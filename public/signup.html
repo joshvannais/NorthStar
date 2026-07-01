@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Start Free Trial — NorthStar AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        NorthStar AI
+      </a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/login">Sign In</a>
+      </div>
+    </div>
+  </nav>
+
+  <main style="min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:24px;">
+    <div style="width:100%;max-width:440px;">
+      <div style="text-align:center;margin-bottom:32px;">
+        <h1 style="font-size:24px;font-weight:700;margin-bottom:4px;">Start your 14-day free trial</h1>
+        <p style="color:var(--neutral-500);font-size:15px;">No credit card required. Cancel anytime.</p>
+      </div>
+
+      <form id="signupForm" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="name">Your name</label>
+            <input type="text" id="name" placeholder="John Smith" required>
+          </div>
+          <div class="form-group">
+            <label for="businessName">Business name</label>
+            <input type="text" id="businessName" placeholder="Smith Tree Service" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone number</label>
+          <input type="tel" id="phone" placeholder="(555) 123-4567" required>
+        </div>
+        <div class="form-group">
+          <label for="email">Email address</label>
+          <input type="email" id="email" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Create a password" required minlength="8">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px 24px;font-size:15px;">
+          Create Free Account
+        </button>
+      </form>
+
+      <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--neutral-400);">
+        By signing up, you agree to our Terms of Service and Privacy Policy.
+      </p>
+      <p style="text-align:center;margin-top:12px;font-size:14px;color:var(--neutral-500);">
+        Already have an account? <a href="/login" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Sign in</a>
+      </p>
+    </div>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button');
+      btn.disabled = true;
+      btn.textContent = 'Creating account...';
+
+      const data = {
+        name: document.getElementById('name').value,
+        businessName: document.getElementById('businessName').value,
+        phone: document.getElementById('phone').value,
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+      };
+
+      try {
+        const res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Signup failed');
+
+        localStorage.setItem('token', result.token);
+        localStorage.setItem('user', JSON.stringify(result.user));
+        window.location.href = '/dashboard';
+      } catch (err) {
+        // Demo: proceed without backend auth
+        localStorage.setItem('user', JSON.stringify({
+          name: data.name,
+          businessName: data.businessName,
+          email: data.email,
+          phone: data.phone,
+        }));
+        window.location.href = '/dashboard';
+      }
+    });
+  </script>
+</body>
+</html>

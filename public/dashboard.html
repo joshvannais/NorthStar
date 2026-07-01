@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — NorthStar AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+  <div class="dashboard-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <a href="/dashboard" class="sidebar-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        NorthStar
+      </a>
+      <nav class="sidebar-nav">
+        <a href="/dashboard" class="active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="/dashboard/leads">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Leads</span>
+        </a>
+        <a href="/dashboard/calls">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span>Call History</span>
+        </a>
+        <a href="/dashboard/my-number">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span>My Number</span>
+        </a>
+        <a href="/dashboard/settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Settings</span>
+        </a>
+      </nav>
+      <a href="/" onclick="localStorage.clear()" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+        <span>Sign Out</span>
+      </a>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" id="mainContent">
+      <div class="page-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p id="welcomeMessage">Welcome back! Here's your overview.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="simulateDemoLead()">➕ Simulate Lead</button>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-label">Total Leads</div>
+          <div class="stat-value" id="totalLeads">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Today</div>
+          <div class="stat-value" id="todayLeads">0</div>
+          <div class="stat-change up" id="todayChange">+0 today</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">This Week</div>
+          <div class="stat-value" id="weekLeads">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Scheduled</div>
+          <div class="stat-value" id="scheduledLeads">0</div>
+        </div>
+      </div>
+
+      <!-- Leads Table -->
+      <div class="table-container">
+        <div class="table-header">
+          <h2>Recent Leads</h2>
+          <span style="font-size:13px;color:var(--neutral-500);" id="leadCount">0 leads</span>
+        </div>
+        <div id="leadsContent">
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <h3>No leads yet</h3>
+            <p>Click "Simulate Lead" to test your AI receptionist, or connect your phone number to start receiving real calls.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    // Welcome message
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (user.name) {
+      document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your overview.`;
+    }
+
+    // Load leads
+    async function loadLeads() {
+      try {
+        const data = await API.getLeads();
+        const leads = data.items || [];
+        renderLeads(leads);
+        renderStats(leads);
+      } catch (err) {
+        console.error('Failed to load leads:', err);
+        // Show empty state
+        document.getElementById('leadsContent').innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <h3>No leads yet</h3>
+            <p>Click "Simulate Lead" to test your AI receptionist.</p>
+          </div>`;
+      }
+    }
+
+    function renderStats(leads) {
+      const now = new Date();
+      const today = leads.filter(l => new Date(l.receivedAt).toDateString() === now.toDateString());
+      const thisWeek = leads.filter(l => {
+        const d = new Date(l.receivedAt);
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        return d >= weekAgo;
+      });
+      const scheduled = leads.filter(l => l.status === 'scheduled');
+
+      document.getElementById('totalLeads').textContent = leads.length;
+      document.getElementById('todayLeads').textContent = today.length;
+      document.getElementById('weekLeads').textContent = thisWeek.length;
+      document.getElementById('scheduledLeads').textContent = scheduled.length;
+      document.getElementById('leadCount').textContent = `${leads.length} leads`;
+
+      if (today.length > 0) {
+        document.getElementById('todayChange').textContent = `+${today.length} today`;
+        document.getElementById('todayChange').className = 'stat-change up';
+      }
+    }
+
+    function renderLeads(leads) {
+      if (leads.length === 0) {
+        document.getElementById('leadsContent').innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <h3>No leads yet</h3>
+            <p>Click "Simulate Lead" to test your AI receptionist.</p>
+          </div>`;
+        return;
+      }
+
+      let html = `<table><thead><tr>
+        <th>Customer</th><th>Phone</th><th>Service</th><th>Date</th><th>Status</th><th>Urgency</th>
+      </tr></thead><tbody>`;
+
+      leads.slice().reverse().forEach(lead => {
+        const urgencyClass = lead.urgency ? 'urgency-high' : 'urgency-normal';
+        const urgencyText = lead.urgency || 'Normal';
+        html += `<tr>
+          <td><strong>${lead.customerName || 'Unknown'}</strong></td>
+          <td>${lead.phoneNumber || '-'}</td>
+          <td>${lead.serviceRequested || '-'}</td>
+          <td>${lead.receivedAt ? formatDate(lead.receivedAt) : '-'}</td>
+          <td>${getStatusBadge(lead.status || 'new')}</td>
+          <td class="${urgencyClass}">${urgencyText}</td>
+        </tr>`;
+      });
+
+      html += '</tbody></table>';
+      document.getElementById('leadsContent').innerHTML = html;
+    }
+
+    // Simulate a demo lead
+    async function simulateDemoLead() {
+      const names = ['John Smith', 'Maria Garcia', 'Bob Johnson', 'Sarah Wilson', 'Mike Brown', 'Lisa Davis'];
+      const services = ['Tree removal', 'Roof repair', 'Plumbing leak', 'Electrical wiring', 'Landscape design', 'Deck staining'];
+      const addresses = ['123 Oak St', '456 Maple Ave', '789 Pine Rd', '321 Elm Dr', '654 Birch Ln'];
+      const times = ['Tomorrow morning', 'Thursday afternoon', 'Friday 10am', 'Next Monday', 'This Saturday'];
+      const urgencies = ['', '', '', 'Storm damage (High)', 'Emergency (High)'];
+
+      const data = {
+        customerName: names[Math.floor(Math.random() * names.length)],
+        phoneNumber: `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`,
+        address: addresses[Math.floor(Math.random() * addresses.length)],
+        serviceRequested: services[Math.floor(Math.random() * services.length)],
+        preferredTime: times[Math.floor(Math.random() * times.length)],
+        urgency: urgencies[Math.floor(Math.random() * urgencies.length)],
+      };
+
+      try {
+        const result = await API.simulateLead(data);
+        showToast(`✅ New lead captured: ${result.lead.customerName}`);
+        loadLeads();
+      } catch (err) {
+        showToast('Lead simulated (offline mode)', 'success');
+        loadLeads();
+      }
+    }
+
+    // Load on page load
+    loadLeads();
+  </script>
+</body>
+</html>

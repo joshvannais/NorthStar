@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrations — NorthStar AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard-layout">
+    <aside class="sidebar">
+      <a href="/dashboard" class="sidebar-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        NorthStar
+      </a>
+      <nav class="sidebar-nav">
+        <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
+        <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
+        <a href="/dashboard/calls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call History</span></a>
+        <a href="/dashboard/integrations" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg><span>Integrations</span></a>
+        <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
+      </nav>
+      <a href="/" onclick="localStorage.clear()" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h1>Integrations</h1>
+          <p>Connect your NorthStar AI receptionist to your tools.</p>
+        </div>
+      </div>
+
+      <!-- Retell AI -->
+      <div class="settings-section">
+        <h2>📞 Voice AI — Retell</h2>
+        <p class="description">Connect Retell AI to power your AI receptionist's voice and natural conversations.</p>
+        <div class="integration-card">
+          <div class="icon">🤖</div>
+          <div class="info">
+            <h4>Retell AI</h4>
+            <p>AI voice agent that answers calls</p>
+          </div>
+          <span><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('Retell setup guide coming soon!')">Configure</button>
+        </div>
+        <p style="font-size:13px;color:var(--neutral-400);margin-top:8px;">Don't have a Retell account? <a href="https://retell.ai" target="_blank" style="color:var(--brand-600);">Sign up free →</a></p>
+      </div>
+
+      <!-- Twilio -->
+      <div class="settings-section">
+        <h2>📱 Phone & SMS — Twilio</h2>
+        <p class="description">Provision phone numbers and receive SMS notifications for new leads.</p>
+        <div class="integration-card">
+          <div class="icon">📞</div>
+          <div class="info">
+            <h4>Phone Number</h4>
+            <p>Business number for incoming calls</p>
+          </div>
+          <span><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('Twilio setup guide coming soon!')">Configure</button>
+        </div>
+        <div class="integration-card">
+          <div class="icon">💬</div>
+          <div class="info">
+            <h4>SMS Notifications</h4>
+            <p>Text alerts when new leads come in</p>
+          </div>
+          <span><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('SMS setup guide coming soon!')">Configure</button>
+        </div>
+      </div>
+
+      <!-- Google -->
+      <div class="settings-section">
+        <h2>📊 Google Workspace</h2>
+        <p class="description">Sync leads to Google Sheets and schedule estimates on Google Calendar.</p>
+        <div class="integration-card">
+          <div class="icon">📋</div>
+          <div class="info">
+            <h4>Google Sheets</h4>
+            <p>Auto-save every lead to a spreadsheet</p>
+          </div>
+          <span><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('Sheets setup guide coming soon!')">Configure</button>
+        </div>
+        <div class="integration-card">
+          <div class="icon">📅</div>
+          <div class="info">
+            <h4>Google Calendar</h4>
+            <p>Auto-schedule estimate appointments</p>
+          </div>
+          <span><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('Calendar setup guide coming soon!')">Configure</button>
+        </div>
+      </div>
+
+      <!-- Email -->
+      <div class="settings-section">
+        <h2>📧 Email Notifications</h2>
+        <p class="description">Get lead summaries delivered to your inbox.</p>
+        <div class="integration-card">
+          <div class="icon">✉️</div>
+          <div class="info">
+            <h4>SMTP Email</h4>
+            <p>Email alerts with full lead details</p>
+          </div>
+          <span><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('Email setup guide coming soon!')">Configure</button>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div style="background:var(--brand-50);border-radius:var(--radius);padding:20px;border:1px solid var(--brand-200);">
+        <h3 style="font-size:15px;font-weight:600;color:var(--brand-800);margin-bottom:4px;">🔌 All integrations ready to connect</h3>
+        <p style="font-size:13px;color:var(--neutral-500);">Once you upgrade to <strong>Professional</strong>, you'll get step-by-step setup guides for each integration right here.</p>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/js/api.js"></script>
+</body>
+</html>

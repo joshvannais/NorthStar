@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — NorthStar AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard-layout">
+    <aside class="sidebar">
+      <a href="/dashboard" class="sidebar-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        NorthStar
+      </a>
+      <nav class="sidebar-nav">
+        <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
+        <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
+        <a href="/dashboard/calls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call History</span></a>
+        <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
+        <a href="/dashboard/settings" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
+      </nav>
+      <a href="/" onclick="localStorage.clear()" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span>
+      </a>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h1>Settings</h1>
+          <p>Manage your account and AI receptionist configuration.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">💾 Save Changes</button>
+      </div>
+
+      <!-- Company Info -->
+      <div class="settings-section">
+        <h2>Company Information</h2>
+        <p class="description">This information is used by your AI receptionist to answer customer questions.</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="companyName">Business Name</label>
+            <input type="text" id="companyName" placeholder="e.g. Smith Tree Service">
+          </div>
+          <div class="form-group">
+            <label for="companyPhone">Business Phone</label>
+            <input type="tel" id="companyPhone" placeholder="(555) 123-4567">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="services">Services Offered</label>
+          <input type="text" id="services" placeholder="e.g. Tree removal, stump grinding, pruning">
+        </div>
+        <div class="form-group">
+          <label for="companyInfo">Company Description (for AI knowledge base)</label>
+          <textarea id="companyInfo" placeholder="Tell your AI receptionist about your company — service areas, hours, insurance info, etc."></textarea>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="settings-section">
+        <h2>Notification Preferences</h2>
+        <p class="description">Choose how you want to be notified when a new lead comes in.</p>
+        <div class="integration-card">
+          <div class="icon">📱</div>
+          <div class="info">
+            <h4>SMS Notifications</h4>
+            <p>Get a text message for every new lead</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" checked id="smsEnabled">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="form-group" style="margin-top:8px;">
+          <label for="smsNumber">SMS Phone Number</label>
+          <input type="tel" id="smsNumber" placeholder="(555) 123-4567">
+        </div>
+        <div class="integration-card">
+          <div class="icon">📧</div>
+          <div class="info">
+            <h4>Email Notifications</h4>
+            <p>Get an email summary for every new lead</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" checked id="emailEnabled">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="form-group" style="margin-top:8px;">
+          <label for="emailAddress">Notification Email</label>
+          <input type="email" id="emailAddress" placeholder="you@example.com">
+        </div>
+      </div>
+
+      <!-- AI Receptionist -->
+      <div class="settings-section">
+        <h2>AI Receptionist</h2>
+        <p class="description">Configure how your AI receptionist greets and handles callers.</p>
+        <div class="integration-card">
+          <div class="icon">🎙️</div>
+          <div class="info">
+            <h4>Voice: Rachel (Natural — Female)</h4>
+            <p>Professional, warm, and clear. More voice options coming soon.</p>
+          </div>
+          <span class="badge badge-new" style="font-size:11px;">1 voice</span>
+        </div>
+        <div class="form-group">
+          <label for="greeting">Custom Greeting (optional)</label>
+          <input type="text" id="greeting" placeholder='e.g. "Thank you for calling Smith Tree Service..."'>
+        </div>
+        <div class="form-group">
+          <label for="companyInfo">Company Knowledge Base (for AI context)</label>
+          <textarea id="companyInfo" placeholder="Tell your AI receptionist about your company — service areas, hours, insurance info, etc."></textarea>
+        </div>
+      </div>
+
+      <!-- Call Routing -->
+      <div class="settings-section">
+        <h2>📞 Call Routing</h2>
+        <p class="description">Control which calls go to the AI receptionist and which ring through to you directly.</p>
+
+        <div class="integration-card">
+          <div class="icon">🔄</div>
+          <div class="info">
+            <h4>AI answers unknown callers only</h4>
+            <p>Known contacts ring your phone normally. New numbers get the AI receptionist.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" checked id="smartRouting">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <p style="font-size:13px;font-weight:600;color:var(--neutral-700);margin:16px 0 8px;">👥 Known Contacts (VIP Numbers)</p>
+        <p style="font-size:13px;color:var(--neutral-500);margin-bottom:12px;">Calls from these numbers will ring through to you directly — the AI won't answer.</p>
+
+        <div id="contactsList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <!-- Contacts will be rendered here -->
+          <div class="empty-state" id="contactsEmpty" style="padding:20px;">
+            <p style="font-size:13px;color:var(--neutral-400);">No contacts added yet. Add family, team members, or regular customers below.</p>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="contactName" placeholder="Name (e.g. Mom, John, Office)" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;">
+          <input type="tel" id="contactPhone" placeholder="Phone number" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;">
+          <button class="btn btn-primary btn-sm" onclick="addContact()">+ Add</button>
+        </div>
+
+        <details style="margin-top:12px;">
+          <summary style="font-size:13px;font-weight:500;color:var(--brand-600);cursor:pointer;padding:4px 0;">📁 Import contacts from your phone</summary>
+          <div style="margin-top:12px;padding:16px;background:var(--neutral-50);border-radius:var(--radius-sm);border:1px solid var(--neutral-200);">
+            <p style="font-size:13px;color:var(--neutral-500);margin-bottom:12px;">
+              Export your contacts from your phone as a <strong>CSV file</strong>, then upload it here.
+              The file should have columns for <strong>Name</strong> and <strong>Phone</strong>.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                📤 Choose CSV File
+                <input type="file" id="csvUpload" accept=".csv" style="display:none;" onchange="importCSV(event)">
+              </label>
+              <span id="importStatus" style="font-size:13px;color:var(--neutral-400);"></span>
+            </div>
+            <p style="font-size:12px;color:var(--neutral-400);margin-top:8px;">
+              How to export: <strong>iPhone</strong> → Settings > Contacts > Export &nbsp;·&nbsp;
+              <strong>Android</strong> → Contacts app > Export to file
+            </p>
+          </div>
+        </details>
+      </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // Load saved settings
+    const saved = JSON.parse(localStorage.getItem('settings') || '{}');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+    if (user.businessName) document.getElementById('companyName').value = user.businessName;
+    if (user.email) document.getElementById('emailAddress').value = user.email;
+    if (user.phone) document.getElementById('companyPhone').value = user.phone;
+
+    Object.entries(saved).forEach(([key, val]) => {
+      const el = document.getElementById(key);
+      if (el) {
+        if (el.type === 'checkbox') el.checked = val;
+        else el.value = val;
+      }
+    });
+
+    function saveSettings() {
+      const fields = ['companyName', 'companyPhone', 'services', 'companyInfo', 'smsNumber', 'emailAddress', 'greeting'];
+      const checkboxes = ['smsEnabled', 'emailEnabled', 'smartRouting'];
+      const settings = {};
+
+      fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) settings[id] = el.value;
+      });
+      checkboxes.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) settings[id] = el.checked;
+      });
+
+      // Save contacts too
+      const contacts = getContacts();
+      settings.contacts = contacts;
+
+      localStorage.setItem('settings', JSON.stringify(settings));
+      showToast('✅ Settings saved successfully!');
+    }
+
+    // ======== Known Contacts (VIP Numbers) ========
+
+    function getContacts() {
+      return JSON.parse(localStorage.getItem('vipContacts') || '[]');
+    }
+
+    function saveContacts(contacts) {
+      localStorage.setItem('vipContacts', JSON.stringify(contacts));
+      renderContacts();
+    }
+
+    function renderContacts() {
+      const list = document.getElementById('contactsList');
+      const contacts = getContacts();
+
+      if (contacts.length === 0) {
+        list.innerHTML = `<div class="empty-state" style="padding:20px;">
+          <p style="font-size:13px;color:var(--neutral-400);">No contacts added yet. Add family, team members, or regular customers below.</p>
+        </div>`;
+        return;
+      }
+
+      list.innerHTML = contacts.map((c, i) => `
+        <div class="integration-card" style="margin-bottom:0;padding:10px 14px;">
+          <div class="icon" style="width:36px;height:36px;font-size:14px;">👤</div>
+          <div class="info">
+            <h4 style="font-size:14px;">${c.name}</h4>
+            <p style="font-size:12px;">${c.phone}</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="removeContact(${i})" style="color:var(--danger);font-size:12px;">Remove</button>
+        </div>
+      `).join('');
+    }
+
+    function addContact() {
+      const name = document.getElementById('contactName').value.trim();
+      const phone = document.getElementById('contactPhone').value.trim();
+      if (!name || !phone) {
+        showToast('Please enter both a name and phone number.', 'error');
+        return;
+      }
+
+      const contacts = getContacts();
+      contacts.push({ name, phone });
+      saveContacts(contacts);
+
+      document.getElementById('contactName').value = '';
+      document.getElementById('contactPhone').value = '';
+      showToast(`✅ "${name}" added to known contacts.`);
+    }
+
+    function removeContact(index) {
+      const contacts = getContacts();
+      const removed = contacts.splice(index, 1)[0];
+      saveContacts(contacts);
+      showToast(`Removed "${removed.name}" from known contacts.`);
+    }
+
+    function importCSV(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const status = document.getElementById('importStatus');
+      status.textContent = 'Reading file...';
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        const lines = text.split('\n').filter(l => l.trim());
+        const contacts = getContacts();
+        let imported = 0;
+        let skipped = 0;
+
+        lines.forEach((line, i) => {
+          // Try comma or tab delimited
+          const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+          if (parts.length < 2) return;
+
+          let name = '';
+          let phone = '';
+
+          // Heuristic: check if first column looks like a name or phone
+          const first = parts[0].trim().replace(/"/g, '');
+          const second = parts[1].trim().replace(/"/g, '');
+
+          if (/^[\d\s\-\(\)]+$/.test(first)) {
+            // First column is phone
+            phone = first;
+            name = second;
+          } else {
+            name = first;
+            phone = second;
+          }
+
+          // Clean phone number
+          phone = phone.replace(/[^\d\+]/g, '');
+          if (phone.length < 7) { skipped++; return; }
+
+          // Skip duplicates
+          const exists = contacts.some(c => c.phone === phone);
+          if (exists) { skipped++; return; }
+
+          contacts.push({ name: name || `Contact ${imported + 1}`, phone });
+          imported++;
+        });
+
+        saveContacts(contacts);
+        status.textContent = `✅ Imported ${imported} contact${imported !== 1 ? 's' : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}.`;
+        status.style.color = 'var(--success)';
+        event.target.value = '';
+      };
+
+      reader.onerror = function() {
+        status.textContent = '❌ Error reading file.';
+        status.style.color = 'var(--danger)';
+      };
+
+      reader.readAsText(file);
+    }
+
+    // Load contacts on page load
+    renderContacts();
+  </script>
+  <script src="/js/api.js"></script>
+</body>
+</html>

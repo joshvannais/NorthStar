@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — NorthStar AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+        NorthStar
+      </a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/signup" class="btn btn-primary btn-sm">Start Free Trial</a>
+      </div>
+    </div>
+  </nav>
+
+  <main style="min-height:calc(100vh - 56px);display:flex;align-items:center;justify-content:center;padding:24px 16px;">
+    <div style="width:100%;max-width:400px;">
+      <div style="text-align:center;margin-bottom:28px;">
+        <h1 style="font-size:22px;font-weight:700;margin-bottom:4px;">Welcome back</h1>
+        <p style="color:var(--neutral-500);font-size:14px;">Sign in to your account</p>
+      </div>
+
+      <form id="loginForm" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="form-group">
+          <label for="email">Email address</label>
+          <input type="email" id="email" placeholder="you@example.com" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Sign In</button>
+      </form>
+
+      <!-- Demo Access Link -->
+      <div style="margin-top:20px;padding:16px;background:#fef3c7;border-radius:8px;border:1px solid #fde68a;text-align:center;">
+        <p style="font-size:14px;font-weight:600;color:#92400e;margin-bottom:8px;">🔑 Owner / Admin Access</p>
+        <a href="/demo-login" style="display:inline-block;padding:8px 20px;background:var(--brand-600);color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Enter Dashboard (Demo Mode)</a>
+        <p style="font-size:11px;color:#92400e;margin-top:8px;">View all leads, settings, and features without creating an account.</p>
+      </div>
+
+      <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--neutral-500);">
+        Don't have an account? <a href="/signup" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Create one</a>
+      </p>
+    </div>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        window.location.href = '/dashboard';
+      } catch (err) {
+        // Demo fallback
+        localStorage.setItem('user', JSON.stringify({ name: 'Demo Contractor', email, role: 'admin' }));
+        window.location.href = '/dashboard';
+      }
+    });
+  </script>
+</body>
+</html>

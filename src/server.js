@@ -236,7 +236,7 @@ app.get('/demo-login', (req, res) => {
 </head>
 <body style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;overflow-x:hidden;">
   <div style="text-align:center;max-width:400px;animation:fadeIn 0.5s ease-out;">
-<img src="/assets/logo.png" alt="NorthStar" style="width:64px;height:64px;object-fit:contain;margin:0 auto 16px;display:block;">
+<img src="/assets/logo.png" alt="NorthStar" style="width:96px;height:96px;object-fit:contain;margin:0 auto 16px;display:block;">
     <h1 style="font-size:22px;font-weight:700;margin-bottom:4px;">Try NorthStar AI</h1>
     <p style="color:var(--neutral-500);font-size:14px;margin-bottom:24px;">Loading your demo dashboard...</p>
     <div style="width:40px;height:40px;border:3px solid var(--neutral-200);border-top-color:var(--brand-600);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto;"></div>

@@ -740,7 +740,7 @@ tr:hover td { background: var(--neutral-50); }
 .toggle {
   position: relative;
   display: inline-block;
-  width: 40px;
+  width: 48px;
   height: 22px;
   flex-shrink: 0;
 }
@@ -811,8 +811,8 @@ tr:hover td { background: var(--neutral-50); }
 }
 
 .integration-card .icon {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -986,14 +986,14 @@ tr:hover td { background: var(--neutral-50); }
   white-space: nowrap;
 }
 .logo-img {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
   flex-shrink: 0;
 }
 .logo-img-lg {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
   flex-shrink: 0;
 }

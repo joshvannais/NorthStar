@@ -43,6 +43,8 @@ const pages = {
   '/dashboard/settings': 'public/dashboard/settings.html',
   '/contact': 'public/contact.html',
   '/admin': 'public/admin.html',
+  '/preview-dark': 'public/previews/dark.html',
+  '/preview-light': 'public/previews/light.html',
 };
 
 Object.entries(pages).forEach(([route, file]) => {

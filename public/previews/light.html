@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Light Theme Preview — NorthStar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #FFFFFF; }
+    .hero { padding: 100px 16px 80px; min-height: 90vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .toggle-bar {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.06);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(0,0,0,0.06);
+      padding: 12px 24px;
+      border-radius: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      z-index: 10;
+    }
+    .toggle-bar a {
+      color: #64748B;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .toggle-bar a.active { background: rgba(212,175,55,0.15); color: #B8860B; }
+    .toggle-bar a:hover { color: #1E293B; }
+  </style>
+</head>
+<body>
+  <section class="hero fade-in">
+    <div class="hero-logo-bg">
+      <img src="/assets/logo.png" alt="" aria-hidden="true" class="hero-star">
+    </div>
+    <h1>Never Miss <span>Another Customer Call</span></h1>
+    <p>AI-powered virtual receptionist for home service contractors — answers every call, captures every lead, 24/7. No more lost jobs because you were on the roof.</p>
+    <div class="hero-actions">
+      <a href="#" class="btn btn-primary">Start 14-Day Free Trial</a>
+      <a href="#" class="btn btn-secondary">How It Works</a>
+    </div>
+  </section>
+
+  <div class="toggle-bar">
+    <a href="/preview-dark">🌙 Dark</a>
+    <a href="/preview-light" class="active">☀️ Light</a>
+    <a href="/">↩ Back to site</a>
+  </div>
+</body>
+</html>

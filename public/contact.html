@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contact — NorthStar AI</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,7 +25,8 @@
         <a href="/signup" class="btn btn-primary btn-sm">Start Free Trial</a>
       </div>
     </div>
-  </nav>
+        <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button>
+    </nav>
 
   <main style="max-width:600px;margin:0 auto;padding:60px 24px;">
     <div style="text-align:center;margin-bottom:48px;">
@@ -111,5 +113,6 @@
     });
   </script>
   <script src="/js/api.js"></script>
+<script src="/js/theme.js"></script>
 </body>
 </html>

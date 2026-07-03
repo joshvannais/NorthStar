@@ -1010,4 +1010,153 @@ tr:hover td { background: var(--neutral-50); }
   height: 48px;
   object-fit: contain;
   flex-shrink: 0;
+}/* ============================================
+   Dark Mode — Theme Toggle
+   ============================================ */
+[data-theme="dark"] {
+  --neutral-50: #0B0D17;
+  --neutral-100: #131624;
+  --neutral-200: #1E2235;
+  --neutral-300: #2A2F45;
+  --neutral-400: #4A5068;
+  --neutral-500: #7C8298;
+  --neutral-600: #A0A5B8;
+  --neutral-700: #C4C8D4;
+  --neutral-800: #E2E4EB;
+  --neutral-900: #F1F2F6;
+
+  --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.25);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.35), 0 4px 6px rgba(0,0,0,0.25);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.4), 0 10px 10px rgba(0,0,0,0.2);
+}
+
+/* Dark theme overrides for specific elements */
+[data-theme="dark"] body {
+  background: var(--neutral-50);
+  color: var(--neutral-800);
+}
+
+[data-theme="dark"] .nav {
+  background: rgba(11, 13, 23, 0.96);
+  border-bottom: 1px solid var(--neutral-200);
+}
+
+[data-theme="dark"] .demo-banner {
+  background: var(--neutral-200);
+  color: var(--neutral-600);
+}
+
+[data-theme="dark"] .demo-banner a {
+  color: var(--brand-400);
+}
+
+[data-theme="dark"] .btn-secondary {
+  background: var(--neutral-200);
+  color: var(--neutral-700);
+  border: 1px solid var(--neutral-300);
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: var(--neutral-300);
+}
+
+[data-theme="dark"] .btn-ghost {
+  color: var(--neutral-500);
+}
+
+[data-theme="dark"] .btn-ghost:hover {
+  background: var(--neutral-200);
+}
+
+[data-theme="dark"] .section-alt {
+  background: var(--neutral-100);
+}
+
+[data-theme="dark"] .card {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
+}
+
+[data-theme="dark"] .card-icon {
+  background: rgba(212, 175, 55, 0.1);
+  color: var(--brand-400);
+}
+
+[data-theme="dark"] .step {
+  background: var(--neutral-100);
+}
+
+[data-theme="dark"] .step-number {
+  background: rgba(212, 175, 55, 0.15);
+  color: var(--brand-400);
+}
+
+/* Dark sidebar */
+[data-theme="dark"] .sidebar {
+  background: var(--neutral-50);
+  border-right: 1px solid var(--neutral-200);
+}
+
+[data-theme="dark"] .sidebar a {
+  color: var(--neutral-500);
+}
+
+[data-theme="dark"] .sidebar a:hover {
+  background: var(--neutral-200);
+  color: var(--neutral-800);
+}
+
+[data-theme="dark"] .sidebar a.active {
+  background: rgba(212, 175, 55, 0.1);
+  color: var(--brand-400);
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--neutral-500);
+  transition: all 0.2s;
+  font-size: 18px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: var(--neutral-100);
+  color: var(--neutral-700);
+}
+
+[data-theme="dark"] .theme-toggle:hover {
+  background: var(--neutral-200);
+  color: var(--brand-400);
+}
+/* Dark mode overrides for admin page */
+[data-theme="dark"] .admin-login {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+}
+
+[data-theme="dark"] .admin-login input {
+  background: var(--neutral-200);
+  border: 1px solid var(--neutral-300);
+  color: var(--neutral-800);
+}
+
+[data-theme="dark"] .admin-login label {
+  color: var(--neutral-600);
+}
+
+[data-theme="dark"] .admin-nav {
+  background: var(--neutral-50);
+  border-bottom: 1px solid var(--neutral-200);
 }

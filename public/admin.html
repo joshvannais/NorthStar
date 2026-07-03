@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — NorthStar AI</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -125,6 +126,9 @@
       <input type="password" id="adminPass" placeholder="Password" onkeydown="if(event.key==='Enter')adminLogin()">
     </div>
     <button class="btn btn-primary" style="width:100%;" onclick="adminLogin()">Sign In</button>
+    <div style="text-align:center;margin-top:12px;">
+      <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme" style="margin:0 auto;">🌙</button>
+    </div>
     <div class="error" id="loginError">Invalid credentials</div>
   </div>
 
@@ -272,5 +276,6 @@
       loadUsers();
     }
   </script>
+<script src="/js/theme.js"></script>
 </body>
 </html>

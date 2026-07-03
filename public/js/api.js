@@ -7,10 +7,13 @@ const API = {
   base: '/api',
 
   async request(method, path, body) {
-    const options = {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-    };
+    const headers = { 'Content-Type': 'application/json' };
+    
+    // Attach auth token if available
+    const token = localStorage.getItem('token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const options = { method, headers };
     if (body) options.body = JSON.stringify(body);
 
     const res = await fetch(`${this.base}${path}`, options);

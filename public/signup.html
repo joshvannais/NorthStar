@@ -97,14 +97,9 @@
         localStorage.setItem('user', JSON.stringify(result.user));
         window.location.href = '/dashboard';
       } catch (err) {
-        // Demo: proceed without backend auth
-        localStorage.setItem('user', JSON.stringify({
-          name: data.name,
-          businessName: data.businessName,
-          email: data.email,
-          phone: data.phone,
-        }));
-        window.location.href = '/dashboard';
+        showToast(err.message || 'Signup failed. Please try again.');
+        btn.disabled = false;
+        btn.textContent = 'Create Free Account';
       }
     });
   </script>

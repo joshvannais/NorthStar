@@ -1,116 +1,66 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none">
   <defs>
-    <!-- Gold fill gradient -->
-    <linearGradient id="goldFill" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFF7C8"/>
-      <stop offset="20%" stop-color="#FFEE8A"/>
-      <stop offset="50%" stop-color="#F2C94C"/>
-      <stop offset="80%" stop-color="#D4AF37"/>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFE87C"/>
+      <stop offset="30%" stop-color="#F2C94C"/>
+      <stop offset="70%" stop-color="#D4AF37"/>
       <stop offset="100%" stop-color="#C89B2C"/>
-    </linearGradient>
-
-    <!-- Gold highlight -->
-    <linearGradient id="goldHighlight" x1="100%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFF5B0"/>
-      <stop offset="50%" stop-color="#F2C94C"/>
-      <stop offset="100%" stop-color="#B8860B"/>
-    </linearGradient>
-
-    <!-- Silver gradient for compass -->
-    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F8F9FA"/>
-      <stop offset="30%" stop-color="#E9ECEF"/>
-      <stop offset="60%" stop-color="#CED4DA"/>
-      <stop offset="100%" stop-color="#ADB5BD"/>
-    </linearGradient>
-
-    <!-- Dark (near-black) for outline -->
-    <linearGradient id="outlineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1A1A2E"/>
-      <stop offset="50%" stop-color="#16213E"/>
-      <stop offset="100%" stop-color="#0F172A"/>
     </linearGradient>
   </defs>
 
-  <!-- Star body (gold fill) -->
-  <path d="M 512 60
-           L 606 388
-           L 948 396
-           L 680 576
-           L 778 916
-           L 512 720
-           L 246 916
-           L 344 576
-           L 76 396
-           L 418 388 Z"
-        fill="url(#goldFill)"/>
+  <!-- Star with gold fill and dark outline -->
+  <g>
+    <!-- Star body (filled) -->
+    <path d="M 512 60
+             L 606 388 L 948 396
+             L 680 576 L 778 916
+             L 512 720 L 246 916
+             L 344 576 L 76 396
+             L 418 388 Z"
+          fill="url(#goldGrad)"/>
 
-  <!-- Star highlight overlay -->
-  <path d="M 512 60
-           L 606 388
-           L 948 396
-           L 680 576
-           L 778 916
-           L 512 720
-           L 246 916
-           L 344 576
-           L 76 396
-           L 418 388 Z"
-        fill="url(#goldHighlight)" opacity="0.3"/>
+    <!-- Dark outline -->
+    <path d="M 512 60
+             L 606 388 L 948 396
+             L 680 576 L 778 916
+             L 512 720 L 246 916
+             L 344 576 L 76 396
+             L 418 388 Z"
+          stroke="#1A1A2E" stroke-width="28" stroke-linejoin="round" fill="none"/>
 
-  <!-- Star outline (thick dark border) -->
-  <path d="M 512 60
-           L 606 388
-           L 948 396
-           L 680 576
-           L 778 916
-           L 512 720
-           L 246 916
-           L 344 576
-           L 76 396
-           L 418 388 Z"
-        stroke="url(#outlineGrad)" stroke-width="28" stroke-linejoin="round" fill="none"/>
-
-  <!-- Outer highlight edge -->
-  <path d="M 512 60
-           L 606 388
-           L 948 396
-           L 680 576
-           L 778 916
-           L 512 720
-           L 246 916
-           L 344 576
-           L 76 396
-           L 418 388 Z"
-        stroke="#FFEE8A" stroke-width="4" stroke-linejoin="round" fill="none" opacity="0.4"/>
+    <!-- Inner bright edge -->
+    <path d="M 512 60
+             L 606 388 L 948 396
+             L 680 576 L 778 916
+             L 512 720 L 246 916
+             L 344 576 L 76 396
+             L 418 388 Z"
+          stroke="#FFF5B0" stroke-width="3" stroke-linejoin="round" fill="none" opacity="0.5"/>
+  </g>
 
   <!-- Compass ring -->
-  <circle cx="512" cy="512" r="172" stroke="url(#silverGrad)" stroke-width="22" fill="none"/>
-  <circle cx="512" cy="512" r="160" stroke="#6C757D" stroke-width="3" fill="none" opacity="0.3"/>
+  <circle cx="512" cy="512" r="170" stroke="#CED4DA" stroke-width="20" fill="none"/>
+  <circle cx="512" cy="512" r="160" stroke="#6C757D" stroke-width="2" fill="none"/>
 
-  <!-- Compass rose - 4 directional arrows -->
+  <!-- N arrow (gold, filled) -->
+  <path d="M 512 318 L 542 470 L 512 432 L 482 470 Z" fill="#D4AF37"/>
+  <path d="M 512 318 L 542 470 L 512 432 L 482 470 Z" stroke="#1A1A2E" stroke-width="5" stroke-linejoin="round" fill="none"/>
 
-  <!-- North arrow (filled gold, extending above ring) -->
-  <path d="M 512 310 L 544 470 L 512 430 L 480 470 Z" fill="#D4AF37"/>
-  <path d="M 512 310 L 544 470 L 512 430 L 480 470 Z" stroke="#1A1A2E" stroke-width="6" stroke-linejoin="round" fill="none"/>
+  <!-- S arrow -->
+  <path d="M 512 706 L 542 554 L 512 592 L 482 554 Z" fill="none" stroke="#6C757D" stroke-width="12" stroke-linejoin="round"/>
+  <!-- E arrow -->
+  <path d="M 706 512 L 554 542 L 592 512 L 554 482 Z" fill="none" stroke="#6C757D" stroke-width="12" stroke-linejoin="round"/>
+  <!-- W arrow -->
+  <path d="M 318 512 L 470 542 L 432 512 L 470 482 Z" fill="none" stroke="#6C757D" stroke-width="12" stroke-linejoin="round"/>
 
-  <!-- South arrow -->
-  <path d="M 512 714 L 544 554 L 512 594 L 480 554 Z" fill="none" stroke="#6C757D" stroke-width="14" stroke-linejoin="round"/>
+  <!-- Tick marks -->
+  <line x1="512" y1="335" x2="512" y2="352" stroke="#ADB5BD" stroke-width="8" stroke-linecap="round"/>
+  <line x1="689" y1="512" x2="672" y2="512" stroke="#6C757D" stroke-width="8" stroke-linecap="round"/>
+  <line x1="512" y1="689" x2="512" y2="672" stroke="#6C757D" stroke-width="8" stroke-linecap="round"/>
+  <line x1="335" y1="512" x2="352" y2="512" stroke="#6C757D" stroke-width="8" stroke-linecap="round"/>
 
-  <!-- East arrow -->
-  <path d="M 714 512 L 554 544 L 594 512 L 554 480 Z" fill="none" stroke="#6C757D" stroke-width="14" stroke-linejoin="round"/>
-
-  <!-- West arrow -->
-  <path d="M 310 512 L 470 544 L 430 512 L 470 480 Z" fill="none" stroke="#6C757D" stroke-width="14" stroke-linejoin="round"/>
-
-  <!-- Directional tick marks on compass ring -->
-  <line x1="512" y1="328" x2="512" y2="348" stroke="#ADB5BD" stroke-width="10" stroke-linecap="round"/>
-  <line x1="696" y1="512" x2="676" y2="512" stroke="#6C757D" stroke-width="10" stroke-linecap="round"/>
-  <line x1="512" y1="696" x2="512" y2="676" stroke="#6C757D" stroke-width="10" stroke-linecap="round"/>
-  <line x1="328" y1="512" x2="348" y2="512" stroke="#6C757D" stroke-width="10" stroke-linecap="round"/>
-
-  <!-- Compass center hub -->
-  <circle cx="512" cy="512" r="22" fill="url(#silverGrad)"/>
-  <circle cx="512" cy="512" r="22" stroke="#6C757D" stroke-width="4" fill="none"/>
-  <circle cx="512" cy="512" r="8" fill="#1A1A2E"/>
+  <!-- Center dot -->
+  <circle cx="512" cy="512" r="18" fill="#E9ECEF"/>
+  <circle cx="512" cy="512" r="18" stroke="#6C757D" stroke-width="3" fill="none"/>
+  <circle cx="512" cy="512" r="6" fill="#1A1A2E"/>
 </svg>

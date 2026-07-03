@@ -971,4 +971,29 @@ tr:hover td { background: var(--neutral-50); }
   .stats-grid { grid-template-columns: 1fr; }
   .card { padding: 20px; }
   .settings-section { padding: 20px; }
+}/* Logo Component
+   Swap between PNG and SVG by changing the file extension on src.
+   To switch: edit src="/assets/logo.png" → src="/assets/logo.svg"
+   Both files exist in /assets/ — no layout changes needed. */
+.logo-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--neutral-900);
+  white-space: nowrap;
+}
+.logo-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.logo-img-lg {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
 }

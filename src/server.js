@@ -213,9 +213,56 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
   }
 });
 
-// Demo login — quick access for testing (kept for convenience)
+// Demo login — allows contractors to test the product without signing up
 app.get('/demo-login', (req, res) => {
-  res.redirect('/login');
+  const demoToken = generateToken({
+    id: 'demo-user',
+    name: 'Demo Contractor',
+    businessName: 'Your Company',
+    email: 'demo@northstar-ai.com',
+    phone: '(555) 000-0000',
+  });
+
+  res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo Access — NorthStar AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;overflow-x:hidden;">
+  <div style="text-align:center;max-width:400px;animation:fadeIn 0.5s ease-out;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="var(--brand-600)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;margin:0 auto 16px;">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+      <circle cx="12" cy="10" r="2.5"/>
+      <path d="M12 6.5v3.5" stroke-width="2.5"/>
+      <path d="M10.5 8.5l1.5-2 1.5 2"/>
+    </svg>
+    <h1 style="font-size:22px;font-weight:700;margin-bottom:4px;">Try NorthStar AI</h1>
+    <p style="color:var(--neutral-500);font-size:14px;margin-bottom:24px;">Loading your demo dashboard...</p>
+    <div style="width:40px;height:40px;border:3px solid var(--neutral-200);border-top-color:var(--brand-600);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto;"></div>
+  </div>
+  <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  </style>
+  <script>
+    localStorage.setItem('token', '${demoToken}');
+    localStorage.setItem('user', JSON.stringify({
+      name: 'Demo Contractor',
+      businessName: 'Your Company',
+      email: 'demo@northstar-ai.com',
+      phone: '(555) 000-0000',
+    }));
+    setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
+  </script>
+</body>
+</html>
+  `);
 });
 
 // --- Admin Routes ---

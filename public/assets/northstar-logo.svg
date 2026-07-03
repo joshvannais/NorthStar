@@ -1,164 +1,63 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-  <defs>
-    <!-- Metallic Gold Gradient -->
-    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F2D46B"/>
-      <stop offset="25%" stop-color="#E5C34A"/>
-      <stop offset="50%" stop-color="#D4AF37"/>
-      <stop offset="75%" stop-color="#C89B2C"/>
-      <stop offset="100%" stop-color="#A67C00"/>
-    </linearGradient>
-
-    <!-- Gold Highlight Gradient -->
-    <linearGradient id="goldHighlight" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#C89B2C"/>
-      <stop offset="50%" stop-color="#F2D46B"/>
-      <stop offset="100%" stop-color="#D4AF37"/>
-    </linearGradient>
-
-    <!-- Metallic Silver Gradient -->
-    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F5F5F5"/>
-      <stop offset="30%" stop-color="#D9DDE2"/>
-      <stop offset="60%" stop-color="#C9CDD2"/>
-      <stop offset="100%" stop-color="#7D8793"/>
-    </linearGradient>
-
-    <!-- Silver Dark Gradient -->
-    <linearGradient id="silverDark" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#C9CDD2"/>
-      <stop offset="100%" stop-color="#5A6570"/>
-    </linearGradient>
-
-    <!-- Ring Gradient -->
-    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#E8EBED"/>
-      <stop offset="50%" stop-color="#A0A8B0"/>
-      <stop offset="100%" stop-color="#6B7580"/>
-    </linearGradient>
-
-    <!-- Monochrome Gradient -->
-    <linearGradient id="monoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="50%" stop-color="#94A3B8"/>
-      <stop offset="100%" stop-color="#475569"/>
-    </linearGradient>
-
-    <!-- Dark Mode Gold -->
-    <linearGradient id="goldDark" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FCD34D"/>
-      <stop offset="50%" stop-color="#D4AF37"/>
-      <stop offset="100%" stop-color="#B8860B"/>
-    </linearGradient>
-
-    <!-- Drop shadow filter -->
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.15"/>
-    </filter>
-  </defs>
-
-  <!-- ===== LIGHT THEME ===== -->
-  <g id="light-theme">
-    <!-- 5-Point Star with metallic gold -->
-    <path d="M 50 3 
-             L 60.14 35.82 
-             L 95.1 35.56 
-             L 67.32 55.56 
-             L 78.14 88.23 
-             L 50 68.1 
-             L 21.86 88.23 
-             L 32.68 55.56 
-             L 4.9 35.56 
-             L 39.86 35.82 Z" 
-          fill="url(#goldGrad)" filter="url(#shadow)"/>
-
-    <!-- Star highlight overlay -->
-    <path d="M 50 3 
-             L 60.14 35.82 
-             L 95.1 35.56 
-             L 67.32 55.56 
-             L 78.14 88.23 
-             L 50 68.1 
-             L 21.86 88.23 
-             L 32.68 55.56 
-             L 4.9 35.56 
-             L 39.86 35.82 Z" 
-          fill="url(#goldHighlight)" opacity="0.3"/>
+  <!-- ===== NAVY VERSION ===== -->
+  <g id="navy">
+    <!-- 5-point star outline (top point 15% longer) -->
+    <path d="M 50 2 
+             L 59.4 37.06 
+             L 88.04 37.64 
+             L 65.22 54.94 
+             L 73.52 82.36 
+             L 50 66 
+             L 26.48 82.36 
+             L 34.78 54.94 
+             L 11.96 37.64 
+             L 40.6 37.06 Z" 
+          stroke="#0F172A" stroke-width="4" stroke-linejoin="round" fill="none"/>
 
     <!-- Compass ring -->
-    <circle cx="50" cy="50" r="15" fill="none" stroke="url(#ringGrad)" stroke-width="2.5"/>
-    <circle cx="50" cy="50" r="14" fill="none" stroke="url(#silverGrad)" stroke-width="0.5" opacity="0.5"/>
+    <circle cx="50" cy="50" r="18" stroke="#0F172A" stroke-width="2.5" fill="none"/>
 
-    <!-- Compass rose - North arrow (filled) -->
-    <path d="M 50 33 L 54 47 L 50 43 L 46 47 Z" fill="url(#silverGrad)"/>
-    
-    <!-- Compass rose - South arrow (outline) -->
-    <path d="M 50 67 L 54 53 L 50 57 L 46 53 Z" fill="none" stroke="url(#silverDark)" stroke-width="1.5" stroke-linejoin="round"/>
-    
-    <!-- Compass rose - East arrow (outline) -->
-    <path d="M 67 50 L 53 54 L 57 50 L 53 46 Z" fill="none" stroke="url(#silverDark)" stroke-width="1.5" stroke-linejoin="round"/>
-    
-    <!-- Compass rose - West arrow (outline) -->
-    <path d="M 33 50 L 47 54 L 43 50 L 47 46 Z" fill="none" stroke="url(#silverDark)" stroke-width="1.5" stroke-linejoin="round"/>
+    <!-- Compass rose (4-point) -->
+    <path d="M 50 30 L 54 46 L 66 50 L 54 54 L 50 70 L 46 54 L 34 50 L 46 46 Z" 
+          stroke="#0F172A" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
 
-    <!-- Compass direction tick marks -->
-    <line x1="50" y1="32" x2="50" y2="34" stroke="url(#silverGrad)" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="68" y1="50" x2="66" y2="50" stroke="url(#silverDark)" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="50" y1="68" x2="50" y2="66" stroke="url(#silverDark)" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="32" y1="50" x2="34" y2="50" stroke="url(#silverDark)" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- North arrow (filled) -->
+    <path d="M 50 28 L 54 46 L 50 42 L 46 46 Z" fill="#0F172A"/>
 
-    <!-- Center hub -->
-    <circle cx="50" cy="50" r="2.5" fill="url(#silverGrad)"/>
-    <circle cx="50" cy="50" r="1" fill="url(#silverDark)"/>
+    <!-- Center dot -->
+    <circle cx="50" cy="50" r="2" fill="#0F172A"/>
   </g>
 
-  <!-- ===== DARK THEME ===== -->
-  <g id="dark-theme" style="display:none;">
-    <path d="M 50 3 
-             L 60.14 35.82 
-             L 95.1 35.56 
-             L 67.32 55.56 
-             L 78.14 88.23 
-             L 50 68.1 
-             L 21.86 88.23 
-             L 32.68 55.56 
-             L 4.9 35.56 
-             L 39.86 35.82 Z" 
-          fill="url(#goldDark)"/>
-
-    <circle cx="50" cy="50" r="15" fill="none" stroke="url(#silverGrad)" stroke-width="2.5"/>
-
-    <path d="M 50 33 L 54 47 L 50 43 L 46 47 Z" fill="url(#silverGrad)"/>
-    <path d="M 50 67 L 54 53 L 50 57 L 46 53 Z" fill="none" stroke="#7D8793" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M 67 50 L 53 54 L 57 50 L 53 46 Z" fill="none" stroke="#7D8793" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M 33 50 L 47 54 L 43 50 L 47 46 Z" fill="none" stroke="#7D8793" stroke-width="1.5" stroke-linejoin="round"/>
-
-    <circle cx="50" cy="50" r="2.5" fill="url(#silverGrad)"/>
-    <circle cx="50" cy="50" r="1" fill="#0F172A"/>
+  <!-- ===== GOLD ACCENT VERSION ===== -->
+  <g id="gold" style="display:none;">
+    <path d="M 50 2 L 59.4 37.06 L 88.04 37.64 L 65.22 54.94 L 73.52 82.36 L 50 66 L 26.48 82.36 L 34.78 54.94 L 11.96 37.64 L 40.6 37.06 Z" 
+          stroke="#D4AF37" stroke-width="4" stroke-linejoin="round" fill="none"/>
+    <circle cx="50" cy="50" r="18" stroke="#D4AF37" stroke-width="2.5" fill="none"/>
+    <path d="M 50 30 L 54 46 L 66 50 L 54 54 L 50 70 L 46 54 L 34 50 L 46 46 Z" 
+          stroke="#D4AF37" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+    <path d="M 50 28 L 54 46 L 50 42 L 46 46 Z" fill="#D4AF37"/>
+    <circle cx="50" cy="50" r="2" fill="#D4AF37"/>
   </g>
 
-  <!-- ===== MONOCHROME ===== -->
-  <g id="monochrome" style="display:none;">
-    <path d="M 50 3 
-             L 60.14 35.82 
-             L 95.1 35.56 
-             L 67.32 55.56 
-             L 78.14 88.23 
-             L 50 68.1 
-             L 21.86 88.23 
-             L 32.68 55.56 
-             L 4.9 35.56 
-             L 39.86 35.82 Z" 
-          fill="url(#monoGrad)"/>
+  <!-- ===== BLACK VERSION ===== -->
+  <g id="black" style="display:none;">
+    <path d="M 50 2 L 59.4 37.06 L 88.04 37.64 L 65.22 54.94 L 73.52 82.36 L 50 66 L 26.48 82.36 L 34.78 54.94 L 11.96 37.64 L 40.6 37.06 Z" 
+          stroke="#000000" stroke-width="4" stroke-linejoin="round" fill="none"/>
+    <circle cx="50" cy="50" r="18" stroke="#000000" stroke-width="2.5" fill="none"/>
+    <path d="M 50 30 L 54 46 L 66 50 L 54 54 L 50 70 L 46 54 L 34 50 L 46 46 Z" 
+          stroke="#000000" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+    <path d="M 50 28 L 54 46 L 50 42 L 46 46 Z" fill="#000000"/>
+    <circle cx="50" cy="50" r="2" fill="#000000"/>
+  </g>
 
-    <circle cx="50" cy="50" r="15" fill="none" stroke="#64748B" stroke-width="2.5"/>
-
-    <path d="M 50 33 L 54 47 L 50 43 L 46 47 Z" fill="#94A3B8"/>
-    <path d="M 50 67 L 54 53 L 50 57 L 46 53 Z" fill="none" stroke="#64748B" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M 67 50 L 53 54 L 57 50 L 53 46 Z" fill="none" stroke="#64748B" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M 33 50 L 47 54 L 43 50 L 47 46 Z" fill="none" stroke="#64748B" stroke-width="1.5" stroke-linejoin="round"/>
-
-    <circle cx="50" cy="50" r="2.5" fill="#94A3B8"/>
-    <circle cx="50" cy="50" r="1" fill="#475569"/>
+  <!-- ===== WHITE VERSION ===== -->
+  <g id="white" style="display:none;">
+    <path d="M 50 2 L 59.4 37.06 L 88.04 37.64 L 65.22 54.94 L 73.52 82.36 L 50 66 L 26.48 82.36 L 34.78 54.94 L 11.96 37.64 L 40.6 37.06 Z" 
+          stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round" fill="none"/>
+    <circle cx="50" cy="50" r="18" stroke="#FFFFFF" stroke-width="2.5" fill="none"/>
+    <path d="M 50 30 L 54 46 L 66 50 L 54 54 L 50 70 L 46 54 L 34 50 L 46 46 Z" 
+          stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+    <path d="M 50 28 L 54 46 L 50 42 L 46 46 Z" fill="#FFFFFF"/>
+    <circle cx="50" cy="50" r="2" fill="#FFFFFF"/>
   </g>
 </svg>

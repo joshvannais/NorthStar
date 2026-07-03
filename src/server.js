@@ -36,6 +36,7 @@ const pages = {
   '/dashboard/my-number': 'public/dashboard/my-number.html',
   '/dashboard/settings': 'public/dashboard/settings.html',
   '/contact': 'public/contact.html',
+  '/admin': 'public/admin.html',
 };
 
 Object.entries(pages).forEach(([route, file]) => {
@@ -87,13 +88,18 @@ app.get('/demo-login', (req, res) => {
   `);
 });
 
-// Auth routes (demo)
+// User storage
+const { addUser, getAllUsers } = require('./users/store');
+
+// Auth routes
 app.post('/api/auth/signup', (req, res) => {
   const { name, businessName, phone, email } = req.body;
+  const user = addUser({ name, businessName, phone, email });
+  console.log(`[Auth] New signup: ${businessName || name} (${email})`);
   res.json({
     success: true,
     token: 'demo-token-' + Date.now(),
-    user: { name, businessName, phone, email },
+    user: { name, businessName, phone, email, id: user.id },
   });
 });
 
@@ -104,6 +110,35 @@ app.post('/api/auth/login', (req, res) => {
     token: 'demo-token-' + Date.now(),
     user: { name: 'Demo Contractor', businessName: 'Your Company', email },
   });
+});
+
+// --- Admin Routes ---
+
+// Admin login
+app.post('/api/admin/login', (req, res) => {
+  const { username, password } = req.body;
+  const adminUser = process.env.ADMIN_USERNAME || 'admin';
+  const adminPass = process.env.ADMIN_PASSWORD || 'northstar2024';
+
+  if (username === adminUser && password === adminPass) {
+    const token = 'admin-token-' + Date.now();
+    res.json({ success: true, token });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
+  }
+});
+
+// Admin: get all users
+app.get('/api/admin/users', (req, res) => {
+  const authHeader = req.headers.authorization;
+  const adminPass = process.env.ADMIN_PASSWORD || 'northstar2024';
+
+  if (!authHeader || !authHeader.startsWith('Bearer admin-token-')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const users = getAllUsers();
+  res.json({ users, count: users.length });
 });
 
 // API routes

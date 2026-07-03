@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — NorthStar AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .admin-login {
+      max-width: 400px;
+      margin: 80px auto;
+      padding: 32px;
+      background: white;
+      border-radius: var(--radius);
+      border: 1px solid var(--neutral-200);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .admin-login h1 {
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+    .admin-login p {
+      color: var(--neutral-500);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    .admin-login .form-group {
+      margin-bottom: 16px;
+    }
+    .admin-login label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--neutral-700);
+    }
+    .admin-login input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--neutral-300);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .admin-login input:focus {
+      outline: none;
+      border-color: var(--brand-500);
+      box-shadow: 0 0 0 3px var(--brand-100);
+    }
+    .admin-login .error {
+      color: var(--danger);
+      font-size: 13px;
+      margin-top: 8px;
+      display: none;
+    }
+    .admin-layout { display: none; }
+    .admin-layout.active { display: flex; }
+    .admin-login.hidden { display: none; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--neutral-200);
+    }
+    .stat-card .num {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--brand-700);
+    }
+    .stat-card .label {
+      font-size: 13px;
+      color: var(--neutral-500);
+      margin-top: 4px;
+    }
+    .badge-plan {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-trial { background: #FEF3C7; color: #92400E; }
+    .badge-pro { background: #DBEAFE; color: #1E40AF; }
+    .badge-enterprise { background: #D1FAE5; color: #065F46; }
+    .badge-cancelled { background: #FEE2E2; color: #991B1B; }
+    .badge-active { background: #D1FAE5; color: #065F46; }
+    .payment-on-time { color: #059669; font-weight: 600; }
+    .payment-late { color: #D97706; font-weight: 600; }
+    .payment-missed { color: #DC2626; font-weight: 600; }
+    .payment-none { color: #9CA3AF; }
+    .admin-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--neutral-200);
+    }
+    .admin-nav h1 { font-size: 20px; margin: 0; }
+  </style>
+</head>
+<body>
+  <!-- Admin Login -->
+  <div class="admin-login" id="loginForm">
+    <div style="text-align:center;margin-bottom:24px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--brand-600)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:40px;height:40px;margin:0 auto 12px;">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        <circle cx="12" cy="10" r="2.5"/>
+        <path d="M12 6.5v3.5" stroke-width="2.5"/>
+        <path d="M10.5 8.5l1.5-2 1.5 2"/>
+      </svg>
+      <h1>NorthStar Admin</h1>
+      <p>Sign in to manage your contractors</p>
+    </div>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="adminUser" placeholder="Username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="adminPass" placeholder="Password" onkeydown="if(event.key==='Enter')adminLogin()">
+    </div>
+    <button class="btn btn-primary" style="width:100%;" onclick="adminLogin()">Sign In</button>
+    <div class="error" id="loginError">Invalid credentials</div>
+  </div>
+
+  <!-- Admin Dashboard -->
+  <div class="admin-layout" id="adminPanel">
+    <div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%;">
+      <div class="admin-nav">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--brand-600)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            <circle cx="12" cy="10" r="2.5"/>
+            <path d="M12 6.5v3.5" stroke-width="2.5"/>
+            <path d="M10.5 8.5l1.5-2 1.5 2"/>
+          </svg>
+          <h1>NorthStar Admin</h1>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="adminLogout()">Sign Out</button>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" id="statsContainer">
+        <div class="stat-card"><div class="num" id="totalUsers">0</div><div class="label">Total Contractors</div></div>
+        <div class="stat-card"><div class="num" id="activeUsers">0</div><div class="label">Active / Trial</div></div>
+        <div class="stat-card"><div class="num" id="proUsers">0</div><div class="label">Paid Plans</div></div>
+        <div class="stat-card"><div class="num" id="newThisMonth">0</div><div class="label">New This Month</div></div>
+      </div>
+
+      <!-- Users Table -->
+      <div style="background:white;border-radius:var(--radius);border:1px solid var(--neutral-200);overflow:hidden;">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--neutral-200);">
+          <h2 style="font-size:15px;font-weight:600;margin:0;">All Contractors</h2>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:var(--neutral-50);text-align:left;font-weight:600;color:var(--neutral-600);">
+                <th style="padding:10px 16px;">Business</th>
+                <th style="padding:10px 16px;">Contact</th>
+                <th style="padding:10px 16px;">Email</th>
+                <th style="padding:10px 16px;">Phone</th>
+                <th style="padding:10px 16px;">Plan</th>
+                <th style="padding:10px 16px;">Status</th>
+                <th style="padding:10px 16px;">Signed Up</th>
+                <th style="padding:10px 16px;">Payment</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyState" style="padding:40px;text-align:center;color:var(--neutral-400);display:none;">
+          <p style="font-size:14px;">No contractors have signed up yet. Share the signup link to get started.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let adminToken = localStorage.getItem('adminToken');
+
+    function adminLogin() {
+      const username = document.getElementById('adminUser').value;
+      const password = document.getElementById('adminPass').value;
+      const errorEl = document.getElementById('loginError');
+
+      fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          adminToken = data.token;
+          localStorage.setItem('adminToken', adminToken);
+          showPanel();
+          loadUsers();
+        } else {
+          errorEl.style.display = 'block';
+        }
+      })
+      .catch(() => {
+        errorEl.style.display = 'block';
+      });
+    }
+
+    function adminLogout() {
+      localStorage.removeItem('adminToken');
+      adminToken = null;
+      document.getElementById('loginForm').classList.remove('hidden');
+      document.getElementById('adminPanel').classList.remove('active');
+    }
+
+    function showPanel() {
+      document.getElementById('loginForm').classList.add('hidden');
+      document.getElementById('adminPanel').classList.add('active');
+    }
+
+    function loadUsers() {
+      fetch('/api/admin/users', {
+        headers: { 'Authorization': 'Bearer ' + adminToken }
+      })
+      .then(r => { if (!r.ok) throw new Error('Unauthorized'); return r.json(); })
+      .then(data => {
+        const users = data.users || [];
+        const tbody = document.getElementById('usersTableBody');
+        const emptyState = document.getElementById('emptyState');
+
+        // Stats
+        document.getElementById('totalUsers').textContent = users.length;
+        document.getElementById('activeUsers').textContent = users.filter(u => u.status === 'active' || u.status === 'trial').length;
+        document.getElementById('proUsers').textContent = users.filter(u => u.planType !== 'Trial').length;
+        document.getElementById('newThisMonth').textContent = users.filter(u => {
+          const month = new Date().getMonth();
+          return new Date(u.signupDate).getMonth() === month;
+        }).length;
+
+        if (users.length === 0) {
+          tbody.innerHTML = '';
+          emptyState.style.display = 'block';
+          return;
+        }
+        emptyState.style.display = 'none';
+
+        tbody.innerHTML = users.map(u => {
+          const planBadge = `badge-${u.planType.toLowerCase()}`;
+          const statusBadge = u.status === 'active' || u.status === 'trial' ? 'badge-active' : 'badge-cancelled';
+          const payClass = u.paymentStatus === 'on_time' ? 'payment-on-time' : u.paymentStatus === 'late' ? 'payment-late' : u.paymentStatus === 'missed' ? 'payment-missed' : 'payment-none';
+          const payLabel = u.paymentStatus === 'on_time' ? 'On time' : u.paymentStatus === 'late' ? 'Late' : u.paymentStatus === 'missed' ? 'Missed' : '—';
+
+          return `<tr style="border-bottom:1px solid var(--neutral-100);">
+            <td style="padding:12px 16px;font-weight:500;">${u.businessName || u.name}</td>
+            <td style="padding:12px 16px;">${u.ownerName || '—'}</td>
+            <td style="padding:12px 16px;"><a href="mailto:${u.email}" style="color:var(--brand-600);text-decoration:none;">${u.email}</a></td>
+            <td style="padding:12px 16px;">${u.phone || '—'}</td>
+            <td style="padding:12px 16px;"><span class="badge-plan ${planBadge}">${u.planType}</span></td>
+            <td style="padding:12px 16px;"><span class="badge-plan ${statusBadge}">${u.status}</span></td>
+            <td style="padding:12px 16px;color:var(--neutral-500);">${new Date(u.signupDate).toLocaleDateString()}</td>
+            <td style="padding:12px 16px;"><span class="${payClass}">${payLabel}</span></td>
+          </tr>`;
+        }).join('');
+      })
+      .catch(() => {
+        adminLogout();
+      });
+    }
+
+    // Auto-login if token exists
+    if (adminToken) {
+      showPanel();
+      loadUsers();
+    }
+  </script>
+</body>
+</html>

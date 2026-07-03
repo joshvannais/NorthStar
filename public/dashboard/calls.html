@@ -12,7 +12,7 @@
   <div class="dashboard-layout">
     <aside class="sidebar">
       <a href="/dashboard" class="sidebar-logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/><circle cx="12" cy="10" r="2.5"/><path d="M12 6.5v3.5" stroke-width="2.5"/><path d="M10.5 8.5l1.5-2 1.5 2"/></svg>
         NorthStar
       </a>
       <nav class="sidebar-nav">
@@ -43,7 +43,7 @@
           <div class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
             <h3>No calls yet</h3>
-            <p>Once you connect your phone number and Retell AI, all calls will appear here with duration, transcript, and lead details.</p>
+            <p>Once your AI receptionist is activated, all calls will appear here with duration, transcript, and lead details.</p>
           </div>
         </div>
       </div>
@@ -70,14 +70,11 @@
       <!-- Setup guide -->
       <div class="settings-section" style="margin-top:24px;">
         <h2>📋 Getting Started with Calls</h2>
-        <p class="description">Your AI receptionist is ready to go. Here's what's needed:</p>
-        <ol style="margin-left:20px;color:var(--neutral-600);font-size:14px;line-height:2;">
-          <li><strong>Create a Retell AI account</strong> — Visit retell.ai and sign up</li>
-          <li><strong>Get your API key</strong> — Copy it from the Retell dashboard</li>
-          <li><strong>Provision a phone number</strong> — Buy a number through Retell or Twilio</li>
-          <li><strong>Connect to NorthStar</strong> — Enter your API key in <a href="/dashboard/integrations" style="color:var(--brand-600);">Integrations</a></li>
-          <li><strong>Done!</strong> — Your AI receptionist starts answering calls instantly</li>
-        </ol>
+        <p class="description">Your AI receptionist is ready to go. We'll handle the setup on our end — no action needed from you.</p>
+        <div style="background:var(--brand-50);border-radius:var(--radius-sm);padding:20px;border:1px solid var(--brand-200);text-align:center;">
+          <p style="font-size:14px;color:var(--neutral-600);">Your account is being configured. Once your AI receptionist is live, all calls will appear here automatically.</p>
+          <p style="font-size:13px;color:var(--neutral-500);margin-top:8px;">Need help? <a href="/contact" style="color:var(--brand-600);font-weight:500;">Contact support →</a></p>
+        </div>
       </div>
     </main>
   </div>

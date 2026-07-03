@@ -12,7 +12,7 @@
   <div class="dashboard-layout">
     <aside class="sidebar">
       <a href="/dashboard" class="sidebar-logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/><circle cx="12" cy="10" r="2.5"/><path d="M12 6.5v3.5" stroke-width="2.5"/><path d="M10.5 8.5l1.5-2 1.5 2"/></svg>
         NorthStar
       </a>
       <nav class="sidebar-nav">
@@ -34,43 +34,35 @@
         </div>
       </div>
 
-      <!-- Retell AI -->
+      <!-- Retell AI (behind-the-scenes) -->
       <div class="settings-section">
-        <h2>📞 Voice AI — Retell</h2>
-        <p class="description">Connect Retell AI to power your AI receptionist's voice and natural conversations.</p>
+        <h2>📞 AI Receptionist</h2>
+        <p class="description">Your AI receptionist is managed by the NorthStar platform — no setup needed on your end.</p>
         <div class="integration-card">
           <div class="icon">🤖</div>
           <div class="info">
-            <h4>Retell AI</h4>
-            <p>AI voice agent that answers calls</p>
+            <h4>Voice AI</h4>
+            <p>AI receptionist that answers your incoming calls</p>
           </div>
-          <span><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-secondary btn-sm" onclick="showToast('Retell setup guide coming soon!')">Configure</button>
+          <span><span class="status-dot disconnected"></span>Pending setup</span>
         </div>
-        <p style="font-size:13px;color:var(--neutral-400);margin-top:8px;">Don't have a Retell account? <a href="https://retell.ai" target="_blank" style="color:var(--brand-600);">Sign up free →</a></p>
+        <p style="font-size:13px;color:var(--neutral-400);margin-top:8px;">Your AI receptionist will be activated automatically. We'll notify you when it's ready.</p>
       </div>
 
-      <!-- Twilio -->
+      <!-- Phone (Twilio behind-the-scenes) -->
       <div class="settings-section">
-        <h2>📱 Phone & SMS — Twilio</h2>
-        <p class="description">Provision phone numbers and receive SMS notifications for new leads.</p>
+        <h2>📱 Phone Number</h2>
+        <p class="description">Your dedicated phone number where customers reach your AI receptionist.</p>
         <div class="integration-card">
           <div class="icon">📞</div>
           <div class="info">
-            <h4>Phone Number</h4>
-            <p>Business number for incoming calls</p>
+            <h4>(555) 000-0000</h4>
+            <p>Your NorthStar receptionist number</p>
           </div>
-          <span><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-secondary btn-sm" onclick="showToast('Twilio setup guide coming soon!')">Configure</button>
+          <span><span class="status-dot disconnected"></span>Pending setup</span>
         </div>
-        <div class="integration-card">
-          <div class="icon">💬</div>
-          <div class="info">
-            <h4>SMS Notifications</h4>
-            <p>Text alerts when new leads come in</p>
-          </div>
-          <span><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-secondary btn-sm" onclick="showToast('SMS setup guide coming soon!')">Configure</button>
+        <div style="background:var(--brand-50);border-radius:var(--radius-sm);padding:16px;border:1px solid var(--brand-200);font-size:13px;color:var(--neutral-600);margin-top:12px;">
+          <strong>💡 How it works:</strong> When a customer calls your business number, it forwards to your AI receptionist. We'll help you set up forwarding.
         </div>
       </div>
 
@@ -115,8 +107,8 @@
 
       <!-- Summary -->
       <div style="background:var(--brand-50);border-radius:var(--radius);padding:20px;border:1px solid var(--brand-200);">
-        <h3 style="font-size:15px;font-weight:600;color:var(--brand-800);margin-bottom:4px;">🔌 All integrations ready to connect</h3>
-        <p style="font-size:13px;color:var(--neutral-500);">Once you upgrade to <strong>Professional</strong>, you'll get step-by-step setup guides for each integration right here.</p>
+        <h3 style="font-size:15px;font-weight:600;color:var(--brand-800);margin-bottom:4px;">🔌 Connect your tools</h3>
+        <p style="font-size:13px;color:var(--neutral-500);">Sync leads to Google Sheets, schedule appointments on Calendar, and get email notifications — all available here.</p>
       </div>
     </main>
   </div>

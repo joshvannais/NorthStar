@@ -13,7 +13,7 @@
       max-width: 400px;
       margin: 80px auto;
       padding: 32px;
-      background: white;
+      background: var(--neutral-50);
       border-radius: var(--radius);
       border: 1px solid var(--neutral-200);
       box-shadow: 0 4px 24px rgba(0,0,0,0.08);
@@ -60,28 +60,6 @@
     .admin-layout.active { display: flex; }
     .admin-login.hidden { display: none; }
 
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    .stat-card {
-      background: white;
-      padding: 20px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--neutral-200);
-    }
-    .stat-card .num {
-      font-size: 28px;
-      font-weight: 700;
-      color: var(--brand-700);
-    }
-    .stat-card .label {
-      font-size: 13px;
-      color: var(--neutral-500);
-      margin-top: 4px;
-    }
     .badge-plan {
       display: inline-block;
       padding: 2px 8px;
@@ -135,7 +113,7 @@
 
   <!-- Admin Dashboard -->
   <div class="admin-layout" id="adminPanel">
-    <div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%;">
+    <div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%;box-sizing:border-box;">
       <div class="admin-nav">
         <div style="display:flex;align-items:center;gap:12px;">
           <img src="/assets/logo.png" alt="NorthStar" class="logo-img">
@@ -146,14 +124,14 @@
 
       <!-- Stats -->
       <div class="stats-grid" id="statsContainer">
-        <div class="stat-card"><div class="num" id="totalUsers">0</div><div class="label">Total Contractors</div></div>
-        <div class="stat-card"><div class="num" id="activeUsers">0</div><div class="label">Active / Trial</div></div>
-        <div class="stat-card"><div class="num" id="proUsers">0</div><div class="label">Paid Plans</div></div>
-        <div class="stat-card"><div class="num" id="newThisMonth">0</div><div class="label">New This Month</div></div>
+        <div class="stat-card"><div class="stat-value" id="totalUsers" style="color:var(--brand-700);">0</div><div class="stat-label">Total Contractors</div></div>
+        <div class="stat-card"><div class="stat-value" id="activeUsers" style="color:var(--brand-700);">0</div><div class="stat-label">Active / Trial</div></div>
+        <div class="stat-card"><div class="stat-value" id="proUsers" style="color:var(--brand-700);">0</div><div class="stat-label">Paid Plans</div></div>
+        <div class="stat-card"><div class="stat-value" id="newThisMonth" style="color:var(--brand-700);">0</div><div class="stat-label">New This Month</div></div>
       </div>
 
       <!-- Users Table -->
-      <div style="background:white;border-radius:var(--radius);border:1px solid var(--neutral-200);overflow:hidden;">
+      <div style="background:var(--neutral-50);border-radius:var(--radius);border:1px solid var(--neutral-200);overflow:hidden;">
         <div style="padding:16px 20px;border-bottom:1px solid var(--neutral-200);">
           <h2 style="font-size:15px;font-weight:600;margin:0;">All Contractors</h2>
         </div>

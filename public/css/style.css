@@ -1095,8 +1095,8 @@ tr:hover td { background: var(--neutral-50); }
     }
 
 /* Mobile hamburger menu */
-.mobile-header {
-  display: none;
+@media (min-width: 769px) {
+  .mobile-header { display: none; }
 }
 
 .hamburger-btn {

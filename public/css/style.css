@@ -173,6 +173,17 @@ img, svg, video, canvas {
   background: var(--neutral-100);
 }
 
+.btn-demo {
+  background: #f59e0b;
+  color: white;
+  border-color: #f59e0b;
+}
+
+.btn-demo:hover {
+  background: #d97706;
+  transform: translateY(-1px);
+}
+
 .btn-sm {
   padding: 6px 14px;
   font-size: 13px;
@@ -1056,6 +1067,16 @@ tr:hover td { background: var(--neutral-50); }
 
 [data-theme="dark"] .btn-ghost:hover {
   background: var(--neutral-200);
+}
+
+[data-theme="dark"] .btn-demo {
+  background: #f59e0b;
+  color: white;
+  border-color: #f59e0b;
+}
+
+[data-theme="dark"] .btn-demo:hover {
+  background: #d97706;
 }
 
 [data-theme="dark"] .section-alt {

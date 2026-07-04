@@ -145,28 +145,46 @@
       document.getElementById("scheduledLeads");
 
       // Revenue calculation — dynamic from simulator data
-                const leadRate = 0.4;
-                const closeRate = 0.6;
-                // Read actual simulated calls from localStorage for real job prices
-                let avgJobValue = 1200; // fallback
-                let simCallCount = 0;
-                let simLeadCount = 0;
-                try {
-                  const callsRaw = localStorage.getItem('northstar_calls');
-                  if (callsRaw) {
-                    const calls = JSON.parse(callsRaw);
-                    simCallCount = calls.length;
-                    // Count only answered/voicemail calls as leads (not missed/no-interest)
-                    simLeadCount = calls.filter(c => c.status === 'answered' || c.status === 'voicemail').length;
-                    if (calls.length > 0) {
-                      const total = calls.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
-                      avgJobValue = Math.round(total / calls.length);
-                    }
-                  }
-                } catch(e) {}
-                // Use both server leads and simulator calls
-                const revenueLeads = today.length + simLeadCount;
-                const estimatedRevenue = revenueLeads * leadRate * avgJobValue * closeRate;
+          const leadRate = 0.4;
+          const closeRate = 0.6;
+          // Read actual simulated calls from localStorage for real job prices
+          let avgJobValue = 1200; // fallback
+          let simCallCount = 0;
+          let simLeadCount = 0;
+          try {
+            let callsRaw = localStorage.getItem('northstar_calls');
+            // Seed demo data on first visit so revenue isn't $0
+            if (!callsRaw && today.length === 0) {
+              const seed = [];
+              const seedServices = [
+                { name:'Tree removal', min:400, max:10000 },
+                { name:'Roof inspection', min:800, max:12000 },
+                { name:'Emergency plumbing', min:200, max:3500 },
+                { name:'HVAC repair', min:300, max:6000 },
+                { name:'Concrete driveway', min:800, max:10000 }
+              ];
+              for (let i = 0; i < seedServices.length; i++) {
+                const s = seedServices[i];
+                const p = Math.round((Math.random() * (s.max - s.min) + s.min) / 25) * 25;
+                seed.push({ caller:'Seed Customer', phone:'(860) 555-0' + (100 + i), address:i + 100 + ' Main St', service:s.name, avgPrice:p, status:'answered', outcome:'appointment-set', time:'Today, ' + (9 + i) + ':00 AM', summary:'Seeded demo call for ' + s.name + '.', transcript:'AI: How can I help?\\nCustomer: I need ' + s.name + '.' });
+              }
+              localStorage.setItem('northstar_calls', JSON.stringify(seed));
+              callsRaw = localStorage.getItem('northstar_calls');
+            }
+            if (callsRaw) {
+              const calls = JSON.parse(callsRaw);
+              simCallCount = calls.length;
+              // Count only answered/voicemail calls as leads (not missed/no-interest)
+              simLeadCount = calls.filter(c => c.status === 'answered' || c.status === 'voicemail').length;
+              if (calls.length > 0) {
+                const total = calls.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
+                avgJobValue = Math.round(total / calls.length);
+              }
+            }
+          } catch(e) { console.error('Revenue calc error:', e); }
+          // Use both server leads and simulator calls
+          const revenueLeads = today.length + simLeadCount;
+          const estimatedRevenue = revenueLeads * leadRate * avgJobValue * closeRate;
           document.getElementById("estimatedRevenue").textContent = "$" + Math.round(estimatedRevenue).toLocaleString();
           if (estimatedRevenue > 0) document.getElementById("estimatedRevenue").className = "stat-value revenue-positive";
       document.getElementById("scheduledLeads").textContent = scheduled.length;

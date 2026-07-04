@@ -225,7 +225,7 @@ app.get('/demo-login', (req, res) => {
     id: 'demo-user',
     name: 'Demo Contractor',
     businessName: 'Your Company',
-    email: 'demo@northstar-ai.com',
+    email: 'demo@northstarsolutions.app',
     phone: '(555) 000-0000',
   });
 
@@ -256,7 +256,7 @@ app.get('/demo-login', (req, res) => {
     localStorage.setItem('user', JSON.stringify({
       name: 'Demo Contractor',
       businessName: 'Your Company',
-      email: 'demo@northstar-ai.com',
+      email: 'demo@northstarsolutions.app',
       phone: '(555) 000-0000',
     }));
     setTimeout(() => { window.location.href = '/dashboard'; }, 1200);

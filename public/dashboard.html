@@ -244,23 +244,58 @@ function toggleMobileMenu() {
     // Simulate a demo lead
     async function simulateDemoLead() {
       const names = ['John Smith', 'Maria Garcia', 'Bob Johnson', 'Sarah Wilson', 'Mike Brown', 'Lisa Davis'];
-      const services = ['Tree removal', 'Roof repair', 'Plumbing leak', 'Electrical wiring', 'Landscape design', 'Deck staining'];
+      const services = [
+        { name: 'Tree removal', price: 2400 },
+        { name: 'Roof repair', price: 3800 },
+        { name: 'Plumbing leak', price: 650 },
+        { name: 'Electrical wiring', price: 1200 },
+        { name: 'Landscape design', price: 2800 },
+        { name: 'Deck staining', price: 1800 }
+      ];
       const addresses = ['123 Oak St', '456 Maple Ave', '789 Pine Rd', '321 Elm Dr', '654 Birch Ln'];
       const times = ['Tomorrow morning', 'Thursday afternoon', 'Friday 10am', 'Next Monday', 'This Saturday'];
       const urgencies = ['', '', '', 'Storm damage (High)', 'Emergency (High)'];
+      const svc = services[Math.floor(Math.random() * services.length)];
+      const adr = addresses[Math.floor(Math.random() * addresses.length)];
+      const name = names[Math.floor(Math.random() * names.length)];
+      const phone = `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`;
+      const time = times[Math.floor(Math.random() * times.length)];
+      const urgency = urgencies[Math.floor(Math.random() * urgencies.length)];
+
+      // Also store a simulated call for the revenue counter
+      const detail = svc.name + ' at ' + adr;
+      try {
+        const callsRaw = localStorage.getItem('northstar_calls');
+        const calls = callsRaw ? JSON.parse(callsRaw) : [];
+        calls.unshift({
+          caller: name,
+          phone: phone,
+          address: adr,
+          service: svc.name,
+          time: new Date().toLocaleString(),
+          duration: '0:00',
+          status: 'answered',
+          outcome: 'appointment-set',
+          summary: 'Estimated for ' + svc.name + '. Customer requested ' + time + '.',
+          transcript: 'AI: How can I help?\\n' + name + ': Need ' + svc.name + ' estimate.',
+          avgPrice: svc.price + Math.floor(Math.random() * 500),
+          jobDetail: detail
+        });
+        localStorage.setItem('northstar_calls', JSON.stringify(calls));
+      } catch(e) {}
 
       const data = {
-        customerName: names[Math.floor(Math.random() * names.length)],
-        phoneNumber: `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`,
-        address: addresses[Math.floor(Math.random() * addresses.length)],
-        serviceRequested: services[Math.floor(Math.random() * services.length)],
-        preferredTime: times[Math.floor(Math.random() * times.length)],
-        urgency: urgencies[Math.floor(Math.random() * urgencies.length)],
+        customerName: name,
+        phoneNumber: phone,
+        address: adr,
+        serviceRequested: svc.name,
+        preferredTime: time,
+        urgency: urgency,
       };
 
       try {
         const result = await API.simulateLead(data);
-        showToast(`✅ New lead captured: ${result.lead.customerName}`);
+        showToast(`✅ New lead captured: ${result.lead.customerName} (${svc.price}+ estimated)`);
         loadLeads();
       } catch (err) {
         showToast('Lead simulated (offline mode)', 'success');

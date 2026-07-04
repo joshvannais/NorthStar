@@ -41,6 +41,7 @@ const pages = {
   '/dashboard/calls': 'public/dashboard/calls.html',
   '/dashboard/my-number': 'public/dashboard/my-number.html',
   '/dashboard/settings': 'public/dashboard/settings.html',
+  '/dashboard/integrations': 'public/dashboard/integrations.html',
   '/contact': 'public/contact.html',
   '/privacy': 'public/privacy.html',
   '/terms': 'public/terms.html',

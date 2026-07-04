@@ -146,7 +146,7 @@
 
       // Revenue calculation
       const leadRate = 0.4;
-      const avgJobValue = 450;
+      const avgJobValue = 1200; // Conservative avg across trades (tree/plumbing/electrical/HVAC/roofing)
       const closeRate = 0.6;
       const estimatedRevenue = today.length * leadRate * avgJobValue * closeRate;
       document.getElementById("estimatedRevenue").textContent = "$" + Math.round(estimatedRevenue).toLocaleString();

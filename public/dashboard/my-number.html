@@ -39,9 +39,9 @@
         <p style="font-size:13px;color:var(--neutral-500);">Enter your business number below. NorthStar will activate it with AI answering.</p>
       </div>
     </div>
-    <div style="margin-top:16px;display:flex;gap:12px;align-items:center;">
-      <input type="tel" id="businessNumber" placeholder="(XXX) XXX-XXXX" style="flex:1;padding:12px 16px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:15px;background:var(--neutral-100);color:var(--neutral-800);" maxlength="14">
-      <button class="btn btn-primary" onclick="saveNumber()">Save Number</button>
+    <div style="margin-top:16px;display:flex;gap:8px;align-items:center;flex-wrap:nowrap;">
+      <input type="tel" id="businessNumber" placeholder="(XXX) XXX-XXXX" style="flex:1;min-width:0;padding:10px 14px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;background:var(--neutral-100);color:var(--neutral-800);" maxlength="14">
+      <button class="btn btn-primary" onclick="saveNumber()" style="white-space:nowrap;padding:10px 18px;font-size:14px;">Save Number</button>
     </div>
     <div id="savedNumber" style="display:none;margin-top:12px;padding:12px;background:rgba(4,120,87,0.1);border-radius:var(--radius-sm);color:#059669;font-size:14px;">
       ✅ Your AI receptionist will answer calls to <strong id="displayedNumber"></strong>

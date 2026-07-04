@@ -147,23 +147,21 @@
       // Revenue calculation — dynamic from simulator data
           const leadRate = 0.4;
           const closeRate = 0.6;
-          // Read actual simulated calls from localStorage for real job prices
+          // Read simulated calls from localStorage
           let avgJobValue = 0;
           let callCount = 0;
           try {
             const callsRaw = localStorage.getItem('northstar_calls');
             if (callsRaw) {
               const calls = JSON.parse(callsRaw);
-              // Only count today's calls (time starts with "Today")
-              const todayCalls = calls.filter(c => c.time && c.time.indexOf('Today') === 0);
-              callCount = todayCalls.length;
-              if (todayCalls.length > 0) {
-                const total = todayCalls.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
-                avgJobValue = Math.round(total / todayCalls.length);
+              const answered = calls.filter(c => c.status === 'answered' || c.status === 'voicemail');
+              callCount = answered.length;
+              if (answered.length > 0) {
+                const total = answered.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
+                avgJobValue = Math.round(total / answered.length);
               }
             }
           } catch(e) {}
-          // Use localStorage calls as the source of truth for revenue
           const estimatedRevenue = callCount * leadRate * avgJobValue * closeRate;
           document.getElementById("estimatedRevenue").textContent = "$" + Math.round(estimatedRevenue).toLocaleString();
           if (estimatedRevenue > 0) document.getElementById("estimatedRevenue").className = "stat-value revenue-positive";

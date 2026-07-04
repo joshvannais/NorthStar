@@ -945,11 +945,18 @@ tr:hover td { background: var(--neutral-50); }
 
   .mobile-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
     gap: 8px;
     padding: 10px 16px;
     border-bottom: 1px solid var(--neutral-200);
     background: white;
+  }
+
+  .mobile-logo {
+    height: 26px;
+    width: 26px;
+    flex-shrink: 0;
   }
 
   .main-content { padding: 16px; }

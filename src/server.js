@@ -42,6 +42,10 @@ const pages = {
   '/dashboard/my-number': 'public/dashboard/my-number.html',
   '/dashboard/settings': 'public/dashboard/settings.html',
   '/contact': 'public/contact.html',
+  '/privacy': 'public/privacy.html',
+  '/terms': 'public/terms.html',
+  '/refund': 'public/refund.html',
+  '/legal': 'public/legal.html',
   '/admin': 'public/admin.html',
   '/preview-dark': 'public/previews/dark.html',
   '/preview-light': 'public/previews/light.html',
@@ -221,7 +225,7 @@ app.get('/demo-login', (req, res) => {
     id: 'demo-user',
     name: 'Demo Contractor',
     businessName: 'Your Company',
-    email: 'demo@northstar-ai.com',
+    email: 'demo@northstarsolutions.app',
     phone: '(555) 000-0000',
   });
 
@@ -252,7 +256,7 @@ app.get('/demo-login', (req, res) => {
     localStorage.setItem('user', JSON.stringify({
       name: 'Demo Contractor',
       businessName: 'Your Company',
-      email: 'demo@northstar-ai.com',
+      email: 'demo@northstarsolutions.app',
       phone: '(555) 000-0000',
     }));
     setTimeout(() => { window.location.href = '/dashboard'; }, 1200);

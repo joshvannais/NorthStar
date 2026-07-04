@@ -57,7 +57,7 @@
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Send Message</button>
       </form>
-      <p style="font-size:13px;color:var(--neutral-400);margin-top:12px;text-align:center;">Or email us directly at <strong>support@northstarsolutions.app</strong></p>
+      <p style="font-size:13px;color:var(--neutral-400);margin-top:12px;text-align:center;">Or email us directly at <strong>northstar-solutions-4e85c6e9@ctomail.io</strong></p>
     </div>
 
     <div class="settings-section" style="text-align:center;">
@@ -66,12 +66,12 @@
         <div class="card" style="padding:20px;text-align:center;">
           <div style="font-size:24px;margin-bottom:8px;">📧</div>
           <h3 style="font-size:14px;font-weight:600;">Email</h3>
-          <p style="font-size:13px;color:var(--neutral-500);">support@northstarsolutions.app</p>
+          <p style="font-size:13px;color:var(--neutral-500);">northstar-solutions-4e85c6e9@ctomail.io</p>
         </div>
         <div class="card" style="padding:20px;text-align:center;">
           <div style="font-size:24px;margin-bottom:8px;">📞</div>
           <h3 style="font-size:14px;font-weight:600;">Phone</h3>
-          <p style="font-size:13px;color:var(--neutral-500);">(555) 000-0000</p>
+          <p style="font-size:13px;color:var(--neutral-500);">(860) 970-5750</p>
         </div>
       </div>
     </div>
@@ -106,13 +106,30 @@
       btn.disabled = true;
       btn.textContent = 'Sending...';
 
-      // For now, just show success (no backend email setup yet)
-      setTimeout(() => {
-        showToast('✅ Message received! We\'ll get back to you soon.');
-        btn.disabled = false;
-        btn.textContent = 'Send Message';
-        e.target.reset();
-      }, 1500);
+      try {
+        const res = await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: document.getElementById('name').value,
+            email: document.getElementById('email').value,
+            subject: document.getElementById('subject').value,
+            message: document.getElementById('message').value
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ Message received! We\'ll get back to you soon.');
+          e.target.reset();
+        } else {
+          showToast('❌ ' + (data.error || 'Something went wrong. Please email us directly.'));
+        }
+      } catch (err) {
+        showToast('❌ Could not send. Please email us directly at northstar-solutions-4e85c6e9@ctomail.io');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Send Message';
     });
   </script>
   <script src="/js/api.js"></script>

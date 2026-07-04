@@ -127,6 +127,77 @@
     </div>
   </section>
 
+  <!-- Try the AI Receptionist (Demo) -->
+  <section class="section" id="demo">
+    <div class="section-header">
+      <h2>Try the AI Receptionist</h2>
+      <p>See how NorthStar answers calls, captures leads, and books jobs — no signup needed.</p>
+    </div>
+    <div id="demoStep1" style="text-align:center;">
+      <p style="margin-bottom:20px;color:var(--neutral-500);font-size:15px;">Choose a scenario to simulate:</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;max-width:700px;margin:0 auto;">
+        <div class="demo-scenario" onclick="startDemo('tree')">
+          <div style="font-size:40px;margin-bottom:8px;">🌳</div>
+          <h4>Tree Service</h4>
+          <p style="font-size:13px;color:var(--neutral-500);">Customer needs an estimate for tree removal</p>
+        </div>
+        <div class="demo-scenario" onclick="startDemo('plumbing')">
+          <div style="font-size:40px;margin-bottom:8px;">🔧</div>
+          <h4>Plumbing Emergency</h4>
+          <p style="font-size:13px;color:var(--neutral-500);">Burst pipe needs immediate repair</p>
+        </div>
+        <div class="demo-scenario" onclick="startDemo('roofing')">
+          <div style="font-size:40px;margin-bottom:8px;">🏠</div>
+          <h4>Roofing Estimate</h4>
+          <p style="font-size:13px;color:var(--neutral-500);">Storm damage needs inspection and quote</p>
+        </div>
+      </div>
+    </div>
+    <div id="demoStep2" style="display:none;">
+      <div style="max-width:560px;margin:0 auto;background:var(--neutral-100);border-radius:var(--radius);border:1px solid var(--neutral-200);overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--neutral-200);border-bottom:1px solid var(--neutral-300);">
+          <span class="demo-active">●</span>
+          <span style="font-size:13px;font-weight:600;" id="demoStatus">Active Call</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--neutral-500);" id="demoTimer">0:00</span>
+        </div>
+        <div id="demoChat" style="padding:16px;max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;"></div>
+        <div style="padding:8px 16px;border-top:1px solid var(--neutral-200);display:flex;align-items:center;gap:8px;">
+          <span class="demo-typing" id="demoTyping" style="display:none;"><span></span><span></span><span></span></span>
+          <button class="btn btn-ghost btn-sm" onclick="resetDemo()" style="margin-left:auto;">← Back to scenarios</button>
+        </div>
+      </div>
+    </div>
+    <div id="demoStep3" style="display:none;max-width:560px;margin:0 auto;">
+      <div style="background:var(--neutral-100);border-radius:var(--radius);border:1px solid var(--neutral-200);padding:24px;">
+        <div style="text-align:center;margin-bottom:20px;">
+          <div style="font-size:32px;">✅</div>
+          <h3 style="margin-top:8px;">Call Complete</h3>
+          <p style="font-size:14px;color:var(--neutral-500);">Here's what the AI captured</p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
+          <div><strong>Customer</strong><br><span style="color:var(--neutral-500);" id="demoResultName">—</span></div>
+          <div><strong>Phone</strong><br><span style="color:var(--neutral-500);" id="demoResultPhone">—</span></div>
+          <div><strong>Address</strong><br><span style="color:var(--neutral-500);" id="demoResultAddress">—</span></div>
+          <div><strong>Service</strong><br><span style="color:var(--neutral-500);" id="demoResultService">—</span></div>
+          <div style="grid-column:1/-1;"><strong>Preferred Time</strong><br><span style="color:var(--neutral-500);" id="demoResultTime">—</span></div>
+        </div>
+        <div style="margin-top:16px;padding:12px;background:var(--neutral-200);border-radius:var(--radius-sm);">
+          <strong style="font-size:13px;">AI Summary</strong>
+          <p style="font-size:13px;color:var(--neutral-600);margin-top:4px;" id="demoResultSummary"></p>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;justify-content:center;">
+          <span class="badge-completed">📨 SMS Sent ✓</span>
+          <span class="badge-completed">📧 Email Sent ✓</span>
+          <span class="badge-completed">💾 Lead Saved ✓</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:20px;justify-content:center;">
+          <button class="btn btn-secondary" onclick="resetDemo()">Try Another Scenario</button>
+          <a href="/login" class="btn btn-primary">Explore Full Dashboard →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Pricing -->
   <section class="section section-alt" id="pricing">
     <div class="section-header">
@@ -247,6 +318,152 @@
     </div>
     <p>© 2026 NorthStar Solutions. All rights reserved.</p>
   </footer>
+<script>
+// Demo scenarios data
+const demoScenarios = {
+  tree: {
+    name: 'Maria Garcia',
+    phone: '(860) 555-0142',
+    address: '42 Maple Drive',
+    service: 'Tree removal estimate',
+    time: 'Thursday morning',
+    summary: 'Customer has a large oak tree with a cracked trunk near the house. Needs an estimate for removal and stump grinding. Preferred time is Thursday before noon.',
+    messages: [
+      { from: 'ai', text: 'Thank you for calling NorthStar. My name is Alex. How can I help you today?' },
+      { from: 'customer', text: 'Hi, I have a large oak tree in my backyard that needs to be removed. Can you give me an estimate?' },
+      { from: 'ai', text: "I'd be happy to help with that. First, could I get your name?" },
+      { from: 'customer', text: 'Maria Garcia.' },
+      { from: 'ai', text: "Thank you, Maria. And what's the best phone number to reach you?" },
+      { from: 'customer', text: '(860) 555-0142.' },
+      { from: 'ai', text: 'Great. And where is the property located?' },
+      { from: 'customer', text: '42 Maple Drive.' },
+      { from: 'ai', text: 'Can you tell me a bit about the tree? About how tall is it and is it near any structures?' },
+      { from: 'customer', text: "It's probably 50 feet tall and about 30 feet from the house. The trunk has a big crack in it." },
+      { from: 'ai', text: 'That sounds like it needs attention soon. I can schedule an estimator to come out Thursday morning. Would that work for you?' },
+      { from: 'customer', text: 'Thursday morning sounds perfect.' },
+      { from: 'ai', text: "Perfect! I've scheduled your estimate for Thursday morning. You'll receive a confirmation text shortly. Is there anything else I can help with?" }
+    ]
+  },
+  plumbing: {
+    name: 'Tom Anderson',
+    phone: '(860) 555-0198',
+    address: '187 Cedar Lane',
+    service: 'Emergency plumbing - burst pipe',
+    time: 'ASAP (emergency)',
+    summary: 'Emergency call - burst pipe in the basement, water leaking. Customer needs immediate plumbing repair. Dispatched as emergency priority.',
+    messages: [
+      { from: 'ai', text: 'Thank you for calling NorthStar. This is Alex. How can I help you?' },
+      { from: 'customer', text: 'I have a burst pipe in my basement! Water is everywhere! I need help right now!' },
+      { from: 'ai', text: "I understand this is urgent. Let me get your information right away. What's your name?" },
+      { from: 'customer', text: 'Tom Anderson. Please hurry.' },
+      { from: 'ai', text: "Tom, I'm noting this as an emergency. What's your phone number?" },
+      { from: 'customer', text: '(860) 555-0198.' },
+      { from: 'ai', text: 'And the address where you need service?' },
+      { from: 'customer', text: '187 Cedar Lane. It's the basement water pipe that burst.' },
+      { from: 'ai', text: "I've flagged this as an emergency. I'm sending a plumber right away. They should be there within the hour. In the meantime, can you locate the main water shutoff?" },
+      { from: 'customer', text: "I think it's in the basement near the water heater." },
+      { from: 'ai', text: "Turn it clockwise to shut off the water to the house. I've dispatched the emergency team and you'll get a text with their ETA. Is there anything else you need?" }
+    ]
+  },
+  roofing: {
+    name: 'Sarah Wilson',
+    phone: '(860) 555-0273',
+    address: '55 Oak Street',
+    service: 'Storm damage roofing inspection',
+    time: 'Wednesday afternoon',
+    summary: "Customer had storm damage from last night's hailstorm. Needs roof inspection and insurance estimate. Several shingles missing and gutter damage.",
+    messages: [
+      { from: 'ai', text: 'Thank you for calling NorthStar. You're speaking with Alex. How can I help you today?' },
+      { from: 'customer', text: 'Hi, we had a bad hailstorm last night and I think my roof is damaged.' },
+      { from: 'ai', text: "I'm sorry to hear that. I can help get that inspected. What's your name?" },
+      { from: 'customer', text: 'Sarah Wilson.' },
+      { from: 'ai', text: 'Thanks Sarah. And your phone number?' },
+      { from: 'customer', text: '(860) 555-0273.' },
+      { from: 'ai', text: "What's the property address?" },
+      { from: 'customer', text: '55 Oak Street.' },
+      { from: 'ai', text: "Can you describe what you're seeing? Any visible damage?" },
+      { from: 'customer', text: 'I can see several shingles loose and some are completely missing. The gutters are dented too.' },
+      { from: 'ai', text: 'That sounds like it needs a professional assessment. We can do a free inspection and provide an insurance-ready estimate. Would Wednesday afternoon work for you?' },
+      { from: 'customer', text: 'Yes, Wednesday afternoon is great.' },
+      { from: 'ai', text: "Perfect! I've scheduled a roof inspection for Wednesday afternoon. You'll receive a confirmation via text and email. We'll handle the insurance paperwork too. Anything else I can help with?" }
+    ]
+  }
+};
+
+let demoInterval;
+let demoSeconds = 0;
+let msgIndex = 0;
+let currentScenario = null;
+
+function startDemo(scenario) {
+  currentScenario = demoScenarios[scenario];
+  if (!currentScenario) return;
+  msgIndex = 0;
+  demoSeconds = 0;
+  document.getElementById('demoStep1').style.display = 'none';
+  document.getElementById('demoStep2').style.display = 'block';
+  document.getElementById('demoStep3').style.display = 'none';
+  document.getElementById('demoChat').innerHTML = '';
+  document.getElementById('demoTimer').textContent = '0:00';
+  document.getElementById('demoTyping').style.display = 'none';
+  if (demoInterval) clearInterval(demoInterval);
+  demoInterval = setInterval(() => {
+    demoSeconds++;
+    const m = Math.floor(demoSeconds / 60);
+    const s = demoSeconds % 60;
+    document.getElementById('demoTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  }, 1000);
+  showNextMsg();
+}
+
+function showNextMsg() {
+  if (msgIndex >= currentScenario.messages.length) {
+    setTimeout(showResults, 1000);
+    return;
+  }
+  const msg = currentScenario.messages[msgIndex];
+  const chat = document.getElementById('demoChat');
+  const typing = document.getElementById('demoTyping');
+  typing.style.display = 'flex';
+  setTimeout(() => {
+    typing.style.display = 'none';
+    const div = document.createElement('div');
+    div.className = 'demo-msg demo-' + msg.from;
+    div.textContent = msg.text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    msgIndex++;
+    setTimeout(showNextMsg, msg.from === 'ai' ? 1800 : 1200);
+  }, msg.from === 'ai' ? 1500 : 1000);
+}
+
+function showResults() {
+  if (demoInterval) clearInterval(demoInterval);
+  document.getElementById('demoStep2').style.display = 'none';
+  document.getElementById('demoStep3').style.display = 'block';
+  const s = currentScenario;
+  document.getElementById('demoResultName').textContent = s.name;
+  document.getElementById('demoResultPhone').textContent = s.phone;
+  document.getElementById('demoResultAddress').textContent = s.address;
+  document.getElementById('demoResultService').textContent = s.service;
+  document.getElementById('demoResultTime').textContent = s.time;
+  document.getElementById('demoResultSummary').textContent = s.summary;
+}
+
+function resetDemo() {
+  if (demoInterval) clearInterval(demoInterval);
+  demoInterval = null;
+  demoSeconds = 0;
+  msgIndex = 0;
+  currentScenario = null;
+  document.getElementById('demoStep1').style.display = 'block';
+  document.getElementById('demoStep2').style.display = 'none';
+  document.getElementById('demoStep3').style.display = 'none';
+  document.getElementById('demoChat').innerHTML = '';
+  document.getElementById('demoTimer').textContent = '0:00';
+  document.getElementById('demoTyping').style.display = 'none';
+}
+</script>
 
 <script src="/js/theme.js"></script>
 <div style="text-align:center;padding:24px 16px;border-top:1px solid var(--neutral-200);margin-top:24px;"><button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button></div>

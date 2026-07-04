@@ -954,8 +954,8 @@ tr:hover td { background: var(--neutral-50); }
   }
 
   .mobile-logo {
-    height: 26px;
-    width: 26px;
+    height: 28px;
+    width: auto;
     flex-shrink: 0;
   }
 

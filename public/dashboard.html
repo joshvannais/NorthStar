@@ -149,22 +149,24 @@
                 const closeRate = 0.6;
                 // Read actual simulated calls from localStorage for real job prices
                 let avgJobValue = 1200; // fallback
-                let simTodayCount = 0;
+                let simCallCount = 0;
+                let simLeadCount = 0;
                 try {
                   const callsRaw = localStorage.getItem('northstar_calls');
                   if (callsRaw) {
                     const calls = JSON.parse(callsRaw);
-                    const todayCalls = calls.filter(c => c.time && c.time.indexOf('Today') === 0);
-                    simTodayCount = todayCalls.length;
-                    if (todayCalls.length > 0) {
-                      const total = todayCalls.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
-                      avgJobValue = Math.round(total / todayCalls.length);
+                    simCallCount = calls.length;
+                    // Count only answered/voicemail calls as leads (not missed/no-interest)
+                    simLeadCount = calls.filter(c => c.status === 'answered' || c.status === 'voicemail').length;
+                    if (calls.length > 0) {
+                      const total = calls.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
+                      avgJobValue = Math.round(total / calls.length);
                     }
                   }
                 } catch(e) {}
-                // Use both server leads and simulator calls for today's count
-                const revenueTodayCount = today.length + simTodayCount;
-                const estimatedRevenue = revenueTodayCount * leadRate * avgJobValue * closeRate;
+                // Use both server leads and simulator calls
+                const revenueLeads = today.length + simLeadCount;
+                const estimatedRevenue = revenueLeads * leadRate * avgJobValue * closeRate;
           document.getElementById("estimatedRevenue").textContent = "$" + Math.round(estimatedRevenue).toLocaleString();
           if (estimatedRevenue > 0) document.getElementById("estimatedRevenue").className = "stat-value revenue-positive";
       document.getElementById("scheduledLeads").textContent = scheduled.length;

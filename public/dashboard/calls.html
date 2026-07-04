@@ -12,10 +12,7 @@
 <body>
   <div class="dashboard-layout">
     <aside class="sidebar">
-      <a href="/dashboard" class="sidebar-logo">
-        <img src="/assets/logo.png" alt="NorthStar" class="logo-img">
-        NorthStar
-      </a>
+      <a href="/dashboard" class="sidebar-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a>
       <nav class="sidebar-nav">
         <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
         <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
@@ -23,66 +20,45 @@
         <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
         <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
       </nav>
-      <a href="/" onclick="localStorage.clear()" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
+      <a href="/" onclick="localStorage.clear()" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
       <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button>
     </aside>
-
     <main class="main-content">
       <div class="page-header">
-        <div>
-          <h1>Call History</h1>
-          <p>Every call your AI receptionist has handled.</p>
-        </div>
+        <div><h1>Call History</h1><p>Every call your AI receptionist has handled.</p></div>
+        <button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">📞 Simulate Call</button>
       </div>
-
-      <div class="table-container">
-        <div class="table-header">
-          <h2>Recent Calls</h2>
-          <span style="font-size:13px;color:var(--neutral-500);">0 calls</span>
-        </div>
-        <div>
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-            <h3>No calls yet</h3>
-            <p>Once your AI receptionist is activated, all calls will appear here with duration, transcript, and lead details.</p>
-          </div>
-        </div>
+      <div style="margin-bottom:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;" id="callStats">
+        <div class="stat-card"><div class="stat-label">Total Calls</div><div class="stat-value" id="totalCalls">0</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Duration</div><div class="stat-value" id="avgDuration">—</div></div>
+        <div class="stat-card"><div class="stat-label">Answer Rate</div><div class="stat-value" id="answerRate">—</div></div>
       </div>
-
-      <!-- Stats cards for call metrics -->
-      <div style="margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
-        <div class="stat-card">
-          <div class="stat-label">Total Calls</div>
-          <div class="stat-value">0</div>
-          <div class="stat-change" style="color:var(--neutral-400);font-size:12px;">Awaiting phone connection</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Avg Duration</div>
-          <div class="stat-value">—</div>
-          <div class="stat-change" style="color:var(--neutral-400);font-size:12px;">Not available yet</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Answer Rate</div>
-          <div class="stat-value">—</div>
-          <div class="stat-change" style="color:var(--neutral-400);font-size:12px;">Not available yet</div>
-        </div>
+      <div class="call-filters">
+        <button class="call-filter-btn active" data-filter="all" onclick="setFilter('all')">All Calls</button>
+        <button class="call-filter-btn" data-filter="answered" onclick="setFilter('answered')">Answered</button>
+        <button class="call-filter-btn" data-filter="missed" onclick="setFilter('missed')">Missed</button>
+        <button class="call-filter-btn" data-filter="voicemail" onclick="setFilter('voicemail')">Voicemail</button>
+        <button class="call-filter-btn" data-filter="demo" onclick="setFilter('demo')">Demo</button>
+        <button class="call-filter-btn" onclick="clearAllCalls()" style="margin-left:auto;border-color:var(--danger);color:var(--danger);">🗑 Clear All</button>
       </div>
-
-      <!-- Setup guide -->
-      <div class="settings-section" style="margin-top:24px;">
-        <h2>📋 Getting Started with Calls</h2>
-        <p class="description">Your AI receptionist is ready to go. We'll handle the setup on our end — no action needed from you.</p>
-        <div style="background:var(--brand-50);border-radius:var(--radius-sm);padding:20px;border:1px solid var(--brand-200);text-align:center;">
-          <p style="font-size:14px;color:var(--neutral-600);">Your account is being configured. Once your AI receptionist is live, all calls will appear here automatically.</p>
-          <p style="font-size:13px;color:var(--neutral-500);margin-top:8px;">Need help? <a href="/contact" style="color:var(--brand-600);font-weight:500;">Contact support →</a></p>
-        </div>
-      </div>
+      <div id="callHistoryList"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div></div>
     </main>
   </div>
-
   <div id="toast" class="toast"></div>
   <script src="/js/api.js"></script>
-<script src="/js/theme.js"></script>
+  <script>
+    let allCalls=[],currentFilter='all';
+    const demoCallData=JSON.parse('[{"caller":"John Smith","phone":"(555) 123-4567","service":"Tree removal","duration":"3:24","status":"answered","outcome":"appointment-set","time":"Today, 9:32 AM","address":"123 Oak St","summary":"Large oak tree removal. Scheduled Friday 10am. $1,200.","transcript":"AI: How can I help?\\nCustomer: Tree removal.\\nAI: Name?\\nCustomer: John Smith.\\nAI: Friday 10am?\\nCustomer: Yes.\\nAI: Scheduled!"},{"caller":"Maria Garcia","phone":"(555) 234-5678","service":"Emergency plumbing","duration":"1:05","status":"answered","outcome":"follow-up","time":"Today, 1:48 PM","address":"456 Maple Ave","summary":"URGENT: Burst pipe. Plumber dispatched ETA 25 min.","transcript":"AI: Emergency?\\nCustomer: Burst pipe!\\nAI: Address?\\nCustomer: 456 Maple.\\nAI: Plumber dispatched."},{"caller":"Bob Johnson","phone":"(555) 345-6789","service":"Roof inspection","duration":"2:15","status":"answered","outcome":"appointment-set","time":"Yesterday, 3:30 PM","address":"789 Pine Rd","summary":"Leak in attic. Inspection Monday 9am.","transcript":"AI: Name?\\nCustomer: Bob Johnson.\\nAI: Monday 9am?\\nCustomer: Yes.\\nAI: Confirmed!"},{"caller":"Sarah Wilson","phone":"(555) 456-7890","service":"Electrical panel","duration":"4:02","status":"voicemail","outcome":"follow-up","time":"Yesterday, 5:00 PM","address":"321 Elm Dr","summary":"After hours voicemail. Panel upgrade needed.","transcript":"AI: Leave a message.\\nCustomer: Panel upgrade at 321 Elm."},{"caller":"Mike Brown","phone":"(555) 567-8901","service":"Landscape design","duration":"2:48","status":"missed","outcome":"no-interest","time":"2 days ago, 2:15 PM","address":"654 Birch Ln","summary":"Pricing inquiry. Not ready to book.","transcript":"AI: How much?\\nCustomer: Just checking prices."}]');
+    function loadCalls(){const s=localStorage.getItem('northstar_calls');if(s)try{allCalls=JSON.parse(s)}catch{allCalls=[]}renderCalls()}
+    function renderCalls(){const f=currentFilter==='all'?allCalls:allCalls.filter(c=>c.status===currentFilter);const c=document.getElementById('callHistoryList');if(f.length===0){c.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';updateStats();return}
+      let html='';f.forEach((call,i)=>{const inits=call.caller.split(' ').map(w=>w[0]).join('').substring(0,2);const ol={'appointment-set':'Appointment Set','lead-captured':'Lead Captured','follow-up':'Follow-up Needed','no-interest':'No Interest'};html+=`<div class="call-card" id="call-${i}"><div class="call-card-header" onclick="toggleCall(${i})"><div class="call-caller"><div class="call-avatar">${inits}</div><div class="call-info"><div class="call-name">${call.caller}</div><div class="call-meta">${call.time} · ${call.duration} · ${call.service} <span class="call-outcome ${call.outcome}">${ol[call.outcome]||call.outcome}</span></div></div></div><span class="call-status-badge ${call.status}">${call.status.charAt(0).toUpperCase()+call.status.slice(1)}</span><svg class="call-expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">${call.phone}</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">${call.address}</div></div><div class="call-detail-item"><div class="call-detail-label">Service</div><div class="call-detail-value">${call.service}</div></div><div class="call-detail-item"><div class="call-detail-label">Duration</div><div class="call-detail-value">${call.duration}</div></div></div><div class="call-detail-label">📋 AI Summary</div><div class="call-summary">${call.summary}</div><div class="call-detail-label">💬 Transcript</div><div class="call-transcript">${call.transcript}</div><div class="call-actions"><button disabled style="opacity:0.5" title="Coming soon">🎙 Play Recording</button><button onclick="showToast(\'✉️ SMS sent to ${call.phone}\')">✉️ Send SMS</button><button onclick="showToast(\'📧 Email sent\')">📧 Send Email</button></div></div></div>`});c.innerHTML=html;updateStats()}
+    function toggleCall(i){document.querySelectorAll('.call-card.expanded').forEach(c=>{if(c.id!=='call-'+i)c.classList.remove('expanded')});document.getElementById('call-'+i).classList.toggle('expanded')}
+    function setFilter(f){currentFilter=f;document.querySelectorAll('.call-filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===f));renderCalls()}
+    function updateStats(){const t=allCalls.length;const a=allCalls.filter(c=>c.status==='answered').length;const m=allCalls.filter(c=>c.status==='missed').length;const ts=allCalls.reduce((s,c)=>{const p=c.duration.split(':');return s+parseInt(p[0])*60+parseInt(p[1])},0);const am=t>0?Math.floor(ts/t/60):0;const as=t>0?Math.floor((ts/t)%60):0;const r=t>0?Math.round((a/t)*100):0;document.getElementById('totalCalls').textContent=t;document.getElementById('avgDuration').textContent=t>0?`${am}:${as.toString().padStart(2,'0')}`:'—';document.getElementById('answerRate').textContent=t>0?`${r}%`:'—'}
+    function simulateDemoCall(){const c=demoCallData[Math.floor(Math.random()*demoCallData.length)];const n=new Date();c.time=`Today, ${n.getHours()}:${n.getMinutes().toString().padStart(2,'0')} ${n.getHours()>=12?'PM':'AM'}`;allCalls.unshift({...c});localStorage.setItem('northstar_calls',JSON.stringify(allCalls));renderCalls();showToast(`📞 Demo call from ${c.caller}`,'success')}
+    function clearAllCalls(){if(confirm('Clear all call history?')){allCalls=[];localStorage.removeItem('northstar_calls');renderCalls();showToast('🗑 Calls cleared')}}
+    function showToast(msg,t){const e=document.getElementById('toast');e.textContent=msg;e.className='toast show';setTimeout(()=>e.classList.remove('show'),3000)}
+    loadCalls();
+  </script>
 </body>
 </html>

@@ -76,6 +76,10 @@
           <div class="stat-label">Scheduled</div>
           <div class="stat-value" id="scheduledLeads">0</div>
         </div>
+        <div class="stat-card stat-card-revenue">
+          <div class="stat-label">💰 Estimated Revenue Captured</div>
+          <div class="stat-value revenue-positive" id="estimatedRevenue">$0</div>
+        </div>
       </div>
 
       <!-- Leads Table -->
@@ -138,7 +142,16 @@
       document.getElementById('totalLeads').textContent = leads.length;
       document.getElementById('todayLeads').textContent = today.length;
       document.getElementById('weekLeads').textContent = thisWeek.length;
-      document.getElementById('scheduledLeads').textContent = scheduled.length;
+      document.getElementById("scheduledLeads");
+
+      // Revenue calculation
+      const leadRate = 0.4;
+      const avgJobValue = 450;
+      const closeRate = 0.6;
+      const estimatedRevenue = today.length * leadRate * avgJobValue * closeRate;
+      document.getElementById("estimatedRevenue").textContent = "$" + Math.round(estimatedRevenue).toLocaleString();
+      if (estimatedRevenue > 0) document.getElementById("estimatedRevenue").className = "stat-value revenue-positive";
+      document.getElementById("scheduledLeads").textContent = scheduled.length;
       document.getElementById('leadCount').textContent = `${leads.length} leads`;
 
       if (today.length > 0) {

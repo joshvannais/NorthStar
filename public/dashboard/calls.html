@@ -54,40 +54,40 @@ var streetNames=['Oak','Maple','Pine','Cedar','Birch','Elm','Walnut','Cherry','W
 var streetTypes=['St','Ave','Dr','Ln','Rd','Way','Ct','Pl','Blvd','Cir','Ter','Pkwy'];
 var areaCodes=['401','203','518','607','315','845','914','631','516','212','347','917','646','718','860','203','413','603','802','207','978','508'];
 var services=[
-  {name:'Tree removal',avg:1200,rangeLow:600,rangeHigh:2500,scenarios:[
+  {name:'Tree removal',rangeLow:400,rangeHigh:10000,scenarios:[
     {summary:'Large oak tree removal near house. Estimate scheduled.',transcript:"AI: NorthStar, how can I help?\nCustomer: I need a tree removed.\nAI: Name?\nCustomer: {name}\nAI: How tall is the tree?\nCustomer: About 50 feet.\nAI: I will schedule an estimator.",outcome:'appointment-set',status:'answered',dur:[180,420]},
     {summary:'Multiple dead trees need removal and stump grinding.',transcript:"AI: NorthStar, how can I help?\nCustomer: I have dead trees that need to come down.\nAI: Name?\nCustomer: {name}\nAI: Three trees? We can quote that.",outcome:'lead-captured',status:'answered',dur:[120,300]},
     {summary:'Tree fell on driveway after storm. Emergency.',transcript:"AI: NorthStar emergency line.\nCustomer: A tree fell on my driveway.\nAI: Name?\nCustomer: {name}\nAI: Sending someone right away.",outcome:'follow-up',status:'answered',dur:[60,180]}]},
-  {name:'Emergency plumbing',avg:850,rangeLow:300,rangeHigh:1500,scenarios:[
+  {name:'Emergency plumbing',rangeLow:200,rangeHigh:3500,scenarios:[
     {summary:'URGENT: Burst pipe under sink. Water everywhere.',transcript:"AI: NorthStar emergency.\nCustomer: Burst pipe! Water everywhere!\nAI: Name?\nCustomer: {name}\nAI: Shut off water. Dispatching plumber.",outcome:'follow-up',status:'answered',dur:[45,150]},
     {summary:'Water heater leaking. Needs replacement quote.',transcript:"AI: NorthStar, how can I help?\nCustomer: Water heater is leaking.\nAI: Name?\nCustomer: {name}\nAI: We can send someone tomorrow morning.",outcome:'appointment-set',status:'answered',dur:[180,360]},
     {summary:'Clogged main drain. Slow drains throughout house.',transcript:"AI: NorthStar, how can I help?\nCustomer: All my drains are slow.\nAI: Name?\nCustomer: {name}\nAI: Sounds like a main line issue.",outcome:'lead-captured',status:'answered',dur:[150,300]}]},
-  {name:'Roof inspection',avg:3500,rangeLow:2000,rangeHigh:6000,scenarios:[
+  {name:'Roof inspection',rangeLow:800,rangeHigh:12000,scenarios:[
     {summary:'Storm damage, missing shingles. Insurance estimate.',transcript:"AI: NorthStar.\nCustomer: Storm damaged my roof.\nAI: Name?\nCustomer: {name}\nAI: Missing shingles? We can inspect Wednesday.",outcome:'appointment-set',status:'answered',dur:[240,480]},
     {summary:'Leak in attic during rain. Needs repair.',transcript:"AI: NorthStar.\nCustomer: I have a leak in my attic.\nAI: Name?\nCustomer: {name}\nAI: We will tarp it today.",outcome:'follow-up',status:'answered',dur:[120,300]},
     {summary:'After hours voicemail about roof replacement.',transcript:"AI: You have reached NorthStar after hours.\nCustomer: Need roof replacement quote at {address}.",outcome:'follow-up',status:'voicemail',dur:[30,90]}]},
-  {name:'Electrical panel upgrade',avg:1800,rangeLow:800,rangeHigh:3000,scenarios:[
+  {name:'Electrical panel upgrade',rangeLow:500,rangeHigh:4500,scenarios:[
     {summary:'Old fuse panel needs upgrade to breakers.',transcript:"AI: NorthStar.\nCustomer: Need panel upgrade.\nAI: Name?\nCustomer: {name}\nAI: When is good for an electrician?",outcome:'appointment-set',status:'answered',dur:[180,360]},
     {summary:'Breakers keep tripping. Needs inspection.',transcript:"AI: NorthStar.\nCustomer: Breakers keep tripping.\nAI: Name?\nCustomer: {name}\nAI: I will send an electrician.",outcome:'lead-captured',status:'answered',dur:[120,300]}]},
-  {name:'Landscape design',avg:1200,rangeLow:500,rangeHigh:3000,scenarios:[
+  {name:'Landscape design',rangeLow:300,rangeHigh:8000,scenarios:[
     {summary:'Front yard redesign with new plantings.',transcript:"AI: NorthStar.\nCustomer: Want to redo my front yard.\nAI: Name?\nCustomer: {name}\nAI: I will schedule a design consultation.",outcome:'appointment-set',status:'answered',dur:[240,480]},
     {summary:'Pricing inquiry for patio installation.',transcript:"AI: NorthStar.\nCustomer: How much for a patio?\nAI: Name?\nCustomer: {name}\nAI: We can give you a free estimate.",outcome:'no-interest',status:'missed',dur:[60,120]}]},
-  {name:'HVAC repair',avg:1500,rangeLow:500,rangeHigh:3000,scenarios:[
+  {name:'HVAC repair',rangeLow:300,rangeHigh:6000,scenarios:[
     {summary:'AC not cooling. Needs service before weekend.',transcript:"AI: NorthStar.\nCustomer: AC stopped blowing cold air.\nAI: Name?\nCustomer: {name}\nAI: I will send a technician today.",outcome:'appointment-set',status:'answered',dur:[180,360]},
     {summary:'Furnace making loud banging noise.',transcript:"AI: NorthStar.\nCustomer: Furnace is making noise.\nAI: Name?\nCustomer: {name}\nAI: Let us get someone out there.",outcome:'lead-captured',status:'answered',dur:[150,300]}]},
-  {name:'Gutter cleaning',avg:400,rangeLow:150,rangeHigh:800,scenarios:[
+  {name:'Gutter cleaning',rangeLow:100,rangeHigh:1500,scenarios:[
     {summary:'Seasonal gutter cleaning for two-story house.',transcript:"AI: NorthStar.\nCustomer: Need gutters cleaned.\nAI: Name?\nCustomer: {name}\nAI: We can do that. Free quote.",outcome:'appointment-set',status:'answered',dur:[120,240]}]},
-  {name:'Pest control',avg:350,rangeLow:150,rangeHigh:600,scenarios:[
+  {name:'Pest control',rangeLow:100,rangeHigh:1000,scenarios:[
     {summary:'Ant infestation in kitchen. Needs treatment.',transcript:"AI: NorthStar.\nCustomer: Ants in my kitchen.\nAI: Name?\nCustomer: {name}\nAI: I will schedule an inspection.",outcome:'lead-captured',status:'answered',dur:[90,180]}]},
-  {name:'Concrete driveway',avg:2500,rangeLow:1000,rangeHigh:5000,scenarios:[
+  {name:'Concrete driveway',rangeLow:800,rangeHigh:10000,scenarios:[
     {summary:'New driveway installation. Needs quote.',transcript:"AI: NorthStar.\nCustomer: Need a new driveway.\nAI: Name?\nCustomer: {name}\nAI: I will schedule a concrete specialist.",outcome:'appointment-set',status:'answered',dur:[180,360]}]},
-  {name:'Fence installation',avg:2200,rangeLow:1200,rangeHigh:4000,scenarios:[
+  {name:'Fence installation',rangeLow:800,rangeHigh:7000,scenarios:[
     {summary:'Privacy fence for backyard. Quote needed.',transcript:"AI: NorthStar.\nCustomer: Need a privacy fence.\nAI: Name?\nCustomer: {name}\nAI: Wood or vinyl? I will send someone.",outcome:'appointment-set',status:'answered',dur:[180,360]}]},
-  {name:'Window replacement',avg:800,rangeLow:300,rangeHigh:1500,scenarios:[
+  {name:'Window replacement',rangeLow:200,rangeHigh:4000,scenarios:[
     {summary:'Drafty windows. Replacement quote needed.',transcript:"AI: NorthStar.\nCustomer: My windows are drafty.\nAI: Name?\nCustomer: {name}\nAI: How many windows?\nCustomer: Six.\nAI: I will schedule a quote.",outcome:'appointment-set',status:'answered',dur:[180,360]}]},
-  {name:'Carpet cleaning',avg:250,rangeLow:100,rangeHigh:500,scenarios:[
+  {name:'Carpet cleaning',rangeLow:80,rangeHigh:800,scenarios:[
     {summary:'Whole house carpet cleaning service.',transcript:"AI: NorthStar.\nCustomer: Need carpets cleaned.\nAI: Name?\nCustomer: {name}\nAI: How many rooms?\nCustomer: Four.\nAI: We can do that this week.",outcome:'appointment-set',status:'answered',dur:[90,180]}]},
-  {name:'Pressure washing',avg:350,rangeLow:150,rangeHigh:700,scenarios:[
+  {name:'Pressure washing',rangeLow:100,rangeHigh:1200,scenarios:[
     {summary:'Driveway and house exterior pressure wash.',transcript:"AI: NorthStar.\nCustomer: Driveway needs pressure washing.\nAI: Name?\nCustomer: {name}\nAI: We can schedule that for you.",outcome:'appointment-set',status:'answered',dur:[60,150]}]}
 ];
 var totalServices=services.length;
@@ -117,9 +117,13 @@ function generateCall(){
   var ampm=hrs>=12?'PM':'AM';
   var time=dayLabel+', '+hrs+':'+(mins<10?'0':'')+mins+' '+ampm;
   var fullSvcName=svc.name;
+  // Random price within the service's realistic range
+  var jobPrice = Math.floor(Math.random() * (svc.rangeHigh - svc.rangeLow)) + svc.rangeLow;
+  // Round to nearest 25 for realism
+  jobPrice = Math.round(jobPrice / 25) * 25;
   var transcript=sc.transcript.replace(/{name}/g,name).replace(/{address}/g,address);
   var summary=sc.summary;
-  return {caller:name,phone:phone,address:address,service:fullSvcName,avgPrice:svc.avg,priceRange:'$'+svc.rangeLow.toLocaleString()+'-$'+svc.rangeHigh.toLocaleString(),duration:duration,status:sc.status,outcome:sc.outcome,time:time,summary:summary,transcript:transcript};
+  return {caller:name,phone:phone,address:address,service:fullSvcName,avgPrice:jobPrice,priceRange:'$'+svc.rangeLow.toLocaleString()+'-$'+svc.rangeHigh.toLocaleString(),duration:duration,status:sc.status,outcome:sc.outcome,time:time,summary:summary,transcript:transcript};
 }
 function loadCalls(){var s=localStorage.getItem('northstar_calls');if(s){try{allCalls=JSON.parse(s)}catch(e){allCalls=[]}}renderCalls()}
 function renderCalls(){

@@ -1379,3 +1379,15 @@ tr:hover td { background: var(--neutral-50); }
 [data-theme="dark"] .call-card-header:hover { background: var(--neutral-800); }
 [data-theme="dark"] .call-actions button { background: var(--neutral-800); border-color: var(--neutral-700); }
 [data-theme="dark"] .call-transcript { background: #000; }
+[data-theme="dark"] .demo-msg.customer { background: var(--neutral-300); color: var(--neutral-800); }
+[data-theme="dark"] .demo-msg.ai { background: rgba(212, 175, 55, 0.2); color: var(--brand-200); }
+[data-theme="dark"] .demo-scenario { border-color: var(--neutral-300); background: var(--neutral-100); }
+[data-theme="dark"] .demo-scenario:hover { border-color: var(--brand-400); box-shadow: 0 2px 12px rgba(212,175,55,0.15); background: rgba(212, 175, 55, 0.08); }
+[data-theme="dark"] .badge-completed { background: rgba(4, 120, 87, 0.2); color: #6ee7b7; }
+[data-theme="dark"] .call-outcome.appointment-set { background: rgba(4, 120, 87, 0.2); color: #6ee7b7; }
+[data-theme="dark"] .call-outcome.follow-up { background: rgba(161, 98, 7, 0.2); color: #fbbf24; }
+[data-theme="dark"] .call-outcome.no-interest { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+[data-theme="dark"] .call-filter-btn { background: var(--neutral-100); border-color: var(--neutral-300); color: var(--neutral-600); }
+[data-theme="dark"] .call-filter-btn:hover { border-color: var(--brand-400); color: var(--brand-300); }
+[data-theme="dark"] .call-filter-btn.active { background: var(--brand-600); color: var(--neutral-900); border-color: var(--brand-500); }
+[data-theme="dark"] .call-est-value { border-top: 1px solid var(--neutral-300); padding-top: 6px; margin-top: 6px; color: var(--neutral-600); }

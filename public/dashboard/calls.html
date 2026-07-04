@@ -10,151 +10,208 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <div class="dashboard-layout">
-    <aside class="sidebar">
-      <a href="/dashboard" class="sidebar-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a>
-      <nav class="sidebar-nav">
-        <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
-        <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
-        <a href="/dashboard/calls" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call History</span></a>
-        <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
-        <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
-      </nav>
-      <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
-      <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">&#127769;</button>
-    </aside>
-    <main class="main-content">
-      <div class="page-header">
-        <div><h1>Call History</h1><p>Every call your AI receptionist has handled.</p></div>
-        <button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">&#128222; Simulate Call</button>
-      </div>
-      <div style="margin-bottom:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;" id="callStats">
-        <div class="stat-card"><div class="stat-label">Total Calls</div><div class="stat-value" id="totalCalls">0</div></div>
-        <div class="stat-card"><div class="stat-label">Avg Duration</div><div class="stat-value" id="avgDuration">—</div></div>
-        <div class="stat-card"><div class="stat-label">Answer Rate</div><div class="stat-value" id="answerRate">—</div></div>
-      </div>
-      <div class="call-filters">
-        <button class="call-filter-btn active" data-filter="all" onclick="setFilter('all')">All Calls</button>
-        <button class="call-filter-btn" data-filter="answered" onclick="setFilter('answered')">Answered</button>
-        <button class="call-filter-btn" data-filter="missed" onclick="setFilter('missed')">Missed</button>
-        <button class="call-filter-btn" data-filter="voicemail" onclick="setFilter('voicemail')">Voicemail</button>
-        <button class="call-filter-btn" data-filter="demo" onclick="setFilter('demo')">Demo</button>
-        <button class="call-filter-btn" onclick="clearAllCalls()" style="margin-left:auto;border-color:var(--danger);color:var(--danger);">&#128465; Clear All</button>
-      </div>
-      <div id="callHistoryList"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div></div>
-    </main>
-  </div>
-  <div id="toast" class="toast"></div>
-  <script src="/js/api.js"></script>
+<div class="dashboard-layout"><aside class="sidebar">
+<a href="/dashboard" class="sidebar-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a>
+<nav class="sidebar-nav">
+<a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
+<a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
+<a href="/dashboard/calls" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call History</span></a>
+<a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
+<a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
+</nav>
+<a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
+<button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">&#127769;</button>
+</aside><main class="main-content">
+<div class="page-header"><div><h1>Call History</h1><p>Every call your AI receptionist has handled.</p></div><button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">📞 Simulate Call</button></div>
+<div style="margin-bottom:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;" id="callStats">
+<div class="stat-card"><div class="stat-label">Total Calls</div><div class="stat-value" id="totalCalls">0</div></div>
+<div class="stat-card"><div class="stat-label">Avg Duration</div><div class="stat-value" id="avgDuration">—</div></div>
+<div class="stat-card"><div class="stat-label">Answer Rate</div><div class="stat-value" id="answerRate">—</div></div>
+</div>
+<div class="call-filters">
+<button class="call-filter-btn active" data-filter="all" onclick="setFilter('all')">All Calls</button>
+<button class="call-filter-btn" data-filter="answered" onclick="setFilter('answered')">Answered</button>
+<button class="call-filter-btn" data-filter="missed" onclick="setFilter('missed')">Missed</button>
+<button class="call-filter-btn" data-filter="voicemail" onclick="setFilter('voicemail')">Voicemail</button>
+<button class="call-filter-btn" onclick="clearAllCalls()" style="margin-left:auto;border-color:var(--danger);color:var(--danger);">🗑 Clear All</button>
+</div>
+<div id="callHistoryList"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div></div>
+</main></div>
+<div id="toast" class="toast"></div>
+<script src="/js/api.js"></script>
 <script>
-var allCalls=[],currentFilter='all';
-var firstNames=['James','Mary','Robert','Patricia','John','Jennifer','Michael','Linda','David','Barbara','William','Elizabeth','Richard','Susan','Joseph','Jessica','Thomas','Sarah','Christopher','Karen','Charles','Lisa','Daniel','Nancy','Matthew','Betty','Anthony','Margaret','Mark','Sandra','Edward','Donna','Helen','Ruth','Paul','Sharon','Steve','Deborah','Brian','Carol','Kevin','Janet','Jason','Maria','George','Rachel','Ken','Heather','Frank','Diane','Raymond','Julie','Larry','Amanda','Scott','Mildred','Eric','Joan'];
-var lastNames=['Smith','Johnson','Williams','Brown','Jones','Garcia','Miller','Davis','Rodriguez','Martinez','Hernandez','Lopez','Gonzalez','Wilson','Anderson','Thomas','Taylor','Moore','Jackson','Martin','Lee','Perez','White','Harris','Clark','Lewis','Robinson','Walker','Young','Allen','King','Wright','Scott','Hill','Green','Adams','Baker','Hall','Rivera','Campbell'];
-var streetNames=['Oak','Maple','Pine','Cedar','Birch','Elm','Walnut','Cherry','Willow','Ash','Spruce','Fir','Poplar','Hickory','Sycamore','Magnolia','Chestnut','Dogwood','Acacia','Juniper','Hemlock','Laurel','Hawthorne','Cypress','Cottonwood'];
-var streetTypes=['St','Ave','Dr','Ln','Rd','Way','Ct','Pl','Blvd','Cir','Ter','Pkwy'];
-var areaCodes=['401','203','518','607','315','845','914','631','516','212','347','917','646','718','860','203','413','603','802','207','978','508'];
-var services=[
-  {name:'Tree removal',rangeLow:400,rangeHigh:10000,scenarios:[
-    {summary:'Large oak tree removal near house. Estimate scheduled.',transcript:"AI: NorthStar, how can I help?\nCustomer: I need a tree removed.\nAI: Name?\nCustomer: {name}\nAI: How tall is the tree?\nCustomer: About 50 feet.\nAI: I will schedule an estimator.",outcome:'appointment-set',status:'answered',dur:[180,420]},
-    {summary:'Multiple dead trees need removal and stump grinding.',transcript:"AI: NorthStar, how can I help?\nCustomer: I have dead trees that need to come down.\nAI: Name?\nCustomer: {name}\nAI: Three trees? We can quote that.",outcome:'lead-captured',status:'answered',dur:[120,300]},
-    {summary:'Tree fell on driveway after storm. Emergency.',transcript:"AI: NorthStar emergency line.\nCustomer: A tree fell on my driveway.\nAI: Name?\nCustomer: {name}\nAI: Sending someone right away.",outcome:'follow-up',status:'answered',dur:[60,180]}]},
-  {name:'Emergency plumbing',rangeLow:200,rangeHigh:3500,scenarios:[
-    {summary:'URGENT: Burst pipe under sink. Water everywhere.',transcript:"AI: NorthStar emergency.\nCustomer: Burst pipe! Water everywhere!\nAI: Name?\nCustomer: {name}\nAI: Shut off water. Dispatching plumber.",outcome:'follow-up',status:'answered',dur:[45,150]},
-    {summary:'Water heater leaking. Needs replacement quote.',transcript:"AI: NorthStar, how can I help?\nCustomer: Water heater is leaking.\nAI: Name?\nCustomer: {name}\nAI: We can send someone tomorrow morning.",outcome:'appointment-set',status:'answered',dur:[180,360]},
-    {summary:'Clogged main drain. Slow drains throughout house.',transcript:"AI: NorthStar, how can I help?\nCustomer: All my drains are slow.\nAI: Name?\nCustomer: {name}\nAI: Sounds like a main line issue.",outcome:'lead-captured',status:'answered',dur:[150,300]}]},
-  {name:'Roof inspection',rangeLow:800,rangeHigh:12000,scenarios:[
-    {summary:'Storm damage, missing shingles. Insurance estimate.',transcript:"AI: NorthStar.\nCustomer: Storm damaged my roof.\nAI: Name?\nCustomer: {name}\nAI: Missing shingles? We can inspect Wednesday.",outcome:'appointment-set',status:'answered',dur:[240,480]},
-    {summary:'Leak in attic during rain. Needs repair.',transcript:"AI: NorthStar.\nCustomer: I have a leak in my attic.\nAI: Name?\nCustomer: {name}\nAI: We will tarp it today.",outcome:'follow-up',status:'answered',dur:[120,300]},
-    {summary:'After hours voicemail about roof replacement.',transcript:"AI: You have reached NorthStar after hours.\nCustomer: Need roof replacement quote at {address}.",outcome:'follow-up',status:'voicemail',dur:[30,90]}]},
-  {name:'Electrical panel upgrade',rangeLow:500,rangeHigh:4500,scenarios:[
-    {summary:'Old fuse panel needs upgrade to breakers.',transcript:"AI: NorthStar.\nCustomer: Need panel upgrade.\nAI: Name?\nCustomer: {name}\nAI: When is good for an electrician?",outcome:'appointment-set',status:'answered',dur:[180,360]},
-    {summary:'Breakers keep tripping. Needs inspection.',transcript:"AI: NorthStar.\nCustomer: Breakers keep tripping.\nAI: Name?\nCustomer: {name}\nAI: I will send an electrician.",outcome:'lead-captured',status:'answered',dur:[120,300]}]},
-  {name:'Landscape design',rangeLow:300,rangeHigh:8000,scenarios:[
-    {summary:'Front yard redesign with new plantings.',transcript:"AI: NorthStar.\nCustomer: Want to redo my front yard.\nAI: Name?\nCustomer: {name}\nAI: I will schedule a design consultation.",outcome:'appointment-set',status:'answered',dur:[240,480]},
-    {summary:'Pricing inquiry for patio installation.',transcript:"AI: NorthStar.\nCustomer: How much for a patio?\nAI: Name?\nCustomer: {name}\nAI: We can give you a free estimate.",outcome:'no-interest',status:'missed',dur:[60,120]}]},
-  {name:'HVAC repair',rangeLow:300,rangeHigh:6000,scenarios:[
-    {summary:'AC not cooling. Needs service before weekend.',transcript:"AI: NorthStar.\nCustomer: AC stopped blowing cold air.\nAI: Name?\nCustomer: {name}\nAI: I will send a technician today.",outcome:'appointment-set',status:'answered',dur:[180,360]},
-    {summary:'Furnace making loud banging noise.',transcript:"AI: NorthStar.\nCustomer: Furnace is making noise.\nAI: Name?\nCustomer: {name}\nAI: Let us get someone out there.",outcome:'lead-captured',status:'answered',dur:[150,300]}]},
-  {name:'Gutter cleaning',rangeLow:100,rangeHigh:1500,scenarios:[
-    {summary:'Seasonal gutter cleaning for two-story house.',transcript:"AI: NorthStar.\nCustomer: Need gutters cleaned.\nAI: Name?\nCustomer: {name}\nAI: We can do that. Free quote.",outcome:'appointment-set',status:'answered',dur:[120,240]}]},
-  {name:'Pest control',rangeLow:100,rangeHigh:1000,scenarios:[
-    {summary:'Ant infestation in kitchen. Needs treatment.',transcript:"AI: NorthStar.\nCustomer: Ants in my kitchen.\nAI: Name?\nCustomer: {name}\nAI: I will schedule an inspection.",outcome:'lead-captured',status:'answered',dur:[90,180]}]},
-  {name:'Concrete driveway',rangeLow:800,rangeHigh:10000,scenarios:[
-    {summary:'New driveway installation. Needs quote.',transcript:"AI: NorthStar.\nCustomer: Need a new driveway.\nAI: Name?\nCustomer: {name}\nAI: I will schedule a concrete specialist.",outcome:'appointment-set',status:'answered',dur:[180,360]}]},
-  {name:'Fence installation',rangeLow:800,rangeHigh:7000,scenarios:[
-    {summary:'Privacy fence for backyard. Quote needed.',transcript:"AI: NorthStar.\nCustomer: Need a privacy fence.\nAI: Name?\nCustomer: {name}\nAI: Wood or vinyl? I will send someone.",outcome:'appointment-set',status:'answered',dur:[180,360]}]},
-  {name:'Window replacement',rangeLow:200,rangeHigh:4000,scenarios:[
-    {summary:'Drafty windows. Replacement quote needed.',transcript:"AI: NorthStar.\nCustomer: My windows are drafty.\nAI: Name?\nCustomer: {name}\nAI: How many windows?\nCustomer: Six.\nAI: I will schedule a quote.",outcome:'appointment-set',status:'answered',dur:[180,360]}]},
-  {name:'Carpet cleaning',rangeLow:80,rangeHigh:800,scenarios:[
-    {summary:'Whole house carpet cleaning service.',transcript:"AI: NorthStar.\nCustomer: Need carpets cleaned.\nAI: Name?\nCustomer: {name}\nAI: How many rooms?\nCustomer: Four.\nAI: We can do that this week.",outcome:'appointment-set',status:'answered',dur:[90,180]}]},
-  {name:'Pressure washing',rangeLow:100,rangeHigh:1200,scenarios:[
-    {summary:'Driveway and house exterior pressure wash.',transcript:"AI: NorthStar.\nCustomer: Driveway needs pressure washing.\nAI: Name?\nCustomer: {name}\nAI: We can schedule that for you.",outcome:'appointment-set',status:'answered',dur:[60,150]}]}
-];
-var totalServices=services.length;
-function generateCall(){
-  var fn=firstNames[Math.floor(Math.random()*firstNames.length)];
-  var ln=lastNames[Math.floor(Math.random()*lastNames.length)];
-  var name=fn+' '+ln;
-  var sn=streetNames[Math.floor(Math.random()*streetNames.length)];
-  var st=streetTypes[Math.floor(Math.random()*streetTypes.length)];
-  var num=Math.floor(Math.random()*8999)+100;
-  var address=num+' '+sn+' '+st;
-  var ac=areaCodes[Math.floor(Math.random()*areaCodes.length)];
-  var phone='('+ac+') 555-'+(Math.floor(Math.random()*8999)+1000);
-  var svc=services[Math.floor(Math.random()*totalServices)];
-  var sc=svc.scenarios[Math.floor(Math.random()*svc.scenarios.length)];
-  var durSec=Math.floor(Math.random()*(sc.dur[1]-sc.dur[0]))+sc.dur[0];
-  var durMin=Math.floor(durSec/60);
-  var durRem=durSec%60;
-  var duration=durMin+':'+(durRem<10?'0':'')+durRem;
-  var now=new Date();
-  var daysAgo=Math.floor(Math.random()*5);
-  var d=new Date(now);
-  d.setDate(d.getDate()-daysAgo);
-  var dayLabel=daysAgo===0?'Today':daysAgo===1?'Yesterday':daysAgo+' days ago';
-  var hrs=Math.floor(Math.random()*12)+8;
-  var mins=Math.floor(Math.random()*60);
-  var ampm=hrs>=12?'PM':'AM';
-  var time=dayLabel+', '+hrs+':'+(mins<10?'0':'')+mins+' '+ampm;
-  var fullSvcName=svc.name;
-  // Random price within the service's realistic range
-  var jobPrice = Math.floor(Math.random() * (svc.rangeHigh - svc.rangeLow)) + svc.rangeLow;
-  // Round to nearest 25 for realism
-  jobPrice = Math.round(jobPrice / 25) * 25;
-  var transcript=sc.transcript.replace(/{name}/g,name).replace(/{address}/g,address);
-  var summary=sc.summary;
-  return {caller:name,phone:phone,address:address,service:fullSvcName,avgPrice:jobPrice,priceRange:'$'+svc.rangeLow.toLocaleString()+'-$'+svc.rangeHigh.toLocaleString(),duration:duration,status:sc.status,outcome:sc.outcome,time:time,summary:summary,transcript:transcript};
-}
-function loadCalls(){var s=localStorage.getItem('northstar_calls');if(s){try{allCalls=JSON.parse(s)}catch(e){allCalls=[]}}renderCalls()}
-function renderCalls(){
-  var f=currentFilter==='all'?allCalls:allCalls.filter(function(c){return c.status===currentFilter});
-  var el=document.getElementById('callHistoryList');
-  if(f.length===0){el.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';updateStats();return}
-  var html='';
-  var outLabels={};
-  outLabels['appointment-set']='Appointment Set';
-  outLabels['lead-captured']='Lead Captured';
-  outLabels['follow-up']='Follow-up Needed';
-  outLabels['no-interest']='No Interest';
-  for(var i=0;i<f.length;i++){
-    var call=f[i];
-    var inits=call.caller.split(' ').map(function(w){return w[0]}).join('').substring(0,2);
-    var statusLabel=call.status.charAt(0).toUpperCase()+call.status.slice(1);
-    var ol=outLabels[call.outcome]||call.outcome;
-    var estHtml='';
-    if(call.avgPrice){estHtml='<div class="call-est-value">Estimated job: <strong>$'+call.avgPrice.toLocaleString()+'</strong> <span style="font-size:11px;color:var(--neutral-500);">('+call.priceRange+')</span></div>'}
-    var detailEstHtml='';
-    if(call.avgPrice){detailEstHtml='<div class="call-detail-item" style="grid-column:1/-1;"><div class="call-detail-label">Estimated Job Value</div><div class="call-detail-value">$'+call.avgPrice.toLocaleString()+' <span style="font-size:12px;color:var(--neutral-500);">('+call.priceRange+')</span></div></div>'}
-    html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+call.caller+'</div><div class="call-meta">'+call.time+' &middot; '+call.duration+' &middot; '+call.service+' <span class="call-outcome '+call.outcome+'">'+ol+'</span></div>'+estHtml+'</div></div><span class="call-status-badge '+call.status+'">'+statusLabel+'</span><svg class="call-expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+call.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+call.address+'</div></div><div class="call-detail-item"><div class="call-detail-label">Service</div><div class="call-detail-value">'+call.service+'</div></div><div class="call-detail-item"><div class="call-detail-label">Duration</div><div class="call-detail-value">'+call.duration+'</div></div>'+detailEstHtml+'</div><div class="call-detail-label">&#128203; AI Summary</div><div class="call-summary">'+call.summary+'</div><div class="call-detail-label">&#128172; Transcript</div><div class="call-transcript">'+call.transcript+'</div><div class="call-actions"><button disabled style="opacity:0.5" title="Coming soon">&#127911; Play Recording</button><button onclick="showToast(\'SMS sent to '+call.phone+'\')">&#9993; Send SMS</button><button onclick="showToast(\'Email sent\')">&#9993; Send Email</button></div></div></div>'
+// Pricing Engine — 13 services with logic-based pricing
+const services = [
+  {name:"Tree removal",icon:"🌳",scenarios:[
+    {label:"Single small tree",trees:1,height:25,nearHouse:false,stump:false,emergency:false},
+    {label:"Large oak removal",trees:1,height:55,nearHouse:true,stump:true,emergency:false},
+    {label:"Multiple dead pines",trees:3,height:45,nearHouse:false,stump:true,emergency:false},
+    {label:"Emergency storm cleanup",trees:2,height:40,nearHouse:true,stump:false,emergency:true},
+    {label:"Overgrown lot clearing",trees:5,height:30,nearHouse:false,stump:false,emergency:false}]},
+  {name:"Roof inspection/replacement",icon:"🏠",scenarios:[
+    {label:"Asphalt shingle tear-off replace",sqft:1800,pitch:"moderate",layers:1,material:"asphalt"},
+    {label:"Metal roof install",sqft:2400,pitch:"steep",layers:2,material:"metal"},
+    {label:"Minor leak repair",sqft:0,pitch:"low",layers:1,material:"patch"},
+    {label:"Architectural shingle replacement",sqft:2000,pitch:"moderate",layers:1,material:"architectural"},
+    {label:"Flat roof repair reseal",sqft:1500,pitch:"low",layers:1,material:"torch-down"}]},
+  {name:"Emergency plumbing",icon:"🔧",scenarios:[
+    {label:"Burst pipe repair",pipeType:"copper",accessibility:"easy",emergency:true,replace:false},
+    {label:"Water heater replacement 50gal",pipeType:"copper",accessibility:"easy",emergency:false,replace:true},
+    {label:"Main sewer line snake",pipeType:"cast-iron",accessibility:"moderate",emergency:true,replace:false},
+    {label:"Full bathroom repipe",pipeType:"galvanized",accessibility:"hard",emergency:false,replace:true},
+    {label:"Faucet drain repair",pipeType:"pvc",accessibility:"easy",emergency:false,replace:false}]},
+  {name:"Electrical panel upgrade",icon:"⚡",scenarios:[
+    {label:"Panel upgrade 100to200A",amperage:200,outdoor:false,permit:true,emergency:false},
+    {label:"Sub-panel install",amperage:100,outdoor:false,permit:true,emergency:false},
+    {label:"Breaker replacement",amperage:0,outdoor:false,permit:false,emergency:true},
+    {label:"Whole house rewiring",amperage:200,outdoor:true,permit:true,emergency:false},
+    {label:"Lighting fixture install 6",amperage:0,outdoor:false,permit:false,emergency:false}]},
+  {name:"Landscape design",icon:"🌿",scenarios:[
+    {label:"Front yard redesign",sqft:1200,patio:false,plantings:true,hardscape:false,irrigation:true},
+    {label:"Patio walkway install",sqft:400,patio:true,plantings:false,hardscape:true,irrigation:false},
+    {label:"Full backyard transformation",sqft:2500,patio:true,plantings:true,hardscape:true,irrigation:true},
+    {label:"Planting mulching",sqft:800,patio:false,plantings:true,hardscape:false,irrigation:false},
+    {label:"Retaining wall drainage",sqft:0,patio:false,plantings:false,hardscape:true,irrigation:false}]},
+  {name:"HVAC repair",icon:"❄️",scenarios:[
+    {label:"AC capacitor replacement",system:"ac",repair:true,tonnage:3,refrigerant:"r410a"},
+    {label:"Full AC system replacement",system:"ac",repair:false,tonnage:3,refrigerant:"r410a"},
+    {label:"Furnace blower motor",system:"furnace",repair:true,tonnage:0,refrigerant:"none"},
+    {label:"Heat pump replacement",system:"heat-pump",repair:false,tonnage:4,refrigerant:"r410a"},
+    {label:"Ductwork cleaning sealing",system:"duct",repair:true,tonnage:0,refrigerant:"none"}]},
+  {name:"Gutter cleaning",icon:"🍂",scenarios:[
+    {label:"Single story gutters",linearFt:120,stories:1,debris:"leaves"},
+    {label:"Two story gutters downspouts",linearFt:200,stories:2,debris:"leaves"},
+    {label:"Heavy debris gutter guards",linearFt:160,stories:2,debris:"heavy"},
+    {label:"Gutter repair clean",linearFt:100,stories:1,debris:"leaves"}]},
+  {name:"Pest control",icon:"🐛",scenarios:[
+    {label:"Ant infestation treatment",sqft:2000,treatment:"general",severity:"moderate"},
+    {label:"Termite inspection treatment",sqft:2500,treatment:"termite",severity:"severe"},
+    {label:"Rodent exclusion",sqft:1800,treatment:"rodent",severity:"moderate"},
+    {label:"Quarterly pest prevention",sqft:2000,treatment:"general",severity:"low"}]},
+  {name:"Concrete driveway",icon:"🏗️",scenarios:[
+    {label:"New driveway 2car",sqft:600,demolition:false,reinforced:true,finish:"broom"},
+    {label:"Replace existing driveway",sqft:550,demolition:true,reinforced:true,finish:"stamp"},
+    {label:"Walkway patio",sqft:350,demolition:false,reinforced:false,finish:"broom"},
+    {label:"Commercial slab",sqft:1000,demolition:true,reinforced:true,finish:"smooth"}]},
+  {name:"Fence installation",icon:"🚧",scenarios:[
+    {label:"Privacy fence wood",linearFt:150,material:"wood",gates:1,terrain:"flat"},
+    {label:"Vinyl fence",linearFt:200,material:"vinyl",gates:2,terrain:"flat"},
+    {label:"Chain-link fence",linearFt:180,material:"chain-link",gates:1,terrain:"slight-slope"},
+    {label:"Split rail wire",linearFt:300,material:"split-rail",gates:0,terrain:"moderate-slope"}]},
+  {name:"Window replacement",icon:"",scenarios:[
+    {label:"Double hung 6 windows",count:6,pane:"double",story:1},
+    {label:"Triple pane energy eff 4 windows",count:4,pane:"triple",story:1},
+    {label:"Bay window install",count:1,pane:"double",story:1},
+    {label:"Full house replacement 12 windows",count:12,pane:"double",story:2}]},
+  {name:"Carpet cleaning",icon:"🧹",scenarios:[
+    {label:"Living room hallway",rooms:2,sqft:500,stains:false,stairs:false},
+    {label:"Full house 4 rooms stairs",rooms:4,sqft:1200,stains:true,stairs:true},
+    {label:"Stain treatment focus",rooms:1,sqft:300,stains:true,stairs:false},
+    {label:"Office carpet refresh",rooms:3,sqft:800,stains:false,stairs:false}]},
+  {name:"Pressure washing",icon:"💦",scenarios:[
+    {label:"Driveway only",sqft:500,surface:"driveway",level:"normal"},
+    {label:"House exterior",sqft:1800,surface:"house",level:"normal"},
+    {label:"Driveway house walkways",sqft:2200,surface:"both",level:"heavy"},
+    {label:"Deck patio cleaning",sqft:400,surface:"deck",level:"normal"}]}];
+
+function calcPrice(svc,s){
+  switch(svc.name){
+    case"Tree removal":{let p=150+(60*s.height*s.trees);if(s.stump)p+=150*s.trees;if(s.nearHouse)p+=800;if(s.emergency)p+=500;return p;}
+    case"Roof inspection/replacement":{if(s.material==="patch")return 750;let psf=s.material==="metal"?7.5:s.material==="architectural"?5.5:4.5;let p=s.sqft*psf;if(s.layers>1)p+=s.sqft*2;if(s.pitch==="steep")p*=1.3;return Math.round(p);}
+    case"Emergency plumbing":{let lh=s.replace?4:s.emergency?1.5:1;let parts=s.replace?s.pipeType==="galvanized"?1200:600:s.emergency?250:80;let p=150+(lh*125)+parts;if(s.accessibility==="hard")p+=200;if(s.emergency)p=Math.round(p*1.25);return Math.round(p);}
+    case"Electrical panel upgrade":{if(s.amperage===0)return s.emergency?250:180;let p=s.amperage===200?1800:1200;if(s.outdoor)p+=400;if(s.permit)p+=250;return p;}
+    case"Landscape design":{let p=s.sqft*8;if(s.patio)p+=3000;if(s.plantings)p+=1500;if(s.hardscape)p+=2000;if(s.irrigation)p+=1200;return Math.round(p);}
+    case"HVAC repair":{if(!s.repair){return Math.round(s.tonnage*(s.system==="heat-pump"?2800:2200)+1500);}if(s.system==="duct")return 1000;if(s.system==="furnace")return 700;return 380;}
+    case"Gutter cleaning":{let p=s.linearFt*(s.stories>1?1.5:1);if(s.debris==="heavy")p*=1.5;return Math.round(p);}
+    case"Pest control":{const sv={low:150,moderate:300,severe:600};let p=sv[s.severity]||300;if(s.treatment==="termite")p+=400;if(s.treatment==="rodent")p+=200;p+=s.sqft*0.05;return Math.round(p);}
+    case"Concrete driveway":{let p=s.sqft*8;if(s.reinforced)p+=s.sqft*2.5;if(s.demolition)p+=1200;if(s.finish==="stamp")p*=1.35;return Math.round(p);}
+    case"Fence installation":{const m={wood:25,vinyl:35,"chain-link":15,"split-rail":12};let p=s.linearFt*(m[s.material]||25)+s.linearFt*12;p+=s.gates*150;if(s.terrain==="slight-slope")p*=1.15;if(s.terrain==="moderate-slope")p*=1.3;return Math.round(p);}
+    case"Window replacement":{const wp={double:500,triple:850};let pw=wp[s.pane]||500;if(s.story>1)pw*=1.2;if(s.count===1)pw=1800;return s.count*pw;}
+    case"Carpet cleaning":{let p=s.sqft*0.35;if(s.stains)p+=100;if(s.stairs)p+=75;return Math.round(p);}
+    case"Pressure washing":{const b={driveway:0.25,house:0.20,both:0.22,deck:0.30};let p=s.sqft*(b[s.surface]||0.22);if(s.level==="heavy")p*=1.4;return Math.max(Math.round(p),100);}
+    default:return 500;
   }
-  el.innerHTML=html;updateStats()
 }
-function toggleCall(i){var cards=document.querySelectorAll('.call-card.expanded');for(var c=0;c<cards.length;c++){if(cards[c].id!=='call-'+i){cards[c].classList.remove('expanded')}}document.getElementById('call-'+i).classList.toggle('expanded')}
-function setFilter(f){currentFilter=f;var btns=document.querySelectorAll('.call-filter-btn');for(var b=0;b<btns.length;b++){btns[b].classList.toggle('active',btns[b].dataset.filter===f)}renderCalls()}
-function updateStats(){var t=allCalls.length;var a=0,m=0,ts=0;for(var i=0;i<t;i++){var c=allCalls[i];if(c.status==='answered')a++;if(c.status==='missed')m++;var p=c.duration.split(':');ts+=parseInt(p[0])*60+parseInt(p[1])}var am=t>0?Math.floor(ts/t/60):0;var as=t>0?Math.floor((ts/t)%60):0;var r=t>0?Math.round((a/t)*100):0;document.getElementById('totalCalls').textContent=t;document.getElementById('avgDuration').textContent=t>0?am+':'+(as<10?'0':'')+as:'—';document.getElementById('answerRate').textContent=t>0?r+'%':'—'}
-function simulateDemoCall(){var call=generateCall();allCalls.unshift(call);localStorage.setItem('northstar_calls',JSON.stringify(allCalls));renderCalls();showToast('Call from '+call.caller+' - $'+call.avgPrice.toLocaleString()+' estimated job','success')}
-function clearAllCalls(){if(confirm('Clear all call history?')){allCalls=[];localStorage.removeItem('northstar_calls');renderCalls();showToast('Calls cleared','')}}
-function showToast(msg,t){var el=document.getElementById('toast');el.textContent=msg;el.className='toast show';setTimeout(function(){el.classList.remove('show')},3000)}
+function fmtDetail(svc,s){
+  switch(svc.name){
+    case"Tree removal":{let p=[];p.push(s.trees+" tree"+(s.trees>1?"s":"")+" x "+s.height+"ft");if(s.nearHouse)p.push("crane needed");if(s.stump)p.push("stump grind");if(s.emergency)p.push("emergency");return p.join(" | ");}
+    case"Roof inspection/replacement":{if(s.material==="patch")return"Leak diagnostic & patch repair";return s.sqft+"sqft "+s.pitch+" "+s.layers+"layer(s) "+s.material;}
+    case"Emergency plumbing":{let d=s.replace?"Replace ":"Repair ";d+=s.pipeType+" "+s.accessibility+" access";if(s.emergency)d+=" emergency";return d;}
+    case"Electrical panel upgrade":{if(s.amperage===0)return s.emergency?"Emergency breaker":"Fixture install";return s.amperage+"A panel"+(s.outdoor?" outdoor":"")+(s.permit?" +permit":"");}
+    case"Landscape design":{let f=[];if(s.sqft>0)f.push(s.sqft+"sqft");if(s.patio)f.push("patio");if(s.plantings)f.push("plants");if(s.hardscape)f.push("hardscape");if(s.irrigation)f.push("irrigation");return f.join(" | ");}
+    case"HVAC repair":{if(!s.repair)return s.tonnage+" ton "+s.system+" replacement";if(s.system==="duct")return"Ductwork cleaning & seal";if(s.system==="furnace")return"Furnace blower motor";return"AC capacitor "+s.tonnage+" ton";}
+    case"Gutter cleaning":return s.linearFt+"ft "+s.stories+" story "+(s.debris==="heavy"?"heavy debris":"leaves");
+    case"Pest control":return s.sqft+"sqft "+s.treatment+" severity:"+s.severity;
+    case"Concrete driveway":return s.sqft+"sqft"+(s.demolition?" +demo":"")+(s.reinforced?" rebar":"")+" "+s.finish+" finish";
+    case"Fence installation":return s.linearFt+"ft "+s.material+(s.gates?" "+s.gates+" gates":"")+" "+s.terrain;
+    case"Window replacement":return s.count+" windows "+s.pane+" pane"+(s.story>1?" "+s.story+" story":"");
+    case"Carpet cleaning":return s.rooms+" rooms "+s.sqft+"sqft"+(s.stains?" +stains":"")+(s.stairs?" +stairs":"");
+    case"Pressure washing":return s.sqft+"sqft "+s.surface+(s.level==="heavy"?" heavy":"");
+    default:return"";
+  }
+}
+const fNames=["James","Maria","Robert","Sarah","Michael","Jennifer","David","Linda","John","Patricia","William","Barbara","Thomas","Elizabeth","Christopher","Susan","Daniel","Jessica","Matthew","Donna"];
+const lNames=["Smith","Garcia","Johnson","Brown","Williams","Miller","Jones","Davis","Rodriguez","Martinez","Hernandez","Lopez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin","Lee"];
+const sNames=["Oak","Maple","Cedar","Pine","Elm","Birch","Walnut","Cherry","Spruce","Willow","Ash","Magnolia","Hickory","Sycamore","Poplar","Chestnut","Hemlock","Dogwood","Locust","Juniper"];
+const sTypes=["St","Ave","Dr","Ln","Rd","Ct","Way","Pl","Blvd","Cir"];
+const aCodes=["860","203","401","413","845","914","475","959","518","607"];
+function genCall(){
+  const svc=services[Math.floor(Math.random()*services.length)];
+  const s=svc.scenarios[Math.floor(Math.random()*svc.scenarios.length)];
+  const price=calcPrice(svc,s);
+  const det=fmtDetail(svc,s);
+  const fn=fNames[Math.floor(Math.random()*fNames.length)];
+  const ln=lNames[Math.floor(Math.random()*lNames.length)];
+  const name=fn+" "+ln;
+  const num=Math.floor(Math.random()*8999)+100;
+  const sn=sNames[Math.floor(Math.random()*sNames.length)];
+  const st=sTypes[Math.floor(Math.random()*sTypes.length)];
+  const ac=aCodes[Math.floor(Math.random()*aCodes.length)];
+  const durSec=Math.floor(Math.random()*(420-120)+120);
+  const durMin=Math.floor(durSec/60);
+  const durRem=durSec%60;
+  const dayRoll=Math.random();
+  const daysAgo=dayRoll<0.4?0:dayRoll<0.65?1:dayRoll<0.85?2:Math.floor(Math.random()*3)+3;
+  const dayLabel=daysAgo===0?"Today":daysAgo===1?"Yesterday":daysAgo+" days ago";
+  const hrs=Math.floor(Math.random()*11)+8;
+  const mins=Math.floor(Math.random()*60);
+  const time=dayLabel+", "+hrs+":"+(mins<10?"0":"")+mins+" "+(hrs>=12?"PM":"AM");
+  const status=Math.random()<0.8?"answered":Math.random()<0.9?"voicemail":"missed";
+  const outcomes=["appointment-set","lead-captured","follow-up","no-interest"];
+  const weights=[0.4,0.3,0.2,0.1];
+  let rr=Math.random(),outcome=outcomes[0];
+  for(let i=0;i<weights.length;i++){rr-=weights[i];if(rr<=0){outcome=outcomes[i];break;}}
+  return{
+    caller:name,phone:"("+ac+") 555-"+(Math.floor(Math.random()*8999)+1000),
+    address:num+" "+sn+" "+st,service:svc.name,icon:svc.icon,
+    avgPrice:price,jobDetail:det,
+    duration:durMin+":"+(durRem<10?"0":"")+durRem,
+    status:status,outcome:outcome,time:time,
+    summary:svc.name+": "+s.label+". "+det+". Estimated $"+price.toLocaleString()+".",
+    transcript:"AI: NorthStar, how can I help?\\nCustomer: I need "+s.label.toLowerCase()+".\\nAI: Great, I can help. Your name?\\nCustomer: "+name+".\\nAI: Address?\\nCustomer: "+num+" "+sn+" "+st+".\\nAI: The estimate is around $"+price.toLocaleString()+". Scheduling an estimator."
+  };
+}
+let allCalls=[],curFilter="all";
+function loadCalls(){try{const d=localStorage.getItem("northstar_calls");if(d)allCalls=JSON.parse(d)}catch(e){}renderCalls()}
+function renderCalls(){
+  const f=curFilter==="all"?allCalls:allCalls.filter(c=>c.status===curFilter);
+  const el=document.getElementById("callHistoryList");
+  if(f.length===0){el.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';upStats();return;}
+  const ol={"appointment-set":"Appointment Set","lead-captured":"Lead Captured","follow-up":"Follow-up Needed","no-interest":"No Interest"};
+  const sc={answered:"#059669",missed:"#dc2626",voicemail:"#d97706"};
+  let html="";
+  f.forEach((c,i)=>{
+    const inits=c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
+    html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+' '+(c.icon||"")+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge" style="background:'+sc[c.status]+'20;color:'+sc[c.status]+'">'+c.status.charAt(0).toUpperCase()+c.status.slice(1)+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div style="margin:12px 0;padding:12px;background:var(--neutral-200);border-radius:var(--radius-sm);"><div style="font-size:15px;font-weight:700;color:var(--brand-600);">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div style="font-size:12px;color:var(--neutral-500);margin-top:2px;">'+c.jobDetail+'</div></div><div class="call-detail-label">Summary</div><div class="call-summary">'+c.summary+'</div><div class="call-detail-label">Transcript</div><div class="call-transcript">'+c.transcript+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
+  });
+  el.innerHTML=html;upStats();
+}
+function toggleCall(i){document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});document.getElementById("call-"+i).classList.toggle("expanded")}
+function setFilter(f){curFilter=f;document.querySelectorAll(".call-filter-btn").forEach(b=>b.classList.toggle("active",b.dataset.filter===f));renderCalls()}
+function upStats(){const t=allCalls.length;const a=allCalls.filter(c=>c.status==="answered").length;const ts=allCalls.reduce((s,c)=>{const p=c.duration.split(":");return s+parseInt(p[0])*60+parseInt(p[1])},0);const am=t>0?Math.floor(ts/t/60):0;const as=t>0?Math.floor(ts/t%60):0;const r=t>0?Math.round((a/t)*100):0;document.getElementById("totalCalls").textContent=t;document.getElementById("avgDuration").textContent=t>0?am+":"+as.toString().padStart(2,"0"):"—";document.getElementById("answerRate").textContent=t>0?r+"%":"—"}
+function simulateDemoCall(){const c=genCall();allCalls.unshift(c);localStorage.setItem("northstar_calls",JSON.stringify(allCalls));renderCalls();showToast("Call from "+c.caller+" — $"+c.avgPrice.toLocaleString()+" estimated")}
+function clearAllCalls(){if(confirm("Clear all call history?")){allCalls=[];localStorage.removeItem("northstar_calls");renderCalls();showToast("Calls cleared")}}
+function showToast(m){const e=document.getElementById("toast");e.textContent=m;e.className="toast show";setTimeout(()=>e.classList.remove("show"),3000)}
 loadCalls();
 </script>
 </body>

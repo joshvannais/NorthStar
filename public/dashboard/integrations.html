@@ -69,83 +69,230 @@ function toggleMobileMenu() {
         </div>
       </div>
 
-      <!-- Retell AI (behind-the-scenes) -->
+      <!-- Google Sheets -->
       <div class="settings-section">
-        <h2>📞 AI Receptionist</h2>
-        <p class="description">Your AI receptionist is managed by the NorthStar platform — no setup needed on your end.</p>
-        <div class="integration-card">
-          <div class="icon">🤖</div>
-          <div class="info">
-            <h4>Voice AI</h4>
-            <p>AI receptionist that answers your incoming calls</p>
-          </div>
-          <span><span class="status-dot disconnected"></span>Pending setup</span>
-        </div>
-        <p style="font-size:13px;color:var(--neutral-400);margin-top:8px;">Your AI receptionist will be activated automatically. We'll notify you when it's ready.</p>
-      </div>
-
-      <!-- Phone (Twilio behind-the-scenes) -->
-      <div class="settings-section">
-        <h2>📱 Phone Number</h2>
-        <p class="description">Your dedicated phone number where customers reach your AI receptionist.</p>
-        <div class="integration-card">
-          <div class="icon">📞</div>
-          <div class="info">
-            <h4>(860) 970-5750</h4>
-            <p>Your NorthStar receptionist number</p>
-          </div>
-          <span><span class="status-dot disconnected"></span>Pending setup</span>
-        </div>
-        <div style="background:var(--brand-50);border-radius:var(--radius-sm);padding:16px;border:1px solid var(--brand-200);font-size:13px;color:var(--neutral-600);margin-top:12px;">
-          <strong>💡 How it works:</strong> When a customer calls your business number, it forwards to your AI receptionist. We'll help you set up forwarding.
-        </div>
-      </div>
-
-      <!-- Google -->
-      <div class="settings-section">
-        <h2>📊 Google Workspace</h2>
-        <p class="description">Sync leads to Google Sheets and schedule estimates on Google Calendar.</p>
-        <div class="integration-card">
+        <h2>📊 Google Sheets</h2>
+        <p class="description">Every lead captured by your AI receptionist is auto-saved to a spreadsheet.</p>
+        <div class="integration-card" id="integration-sheets">
           <div class="icon">📋</div>
           <div class="info">
-            <h4>Google Sheets</h4>
-            <p>Auto-save every lead to a spreadsheet</p>
+            <h4>Lead Sync</h4>
+            <p>Auto-save name, phone, address, service &amp; time to Google Sheets</p>
           </div>
-          <span><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-secondary btn-sm" onclick="showToast('Sheets setup guide coming soon!')">Configure</button>
+          <span id="sheets-status"><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-sm" id="sheets-btn" onclick="connectIntegration('sheets')">Connect</button>
         </div>
-        <div class="integration-card">
+      </div>
+
+      <!-- Google Calendar -->
+      <div class="settings-section">
+        <h2>📅 Google Calendar</h2>
+        <p class="description">Auto-schedule estimate appointments so you never double-book.</p>
+        <div class="integration-card" id="integration-calendar">
           <div class="icon">📅</div>
           <div class="info">
-            <h4>Google Calendar</h4>
-            <p>Auto-schedule estimate appointments</p>
+            <h4>Appointment Sync</h4>
+            <p>Estimates scheduled by your AI appear on your Google Calendar</p>
           </div>
-          <span><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-secondary btn-sm" onclick="showToast('Calendar setup guide coming soon!')">Configure</button>
+          <span id="calendar-status"><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-sm" id="calendar-btn" onclick="connectIntegration('calendar')">Connect</button>
         </div>
       </div>
 
-      <!-- Email -->
+      <!-- Apple Calendar -->
+      <div class="settings-section">
+        <h2>🍎 Apple Calendar</h2>
+        <p class="description">Sync appointments to your iCloud calendar.</p>
+        <div class="integration-card" id="integration-apple">
+          <div class="icon">📆</div>
+          <div class="info">
+            <h4>iCloud Sync</h4>
+            <p>Push estimates and appointments to Apple Calendar</p>
+          </div>
+          <span id="apple-status"><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-sm" id="apple-btn" onclick="connectIntegration('apple')">Connect</button>
+        </div>
+      </div>
+
+      <!-- Email Notifications -->
       <div class="settings-section">
         <h2>📧 Email Notifications</h2>
-        <p class="description">Get lead summaries delivered to your inbox.</p>
-        <div class="integration-card">
+        <p class="description">Get instant email alerts when your AI captures a new lead.</p>
+        <div class="integration-card" id="integration-email">
           <div class="icon">✉️</div>
           <div class="info">
-            <h4>SMTP Email</h4>
-            <p>Email alerts with full lead details</p>
+            <h4>Lead Alerts</h4>
+            <p>Full lead details delivered to your inbox after every call</p>
           </div>
-          <span><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-secondary btn-sm" onclick="showToast('Email setup guide coming soon!')">Configure</button>
+          <span id="email-status"><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-sm" id="email-btn" onclick="connectIntegration('email')">Connect</button>
         </div>
       </div>
 
-      <!-- Summary -->
-      <div style="background:var(--brand-50);border-radius:var(--radius);padding:20px;border:1px solid var(--brand-200);">
-        <h3 style="font-size:15px;font-weight:600;color:var(--brand-800);margin-bottom:4px;">🔌 Connect your tools</h3>
-        <p style="font-size:13px;color:var(--neutral-500);">Sync leads to Google Sheets, schedule appointments on Calendar, and get email notifications — all available here.</p>
+      <!-- Connection Modal -->
+      <div class="modal-overlay" id="connectModal" style="display:none;" onclick="closeModal(event)">
+        <div class="modal-content" style="max-width:440px;" onclick="event.stopPropagation()">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+            <h3 id="modalTitle" style="font-size:17px;font-weight:600;">Connect</h3>
+            <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--neutral-500);">&times;</button>
+          </div>
+          <div id="modalBody"></div>
+          <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end;">
+            <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="modalConfirm" onclick="confirmConnection()">Connect</button>
+          </div>
+        </div>
       </div>
-    </main>
+
+      <script>
+      const connectionConfigs = {
+        sheets: {
+          title: 'Connect Google Sheets',
+          fields: [
+            { label: 'Google Sheet Name', id: 'sheets-input', placeholder: 'e.g. NorthStar Leads', type: 'text' }
+          ],
+          desc: 'Every new lead will be appended as a row in your spreadsheet.',
+          icon: '📋'
+        },
+        calendar: {
+          title: 'Connect Google Calendar',
+          fields: [
+            { label: 'Calendar Name', id: 'calendar-input', placeholder: 'e.g. Work Calendar', type: 'text' }
+          ],
+          desc: 'Estimates and appointments are auto-scheduled to your Google Calendar.',
+          icon: '📅'
+        },
+        apple: {
+          title: 'Connect Apple Calendar',
+          fields: [
+            { label: 'Calendar Name', id: 'apple-input', placeholder: 'e.g. iCloud', type: 'text' }
+          ],
+          desc: 'Push appointments to your Apple Calendar for seamless syncing across devices.',
+          icon: '📆'
+        },
+        email: {
+          title: 'Connect Email Notifications',
+          fields: [
+            { label: 'Email Address', id: 'email-input', placeholder: 'you@example.com', type: 'email' }
+          ],
+          desc: 'Get notified instantly when a new lead comes in.',
+          icon: '✉️'
+        }
+      };
+
+      let currentIntegration = null;
+
+      function connectIntegration(type) {
+        currentIntegration = type;
+        const config = connectionConfigs[type];
+        if (!config) return;
+
+        // If already connected, disconnect
+        const saved = localStorage.getItem('northstar_integration_' + type);
+        if (saved) {
+          if (!confirm('Disconnect from ' + config.title.replace('Connect ', '') + '?')) return;
+          localStorage.removeItem('northstar_integration_' + type);
+          updateIntegrationUI(type);
+          return;
+        }
+
+        document.getElementById('modalTitle').textContent = config.title;
+        let bodyHTML = '<p style="font-size:14px;color:var(--neutral-500);margin-bottom:16px;">' + config.desc + '</p>';
+        config.fields.forEach(f => {
+          bodyHTML += '<div style="margin-bottom:12px;">';
+          bodyHTML += '<label style="display:block;font-size:13px;font-weight:500;color:var(--neutral-600);margin-bottom:4px;">' + f.label + '</label>';
+          bodyHTML += '<input type="' + f.type + '" id="' + f.id + '" placeholder="' + f.placeholder + '" style="width:100%;padding:10px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;background:var(--neutral-100);color:var(--neutral-800);box-sizing:border-box;">';
+          bodyHTML += '</div>';
+        });
+        document.getElementById('modalBody').innerHTML = bodyHTML;
+        document.getElementById('connectModal').style.display = 'flex';
+
+        // Pre-fill if reconnecting
+        if (saved) {
+          const data = JSON.parse(saved);
+          config.fields.forEach(f => {
+            const el = document.getElementById(f.id);
+            if (el && data[f.id]) el.value = data[f.id];
+          });
+        }
+      }
+
+      function confirmConnection() {
+        if (!currentIntegration) return;
+        const config = connectionConfigs[currentIntegration];
+        const data = {};
+        config.fields.forEach(f => {
+          const el = document.getElementById(f.id);
+          data[f.id] = el ? el.value.trim() : '';
+        });
+
+        // Validate
+        if (currentIntegration === 'email') {
+          const val = data['email-input'];
+          if (!val || !val.includes('@')) {
+            showToast('Please enter a valid email address');
+            return;
+          }
+        }
+
+        // Store the connection
+        const name = config.fields[0] ? (data[config.fields[0].id] || 'Connected') : 'Connected';
+        const store = { name: name, connectedAt: new Date().toISOString(), ...data };
+        localStorage.setItem('northstar_integration_' + currentIntegration, JSON.stringify(store));
+        closeModal();
+        updateIntegrationUI(currentIntegration);
+        showToast('✅ Connected to ' + config.title.replace('Connect ', '') + '!');
+      }
+
+      function updateIntegrationUI(type) {
+        const saved = localStorage.getItem('northstar_integration_' + type);
+        const statusEl = document.getElementById(type + '-status');
+        const btnEl = document.getElementById(type + '-btn');
+        const cardEl = document.getElementById('integration-' + type);
+
+        if (saved) {
+          const data = JSON.parse(saved);
+          statusEl.innerHTML = '<span class="status-dot connected"></span>Connected';
+          btnEl.textContent = 'Disconnect';
+          btnEl.className = 'btn btn-ghost btn-sm';
+          if (cardEl) cardEl.style.borderLeft = '3px solid var(--brand-500)';
+        } else {
+          statusEl.innerHTML = '<span class="status-dot disconnected"></span>Not connected';
+          btnEl.textContent = 'Connect';
+          btnEl.className = 'btn btn-sm';
+          if (cardEl) cardEl.style.borderLeft = '3px solid transparent';
+        }
+      }
+
+      function closeModal(e) {
+        if (e && e.target !== e.currentTarget && !e.currentTarget) return;
+        document.getElementById('connectModal').style.display = 'none';
+        currentIntegration = null;
+      }
+
+      // Init UI on load
+      ['sheets', 'calendar', 'apple', 'email'].forEach(updateIntegrationUI);
+
+      // Dark mode support for modal
+      const style = document.createElement('style');
+      style.textContent = `
+        .modal-overlay {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: rgba(0,0,0,0.4); z-index: 2000;
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px; box-sizing: border-box;
+        }
+        .modal-content {
+          background: white; border-radius: 12px; padding: 24px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%;
+          max-height: 80vh; overflow-y: auto;
+        }
+        [data-theme="dark"] .modal-content { background: var(--neutral-50); }
+        [data-theme="dark"] .modal-overlay { background: rgba(0,0,0,0.6); }
+      `;
+      document.head.appendChild(style);
+      </script>
+      </main>
   </div>
 
   <div id="toast" class="toast"></div>

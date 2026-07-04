@@ -363,6 +363,7 @@ async function start() {
     console.log(`  ${baseUrl}/login           → Sign in`);
     console.log(`  ${baseUrl}/signup          → Sign up (14-day free trial)`);
     console.log(`  ${baseUrl}/dashboard       → Contractor dashboard`);
+    console.log(`  ${baseUrl}/dashboard/integrations → Integrations`);
     console.log(`  ${baseUrl}/admin           → Admin panel`);
     console.log('');
     console.log('📍 Auth API:');

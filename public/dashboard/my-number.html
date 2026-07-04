@@ -10,77 +10,103 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <div class="dashboard-layout">
-    <aside class="sidebar">
-      <a href="/dashboard" class="sidebar-logo">
-        <img src="/assets/logo.png" alt="NorthStar" class="logo-img">
-        NorthStar
-      </a>
-      <nav class="sidebar-nav">
-        <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
-        <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
-        <a href="/dashboard/calls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call History</span></a>
-        <a href="/dashboard/my-number" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
-        <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
-      </nav>
-      <a href="/" onclick="localStorage.clear()" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
-      <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button>
-    </aside>
-
-    <main class="main-content">
-      <div class="page-header">
-        <div>
-          <h1>My Number</h1>
-          <p>Your AI receptionist phone number and forwarding status.</p>
-        </div>
-      </div>
-
-      <!-- Your Number -->
-      <div class="settings-section">
-        <h2>📞 Your AI Receptionist Number</h2>
-        <p class="description">This is the number your customers call. It forwards to your AI receptionist.</p>
-        <div class="integration-card">
-          <div class="icon">📞</div>
-          <div class="info">
-            <h4>(860) 970-5750</h4>
-            <p>Your dedicated NorthStar AI receptionist number</p>
-          </div>
-          <span class="badge badge-new" style="font-size:11px;">Active</span>
-        </div>
-      </div>
-
-      <!-- Forwarding -->
-      <div class="settings-section">
-        <h2>🔄 Call Forwarding Instructions</h2>
-        <p class="description">Forward your existing business number to your NorthStar number so calls get answered.</p>
-        <div style="background:var(--brand-50);border-radius:var(--radius-sm);padding:20px;border:1px solid var(--brand-200);">
-          <ol style="margin-left:18px;color:var(--neutral-600);font-size:14px;line-height:2.2;">
-            <li><strong>Call your phone provider</strong> (Verizon, AT&T, Comcast, etc.)</li>
-            <li>Ask them to <strong>forward calls</strong> from your business number to <strong>(860) 970-5750</strong></li>
-            <li>Or set it up in your phone's online dashboard under "Call Forwarding"</li>
-            <li>Once active, <strong>test it</strong> — call your number and the AI receptionist should answer</li>
-          </ol>
-        </div>
-        <div class="integration-card" style="margin-top:16px;">
-          <div class="icon">✅</div>
-          <div class="info">
-            <h4>Forwarding Status</h4>
-            <p>We'll detect when forwarding is active and update this</p>
-          </div>
-          <span><span class="status-dot disconnected"></span>Waiting for setup</span>
-        </div>
-      </div>
-
-      <!-- Need help -->
-      <div style="background:var(--neutral-50);border-radius:var(--radius);padding:20px;border:1px solid var(--neutral-200);text-align:center;">
-        <p style="font-size:14px;color:var(--neutral-500);">Need help with forwarding? <a href="/contact" style="color:var(--brand-600);font-weight:500;">Contact us →</a></p>
-      </div>
-    </main>
+<div class="dashboard-layout">
+<aside class="sidebar">
+  <a href="/dashboard" class="sidebar-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a>
+  <nav class="sidebar-nav">
+    <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
+    <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
+    <a href="/dashboard/calls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call History</span></a>
+    <a href="/dashboard/my-number" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
+    <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
+  </nav>
+  <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
+  <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">&#127769;</button>
+</aside>
+<main class="main-content">
+  <div class="page-header">
+    <div><h1>My Number</h1><p>Your AI receptionist phone number.</p></div>
   </div>
 
-  <div id="toast" class="toast"></div>
-  <script src="/js/api.js"></script>
+  <!-- Phone Number Setup -->
+  <div class="settings-section">
+    <h2>📞 Your Business Phone Number</h2>
+    <p class="description">NorthStar uses your existing business phone number. When customers call it, our AI receptionist answers — no forwarding required.</p>
+    <div class="integration-card">
+      <div class="icon">📱</div>
+      <div class="info">
+        <h4>Your Current Business Number</h4>
+        <p style="font-size:13px;color:var(--neutral-500);">Enter your business number below. NorthStar will activate it with AI answering.</p>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:12px;align-items:center;">
+      <input type="tel" id="businessNumber" placeholder="(XXX) XXX-XXXX" style="flex:1;padding:12px 16px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:15px;background:var(--neutral-100);color:var(--neutral-800);" maxlength="14">
+      <button class="btn btn-primary" onclick="saveNumber()">Save Number</button>
+    </div>
+    <div id="savedNumber" style="display:none;margin-top:12px;padding:12px;background:rgba(4,120,87,0.1);border-radius:var(--radius-sm);color:#059669;font-size:14px;">
+      ✅ Your AI receptionist will answer calls to <strong id="displayedNumber"></strong>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="settings-section">
+    <h2>⚙️ How It Works</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:8px;">
+      <div style="padding:20px;background:var(--neutral-100);border-radius:var(--radius-sm);text-align:center;">
+        <div style="font-size:28px;margin-bottom:8px;">📞</div>
+        <h4 style="margin-bottom:4px;">Customer Calls</h4>
+        <p style="font-size:13px;color:var(--neutral-500);">They dial your business number — the same one you've always had.</p>
+      </div>
+      <div style="padding:20px;background:var(--neutral-100);border-radius:var(--radius-sm);text-align:center;">
+        <div style="font-size:28px;margin-bottom:8px;">🤖</div>
+        <h4 style="margin-bottom:4px;">AI Answers</h4>
+        <p style="font-size:13px;color:var(--neutral-500);">NorthStar's AI picks up, captures lead info, and schedules jobs.</p>
+      </div>
+      <div style="padding:20px;background:var(--neutral-100);border-radius:var(--radius-sm);text-align:center;">
+        <div style="font-size:28px;margin-bottom:8px;">📊</div>
+        <h4 style="margin-bottom:4px;">You Get Reports</h4>
+        <p style="font-size:13px;color:var(--neutral-500);">Every call is logged with a summary, transcript, and lead info.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("businessNumber").addEventListener("input", function(e) {
+      let val = e.target.value.replace(/\\D/g,"");
+      if (val.length > 10) val = val.slice(0,10);
+      let formatted = "";
+      if (val.length > 0) formatted += "(" + val.slice(0,3);
+      if (val.length > 3) formatted += ") " + val.slice(3,6);
+      if (val.length > 6) formatted += "-" + val.slice(6,10);
+      e.target.value = formatted;
+    });
+    function saveNumber() {
+      const num = document.getElementById("businessNumber").value;
+      if (num.length < 10) { showToast("Please enter a full phone number"); return; }
+      localStorage.setItem("northstar_business_number", num);
+      document.getElementById("displayedNumber").textContent = num;
+      document.getElementById("savedNumber").style.display = "block";
+      showToast("Number saved: " + num);
+    }
+    // Load saved number
+    const saved = localStorage.getItem("northstar_business_number");
+    if (saved) {
+      document.getElementById("businessNumber").value = saved;
+      document.getElementById("displayedNumber").textContent = saved;
+      document.getElementById("savedNumber").style.display = "block";
+    }
+    function showToast(m) {
+      const e = document.getElementById("toast");
+      if (!e) return;
+      e.textContent = m;
+      e.className = "toast show";
+      setTimeout(() => e.classList.remove("show"), 3000);
+    }
+  </script>
+</main>
+</div>
+<div id="toast" class="toast"></div>
+<script src="/js/api.js"></script>
 <script src="/js/theme.js"></script>
 </body>
 </html>

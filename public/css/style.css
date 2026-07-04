@@ -1070,7 +1070,7 @@ tr:hover td { background: var(--neutral-50); }
 }
 
 [data-theme="dark"] .section-alt {
-  background: var(--neutral-100);
+  background: var(--neutral-50);
 }
 
 [data-theme="dark"] .card {
@@ -1189,7 +1189,8 @@ tr:hover td { background: var(--neutral-50); }
 /* Dark mode: pricing cards */
 [data-theme="dark"] .pricing-card {
   background: var(--neutral-100);
-  border: 1px solid var(--neutral-200);
+  border: 1px solid var(--neutral-300);
+  box-shadow: var(--shadow-md);
 }
 
 [data-theme="dark"] .pricing-card.featured {
@@ -1200,6 +1201,7 @@ tr:hover td { background: var(--neutral-50); }
 
 [data-theme="dark"] .pricing-card .price {
   color: var(--brand-400);
+  text-shadow: 0 0 30px rgba(212, 175, 55, 0.15);
 }
 
 [data-theme="dark"] .pricing-card .price span {
@@ -1217,6 +1219,27 @@ tr:hover td { background: var(--neutral-50); }
 [data-theme="dark"] .pricing-card.featured::before {
   background: var(--brand-500);
   color: var(--neutral-900);
+}
+
+[data-theme="dark"] .pricing-card .btn-primary {
+  background: var(--brand-500);
+  color: var(--neutral-900);
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.25);
+}
+
+[data-theme="dark"] .pricing-card .btn-primary:hover {
+  background: var(--brand-600);
+}
+
+[data-theme="dark"] .pricing-card .btn-secondary {
+  background: var(--neutral-200);
+  border: 1px solid var(--neutral-300);
+  color: var(--neutral-700);
+}
+
+[data-theme="dark"] .pricing-card .btn-secondary:hover {
+  background: var(--neutral-300);
+  color: var(--neutral-800);
 }
 
 /* Dark mode: stat cards and tables */

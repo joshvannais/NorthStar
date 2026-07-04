@@ -1510,3 +1510,5 @@ tr:hover td { background: var(--neutral-50); }
 
 [data-theme="dark"] .mobile-header { background: var(--neutral-50); border-bottom-color: var(--neutral-300); }
 [data-theme="dark"] .mobile-header .hamburger-btn { color: var(--neutral-500); }
+
+[data-theme="dark"] #demoResultPrice { color: var(--brand-400) !important; }

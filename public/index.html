@@ -180,6 +180,11 @@
           <div><strong>Address</strong><br><span style="color:var(--neutral-500);" id="demoResultAddress">—</span></div>
           <div><strong>Service</strong><br><span style="color:var(--neutral-500);" id="demoResultService">—</span></div>
           <div style="grid-column:1/-1;"><strong>Preferred Time</strong><br><span style="color:var(--neutral-500);" id="demoResultTime">—</span></div>
+          <div style="grid-column:1/-1;padding:12px;margin-top:4px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2);border-radius:var(--radius-sm);text-align:center;">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--neutral-500);margin-bottom:2px;">Estimated Job Value</div>
+            <div style="font-size:22px;font-weight:700;color:var(--brand-700);" id="demoResultPrice">—</div>
+            <div style="font-size:11px;color:var(--neutral-500);margin-top:2px;" id="demoResultPriceBreakdown">—</div>
+          </div>
         </div>
         <div style="margin-top:16px;padding:12px;background:var(--neutral-200);border-radius:var(--radius-sm);">
           <strong style="font-size:13px;">AI Summary</strong>
@@ -190,9 +195,9 @@
           <span class="badge-completed">📧 Email Sent ✓</span>
           <span class="badge-completed">💾 Lead Saved ✓</span>
         </div>
-        <div style="display:flex;gap:8px;margin-top:20px;justify-content:center;">
-          <button class="btn btn-secondary" onclick="resetDemo()">Try Another Scenario</button>
-          <a href="/login" class="btn btn-primary">Explore Full Dashboard →</a>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:20px;">
+          <button class="btn btn-secondary" onclick="resetDemo()" style="width:100%;">Try Another Scenario</button>
+          <a href="/login" class="btn btn-primary" style="width:100%;">Explore Full Dashboard →</a>
         </div>
       </div>
     </div>
@@ -325,6 +330,8 @@ const demoScenarios = {
     name: 'Maria Garcia',
     phone: '(860) 555-0142',
     address: '42 Maple Drive',
+    price: '$2,400 - $3,800',
+    priceBreakdown: '50ft oak tree, near house, stump grinding + emergency risk factor',
     service: 'Tree removal estimate',
     time: 'Thursday morning',
     summary: 'Customer has a large oak tree with a cracked trunk near the house. Needs an estimate for removal and stump grinding. Preferred time is Thursday before noon.',
@@ -348,6 +355,8 @@ const demoScenarios = {
     name: 'Tom Anderson',
     phone: '(860) 555-0198',
     address: '187 Cedar Lane',
+    price: '$450 - $850',
+    priceBreakdown: 'Emergency burst pipe repair, basement location, priority dispatch fee',
     service: 'Emergency plumbing - burst pipe',
     time: 'ASAP (emergency)',
     summary: 'Emergency call - burst pipe in the basement, water leaking. Customer needs immediate plumbing repair. Dispatched as emergency priority.',
@@ -369,6 +378,8 @@ const demoScenarios = {
     name: 'Sarah Wilson',
     phone: '(860) 555-0273',
     address: '55 Oak Street',
+    price: '$2,800 - $5,500',
+    priceBreakdown: 'Hail damage roof inspection, shingle replacement, gutter repair, insurance paperwork',
     service: 'Storm damage roofing inspection',
     time: 'Wednesday afternoon',
     summary: "Customer had storm damage from last night's hailstorm. Needs roof inspection and insurance estimate. Several shingles missing and gutter damage.",
@@ -438,17 +449,19 @@ function showNextMsg() {
 }
 
 function showResults() {
-  if (demoInterval) clearInterval(demoInterval);
-  document.getElementById('demoStep2').style.display = 'none';
-  document.getElementById('demoStep3').style.display = 'block';
-  const s = currentScenario;
-  document.getElementById('demoResultName').textContent = s.name;
-  document.getElementById('demoResultPhone').textContent = s.phone;
-  document.getElementById('demoResultAddress').textContent = s.address;
-  document.getElementById('demoResultService').textContent = s.service;
-  document.getElementById('demoResultTime').textContent = s.time;
-  document.getElementById('demoResultSummary').textContent = s.summary;
-}
+      if (demoInterval) clearInterval(demoInterval);
+      document.getElementById('demoStep2').style.display = 'none';
+      document.getElementById('demoStep3').style.display = 'block';
+      const s = currentScenario;
+      document.getElementById('demoResultName').textContent = s.name;
+      document.getElementById('demoResultPhone').textContent = s.phone;
+      document.getElementById('demoResultAddress').textContent = s.address;
+      document.getElementById('demoResultService').textContent = s.service;
+      document.getElementById('demoResultTime').textContent = s.time;
+      document.getElementById('demoResultSummary').textContent = s.summary;
+      document.getElementById('demoResultPrice').textContent = s.price || '—';
+      document.getElementById('demoResultPriceBreakdown').textContent = s.priceBreakdown || '';
+    }
 
 function resetDemo() {
   if (demoInterval) clearInterval(demoInterval);

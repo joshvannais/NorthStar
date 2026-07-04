@@ -40,7 +40,7 @@
           <span>Settings</span>
         </a>
       </nav>
-      <a href="/" onclick="localStorage.clear()" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">
+      <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
         <span>Sign Out</span>
       </a>
@@ -153,8 +153,8 @@
           let simLeadCount = 0;
           try {
             let callsRaw = localStorage.getItem('northstar_calls');
-            // Seed demo data on first visit so revenue isn't $0
-            if (!callsRaw && today.length === 0) {
+            // Seed demo data if northstar_calls doesn't exist yet
+            if (!callsRaw) {
               const seed = [];
               const seedServices = [
                 { name:'Tree removal', min:400, max:10000 },

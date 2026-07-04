@@ -1242,6 +1242,49 @@ tr:hover td { background: var(--neutral-50); }
   color: var(--neutral-800);
 }
 
+
+/* Stats bar */
+.stats-bar {
+  text-align: center;
+  padding: 48px 16px;
+  background: var(--neutral-800);
+}
+
+.stats-bar .grid-3 {
+  color: white;
+}
+
+.stats-bar-value {
+  font-size: clamp(32px, 6vw, 40px);
+  font-weight: 800;
+  margin-bottom: 4px;
+  color: inherit;
+}
+
+.stats-bar-label {
+  opacity: 0.8;
+  font-size: 14px;
+  color: inherit;
+}
+
+/* Dark mode: stats bar */
+[data-theme="dark"] .stats-bar {
+  background: var(--neutral-100);
+}
+
+[data-theme="dark"] .stats-bar .grid-3 {
+  color: var(--neutral-800);
+}
+
+[data-theme="dark"] .stats-bar-value {
+  color: var(--brand-400);
+}
+
+[data-theme="dark"] .stats-bar-label {
+  color: var(--neutral-600);
+  opacity: 1;
+}
+
 /* Dark mode: stat cards and tables */
 [data-theme="dark"] .stat-card {
   background: var(--neutral-100);

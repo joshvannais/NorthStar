@@ -184,22 +184,12 @@ function toggleMobileMenu() {
       document.getElementById('weekLeads').textContent = thisWeek.length;
       document.getElementById("scheduledLeads");
 
-      // Revenue calculation — dynamic from simulator data
-          const leadRate = 0.4;
-          const closeRate = 0.6;
-          // Read simulated calls from in-memory array (resets on page load)
-          let avgJobValue = 0;
-          let callCount = 0;
+      // Revenue calculation — sum of all call prices (matches call history job values)
+          let totalRevenue = 0;
           try {
-            const calls = simulatedCalls;
-            const answered = calls.filter(c => c.status === 'answered' || c.status === 'voicemail');
-            callCount = answered.length;
-            if (answered.length > 0) {
-              const total = answered.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
-              avgJobValue = Math.round(total / answered.length);
-            }
+            totalRevenue = simulatedCalls.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
           } catch(e) {}
-          const estimatedRevenue = callCount * leadRate * avgJobValue * closeRate;
+          const estimatedRevenue = totalRevenue;
           document.getElementById("estimatedRevenue").textContent = "$" + Math.round(estimatedRevenue).toLocaleString();
           if (estimatedRevenue > 0) document.getElementById("estimatedRevenue").className = "stat-value revenue-positive";
       document.getElementById("scheduledLeads").textContent = scheduled.length;

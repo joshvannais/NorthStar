@@ -326,7 +326,7 @@ img, svg, video, canvas {
 .card-icon {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -353,7 +353,7 @@ img, svg, video, canvas {
 /* Steps */
 .steps {
   display: flex;
-  gap: 24px;
+  gap: 20px;
   max-width: 900px;
   margin: 0 auto;
   width: 100%;
@@ -943,7 +943,7 @@ tr:hover td { background: var(--neutral-50); }
   .grid-3, .grid-4, .grid-2 { grid-template-columns: 1fr; }
   .grid { gap: 16px; }
 
-  .steps { flex-direction: column; gap: 28px; padding: 0; }
+  .steps { flex-direction: column; gap: 20px; padding: 0; }
   .step { max-width: 400px; margin: 0 auto; }
 
   .pricing-grid { grid-template-columns: 1fr; max-width: 380px; }
@@ -1483,7 +1483,7 @@ tr:hover td { background: var(--neutral-50); }
 [data-theme="dark"] .stat-card-revenue .stat-value { color: var(--brand-300); }
 
 /* FEATURE: Call History */
-.call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); margin-bottom: 12px; overflow: hidden; }
+.call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
 .call-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; cursor: pointer; gap: 12px; }
 .call-card-header:hover { background: var(--neutral-50); }
 .call-caller { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
@@ -1501,8 +1501,8 @@ tr:hover td { background: var(--neutral-50); }
 .call-card.expanded .call-card-body { max-height: 800px; padding: 0 20px 20px; }
 .call-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; font-size: 13px; }
 .call-detail-label { color: var(--neutral-500); font-weight: 500; }
-.call-summary { background: var(--neutral-50); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 12px; font-size: 13px; }
-.call-transcript { background: #0f172a; color: #e4e4e7; border-radius: var(--radius-md); padding: 14px 16px; font-family: monospace; font-size: 12px; line-height: 1.7; max-height: 200px; overflow-y: auto; white-space: pre-wrap; margin-bottom: 12px; }
+.call-summary { background: var(--neutral-50); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 12px; font-size: 13px; }
+.call-transcript { background: #0f172a; color: #e4e4e7; border-radius: var(--radius-sm); padding: 14px 16px; font-family: monospace; font-size: 12px; line-height: 1.7; max-height: 200px; overflow-y: auto; white-space: pre-wrap; margin-bottom: 12px; }
 .call-transcript .ai-text { color: #D4AF37; }
 .call-actions button { padding: 6px 14px; font-size: 12px; border-radius: var(--radius-sm); border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; }
 .call-filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -1519,7 +1519,7 @@ tr:hover td { background: var(--neutral-50); }
 .demo-msg.ai { background: var(--brand-100); align-self: flex-start; }
 .demo-msg.customer { background: var(--neutral-200); align-self: flex-end; margin-left: auto; }
 .badge-completed { background: #d1fae5; color: #047857; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-.demo-scenario { padding: 16px; border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); cursor: pointer; text-align: center; }
+.demo-scenario { padding: 16px; border: 1px solid var(--neutral-200); border-radius: var(--radius); cursor: pointer; text-align: center; }
 .demo-scenario:hover { border-color: var(--brand-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 [data-theme="dark"] .call-card-header:hover { background: var(--neutral-800); }
 [data-theme="dark"] .call-actions button { background: var(--neutral-800); border-color: var(--neutral-700); }

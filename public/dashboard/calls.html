@@ -224,8 +224,10 @@ function genCall(){
     transcript:"AI: NorthStar, how can I help?\\nCustomer: I need "+s.label.toLowerCase()+".\\nAI: Great, I can help. Your name?\\nCustomer: "+name+".\\nAI: Address?\\nCustomer: "+num+" "+sn+" "+st+".\\nAI: Thanks, I'll schedule an estimator to come out and take a look."
   };
 }
+// Initialize from sessionStorage if data exists
 let allCalls=[],curFilter="all";
-function loadCalls(){try{const d=sessionStorage.getItem("northstar_calls");if(d)allCalls=JSON.parse(d);sessionStorage.removeItem("northstar_calls")}catch(e){}renderCalls()}
+try{const d=sessionStorage.getItem("northstar_calls");if(d)allCalls=JSON.parse(d)}catch(e){}
+function loadCalls(){renderCalls()}
 function renderCalls(){
   const f=curFilter==="all"?allCalls:allCalls.filter(c=>c.status===curFilter);
   const el=document.getElementById("callHistoryList");

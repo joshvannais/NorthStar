@@ -93,13 +93,12 @@ function toggleMobileMenu() {
     // In-memory leads — resets on each page load
     let allLeads = [];
 
-    // First, grab anything synced from the dashboard via sessionStorage
+    // Initialize from sessionStorage if data exists (shared across pages)
     try {
       const synced = sessionStorage.getItem('northstar_calls');
       if (synced) {
         const parsed = JSON.parse(synced);
         if (Array.isArray(parsed)) allLeads = parsed;
-        sessionStorage.removeItem('northstar_calls');
       }
     } catch(e) {}
 

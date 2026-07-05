@@ -142,10 +142,16 @@ function toggleMobileMenu() {
       document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your overview.`;
     }
 
-    // In-memory simulated calls — resets on each page load
+    // In-memory simulated calls — shared via sessionStorage across pages
     let simulatedCalls = [];
-    // Clear any synced call data from sessionStorage so it starts fresh
-    try { sessionStorage.removeItem('northstar_calls'); } catch(e) {}
+    // Initialize from sessionStorage if data exists (synced from other pages)
+    try {
+      const saved = sessionStorage.getItem('northstar_calls');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) simulatedCalls = parsed;
+      }
+    } catch(e) {}
 
     // Load leads from in-memory simulated calls (resets on refresh)
     async function loadLeads() {

@@ -283,23 +283,8 @@ function toggleMobileMenu() {
         sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
       } catch(e) {}
 
-      const data = {
-        customerName: name,
-        phoneNumber: phone,
-        address: adr,
-        serviceRequested: svc.name,
-        preferredTime: time,
-        urgency: urgency,
-      };
-
-      try {
-        const result = await API.simulateLead(data);
-        showToast(`✅ New lead captured: ${result.lead.customerName} (${svc.price}+ estimated)`);
-        loadLeads();
-      } catch (err) {
-        showToast('Lead simulated (offline mode)', 'success');
-        loadLeads();
-      }
+      showToast(`✅ New lead captured: ${name} (${svc.price}+ estimated)`);
+      loadLeads();
     }
 
     // Load on page load

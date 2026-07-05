@@ -188,42 +188,381 @@ const lNames=["Smith","Garcia","Johnson","Brown","Williams","Miller","Jones","Da
 const sNames=["Oak","Maple","Cedar","Pine","Elm","Birch","Walnut","Cherry","Spruce","Willow","Ash","Magnolia","Hickory","Sycamore","Poplar","Chestnut","Hemlock","Dogwood","Locust","Juniper"];
 const sTypes=["St","Ave","Dr","Ln","Rd","Ct","Way","Pl","Blvd","Cir"];
 const aCodes=["860","203","401","413","845","914","475","959","518","607"];
-function genCall(){
-  const svc=services[Math.floor(Math.random()*services.length)];
-  const s=svc.scenarios[Math.floor(Math.random()*svc.scenarios.length)];
-  const price=calcPrice(svc,s);
-  const det=fmtDetail(svc,s);
-  const fn=fNames[Math.floor(Math.random()*fNames.length)];
-  const ln=lNames[Math.floor(Math.random()*lNames.length)];
-  const name=fn+" "+ln;
-  const num=Math.floor(Math.random()*8999)+100;
-  const sn=sNames[Math.floor(Math.random()*sNames.length)];
-  const st=sTypes[Math.floor(Math.random()*sTypes.length)];
-  const ac=aCodes[Math.floor(Math.random()*aCodes.length)];
-  const durSec=Math.floor(Math.random()*(420-120)+120);
-  const durMin=Math.floor(durSec/60);
-  const durRem=durSec%60;
-  const dayRoll=Math.random();
-  const daysAgo=dayRoll<0.4?0:dayRoll<0.65?1:dayRoll<0.85?2:Math.floor(Math.random()*3)+3;
-  const dayLabel=daysAgo===0?"Today":daysAgo===1?"Yesterday":daysAgo+" days ago";
-  const hrs=Math.floor(Math.random()*11)+8;
-  const mins=Math.floor(Math.random()*60);
-  const time=dayLabel+", "+hrs+":"+(mins<10?"0":"")+mins+" "+(hrs>=12?"PM":"AM");
-  const status=Math.random()<0.8?"answered":Math.random()<0.9?"voicemail":"missed";
-  const outcomes=["appointment-set","lead-captured","follow-up","no-interest"];
-  const weights=[0.4,0.3,0.2,0.1];
-  let rr=Math.random(),outcome=outcomes[0];
-  for(let i=0;i<weights.length;i++){rr-=weights[i];if(rr<=0){outcome=outcomes[i];break;}}
-  return{
-    caller:name,phone:"("+ac+") 555-"+(Math.floor(Math.random()*8999)+1000),
-    address:num+" "+sn+" "+st,service:svc.name,icon:svc.icon,
-    avgPrice:price,jobDetail:det,
-    duration:durMin+":"+(durRem<10?"0":"")+durRem,
-    status:status,outcome:outcome,time:time,receivedAt:new Date().toISOString(),
-    summary:svc.name+": "+s.label+". "+det+". Estimated $"+price.toLocaleString()+".",
-    transcript:"AI: NorthStar, how can I help?\\nCustomer: I need "+s.label.toLowerCase()+".\\nAI: Great, I can help. Your name?\\nCustomer: "+name+".\\nAI: Address?\\nCustomer: "+num+" "+sn+" "+st+".\\nAI: Thanks, I'll schedule an estimator to come out and take a look."
-  };
-}
+function genTranscript(svc,s,name,num,sn,st){
+      const addr=num+" "+sn+" "+st;
+      const first=name.split(" ")[0];
+      function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+      function trees(t){return t===1?"tree":"trees";}
+      function aAn(w){return /^[aeiou]/i.test(w)?"an":"a";}
+      switch(svc.name){
+        case"Tree removal":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: Hi, I need some "+(s.emergency?"emergency ":"")+"tree removal done.");
+          lines.push("AI: "+(s.emergency?"I understand it's urgent. ":"")+"How many trees need to be removed?");
+          lines.push("Customer: "+s.trees+".");
+          if(s.trees<=2){}else{
+            lines.push("AI: And how many of them?");
+            lines.push("Customer: I said "+s.trees+", I need them all removed.");
+          }
+          lines.push("AI: About how tall are they — roughly?");
+          lines.push("Customer: Around "+s.height+" feet each.");
+          lines.push("AI: Are any of them near structures like your house, garage, or power lines?");
+          lines.push("Customer: "+(s.nearHouse?"Yeah, they're right next to the house.":"No, they're out in the open."));
+          if(s.stump){
+            lines.push("AI: Do you need stump grinding done as well?");
+            lines.push("Customer: Yes, please grind the stumps.");
+          }
+          lines.push("AI: Got it. Let me get your info. What's your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          let det=s.trees+" "+trees(s.trees)+" at "+s.height+"ft";
+          if(s.nearHouse)det+=" near structures";
+          if(s.stump)det+=", stump grinding";
+          if(s.emergency)det+=" (emergency)";
+          lines.push("AI: Thanks "+first+". I have "+det+". We'll have an estimator reach out to schedule a time. Thank you!");
+          return lines.join("\\n");
+        }
+        case"Roof inspection/replacement":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.material==="patch"){
+            lines.push("Customer: I've got a roof leak I need repaired.");
+            lines.push("AI: I'm sorry to hear that. How big is the area affected?");
+            lines.push("Customer: It's about a "+s.sqft+" square foot patch around the chimney.");
+            lines.push("AI: Got it. Do you know what type of roofing material you have?");
+            lines.push("Customer: It's asphalt shingles.");
+            lines.push("AI: And how accessible is the roof — is it a steep pitch?");
+            lines.push("Customer: No, it's a low slope roof, easy to walk on.");
+            lines.push("AI: Good to know. Let me get your information. What's your name?");
+            lines.push("Customer: "+name+".");
+            lines.push("AI: And your address?");
+            lines.push("Customer: "+addr+".");
+            lines.push("AI: Thanks "+first+". We'll send an inspector to assess the leak and get you sorted. Thank you!");
+          }else{
+            lines.push("Customer: I need "+(s.material==="metal"?"a metal":"a new")+" roof installed.");
+            lines.push("AI: Great! What's the approximate square footage of the roof?");
+            lines.push("Customer: About "+s.sqft+" square feet.");
+            lines.push("AI: And what material are you looking to use?");
+            lines.push("Customer: We want "+(s.material==="metal"?"metal":s.material==="architectural"?"architectural shingles":"asphalt shingles")+".");
+            lines.push("AI: How many layers of existing roofing are there?");
+            lines.push("Customer: There "+(s.layers>1?"are "+s.layers+" layers":"is one layer")+" currently on there.");
+            lines.push("AI: What's the roof pitch like — low, moderate, or steep?");
+            lines.push("Customer: It's "+aAn(s.pitch)+" "+s.pitch+" pitch.");
+            lines.push("AI: Perfect. Let me grab your contact info. Your name?");
+            lines.push("Customer: "+name+".");
+            lines.push("AI: And your address?");
+            lines.push("Customer: "+addr+".");
+            lines.push("AI: Thanks "+first+". I have a "+s.sqft+"sqft "+s.material+" roof, "+s.pitch+" pitch, "+s.layers+" layer(s). An estimator will be in touch. Thank you!");
+          }
+          return lines.join("\\n");
+        }
+        case"Emergency plumbing":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.emergency){
+            lines.push("Customer: I have "+(s.replace?"a water emergency — my tank burst":"an emergency — "+(s.pipeType==="cast-iron"?"my sewer line is backed up":"a pipe burst"))+"!");
+            lines.push("AI: I understand this is urgent! I'll get help out quickly. What type of pipe is it?");
+          }else{
+            lines.push("Customer: I need "+(s.replace?"a new water heater installed":"some plumbing work done — "+(s.pipeType==="pvc"?"a faucet repair":"a pipe repair"))+".");
+            lines.push("AI: Sure, I can help with that. What type of pipes do you have?");
+          }
+          lines.push("Customer: They're "+s.pipeType+" pipes.");
+          lines.push("AI: And how accessible is the area — easy, moderate, or hard to reach?");
+          lines.push("Customer: I'd say accessibility is "+s.accessibility+".");
+          lines.push("AI: "+(s.replace?"So you need this replaced, not just repaired?":"And this is a repair, not a full replacement?"));
+          lines.push("Customer: "+(s.replace?"Yes, it needs to be replaced.":"Correct, just a repair."));
+          if(s.emergency)lines.push("AI: Emergency call, understood. We'll prioritize this.");
+          lines.push("AI: Let me get your details. What's your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We have "+(s.replace?"a replacement":"a repair")+" on "+s.pipeType+", accessibility is "+s.accessibility+(s.emergency?". We'll rush someone out ASAP!":".")+" Thank you!");
+          return lines.join("\\n");
+        }
+        case"Electrical panel upgrade":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.amperage===0){
+            lines.push("Customer: I need "+(s.emergency?"an emergency breaker fix — something tripped and won't reset":"some light fixtures installed")+".");
+            lines.push("AI: Got it. "+(s.emergency?"This sounds urgent. We can get a licensed electrician out right away.":"How many fixtures are you looking to install?"));
+            if(!s.emergency)lines.push("Customer: About 6 fixtures.");
+          }else{
+            lines.push("Customer: I need "+(s.outdoor?"an outdoor":"an")+" electrical panel upgrade to "+s.amperage+" amps.");
+            lines.push("AI: "+(s.outdoor?"An outdoor panel — good to know. ":"")+(s.permit?"Are permits already pulled for this?":"Is this just a straight panel swap?"));
+            lines.push("Customer: "+(s.permit?"We'll need a permit, yes.":"No permits needed."));
+            lines.push("AI: "+(s.outdoor?"And the panel is mounted outside the house, correct?":"And is the panel indoors?"));
+            lines.push("Customer: "+(s.outdoor?"Yes, it's outside.":"Yes, it's inside."));
+          }
+          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          if(s.amperage===0){
+            lines.push("AI: Thanks "+first+". "+(s.emergency?"We'll get an electrician to you ASAP.":"We'll have someone reach out to schedule the install.")+" Thank you!");
+          }else{
+            lines.push("AI: Thanks "+first+". We have a "+s.amperage+"A panel upgrade"+(s.outdoor?" outdoor":"")+(s.permit?" with permit":"")+". An electrician will reach out to schedule. Thank you!");
+          }
+          return lines.join("\\n");
+        }
+        case"Landscape design":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I'm looking for landscape design for my yard.");
+          lines.push("AI: Great! What's the approximate square footage of the area?");
+          lines.push("Customer: It's about "+s.sqft+" square feet.");
+          lines.push("AI: Are you looking to add a patio or walkway?");
+          lines.push("Customer: "+(s.patio?"Yes, we want a patio installed.":"No, just focusing on the yard."));
+          if(s.hardscape){
+            lines.push("AI: Any hardscape features like retaining walls or stonework?");
+            lines.push("Customer: Yes, we want "+(s.sqft===0?"a retaining wall and drainage":"some hardscape features")+".");
+          }
+          if(s.plantings){
+            lines.push("AI: Do you need plantings — shrubs, flowers, trees?");
+            lines.push("Customer: Yes, we'd like new plantings throughout.");
+          }
+          if(s.irrigation){
+            lines.push("AI: And what about irrigation — do you need a sprinkler system?");
+            lines.push("Customer: Yes, we need irrigation installed.");
+          }
+          lines.push("AI: Excellent! Let me get your information. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          let features=[];
+          if(s.patio)features.push("patio");
+          if(s.plantings)features.push("plantings");
+          if(s.hardscape)features.push("hardscape");
+          if(s.irrigation)features.push("irrigation");
+          lines.push("AI: Thanks "+first+". I have "+s.sqft+" sqft of landscaping with "+features.join(", ")+". A designer will reach out to discuss. Thank you!");
+          return lines.join("\\n");
+        }
+        case"HVAC repair":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(!s.repair){
+            lines.push("Customer: I need "+(s.system==="heat-pump"?"a heat pump":"a new "+s.system+" system")+" replacement.");
+            lines.push("AI: I see. What tonnage is your current system?");
+            lines.push("Customer: It's a "+s.tonnage+"-ton system.");
+            lines.push("AI: And do you know what type of refrigerant it uses?");
+            lines.push("Customer: It uses R-410A.");
+            lines.push("AI: "+(s.system==="heat-pump"?"So a heat pump replacement at "+s.tonnage+" tons.":"A "+s.tonnage+"-ton AC replacement."));
+          }else if(s.system==="duct"){
+            lines.push("Customer: I need my ductwork cleaned and sealed.");
+            lines.push("AI: Sounds good. About how big is your home?");
+            lines.push("Customer: Around 2,000 square feet.");
+            lines.push("AI: Do you know when the ducts were last cleaned?");
+            lines.push("Customer: It's been several years, honestly.");
+          }else if(s.system==="furnace"){
+            lines.push("Customer: My furnace blower motor stopped working.");
+            lines.push("AI: That's no good this time of year. Has the furnace been making unusual noises?");
+            lines.push("Customer: Yes, it was rattling before it quit entirely.");
+            lines.push("AI: Got it. "+(s.tonnage>0?"What tonnage is the unit?":"We handle all standard furnace models."));
+            if(s.tonnage>0)lines.push("Customer: It's a "+s.tonnage+"-ton unit.");
+          }else{
+            lines.push("Customer: My AC isn't cooling — I think it might be the capacitor.");
+            lines.push("AI: I see. What tonnage is your AC unit?");
+            lines.push("Customer: It's a "+s.tonnage+"-ton unit.");
+            lines.push("AI: "+(s.refrigerant!=="none"?"Do you know the refrigerant type?":"Good to know."));
+            if(s.refrigerant!=="none")lines.push("Customer: It uses "+s.refrigerant.toUpperCase()+".");
+          }
+          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We'll have an HVAC technician reach out to schedule. Thank you!");
+          return lines.join("\\n");
+        }
+        case"Gutter cleaning":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need my gutters cleaned out.");
+          lines.push("AI: How many linear feet of gutter do you have?");
+          lines.push("Customer: About "+s.linearFt+" feet total.");
+          lines.push("AI: And is your home single story or two story?");
+          lines.push("Customer: It's "+(s.stories>1?"two stories":"a single story")+".");
+          lines.push("AI: What kind of debris are we dealing with — leaves or heavier buildup?");
+          lines.push("Customer: It's "+(s.debris==="heavy"?"pretty heavy buildup — there's dirt and debris mixed in":"mostly leaves")+".");
+          lines.push("AI: Would you like a quote for gutter guards to prevent future buildup?");
+          lines.push("Customer: "+(s.debris==="heavy"?"Yeah, I'm interested in guards too.":"Not right now, just the cleaning."));
+          lines.push("AI: Got it. Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We have "+s.linearFt+"ft of gutters, "+(s.stories>1?"two story":"single story")+". We'll have a crew reach out to schedule. Thank you!");
+          return lines.join("\\n");
+        }
+        case"Pest control":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need pest control service.");
+          lines.push("AI: Sure! What kind of pest are you dealing with?");
+          lines.push("Customer: We have "+(s.treatment==="termite"?"termites":s.treatment==="rodent"?"rodents":"an ant infestation")+".");
+          lines.push("AI: How severe would you say the problem is — low, moderate, or severe?");
+          lines.push("Customer: I'd say it's "+s.severity+".");
+          lines.push("AI: And what's the approximate square footage of your home?");
+          lines.push("Customer: About "+s.sqft+" square feet.");
+          lines.push("AI: "+(s.treatment==="termite"?"Termites need immediate attention. We'll schedule an inspection right away.":s.treatment==="rodent"?"We can set up exclusion and trapping.":"We can treat for ants with a thorough perimeter spray."));
+          lines.push("AI: Let me get your details. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We have a "+(s.sqft)+"sqft home with "+s.treatment+" treatment needed, severity "+s.severity+". A pest control specialist will reach out. Thank you!");
+          return lines.join("\\n");
+        }
+        case"Concrete driveway":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.demolition){
+            lines.push("Customer: I need my old driveway removed and a new one poured.");
+            lines.push("AI: Sure! What's the square footage of the driveway?");
+            lines.push("Customer: About "+s.sqft+" square feet.");
+            lines.push("AI: So demolition of the existing slab, and pour new. Are you looking at reinforced concrete with rebar?");
+          }else{
+            lines.push("Customer: I want to pour a new concrete "+(s.sqft<500?"walkway":"driveway")+".");
+            lines.push("AI: Great! What's the total square footage?");
+            lines.push("Customer: About "+s.sqft+" square feet.");
+            lines.push("AI: "+(s.sqft<500?"A nice walkway. ":"A good-sized driveway. ")+"Do you want it reinforced with rebar or wire mesh?");
+          }
+          lines.push("Customer: "+(s.reinforced?"Yes, I want it reinforced.":"No, standard concrete is fine."));
+          lines.push("AI: And what type of finish are you looking for — broom, smooth, or stamped?");
+          lines.push("Customer: We'd like "+(s.finish==="stamp"?"a stamped decorative":"a "+(s.finish==="smooth"?"smooth":"broom"))+" finish.");
+          lines.push("AI: "+(s.demolition?"So that's a demo and repour, ":"New pour, ")+s.sqft+" sqft, "+(s.reinforced?"reinforced, ":"")+s.finish+" finish. Sounds good!");
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". "+(s.demolition?"We'll schedule a demo and pour.":"We'll have a concrete crew reach out for the pour.")+" Thank you!");
+          return lines.join("\\n");
+        }
+        case"Fence installation":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need a fence installed.");
+          lines.push("AI: How many linear feet are you looking at?");
+          lines.push("Customer: About "+s.linearFt+" feet.");
+          lines.push("AI: What material are you considering — wood, vinyl, chain-link, or split-rail?");
+          lines.push("Customer: We want "+s.material+".");
+          lines.push("AI: How many gates do you need?");
+          lines.push("Customer: "+(s.gates>0?+s.gates+" gates.":"No gates needed."));
+          lines.push("AI: What's the terrain like where the fence will go — flat, slight slope, or moderate slope?");
+          lines.push("Customer: It's "+s.terrain.replace("-"," ")+".");
+          lines.push("AI: "+(s.terrain.includes("slope")?"We handle sloped terrain all the time.":"Flat terrain is straightforward.")+" Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". "+s.linearFt+"ft of "+s.material+(s.gates?" with "+s.gates+" gates":"")+" on "+s.terrain.replace("-"," ")+". A fencing contractor will reach out. Thank you!");
+          return lines.join("\\n");
+        }
+        case"Window replacement":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I'm looking to replace some windows.");
+          lines.push("AI: How many windows are you looking to replace?");
+          lines.push("Customer: "+s.count+" window"+(s.count>1?"s":"")+".");
+          lines.push("AI: Are you looking at double-pane or triple-pane windows?");
+          lines.push("Customer: We want "+s.pane+"-pane windows.");
+          lines.push("AI: What floor are the windows on?");
+          lines.push("Customer: They're on the "+(s.story>1?"second":"first")+" floor.");
+          lines.push("AI: "+(s.story>1?"Second floor installs cost a bit more for labor.":"First floor is straightforward.")+" ");
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". I have "+s.count+" "+s.pane+"-pane windows on the "+(s.story>1?"second":"first")+" floor. An installer will reach out to schedule. Thank you!");
+          return lines.join("\\n");
+        }
+        case"Carpet cleaning":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need my carpets cleaned.");
+          lines.push("AI: How many rooms need cleaning?");
+          lines.push("Customer: "+s.rooms+" room"+(s.rooms>1?"s":"")+".");
+          lines.push("AI: What's the total square footage?");
+          lines.push("Customer: About "+s.sqft+" square feet.");
+          lines.push("AI: Do you have any stubborn stains that need special treatment?");
+          lines.push("Customer: "+(s.stains?"Yes, there are some tough stains we need removed.":"No, just a general clean."));
+          if(s.stairs){
+            lines.push("AI: Any stairs that need cleaning too?");
+            lines.push("Customer: Yes, there are stairs as well.");
+          }
+          lines.push("AI: "+(s.stains?"We have great stain removal treatments.":"Great, a standard deep clean.")+" Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We have "+s.rooms+" rooms, "+s.sqft+" sqft"+(s.stains?", stain treatment":"")+(s.stairs?", stairs":"")+". A cleaning crew will reach out to schedule. Thank you!");
+          return lines.join("\\n");
+        }
+        case"Pressure washing":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need pressure washing done.");
+          lines.push("AI: What type of surface are you having cleaned — driveway, house exterior, deck, or a combination?");
+          lines.push("Customer: I need the "+(s.surface==="driveway"?"driveway":s.surface==="house"?"house exterior":s.surface==="both"?"driveway and house":s.surface==="deck"?"deck and patio":"property")+" cleaned.");
+          lines.push("AI: About how many square feet?");
+          lines.push("Customer: Around "+s.sqft+" square feet.");
+          lines.push("AI: And how dirty is it — normal buildup or heavy grime?");
+          lines.push("Customer: It's "+(s.level==="heavy"?"pretty heavy — there's years of buildup.":"normal seasonal dirt."));
+          lines.push("AI: "+(s.level==="heavy"?"Heavy cleaning might need some extra passes and a degreaser.":"Normal cleaning will get it looking great.")+" ");
+          if(s.surface==="deck")lines.push(lines.pop()+"We use a soft wash for decks to protect the wood.");
+          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We have "+s.sqft+" sqft of "+(s.surface==="both"?"driveway and house":s.surface)+" cleaning"+(s.level==="heavy"?" (heavy duty)":"")+". A crew will reach out to schedule. Thank you!");
+          return lines.join("\\n");
+        }
+        default:{
+          // Fallback generic transcript
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need "+s.label.toLowerCase()+".");
+          lines.push("AI: Great, I can help with that. What's your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks, I'll have an estimator reach out to schedule a time. Thank you!");
+          return lines.join("\\n");
+        }
+      }
+    }
+    function genCall(){
+      const svc=services[Math.floor(Math.random()*services.length)];
+      const s=svc.scenarios[Math.floor(Math.random()*svc.scenarios.length)];
+      const price=calcPrice(svc,s);
+      const det=fmtDetail(svc,s);
+      const fn=fNames[Math.floor(Math.random()*fNames.length)];
+      const ln=lNames[Math.floor(Math.random()*lNames.length)];
+      const name=fn+" "+ln;
+      const num=Math.floor(Math.random()*8999)+100;
+      const sn=sNames[Math.floor(Math.random()*sNames.length)];
+      const st=sTypes[Math.floor(Math.random()*sTypes.length)];
+      const ac=aCodes[Math.floor(Math.random()*aCodes.length)];
+      const durSec=Math.floor(Math.random()*(420-120)+120);
+      const durMin=Math.floor(durSec/60);
+      const durRem=durSec%60;
+      const dayRoll=Math.random();
+      const daysAgo=dayRoll<0.4?0:dayRoll<0.65?1:dayRoll<0.85?2:Math.floor(Math.random()*3)+3;
+      const dayLabel=daysAgo===0?"Today":daysAgo===1?"Yesterday":daysAgo+" days ago";
+      const hrs=Math.floor(Math.random()*11)+8;
+      const mins=Math.floor(Math.random()*60);
+      const time=dayLabel+", "+hrs+":"+(mins<10?"0":"")+mins+" "+(hrs>=12?"PM":"AM");
+      const status=Math.random()<0.8?"answered":Math.random()<0.9?"voicemail":"missed";
+      const outcomes=["appointment-set","lead-captured","follow-up","no-interest"];
+      const weights=[0.4,0.3,0.2,0.1];
+      let rr=Math.random(),outcome=outcomes[0];
+      for(let i=0;i<weights.length;i++){rr-=weights[i];if(rr<=0){outcome=outcomes[i];break;}}
+      return{
+        caller:name,phone:"("+ac+") 555-"+(Math.floor(Math.random()*8999)+1000),
+        address:num+" "+sn+" "+st,service:svc.name,icon:svc.icon,
+        avgPrice:price,jobDetail:det,
+        duration:durMin+":"+(durRem<10?"0":"")+durRem,
+        status:status,outcome:outcome,time:time,receivedAt:new Date().toISOString(),
+        summary:svc.name+": "+s.label+". "+det+". Estimated $"+price.toLocaleString()+".",
+        transcript:genTranscript(svc,s,name,num,sn,st)
+      };
+    }
 // Initialize from sessionStorage if data exists
 let allCalls=[],curFilter="all";
 try{const d=sessionStorage.getItem("northstar_calls");if(d)allCalls=JSON.parse(d);const nav=performance.getEntriesByType('navigation');if(nav.length>0&&nav[0].type==='reload')sessionStorage.removeItem("northstar_calls")}catch(e){}

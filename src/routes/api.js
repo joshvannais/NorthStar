@@ -7,6 +7,7 @@ const { getAllLeads, getLead } = require('../leads/store');
 const { handleWebhook } = require('../retell/webhook');
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
+const jobber = require('../integrations/jobber');
 
 const router = express.Router();
 
@@ -150,7 +151,70 @@ router.post('/retell/create-agent', async (req, res) => {
   res.json(result || { error: 'Retell API not configured' });
 });
 
-module.exports = router;
+/**
+ * Jobber Integration Routes
+ */
+
+/**
+ * GET /api/integrations/jobber/status
+ * Check if Jobber is connected for the current user.
+ */
+router.get('/integrations/jobber/status', async (req, res) => {
+  const userId = req.query.userId;
+  if (!userId) return res.json({ connected: false, configured: jobber.isConfigured() });
+  const status = await jobber.getStatus(userId);
+  res.json(status);
+});
+
+/**
+ * GET /api/integrations/jobber/auth
+ * Start the OAuth flow to connect Jobber.
+ */
+router.get('/integrations/jobber/auth', (req, res) => {
+  const userId = req.query.userId;
+  if (!userId) return res.status(400).json({ error: 'Missing userId' });
+  const authUrl = jobber.getAuthUrl(userId, `${req.protocol}://${req.get('host')}`);
+  if (!authUrl) return res.status(503).json({ error: 'Jobber integration not configured. Set JOBBER_CLIENT_ID and JOBBER_CLIENT_SECRET.' });
+  res.redirect(authUrl);
+});
+
+/**
+ * GET /api/integrations/jobber/callback
+ * Handle the OAuth callback from Jobber.
+ */
+router.get('/integrations/jobber/callback', async (req, res) => {
+  const { code, state } = req.query;
+  if (!code) return res.status(400).send('Missing authorization code');
+  
+  try {
+    let userId = null;
+    if (state) {
+      try { userId = JSON.parse(Buffer.from(state, 'base64').toString()).userId; } catch(e) {}
+    }
+    
+    const tokens = await jobber.exchangeCode(code, `${req.protocol}://${req.get('host')}`);
+    if (tokens.access_token && userId) {
+      await jobber.saveTokens(userId, tokens.access_token, tokens.refresh_token, tokens.expires_in);
+    }
+    
+    res.redirect('/dashboard/integrations?jobber=connected');
+  } catch (err) {
+    console.error('[Jobber] OAuth callback error:', err.message);
+    res.status(500).send('Failed to connect Jobber. Please try again.');
+  }
+});
+
+/**
+ * POST /api/integrations/jobber/disconnect
+ * Disconnect Jobber for a user.
+ */
+router.post('/integrations/jobber/disconnect', async (req, res) => {
+  const userId = req.body.userId;
+  if (!userId) return res.status(400).json({ error: 'Missing userId' });
+  await jobber.disconnect(userId);
+  res.json({ success: true });
+});
+
 /**
  * POST /api/contact
  * Submit a contact form message.
@@ -207,3 +271,5 @@ router.get('/contact/messages', (req, res) => {
   }
   res.json({ messages: [], count: 0 });
 });
+
+module.exports = router;

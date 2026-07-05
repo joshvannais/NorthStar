@@ -128,6 +128,20 @@ function toggleMobileMenu() {
           <button class="btn btn-sm" id="email-btn" onclick="connectIntegration('email')">Connect</button>
         </div>
       </div>
+      <!-- Jobber CRM -->
+      <div class="settings-section">
+        <h2>🔧 Jobber CRM</h2>
+        <p class="description">Auto-create clients and jobs in Jobber when your AI captures a new lead.</p>
+        <div class="integration-card" id="integration-jobber">
+          <div class="icon">🔧</div>
+          <div class="info">
+            <h4>Client &amp; Job Sync</h4>
+            <p>Leads automatically become clients and jobs in your Jobber account</p>
+          </div>
+          <span id="jobber-status"><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-sm" id="jobber-btn" onclick="connectJobber()">Connect</button>
+        </div>
+      </div>
 
       <!-- Connection Modal -->
       <div class="modal-overlay" id="connectModal" style="display:none;" onclick="closeModal(event)">
@@ -291,6 +305,45 @@ function toggleMobileMenu() {
         [data-theme="dark"] .modal-overlay { background: rgba(0,0,0,0.6); }
       `;
       document.head.appendChild(style);
+
+      // Jobber integration
+      async function connectJobber() {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!user.id) { showToast('Please sign in to connect Jobber'); return; }
+        try {
+          const r = await fetch('/api/integrations/jobber/status?userId=' + user.id);
+          const status = await r.json();
+          if (!status.configured) { showToast('Jobber integration not configured yet. Contact NorthStar support.'); return; }
+          if (status.connected) {
+            if (!confirm('Disconnect Jobber? This will stop lead sync.')) return;
+            await fetch('/api/integrations/jobber/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) });
+            document.getElementById('jobber-status').innerHTML = '<span class="status-dot disconnected"></span>Not connected';
+            document.getElementById('jobber-btn').textContent = 'Connect';
+            showToast('Jobber disconnected');
+          } else {
+            window.location.href = '/api/integrations/jobber/auth?userId=' + user.id;
+          }
+        } catch(e) { showToast('Failed to check Jobber status'); }
+      }
+      // Check Jobber status on load
+      (async function() {
+        try {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          if (user.id) {
+            const r = await fetch('/api/integrations/jobber/status?userId=' + user.id);
+            const status = await r.json();
+            if (status.connected) {
+              document.getElementById('jobber-status').innerHTML = '<span class="status-dot connected"></span>Connected';
+              document.getElementById('jobber-btn').textContent = 'Disconnect';
+            }
+          }
+        } catch(e) {}
+      })();
+      // Handle ?jobber=connected from OAuth callback
+      if (window.location.search.includes('jobber=connected')) {
+        showToast('Jobber connected successfully!');
+        window.history.replaceState({}, '', window.location.pathname);
+      }
       </script>
       </main>
   </div>

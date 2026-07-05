@@ -85,6 +85,14 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    // Add Jobber columns if they don't exist (for existing users tables)
+    try {
+      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_access_token TEXT`);
+      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_refresh_token TEXT`);
+      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_token_expires TIMESTAMP`);
+    } catch (e) {
+      // Columns may already exist, ignore
+    }
 
     console.log('[DB] PostgreSQL connected and tables ready');
     dbAvailable = true;

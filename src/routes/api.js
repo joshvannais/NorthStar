@@ -161,9 +161,15 @@ router.post('/retell/create-agent', async (req, res) => {
  */
 router.get('/integrations/jobber/status', async (req, res) => {
   const userId = req.query.userId;
-  if (!userId) return res.json({ connected: false, configured: jobber.isConfigured() });
+  const debug = {
+    hasClientId: !!process.env.JOBBER_CLIENT_ID,
+    hasClientSecret: !!process.env.JOBBER_CLIENT_SECRET,
+    clientIdLength: process.env.JOBBER_CLIENT_ID ? process.env.JOBBER_CLIENT_ID.length : 0,
+    configured: jobber.isConfigured()
+  };
+  if (!userId) return res.json({ connected: false, ...debug });
   const status = await jobber.getStatus(userId);
-  res.json(status);
+  res.json({ ...status, ...debug });
 });
 
 /**

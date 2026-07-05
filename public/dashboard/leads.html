@@ -88,17 +88,23 @@ function toggleMobileMenu() {
 
   <div id="toast" class="toast"></div>
 
-  <script src="/js/api.js"></script>
   <script>
-    async function loadLeads() {
-      try {
-        const data = await API.getLeads();
-        const leads = data.items || [];
-        document.getElementById('leadCount').textContent = `${leads.length} leads`;
-        renderLeads(leads);
-      } catch (err) {
-        console.error(err);
+    // In-memory leads — resets on each page load
+    let allLeads = [];
+
+    // First, grab anything synced from the dashboard via sessionStorage
+    try {
+      const synced = sessionStorage.getItem('northstar_calls');
+      if (synced) {
+        const parsed = JSON.parse(synced);
+        if (Array.isArray(parsed)) allLeads = parsed;
+        sessionStorage.removeItem('northstar_calls');
       }
+    } catch(e) {}
+
+    function loadLeads() {
+      document.getElementById('leadCount').textContent = `${allLeads.length} leads`;
+      renderLeads(allLeads);
     }
 
     function renderLeads(leads) {
@@ -113,18 +119,18 @@ function toggleMobileMenu() {
       }
 
       let html = `<table><thead><tr>
-        <th>Customer</th><th>Phone</th><th>Address</th><th>Service</th><th>Preferred Time</th><th>Date</th><th>Status</th>
+        <th>Customer</th><th>Phone</th><th>Address</th><th>Service</th><th>Date</th><th>Status</th>
       </tr></thead><tbody>`;
 
-      leads.slice().reverse().forEach(lead => {
+      leads.slice().reverse().forEach(c => {
+        const status = c.status || 'new';
         html += `<tr>
-          <td><strong>${lead.customerName || 'Unknown'}</strong></td>
-          <td>${lead.phoneNumber || '-'}</td>
-          <td>${lead.address || '-'}</td>
-          <td>${lead.serviceRequested || '-'}</td>
-          <td>${lead.preferredTime || '-'}</td>
-          <td>${lead.receivedAt ? formatDate(lead.receivedAt) : '-'}</td>
-          <td>${getStatusBadge(lead.status || 'new')}</td>
+          <td><strong>${c.caller || c.customerName || 'Unknown'}</strong></td>
+          <td>${c.phone || c.phoneNumber || '-'}</td>
+          <td>${c.address || '-'}</td>
+          <td>${c.service || c.serviceRequested || '-'}</td>
+          <td>${c.time || (c.receivedAt ? formatDate(c.receivedAt) : '-')}</td>
+          <td>${getStatusBadge(status)}</td>
         </tr>`;
       });
 
@@ -132,21 +138,33 @@ function toggleMobileMenu() {
       document.getElementById('leadsContent').innerHTML = html;
     }
 
-    async function simulateLead() {
+    function simulateLead() {
+      const names = ['John Smith', 'Maria Garcia', 'Bob Johnson', 'Sarah Wilson', 'Mike Brown', 'Lisa Davis'];
+      const services = ['Tree removal', 'Roof repair', 'Plumbing leak', 'Electrical wiring', 'Landscape design', 'Deck staining'];
+      const addresses = ['123 Oak St', '456 Maple Ave', '789 Pine Rd', '321 Elm Dr', '654 Birch Ln'];
+      const name = names[Math.floor(Math.random() * names.length)];
+      const service = services[Math.floor(Math.random() * services.length)];
+      const address = addresses[Math.floor(Math.random() * addresses.length)];
+      const phone = `(${100+Math.floor(Math.random()*900)}) ${100+Math.floor(Math.random()*900)}-${1000+Math.floor(Math.random()*9000)}`;
+
+      const lead = {
+        caller: name,
+        phone: phone,
+        address: address,
+        service: service,
+        time: new Date().toLocaleString(),
+        status: 'new',
+        avgPrice: 0
+      };
+
+      allLeads.unshift(lead);
       try {
-        const result = await API.simulateLead({
-          customerName: 'Demo Caller',
-          phoneNumber: '(860) 970-5750',
-          address: '123 Demo Street',
-          serviceRequested: 'Test service',
-          preferredTime: 'Next available',
-        });
-        showToast('✅ Lead captured!');
-        loadLeads();
-      } catch (err) {
-        showToast('Lead simulated', 'success');
-        loadLeads();
-      }
+        const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
+        existing.unshift(lead);
+        sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
+      } catch(e) {}
+      showToast(`✅ New lead: ${name} (${service})`);
+      loadLeads();
     }
 
     loadLeads();

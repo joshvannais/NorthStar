@@ -27,7 +27,7 @@ router.get('/health', (req, res) => {
         return res.json({ totalCalls: 0, totalRevenue: 0 });
       }
       try {
-        const result = await db.query('SELECT COUNT(*)::int AS calls, COALESCE(SUM(estimated_price), 0)::float AS revenue FROM call_records');
+        const result = await db.query("SELECT COUNT(*)::int AS calls, COALESCE(SUM(estimated_price), 0)::float AS revenue FROM call_records WHERE source = 'real'");
         res.json({
           totalCalls: result.rows[0].calls,
           totalRevenue: Math.round(result.rows[0].revenue),

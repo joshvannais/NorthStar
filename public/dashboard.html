@@ -147,18 +147,23 @@ function toggleMobileMenu() {
     // Clear any synced call data from sessionStorage so it starts fresh
     try { sessionStorage.removeItem('northstar_calls'); } catch(e) {}
 
-    // Load leads
+    // Load leads from in-memory simulated calls (resets on refresh)
     async function loadLeads() {
       try {
-        const data = await API.getLeads();
-        const leads = data.items || [];
+        const leads = simulatedCalls.map(c => ({
+          customerName: c.caller,
+          phoneNumber: c.phone,
+          serviceRequested: c.service,
+          receivedAt: c.time,
+          status: c.status || 'new',
+          urgency: '',
+          avgPrice: c.avgPrice
+        }));
         renderLeads(leads);
         renderStats(leads);
       } catch (err) {
                   console.error('Failed to load leads:', err);
-                  // Still render stats from in-memory call data
                   renderStats([]);
-                  // Show empty state
                   document.getElementById('leadsContent').innerHTML = `
                     <div class="empty-state">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>

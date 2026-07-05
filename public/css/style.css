@@ -364,6 +364,11 @@ img, svg, video, canvas {
   flex: 1;
   text-align: center;
   position: relative;
+  background: white;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius);
+  padding: 28px 20px;
+  transition: all 0.3s;
 }
 
 .step-number {
@@ -389,6 +394,8 @@ img, svg, video, canvas {
 .step p {
   font-size: 14px;
   color: var(--neutral-500);
+  line-height: 1.6;
+  margin-bottom: 0;
 }
 
 /* Pricing */
@@ -936,7 +943,7 @@ tr:hover td { background: var(--neutral-50); }
   .grid-3, .grid-4, .grid-2 { grid-template-columns: 1fr; }
   .grid { gap: 16px; }
 
-  .steps { flex-direction: column; gap: 28px; }
+  .steps { flex-direction: column; gap: 28px; padding: 0; }
   .step { max-width: 400px; margin: 0 auto; }
 
   .pricing-grid { grid-template-columns: 1fr; max-width: 380px; }
@@ -1095,6 +1102,7 @@ tr:hover td { background: var(--neutral-50); }
 
 [data-theme="dark"] .step {
   background: var(--neutral-100);
+  border-color: var(--neutral-200);
 }
 
 [data-theme="dark"] .step-number {

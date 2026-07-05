@@ -142,6 +142,9 @@ function toggleMobileMenu() {
       document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your overview.`;
     }
 
+    // In-memory simulated calls — resets on each page load
+    let simulatedCalls = [];
+
     // Load leads
     async function loadLeads() {
       try {
@@ -151,7 +154,7 @@ function toggleMobileMenu() {
         renderStats(leads);
       } catch (err) {
                   console.error('Failed to load leads:', err);
-                  // Still render stats from localStorage call data
+                  // Still render stats from in-memory call data
                   renderStats([]);
                   // Show empty state
                   document.getElementById('leadsContent').innerHTML = `
@@ -182,19 +185,16 @@ function toggleMobileMenu() {
       // Revenue calculation — dynamic from simulator data
           const leadRate = 0.4;
           const closeRate = 0.6;
-          // Read simulated calls from localStorage
+          // Read simulated calls from in-memory array (resets on page load)
           let avgJobValue = 0;
           let callCount = 0;
           try {
-            const callsRaw = localStorage.getItem('northstar_calls');
-            if (callsRaw) {
-              const calls = JSON.parse(callsRaw);
-              const answered = calls.filter(c => c.status === 'answered' || c.status === 'voicemail');
-              callCount = answered.length;
-              if (answered.length > 0) {
-                const total = answered.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
-                avgJobValue = Math.round(total / answered.length);
-              }
+            const calls = simulatedCalls;
+            const answered = calls.filter(c => c.status === 'answered' || c.status === 'voicemail');
+            callCount = answered.length;
+            if (answered.length > 0) {
+              const total = answered.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
+              avgJobValue = Math.round(total / answered.length);
             }
           } catch(e) {}
           const estimatedRevenue = callCount * leadRate * avgJobValue * closeRate;
@@ -262,12 +262,10 @@ function toggleMobileMenu() {
       const time = times[Math.floor(Math.random() * times.length)];
       const urgency = urgencies[Math.floor(Math.random() * urgencies.length)];
 
-      // Also store a simulated call for the revenue counter
+      // Store simulated call for revenue counter (in-memory only — resets on refresh)
       const detail = svc.name + ' at ' + adr;
       try {
-        const callsRaw = localStorage.getItem('northstar_calls');
-        const calls = callsRaw ? JSON.parse(callsRaw) : [];
-        calls.unshift({
+        simulatedCalls.unshift({
           caller: name,
           phone: phone,
           address: adr,
@@ -281,7 +279,6 @@ function toggleMobileMenu() {
           avgPrice: svc.price + Math.floor(Math.random() * 500),
           jobDetail: detail
         });
-        localStorage.setItem('northstar_calls', JSON.stringify(calls));
       } catch(e) {}
 
       const data = {

@@ -284,6 +284,16 @@ function calcPrice(svc,s){
     default:return 500;
   }
 }
+function calcBreakdown(svc,s){var items=[];
+  switch(svc.name){
+    case"Tree removal":{items.push({l:"Base rate",a:150});items.push({l:s.trees+" trees x "+s.height+"ft x $60",a:60*s.height*s.trees});if(s.stump)items.push({l:"Stump grinding",a:150*s.trees});if(s.nearHouse)items.push({l:"Crane (near house)",a:800});if(s.emergency)items.push({l:"Emergency surcharge",a:500});return items;}
+    case"Roof inspection/replacement":{if(s.material==="patch"){items.push({l:"Patch repair flat rate",a:750});return items;}var psf=s.material==="metal"?7.5:s.material==="architectural"?5.5:4.5;items.push({l:s.sqft+"sqft x $"+psf.toFixed(1)+" material",a:Math.round(s.sqft*psf)});if(s.layers>1)items.push({l:"Extra tear-off layers",a:Math.round(s.sqft*2)});if(s.pitch==="steep"){var p=Math.round(s.sqft*psf*0.3);items.push({l:"Steep pitch surcharge",a:p});}return items;}
+    case"Emergency plumbing":{var lh=s.replace?4:s.emergency?1.5:1;var parts=s.replace?s.pipeType==="galvanized"?1200:600:s.emergency?250:80;items.push({l:"Trip fee",a:150});items.push({l:"Labor "+lh+"hr x $125",a:Math.round(lh*125)});items.push({l:"Parts/materials",a:parts});if(s.accessibility==="hard")items.push({l:"Hard access fee",a:200});return items;}
+    case"Concrete driveway":{items.push({l:s.sqft+"sqft x $8 concrete",a:s.sqft*8});if(s.reinforced)items.push({l:"Rebar reinforcement",a:Math.round(s.sqft*2.5)});if(s.demolition)items.push({l:"Demo old concrete",a:1200});if(s.finish==="stamp")items.push({l:"Stamped finish (+35%)",a:Math.round(s.sqft*8*0.35)});return items;}
+    case"Fence installation":{var m={wood:25,vinyl:35,"chain-link":15,"split-rail":12};items.push({l:s.linearFt+"ft x $"+m[s.material]+" material",a:s.linearFt*m[s.material]});items.push({l:s.linearFt+"ft x $12 labor",a:s.linearFt*12});if(s.gates>0)items.push({l:s.gates+" gate(s)",a:s.gates*150});if(s.terrain==="slight-slope")items.push({l:"Slope surcharge",a:Math.round((s.linearFt*25+s.linearFt*12)*0.15)});if(s.terrain==="moderate-slope")items.push({l:"Moderate slope surcharge",a:Math.round((s.linearFt*25+s.linearFt*12)*0.3)});return items;}
+    default:{items.push({l:"Base estimate",a:calcPrice(svc,s)});return items;}
+  }
+}
 function fmtDetail(svc,s){
   switch(svc.name){
     case"Tree removal":{let p=[];p.push(s.trees+" tree"+(s.trees>1?"s":"")+" x "+s.height+"ft");if(s.nearHouse)p.push("crane needed");if(s.stump)p.push("stump grind");if(s.emergency)p.push("emergency");return p.join(" | ");}
@@ -942,7 +952,7 @@ function genTranscript(svc,s,name,num,sn,st){
       const svc=services[Math.floor(Math.random()*services.length)];
       const s=svc.scenarios[Math.floor(Math.random()*svc.scenarios.length)];
       const price=calcPrice(svc,s);
-      const det=fmtDetail(svc,s);
+      const det=fmtDetail(svc,s);const bdl=calcBreakdown(svc,s);
       const fn=fNames[Math.floor(Math.random()*fNames.length)];
       const ln=lNames[Math.floor(Math.random()*lNames.length)];
       const name=fn+" "+ln;

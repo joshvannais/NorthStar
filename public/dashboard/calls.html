@@ -225,7 +225,7 @@ function genCall(){
   };
 }
 let allCalls=[],curFilter="all";
-function loadCalls(){try{const d=sessionStorage.getItem("northstar_calls");if(d)allCalls=JSON.parse(d)}catch(e){}renderCalls()}
+function loadCalls(){try{const d=sessionStorage.getItem("northstar_calls");if(d)allCalls=JSON.parse(d);sessionStorage.removeItem("northstar_calls")}catch(e){}renderCalls()}
 function renderCalls(){
   const f=curFilter==="all"?allCalls:allCalls.filter(c=>c.status===curFilter);
   const el=document.getElementById("callHistoryList");

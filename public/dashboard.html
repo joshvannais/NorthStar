@@ -144,6 +144,8 @@ function toggleMobileMenu() {
 
     // In-memory simulated calls — resets on each page load
     let simulatedCalls = [];
+    // Clear any synced call data from sessionStorage so it starts fresh
+    try { sessionStorage.removeItem('northstar_calls'); } catch(e) {}
 
     // Load leads
     async function loadLeads() {

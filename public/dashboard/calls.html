@@ -221,7 +221,7 @@ function genCall(){
     duration:durMin+":"+(durRem<10?"0":"")+durRem,
     status:status,outcome:outcome,time:time,
     summary:svc.name+": "+s.label+". "+det+". Estimated $"+price.toLocaleString()+".",
-    transcript:"AI: NorthStar, how can I help?\\nCustomer: I need "+s.label.toLowerCase()+".\\nAI: Great, I can help. Your name?\\nCustomer: "+name+".\\nAI: Address?\\nCustomer: "+num+" "+sn+" "+st+".\\nAI: The estimate is around $"+price.toLocaleString()+". Scheduling an estimator."
+    transcript:"AI: NorthStar, how can I help?\\nCustomer: I need "+s.label.toLowerCase()+".\\nAI: Great, I can help. Your name?\\nCustomer: "+name+".\\nAI: Address?\\nCustomer: "+num+" "+sn+" "+st+".\\nAI: Thanks, I'll schedule an estimator to come out and take a look."
   };
 }
 let allCalls=[],curFilter="all";

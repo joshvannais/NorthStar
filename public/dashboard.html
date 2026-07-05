@@ -274,7 +274,7 @@ function toggleMobileMenu() {
         status: 'answered',
         outcome: 'appointment-set',
         summary: 'Estimated for ' + svc.name + '. Customer requested ' + time + '.',
-        transcript: 'AI: How can I help?\\n' + name + ': Need ' + svc.name + ' estimate.',
+        transcript: 'AI: NorthStar, how can I help?\\n' + name + ': I need ' + svc.name + '.\\nAI: Great, let me get your info. What is your address?\\nCustomer: ' + adr + '.\\nAI: Thanks, I\'ll schedule an estimator to come out.',
         avgPrice: svc.price + Math.floor(Math.random() * 500),
         jobDetail: detail
       };

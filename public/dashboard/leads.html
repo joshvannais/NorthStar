@@ -92,6 +92,7 @@ function toggleMobileMenu() {
   <script>
     // In-memory leads — resets on each page load
     let allLeads = [];
+    function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
 
     // Initialize from sessionStorage if data exists (shared across pages)
     try {
@@ -99,6 +100,11 @@ function toggleMobileMenu() {
       if (synced) {
         const parsed = JSON.parse(synced);
         if (Array.isArray(parsed)) allLeads = parsed;
+      }
+      // On page reload (F5/Cmd+R), clear sessionStorage after reading
+      const nav = performance.getEntriesByType('navigation');
+      if (nav.length > 0 && nav[0].type === 'reload') {
+        sessionStorage.removeItem('northstar_calls');
       }
     } catch(e) {}
 
@@ -129,7 +135,7 @@ function toggleMobileMenu() {
           <td>${c.phone || c.phoneNumber || '-'}</td>
           <td>${c.address || '-'}</td>
           <td>${c.service || c.serviceRequested || '-'}</td>
-          <td>${c.time || (c.receivedAt ? formatDate(c.receivedAt) : '-')}</td>
+          <td>${fmtTime(c.time || (c.receivedAt ? c.receivedAt : null))}</td>
           <td>${getStatusBadge(status)}</td>
         </tr>`;
       });
@@ -152,7 +158,7 @@ function toggleMobileMenu() {
         phone: phone,
         address: address,
         service: service,
-        time: new Date().toLocaleString(),
+        time: new Date().toISOString(),
         status: 'new',
         avgPrice: 0
       };

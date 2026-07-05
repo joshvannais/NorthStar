@@ -144,12 +144,18 @@ function toggleMobileMenu() {
 
     // In-memory simulated calls — shared via sessionStorage across pages
     let simulatedCalls = [];
+    function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
     // Initialize from sessionStorage if data exists (synced from other pages)
     try {
       const saved = sessionStorage.getItem('northstar_calls');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) simulatedCalls = parsed;
+      }
+      // If this is a page reload (F5/Cmd+R), clear sessionStorage so data doesn't persist on next refresh
+      const nav = performance.getEntriesByType('navigation');
+      if (nav.length > 0 && nav[0].type === 'reload') {
+        sessionStorage.removeItem('northstar_calls');
       }
     } catch(e) {}
 
@@ -160,7 +166,7 @@ function toggleMobileMenu() {
           customerName: c.caller,
           phoneNumber: c.phone,
           serviceRequested: c.service,
-          receivedAt: c.time,
+          receivedAt: c.receivedAt || c.time,
           status: c.status || 'new',
           urgency: '',
           avgPrice: c.avgPrice
@@ -181,13 +187,9 @@ function toggleMobileMenu() {
 
     function renderStats(leads) {
       const now = new Date();
-      const today = leads.filter(l => new Date(l.receivedAt).toDateString() === now.toDateString());
-      const thisWeek = leads.filter(l => {
-        const d = new Date(l.receivedAt);
-        const weekAgo = new Date(now);
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        return d >= weekAgo;
-      });
+      let today = [], thisWeek = [];
+      try { today = leads.filter(l => { const d = new Date(l.receivedAt); return !isNaN(d.getTime()) && d.toDateString() === now.toDateString(); }); } catch(e) {}
+      try { thisWeek = leads.filter(l => { const d = new Date(l.receivedAt); if (isNaN(d.getTime())) return false; const wa = new Date(now); wa.setDate(wa.getDate() - 7); return d >= wa; }); } catch(e) {}
       const scheduled = leads.filter(l => l.status === 'scheduled');
 
       document.getElementById('totalLeads').textContent = leads.length;
@@ -234,7 +236,7 @@ function toggleMobileMenu() {
           <td><strong>${lead.customerName || 'Unknown'}</strong></td>
           <td>${lead.phoneNumber || '-'}</td>
           <td>${lead.serviceRequested || '-'}</td>
-          <td>${lead.receivedAt ? formatDate(lead.receivedAt) : '-'}</td>
+          <td>${fmtTime(lead.receivedAt)}</td>
           <td>${getStatusBadge(lead.status || 'new')}</td>
           <td class="${urgencyClass}">${urgencyText}</td>
         </tr>`;
@@ -272,7 +274,7 @@ function toggleMobileMenu() {
         phone: phone,
         address: adr,
         service: svc.name,
-        time: new Date().toLocaleString(),
+        time: new Date().toISOString(),
         duration: '0:00',
         status: 'answered',
         outcome: 'appointment-set',

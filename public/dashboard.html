@@ -264,21 +264,26 @@ function toggleMobileMenu() {
 
       // Store simulated call for revenue counter (in-memory only — resets on refresh)
       const detail = svc.name + ' at ' + adr;
+      const callRecord = {
+        caller: name,
+        phone: phone,
+        address: adr,
+        service: svc.name,
+        time: new Date().toLocaleString(),
+        duration: '0:00',
+        status: 'answered',
+        outcome: 'appointment-set',
+        summary: 'Estimated for ' + svc.name + '. Customer requested ' + time + '.',
+        transcript: 'AI: How can I help?\\n' + name + ': Need ' + svc.name + ' estimate.',
+        avgPrice: svc.price + Math.floor(Math.random() * 500),
+        jobDetail: detail
+      };
       try {
-        simulatedCalls.unshift({
-          caller: name,
-          phone: phone,
-          address: adr,
-          service: svc.name,
-          time: new Date().toLocaleString(),
-          duration: '0:00',
-          status: 'answered',
-          outcome: 'appointment-set',
-          summary: 'Estimated for ' + svc.name + '. Customer requested ' + time + '.',
-          transcript: 'AI: How can I help?\\n' + name + ': Need ' + svc.name + ' estimate.',
-          avgPrice: svc.price + Math.floor(Math.random() * 500),
-          jobDetail: detail
-        });
+        simulatedCalls.unshift(callRecord);
+        // Also sync to sessionStorage for the Call History page
+        const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
+        existing.unshift(callRecord);
+        sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
       } catch(e) {}
 
       const data = {

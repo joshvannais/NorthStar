@@ -145,7 +145,109 @@ const services = [
     {label:"Driveway only",sqft:500,surface:"driveway",level:"normal"},
     {label:"House exterior",sqft:1800,surface:"house",level:"normal"},
     {label:"Driveway house walkways",sqft:2200,surface:"both",level:"heavy"},
-    {label:"Deck patio cleaning",sqft:400,surface:"deck",level:"normal"}]}];
+    {label:"Deck patio cleaning",sqft:400,surface:"deck",level:"normal"}]},
+  {name:"Interior Painting",icon:"🎨",scenarios:[
+    {label:"Single room accent",rooms:1,wallSqft:400,ceilingHeight:8,trim:false,grade:"economy",colorChange:false},
+    {label:"Full house interior",rooms:5,wallSqft:2000,ceilingHeight:8,trim:true,grade:"premium",colorChange:true},
+    {label:"Kitchen cabinets",rooms:1,wallSqft:300,ceilingHeight:8,trim:true,grade:"premium",colorChange:true},
+    {label:"Ceiling texture",rooms:3,wallSqft:0,ceilingHeight:8,trim:false,grade:"economy",colorChange:false},
+    {label:"Exterior trim painting",rooms:0,wallSqft:800,ceilingHeight:10,trim:true,grade:"premium",colorChange:true}]},
+  {name:"Drywall Repair/Installation",icon:"🧱",scenarios:[
+    {label:"Small patch repair",patchType:"small",sqft:5,textureMatch:false,waterDamage:false,ceiling:false},
+    {label:"Full room drywall",patchType:"full",sqft:800,textureMatch:true,waterDamage:false,ceiling:false},
+    {label:"Water damage restoration",patchType:"full",sqft:200,textureMatch:true,waterDamage:true,ceiling:false},
+    {label:"Textured ceiling repair",patchType:"medium",sqft:100,textureMatch:true,waterDamage:false,ceiling:true},
+    {label:"Basement finishing",patchType:"full",sqft:1000,textureMatch:true,waterDamage:false,ceiling:true}]},
+  {name:"Flooring Installation",icon:"🏠",scenarios:[
+    {label:"Living room hardwood",sqft:400,material:"hardwood",stairs:false,underlayment:true,furnitureMoving:false},
+    {label:"Kitchen tile",sqft:250,material:"tile",stairs:false,underlayment:true,furnitureMoving:false},
+    {label:"Basement laminate",sqft:650,material:"laminate",stairs:false,underlayment:true,furnitureMoving:true},
+    {label:"Stairs and landing",sqft:0,material:"hardwood",stairs:true,underlayment:false,furnitureMoving:false},
+    {label:"Full main level vinyl",sqft:1200,material:"vinyl",stairs:true,underlayment:true,furnitureMoving:true}]},
+  {name:"Garage Door Service",icon:"🚗",scenarios:[
+    {label:"Spring replacement",doorSize:"single",springIssue:true,offTrack:false,newOpener:false,insulated:false},
+    {label:"Full door replacement",doorSize:"double",springIssue:false,offTrack:false,newOpener:false,insulated:true},
+    {label:"Opener installation",doorSize:"single",springIssue:false,offTrack:false,newOpener:true,insulated:false},
+    {label:"Insulated garage door",doorSize:"double",springIssue:false,offTrack:false,newOpener:true,insulated:true},
+    {label:"Cable and track repair",doorSize:"single",springIssue:false,offTrack:true,newOpener:false,insulated:false}]},
+  {name:"Solar Panel Installation",icon:"☀️",scenarios:[
+    {label:"10-panel roof mount",panels:10,roofType:"asphalt",battery:false,mount:"roof",permit:true},
+    {label:"20-panel full system",panels:20,roofType:"asphalt",battery:false,mount:"roof",permit:true},
+    {label:"Ground mount system",panels:15,roofType:"asphalt",battery:false,mount:"ground",permit:true},
+    {label:"Solar with battery backup",panels:15,roofType:"asphalt",battery:true,mount:"roof",permit:true},
+    {label:"Solar roof tiles",panels:0,roofType:"tile",battery:false,mount:"roof",permit:true}]},
+  {name:"Deck Building/Repair",icon:"🪵",scenarios:[
+    {label:"Small ground-level deck",sqft:200,material:"treated",height:"ground",stairs:0,railings:true,stain:false},
+    {label:"Two-story deck",sqft:300,material:"treated",height:"second",stairs:1,railings:true,stain:false},
+    {label:"Composite deck",sqft:350,material:"composite",height:"ground",stairs:2,railings:true,stain:false},
+    {label:"Deck repair and stain",sqft:250,material:"treated",height:"ground",stairs:0,railings:false,stain:true},
+    {label:"Covered patio",sqft:400,material:"treated",height:"ground",stairs:0,railings:false,stain:false}]},
+  {name:"Pool Service/Repair",icon:"🏊",scenarios:[
+    {label:"Weekly chemical service",poolType:"in-ground",service:"weekly",equipment:false,opening:false,closing:false},
+    {label:"Filter pump replacement",poolType:"in-ground",service:"none",equipment:"pump",opening:false,closing:false},
+    {label:"Heater repair",poolType:"above-ground",service:"none",equipment:"heater",opening:false,closing:false},
+    {label:"Pool opening",poolType:"in-ground",service:"none",equipment:false,opening:true,closing:false},
+    {label:"Pool closing",poolType:"in-ground",service:"none",equipment:false,opening:false,closing:true}]},
+  {name:"Appliance Repair",icon:"🔌",scenarios:[
+    {label:"Refrigerator not cooling",appliance:"refrigerator",brand:"samsung",symptoms:"not cooling",underWarranty:false},
+    {label:"Washing machine leak",appliance:"washer",brand:"lg",symptoms:"leaking",underWarranty:false},
+    {label:"Oven not heating",appliance:"oven",brand:"ge",symptoms:"no heat",underWarranty:false},
+    {label:"Dishwasher not draining",appliance:"dishwasher",brand:"kitchenaid",symptoms:"not draining",underWarranty:true},
+    {label:"Dryer no heat",appliance:"dryer",brand:"whirlpool",symptoms:"no heat",underWarranty:false}]},
+  {name:"Siding Installation/Repair",icon:"🏘️",scenarios:[
+    {label:"Small patch repair",sqft:50,material:"vinyl",newInstall:false,trim:false,stories:1},
+    {label:"Full house vinyl siding",sqft:1600,material:"vinyl",newInstall:true,trim:true,stories:2},
+    {label:"Fiber cement siding",sqft:1500,material:"fiber-cement",newInstall:true,trim:true,stories:2},
+    {label:"Trim and fascia replacement",sqft:0,material:"vinyl",newInstall:false,trim:true,stories:1},
+    {label:"Partial reside",sqft:600,material:"vinyl",newInstall:true,trim:false,stories:1}]},
+  {name:"Chimney Service",icon:"🔥",scenarios:[
+    {label:"Annual cleaning",service:"cleaning",crownRepair:false,linerNeeded:false,damperReplace:false,stories:1},
+    {label:"Crown repair",service:"crown",crownRepair:true,linerNeeded:false,damperReplace:false,stories:2},
+    {label:"Liner installation",service:"liner",crownRepair:false,linerNeeded:true,damperReplace:false,stories:2},
+    {label:"Damper replacement",service:"damper",crownRepair:false,linerNeeded:false,damperReplace:true,stories:1},
+    {label:"Full chimney rebuild",service:"rebuild",crownRepair:true,linerNeeded:true,damperReplace:true,stories:2}]},
+  {name:"Foundation Repair",icon:"🏗️",scenarios:[
+    {label:"Crack injection",location:"interior",crackWidth:"1/8in",bowingWall:false,waterInBasement:false,soilType:"clay"},
+    {label:"Wall straightening anchors",location:"interior",crackWidth:"1/2in",bowingWall:true,waterInBasement:false,soilType:"clay"},
+    {label:"Drainage correction",location:"exterior",crackWidth:"0",bowingWall:false,waterInBasement:true,soilType:"silt"},
+    {label:"Pier installation",location:"exterior",crackWidth:"1/4in",bowingWall:false,waterInBasement:false,soilType:"clay"},
+    {label:"Full waterproofing",location:"exterior",crackWidth:"1/8in",bowingWall:false,waterInBasement:true,soilType:"loam"}]},
+  {name:"Mold Remediation",icon:"🦠",scenarios:[
+    {label:"Bathroom mold",sqft:50,location:"bathroom",visibleMold:true,waterSource:true,mustySmell:false},
+    {label:"Basement mold",sqft:300,location:"basement",visibleMold:true,waterSource:true,mustySmell:true},
+    {label:"Attic mold",sqft:200,location:"attic",visibleMold:false,waterSource:false,mustySmell:true},
+    {label:"HVAC mold treatment",sqft:0,location:"hvac",visibleMold:false,waterSource:false,mustySmell:true},
+    {label:"Whole-house treatment",sqft:2000,location:"whole-house",visibleMold:true,waterSource:true,mustySmell:true}]},
+  {name:"Well Pump Service",icon:"💧",scenarios:[
+    {label:"No water diagnosis",depth:200,wellIssue:"no-water",pumpType:"submersible",systemAge:15,lowPressure:false},
+    {label:"Submersible pump replacement",depth:300,wellIssue:"pump-failure",pumpType:"submersible",systemAge:18,lowPressure:false},
+    {label:"Pressure tank replacement",depth:150,wellIssue:"low-pressure",pumpType:"submersible",systemAge:10,lowPressure:true},
+    {label:"Control box repair",depth:100,wellIssue:"no-power",pumpType:"jet",systemAge:8,lowPressure:false},
+    {label:"Well chlorination",depth:250,wellIssue:"bacteria",pumpType:"submersible",systemAge:12,lowPressure:false}]},
+  {name:"Septic System Service",icon:"🫧",scenarios:[
+    {label:"Routine pumping",tankSize:1000,lastPumping:3,backup:false,fieldIssue:false,bedrooms:3},
+    {label:"Full inspection",tankSize:1500,lastPumping:5,backup:false,fieldIssue:true,bedrooms:4},
+    {label:"Drain field repair",tankSize:1000,lastPumping:2,backup:true,fieldIssue:true,bedrooms:3},
+    {label:"Tank replacement",tankSize:1500,lastPumping:10,backup:false,fieldIssue:false,bedrooms:4},
+    {label:"Emergency backup",tankSize:1000,lastPumping:4,backup:true,fieldIssue:false,bedrooms:3}]},
+  {name:"Generator Installation",icon:"⚡",scenarios:[
+    {label:"10kW standby generator",kw:10,wholeHouse:false,fuel:"nat-gas",transferSwitch:true,permit:true},
+    {label:"22kW whole house",kw:22,wholeHouse:true,fuel:"nat-gas",transferSwitch:true,permit:true},
+    {label:"Portable inlet install",kw:0,wholeHouse:false,fuel:"propane",transferSwitch:false,permit:false},
+    {label:"Transfer switch only",kw:0,wholeHouse:false,fuel:"none",transferSwitch:true,permit:true},
+    {label:"Generator maintenance",kw:10,wholeHouse:false,fuel:"nat-gas",transferSwitch:true,permit:false}]},
+  {name:"Bathroom Remodeling",icon:"🛁",scenarios:[
+    {label:"Vanity and lighting update",type:"vanity",tearOut:false,fixtures:true,tile:false,plumbingMove:false,accessible:false},
+    {label:"Tub to shower conversion",type:"tub-shower",tearOut:true,fixtures:true,tile:true,plumbingMove:true,accessible:false},
+    {label:"Complete master bath",type:"master",tearOut:true,fixtures:true,tile:true,plumbingMove:true,accessible:false},
+    {label:"Half bath powder room",type:"half-bath",tearOut:true,fixtures:true,tile:false,plumbingMove:false,accessible:false},
+    {label:"Accessible shower install",type:"accessible",tearOut:true,fixtures:true,tile:true,plumbingMove:true,accessible:true}]},
+  {name:"Insulation Installation",icon:"🌡️",scenarios:[
+    {label:"Attic blow-in",location:"attic",type:"blown-in",sqft:1000,rValue:49,airSealing:true,vaporBarrier:false},
+    {label:"Wall injection",location:"walls",type:"injection",sqft:800,rValue:15,airSealing:false,vaporBarrier:false},
+    {label:"Crawlspace encapsulation",location:"crawlspace",type:"encapsulation",sqft:500,rValue:30,airSealing:true,vaporBarrier:true},
+    {label:"Spray foam attic",location:"attic",type:"spray-foam",sqft:800,rValue:38,airSealing:true,vaporBarrier:false},
+    {label:"Garage insulation",location:"garage",type:"batt",sqft:600,rValue:13,airSealing:false,vaporBarrier:false}]}];
 
 function calcPrice(svc,s){
   switch(svc.name){
@@ -162,6 +264,23 @@ function calcPrice(svc,s){
     case"Window replacement":{const wp={double:500,triple:850};let pw=wp[s.pane]||500;if(s.story>1)pw*=1.2;if(s.count===1)pw=1800;return s.count*pw;}
     case"Carpet cleaning":{let p=s.sqft*0.35;if(s.stains)p+=100;if(s.stairs)p+=75;return Math.round(p);}
     case"Pressure washing":{const b={driveway:0.25,house:0.20,both:0.22,deck:0.30};let p=s.sqft*(b[s.surface]||0.22);if(s.level==="heavy")p*=1.4;return Math.max(Math.round(p),100);}
+    case"Interior Painting":{let rate=s.ceilingHeight>8?3.5:(s.wallSqft>0?3:2.5);let p=s.wallSqft*rate;if(s.trim)p+=s.wallSqft*0.5;if(s.grade==="premium")p*=1.3;if(s.colorChange)p+=200;return Math.round(p);}
+    case"Drywall Repair/Installation":{if(s.patchType==="small")return 120;if(s.patchType==="medium"&&s.ceiling)return 350;if(s.waterDamage)return Math.round(s.sqft*2.5+400);let p=s.sqft*2;if(s.textureMatch)p+=200;if(s.ceiling)p*=1.2;return Math.round(p);}
+    case"Flooring Installation":{const m={hardwood:12,laminate:5,tile:8,vinyl:4};let p=s.sqft*(m[s.material]||5);if(s.underlayment)p+=s.sqft*0.5;if(s.furnitureMoving)p+=300;if(s.stairs)p+=600;return Math.round(p);}
+    case"Garage Door Service":{const d=s.doorSize==="double"?1.5:1;if(s.springIssue)return Math.round(250*d);if(s.offTrack)return Math.round(300*d);let p=d*1200;if(s.newOpener)p+=600;if(s.insulated)p+=400;return Math.round(p);}
+    case"Solar Panel Installation":{if(s.roofType==="tile")return 25000;let p=s.panels*2500;if(s.battery)p+=10000;if(s.mount==="ground")p+=3000;if(s.permit)p+=1000;return Math.round(p);}
+    case"Deck Building/Repair":{const m={treated:30,cedar:40,composite:45};let p=s.sqft*(m[s.material]||30);if(s.railings)p+=s.sqft*15;if(s.stairs>0)p+=s.stairs*200;if(s.height==="second")p*=1.3;if(s.stain)p+=500;return Math.round(p);}
+    case"Pool Service/Repair":{const t=s.poolType==="in-ground"?1.2:1;if(s.service==="weekly")return Math.round(150*t);if(s.equipment==="pump")return Math.round(1000*t);if(s.equipment==="heater")return Math.round(1500*t);if(s.opening)return Math.round(450*t);if(s.closing)return Math.round(300*t);return 100;}
+    case"Appliance Repair":{const a={refrigerator:400,washer:280,oven:350,dishwasher:250,dryer:280};let p=a[s.appliance]||300;if(s.underWarranty)p=100;return Math.round(p);}
+    case"Siding Installation/Repair":{const m={vinyl:6,"fiber-cement":10,wood:8};let p=s.sqft*(m[s.material]||6);if(!s.newInstall&&s.sqft>0)p=Math.round(p*0.6);if(s.trim)p+=500;if(s.stories>1)p*=1.15;return Math.round(p);}
+    case"Chimney Service":{if(s.service==="cleaning")return 250;if(s.service==="crown")return Math.round(550+(s.stories>1?200:0));if(s.service==="liner")return Math.round(2200+(s.stories>1?500:0));if(s.service==="damper")return 350;if(s.service==="rebuild")return 5500;return 250;}
+    case"Foundation Repair":{if(s.bowingWall)return Math.round(4500);if(s.waterInBasement&&s.location==="exterior")return Math.round(4000);if(s.location==="exterior"&&s.crackWidth!=="0")return Math.round(2500);if(s.crackWidth==="1/8in")return 700;return 1500;}
+    case"Mold Remediation":{if(s.location==="hvac")return 800;let p=s.sqft*4;if(s.location==="whole-house")p*=1.5;if(s.waterSource)p+=300;if(s.mustySmell)p+=200;return Math.round(p);}
+    case"Well Pump Service":{if(s.wellIssue==="no-water")return 250;if(s.wellIssue==="pump-failure")return Math.round(2000+(s.depth>200?500:0));if(s.wellIssue==="low-pressure")return 600;if(s.wellIssue==="no-power")return 350;if(s.wellIssue==="bacteria")return 400;return 250;}
+    case"Septic System Service":{if(s.backup&&s.fieldIssue)return 5500;if(s.tankSize>=1500&&s.lastPumping>=10)return 5000;if(s.fieldIssue)return 5000;if(s.backup)return 700;return Math.round(s.tankSize*0.4);}
+    case"Generator Installation":{if(s.kw===0&&!s.transferSwitch)return 700;if(s.kw===0&&s.transferSwitch)return 1400;let p=s.kw>=22?9000:5000;if(s.wholeHouse)p+=2000;if(s.permit)p+=1000;return Math.round(p);}
+    case"Bathroom Remodeling":{if(s.type==="vanity")return 2800;if(s.type==="tub-shower")return 6000;if(s.type==="master")return 17000;if(s.type==="half-bath")return 5000;if(s.accessible)return 8000;return 5000;}
+    case"Insulation Installation":{if(s.type==="encapsulation")return 2800;const r={blown:1.5,injection:1.8,"spray-foam":3,batt:0.75};let p=s.sqft*(r[s.type]||1.5);if(s.airSealing)p+=800;if(s.vaporBarrier)p+=500;return Math.round(p);}
     default:return 500;
   }
 }
@@ -180,6 +299,23 @@ function fmtDetail(svc,s){
     case"Window replacement":return s.count+" windows "+s.pane+" pane"+(s.story>1?" "+s.story+" story":"");
     case"Carpet cleaning":return s.rooms+" rooms "+s.sqft+"sqft"+(s.stains?" +stains":"")+(s.stairs?" +stairs":"");
     case"Pressure washing":return s.sqft+"sqft "+s.surface+(s.level==="heavy"?" heavy":"");
+    case"Interior Painting":return s.rooms+" rooms "+(s.wallSqft>0?s.wallSqft+"sqft":"")+(s.trim?" +trim":"")+" "+s.grade+(s.colorChange?" color-change":"");
+    case"Drywall Repair/Installation":return s.patchType+" "+(s.ceiling?"ceiling":"wall")+(s.textureMatch?" textured":"")+(s.waterDamage?" water-damage":"")+" "+s.sqft+"sqft";
+    case"Flooring Installation":return s.sqft+"sqft "+(s.material)+(s.stairs?" +stairs":"")+(s.underlayment?" underlayment":"")+(s.furnitureMoving?" move-furniture":"");
+    case"Garage Door Service":return s.doorSize+" door"+(s.springIssue?" spring-repair":s.offTrack?" track-repair":s.newOpener?" +opener":"")+(s.insulated?" insulated":"");
+    case"Solar Panel Installation":return s.panels>0?s.panels+" panels":"tiles"+(s.battery?" +battery":"")+" "+s.mount+(s.permit?" +permit":"");
+    case"Deck Building/Repair":return s.sqft+"sqft "+s.material+" "+(s.height==="second"?"2-story":"ground")+(s.railings?" railings":"")+(s.stairs>0?" "+s.stairs+" stairs":"")+(s.stain?" +stain":"");
+    case"Pool Service/Repair":return s.poolType+" "+(s.service==="weekly"?"weekly service":s.equipment?s.equipment+" repair":s.opening?"opening":s.closing?"closing":"");
+    case"Appliance Repair":return s.appliance+" "+s.brand+" "+s.symptoms+(s.underWarranty?" (warranty)":"");
+    case"Siding Installation/Repair":return s.sqft+"sqft "+(s.material)+(s.newInstall?" new":" repair")+(s.trim?" +trim":"")+" "+s.stories+" story";
+    case"Chimney Service":return s.service+(s.stories>1?" 2-story":"")+(s.crownRepair?" crown":s.linerNeeded?" liner":s.damperReplace?" damper":"");
+    case"Foundation Repair":return s.location+" "+(s.bowingWall?"wall-anchors":s.crackWidth!=="0"?s.crackWidth+" crack":"drainage")+" "+s.soilType+" soil";
+    case"Mold Remediation":return s.location+(s.sqft>0?" "+s.sqft+"sqft":"")+(s.waterSource?" +water-source":"")+(s.visibleMold?" visible":"");
+    case"Well Pump Service":return s.depth+"ft "+s.pumpType+" "+(s.wellIssue==="no-water"?"diagnosis":s.wellIssue==="pump-failure"?"pump-replace":s.wellIssue==="low-pressure"?"tank-replace":s.wellIssue==="no-power"?"control-repair":"chlorination")+" "+s.systemAge+"yr";
+    case"Septic System Service":return s.tankSize+"gal "+(s.backup?"backup":"")+(s.fieldIssue?" drain-field":" pumping")+" "+s.bedrooms+"br";
+    case"Generator Installation":return s.kw>0?s.kw+"kW":"inlet"+(s.wholeHouse?" whole-house":"")+" "+s.fuel+(s.permit?" +permit":"");
+    case"Bathroom Remodeling":return s.type+(s.tearOut?" tear-out":"")+(s.tile?" tile":"")+(s.accessible?" accessible":"");
+    case"Insulation Installation":return s.location+" "+s.type+" "+s.sqft+"sqft r-"+s.rValue+(s.airSealing?" +sealing":"");
     default:return"";
   }
 }
@@ -512,6 +648,281 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have "+s.sqft+" sqft of "+(s.surface==="both"?"driveway and house":s.surface)+" cleaning"+(s.level==="heavy"?" (heavy duty)":"")+". A crew will reach out to schedule. Thank you!");
           return lines.join("\\n");
+        }
+
+        case"Interior Painting":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need some interior painting done.");
+          lines.push("AI: Great! How many rooms are we painting?");
+          lines.push("Customer: "+(s.rooms>0?s.rooms+" room"+(s.rooms>1?"s":""):"Just the exterior trim")+".");
+          if(s.wallSqft>0){lines.push("AI: What's the total wall square footage?");lines.push("Customer: About "+s.wallSqft+" square feet.");}
+          if(s.ceilingHeight>8){lines.push("AI: And what's the ceiling height — standard 8ft or higher?");lines.push("Customer: It's "+s.ceilingHeight+" feet, we have vaulted ceilings.");}
+          lines.push("AI: Are you looking for economy or premium grade paint?");
+          lines.push("Customer: We want "+(s.grade==="premium"?"premium — it lasts longer.":"economy grade."));
+          if(s.trim){lines.push("AI: Will there be any trim work — baseboards, crown molding, or cabinets?");lines.push("Customer: Yes, we need the trim done too.");}
+          if(s.colorChange){lines.push("AI: Is this a color change or same color touch-up?");lines.push("Customer: It's a color change, so we'll need coverage.");}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          return lines.join("\n");
+        }
+        case"Drywall Repair/Installation":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need "+(s.patchType==="small"?"a small patch repair":s.waterDamage?"water damage drywall repair":"drywall installed")+".");
+          lines.push("AI: "+(s.patchType==="small"?"How big is the hole? About how many square feet?":"What's the total square footage?"));
+          lines.push("Customer: "+(s.patchType==="small"?"It's a small hole, about "+s.sqft+" sqft.":"About "+s.sqft+" square feet."));
+          if(s.waterDamage){lines.push("AI: Was there water damage involved?");lines.push("Customer: Yes, we had a leak that damaged the drywall.");}
+          if(s.textureMatch){lines.push("AI: Do you need the texture matched to the existing wall?");lines.push("Customer: Yes, we want it to match the rest of the wall.");}
+          if(s.ceiling){lines.push("AI: Is this a ceiling or wall?");lines.push("Customer: It's the ceiling.");lines.push("AI: Ceiling work needs some extra care.");}
+          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". "+(s.patchType==="small"?"Small patch":s.sqft+"sqft "+(s.ceiling?"ceiling":"wall"))+(s.textureMatch?" textured":"")+(s.waterDamage?" water-damage":"")+". We'll have a drywall pro reach out. Thank you!");
+          return lines.join("\n");
+        }
+        case"Flooring Installation":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need new flooring installed.");
+          lines.push("AI: What type of flooring are you looking at — hardwood, laminate, tile, or vinyl?");
+          lines.push("Customer: We want "+s.material+".");
+          lines.push("AI: What's the total square footage?");
+          lines.push("Customer: About "+s.sqft+" square feet.");
+          if(s.furnitureMoving){lines.push("AI: Do you need help moving furniture out of the way?");lines.push("Customer: Yes, we'll need furniture moved.");}
+          if(s.stairs){lines.push("AI: Any stairs or landing to do as well?");lines.push("Customer: Yes, we have stairs that need flooring too.");}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          return lines.join("\n");
+        }
+        case"Garage Door Service":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.springIssue)lines.push("Customer: My garage door spring broke — the door won't open.");
+          else if(s.offTrack)lines.push("Customer: My garage door came off the track.");
+          else if(s.newOpener)lines.push("Customer: I need a new garage door opener installed.");
+          else lines.push("Customer: I need a new garage door installed.");
+          lines.push("AI: "+(s.springIssue||s.offTrack?"That sounds urgent. ":"")+"Is it a single or double car door?");
+          lines.push("Customer: It's a "+(s.doorSize==="double"?"double":"single")+" car door.");
+          if(s.insulated){lines.push("AI: Are you looking for an insulated door?");lines.push("Customer: Yes, I want it insulated.");}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          if(s.springIssue)lines.push("AI: Thanks "+first+". We have a spring replacement for a "+s.doorSize+" door. We'll get someone out ASAP.");
+          else if(s.offTrack)lines.push("AI: Thanks "+first+". We'll send a tech to fix the track on your "+s.doorSize+" door.");
+          return lines.join("\n");
+        }
+        case"Solar Panel Installation":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.roofType==="tile"){lines.push("Customer: I'm interested in solar roof tiles.");lines.push("AI: Great choice! Solar tiles integrate right into the roof.");}
+          else{lines.push("Customer: I want to install solar panels on my property.");
+          lines.push("AI: How many panels are you looking at?");
+          lines.push("Customer: "+(s.panels>0?s.panels+" panels.":"We're looking at a full system."));
+          lines.push("AI: What type of roof do you have — asphalt, metal, or tile?");
+          lines.push("Customer: It's "+(s.roofType==="asphalt"?"asphalt shingles":"a "+s.roofType+" roof")+".");
+          lines.push("AI: "+(s.mount==="ground"?"Would this be a ground mount installation?":"Are you looking at a roof mount or ground mount?"));
+          lines.push("Customer: "+(s.mount==="ground"?"Ground mount — we have the land for it.":"Roof mount is fine."));}
+          if(s.battery){lines.push("AI: Do you need battery backup for energy storage?");lines.push("Customer: Yes, we want a battery backup system.");}
+          if(s.permit){lines.push("AI: Do you need help with permits?");lines.push("Customer: Yes, we need the permits handled.");}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          return lines.join("\n");
+        }
+        case"Deck Building/Repair":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.stain)lines.push("Customer: I need my deck repaired and stained.");
+          else lines.push("Customer: I want to build "+(s.sqft<300?"a small deck":"a new deck")+".");
+          if(!s.stain){lines.push("AI: What's the approximate square footage?");lines.push("Customer: About "+s.sqft+" square feet.");}
+          lines.push("AI: What material are you considering — treated lumber, cedar, or composite?");
+          lines.push("Customer: We want "+(s.material==="treated"?"treated lumber":s.material==="composite"?"composite — low maintenance":s.material)+".");
+          lines.push("AI: Will this be ground level or a second story deck?");
+          lines.push("Customer: It's "+(s.height==="second"?"a second story deck":"ground level")+".");
+          if(s.railings){lines.push("AI: Do you need railings?");lines.push("Customer: Yes, we need railings.");}
+          if(s.stairs>0){lines.push("AI: How many sets of stairs?");lines.push("Customer: "+s.stairs+" set"+(s.stairs>1?"s":"")+".");}
+          if(s.stain){lines.push("AI: And you need staining done as well?");lines.push("Customer: Yes, power wash and stain.");}
+          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          return lines.join("\n");
+        }
+        case"Pool Service/Repair":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.service==="weekly"){lines.push("Customer: I need weekly pool chemical service.");lines.push("AI: Great! Is your pool in-ground or above-ground?");lines.push("Customer: It's "+s.poolType+".");}
+          else if(s.opening){lines.push("Customer: I need my pool opened for the season.");lines.push("AI: Sure! Is it an in-ground or above-ground pool?");lines.push("Customer: It's "+s.poolType+".");}
+          else if(s.closing){lines.push("Customer: I need my pool closed for winter.");lines.push("AI: Got it. In-ground or above-ground?");lines.push("Customer: It's "+s.poolType+".");}
+          else if(s.equipment==="pump"){lines.push("Customer: My pool filter pump isn't working.");lines.push("AI: Sorry to hear that. Is it an in-ground or above-ground pool?");lines.push("Customer: It's "+s.poolType+".");lines.push("AI: We can replace the pump. Do you know the model?");lines.push("Customer: I'm not sure offhand.");}
+          else if(s.equipment==="heater"){lines.push("Customer: My pool heater stopped heating.");lines.push("AI: We can help with that. Is your pool in-ground or above-ground?");lines.push("Customer: It's "+s.poolType+".");lines.push("AI: We'll get a pool tech to diagnose the heater.");}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". "+(s.service==="weekly"?"We'll set up weekly service.":s.opening?"We'll schedule the pool opening.":s.closing?"We'll schedule the pool closing.":s.equipment==="pump"?"We'll send a tech to replace the pump.":s.equipment==="heater"?"We'll send someone to check the heater.":"")+" Thank you!");
+          return lines.join("\n");
+        }
+        case"Appliance Repair":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: My "+s.appliance+" is having issues.");
+          lines.push("AI: What brand is it?");
+          lines.push("Customer: It's a "+s.brand+".");
+          lines.push("AI: What symptoms are you experiencing?");
+          lines.push("Customer: It's "+s.symptoms+".");
+          lines.push("AI: Is it still under warranty?");
+          lines.push("Customer: "+(s.underWarranty?"Yes, it's still covered.":"No, it's out of warranty."));
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We'll send an appliance tech to look at your "+s.brand+" "+s.appliance+". Thank you!");
+          return lines.join("\n");
+        }
+        case"Siding Installation/Repair":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.newInstall)lines.push("Customer: I need new siding installed on my home.");
+          else if(s.trim)lines.push("Customer: I need my trim and fascia replaced.");
+          else lines.push("Customer: I need a siding repair.");
+          if(s.sqft>0){lines.push("AI: What's the total square footage?");lines.push("Customer: About "+s.sqft+" square feet.");}
+          lines.push("AI: What material are you looking at — vinyl, fiber cement, or wood?");
+          lines.push("Customer: We want "+(s.material==="fiber-cement"?"fiber cement":s.material)+".");
+          if(s.trim&&s.sqft>0){lines.push("AI: Do you need trim and fascia work too?");lines.push("Customer: Yes, fresh trim and fascia.");}
+          lines.push("AI: How many stories is the home?");
+          lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));
+          lines.push("AI: "+(s.stories>1?"Two-story work takes a bit more time.":"Single story is straightforward.")+" Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          return lines.join("\n");
+        }
+        case"Chimney Service":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.service==="cleaning"){lines.push("Customer: I need my chimney cleaned.");lines.push("AI: Great! How many stories is your home?");lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));}
+          else if(s.service==="crown"){lines.push("Customer: The crown on my chimney needs repair.");lines.push("AI: We can fix that. How many stories?");lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));}
+          else if(s.service==="liner"){lines.push("Customer: I need a new chimney liner installed.");lines.push("AI: We handle liner installations. How many stories?");lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));}
+          else if(s.service==="damper"){lines.push("Customer: My chimney damper needs replacing.");lines.push("AI: We can replace the damper. How many stories?");lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));}
+          else if(s.service==="rebuild"){lines.push("Customer: My chimney needs a full rebuild.");lines.push("AI: Understood. How many stories?");lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));lines.push("AI: A full rebuild takes some time but we'll get it done right.");}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          return lines.join("\n");
+        }
+        case"Foundation Repair":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.bowingWall){lines.push("Customer: My basement wall is bowing inward.");lines.push("AI: That sounds serious. We'll get a foundation specialist out. Is the crack more than 1/4 inch?");lines.push("Customer: Yes, it's about "+s.crackWidth+".");}
+          else if(s.waterInBasement&&s.location==="exterior"){lines.push("Customer: I have water in my basement and need drainage fixed.");lines.push("AI: We can help with exterior drainage. What type of soil do you have?");lines.push("Customer: It's "+s.soilType+" soil.");}
+          else if(s.location==="exterior"&&s.crackWidth!=="0"){lines.push("Customer: I need foundation piers installed.");lines.push("AI: How wide are the cracks in the foundation?");lines.push("Customer: About "+s.crackWidth+".");lines.push("AI: What type of soil do you have?");lines.push("Customer: It's "+s.soilType+" soil.");}
+          else{lines.push("Customer: I have a crack in my foundation wall.");lines.push("AI: How wide is the crack?");lines.push("Customer: It's about "+s.crackWidth+".");lines.push("AI: "+(s.waterInBasement?"Does water come through when it rains?":"Is it on the interior or exterior?"));if(s.waterInBasement)lines.push("Customer: Yes, water seeps in.");else lines.push("Customer: "+(s.location==="interior"?"Interior.":"Exterior."));}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We'll have a foundation specialist contact you. Thank you!");
+          return lines.join("\n");
+        }
+        case"Mold Remediation":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.location==="hvac"){lines.push("Customer: I think there's mold in my HVAC system.");lines.push("AI: We can treat HVAC mold. Can you smell a musty odor when the system runs?");lines.push("Customer: "+(s.mustySmell?"Yes, it smells musty.":"Not really, but I can see visible mold."));}
+          else{lines.push("Customer: I have mold in my "+(s.location==="whole-house"?"home":" "+s.location)+".");
+          lines.push("AI: How many square feet are affected?");
+          lines.push("Customer: "+(s.sqft>0?"About "+s.sqft+" sqft.":"I'm not sure of the exact size."));
+          if(s.visibleMold){lines.push("AI: Can you see visible mold growth?");lines.push("Customer: Yes, it's visible.");}
+          if(s.waterSource){lines.push("AI: Is there an active water source causing the mold?");lines.push("Customer: Yes, there's a moisture issue.");}
+          if(s.mustySmell){lines.push("AI: Do you notice a musty smell?");lines.push("Customer: Yes, definitely.");}}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We'll have a mold remediation specialist reach out to assess the "+(s.location==="hvac"?"HVAC system":s.sqft>0?s.sqft+"sqft area":"property")+". Thank you!");
+          return lines.join("\n");
+        }
+        case"Well Pump Service":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.wellIssue==="no-water"){lines.push("Customer: I have no water coming from my well.");lines.push("AI: That's urgent. How deep is your well?");lines.push("Customer: It's about "+s.depth+" feet deep.");lines.push("AI: Do you have a submersible or jet pump?");lines.push("Customer: It's "+s.pumpType+".");lines.push("AI: How old is the system?");lines.push("Customer: About "+s.systemAge+" years old.");}
+          else if(s.wellIssue==="pump-failure"){lines.push("Customer: My well pump stopped working.");lines.push("AI: How deep is your well?");lines.push("Customer: It's about "+s.depth+" feet deep.");lines.push("AI: Submersible or jet pump?");lines.push("Customer: It's "+s.pumpType+".");lines.push("AI: How old is the system?");lines.push("Customer: About "+s.systemAge+" years old.");}
+          else if(s.wellIssue==="low-pressure"){lines.push("Customer: My water pressure is low.");lines.push("AI: How deep is the well?");lines.push("Customer: About "+s.depth+" feet.");lines.push("AI: It could be the pressure tank. How old is the system?");lines.push("Customer: About "+s.systemAge+" years.");}
+          else if(s.wellIssue==="no-power"){lines.push("Customer: The well pump has no power.");lines.push("AI: That could be a control box issue. What type of pump do you have?");lines.push("Customer: It's "+s.pumpType+".");lines.push("AI: How old is the system?");lines.push("Customer: About "+s.systemAge+" years.");}
+          else if(s.wellIssue==="bacteria"){lines.push("Customer: My well water tested positive for bacteria.");lines.push("AI: We can do a well chlorination. How deep is the well?");lines.push("Customer: About "+s.depth+" feet.");}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We'll send a well service technician to address your "+(s.wellIssue==="no-water"?"no water":s.wellIssue==="pump-failure"?"pump failure":s.wellIssue==="low-pressure"?"low pressure":s.wellIssue==="no-power"?"electrical issue":"chlorination")+". Thank you!");
+          return lines.join("\n");
+        }
+        case"Septic System Service":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.backup&&s.fieldIssue){lines.push("Customer: My septic is backing up and the drain field is failing.");lines.push("AI: That sounds like a serious issue. What size tank do you have?");lines.push("Customer: It's a "+s.tankSize+" gallon tank.");lines.push("AI: How many bedrooms in the home?");lines.push("Customer: "+s.bedrooms+" bedrooms.");lines.push("AI: When was it last pumped?");lines.push("Customer: About "+s.lastPumping+" years ago.");}
+          else if(s.fieldIssue){lines.push("Customer: I think my drain field is failing.");lines.push("AI: We can inspect it. What size tank?");lines.push("Customer: "+s.tankSize+" gallons.");lines.push("AI: How many bedrooms?");lines.push("Customer: "+s.bedrooms+" bedrooms.");}
+          else if(s.backup){lines.push("Customer: My septic system is backing up.");lines.push("AI: We'll get someone out. What size tank?");lines.push("Customer: "+s.tankSize+" gallons.");lines.push("AI: When was it last pumped?");lines.push("Customer: About "+s.lastPumping+" years ago.");}
+          else{lines.push("Customer: I need my septic tank pumped.");lines.push("AI: What size tank do you have?");lines.push("Customer: It's a "+s.tankSize+" gallon tank.");lines.push("AI: How many bedrooms in the home?");lines.push("Customer: "+s.bedrooms+" bedrooms.");lines.push("AI: When was it last pumped?");lines.push("Customer: About "+s.lastPumping+" years ago.");}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We'll have a septic service contact you. Thank you!");
+          return lines.join("\n");
+        }
+        case"Generator Installation":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.kw===0&&!s.transferSwitch){lines.push("Customer: I need a portable generator inlet installed.");lines.push("AI: Simple setup. What fuel type — natural gas or propane?");lines.push("Customer: "+(s.fuel==="nat-gas"?"Natural gas.":"Propane."));}
+          else if(s.kw===0&&s.transferSwitch){lines.push("Customer: I need a transfer switch installed.");lines.push("AI: Do you need permits pulled for this?");lines.push("Customer: "+(s.permit?"Yes, we need permits.":"No, it's already approved."));}
+          else{lines.push("Customer: I want to install a "+(s.kw>=22?"whole house":"standby")+" generator.");lines.push("AI: "+(s.kw>=22?"A 22kW whole house setup — that's a big system. ":"")+"What fuel type — natural gas or propane?");lines.push("Customer: "+(s.fuel==="nat-gas"?"Natural gas.":"Propane."));if(s.wholeHouse){lines.push("AI: Will this be powering the whole house or just essential circuits?");lines.push("Customer: The whole house.");}if(s.permit){lines.push("AI: Do you need permits handled?");lines.push("Customer: Yes, please handle the permits.");}}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We'll have a generator specialist reach out to schedule. Thank you!");
+          return lines.join("\n");
+        }
+        case"Bathroom Remodeling":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          if(s.type==="vanity"){lines.push("Customer: I want to update my bathroom vanity and lighting.");lines.push("AI: Nice! Is this a full tear-out of the existing vanity?");lines.push("Customer: "+(s.tearOut?"Yes, remove the old one.":"No, just swapping fixtures."));}
+          else if(s.type==="tub-shower"){lines.push("Customer: I want to convert my tub to a walk-in shower.");lines.push("AI: Great upgrade. This involves a tear-out?");lines.push("Customer: "+(s.tearOut?"Yes, full tear-out.":"Partially."));lines.push("AI: "+(s.tile?"Are you planning on tile work?":"Any paint or just the conversion?"));if(s.tile)lines.push("Customer: Yes, we want tile.");lines.push("AI: "+(s.plumbingMove?"Will the plumbing need to be moved?":""));if(s.plumbingMove)lines.push("Customer: Yes, the plumbing needs to be relocated.");}
+          else if(s.type==="master"){lines.push("Customer: I want a complete master bathroom remodel.");lines.push("AI: Full tear-out of everything?");lines.push("Customer: "+(s.tearOut?"Yes, start from scratch.":"Some things stay."));lines.push("AI: "+(s.tile?"Are you doing tile work?":""));if(s.tile)lines.push("Customer: Yes, we want tile floors and shower.");lines.push("AI: "+(s.plumbingMove?"Are you moving any plumbing?":""));if(s.plumbingMove)lines.push("Customer: Yes, we're reconfiguring the layout.");}
+          else if(s.type==="half-bath"){lines.push("Customer: I want to remodel my half bath / powder room.");lines.push("AI: "+(s.tearOut?"Full tear-out?":"Just updating fixtures?"));lines.push("Customer: "+(s.tearOut?"Yes, gut it.":"Just updating."));lines.push("AI: "+(s.fixtures?"New fixtures too?":""));if(s.fixtures)lines.push("Customer: Yes, new vanity and toilet.");}
+          else if(s.accessible){lines.push("Customer: I need an accessible shower installed.");lines.push("AI: We do ADA-compliant accessible showers. Full tear-out of the existing?");lines.push("Customer: "+(s.tearOut?"Yes, remove everything.":"Just the shower area."));}
+          lines.push("AI: Let me get your info. Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          lines.push("AI: Thanks "+first+". We'll have a remodeling consultant reach out to discuss your "+(s.type==="vanity"?"vanity update":s.type==="tub-shower"?"tub-to-shower conversion":s.type==="master"?"master bath remodel":s.type==="half-bath"?"half bath remodel":"accessible shower")+". Thank you!");
+          return lines.join("\n");
+        }
+        case"Insulation Installation":{
+          let lines=[];
+          lines.push("AI: NorthStar Solutions, this is your AI receptionist. How can I help?");
+          lines.push("Customer: I need insulation installed in my "+(s.location==="crawlspace"?"crawlspace":s.location==="garage"?"garage":s.location==="attic"?"attic":"walls")+".");
+          if(s.location==="crawlspace"){lines.push("AI: Are you looking at full encapsulation with a vapor barrier?");lines.push("Customer: "+(s.vaporBarrier?"Yes, full encapsulation with vapor barrier.":"Just the insulation."));}
+          else if(s.location==="attic"){lines.push("AI: "+(s.type==="spray-foam"?"Spray foam is great for air sealing. ":"Blow-in is cost-effective. ")+"What R-value are you aiming for?");lines.push("Customer: We're targeting R-"+s.rValue+".");}
+          else if(s.location==="walls"){lines.push("AI: We inject cellulose or spray foam into the wall cavities. What R-value are you looking for?");lines.push("Customer: We want R-"+s.rValue+".");}
+          else{lines.push("AI: What's the square footage?");lines.push("Customer: About "+s.sqft+" square feet.");lines.push("AI: What R-value are you looking for?");lines.push("Customer: R-"+s.rValue+".");}
+          lines.push("AI: "+(s.airSealing?"Do you need air sealing done too?":""));
+          if(s.airSealing)lines.push("Customer: Yes, air seal as well.");
+          lines.push("AI: "+(s.vaporBarrier&&s.location==="crawlspace"?"We'll do a full encapsulation with vapor barrier.":"Let me get your info.")+" Your name?");
+          lines.push("Customer: "+name+".");
+          lines.push("AI: And your address?");
+          lines.push("Customer: "+addr+".");
+          return lines.join("\n");
         }
         default:{
           // Fallback generic transcript

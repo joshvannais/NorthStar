@@ -69,6 +69,21 @@ function toggleMobileMenu() {
         </div>
       </div>
 
+      <!-- Jobber CRM -->
+      <div class="settings-section">
+        <h2>🔧 Jobber CRM</h2>
+        <p class="description">Auto-create clients and jobs in Jobber when your AI captures a new lead.</p>
+        <div class="integration-card" id="integration-jobber">
+          <div class="icon">🔧</div>
+          <div class="info">
+            <h4>Client &amp; Job Sync</h4>
+            <p>Leads automatically become clients and jobs in your Jobber account</p>
+          </div>
+          <span id="jobber-status"><span class="status-dot disconnected"></span>Not connected</span>
+          <button class="btn btn-sm" id="jobber-btn" onclick="connectJobber()">Connect</button>
+        </div>
+      </div>
+
       <!-- Google Sheets -->
       <div class="settings-section">
         <h2>📊 Google Sheets</h2>
@@ -128,21 +143,6 @@ function toggleMobileMenu() {
           <button class="btn btn-sm" id="email-btn" onclick="connectIntegration('email')">Connect</button>
         </div>
       </div>
-      <!-- Jobber CRM -->
-      <div class="settings-section">
-        <h2>🔧 Jobber CRM</h2>
-        <p class="description">Auto-create clients and jobs in Jobber when your AI captures a new lead.</p>
-        <div class="integration-card" id="integration-jobber">
-          <div class="icon">🔧</div>
-          <div class="info">
-            <h4>Client &amp; Job Sync</h4>
-            <p>Leads automatically become clients and jobs in your Jobber account</p>
-          </div>
-          <span id="jobber-status"><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-sm" id="jobber-btn" onclick="connectJobber()">Connect</button>
-        </div>
-      </div>
-
       <!-- Connection Modal -->
       <div class="modal-overlay" id="connectModal" style="display:none;" onclick="closeModal(event)">
         <div class="modal-content" style="max-width:440px;" onclick="event.stopPropagation()">

@@ -43,6 +43,16 @@
     </div>
     <h1>Every Missed Call <span>Costs You Money.</span></h1>
     <p>While you're working, Northstar is answering calls, qualifying customers, and booking your next job.</p>
+    <div id="liveStats" style="display:flex;gap:32px;justify-content:center;margin:20px 0;flex-wrap:wrap;">
+      <div style="text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:var(--brand-600);"><span id="statRevenue">0</span></div>
+        <div style="font-size:13px;color:var(--neutral-500);">Revenue Generated</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:var(--brand-600);"><span id="statCalls">0</span></div>
+        <div style="font-size:13px;color:var(--neutral-500);">Calls Answered</div>
+      </div>
+    </div>
     <div class="hero-actions">
       <a href="/signup" class="btn btn-primary">Start 14-Day Free Trial</a>
       <a href="/demo-login" class="btn btn-demo">Try the Live Demo →</a>
@@ -476,6 +486,18 @@ function resetDemo() {
   document.getElementById('demoTimer').textContent = '0:00';
   document.getElementById('demoTyping').style.display = 'none';
 }
+</script>
+
+<script>
+async function loadStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+    document.getElementById('statRevenue').textContent = "$" + d.totalRevenue.toLocaleString();
+    document.getElementById('statCalls').textContent = d.totalCalls.toLocaleString();
+  } catch(e) {}
+}
+loadStats();
 </script>
 
 <script src="/js/theme.js"></script>

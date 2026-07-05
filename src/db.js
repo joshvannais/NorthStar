@@ -74,6 +74,17 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS call_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        caller_name VARCHAR(255) DEFAULT '',
+        service_type VARCHAR(255) NOT NULL,
+        estimated_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+        job_detail VARCHAR(500) DEFAULT '',
+        source VARCHAR(50) DEFAULT 'simulator',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
 
     console.log('[DB] PostgreSQL connected and tables ready');
     dbAvailable = true;

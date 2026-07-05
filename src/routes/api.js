@@ -6,6 +6,7 @@ const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
 const { handleWebhook } = require('../retell/webhook');
 const { scheduleEstimate } = require('../calendar/client');
+const db = require('../db');
 
 const router = express.Router();
 
@@ -14,8 +15,49 @@ const router = express.Router();
  * Health check endpoint.
  */
 router.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'northstar-solutions', version: '1.0.0' });
-});
+      res.json({ status: 'ok', service: 'northstar-solutions', version: '1.0.0' });
+    });
+
+    /**
+     * GET /api/stats
+     * Return aggregate stats: total calls, total revenue, served from database.
+     */
+    router.get('/stats', async (req, res) => {
+      if (!db.isAvailable()) {
+        return res.json({ totalCalls: 0, totalRevenue: 0 });
+      }
+      try {
+        const result = await db.query('SELECT COUNT(*)::int AS calls, COALESCE(SUM(estimated_price), 0)::float AS revenue FROM call_records');
+        res.json({
+          totalCalls: result.rows[0].calls,
+          totalRevenue: Math.round(result.rows[0].revenue),
+        });
+      } catch (err) {
+        console.error('[API] Stats error:', err.message);
+        res.json({ totalCalls: 0, totalRevenue: 0 });
+      }
+    });
+
+    /**
+     * POST /api/calls/record
+     * Record a simulated call with pricing data from the engine.
+     */
+    router.post('/calls/record', async (req, res) => {
+      if (!db.isAvailable()) {
+        return res.json({ success: true, note: 'DB not available, call not persisted' });
+      }
+      try {
+        const { callerName, serviceType, estimatedPrice, jobDetail, source } = req.body;
+        await db.query(
+          'INSERT INTO call_records (caller_name, service_type, estimated_price, job_detail, source) VALUES ($1, $2, $3, $4, $5)',
+          [callerName || '', serviceType || 'Unknown', estimatedPrice || 0, jobDetail || '', source || 'simulator']
+        );
+        res.json({ success: true });
+      } catch (err) {
+        console.error('[API] Record call error:', err.message);
+        res.status(500).json({ error: 'Failed to record call' });
+      }
+    });
 
 /**
  * GET /api/leads

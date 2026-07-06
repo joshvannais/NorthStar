@@ -82,6 +82,7 @@ async function initDatabase() {
         estimated_price DECIMAL(10,2) NOT NULL DEFAULT 0,
         job_detail VARCHAR(500) DEFAULT '',
         source VARCHAR(50) DEFAULT 'simulator',
+        outcome VARCHAR(50) DEFAULT ''::character varying,
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);

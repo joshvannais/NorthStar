@@ -25,13 +25,14 @@ router.get('/health', (req, res) => {
      */
     router.get('/stats', async (req, res) => {
       if (!db.isAvailable()) {
-        return res.json({ totalCalls: 0, totalRevenue: 0 });
+        return res.json({ totalCalls: 0, totalRevenue: 0, appointmentsBooked: 0 });
       }
       try {
-        const result = await db.query("SELECT COUNT(*)::int AS calls, COALESCE(SUM(estimated_price), 0)::float AS revenue FROM call_records WHERE source = 'real'");
+        const result = await db.query("SELECT COUNT(*)::int AS calls, COALESCE(SUM(estimated_price), 0)::float AS revenue, COUNT(*) FILTER (WHERE outcome = 'appointment-set')::int AS appointments FROM call_records WHERE source = 'real'");
         res.json({
           totalCalls: result.rows[0].calls,
           totalRevenue: Math.round(result.rows[0].revenue),
+          appointmentsBooked: result.rows[0].appointments,
         });
       } catch (err) {
         console.error('[API] Stats error:', err.message);

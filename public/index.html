@@ -52,6 +52,10 @@
         <div style="font-size:24px;font-weight:800;color:var(--brand-600);"><span id="statCalls">0</span></div>
         <div style="font-size:13px;color:var(--neutral-500);">Calls Answered</div>
       </div>
+      <div style="text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:var(--brand-600);"><span id="statAppointments">0</span></div>
+        <div style="font-size:13px;color:var(--neutral-500);">Appointments Booked</div>
+      </div>
     </div>
     <div class="hero-actions">
       <a href="/signup" class="btn btn-primary">Start 14-Day Free Trial</a>
@@ -500,6 +504,7 @@ async function loadStats() {
     const d = await r.json();
     document.getElementById('statRevenue').textContent = "$" + d.totalRevenue.toLocaleString();
     document.getElementById('statCalls').textContent = d.totalCalls.toLocaleString();
+    document.getElementById('statAppointments').textContent = d.appointmentsBooked.toLocaleString();
   } catch(e) {}
 }
 loadStats();

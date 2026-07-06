@@ -145,37 +145,17 @@ function toggleMobileMenu() {
       document.getElementById('leadsContent').innerHTML = html;
     }
 
-    function simulateLead() {
-      const names = ['John Smith', 'Maria Garcia', 'Bob Johnson', 'Sarah Wilson', 'Mike Brown', 'Lisa Davis'];
-      const services = ['Tree removal', 'Roof repair', 'Plumbing leak', 'Electrical wiring', 'Landscape design', 'Deck staining'];
-      const addresses = ['123 Oak St', '456 Maple Ave', '789 Pine Rd', '321 Elm Dr', '654 Birch Ln'];
-      const name = names[Math.floor(Math.random() * names.length)];
-      const service = services[Math.floor(Math.random() * services.length)];
-      const address = addresses[Math.floor(Math.random() * addresses.length)];
-      const phone = `(${100+Math.floor(Math.random()*900)}) ${100+Math.floor(Math.random()*900)}-${1000+Math.floor(Math.random()*9000)}`;
-
-      const lead = {
-        caller: name,
-        phone: phone,
-        address: address,
-        service: service,
-        time: new Date().toISOString(),
-        status: 'new',
-        avgPrice: 0
-      };
-
-      allLeads.unshift(lead);
+        function simulateLead() {
+      const c = genCall();
+      allLeads.unshift(c);
       try {
         const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
-        existing.unshift(lead);
+        existing.unshift(c);
         sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
       } catch(e) {}
-      showToast(`✅ New lead: ${name} (${service})`);
+      showToast("✅ New lead: " + c.caller + " (" + c.service + ")");
       loadLeads();
-    }
-
-    loadLeads();
-  </script>
+    }</script>
 <script src="/js/theme.js"></script>
 </body>
 </html>

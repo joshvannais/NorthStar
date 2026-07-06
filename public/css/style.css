@@ -1576,10 +1576,6 @@ tr:hover td { background: var(--neutral-50); }
 .call-transcript { background: #0f172a; color: #e4e4e7; border-radius: var(--radius-sm); padding: 14px 16px; font-family: monospace; font-size: 12px; line-height: 1.7; margin-bottom: 12px; white-space: pre-wrap; }
 .call-transcript .ai-text { color: #D4AF37; }
 .call-actions button { padding: 6px 14px; font-size: 12px; border-radius: var(--radius-sm); border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; }
-.call-filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
-.call-filter-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--neutral-200); background: #fff; font-size: 13px; cursor: pointer; color: var(--neutral-600); }
-.call-filter-btn:hover { border-color: var(--brand-300); color: var(--brand-600); }
-.call-filter-btn.active { background: var(--brand-600); color: white; border-color: var(--brand-600); }
 .call-outcome { font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: 500; }
 .call-outcome.appointment-set { background: #d1fae5; color: #047857; }
 .call-outcome.follow-up { background: #fef3c7; color: #a16207; }
@@ -1592,9 +1588,6 @@ tr:hover td { background: var(--neutral-50); }
 .badge-completed { background: #d1fae5; color: #047857; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
 .demo-scenario { padding: 16px; border: 1px solid var(--neutral-200); border-radius: var(--radius); cursor: pointer; text-align: center; }
 .demo-scenario:hover { border-color: var(--brand-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-[data-theme="dark"] .call-card-header:hover { background: var(--neutral-800); }
-[data-theme="dark"] .call-card { background: var(--neutral-100); border-color: var(--neutral-300); }
-[data-theme="dark"] .call-summary { background: var(--neutral-200); color: var(--neutral-600); }
 [data-theme="dark"] .call-actions button { background: var(--neutral-800); border-color: var(--neutral-700); }
 [data-theme="dark"] .call-transcript { background: #000; }
 [data-theme="dark"] .demo-msg.customer { background: var(--neutral-300); color: var(--neutral-800); }
@@ -1605,9 +1598,6 @@ tr:hover td { background: var(--neutral-50); }
 [data-theme="dark"] .call-outcome.appointment-set { background: rgba(4, 120, 87, 0.2); color: #6ee7b7; }
 [data-theme="dark"] .call-outcome.follow-up { background: rgba(161, 98, 7, 0.2); color: #fbbf24; }
 [data-theme="dark"] .call-outcome.no-interest { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
-[data-theme="dark"] .call-filter-btn { background: var(--neutral-100); border-color: var(--neutral-300); color: var(--neutral-600); }
-[data-theme="dark"] .call-filter-btn:hover { border-color: var(--brand-400); color: var(--brand-300); }
-[data-theme="dark"] .call-filter-btn.active { background: var(--brand-600); color: var(--neutral-900); border-color: var(--brand-500); }
 [data-theme="dark"] .call-est-value { border-top: 1px solid var(--neutral-300); padding-top: 6px; margin-top: 6px; color: var(--neutral-600); }
 
 [data-theme="dark"] .mobile-header { background: var(--neutral-50); border-bottom-color: var(--neutral-300); }
@@ -1744,15 +1734,24 @@ tr:hover td { background: var(--neutral-50); }
 .call-filters .filter-group { display: flex; gap: 4px; align-items: center; }
 .call-filters .filter-separator { width: 1px; height: 24px; background: var(--neutral-300); margin: 0 4px; }
 .call-filters .filter-right { margin-left: auto; }
+@media (max-width: 768px) {
+  .call-filters { gap: 4px; }
+  .call-filters .filter-group { gap: 3px; }
+  .call-filter-btn { padding: 4px 8px; font-size: 11px; }
+  .call-filters .filter-separator { margin: 0 2px; }
+  .call-filters .filter-right { margin-left: 0; }
+}
 .call-filter-btn { padding: 5px 12px; font-size: 12px; border-radius: 20px; border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; color: var(--neutral-600); transition: all 0.2s; white-space: nowrap; }
 .call-filter-btn:hover { border-color: var(--brand-300); color: var(--brand-600); }
 .call-filter-btn.active { background: var(--brand-600); color: white; border-color: var(--brand-600); }
 
 /* Dark mode for expanded call card */
 [data-theme="dark"] .call-card-body {
-  background: var(--neutral-100);
+  background: var(--neutral-200);
   border-top: 1px solid var(--neutral-300);
 }
+[data-theme="dark"] .call-card { background: var(--neutral-100); border-color: var(--neutral-300); }
+[data-theme="dark"] .call-card-header:hover { background: var(--neutral-200); }
 [data-theme="dark"] .call-summary {
   background: var(--neutral-200);
   color: var(--neutral-700);

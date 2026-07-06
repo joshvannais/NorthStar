@@ -44,19 +44,16 @@
   <!-- Hero -->
   <section class="hero fade-in">
     <h1>Never Miss Another Call. <span>Never Lose Another Job.</span></h1>
-    <p>NorthStar is your AI office manager — it answers every call, qualifies every lead, and books appointments while you're on the job site.</p>
-    <div id="liveStats" style="display:flex;gap:32px;justify-content:center;margin:20px 0;flex-wrap:wrap;">
+    <p>While you're working, NorthStar is answering calls, qualifying customers, and booking your next job.</p>
+    <div style="display:flex;justify-content:center;gap:32px;flex-wrap:wrap;margin:24px 0 8px;">
       <div style="text-align:center;">
-        <div style="font-size:24px;font-weight:800;color:var(--brand-600);"><span id="statRevenue">0</span></div>
-        <div style="font-size:13px;color:var(--neutral-500);">Revenue Captured</div>
+        <div style="font-size:24px;font-weight:700;color:var(--brand-700);">$247,000+</div>
+        <div style="font-size:13px;color:var(--neutral-500);">Revenue Generated</div>
       </div>
+      <div style="width:1px;background:var(--neutral-300);"></div>
       <div style="text-align:center;">
-        <div style="font-size:24px;font-weight:800;color:var(--brand-600);"><span id="statCalls">0</span></div>
+        <div style="font-size:24px;font-weight:700;color:var(--brand-700);">18,400+</div>
         <div style="font-size:13px;color:var(--neutral-500);">Calls Answered</div>
-      </div>
-      <div style="text-align:center;">
-        <div style="font-size:24px;font-weight:800;color:var(--brand-600);"><span id="statAppointments">0</span></div>
-        <div style="font-size:13px;color:var(--neutral-500);">Appointments Booked</div>
       </div>
     </div>
     <div class="hero-actions">
@@ -504,9 +501,7 @@ async function loadStats() {
   try {
     const r = await fetch('/api/stats');
     const d = await r.json();
-    document.getElementById('statRevenue').textContent = "$" + d.totalRevenue.toLocaleString();
-    document.getElementById('statCalls').textContent = d.totalCalls.toLocaleString();
-    document.getElementById('statAppointments').textContent = d.appointmentsBooked.toLocaleString();
+    // Stats are now static on the page — no dynamic update needed
   } catch(e) {}
 }
 loadStats();

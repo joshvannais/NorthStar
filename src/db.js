@@ -74,6 +74,25 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS call_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        caller_name VARCHAR(255) DEFAULT '',
+        service_type VARCHAR(255) NOT NULL,
+        estimated_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+        job_detail VARCHAR(500) DEFAULT '',
+        source VARCHAR(50) DEFAULT 'simulator',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    // Add Jobber columns if they don't exist (for existing users tables)
+    try {
+      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_access_token TEXT`);
+      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_refresh_token TEXT`);
+      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_token_expires TIMESTAMP`);
+    } catch (e) {
+      // Columns may already exist, ignore
+    }
 
     console.log('[DB] PostgreSQL connected and tables ready');
     dbAvailable = true;

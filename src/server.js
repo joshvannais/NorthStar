@@ -41,6 +41,7 @@ const pages = {
   '/dashboard/calls': 'public/dashboard/calls.html',
   '/dashboard/my-number': 'public/dashboard/my-number.html',
   '/dashboard/settings': 'public/dashboard/settings.html',
+  '/dashboard/integrations': 'public/dashboard/integrations.html',
   '/contact': 'public/contact.html',
   '/privacy': 'public/privacy.html',
   '/terms': 'public/terms.html',
@@ -225,7 +226,7 @@ app.get('/demo-login', (req, res) => {
     id: 'demo-user',
     name: 'Demo Contractor',
     businessName: 'Your Company',
-    email: 'demo@northstar-ai.com',
+    email: 'demo@northstarsolutions.app',
     phone: '(555) 000-0000',
   });
 
@@ -256,7 +257,7 @@ app.get('/demo-login', (req, res) => {
     localStorage.setItem('user', JSON.stringify({
       name: 'Demo Contractor',
       businessName: 'Your Company',
-      email: 'demo@northstar-ai.com',
+      email: 'demo@northstarsolutions.app',
       phone: '(555) 000-0000',
     }));
     setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
@@ -362,6 +363,7 @@ async function start() {
     console.log(`  ${baseUrl}/login           → Sign in`);
     console.log(`  ${baseUrl}/signup          → Sign up (14-day free trial)`);
     console.log(`  ${baseUrl}/dashboard       → Contractor dashboard`);
+    console.log(`  ${baseUrl}/dashboard/integrations → Integrations`);
     console.log(`  ${baseUrl}/admin           → Admin panel`);
     console.log('');
     console.log('📍 Auth API:');

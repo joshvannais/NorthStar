@@ -128,7 +128,7 @@ function toggleMobileMenu() {
         <th>Customer</th><th>Phone</th><th>Address</th><th>Service</th><th>Date</th><th>Status</th>
       </tr></thead><tbody>`;
 
-      leads.slice().reverse().forEach(c => {
+      leads.slice().forEach(c => {
         const status = c.status || 'new';
         html += `<tr>
           <td><strong>${c.caller || c.customerName || 'Unknown'}</strong></td>

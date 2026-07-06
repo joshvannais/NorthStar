@@ -1555,10 +1555,10 @@ tr:hover td { background: var(--neutral-50); }
 
 #callHistoryList { display: flex; flex-direction: column; gap: 20px; }
 /* FEATURE: Call History */
-.call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: 16px; overflow: hidden; }
-.call-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; cursor: pointer; gap: 12px; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+.call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: 16px; }
+.call-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; cursor: pointer; gap: 12px; }
 .call-card-header:hover { background: var(--neutral-50); }
-.call-card.expanded .call-card-header { border-bottom-color: var(--neutral-100); }
+
 .call-caller { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .call-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--brand-100); color: var(--brand-600); display: flex; align-items: center; justify-content: center; font-weight: 600; }
 .call-name { font-weight: 600; font-size: 14px; }
@@ -1759,7 +1759,6 @@ tr:hover td { background: var(--neutral-50); }
 /* Dark mode for expanded call card */
 [data-theme="dark"] .call-card-body {
   background: var(--neutral-200);
-  border-top: 1px solid var(--neutral-300);
 }
 [data-theme="dark"] .call-card { background: var(--neutral-100); border-color: var(--neutral-300); }
 [data-theme="dark"] .call-card-header:hover { background: var(--neutral-200); }

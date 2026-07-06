@@ -1554,10 +1554,10 @@ tr:hover td { background: var(--neutral-50); }
 [data-theme="dark"] .footer-links a:hover { color: var(--brand-400); }
 
 /* FEATURE: Call History */
-.call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: 16px; margin-bottom: 16px; overflow: hidden; }
+.call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: 16px; margin-bottom: 20px; overflow: hidden; }
 .call-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; cursor: pointer; gap: 12px; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
 .call-card-header:hover { background: var(--neutral-50); }
-.call-card.expanded .call-card-header { border-bottom-color: var(--neutral-100); }
+.call-card.expanded { margin-bottom: 28px; } .call-card.expanded .call-card-header { border-bottom-color: var(--neutral-100); }
 .call-caller { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .call-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--brand-100); color: var(--brand-600); display: flex; align-items: center; justify-content: center; font-weight: 600; }
 .call-name { font-weight: 600; font-size: 14px; }
@@ -1582,10 +1582,10 @@ tr:hover td { background: var(--neutral-50); }
 [data-theme="dark"] .chat-msg.chat-ai strong { color: var(--brand-400); }
 [data-theme="dark"] .chat-msg.chat-customer { background: var(--neutral-100); color: var(--neutral-600); }
 [data-theme="dark"] .chat-msg.chat-customer strong { color: var(--neutral-400); }
-.call-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; font-size: 13px; margin-top: 4px; }
+.call-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; font-size: 13px; margin-top: 4px; }
 .call-detail-label { color: var(--neutral-500); font-weight: 500; }
-.call-summary { background: var(--neutral-50); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 12px; font-size: 13px; }
-.call-transcript { border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 12px; max-height: 400px; overflow-y: auto; }
+.call-summary { background: var(--neutral-50); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+.call-transcript { border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 10px; max-height: 250px; overflow-y: auto; }
 .call-transcript .ai-text { color: #D4AF37; }
 .call-actions button { padding: 6px 14px; font-size: 12px; border-radius: var(--radius-sm); border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; }
 .call-outcome { font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: 500; }

@@ -47,7 +47,7 @@ function formatLeadEmail(lead) {
         <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;">Outcome</td><td style="padding:8px;border-bottom:1px solid #eee;">${lead.callOutcome || 'Lead captured'}</td></tr>
       </table>
       <hr style="margin-top:16px;">
-      <p style="color:#888;font-size:12px;">Northstar Solutions — AI Receptionist</p>
+      <p style="color:#888;font-size:12px;">Northstar Solutions — AI Office Manager</p>
     `,
   };
 }

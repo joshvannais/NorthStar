@@ -54,7 +54,7 @@ function toggleMobileMenu() {
 <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
 <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">&#127769;</button>
 </aside><main class="main-content">
-<div class="page-header"><div><h1>Call History</h1><p>Every call your AI receptionist has handled.</p></div><button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">📞 Simulate Call</button></div>
+<div class="page-header"><div><h1>Call History</h1><p>Every call your AI Office Manager has handled.</p></div><button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">📞 Simulate Call</button></div>
 <div style="margin-bottom:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;" id="callStats">
 <div class="stat-card"><div class="stat-label">Total Calls</div><div class="stat-value" id="totalCalls">0</div></div>
 <div class="stat-card"><div class="stat-label">Avg Duration</div><div class="stat-value" id="avgDuration">—</div></div>

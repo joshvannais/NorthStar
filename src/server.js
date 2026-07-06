@@ -1,10 +1,10 @@
 /**
- * Northstar Solutions — AI Receptionist Platform
+ * Northstar Solutions — AI Office Manager Platform
  * 
  * Full-stack application with:
  * - Marketing site & contractor dashboard
  * - Real contractor auth (passwords + JWT)
- * - AI receptionist pipeline (Retell AI webhooks)
+ * - AI Office Manager pipeline (Retell AI webhooks)
  * - Lead capture, notifications, sheets sync
  * - Calendar scheduling
  */

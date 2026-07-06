@@ -1,0 +1,579 @@
+[1mdiff --git a/src/db.js b/src/db.js[m
+[1mindex bd020fa..0065c2e 100644[m
+[1m--- a/src/db.js[m
+[1m+++ b/src/db.js[m
+[36m@@ -74,25 +74,6 @@[m [masync function initDatabase() {[m
+         created_at TIMESTAMP DEFAULT NOW()[m
+       );[m
+     `);[m
+[31m-    await p.query(`[m
+[31m-      CREATE TABLE IF NOT EXISTS call_records ([m
+[31m-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),[m
+[31m-        caller_name VARCHAR(255) DEFAULT '',[m
+[31m-        service_type VARCHAR(255) NOT NULL,[m
+[31m-        estimated_price DECIMAL(10,2) NOT NULL DEFAULT 0,[m
+[31m-        job_detail VARCHAR(500) DEFAULT '',[m
+[31m-        source VARCHAR(50) DEFAULT 'simulator',[m
+[31m-        created_at TIMESTAMP DEFAULT NOW()[m
+[31m-      );[m
+[31m-    `);[m
+[31m-    // Add Jobber columns if they don't exist (for existing users tables)[m
+[31m-    try {[m
+[31m-      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_access_token TEXT`);[m
+[31m-      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_refresh_token TEXT`);[m
+[31m-      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_token_expires TIMESTAMP`);[m
+[31m-    } catch (e) {[m
+[31m-      // Columns may already exist, ignore[m
+[31m-    }[m
+ [m
+     console.log('[DB] PostgreSQL connected and tables ready');[m
+     dbAvailable = true;[m
+[1mdiff --git a/src/integrations/jobber.js b/src/integrations/jobber.js[m
+[1mdeleted file mode 100644[m
+[1mindex a858417..0000000[m
+[1m--- a/src/integrations/jobber.js[m
+[1m+++ /dev/null[m
+[36m@@ -1,323 +0,0 @@[m
+[31m-/**[m
+[31m- * Jobber Integration Module[m
+[31m- * Handles OAuth 2.0 authentication and API operations for Jobber CRM.[m
+[31m- * [m
+[31m- * Prerequisites: JOBBER_CLIENT_ID and JOBBER_CLIENT_SECRET environment variables[m
+[31m- * must be set by registering an app at https://developer.getjobber.com/[m
+[31m- */[m
+[31m-[m
+[31m-const https = require('https');[m
+[31m-const db = require('../db');[m
+[31m-[m
+[31m-const JOBBER_AUTH_URL = 'https://api.getjobber.com/api/oauth/authorize';[m
+[31m-const JOBBER_TOKEN_URL = 'https://api.getjobber.com/api/oauth/token';[m
+[31m-const JOBBER_GRAPHQL_URL = 'https://api.getjobber.com/api/graphql';[m
+[31m-const JOBBER_API_VERSION = '2024-01-01';[m
+[31m-[m
+[31m-/**[m
+[31m- * Check if Jobber integration is configured (has API credentials)[m
+[31m- */[m
+[31m-function isConfigured() {[m
+[31m-  return !!(process.env.JOBBER_CLIENT_ID && process.env.JOBBER_CLIENT_SECRET);[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Generate the OAuth 2.0 authorization URL for a contractor to connect their Jobber account.[m
+[31m- */[m
+[31m-function getAuthUrl(userId, redirectBase) {[m
+[31m-  if (!isConfigured()) return null;[m
+[31m-  const clientId = process.env.JOBBER_CLIENT_ID;[m
+[31m-  const redirectUri = `${redirectBase}/api/integrations/jobber/callback`;[m
+[31m-  const state = Buffer.from(JSON.stringify({ userId })).toString('base64');[m
+[31m-  return `${JOBBER_AUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}`;[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Exchange an authorization code for an access token.[m
+[31m- */[m
+[31m-function exchangeCode(code, redirectBase) {[m
+[31m-  return new Promise((resolve, reject) => {[m
+[31m-    const data = JSON.stringify({[m
+[31m-      client_id: process.env.JOBBER_CLIENT_ID,[m
+[31m-      client_secret: process.env.JOBBER_CLIENT_SECRET,[m
+[31m-      code,[m
+[31m-      redirect_uri: `${redirectBase}/api/integrations/jobber/callback`,[m
+[31m-      grant_type: 'authorization_code'[m
+[31m-    });[m
+[31m-    const req = https.request(JOBBER_TOKEN_URL, {[m
+[31m-      method: 'POST',[m
+[31m-      headers: { 'Content-Type': 'application/json', 'Content-Length': data.length }[m
+[31m-    }, (res) => {[m
+[31m-      let body = '';[m
+[31m-      res.on('data', chunk => body += chunk);[m
+[31m-      res.on('end', () => {[m
+[31m-        try { resolve(JSON.parse(body)); }[m
+[31m-        catch (e) { reject(new Error('Failed to parse token response')); }[m
+[31m-      });[m
+[31m-    });[m
+[31m-    req.on('error', reject);[m
+[31m-    req.write(data);[m
+[31m-    req.end();[m
+[31m-  });[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Refresh an access token using a refresh token.[m
+[31m- */[m
+[31m-function refreshToken(refreshToken) {[m
+[31m-  return new Promise((resolve, reject) => {[m
+[31m-    const data = JSON.stringify({[m
+[31m-      client_id: process.env.JOBBER_CLIENT_ID,[m
+[31m-      client_secret: process.env.JOBBER_CLIENT_SECRET,[m
+[31m-      refresh_token: refreshToken,[m
+[31m-      grant_type: 'refresh_token'[m
+[31m-    });[m
+[31m-    const req = https.request(JOBBER_TOKEN_URL, {[m
+[31m-      method: 'POST',[m
+[31m-      headers: { 'Content-Type': 'application/json', 'Content-Length': data.length }[m
+[31m-    }, (res) => {[m
+[31m-      let body = '';[m
+[31m-      res.on('data', chunk => body += chunk);[m
+[31m-      res.on('end', () => {[m
+[31m-        try { resolve(JSON.parse(body)); }[m
+[31m-        catch (e) { reject(new Error('Failed to parse token refresh response')); }[m
+[31m-      });[m
+[31m-    });[m
+[31m-    req.on('error', reject);[m
+[31m-    req.write(data);[m
+[31m-    req.end();[m
+[31m-  });[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Execute a GraphQL query against the Jobber API.[m
+[31m- */[m
+[31m-function graphql(query, variables, accessToken) {[m
+[31m-  return new Promise((resolve, reject) => {[m
+[31m-    const data = JSON.stringify({ query, variables });[m
+[31m-    const req = https.request(JOBBER_GRAPHQL_URL, {[m
+[31m-      method: 'POST',[m
+[31m-      headers: {[m
+[31m-        'Content-Type': 'application/json',[m
+[31m-        'Authorization': `Bearer ${accessToken}`,[m
+[31m-        'X-Api-Version': JOBBER_API_VERSION,[m
+[31m-        'Content-Length': data.length[m
+[31m-      }[m
+[31m-    }, (res) => {[m
+[31m-      let body = '';[m
+[31m-      res.on('data', chunk => body += chunk);[m
+[31m-      res.on('end', () => {[m
+[31m-        try { resolve(JSON.parse(body)); }[m
+[31m-        catch (e) { reject(new Error('Failed to parse GraphQL response')); }[m
+[31m-      });[m
+[31m-    });[m
+[31m-    req.on('error', reject);[m
+[31m-    req.write(data);[m
+[31m-    req.end();[m
+[31m-  });[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Get stored Jobber tokens for a user from the database.[m
+[31m- */[m
+[31m-async function getTokens(userId) {[m
+[31m-  if (!db.isAvailable()) return null;[m
+[31m-  try {[m
+[31m-    const result = await db.query([m
+[31m-      'SELECT jobber_access_token, jobber_refresh_token, jobber_token_expires FROM users WHERE id = $1',[m
+[31m-      [userId][m
+[31m-    );[m
+[31m-    if (result.rows.length === 0) return null;[m
+[31m-    const row = result.rows[0];[m
+[31m-    if (!row.jobber_access_token) return null;[m
+[31m-    return {[m
+[31m-      accessToken: row.jobber_access_token,[m
+[31m-      refreshToken: row.jobber_refresh_token,[m
+[31m-      expiresAt: row.jobber_token_expires[m
+[31m-    };[m
+[31m-  } catch (err) {[m
+[31m-    console.error('[Jobber] Get tokens error:', err.message);[m
+[31m-    return null;[m
+[31m-  }[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Save Jobber tokens for a user.[m
+[31m- */[m
+[31m-async function saveTokens(userId, accessToken, refreshToken, expiresIn) {[m
+[31m-  if (!db.isAvailable()) return;[m
+[31m-  const expiresAt = new Date(Date.now() + (expiresIn || 3600) * 1000);[m
+[31m-  try {[m
+[31m-    await db.query([m
+[31m-      'UPDATE users SET jobber_access_token = $1, jobber_refresh_token = $2, jobber_token_expires = $3 WHERE id = $4',[m
+[31m-      [accessToken, refreshToken, expiresAt, userId][m
+[31m-    );[m
+[31m-  } catch (err) {[m
+[31m-    console.error('[Jobber] Save tokens error:', err.message);[m
+[31m-  }[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Get a valid access token for a user (refreshes if expired).[m
+[31m- */[m
+[31m-async function getValidAccessToken(userId) {[m
+[31m-  const tokens = await getTokens(userId);[m
+[31m-  if (!tokens) return null;[m
+[31m-  [m
+[31m-  // Check if token is expired (with 5 min buffer)[m
+[31m-  if (tokens.expiresAt && new Date(tokens.expiresAt).getTime() - 300000 < Date.now()) {[m
+[31m-    try {[m
+[31m-      const refreshed = await refreshToken(tokens.refreshToken);[m
+[31m-      if (refreshed.access_token) {[m
+[31m-        await saveTokens(userId, refreshed.access_token, refreshed.refresh_token || tokens.refreshToken, refreshed.expires_in);[m
+[31m-        return refreshed.access_token;[m
+[31m-      }[m
+[31m-    } catch (err) {[m
+[31m-      console.error('[Jobber] Token refresh failed:', err.message);[m
+[31m-      return null;[m
+[31m-    }[m
+[31m-  }[m
+[31m-  return tokens.accessToken;[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Create a client in Jobber from a lead.[m
+[31m- * Returns the Jobber client ID on success.[m
+[31m- */[m
+[31m-async function createClient(lead, accessToken) {[m
+[31m-  const mutation = `[m
+[31m-    mutation CreateClient($input: ClientCreateInput!) {[m
+[31m-      clientCreate(input: $input) {[m
+[31m-        client {[m
+[31m-          id[m
+[31m-          firstName[m
+[31m-          lastName[m
+[31m-        }[m
+[31m-        errors {[m
+[31m-          message[m
+[31m-        }[m
+[31m-      }[m
+[31m-    }[m
+[31m-  `;[m
+[31m-  [m
+[31m-  const nameParts = (lead.customerName || 'Unknown').split(' ');[m
+[31m-  const firstName = nameParts[0] || 'Unknown';[m
+[31m-  const lastName = nameParts.slice(1).join(' ') || 'Client';[m
+[31m-  [m
+[31m-  const variables = {[m
+[31m-    input: {[m
+[31m-      firstName,[m
+[31m-      lastName,[m
+[31m-      emails: [{ address: lead.email || '' }],[m
+[31m-      phoneNumbers: [{ number: lead.phoneNumber || '' }],[m
+[31m-      addresses: [{[m
+[31m-        street1: lead.address || '',[m
+[31m-        city: lead.city || '',[m
+[31m-        province: lead.state || '',[m
+[31m-        zip: lead.zip || ''[m
+[31m-      }][m
+[31m-    }[m
+[31m-  };[m
+[31m-  [m
+[31m-  const result = await graphql(mutation, variables, accessToken);[m
+[31m-  if (result.data?.clientCreate?.client) {[m
+[31m-    return result.data.clientCreate.client.id;[m
+[31m-  }[m
+[31m-  console.error('[Jobber] Create client error:', JSON.stringify(result.errors || result));[m
+[31m-  return null;[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Create a job/request in Jobber for a lead.[m
+[31m- * Optionally linked to a client.[m
+[31m- */[m
+[31m-async function createJob(lead, clientId, accessToken) {[m
+[31m-  const mutation = `[m
+[31m-    mutation CreateJob($input: JobCreateInput!) {[m
+[31m-      jobCreate(input: $input) {[m
+[31m-        job {[m
+[31m-          id[m
+[31m-          title[m
+[31m-        }[m
+[31m-        errors {[m
+[31m-          message[m
+[31m-        }[m
+[31m-      }[m
+[31m-    }[m
+[31m-  `;[m
+[31m-  [m
+[31m-  const variables = {[m
+[31m-    input: {[m
+[31m-      clientId,[m
+[31m-      title: `${lead.serviceRequested || 'Service'} - ${lead.customerName || 'Lead'}`,[m
+[31m-      description: lead.notes || lead.summary || `Lead from NorthStar AI: ${lead.serviceRequested || 'Service needed'}`,[m
+[31m-      status: 'UNASSIGNED'[m
+[31m-    }[m
+[31m-  };[m
+[31m-  [m
+[31m-  const result = await graphql(mutation, variables, accessToken);[m
+[31m-  if (result.data?.jobCreate?.job) {[m
+[31m-    return result.data.jobCreate.job.id;[m
+[31m-  }[m
+[31m-  console.error('[Jobber] Create job error:', JSON.stringify(result.errors || result));[m
+[31m-  return null;[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Push a lead to Jobber — creates a client and a job.[m
+[31m- * Returns { clientId, jobId } or null on failure.[m
+[31m- */[m
+[31m-async function pushLead(lead, userId) {[m
+[31m-  const accessToken = await getValidAccessToken(userId);[m
+[31m-  if (!accessToken) {[m
+[31m-    console.log('[Jobber] No valid token for user', userId);[m
+[31m-    return null;[m
+[31m-  }[m
+[31m-  [m
+[31m-  try {[m
+[31m-    const clientId = await createClient(lead, accessToken);[m
+[31m-    if (!clientId) return null;[m
+[31m-    [m
+[31m-    const jobId = await createJob(lead, clientId, accessToken);[m
+[31m-    return { clientId, jobId };[m
+[31m-  } catch (err) {[m
+[31m-    console.error('[Jobber] Push lead error:', err.message);[m
+[31m-    return null;[m
+[31m-  }[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Disconnect Jobber for a user (clear stored tokens).[m
+[31m- */[m
+[31m-async function disconnect(userId) {[m
+[31m-  if (!db.isAvailable()) return;[m
+[31m-  try {[m
+[31m-    await db.query([m
+[31m-      'UPDATE users SET jobber_access_token = NULL, jobber_refresh_token = NULL, jobber_token_expires = NULL WHERE id = $1',[m
+[31m-      [userId][m
+[31m-    );[m
+[31m-  } catch (err) {[m
+[31m-    console.error('[Jobber] Disconnect error:', err.message);[m
+[31m-  }[m
+[31m-}[m
+[31m-[m
+[31m-/**[m
+[31m- * Get connection status for a user.[m
+[31m- */[m
+[31m-async function getStatus(userId) {[m
+[31m-  const tokens = await getTokens(userId);[m
+[31m-  return {[m
+[31m-    connected: !!tokens,[m
+[31m-    configured: isConfigured()[m
+[31m-  };[m
+[31m-}[m
+[31m-[m
+[31m-module.exports = {[m
+[31m-  isConfigured,[m
+[31m-  getAuthUrl,[m
+[31m-  exchangeCode,[m
+[31m-  saveTokens,[m
+[31m-  getStatus,[m
+[31m-  disconnect,[m
+[31m-  pushLead[m
+[31m-};[m
+\ No newline at end of file[m
+[1mdiff --git a/src/routes/api.js b/src/routes/api.js[m
+[1mindex 8bfa6a9..363ba03 100644[m
+[1m--- a/src/routes/api.js[m
+[1m+++ b/src/routes/api.js[m
+[36m@@ -6,8 +6,6 @@[m [mconst express = require('express');[m
+ const { getAllLeads, getLead } = require('../leads/store');[m
+ const { handleWebhook } = require('../retell/webhook');[m
+ const { scheduleEstimate } = require('../calendar/client');[m
+[31m-const db = require('../db');[m
+[31m-const jobber = require('../integrations/jobber');[m
+ [m
+ const router = express.Router();[m
+ [m
+[36m@@ -16,49 +14,8 @@[m [mconst router = express.Router();[m
+  * Health check endpoint.[m
+  */[m
+ router.get('/health', (req, res) => {[m
+[31m-      res.json({ status: 'ok', service: 'northstar-solutions', version: '1.0.0' });[m
+[31m-    });[m
+[31m-[m
+[31m-    /**[m
+[31m-     * GET /api/stats[m
+[31m-     * Return aggregate stats: total calls, total revenue, served from database.[m
+[31m-     */[m
+[31m-    router.get('/stats', async (req, res) => {[m
+[31m-      if (!db.isAvailable()) {[m
+[31m-        return res.json({ totalCalls: 0, totalRevenue: 0 });[m
+[31m-      }[m
+[31m-      try {[m
+[31m-        const result = await db.query("SELECT COUNT(*)::int AS calls, COALESCE(SUM(estimated_price), 0)::float AS revenue FROM call_records WHERE source = 'real'");[m
+[31m-        res.json({[m
+[31m-          totalCalls: result.rows[0].calls,[m
+[31m-          totalRevenue: Math.round(result.rows[0].revenue),[m
+[31m-        });[m
+[31m-      } catch (err) {[m
+[31m-        console.error('[API] Stats error:', err.message);[m
+[31m-        res.json({ totalCalls: 0, totalRevenue: 0 });[m
+[31m-      }[m
+[31m-    });[m
+[31m-[m
+[31m-    /**[m
+[31m-     * POST /api/calls/record[m
+[31m-     * Record a simulated call with pricing data from the engine.[m
+[31m-     */[m
+[31m-    router.post('/calls/record', async (req, res) => {[m
+[31m-      if (!db.isAvailable()) {[m
+[31m-        return res.json({ success: true, note: 'DB not available, call not persisted' });[m
+[31m-      }[m
+[31m-      try {[m
+[31m-        const { callerName, serviceType, estimatedPrice, jobDetail, source } = req.body;[m
+[31m-        await db.query([m
+[31m-          'INSERT INTO call_records (caller_name, service_type, estimated_price, job_detail, source) VALUES ($1, $2, $3, $4, $5)',[m
+[31m-          [callerName || '', serviceType || 'Unknown', estimatedPrice || 0, jobDetail || '', source || 'simulator'][m
+[31m-        );[m
+[31m-        res.json({ success: true });[m
+[31m-      } catch (err) {[m
+[31m-        console.error('[API] Record call error:', err.message);[m
+[31m-        res.status(500).json({ error: 'Failed to record call' });[m
+[31m-      }[m
+[31m-    });[m
+[32m+[m[32m  res.json({ status: 'ok', service: 'northstar-solutions', version: '1.0.0' });[m
+[32m+[m[32m});[m
+ [m
+ /**[m
+  * GET /api/leads[m
+[36m@@ -151,131 +108,4 @@[m [mrouter.post('/retell/create-agent', async (req, res) => {[m
+   res.json(result || { error: 'Retell API not configured' });[m
+ });[m
+ [m
+[31m-/**[m
+[31m- * Jobber Integration Routes[m
+[31m- */[m
+[31m-[m
+[31m-/**[m
+[31m- * GET /api/integrations/jobber/status[m
+[31m- * Check if Jobber is connected for the current user.[m
+[31m- */[m
+[31m-router.get('/integrations/jobber/status', async (req, res) => {[m
+[31m-  const userId = req.query.userId;[m
+[31m-  const debug = {[m
+[31m-    hasClientId: !!process.env.JOBBER_CLIENT_ID,[m
+[31m-    hasClientSecret: !!process.env.JOBBER_CLIENT_SECRET,[m
+[31m-    clientIdLength: process.env.JOBBER_CLIENT_ID ? process.env.JOBBER_CLIENT_ID.length : 0,[m
+[31m-    configured: jobber.isConfigured()[m
+[31m-  };[m
+[31m-  if (!userId) return res.json({ connected: false, ...debug });[m
+[31m-  const status = await jobber.getStatus(userId);[m
+[31m-  res.json({ ...status, ...debug });[m
+[31m-});[m
+[31m-[m
+[31m-/**[m
+[31m- * GET /api/integrations/jobber/auth[m
+[31m- * Start the OAuth flow to connect Jobber.[m
+[31m- */[m
+[31m-router.get('/integrations/jobber/auth', (req, res) => {[m
+[31m-  const userId = req.query.userId;[m
+[31m-  if (!userId) return res.status(400).json({ error: 'Missing userId' });[m
+[31m-  const authUrl = jobber.getAuthUrl(userId, `${req.protocol}://${req.get('host')}`);[m
+[31m-  if (!authUrl) return res.status(503).json({ error: 'Jobber integration not configured. Set JOBBER_CLIENT_ID and JOBBER_CLIENT_SECRET.' });[m
+[31m-  res.redirect(authUrl);[m
+[31m-});[m
+[31m-[m
+[31m-/**[m
+[31m- * GET /api/integrations/jobber/callback[m
+[31m- * Handle the OAuth callback from Jobber.[m
+[31m- */[m
+[31m-router.get('/integrations/jobber/callback', async (req, res) => {[m
+[31m-  const { code, state } = req.query;[m
+[31m-  if (!code) return res.status(400).send('Missing authorization code');[m
+[31m-  [m
+[31m-  try {[m
+[31m-    let userId = null;[m
+[31m-    if (state) {[m
+[31m-      try { userId = JSON.parse(Buffer.from(state, 'base64').toString()).userId; } catch(e) {}[m
+[31m-    }[m
+[31m-    [m
+[31m-    const tokens = await jobber.exchangeCode(code, `${req.protocol}://${req.get('host')}`);[m
+[31m-    if (tokens.access_token && userId) {[m
+[31m-      await jobber.saveTokens(userId, tokens.access_token, tokens.refresh_token, tokens.expires_in);[m
+[31m-    }[m
+[31m-    [m
+[31m-    res.redirect('/dashboard/integrations?jobber=connected');[m
+[31m-  } catch (err) {[m
+[31m-    console.error('[Jobber] OAuth callback error:', err.message);[m
+[31m-    res.status(500).send('Failed to connect Jobber. Please try again.');[m
+[31m-  }[m
+[31m-});[m
+[31m-[m
+[31m-/**[m
+[31m- * POST /api/integrations/jobber/disconnect[m
+[31m- * Disconnect Jobber for a user.[m
+[31m- */[m
+[31m-router.post('/integrations/jobber/disconnect', async (req, res) => {[m
+[31m-  const userId = req.body.userId;[m
+[31m-  if (!userId) return res.status(400).json({ error: 'Missing userId' });[m
+[31m-  await jobber.disconnect(userId);[m
+[31m-  res.json({ success: true });[m
+[31m-});[m
+[31m-[m
+[31m-/**[m
+[31m- * POST /api/contact[m
+[31m- * Submit a contact form message.[m
+[31m- */[m
+[31m-router.post('/contact', async (req, res) => {[m
+[31m-  try {[m
+[31m-    const { name, email, subject, message } = req.body;[m
+[31m-    if (!name || !email || !subject || !message) {[m
+[31m-      return res.status(400).json({ error: 'All fields are required' });[m
+[31m-    }[m
+[31m-    [m
+[31m-    const fs = require('fs');[m
+[31m-    const path = require('path');[m
+[31m-    const contactsDir = path.join(__dirname, '..', '..', 'data');[m
+[31m-    if (!fs.existsSync(contactsDir)) fs.mkdirSync(contactsDir, { recursive: true });[m
+[31m-    [m
+[31m-    const entry = {[m
+[31m-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),[m
+[31m-      name,[m
+[31m-      email,[m
+[31m-      subject,[m
+[31m-      message,[m
+[31m-      createdAt: new Date().toISOString(),[m
+[31m-      status: 'new'[m
+[31m-    };[m
+[31m-    [m
+[31m-    const filePath = path.join(contactsDir, 'contact-messages.json');[m
+[31m-    let messages = [];[m
+[31m-    if (fs.existsSync(filePath)) {[m
+[31m-      messages = JSON.parse(fs.readFileSync(filePath, 'utf8'));[m
+[31m-    }[m
+[31m-    messages.push(entry);[m
+[31m-    fs.writeFileSync(filePath, JSON.stringify(messages, null, 2));[m
+[31m-    [m
+[31m-    console.log(`[Contact] New message from ${name} (${email}): ${subject}`);[m
+[31m-    res.json({ success: true, message: 'Message received. We\'ll get back to you soon.' });[m
+[31m-  } catch (err) {[m
+[31m-    console.error('[Contact] Error:', err.message);[m
+[31m-    res.status(500).json({ error: 'Failed to submit message' });[m
+[31m-  }[m
+[31m-});[m
+[31m-[m
+[31m-/**[m
+[31m- * GET /api/contact/messages[m
+[31m- * List contact messages (internal use).[m
+[31m- */[m
+[31m-router.get('/contact/messages', (req, res) => {[m
+[31m-  const fs = require('fs');[m
+[31m-  const path = require('path');[m
+[31m-  const filePath = path.join(__dirname, '..', '..', 'data', 'contact-messages.json');[m
+[31m-  if (fs.existsSync(filePath)) {[m
+[31m-    const messages = JSON.parse(fs.readFileSync(filePath, 'utf8'));[m
+[31m-    return res.json({ messages, count: messages.length });[m
+[31m-  }[m
+[31m-  res.json({ messages: [], count: 0 });[m
+[31m-});[m
+[31m-[m
+[31m-module.exports = router;[m
+[32m+[m[32mmodule.exports = router;[m
+\ No newline at end of file[m
+[1mdiff --git a/src/server.js b/src/server.js[m
+[1mindex da69d1f..5ad2da6 100644[m
+[1m--- a/src/server.js[m
+[1m+++ b/src/server.js[m
+[36m@@ -41,7 +41,6 @@[m [mconst pages = {[m
+   '/dashboard/calls': 'public/dashboard/calls.html',[m
+   '/dashboard/my-number': 'public/dashboard/my-number.html',[m
+   '/dashboard/settings': 'public/dashboard/settings.html',[m
+[31m-  '/dashboard/integrations': 'public/dashboard/integrations.html',[m
+   '/contact': 'public/contact.html',[m
+   '/privacy': 'public/privacy.html',[m
+   '/terms': 'public/terms.html',[m
+[36m@@ -363,7 +362,6 @@[m [masync function start() {[m
+     console.log(`  ${baseUrl}/login           → Sign in`);[m
+     console.log(`  ${baseUrl}/signup          → Sign up (14-day free trial)`);[m
+     console.log(`  ${baseUrl}/dashboard       → Contractor dashboard`);[m
+[31m-    console.log(`  ${baseUrl}/dashboard/integrations → Integrations`);[m
+     console.log(`  ${baseUrl}/admin           → Admin panel`);[m
+     console.log('');[m
+     console.log('📍 Auth API:');[m

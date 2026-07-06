@@ -1502,12 +1502,56 @@ tr:hover td { background: var(--neutral-50); }
 }
 [data-theme="dark"] .stat-card-revenue .stat-value { color: var(--brand-300); }
 
-/* FEATURE: Revenue KPI Card */
-.stat-card-revenue { background: linear-gradient(135deg, #FFF8E7, #FFECB3) !important; border: 1px solid var(--brand-300) !important; }
-.stat-card-revenue .stat-value { color: var(--brand-600); }
-.revenue-positive { color: var(--success) !important; }
-[data-theme="dark"] .stat-card-revenue { background: linear-gradient(135deg, #2a2510, #3d3010) !important; border-color: var(--brand-700) !important; }
-[data-theme="dark"] .stat-card-revenue .stat-value { color: var(--brand-300); }
+/* FEATURE: Legal Content Styles */
+.legal-content { max-width: 720px; margin: 0 auto; padding: 60px 24px; }
+.legal-content h1 { font-size: clamp(28px,5vw,36px); font-weight: 700; margin-bottom: 8px; color: var(--neutral-900); }
+.legal-content .last-updated { color: var(--neutral-500); font-size: 13px; margin-bottom: 32px; }
+.legal-content h2 { font-size: 20px; font-weight: 600; margin: 32px 0 12px; color: var(--neutral-800); }
+.legal-content p, .legal-content li { font-size: 15px; color: var(--neutral-600); line-height: 1.7; margin-bottom: 16px; }
+.legal-content ul { margin: 12px 0 20px 24px; }
+.legal-content li { font-size: 14px; margin-bottom: 6px; }
+[data-theme="dark"] .legal-content h1 { color: var(--neutral-800); }
+[data-theme="dark"] .legal-content h2 { color: var(--neutral-700); }
+[data-theme="dark"] .legal-content p,
+[data-theme="dark"] .legal-content li { color: var(--neutral-600); }
+
+/* FEATURE: Trust Badges & Footer Standardization */
+.footer-trust {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--neutral-400);
+}
+.footer-trust span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.footer-links a {
+  color: var(--neutral-500);
+  text-decoration: none;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+.footer-links a:hover { color: var(--brand-600); }
+.footer-theme-btn {
+  text-align: center;
+  padding: 24px 16px;
+  border-top: 1px solid var(--neutral-200);
+}
+[data-theme="dark"] .footer-trust { color: var(--neutral-500); }
+[data-theme="dark"] .footer-links a { color: var(--neutral-500); }
+[data-theme="dark"] .footer-links a:hover { color: var(--brand-400); }
 
 /* FEATURE: Call History */
 .call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }

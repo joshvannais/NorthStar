@@ -1737,3 +1737,27 @@ tr:hover td { background: var(--neutral-50); }
   .stats-grid { grid-template-columns: 1fr; }
   .analytics-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* FEATURE: Call History Polish */
+.call-search-bar { margin-bottom: 12px; }
+.call-filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.call-filters .filter-group { display: flex; gap: 4px; align-items: center; }
+.call-filters .filter-separator { width: 1px; height: 24px; background: var(--neutral-300); margin: 0 4px; }
+.call-filters .filter-right { margin-left: auto; }
+.call-filter-btn { padding: 5px 12px; font-size: 12px; border-radius: 20px; border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; color: var(--neutral-600); transition: all 0.2s; white-space: nowrap; }
+.call-filter-btn:hover { border-color: var(--brand-300); color: var(--brand-600); }
+.call-filter-btn.active { background: var(--brand-600); color: white; border-color: var(--brand-600); }
+
+/* Dark mode for expanded call card */
+[data-theme="dark"] .call-card-body {
+  background: var(--neutral-100);
+  border-top: 1px solid var(--neutral-300);
+}
+[data-theme="dark"] .call-summary {
+  background: var(--neutral-200);
+  color: var(--neutral-700);
+}
+[data-theme="dark"] .call-filters .filter-separator { background: var(--neutral-400); }
+[data-theme="dark"] .call-filter-btn { background: var(--neutral-100); border-color: var(--neutral-300); color: var(--neutral-500); }
+[data-theme="dark"] .call-filter-btn:hover { border-color: var(--brand-400); color: var(--brand-300); }
+[data-theme="dark"] .call-filter-btn.active { background: var(--brand-600); color: var(--neutral-900); border-color: var(--brand-500); }

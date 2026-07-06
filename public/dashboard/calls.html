@@ -61,11 +61,18 @@ function toggleMobileMenu() {
 <div class="stat-card"><div class="stat-label">Avg Duration</div><div class="stat-value" id="avgDuration">—</div></div>
 <div class="stat-card"><div class="stat-label">Answer Rate</div><div class="stat-value" id="answerRate">—</div></div>
 </div>
+<div class="call-search-bar">
+<input type="text" id="callSearchInput" placeholder="🔍 Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)" style="width:100%;padding:10px 14px;border:1px solid var(--neutral-300);border-radius:var(--radius-md);font-size:14px;background:var(--neutral-100);color:var(--neutral-800);box-sizing:border-box;">
+</div>
 <div class="call-filters">
-<button class="call-filter-btn active" data-filter="all" onclick="setFilter('all')">All Calls</button>
-<button class="call-filter-btn" data-filter="answered" onclick="setFilter('answered')">Answered</button>
-<button class="call-filter-btn" data-filter="missed" onclick="setFilter('missed')">Missed</button>
-<button class="call-filter-btn" data-filter="voicemail" onclick="setFilter('voicemail')">Voicemail</button>
+<button class="call-filter-btn active" data-filter="all" onclick="setFilter('all')">📋 All</button>
+<button class="call-filter-btn" data-filter="booked" onclick="setFilter('booked')">🟢 Booked</button>
+<button class="call-filter-btn" data-filter="estimate" onclick="setFilter('estimate')">🔵 Estimate</button>
+<button class="call-filter-btn" data-filter="follow-up" onclick="setFilter('follow-up')">🟡 Follow Up</button>
+<button class="call-filter-btn" data-filter="voicemail" onclick="setFilter('voicemail')">⚪ Voicemail</button>
+<button class="call-filter-btn" data-filter="no-interest" onclick="setFilter('no-interest')">⚫ No Interest</button>
+<button class="call-filter-btn" data-filter="today" onclick="setFilter('today')">📅 Today</button>
+<button class="call-filter-btn" data-filter="week" onclick="setFilter('week')">📅 This Week</button>
 <button class="call-filter-btn" onclick="clearAllCalls()" style="margin-left:auto;border-color:var(--danger);color:var(--danger);">🗑 Clear All</button>
 </div>
 <div id="callHistoryList"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div></div>
@@ -1011,22 +1018,43 @@ function genTranscript(svc,s,name,num,sn,st){
       };
     }
 // Initialize from sessionStorage if data exists
-let allCalls=[],curFilter="all";
+let allCalls=[],curFilter="all",curSearch="";
+function matchSearch(c,q){
+  if(!q)return true;
+  const l=q.toLowerCase();
+  return (c.caller&&c.caller.toLowerCase().includes(l))||
+    (c.phone&&c.phone.toLowerCase().includes(l))||
+    (c.address&&c.address.toLowerCase().includes(l))||
+    (c.service&&c.service.toLowerCase().includes(l))||
+    (c.transcript&&c.transcript.toLowerCase().includes(l))||
+    (c.summary&&c.summary.toLowerCase().includes(l));
+}
+function isToday(d){const t=new Date();return d.getDate()===t.getDate()&&d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear();}
+function isThisWeek(d){const t=new Date();const w=t.getTime()-t.getDay()*86400000;return d.getTime()>=w;}
 try{const d=sessionStorage.getItem("northstar_calls");if(d)allCalls=JSON.parse(d);const nav=performance.getEntriesByType('navigation');if(nav.length>0&&nav[0].type==='reload')sessionStorage.removeItem("northstar_calls")}catch(e){}
 function loadCalls(){renderCalls()}
 function renderCalls(){
-  const f=curFilter==="all"?allCalls:allCalls.filter(c=>c.status===curFilter);
+  let f=allCalls;
+  if(curSearch)f=f.filter(c=>matchSearch(c,curSearch));
+  if(curFilter!="all"){
+    if(curFilter==="today")f=f.filter(c=>{try{const d=new Date(c.receivedAt);return isToday(d);}catch(e){return false;}});
+    else if(curFilter==="week")f=f.filter(c=>{try{const d=new Date(c.receivedAt);return isThisWeek(d);}catch(e){return false;}});
+    else if(curFilter==="voicemail")f=f.filter(c=>c.status==="voicemail");
+    else f=f.filter(c=>c.outcome===curFilter);
+  }
   const el=document.getElementById("callHistoryList");
   if(f.length===0){el.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';upStats();return;}
-  const ol={"appointment-set":"Appointment Set","lead-captured":"Lead Captured","follow-up":"Follow-up Needed","no-interest":"No Interest"};
+  const oc={"appointment-set":{bg:"#059669",label:"Booked"},"lead-captured":{bg:"#2563eb",label:"Estimate"},"follow-up":{bg:"#d97706",label:"Follow Up"},"no-interest":{bg:"#6b7280",label:"No Interest"}};
   const sc={answered:"#059669",missed:"#dc2626",voicemail:"#d97706"};
   let html="";
   f.forEach((c,i)=>{
     const inits=c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
-    html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+' '+(c.icon||"")+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge" style="background:'+sc[c.status]+'20;color:'+sc[c.status]+'">'+c.status.charAt(0).toUpperCase()+c.status.slice(1)+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div style="margin:12px 0;padding:12px;background:var(--neutral-200);border-radius:var(--radius-sm);"><div style="font-size:15px;font-weight:700;color:var(--brand-600);">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div style="font-size:12px;color:var(--neutral-500);margin-top:2px;">'+c.jobDetail+'</div>'+((c.pricingBreakdown&&c.pricingBreakdown.length>0)?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(function(pb){return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>';}).join('')+'<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:6px 0 0;border-top:2px solid var(--neutral-400);margin-top:4px;"><span>Total</span><span>$'+c.avgPrice.toLocaleString()+'</span></div></div>':'')+<div class="call-detail-label">Summary</div><div class="call-summary">'+c.summary+'</div><div class="call-detail-label">Transcript</div><div class="call-transcript">'+c.transcript+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
+    const ob=oc[c.outcome]||{bg:"#6b7280",label:c.outcome};
+    html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+' '+(c.icon||"")+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge" style="background:'+ob.bg+'20;color:'+ob.bg+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div style="margin:12px 0;padding:12px;background:var(--neutral-200);border-radius:var(--radius-sm);"><div style="font-size:15px;font-weight:700;color:var(--brand-600);">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div style="font-size:12px;color:var(--neutral-500);margin-top:2px;">'+c.jobDetail+'</div>'+((c.pricingBreakdown&&c.pricingBreakdown.length>0)?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(function(pb){return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>';}).join('')+'<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:6px 0 0;border-top:2px solid var(--neutral-400);margin-top:4px;"><span>Total</span><span>$'+c.avgPrice.toLocaleString()+'</span></div></div>':'')+'<div class="call-detail-label">Summary</div><div class="call-summary">'+c.summary+'</div><div class="call-detail-label">Transcript</div><div class="call-transcript">'+c.transcript+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to \'+c.phone+\'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
   });
   el.innerHTML=html;upStats();
 }
+function setSearch(q){curSearch=q;renderCalls()}
 function toggleCall(i){document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});document.getElementById("call-"+i).classList.toggle("expanded")}
 function setFilter(f){curFilter=f;document.querySelectorAll(".call-filter-btn").forEach(b=>b.classList.toggle("active",b.dataset.filter===f));renderCalls()}
 function upStats(){const t=allCalls.length;const a=allCalls.filter(c=>c.status==="answered").length;const ts=allCalls.reduce((s,c)=>{const p=c.duration.split(":");return s+parseInt(p[0])*60+parseInt(p[1])},0);const am=t>0?Math.floor(ts/t/60):0;const as=t>0?Math.floor(ts/t%60):0;const r=t>0?Math.round((a/t)*100):0;document.getElementById("totalCalls").textContent=t;document.getElementById("avgDuration").textContent=t>0?am+":"+as.toString().padStart(2,"0"):"—";document.getElementById("answerRate").textContent=t>0?r+"%":"—"}

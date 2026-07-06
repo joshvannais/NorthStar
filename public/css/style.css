@@ -1105,9 +1105,9 @@ tr:hover td { background: var(--neutral-50); }
 }
 
 [data-theme="dark"] .btn-demo {
-  background: #f59e0b;
+  background: var(--accent);
   color: white;
-  border-color: #f59e0b;
+  border-color: var(--accent);
 }
 
 [data-theme="dark"] .btn-demo:hover {

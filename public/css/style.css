@@ -201,14 +201,15 @@ img, svg, video, canvas {
 }
 
 .btn-demo {
-  background: #f59e0b;
+  background: var(--accent);
   color: white;
-  border-color: #f59e0b;
+  border-color: var(--accent);
 }
 
 .btn-demo:hover {
-  background: #d97706;
+  background: var(--accent-hover);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .btn-sm {

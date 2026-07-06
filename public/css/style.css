@@ -1555,7 +1555,7 @@ tr:hover td { background: var(--neutral-50); }
 
 #callHistoryList { display: flex; flex-direction: column; gap: 20px; }
 /* FEATURE: Call History */
-.call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: 16px; }
+.call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: 16px; overflow: hidden; }
 .call-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; cursor: pointer; gap: 12px; }
 .call-card-header:hover { background: var(--neutral-50); }
 
@@ -1752,7 +1752,7 @@ tr:hover td { background: var(--neutral-50); }
   .call-filters .call-filters-row2 { gap: 3px; }
   .call-filter-btn { padding: 4px 8px; font-size: 11px; }
 }
-.call-filter-btn { padding: 5px 12px; font-size: 12px; border-radius: 20px; border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; color: var(--neutral-600); transition: all 0.2s; white-space: nowrap; }
+.call-filter-btn { padding: 5px 12px; font-size: 12px; border-radius: 20px; border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; color: var(--neutral-600); transition: all 0.2s; white-space: nowrap; flex: 0 0 auto; }
 .call-filter-btn:hover { border-color: var(--brand-300); color: var(--brand-600); }
 .call-filter-btn.active { background: var(--brand-600); color: white; border-color: var(--brand-600); }
 

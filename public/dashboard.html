@@ -203,7 +203,8 @@ function toggleMobileMenu() {
     window.showToast = showNotification;
   </script>
 
-  <script src="/js/api.js"></script>
+  <script src="/js/simulator.js"></script>
+<script src="/js/api.js"></script>
   <script>
     // Welcome message
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -320,7 +321,7 @@ function toggleMobileMenu() {
         <th>Customer</th><th>Phone</th><th>Service</th><th>Date</th><th>Status</th><th>Urgency</th>
       </tr></thead><tbody>`;
 
-      leads.slice().reverse().forEach(lead => {
+      leads.slice().forEach(lead => {
         const urgencyClass = lead.urgency ? 'urgency-high' : 'urgency-normal';
         const urgencyText = lead.urgency || 'Normal';
         html += `<tr>

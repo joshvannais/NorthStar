@@ -1544,3 +1544,125 @@ tr:hover td { background: var(--neutral-50); }
 
 [data-theme="dark"] #demoResultPrice { color: var(--brand-400) !important; }
 
+
+/* FEATURE: Dashboard KPI Cards with Icons */
+.stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  background: var(--neutral-50);
+  color: var(--neutral-500);
+}
+.stat-card-calls .stat-icon { background: #dbeafe; color: #1d4ed8; }
+.stat-card-leads .stat-icon { background: #d1fae5; color: #047857; }
+.stat-card-appointments .stat-icon { background: #fef3c7; color: #b45309; }
+.stat-card-revenue .stat-icon { background: #fef3c7; color: #b8860b; }
+.stat-card-missed .stat-icon { background: #f3e8ff; color: #7e22ce; }
+[data-theme="dark"] .stat-card-calls .stat-icon { background: rgba(30,64,175,0.2); color: #93c5fd; }
+[data-theme="dark"] .stat-card-leads .stat-icon { background: rgba(4,120,87,0.2); color: #6ee7b7; }
+[data-theme="dark"] .stat-card-appointments .stat-icon { background: rgba(180,83,9,0.2); color: #fbbf24; }
+[data-theme="dark"] .stat-card-revenue .stat-icon { background: rgba(180,83,9,0.2); color: #fbbf24; }
+[data-theme="dark"] .stat-card-missed .stat-icon { background: rgba(126,34,206,0.2); color: #d8b4fe; }
+
+/* Analytics Grid */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.analytics-card {
+  background: var(--neutral-50);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  text-align: center;
+}
+.analytics-card .analytics-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.analytics-card .analytics-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--neutral-900);
+}
+[data-theme="dark"] .analytics-card {
+  background: var(--neutral-100);
+  border-color: var(--neutral-200);
+}
+[data-theme="dark"] .analytics-card .analytics-value {
+  color: var(--neutral-800);
+}
+
+/* Premium Notification Toasts */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 90vw;
+}
+.toast-notification {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-xl);
+  animation: toastIn 0.35s ease-out;
+  min-width: 280px;
+  max-width: 400px;
+}
+.toast-notification.success { background: #065f46; color: #d1fae5; }
+.toast-notification.info { background: #1e3a5f; color: #dbeafe; }
+.toast-notification.warning { background: #78350f; color: #fef3c7; }
+.toast-notification .toast-icon { font-size: 18px; flex-shrink: 0; }
+.toast-notification .toast-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.toast-notification .toast-close:hover { opacity: 1; }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(60px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(60px); }
+}
+
+/* Responsive: Analytics grid */
+@media (max-width: 1024px) {
+  .analytics-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .stats-grid { grid-template-columns: 2fr 2fr; }
+  .stat-card:last-child { grid-column: 1 / -1; }
+  .analytics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .analytics-grid { grid-template-columns: 1fr 1fr; }
+}

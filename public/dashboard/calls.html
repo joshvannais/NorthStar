@@ -371,7 +371,7 @@ const lNames=["Smith","Garcia","Johnson","Brown","Williams","Miller","Jones","Da
 const sNames=["Oak","Maple","Cedar","Pine","Elm","Birch","Walnut","Cherry","Spruce","Willow","Ash","Magnolia","Hickory","Sycamore","Poplar","Chestnut","Hemlock","Dogwood","Locust","Juniper"];
 const sTypes=["St","Ave","Dr","Ln","Rd","Ct","Way","Pl","Blvd","Cir"];
 const aCodes=["860","203","401","413","845","914","475","959","518","607"];
-function genTranscript(svc,s,name,num,sn,st){
+function genTranscript(svc,s,name,phone,num,sn,st){
       const addr=num+" "+sn+" "+st;
       const first=name.split(" ")[0];
       function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
@@ -398,7 +398,9 @@ function genTranscript(svc,s,name,num,sn,st){
           }
           lines.push("AI: Got it. Let me get your info. What's your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           let det=s.trees+" "+trees(s.trees)+" at "+s.height+"ft";
           if(s.nearHouse)det+=" near structures";
@@ -459,7 +461,9 @@ function genTranscript(svc,s,name,num,sn,st){
           if(s.emergency)lines.push("AI: Emergency call, understood. We'll prioritize this.");
           lines.push("AI: Let me get your details. What's your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have "+(s.replace?"a replacement":"a repair")+" on "+s.pipeType+", accessibility is "+s.accessibility+(s.emergency?". We'll rush someone out ASAP!":".")+" Thank you!");
           return lines.join("\\n");
@@ -478,9 +482,11 @@ function genTranscript(svc,s,name,num,sn,st){
             lines.push("AI: "+(s.outdoor?"And the panel is mounted outside the house, correct?":"And is the panel indoors?"));
             lines.push("Customer: "+(s.outdoor?"Yes, it's outside.":"Yes, it's inside."));
           }
-          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           if(s.amperage===0){
             lines.push("AI: Thanks "+first+". "+(s.emergency?"We'll get an electrician to you ASAP.":"We'll have someone reach out to schedule the install.")+" Thank you!");
@@ -511,7 +517,9 @@ function genTranscript(svc,s,name,num,sn,st){
           }
           lines.push("AI: Excellent! Let me get your information. Your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           let features=[];
           if(s.patio)features.push("patio");
@@ -550,9 +558,11 @@ function genTranscript(svc,s,name,num,sn,st){
             lines.push("AI: "+(s.refrigerant!=="none"?"Do you know the refrigerant type?":"Good to know."));
             if(s.refrigerant!=="none")lines.push("Customer: It uses "+s.refrigerant.toUpperCase()+".");
           }
-          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We'll have an HVAC technician reach out to schedule. Thank you!");
           return lines.join("\\n");
@@ -571,7 +581,9 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: "+(s.debris==="heavy"?"Yeah, I'm interested in guards too.":"Not right now, just the cleaning."));
           lines.push("AI: Got it. Let me get your info. Your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have "+s.linearFt+"ft of gutters, "+(s.stories>1?"two story":"single story")+". We'll have a crew reach out to schedule. Thank you!");
           return lines.join("\\n");
@@ -587,9 +599,11 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("AI: And what's the approximate square footage of your home?");
           lines.push("Customer: About "+s.sqft+" square feet.");
           lines.push("AI: "+(s.treatment==="termite"?"Termites need immediate attention. We'll schedule an inspection right away.":s.treatment==="rodent"?"We can set up exclusion and trapping.":"We can treat for ants with a thorough perimeter spray."));
-          lines.push("AI: Let me get your details. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have a "+(s.sqft)+"sqft home with "+s.treatment+" treatment needed, severity "+s.severity+". A pest control specialist will reach out. Thank you!");
           return lines.join("\\n");
@@ -612,9 +626,11 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("AI: And what type of finish are you looking for — broom, smooth, or stamped?");
           lines.push("Customer: We'd like "+(s.finish==="stamp"?"a stamped decorative":"a "+(s.finish==="smooth"?"smooth":"broom"))+" finish.");
           lines.push("AI: "+(s.demolition?"So that's a demo and repour, ":"New pour, ")+s.sqft+" sqft, "+(s.reinforced?"reinforced, ":"")+s.finish+" finish. Sounds good!");
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". "+(s.demolition?"We'll schedule a demo and pour.":"We'll have a concrete crew reach out for the pour.")+" Thank you!");
           return lines.join("\\n");
@@ -633,7 +649,9 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: It's "+s.terrain.replace("-"," ")+".");
           lines.push("AI: "+(s.terrain.includes("slope")?"We handle sloped terrain all the time.":"Flat terrain is straightforward.")+" Let me get your info. Your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". "+s.linearFt+"ft of "+s.material+(s.gates?" with "+s.gates+" gates":"")+" on "+s.terrain.replace("-"," ")+". A fencing contractor will reach out. Thank you!");
           return lines.join("\\n");
@@ -649,9 +667,11 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("AI: What floor are the windows on?");
           lines.push("Customer: They're on the "+(s.story>1?"second":"first")+" floor.");
           lines.push("AI: "+(s.story>1?"Second floor installs cost a bit more for labor.":"First floor is straightforward.")+" ");
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". I have "+s.count+" "+s.pane+"-pane windows on the "+(s.story>1?"second":"first")+" floor. An installer will reach out to schedule. Thank you!");
           return lines.join("\\n");
@@ -672,7 +692,9 @@ function genTranscript(svc,s,name,num,sn,st){
           }
           lines.push("AI: "+(s.stains?"We have great stain removal treatments.":"Great, a standard deep clean.")+" Let me get your info. Your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have "+s.rooms+" rooms, "+s.sqft+" sqft"+(s.stains?", stain treatment":"")+(s.stairs?", stairs":"")+". A cleaning crew will reach out to schedule. Thank you!");
           return lines.join("\\n");
@@ -689,9 +711,11 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: It's "+(s.level==="heavy"?"pretty heavy — there's years of buildup.":"normal seasonal dirt."));
           lines.push("AI: "+(s.level==="heavy"?"Heavy cleaning might need some extra passes and a degreaser.":"Normal cleaning will get it looking great.")+" ");
           if(s.surface==="deck")lines.push(lines.pop()+"We use a soft wash for decks to protect the wood.");
-          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have "+s.sqft+" sqft of "+(s.surface==="both"?"driveway and house":s.surface)+" cleaning"+(s.level==="heavy"?" (heavy duty)":"")+". A crew will reach out to schedule. Thank you!");
           return lines.join("\\n");
@@ -709,9 +733,11 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: We want "+(s.grade==="premium"?"premium — it lasts longer.":"economy grade."));
           if(s.trim){lines.push("AI: Will there be any trim work — baseboards, crown molding, or cabinets?");lines.push("Customer: Yes, we need the trim done too.");}
           if(s.colorChange){lines.push("AI: Is this a color change or same color touch-up?");lines.push("Customer: It's a color change, so we'll need coverage.");}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           return lines.join("\n");
         }
@@ -724,9 +750,11 @@ function genTranscript(svc,s,name,num,sn,st){
           if(s.waterDamage){lines.push("AI: Was there water damage involved?");lines.push("Customer: Yes, we had a leak that damaged the drywall.");}
           if(s.textureMatch){lines.push("AI: Do you need the texture matched to the existing wall?");lines.push("Customer: Yes, we want it to match the rest of the wall.");}
           if(s.ceiling){lines.push("AI: Is this a ceiling or wall?");lines.push("Customer: It's the ceiling.");lines.push("AI: Ceiling work needs some extra care.");}
-          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". "+(s.patchType==="small"?"Small patch":s.sqft+"sqft "+(s.ceiling?"ceiling":"wall"))+(s.textureMatch?" textured":"")+(s.waterDamage?" water-damage":"")+". We'll have a drywall pro reach out. Thank you!");
           return lines.join("\n");
@@ -741,9 +769,11 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: About "+s.sqft+" square feet.");
           if(s.furnitureMoving){lines.push("AI: Do you need help moving furniture out of the way?");lines.push("Customer: Yes, we'll need furniture moved.");}
           if(s.stairs){lines.push("AI: Any stairs or landing to do as well?");lines.push("Customer: Yes, we have stairs that need flooring too.");}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           return lines.join("\n");
         }
@@ -757,9 +787,11 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("AI: "+(s.springIssue||s.offTrack?"That sounds urgent. ":"")+"Is it a single or double car door?");
           lines.push("Customer: It's a "+(s.doorSize==="double"?"double":"single")+" car door.");
           if(s.insulated){lines.push("AI: Are you looking for an insulated door?");lines.push("Customer: Yes, I want it insulated.");}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           if(s.springIssue)lines.push("AI: Thanks "+first+". We have a spring replacement for a "+s.doorSize+" door. We'll get someone out ASAP.");
           else if(s.offTrack)lines.push("AI: Thanks "+first+". We'll send a tech to fix the track on your "+s.doorSize+" door.");
@@ -778,9 +810,11 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: "+(s.mount==="ground"?"Ground mount — we have the land for it.":"Roof mount is fine."));}
           if(s.battery){lines.push("AI: Do you need battery backup for energy storage?");lines.push("Customer: Yes, we want a battery backup system.");}
           if(s.permit){lines.push("AI: Do you need help with permits?");lines.push("Customer: Yes, we need the permits handled.");}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           return lines.join("\n");
         }
@@ -797,9 +831,11 @@ function genTranscript(svc,s,name,num,sn,st){
           if(s.railings){lines.push("AI: Do you need railings?");lines.push("Customer: Yes, we need railings.");}
           if(s.stairs>0){lines.push("AI: How many sets of stairs?");lines.push("Customer: "+s.stairs+" set"+(s.stairs>1?"s":"")+".");}
           if(s.stain){lines.push("AI: And you need staining done as well?");lines.push("Customer: Yes, power wash and stain.");}
-          lines.push("AI: Let me grab your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           return lines.join("\n");
         }
@@ -811,9 +847,11 @@ function genTranscript(svc,s,name,num,sn,st){
           else if(s.closing){lines.push("Customer: I need my pool closed for winter.");lines.push("AI: Got it. In-ground or above-ground?");lines.push("Customer: It's "+s.poolType+".");}
           else if(s.equipment==="pump"){lines.push("Customer: My pool filter pump isn't working.");lines.push("AI: Sorry to hear that. Is it an in-ground or above-ground pool?");lines.push("Customer: It's "+s.poolType+".");lines.push("AI: We can replace the pump. Do you know the model?");lines.push("Customer: I'm not sure offhand.");}
           else if(s.equipment==="heater"){lines.push("Customer: My pool heater stopped heating.");lines.push("AI: We can help with that. Is your pool in-ground or above-ground?");lines.push("Customer: It's "+s.poolType+".");lines.push("AI: We'll get a pool tech to diagnose the heater.");}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". "+(s.service==="weekly"?"We'll set up weekly service.":s.opening?"We'll schedule the pool opening.":s.closing?"We'll schedule the pool closing.":s.equipment==="pump"?"We'll send a tech to replace the pump.":s.equipment==="heater"?"We'll send someone to check the heater.":"")+" Thank you!");
           return lines.join("\n");
@@ -828,9 +866,11 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: It's "+s.symptoms+".");
           lines.push("AI: Is it still under warranty?");
           lines.push("Customer: "+(s.underWarranty?"Yes, it's still covered.":"No, it's out of warranty."));
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We'll send an appliance tech to look at your "+s.brand+" "+s.appliance+". Thank you!");
           return lines.join("\n");
@@ -849,7 +889,9 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));
           lines.push("AI: "+(s.stories>1?"Two-story work takes a bit more time.":"Single story is straightforward.")+" Let me get your info. Your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           return lines.join("\n");
         }
@@ -861,9 +903,11 @@ function genTranscript(svc,s,name,num,sn,st){
           else if(s.service==="liner"){lines.push("Customer: I need a new chimney liner installed.");lines.push("AI: We handle liner installations. How many stories?");lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));}
           else if(s.service==="damper"){lines.push("Customer: My chimney damper needs replacing.");lines.push("AI: We can replace the damper. How many stories?");lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));}
           else if(s.service==="rebuild"){lines.push("Customer: My chimney needs a full rebuild.");lines.push("AI: Understood. How many stories?");lines.push("Customer: "+(s.stories>1?"Two stories.":"Single story."));lines.push("AI: A full rebuild takes some time but we'll get it done right.");}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           return lines.join("\n");
         }
@@ -874,9 +918,11 @@ function genTranscript(svc,s,name,num,sn,st){
           else if(s.waterInBasement&&s.location==="exterior"){lines.push("Customer: I have water in my basement and need drainage fixed.");lines.push("AI: We can help with exterior drainage. What type of soil do you have?");lines.push("Customer: It's "+s.soilType+" soil.");}
           else if(s.location==="exterior"&&s.crackWidth!=="0"){lines.push("Customer: I need foundation piers installed.");lines.push("AI: How wide are the cracks in the foundation?");lines.push("Customer: About "+s.crackWidth+".");lines.push("AI: What type of soil do you have?");lines.push("Customer: It's "+s.soilType+" soil.");}
           else{lines.push("Customer: I have a crack in my foundation wall.");lines.push("AI: How wide is the crack?");lines.push("Customer: It's about "+s.crackWidth+".");lines.push("AI: "+(s.waterInBasement?"Does water come through when it rains?":"Is it on the interior or exterior?"));if(s.waterInBasement)lines.push("Customer: Yes, water seeps in.");else lines.push("Customer: "+(s.location==="interior"?"Interior.":"Exterior."));}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We'll have a foundation specialist contact you. Thank you!");
           return lines.join("\n");
@@ -891,9 +937,11 @@ function genTranscript(svc,s,name,num,sn,st){
           if(s.visibleMold){lines.push("AI: Can you see visible mold growth?");lines.push("Customer: Yes, it's visible.");}
           if(s.waterSource){lines.push("AI: Is there an active water source causing the mold?");lines.push("Customer: Yes, there's a moisture issue.");}
           if(s.mustySmell){lines.push("AI: Do you notice a musty smell?");lines.push("Customer: Yes, definitely.");}}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We'll have a mold remediation specialist reach out to assess the "+(s.location==="hvac"?"HVAC system":s.sqft>0?s.sqft+"sqft area":"property")+". Thank you!");
           return lines.join("\n");
@@ -906,9 +954,11 @@ function genTranscript(svc,s,name,num,sn,st){
           else if(s.wellIssue==="low-pressure"){lines.push("Customer: My water pressure is low.");lines.push("AI: How deep is the well?");lines.push("Customer: About "+s.depth+" feet.");lines.push("AI: It could be the pressure tank. How old is the system?");lines.push("Customer: About "+s.systemAge+" years.");}
           else if(s.wellIssue==="no-power"){lines.push("Customer: The well pump has no power.");lines.push("AI: That could be a control box issue. What type of pump do you have?");lines.push("Customer: It's "+s.pumpType+".");lines.push("AI: How old is the system?");lines.push("Customer: About "+s.systemAge+" years.");}
           else if(s.wellIssue==="bacteria"){lines.push("Customer: My well water tested positive for bacteria.");lines.push("AI: We can do a well chlorination. How deep is the well?");lines.push("Customer: About "+s.depth+" feet.");}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We'll send a well service technician to address your "+(s.wellIssue==="no-water"?"no water":s.wellIssue==="pump-failure"?"pump failure":s.wellIssue==="low-pressure"?"low pressure":s.wellIssue==="no-power"?"electrical issue":"chlorination")+". Thank you!");
           return lines.join("\n");
@@ -920,9 +970,11 @@ function genTranscript(svc,s,name,num,sn,st){
           else if(s.fieldIssue){lines.push("Customer: I think my drain field is failing.");lines.push("AI: We can inspect it. What size tank?");lines.push("Customer: "+s.tankSize+" gallons.");lines.push("AI: How many bedrooms?");lines.push("Customer: "+s.bedrooms+" bedrooms.");}
           else if(s.backup){lines.push("Customer: My septic system is backing up.");lines.push("AI: We'll get someone out. What size tank?");lines.push("Customer: "+s.tankSize+" gallons.");lines.push("AI: When was it last pumped?");lines.push("Customer: About "+s.lastPumping+" years ago.");}
           else{lines.push("Customer: I need my septic tank pumped.");lines.push("AI: What size tank do you have?");lines.push("Customer: It's a "+s.tankSize+" gallon tank.");lines.push("AI: How many bedrooms in the home?");lines.push("Customer: "+s.bedrooms+" bedrooms.");lines.push("AI: When was it last pumped?");lines.push("Customer: About "+s.lastPumping+" years ago.");}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We'll have a septic service contact you. Thank you!");
           return lines.join("\n");
@@ -933,9 +985,11 @@ function genTranscript(svc,s,name,num,sn,st){
           if(s.kw===0&&!s.transferSwitch){lines.push("Customer: I need a portable generator inlet installed.");lines.push("AI: Simple setup. What fuel type — natural gas or propane?");lines.push("Customer: "+(s.fuel==="nat-gas"?"Natural gas.":"Propane."));}
           else if(s.kw===0&&s.transferSwitch){lines.push("Customer: I need a transfer switch installed.");lines.push("AI: Do you need permits pulled for this?");lines.push("Customer: "+(s.permit?"Yes, we need permits.":"No, it's already approved."));}
           else{lines.push("Customer: I want to install a "+(s.kw>=22?"whole house":"standby")+" generator.");lines.push("AI: "+(s.kw>=22?"A 22kW whole house setup — that's a big system. ":"")+"What fuel type — natural gas or propane?");lines.push("Customer: "+(s.fuel==="nat-gas"?"Natural gas.":"Propane."));if(s.wholeHouse){lines.push("AI: Will this be powering the whole house or just essential circuits?");lines.push("Customer: The whole house.");}if(s.permit){lines.push("AI: Do you need permits handled?");lines.push("Customer: Yes, please handle the permits.");}}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We'll have a generator specialist reach out to schedule. Thank you!");
           return lines.join("\n");
@@ -948,9 +1002,11 @@ function genTranscript(svc,s,name,num,sn,st){
           else if(s.type==="master"){lines.push("Customer: I want a complete master bathroom remodel.");lines.push("AI: Full tear-out of everything?");lines.push("Customer: "+(s.tearOut?"Yes, start from scratch.":"Some things stay."));lines.push("AI: "+(s.tile?"Are you doing tile work?":""));if(s.tile)lines.push("Customer: Yes, we want tile floors and shower.");lines.push("AI: "+(s.plumbingMove?"Are you moving any plumbing?":""));if(s.plumbingMove)lines.push("Customer: Yes, we're reconfiguring the layout.");}
           else if(s.type==="half-bath"){lines.push("Customer: I want to remodel my half bath / powder room.");lines.push("AI: "+(s.tearOut?"Full tear-out?":"Just updating fixtures?"));lines.push("Customer: "+(s.tearOut?"Yes, gut it.":"Just updating."));lines.push("AI: "+(s.fixtures?"New fixtures too?":""));if(s.fixtures)lines.push("Customer: Yes, new vanity and toilet.");}
           else if(s.accessible){lines.push("Customer: I need an accessible shower installed.");lines.push("AI: We do ADA-compliant accessible showers. Full tear-out of the existing?");lines.push("Customer: "+(s.tearOut?"Yes, remove everything.":"Just the shower area."));}
-          lines.push("AI: Let me get your info. Your name?");
+          lines.push("AI: Great! Let me get some details. What is your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We'll have a remodeling consultant reach out to discuss your "+(s.type==="vanity"?"vanity update":s.type==="tub-shower"?"tub-to-shower conversion":s.type==="master"?"master bath remodel":s.type==="half-bath"?"half bath remodel":"accessible shower")+". Thank you!");
           return lines.join("\n");
@@ -967,7 +1023,9 @@ function genTranscript(svc,s,name,num,sn,st){
           if(s.airSealing)lines.push("Customer: Yes, air seal as well.");
           lines.push("AI: "+(s.vaporBarrier&&s.location==="crawlspace"?"We'll do a full encapsulation with vapor barrier.":"Let me get your info.")+" Your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           return lines.join("\n");
         }
@@ -978,7 +1036,9 @@ function genTranscript(svc,s,name,num,sn,st){
           lines.push("Customer: I need "+s.label.toLowerCase()+".");
           lines.push("AI: Great, I can help with that. What's your name?");
           lines.push("Customer: "+name+".");
-          lines.push("AI: And your address?");
+          lines.push("AI: Thanks "+first+"! And a phone number I can reach you at?");
+          lines.push("Customer: "+phone+".");
+          lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks, I'll have an estimator reach out to schedule a time. Thank you!");
           return lines.join("\\n");
@@ -997,6 +1057,7 @@ function genTranscript(svc,s,name,num,sn,st){
       const sn=sNames[Math.floor(Math.random()*sNames.length)];
       const st=sTypes[Math.floor(Math.random()*sTypes.length)];
       const ac=aCodes[Math.floor(Math.random()*aCodes.length)];
+      const phone="("+ac+") 555-"+(Math.floor(Math.random()*8999)+1000);
       const durSec=Math.floor(Math.random()*(420-120)+120);
       const durMin=Math.floor(durSec/60);
       const durRem=durSec%60;
@@ -1012,14 +1073,14 @@ function genTranscript(svc,s,name,num,sn,st){
       let rr=Math.random(),outcome=outcomes[0];
       for(let i=0;i<weights.length;i++){rr-=weights[i];if(rr<=0){outcome=outcomes[i];break;}}
       return{
-        caller:name,phone:"("+ac+") 555-"+(Math.floor(Math.random()*8999)+1000),
+        caller:name,phone:phone,
         address:num+" "+sn+" "+st,service:svc.name,icon:svc.icon,
         avgPrice:price,jobDetail:det,
         duration:durMin+":"+(durRem<10?"0":"")+durRem,
         status:status,outcome:outcome,time:time,receivedAt:new Date().toISOString(),
         summary:svc.name+": "+s.label+". "+det+". Estimated $"+price.toLocaleString()+".",
         priceBreakdown:(function(){try{var pb=calcBreakdown(svc,s);return pb.map(function(x){return x.l}).join(", ");}catch(e){return "";}})(),
-        transcript:genTranscript(svc,s,name,num,sn,st),
+        transcript:genTranscript(svc,s,name,phone,num,sn,st),
         pricingBreakdown:calcBreakdown(svc,s)
       };
     }

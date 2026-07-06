@@ -407,7 +407,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           if(s.stump)det+=", stump grinding";
           if(s.emergency)det+=" (emergency)";
           lines.push("AI: Thanks "+first+". I have "+det+". We'll have an estimator reach out to schedule a time. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Roof inspection/replacement":{
           let lines=[];
@@ -441,7 +441,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
             lines.push("Customer: "+addr+".");
             lines.push("AI: Thanks "+first+". I have a "+s.sqft+"sqft "+s.material+" roof, "+s.pitch+" pitch, "+s.layers+" layer(s). An estimator will be in touch. Thank you!");
           }
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Emergency plumbing":{
           let lines=[];
@@ -466,7 +466,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have "+(s.replace?"a replacement":"a repair")+" on "+s.pipeType+", accessibility is "+s.accessibility+(s.emergency?". We'll rush someone out ASAP!":".")+" Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Electrical panel upgrade":{
           let lines=[];
@@ -493,7 +493,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           }else{
             lines.push("AI: Thanks "+first+". We have a "+s.amperage+"A panel upgrade"+(s.outdoor?" outdoor":"")+(s.permit?" with permit":"")+". An electrician will reach out to schedule. Thank you!");
           }
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Landscape design":{
           let lines=[];
@@ -527,7 +527,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           if(s.hardscape)features.push("hardscape");
           if(s.irrigation)features.push("irrigation");
           lines.push("AI: Thanks "+first+". I have "+s.sqft+" sqft of landscaping with "+features.join(", ")+". A designer will reach out to discuss. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"HVAC repair":{
           let lines=[];
@@ -565,7 +565,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We'll have an HVAC technician reach out to schedule. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Gutter cleaning":{
           let lines=[];
@@ -586,7 +586,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have "+s.linearFt+"ft of gutters, "+(s.stories>1?"two story":"single story")+". We'll have a crew reach out to schedule. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Pest control":{
           let lines=[];
@@ -606,7 +606,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have a "+(s.sqft)+"sqft home with "+s.treatment+" treatment needed, severity "+s.severity+". A pest control specialist will reach out. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Concrete driveway":{
           let lines=[];
@@ -633,7 +633,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". "+(s.demolition?"We'll schedule a demo and pour.":"We'll have a concrete crew reach out for the pour.")+" Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Fence installation":{
           let lines=[];
@@ -654,7 +654,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". "+s.linearFt+"ft of "+s.material+(s.gates?" with "+s.gates+" gates":"")+" on "+s.terrain.replace("-"," ")+". A fencing contractor will reach out. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Window replacement":{
           let lines=[];
@@ -674,7 +674,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". I have "+s.count+" "+s.pane+"-pane windows on the "+(s.story>1?"second":"first")+" floor. An installer will reach out to schedule. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Carpet cleaning":{
           let lines=[];
@@ -697,7 +697,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have "+s.rooms+" rooms, "+s.sqft+" sqft"+(s.stains?", stain treatment":"")+(s.stairs?", stairs":"")+". A cleaning crew will reach out to schedule. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
         case"Pressure washing":{
           let lines=[];
@@ -718,7 +718,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks "+first+". We have "+s.sqft+" sqft of "+(s.surface==="both"?"driveway and house":s.surface)+" cleaning"+(s.level==="heavy"?" (heavy duty)":"")+". A crew will reach out to schedule. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
 
         case"Interior Painting":{
@@ -1041,7 +1041,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
           lines.push("AI: Perfect. And what's the address for the service?");
           lines.push("Customer: "+addr+".");
           lines.push("AI: Thanks, I'll have an estimator reach out to schedule a time. Thank you!");
-          return lines.join("\\n");
+          return lines.join("\n");
         }
       }
     }
@@ -1107,7 +1107,12 @@ function renderCalls(){
     if(curFilter==="today")f=f.filter(c=>{try{const d=new Date(c.receivedAt);return isToday(d);}catch(e){return false;}});
     else if(curFilter==="week")f=f.filter(c=>{try{const d=new Date(c.receivedAt);return isThisWeek(d);}catch(e){return false;}});
     else if(curFilter==="voicemail")f=f.filter(c=>c.status==="voicemail");
-    else f=f.filter(c=>c.outcome===curFilter);
+    else {
+      const outcomeMap={"booked":"appointment-set","estimate":"lead-captured","follow-up":"follow-up","voicemail":"voicemail","no-interest":"no-interest"};
+      const mapped=outcomeMap[curFilter];
+      if(mapped==="voicemail")f=f.filter(c=>c.status==="voicemail");
+      else f=f.filter(c=>c.outcome===mapped);
+    }
   }
   const el=document.getElementById("callHistoryList");
   if(f.length===0){el.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';upStats();return;}
@@ -1117,7 +1122,7 @@ function renderCalls(){
   f.forEach((c,i)=>{
     const inits=c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
     const ob=oc[c.outcome]||{bg:"#6b7280",label:c.outcome};
-    html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+' '+(c.icon||"")+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge" style="background:'+ob.bg+'20;color:'+ob.bg+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div style="margin:12px 0;padding:12px;background:var(--neutral-200);border-radius:var(--radius-sm);"><div style="font-size:15px;font-weight:700;color:var(--brand-600);">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div style="font-size:12px;color:var(--neutral-500);margin-top:2px;">'+c.jobDetail+'</div>'+((c.pricingBreakdown&&c.pricingBreakdown.length>0)?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(function(pb){return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>';}).join('')+'<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:6px 0 0;border-top:2px solid var(--neutral-400);margin-top:4px;"><span>Total</span><span>$'+c.avgPrice.toLocaleString()+'</span></div></div>':'')+'<div class="call-detail-label">Summary</div><div class="call-summary">'+c.summary+'</div><div class="call-detail-label">Transcript</div><div class="call-transcript">'+c.transcript+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to \'+c.phone+\'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
+    html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+' '+(c.icon||"")+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge" style="background:'+ob.bg+'20;color:'+ob.bg+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div style="margin:12px 0;padding:12px;background:var(--neutral-200);border-radius:var(--radius-sm);"><div style="font-size:15px;font-weight:700;color:var(--brand-600);">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div style="font-size:12px;color:var(--neutral-500);margin-top:2px;">'+c.jobDetail+'</div>'+((c.pricingBreakdown&&c.pricingBreakdown.length>0)?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(function(pb){return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>';}).join('')+'<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:6px 0 0;border-top:2px solid var(--neutral-400);margin-top:4px;"><span>Total</span><span>$'+c.avgPrice.toLocaleString()+'</span></div></div>':'')+'<div class="call-detail-label">Summary</div><div class="call-summary">'+c.summary+'</div><div class="call-detail-label">Transcript</div><div class="call-transcript">'+c.transcript.split("\n").map(function(l){if(l.startsWith("AI:"))return '<div class="chat-msg chat-ai"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div class="chat-msg chat-customer"><strong>You</strong> '+l.substring(9)+'</div>';return '<div class="chat-msg">'+l+'</div>';}).join("")+'</div>'<div class="call-actions"><button onclick="showToast(\'Sent SMS to \'+c.phone+\'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
   });
   el.innerHTML=html;upStats();
 }

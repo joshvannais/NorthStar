@@ -339,50 +339,44 @@ function toggleMobileMenu() {
 
     // Simulate a demo lead
     async function simulateDemoLead() {
-      const names = ['John Smith', 'Maria Garcia', 'Bob Johnson', 'Sarah Wilson', 'Mike Brown', 'Lisa Davis'];
-      const services = [
-        { name: 'Tree removal', price: 2400 },
-        { name: 'Roof repair', price: 3800 },
-        { name: 'Plumbing leak', price: 650 },
-        { name: 'Electrical wiring', price: 1200 },
-        { name: 'Landscape design', price: 2800 },
-        { name: 'Deck staining', price: 1800 }
-      ];
-      const addresses = ['123 Oak St', '456 Maple Ave', '789 Pine Rd', '321 Elm Dr', '654 Birch Ln'];
-      const times = ['Tomorrow morning', 'Thursday afternoon', 'Friday 10am', 'Next Monday', 'This Saturday'];
-      const urgencies = ['', '', '', 'Storm damage (High)', 'Emergency (High)'];
-      const svc = services[Math.floor(Math.random() * services.length)];
-      const adr = addresses[Math.floor(Math.random() * addresses.length)];
+      const names = ['John Smith', 'Maria Garcia', 'Bob Johnson', 'Sarah Wilson', 'Mike Brown', 'Lisa Davis', 'Tom Anderson', 'Emily Clark', 'David Miller', 'Jessica White'];
+      const outcomes = ['appointment-set', 'lead-captured', 'follow-up', 'no-interest'];
+      const outcomeWeights = [0.4, 0.3, 0.2, 0.1];
+      let rr = Math.random(), outcome = outcomes[0];
+      for (let i = 0; i < outcomeWeights.length; i++) { rr -= outcomeWeights[i]; if (rr <= 0) { outcome = outcomes[i]; break; } }
+      // Generate call data matching the calls page format
+      const durSec = Math.floor(Math.random() * (120 - 60) + 60);
+      const durMin = Math.floor(durSec / 60);
+      const durRem = durSec % 60;
+      const dayRoll = Math.random();
+      const daysAgo = dayRoll < 0.4 ? 0 : dayRoll < 0.65 ? 1 : dayRoll < 0.85 ? 2 : Math.floor(Math.random() * 3) + 3;
+      const dayLabel = daysAgo === 0 ? "Today" : daysAgo === 1 ? "Yesterday" : daysAgo + " days ago";
+      const hrs = Math.floor(Math.random() * 11) + 8;
+      const mins = Math.floor(Math.random() * 60);
+      const time = dayLabel + ", " + hrs + ":" + (mins < 10 ? "0" : "") + mins + " " + (hrs >= 12 ? "PM" : "AM");
+      const svcNames = ['Tree removal', 'Roof repair', 'Plumbing leak', 'Electrical wiring', 'Landscape design', 'Deck staining', 'HVAC repair', 'Gutter cleaning', 'Fence installation', 'Interior painting'];
+      const svc = svcNames[Math.floor(Math.random() * svcNames.length)];
+      const adr = (Math.floor(Math.random() * 8999) + 100) + ' ' + ['Oak', 'Maple', 'Cedar', 'Pine', 'Elm', 'Birch', 'Walnut', 'Cherry', 'Spruce', 'Willow'][Math.floor(Math.random() * 10)] + ' ' + ['St', 'Ave', 'Dr', 'Ln', 'Rd', 'Ct'][Math.floor(Math.random() * 6)];
       const name = names[Math.floor(Math.random() * names.length)];
-      const phone = `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`;
-      const time = times[Math.floor(Math.random() * times.length)];
-      const urgency = urgencies[Math.floor(Math.random() * urgencies.length)];
-
-      // Store simulated call for revenue counter (in-memory only — resets on refresh)
-      const detail = svc.name + ' at ' + adr;
+      const phone = "(" + (Math.floor(Math.random() * 900) + 100) + ") 555-" + (Math.floor(Math.random() * 8999) + 1000);
+      const price = Math.floor(Math.random() * 3000) + 350;
       const callRecord = {
-        caller: name,
-        phone: phone,
-        address: adr,
-        service: svc.name,
-        time: new Date().toISOString(),
-        duration: '0:00',
-        status: 'answered',
-        outcome: 'appointment-set',
-        summary: 'Estimated for ' + svc.name + '. Customer requested ' + time + '.',
-        transcript: 'AI: NorthStar, how can I help?\\n' + name + ': I need ' + svc.name + '.\\nAI: Great, let me get your info. What is your address?\\nCustomer: ' + adr + '.\\nAI: Thanks, I\'ll schedule an estimator to come out.',
-        avgPrice: svc.price + Math.floor(Math.random() * 500),
-        jobDetail: detail
+        caller: name, phone: phone, address: adr, service: svc, icon: '📞',
+        avgPrice: price, jobDetail: svc + ' at ' + adr,
+        duration: durMin + ":" + (durRem < 10 ? "0" : "") + durRem,
+        status: "answered", outcome: outcome,
+        time: time, receivedAt: new Date().toISOString(),
+        summary: svc + ". Estimated $" + price.toLocaleString() + ".",
+        transcript: "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need " + svc.toLowerCase() + ".\nAI: Great, I can help with that. What's your name?\nCustomer: " + name + ".\nAI: Thanks " + name.split(" ")[0] + "! And what's your address?\nCustomer: " + adr + ".\nAI: Perfect. I have " + svc + " at " + adr + ". We'll have someone reach out to schedule. Thank you!",
+        pricingBreakdown: [{ l: svc, a: price }]
       };
       try {
         simulatedCalls.unshift(callRecord);
-        // Also sync to sessionStorage for the Call History page
         const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
         existing.unshift(callRecord);
         sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
-      } catch(e) {}
-
-      showToast(`✅ New lead captured: ${name} (${svc.price}+ estimated)`);
+      } catch (e) { }
+      showToast(`✅ New lead captured: ${name} (${price.toLocaleString()} estimated)`);
       loadLeads();
     }
 

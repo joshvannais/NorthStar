@@ -1740,16 +1740,15 @@ tr:hover td { background: var(--neutral-50); }
 
 /* FEATURE: Call History Polish */
 .call-search-bar { margin-bottom: 12px; }
-.call-filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
-.call-filters .filter-group { display: flex; gap: 4px; align-items: center; }
-.call-filters .filter-separator { width: 1px; height: 24px; background: var(--neutral-300); margin: 0 4px; }
-.call-filters .filter-right { margin-left: auto; }
+.call-filters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.call-filters .filter-group { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.call-filters .call-filters-row2 { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.call-filter-clear { border-color: var(--danger) !important; color: var(--danger) !important; }
 @media (max-width: 768px) {
-  .call-filters { gap: 4px; }
+  .call-filters { gap: 6px; }
   .call-filters .filter-group { gap: 3px; }
+  .call-filters .call-filters-row2 { gap: 3px; }
   .call-filter-btn { padding: 4px 8px; font-size: 11px; }
-  .call-filters .filter-separator { margin: 0 2px; }
-  .call-filters .filter-right { margin-left: 0; }
 }
 .call-filter-btn { padding: 5px 12px; font-size: 12px; border-radius: 20px; border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; color: var(--neutral-600); transition: all 0.2s; white-space: nowrap; }
 .call-filter-btn:hover { border-color: var(--brand-300); color: var(--brand-600); }
@@ -1766,7 +1765,6 @@ tr:hover td { background: var(--neutral-50); }
   background: var(--neutral-200);
   color: var(--neutral-700);
 }
-[data-theme="dark"] .call-filters .filter-separator { background: var(--neutral-400); }
 [data-theme="dark"] .call-filter-btn { background: var(--neutral-100); border-color: var(--neutral-300); color: var(--neutral-500); }
 [data-theme="dark"] .call-filter-btn:hover { border-color: var(--brand-400); color: var(--brand-300); }
 [data-theme="dark"] .call-filter-btn.active { background: var(--brand-600); color: var(--neutral-900); border-color: var(--brand-500); }

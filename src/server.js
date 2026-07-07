@@ -480,21 +480,10 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 // API routes
 app.use('/api', apiRoutes);
 app.use('/api/v1', dashboardRoutes);
-
-// Public API v1 (versioned, externally-facing)
 app.use('/api/v1', publicApiRoutes);
 
-// 404 handler for unmatched routes
+// 404 + error handler (single instances)
 app.use(notFound);
-
-// Standard error handler
-// Public API v1
-app.use('/api/v1', publicApiRoutes);
-
-// 404 handler
-app.use(notFound);
-
-// Error handler
 app.use(errorHandler);
 
 // Start server
@@ -503,9 +492,6 @@ async function start() {
   await db.initDatabase();
   await cache.init();
   await audit.ensureTable();
-  // Initialize database and cache
-  await db.initDatabase();
-  await cache.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

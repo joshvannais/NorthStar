@@ -18,6 +18,8 @@ const { ApiError } = require('../middleware/apiError');
 const cache = require('../cache/client');
 const db = require('../db');
 const { getAllLeads, getLead } = require('../leads/store');
+const analytics = require('../analytics/pipeline');
+const { seedDemoData } = require('../analytics/seeder');
 
 const router = express.Router();
 
@@ -126,18 +128,40 @@ router.get('/integrations', requireAuth, requirePermission('integrations', 'mana
 
 router.get('/analytics/overview', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
   try {
-    const ck = cache.buildKey('analytics:overview', req.user.id);
-    const cached = await cache.get(ck);
-    if (cached) return res.json(cached);
-
-    const response = { data: { callsToday: 0, newLeads: 0, appointmentsScheduled: 0, estimatedRevenue: 0, missedRevenuePrevented: 0, answerRate: '0%' } };
-    await cache.set(ck, response, 120);
-    res.json(response);
+    const range = req.query.range || 'today';
+    const data = await analytics.computeOverview(req.user.id, range);
+    res.json({ data });
   } catch (err) { next(err); }
 });
 
-router.get('/analytics/trends', requireAuth, requirePermission('dashboard', 'view'), (req, res) => {
-  res.json({ data: { daily: [], weekly: [], monthly: [] } });
+router.get('/analytics/trends', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
+  try {
+    const data = await analytics.computeTrends(req.user.id);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/pipeline', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
+  try {
+    const data = await analytics.computePipeline(req.user.id);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/by-service', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
+  try {
+    const range = req.query.range || 'month';
+    const data = await analytics.computeByService(req.user.id, range);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+// Seed demo data for the current user
+router.post('/analytics/seed', requireAuth, async (req, res, next) => {
+  try {
+    const seeded = await seedDemoData(req.user.id);
+    res.json({ data: { message: 'Demo data seeded successfully', records: seeded.length } });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

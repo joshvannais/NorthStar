@@ -15,6 +15,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const config = require('./config');
 const apiRoutes = require('./routes/api');
+const dashboardRoutes = require('./routes/dashboard');
 const publicApiRoutes = require('./routes/publicApi');
 const db = require('./db');
 const cache = require('./cache/client');
@@ -482,6 +483,7 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 
 // API routes
 app.use('/api', apiRoutes);
+app.use('/api/v1', dashboardRoutes);
 
 // Public API v1 (versioned, externally-facing)
 app.use('/api/v1', publicApiRoutes);

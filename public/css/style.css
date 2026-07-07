@@ -2035,3 +2035,588 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 [data-theme="dark"] .call-filter-btn { background: var(--neutral-100); border-color: var(--neutral-300); color: var(--neutral-500); }
 [data-theme="dark"] .call-filter-btn:hover { border-color: var(--brand-400); color: var(--brand-300); }
 [data-theme="dark"] .call-filter-btn.active { background: var(--brand-600); color: var(--neutral-900); border-color: var(--brand-500); }
+
+/* ============================================
+   Phase 3 — Canonical Dashboard Components
+   ============================================ */
+
+/* Widget Grid System */
+.ds-widget { margin-bottom: var(--space-lg); }
+.ds-widget-full { grid-column: 1 / -1; }
+.ds-widget-half { grid-column: span 1; }
+
+/* Card Component (Design System V4-08) */
+.ds-card {
+  background: white;
+  border-radius: var(--radius);
+  border: 1px solid var(--neutral-200);
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s ease;
+}
+.ds-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--neutral-200);
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.ds-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--neutral-800);
+}
+.ds-card-body {
+  padding: var(--space-lg);
+}
+
+/* Daily Brief (V1-02) */
+.ds-brief {
+  padding: var(--space-lg);
+}
+.ds-brief-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+.ds-brief-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--neutral-400);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.ds-brief-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--neutral-400);
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+.ds-brief-btn:hover { color: var(--brand-600); background: var(--brand-50); }
+.ds-brief-time {
+  font-size: 11px;
+  color: var(--neutral-400);
+}
+.ds-brief-body p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--neutral-700);
+}
+.ds-brief-body p:first-child { margin-top: 0; }
+
+/* Quick Actions (V1-03) */
+.ds-quick-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ds-action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  background: white;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  min-width: 110px;
+  flex: 1 0 auto;
+  text-align: center;
+}
+.ds-action-card:hover {
+  border-color: var(--brand-300);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.ds-action-card svg { color: var(--brand-600); }
+.ds-action-card span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--neutral-600);
+  white-space: nowrap;
+}
+.ds-action-card:hover span { color: var(--neutral-800); }
+
+/* Hero KPI (V1-04) */
+.ds-hero-kpi {
+  border-top: 4px solid var(--brand-400);
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+.ds-hero-kpi:hover { box-shadow: var(--shadow-md); }
+.ds-hero-kpi-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-sm);
+}
+.ds-hero-kpi-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ds-info-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--neutral-300);
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--neutral-400);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ds-info-btn:hover { border-color: var(--brand-400); color: var(--brand-600); }
+.ds-hero-kpi-filters {
+  display: flex;
+  gap: 4px;
+  margin-bottom: var(--space-md);
+  flex-wrap: wrap;
+}
+.ds-pill {
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--neutral-200);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--neutral-500);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ds-pill:hover { border-color: var(--brand-300); color: var(--brand-600); }
+.ds-pill.active {
+  background: var(--brand-600);
+  color: white;
+  border-color: var(--brand-600);
+}
+.ds-hero-kpi-value {
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--neutral-900);
+  margin-bottom: 4px;
+}
+.ds-hero-kpi-trend { margin-bottom: 2px; }
+.ds-hero-kpi-subtitle {
+  font-size: 14px;
+  color: var(--neutral-500);
+}
+.ds-trend-up { color: var(--success); font-size: 14px; font-weight: 500; }
+.ds-trend-down { color: var(--danger); font-size: 14px; font-weight: 500; }
+.ds-trend-flat { color: var(--neutral-400); font-size: 14px; }
+
+/* KPI Grid (V1-05) */
+.ds-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+.ds-kpi-card {
+  background: white;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius);
+  padding: var(--space-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.ds-kpi-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.ds-kpi-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-sm);
+}
+.ds-kpi-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--neutral-900);
+  line-height: 1.2;
+}
+.ds-kpi-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--neutral-500);
+  margin-top: 2px;
+}
+.ds-kpi-trend {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Revenue Trends (V1-06) */
+.ds-metric-select {
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--neutral-700);
+  cursor: pointer;
+}
+.ds-trend-periods {
+  display: flex;
+  gap: 4px;
+  margin-bottom: var(--space-md);
+}
+.ds-chart-area {
+  position: relative;
+  min-height: 280px;
+}
+.ds-chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 280px;
+  color: var(--neutral-400);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Coach (V1-07) */
+.ds-coach-text {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--neutral-700);
+  font-weight: 500;
+  margin-bottom: var(--space-sm);
+}
+.ds-coach-reason {
+  font-size: 13px;
+  color: var(--neutral-500);
+  line-height: 1.5;
+}
+
+/* Lists for Leads, Calls, Appointments */
+.ds-list { display: flex; flex-direction: column; gap: 2px; }
+.ds-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--neutral-100);
+}
+.ds-list-item:last-child { border-bottom: none; }
+.ds-list-item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--neutral-50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.ds-list-item-content { flex: 1; min-width: 0; }
+.ds-list-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--neutral-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ds-list-item-sub {
+  font-size: 12px;
+  color: var(--neutral-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ds-empty-inline {
+  padding: 32px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--neutral-500);
+}
+
+/* Status Widget (V1-11) */
+.ds-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+.ds-status-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.ds-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ds-status-dot.status-active { background: var(--success); box-shadow: 0 0 6px rgba(16,185,129,0.4); }
+.ds-status-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--neutral-700);
+}
+.ds-status-desc {
+  font-size: 11px;
+  color: var(--neutral-500);
+}
+
+/* Analytics Overview */
+.ds-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-md);
+}
+.ds-analytics-item {
+  text-align: center;
+  padding: var(--space-md);
+  background: var(--neutral-50);
+  border-radius: var(--radius-sm);
+}
+.ds-analytics-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.ds-analytics-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--neutral-900);
+}
+.ds-error-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  font-size: 14px;
+  color: var(--neutral-600);
+}
+.ds-skeleton {
+  padding: var(--space-lg);
+}
+
+/* Gated widget banner */
+.ds-gated-pro {
+  position: relative;
+}
+.ds-gated-pro::after {
+  content: 'PRO';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: var(--brand-600);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+/* Loading animation for KPI updates */
+@keyframes kpiPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.ds-kpi-card.updating .ds-kpi-value {
+  animation: kpiPulse 0.3s ease;
+}
+
+/* Dark mode overrides for dashboard components */
+[data-theme="dark"] .ds-card {
+  background: var(--neutral-100);
+  border-color: var(--neutral-300);
+}
+[data-theme="dark"] .ds-card-header {
+  border-bottom-color: var(--neutral-300);
+}
+[data-theme="dark"] .ds-card-title {
+  color: var(--neutral-700);
+}
+[data-theme="dark"] .ds-action-card {
+  background: var(--neutral-100);
+  border-color: var(--neutral-300);
+}
+[data-theme="dark"] .ds-action-card:hover {
+  border-color: var(--brand-500);
+  background: var(--neutral-200);
+}
+[data-theme="dark"] .ds-action-card svg { color: var(--brand-400); }
+[data-theme="dark"] .ds-action-card span { color: var(--neutral-500); }
+[data-theme="dark"] .ds-kpi-card {
+  background: var(--neutral-100);
+  border-color: var(--neutral-300);
+}
+[data-theme="dark"] .ds-kpi-value { color: var(--neutral-800); }
+[data-theme="dark"] .ds-hero-kpi-value { color: var(--neutral-800); }
+[data-theme="dark"] .ds-pill {
+  border-color: var(--neutral-300);
+  color: var(--neutral-400);
+}
+[data-theme="dark"] .ds-pill:hover { border-color: var(--brand-400); color: var(--brand-300); }
+[data-theme="dark"] .ds-pill.active { background: var(--brand-600); color: var(--neutral-900); border-color: var(--brand-500); }
+[data-theme="dark"] .ds-metric-select {
+  background: var(--neutral-200);
+  border-color: var(--neutral-300);
+  color: var(--neutral-700);
+}
+[data-theme="dark"] .ds-list-item {
+  border-bottom-color: var(--neutral-300);
+}
+[data-theme="dark"] .ds-list-item-icon { background: var(--neutral-200); }
+[data-theme="dark"] .ds-list-item-title { color: var(--neutral-700); }
+[data-theme="dark"] .ds-analytics-item { background: var(--neutral-200); }
+[data-theme="dark"] .ds-analytics-value { color: var(--neutral-800); }
+[data-theme="dark"] .ds-status-name { color: var(--neutral-600); }
+[data-theme="dark"] .ds-brief-body p { color: var(--neutral-600); }
+[data-theme="dark"] .ds-coach-text { color: var(--neutral-600); }
+[data-theme="dark"] .ds-daily-brief { background: var(--neutral-100); border-color: var(--neutral-300); }
+
+/* Responsive: Dashboard Widget Grid */
+@media (min-width: 1024px) {
+  .main-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 var(--space-lg);
+    align-content: start;
+  }
+  .ds-widget-full { grid-column: 1 / -1; }
+  .ds-widget-half { grid-column: span 1; }
+}
+
+@media (max-width: 1023px) {
+  .ds-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .ds-analytics-grid { grid-template-columns: repeat(3, 1fr); }
+  .ds-status-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    display: block;
+  }
+  .ds-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: var(--space-sm); }
+  .ds-kpi-card { padding: var(--space-md); }
+  .ds-kpi-value { font-size: 20px; }
+  .ds-hero-kpi-value { font-size: 32px; }
+  .ds-quick-actions { gap: 8px; }
+  .ds-action-card { padding: 12px 14px; min-width: 80px; flex: 1 0 calc(33% - 8px); }
+  .ds-analytics-grid { grid-template-columns: repeat(2, 1fr); gap: var(--space-sm); }
+  .ds-analytics-item { padding: 12px; }
+  .ds-analytics-value { font-size: 17px; }
+  .ds-status-grid { grid-template-columns: 1fr 1fr; }
+  .ds-card-body { padding: var(--space-md); }
+  .ds-card-header { padding: var(--space-sm) var(--space-md); }
+  .ds-widget { margin-bottom: var(--space-md); }
+}
+
+@media (max-width: 480px) {
+  .ds-kpi-grid { grid-template-columns: 1fr; }
+  .ds-action-card { flex: 1 0 calc(50% - 8px); }
+  .ds-hero-kpi-value { font-size: 28px; }
+  .ds-analytics-grid { grid-template-columns: 1fr 1fr; }
+  .ds-status-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================
+   Phase 3 — Remediation CSS
+   ============================================ */
+
+/* Skip-to-content link (M3) */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  z-index: 10000;
+  padding: 8px 16px;
+  background: var(--brand-600);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 var(--radius-sm) 0;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* Modal CSS classes (M2) */
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--neutral-900);
+}
+.modal-desc {
+  font-size: 13px;
+  color: var(--neutral-500);
+  margin-bottom: 12px;
+}
+.modal-phone-number {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--brand-600);
+  letter-spacing: 1px;
+  margin: 16px 0;
+}
+.modal-emoji {
+  font-size: 48px;
+}
+.modal-ai-response {
+  background: var(--neutral-50);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 13px;
+  min-height: 60px;
+  color: var(--neutral-500);
+  margin-top: 8px;
+}
+
+/* Health Indicators (H3) */
+.health-hot { color: #dc2626; font-weight: 600; }
+.health-warm { color: #d97706; font-weight: 600; }
+.health-cold { color: #6b7280; }
+.health-new { color: var(--brand-600); font-weight: 600; }
+
+/* Outcome Badges (H2) */
+.badge-answered { background: #d1fae5; color: #047857; }
+.badge-missed { background: #fee2e2; color: #b91c1c; }
+.badge-voicemail { background: #fef3c7; color: #a16207; }
+.badge-transferred { background: #f3e8ff; color: #7e22ce; }
+
+/* Dark mode for health indicators */
+[data-theme="dark"] .health-hot { color: #fca5a5; }
+[data-theme="dark"] .health-warm { color: #fbbf24; }
+[data-theme="dark"] .health-cold { color: #9ca3af; }
+[data-theme="dark"] .health-new { color: var(--brand-400); }
+
+/* Dark mode for outcome badges */
+[data-theme="dark"] .badge-answered { background: rgba(4,120,87,0.2); color: #6ee7b7; }
+[data-theme="dark"] .badge-missed { background: rgba(185,28,28,0.2); color: #fca5a5; }
+[data-theme="dark"] .badge-voicemail { background: rgba(161,98,7,0.2); color: #fbbf24; }
+[data-theme="dark"] .badge-transferred { background: rgba(126,34,206,0.2); color: #d8b4fe; }
+
+/* Dark mode for modal classes */
+[data-theme="dark"] .modal-title { color: var(--neutral-800); }
+[data-theme="dark"] .modal-ai-response { background: var(--neutral-200); color: var(--neutral-600); }
+[data-theme="dark"] .modal-phone-number { color: var(--brand-400); }

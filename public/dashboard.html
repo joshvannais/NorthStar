@@ -8,9 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="/css/dashboard.css">
 </head>
 <body>
+<a href="#mainContent" class="skip-link">Skip to main content</a>
 <div class="mobile-header">
   <button class="hamburger-btn" onclick="toggleMobileMenu()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -25,12 +25,14 @@
     <button class="mobile-menu-close" onclick="toggleMobileMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   </div>
   <nav class="mobile-menu-nav">
-    <a href="/dashboard" id="mnav-dashboard" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
-    <a href="/dashboard/leads" id="mnav-leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
-    <a href="/dashboard/calls" id="mnav-calls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Call History</a>
-    <a href="/dashboard/my-number" id="mnav-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>My Number</a>
-    <a href="/dashboard/settings" id="mnav-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
-    <a href="/dashboard/integrations" id="mnav-integrations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>Integrations</a>
+    <a href="/dashboard" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+    <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
+    <a href="/dashboard/calls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Call History</a>
+    <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>My Number</a>
+    <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Calendar</a>
+    <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>AI Settings</a>
+    <a href="/dashboard/business-profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Business Profile</a>
+    <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
   </nav>
   <div class="mobile-menu-footer">
     <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>
@@ -45,14 +47,13 @@ function toggleMobileMenu() {
 </script>
 
   <div class="dashboard-layout">
-    <!-- Sidebar -->
     <aside class="sidebar">
       <a href="/dashboard" class="sidebar-logo">
         <img src="/assets/logo.png" alt="NorthStar" class="logo-img">
         NorthStar
       </a>
       <nav class="sidebar-nav">
-        <a href="/dashboard" class="active">
+        <a href="/dashboard" class="active" aria-current="page">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           <span>Dashboard</span>
         </a>
@@ -68,6 +69,18 @@ function toggleMobileMenu() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           <span>My Number</span>
         </a>
+        <a href="/dashboard/calendar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+          <span>Calendar</span>
+        </a>
+        <a href="/dashboard/ai-settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>
+          <span>AI Settings</span>
+        </a>
+        <a href="/dashboard/business-profile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Business Profile</span>
+        </a>
         <a href="/dashboard/settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
           <span>Settings</span>
@@ -79,277 +92,254 @@ function toggleMobileMenu() {
       </a>
       <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button>
     </aside>
-
-    <!-- Main Content -->
     <main class="main-content" id="mainContent">
       <div class="page-header">
         <div>
           <h1>Dashboard</h1>
-          <p id="welcomeMessage">Welcome back! Here's your overview.</p>
+          <p id="welcomeMessage">Welcome back! Here's your business overview.</p>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="simulateDemoLead()">➕ Simulate Lead</button>
-      </div>
-
-      <!-- Stats / KPI Cards -->
-      <div class="stats-grid" id="statsGrid">
-        <div class="stat-card stat-card-calls">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          </div>
-          <div class="stat-label">Today's Calls</div>
-          <div class="stat-value" id="totalCallsToday">0</div>
-          <div class="stat-change up" id="callsChange">Answered by AI</div>
-        </div>
-        <div class="stat-card stat-card-leads">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <div class="stat-label">New Leads</div>
-          <div class="stat-value" id="todayLeads">0</div>
-          <div class="stat-change up" id="todayChange">Captured today</div>
-        </div>
-        <div class="stat-card stat-card-appointments">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
-          </div>
-          <div class="stat-label">Appointments</div>
-          <div class="stat-value" id="scheduledLeads">0</div>
-          <div class="stat-change up">Scheduled</div>
-        </div>
-        <div class="stat-card stat-card-revenue">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="12" x2="12" y1="1" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          </div>
-          <div class="stat-label">Revenue Captured</div>
-          <div class="stat-value revenue-positive" id="estimatedRevenue">$0</div>
-          <div class="stat-change up" id="revenueChange">Estimated today</div>
-        </div>
-        <div class="stat-card stat-card-missed">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg>
-          </div>
-          <div class="stat-label">Missed Calls Prevented</div>
-          <div class="stat-value" id="missedCallsPrevented">0</div>
-          <div class="stat-change up">Saved by AI</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="simulateDemoLead()">➕ Simulate Lead</button>
         </div>
       </div>
-
-      <!-- Analytics Section -->
-      <div class="analytics-grid" id="analyticsGrid">
-        <div class="analytics-card">
-          <div class="analytics-label">Calls Answered</div>
-          <div class="analytics-value" id="analyticsCalls">0</div>
-        </div>
-        <div class="analytics-card">
-          <div class="analytics-label">Leads Captured</div>
-          <div class="analytics-value" id="analyticsLeads">0</div>
-        </div>
-        <div class="analytics-card">
-          <div class="analytics-label">Appointments Booked</div>
-          <div class="analytics-value" id="analyticsAppts">0</div>
-        </div>
-        <div class="analytics-card">
-          <div class="analytics-label">Avg. Job Value</div>
-          <div class="analytics-value" id="analyticsAvgValue">$0</div>
-        </div>
-        <div class="analytics-card">
-          <div class="analytics-label">Avg. Call Length</div>
-          <div class="analytics-value" id="analyticsCallLength">0:00</div>
-        </div>
-        <div class="analytics-card">
-          <div class="analytics-label">Conversion Rate</div>
-          <div class="analytics-value" id="analyticsConversion">0%</div>
+      <!-- WIDGET 1: Daily Brief -->
+      <div class="ds-widget ds-widget-full" id="widget-daily-brief">
+        <div class="ds-card" id="dailyBriefCard">
+          <div class="ds-skeleton" id="briefSkeleton"><div class="skeleton skeleton-title" style="width:30%;"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:80%;"></div><div class="skeleton skeleton-text" style="width:50%;"></div></div>
+          <div class="ds-brief" id="briefContent" style="display:none;">
+            <div class="ds-brief-header"><span class="ds-brief-label">NORTHSTAR DAILY BRIEF</span><div style="display:flex;gap:4px;align-items:center;"><button class="ds-brief-btn" onclick="refreshBrief()" title="Refresh brief">↻</button><span class="ds-brief-time" id="briefTimestamp">Last updated: —</span></div></div>
+            <div class="ds-brief-body" id="briefBody"></div>
+          </div>
+          <div class="ds-error-inline" id="briefError" style="display:none;"><span>⚠️</span><span>Unable to load daily brief.</span><button class="btn btn-sm btn-ghost" onclick="refreshBrief()">Retry</button></div>
         </div>
       </div>
-
-      <!-- Leads Table -->
-      <div class="table-container">
-        <div class="table-header">
-          <h2>Recent Leads</h2>
-          <span style="font-size:13px;color:var(--neutral-500);" id="leadCount">0 leads</span>
+      <!-- WIDGET 2: Quick Actions -->
+      <div class="ds-widget ds-widget-full" id="widget-quick-actions">
+        <div class="ds-quick-actions">
+          <button class="ds-action-card" onclick="simulateDemoLead()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="8"/></svg><span>Simulate Lead</span></button>
+          <button class="ds-action-card" onclick="openTestAIModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Test AI</span></button>
+          <button class="ds-action-card" onclick="openCallMyAIModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call My AI</span></button>
+          <button class="ds-action-card" onclick="showComingSoon('Invite Team Member')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Invite Team</span></button>
+          <button class="ds-action-card" onclick="showComingSoon('Integration')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg><span>Connect Integrations</span></button>
+          <button class="ds-action-card" onclick="showComingSoon('Knowledge Base')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg><span>Knowledge Base</span></button>
         </div>
-        <div id="leadsContent">
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <h3>No leads yet</h3>
-            <p>Click "Simulate Lead" to test your AI Office Manager, or connect your phone number to start receiving real calls.</p>
+      </div>
+      <!-- WIDGET 3: Hero KPI -->
+      <div class="ds-widget ds-widget-full" id="widget-hero-kpi">
+        <div class="ds-card ds-hero-kpi" id="heroKpiCard" onclick="navigateToRevenue()">
+          <div class="ds-skeleton" id="heroSkeleton"><div class="skeleton skeleton-title" style="width:40%;"></div><div class="skeleton skeleton-text" style="width:25%;height:40px;margin:12px 0;"></div><div class="skeleton skeleton-text" style="width:35%;"></div></div>
+          <div id="heroContent" style="display:none;">
+            <div class="ds-hero-kpi-header"><span class="ds-hero-kpi-title">Estimated Revenue Opportunity</span><button class="ds-info-btn" onclick="event.stopPropagation();showTooltip(event,'Total estimated value of all qualified opportunities managed by NorthStar. This is pipeline value, not earned revenue.')" aria-label="What is estimated revenue opportunity?">?</button></div>
+            <div class="ds-hero-kpi-filters" id="heroPeriodPills">
+              <button class="ds-pill active" data-period="today" onclick="event.stopPropagation();switchHeroPeriod('today')">Today</button>
+              <button class="ds-pill" data-period="week" onclick="event.stopPropagation();switchHeroPeriod('week')">Week</button>
+              <button class="ds-pill" data-period="month" onclick="event.stopPropagation();switchHeroPeriod('month')">Month</button>
+              <button class="ds-pill" data-period="quarter" onclick="event.stopPropagation();switchHeroPeriod('quarter')">Quarter</button>
+              <button class="ds-pill" data-period="year" onclick="event.stopPropagation();switchHeroPeriod('year')">Year</button>
+            </div>
+            <div class="ds-hero-kpi-value" id="heroKpiValue">$0</div>
+            <div class="ds-hero-kpi-trend" id="heroKpiTrend"></div>
+            <div class="ds-hero-kpi-subtitle" id="heroKpiSubtitle">From 0 qualified opportunities</div>
+          </div>
+          <div class="ds-error-inline" id="heroError" style="display:none;"><span>⚠️</span><span>Unable to load revenue data.</span><button class="btn btn-sm btn-ghost" onclick="loadHeroKPI()">Retry</button></div>
+        </div>
+      </div>
+      <!-- WIDGET 4: KPI Grid -->
+      <div class="ds-widget ds-widget-full" id="widget-kpi-grid"><div class="ds-kpi-grid" id="kpiGrid"></div></div>
+      <!-- WIDGET 5: Revenue Trends (Pro+) -->
+      <div class="ds-widget ds-widget-full ds-gated-pro" id="widget-revenue-trends">
+        <div class="ds-card" id="revenueTrendsCard">
+          <div class="ds-card-header"><span class="ds-card-title">Revenue Trends</span><div style="display:flex;gap:8px;align-items:center;"><select class="ds-metric-select" id="trendMetricSelect" onchange="loadTrendChart()"><option value="revenue">Revenue Opportunity</option><option value="calls">Calls</option><option value="leads">Leads</option><option value="appointments">Appointments</option><option value="conversion">Conversion Rate</option><option value="avgJobValue">Avg Job Value</option></select></div></div>
+          <div class="ds-card-body">
+            <div class="ds-trend-periods" id="trendPeriodPills">
+              <button class="ds-pill active" data-period="7d" onclick="switchTrendPeriod('7d')">7D</button>
+              <button class="ds-pill" data-period="30d" onclick="switchTrendPeriod('30d')">30D</button>
+              <button class="ds-pill" data-period="90d" onclick="switchTrendPeriod('90d')">90D</button>
+              <button class="ds-pill" data-period="1y" onclick="switchTrendPeriod('1y')">1Y</button>
+            </div>
+            <div class="ds-chart-area" id="trendChartArea">
+              <div class="ds-skeleton" id="chartSkeleton" style="height:280px;border-radius:var(--radius-sm);"></div>
+              <canvas id="trendChartCanvas" style="display:none;width:100%;height:280px;"></canvas>
+              <div class="ds-chart-empty" id="chartEmpty" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" style="opacity:0.3;"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><p>No trend data available for this period.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- WIDGET 6: NorthStar Coach (Pro+) -->
+      <div class="ds-widget ds-widget-full ds-gated-pro" id="widget-coach">
+        <div class="ds-card" id="coachCard">
+          <div class="ds-card-header"><span class="ds-card-title">⭐ NorthStar Coach</span><button class="btn btn-sm btn-ghost" onclick="dismissCoach()">Dismiss</button></div>
+          <div class="ds-card-body" id="coachBody">
+            <div class="ds-skeleton" id="coachSkeleton"><div class="skeleton skeleton-text" style="width:90%;"></div><div class="skeleton skeleton-text" style="width:60%;"></div></div>
+            <div class="ds-coach-content" id="coachContent" style="display:none;"><p class="ds-coach-text" id="coachText">NorthStar is analyzing your data.</p><div class="ds-coach-reason" id="coachReason"></div></div>
+          </div>
+        </div>
+      </div>
+      <!-- WIDGET 7: Recent Leads -->
+      <div class="ds-widget ds-widget-half" id="widget-recent-leads">
+        <div class="ds-card">
+          <div class="ds-card-header"><span class="ds-card-title">📋 Recent Leads</span><a href="/dashboard/leads" class="btn btn-sm btn-ghost">View All</a></div>
+          <div class="ds-card-body" id="recentLeadsBody">
+            <div class="ds-skeleton" id="leadsSkeleton"><div class="skeleton skeleton-text" style="width:100%;"></div><div class="skeleton skeleton-text" style="width:100%;"></div><div class="skeleton skeleton-text" style="width:100%;"></div><div class="skeleton skeleton-text" style="width:80%;"></div></div>
+            <div class="ds-list" id="recentLeadsList"></div>
+            <div class="ds-empty-inline" id="recentLeadsEmpty" style="display:none;"><p>No leads yet. Click "Simulate Lead" to test your AI Office Manager.</p></div>
+          </div>
+        </div>
+      </div>
+      <!-- WIDGET 8: Recent Calls -->
+      <div class="ds-widget ds-widget-half" id="widget-recent-calls">
+        <div class="ds-card">
+          <div class="ds-card-header"><span class="ds-card-title">📞 Recent Calls</span><a href="/dashboard/calls" class="btn btn-sm btn-ghost">View All</a></div>
+          <div class="ds-card-body" id="recentCallsBody">
+            <div class="ds-skeleton" id="callsSkeleton"><div class="skeleton skeleton-text" style="width:100%;"></div><div class="skeleton skeleton-text" style="width:100%;"></div><div class="skeleton skeleton-text" style="width:100%;"></div><div class="skeleton skeleton-text" style="width:80%;"></div></div>
+            <div class="ds-list" id="recentCallsList"></div>
+            <div class="ds-empty-inline" id="recentCallsEmpty" style="display:none;"><p>No calls recorded yet. Calls will appear here once NorthStar answers your phone.</p></div>
+          </div>
+        </div>
+      </div>
+      <!-- WIDGET 9: Upcoming Appointments -->
+      <div class="ds-widget ds-widget-half" id="widget-appointments">
+        <div class="ds-card">
+          <div class="ds-card-header"><span class="ds-card-title">📅 Upcoming Appointments</span><a href="/dashboard/calendar" class="btn btn-sm btn-ghost">View All</a></div>
+          <div class="ds-card-body" id="appointmentsBody">
+            <div class="ds-skeleton" id="apptsSkeleton"><div class="skeleton skeleton-text" style="width:100%;"></div><div class="skeleton skeleton-text" style="width:100%;"></div><div class="skeleton skeleton-text" style="width:70%;"></div></div>
+            <div class="ds-list" id="appointmentsList"></div>
+            <div class="ds-empty-inline" id="appointmentsEmpty" style="display:none;"><p>No appointments scheduled.</p></div>
+          </div>
+        </div>
+      </div>
+      <!-- WIDGET 10: NorthStar Status -->
+      <div class="ds-widget ds-widget-half" id="widget-status">
+        <div class="ds-card">
+          <div class="ds-card-header"><span class="ds-card-title">🔵 NorthStar Status</span></div>
+          <div class="ds-card-body"><div class="ds-status-grid" id="statusGrid"></div></div>
+        </div>
+      </div>
+      <!-- WIDGET 11: Analytics -->
+      <div class="ds-widget ds-widget-full" id="widget-analytics">
+        <div class="ds-card">
+          <div class="ds-card-header"><span class="ds-card-title">📊 Analytics Overview</span></div>
+          <div class="ds-card-body">
+            <div class="ds-analytics-grid" id="analyticsGrid">
+              <div class="ds-analytics-item"><div class="ds-analytics-label">Calls Answered</div><div class="ds-analytics-value" id="analyticsCalls">0</div></div>
+              <div class="ds-analytics-item"><div class="ds-analytics-label">Leads Captured</div><div class="ds-analytics-value" id="analyticsLeads">0</div></div>
+              <div class="ds-analytics-item"><div class="ds-analytics-label">Appointments Booked</div><div class="ds-analytics-value" id="analyticsAppts">0</div></div>
+              <div class="ds-analytics-item"><div class="ds-analytics-label">Avg. Job Value</div><div class="ds-analytics-value" id="analyticsAvgValue">$0</div></div>
+              <div class="ds-analytics-item"><div class="ds-analytics-label">Avg. Call Length</div><div class="ds-analytics-value" id="analyticsCallLength">0:00</div></div>
+              <div class="ds-analytics-item"><div class="ds-analytics-label">Conversion Rate</div><div class="ds-analytics-value" id="analyticsConversion">0%</div></div>
+            </div>
           </div>
         </div>
       </div>
     </main>
   </div>
-
   <div class="toast-container" id="toastContainer"></div>
-
+  <!-- Modals -->
+  <div class="modal-backdrop" id="testAIModal" style="display:none;" role="dialog" aria-modal="true" aria-label="Test your AI" onclick="closeTestAIModal(event)">
+    <div class="modal-panel modal-sm" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 class="modal-title">Test Your AI</h3><button class="modal-close" onclick="closeTestAIModal()" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <p class="modal-desc">Type a question a customer might ask.</p>
+        <div class="form-group"><input type="text" id="testAiInput" placeholder="e.g., How much is a tree removal?"></div>
+        <div id="testAiResponse" class="modal-ai-response">Your AI's response will appear here.</div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary btn-sm" onclick="closeTestAIModal()">Close</button><button class="btn btn-primary btn-sm" onclick="testAIResponse()">Ask AI</button></div>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="callMyAIModal" style="display:none;" role="dialog" aria-modal="true" aria-label="Call your AI" onclick="closeCallMyAIModal(event)">
+    <div class="modal-panel modal-sm" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 class="modal-title">Call Your AI</h3><button class="modal-close" onclick="closeCallMyAIModal()" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <p class="modal-desc">Call your NorthStar AI phone number.</p>
+        <div class="modal-phone-number" id="myPhoneNumberDisplay">(860) 467-0739</div>
+        <p class="modal-desc">Your AI receptionist will answer.</p>
+      </div>
+      <div class="modal-footer"><button class="btn btn-primary" onclick="closeCallMyAIModal()">Got it</button></div>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="comingSoonModal" style="display:none;" role="dialog" aria-modal="true" aria-label="Coming soon" onclick="closeComingSoon(event)">
+    <div class="modal-panel modal-sm" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 class="modal-title">Coming Soon</h3><button class="modal-close" onclick="closeComingSoon()" aria-label="Close">&times;</button></div>
+      <div class="modal-body"><span class="modal-emoji">🚧</span><p class="modal-desc" id="comingSoonMessage">Under development.</p></div>
+      <div class="modal-footer"><button class="btn btn-primary" onclick="closeComingSoon()">OK</button></div>
+    </div>
+  </div>
   <script>
-    // Premium notification toasts
-    function showNotification(message, type) {
-      type = type || 'info';
-      const icons = { success: '✅', info: 'ℹ️', warning: '⚠️' };
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = 'toast-notification ' + type;
-      toast.innerHTML = '<span class="toast-icon">' + (icons[type] || 'ℹ️') + '</span>' +
-        '<span>' + message + '</span>' +
-        '<button class="toast-close" onclick="this.parentElement.remove()">×</button>';
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.style.animation = 'toastOut 0.3s ease-out forwards';
-        setTimeout(() => toast.remove(), 300);
-      }, 4000);
-    }
-
-    // Override old showToast
-    window.showToast = showNotification;
+  function showNotification(m,t){t=t||'info';const icons={success:'✅',info:'ℹ️',warning:'⚠️'};const c=document.getElementById('toastContainer');const o=document.createElement('div');o.className='toast-notification '+t;o.innerHTML='<span class="toast-icon">'+(icons[t]||'ℹ️')+'</span><span>'+m+'</span><button class="toast-close" onclick="this.parentElement.remove()">×</button>';c.appendChild(o);setTimeout(()=>{o.style.animation='toastOut 0.3s ease-out forwards';setTimeout(()=>o.remove(),300);},4000);}
+  window.showToast=showNotification;
   </script>
-
   <script src="/js/simulator.js"></script>
-<script src="/js/api.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
   <script>
-    // Welcome message
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (user.name) {
-      document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your overview.`;
-    }
-
-    // In-memory simulated calls — shared via sessionStorage across pages
-    let simulatedCalls = [];
-    function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
-    // Initialize from sessionStorage if data exists (synced from other pages)
-    try {
-      const saved = sessionStorage.getItem('northstar_calls');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) simulatedCalls = parsed;
-      }
-      // If this is a page reload (F5/Cmd+R), clear sessionStorage so data doesn't persist on next refresh
-      const nav = performance.getEntriesByType('navigation');
-      if (nav.length > 0 && nav[0].type === 'reload') {
-        sessionStorage.removeItem('northstar_calls');
-      }
-    } catch(e) {}
-
-    // Load leads from in-memory simulated calls (resets on refresh)
-    async function loadLeads() {
-      try {
-        const leads = simulatedCalls.map(c => ({
-          customerName: c.caller,
-          phoneNumber: c.phone,
-          serviceRequested: c.service,
-          receivedAt: c.receivedAt || c.time,
-          status: c.status || 'new',
-          urgency: '',
-          avgPrice: c.avgPrice
-        }));
-        renderLeads(leads);
-        renderStats(leads);
-      } catch (err) {
-                  console.error('Failed to load leads:', err);
-                  renderStats([]);
-                  document.getElementById('leadsContent').innerHTML = `
-                    <div class="empty-state">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                      <h3>No leads yet</h3>
-                      <p>Click "Simulate Lead" to test your AI Office Manager.</p>
-                    </div>`;
-                }
-    }
-
-    function renderStats(leads) {
-      const now = new Date();
-      let today = [], thisWeek = [];
-      try { today = leads.filter(l => { const d = new Date(l.receivedAt); return !isNaN(d.getTime()) && d.toDateString() === now.toDateString(); }); } catch(e) {}
-      try { thisWeek = leads.filter(l => { const d = new Date(l.receivedAt); if (isNaN(d.getTime())) return false; const wa = new Date(now); wa.setDate(wa.getDate() - 7); return d >= wa; }); } catch(e) {}
-      const scheduled = leads.filter(l => l.status === 'scheduled');
-
-      // Today's calls
-      const callsToday = today.length;
-      document.getElementById('totalCallsToday').textContent = callsToday;
-      document.getElementById('callsChange').textContent = callsToday > 0 ? `${callsToday} answered by AI today` : 'Answered by AI';
-
-      // Today's leads
-      document.getElementById('todayLeads').textContent = today.length;
-      document.getElementById('todayChange').textContent = today.length > 0 ? `${today.length} captured today` : 'Captured today';
-
-      // Appointments
-      document.getElementById('scheduledLeads').textContent = scheduled.length;
-
-      // Revenue calculation
-      let totalRevenue = 0;
-      try {
-        totalRevenue = simulatedCalls.reduce((sum, c) => sum + (c.avgPrice || 0), 0);
-      } catch(e) {}
-      const estimatedRevenue = totalRevenue;
-      document.getElementById("estimatedRevenue").textContent = "$" + Math.round(estimatedRevenue).toLocaleString();
-      if (estimatedRevenue > 0) document.getElementById("estimatedRevenue").className = "stat-value revenue-positive";
-      document.getElementById('revenueChange').textContent = estimatedRevenue > 0 ? `$${Math.round(estimatedRevenue).toLocaleString()} estimated today` : 'Estimated today';
-
-      // Missed calls prevented
-      document.getElementById('missedCallsPrevented').textContent = callsToday > 0 ? callsToday : 0;
-
-      // Lead count
-      document.getElementById('leadCount').textContent = `${leads.length} leads`;
-
-      // Analytics section
-      const totalCalls = simulatedCalls.length;
-      const totalLeads = leads.length;
-      const appointmentsBooked = scheduled.length;
-      const avgValue = totalLeads > 0 ? Math.round(totalRevenue / totalLeads) : 0;
-      const avgCallLength = totalCalls > 0 ? '3:24' : '0:00';
-      const conversionRate = totalCalls > 0 ? Math.round((appointmentsBooked / totalCalls) * 100) + '%' : '0%';
-
-      document.getElementById('analyticsCalls').textContent = totalCalls;
-      document.getElementById('analyticsLeads').textContent = totalLeads;
-      document.getElementById('analyticsAppts').textContent = appointmentsBooked;
-      document.getElementById('analyticsAvgValue').textContent = '$' + avgValue.toLocaleString();
-      document.getElementById('analyticsCallLength').textContent = avgCallLength;
-      document.getElementById('analyticsConversion').textContent = conversionRate;
-    }
-
-    function renderLeads(leads) {
-      if (leads.length === 0) {
-        document.getElementById('leadsContent').innerHTML = `
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <h3>No leads yet</h3>
-            <p>Click "Simulate Lead" to test your AI Office Manager.</p>
-          </div>`;
-        return;
-      }
-
-      let html = `<table><thead><tr>
-        <th>Customer</th><th>Phone</th><th>Service</th><th>Date</th><th>Status</th><th>Urgency</th>
-      </tr></thead><tbody>`;
-
-      leads.slice().forEach(lead => {
-        const urgencyClass = lead.urgency ? 'urgency-high' : 'urgency-normal';
-        const urgencyText = lead.urgency || 'Normal';
-        html += `<tr>
-          <td><strong>${lead.customerName || 'Unknown'}</strong></td>
-          <td>${lead.phoneNumber || '-'}</td>
-          <td>${lead.serviceRequested || '-'}</td>
-          <td>${fmtTime(lead.receivedAt)}</td>
-          <td>${getStatusBadge(lead.status || 'new')}</td>
-          <td class="${urgencyClass}">${urgencyText}</td>
-        </tr>`;
-      });
-
-      html += '</tbody></table>';
-      document.getElementById('leadsContent').innerHTML = html;
-    }
-
-    // Simulate a demo lead
-    async     function simulateDemoLead() {
-      const c = genCall();
-      try {
-        simulatedCalls.unshift(c);
-        const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
-        existing.unshift(c);
-        sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
-      } catch (e) {}
-      showToast("✅ New lead: " + c.caller + " ($" + c.avgPrice.toLocaleString() + " estimated)");
-      loadLeads();
-    }</script>
-<script src="/js/theme.js"></script>
+  const user=JSON.parse(localStorage.getItem('user')||'{}');
+  if(user.name)document.getElementById('welcomeMessage').textContent='Welcome back, '+user.name+'!';
+  let simulatedCalls=[];
+  function fmtTime(t){if(!t)return'-';try{const d=new Date(t);if(!isNaN(d.getTime()))return d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch(e){}return t;}
+  try{const s=sessionStorage.getItem('northstar_calls');if(s){const p=JSON.parse(s);if(Array.isArray(p))simulatedCalls=p;}const n=performance.getEntriesByType('navigation');if(n.length>0&&n[0].type==='reload')sessionStorage.removeItem('northstar_calls');}catch(e){}
+  function getStatusBadge(s){const m={new:'badge-new',scheduled:'badge-scheduled',contacted:'badge-contacted',completed:'badge-completed'};return'<span class="badge '+(m[s]||'badge-new')+'">'+(s||'new')+'</span>';}
+  function showTooltip(e,t){const x=document.querySelector('.tooltip');if(x)x.remove();const tip=document.createElement('div');tip.className='tooltip visible';tip.textContent=t;const r=e.target.getBoundingClientRect();tip.style.left=Math.min(r.left+r.width/2-100,window.innerWidth-220)+'px';tip.style.top=(r.bottom+8)+'px';document.body.appendChild(tip);setTimeout(()=>tip.remove(),4000);}
+  function getOutcomeBadge(o){const m={answered:'badge-answered Answered',missed:'badge-missed Missed',voicemail:'badge-voicemail Voicemail',transferred:'badge-transferred Transferred'};const e=m[o]||'badge-answered Answered';const[c,l]=e.split(' ');return'<span class="call-status-badge '+c+'">'+l+'</span>';}
+  function getHealthIndicator(t){const n=new Date(),r=new Date(t);if(isNaN(r.getTime()))return'<span class="health-new" style="font-size:11px;">New</span>';const h=(n-r)/(1e3*3600);if(h<1)return'<span class="health-hot" style="font-size:11px;">Hot</span>';if(h<24)return'<span class="health-warm" style="font-size:11px;">Warm</span>';return'<span class="health-cold" style="font-size:11px;">Cold</span>';}
+  // Day-Reset (H8)
+  const hps='northstar_hero_kpi_period',sd=sessionStorage.getItem('northstar_kpi_day'),ts=new Date().toDateString();if(sd&&sd!==ts)sessionStorage.removeItem(hps);sessionStorage.setItem('northstar_kpi_day',ts);
+  let currentHeroPeriod=sessionStorage.getItem(hps)||'month';
+  // Daily Brief
+  let briefLastRefresh=0;
+  function refreshBrief(){const n=Date.now();if(n-briefLastRefresh<60000){showNotification('Please wait 60 seconds.','warning');return;}briefLastRefresh=n;loadDailyBrief();}
+  function loadDailyBrief(){const s=document.getElementById('briefSkeleton'),c=document.getElementById('briefContent'),e=document.getElementById('briefError');s.style.display='block';c.style.display='none';e.style.display='none';setTimeout(()=>{s.style.display='none';const today=simulatedCalls.filter(c=>{try{const d=new Date(c.receivedAt||c.time);return!isNaN(d.getTime())&&d.toDateString()===new Date().toDateString()}catch(e){return false}}).length,apps=simulatedCalls.filter(c=>c.status==='scheduled').length,hr=new Date().getHours(),g=hr<12?'Good morning':hr<17?'Good afternoon':'Good evening',n=user.name||'there';let b=g+', '+n+'. ';if(today>0)b+='NorthStar answered '+today+' call'+(today!==1?'s':'')+' today';const l=simulatedCalls.length;if(l>0&&today>0)b+=', captured '+l+' lead'+(l!==1?'s':'');else if(l>0)b+='NorthStar has captured '+l+' lead'+(l!==1?'s':'');if(apps>0)b+=', and booked '+apps+' appointment'+(apps!==1?'s':'');b+='. ';const hv=simulatedCalls.sort((a,b)=>(b.avgPrice||0)-(a.avgPrice||0))[0];if(hv&&hv.avgPrice>0)b+='Your top opportunity is a $'+(hv.avgPrice||0).toLocaleString()+' '+hv.service+' with '+hv.caller+'.';else if(simulatedCalls.length>0)b+='Keep an eye on your recent leads.';else b=g+', '+n+'. Welcome to NorthStar!';document.getElementById('briefBody').innerHTML='<p>'+b+'</p>';document.getElementById('briefTimestamp').textContent='Last updated: '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});c.style.display='block';},600);}
+  // Hero KPI
+  function loadHeroKPI(){const s=document.getElementById('heroSkeleton'),c=document.getElementById('heroContent'),e=document.getElementById('heroError');s.style.display='block';c.style.display='none';e.style.display='none';setTimeout(()=>{s.style.display='none';const l=simulatedCalls,v=l.reduce((s,c)=>s+(c.avgPrice||0),0),cnt=l.length,svc=new Set(l.map(x=>x.service).filter(Boolean)).size,val=cnt>0?v:0;document.getElementById('heroKpiValue').textContent='$'+Math.round(val).toLocaleString();if(val>0){const trend=cnt>3?12:0,arrow=trend>0?'↑':trend<0?'↓':'→',cls=trend>0?'ds-trend-up':trend<0?'ds-trend-down':'ds-trend-flat';document.getElementById('heroKpiTrend').innerHTML='<span class="'+cls+'">'+arrow+' '+Math.abs(trend)+'% vs last '+currentHeroPeriod+'</span>';}else document.getElementById('heroKpiTrend').innerHTML='';document.getElementById('heroKpiSubtitle').textContent=cnt>0?'From '+cnt+' opportunit'+(cnt!==1?'ies':'y')+' across '+svc+' service'+(svc!==1?'s':''):'No qualified opportunities yet.';c.style.display='block';},500);}
+  function switchHeroPeriod(p){currentHeroPeriod=p;sessionStorage.setItem(hps,p);document.querySelectorAll('#heroPeriodPills .ds-pill').forEach(el=>el.classList.toggle('active',el.dataset.period===p));loadHeroKPI();}
+  function navigateToRevenue(){window.location.href='/dashboard/reports/revenue?period='+currentHeroPeriod;}
+  document.querySelectorAll('#heroPeriodPills .ds-pill').forEach(p=>p.classList.toggle('active',p.dataset.period===currentHeroPeriod));
+  // KPI Grid (H1: tier gating)
+  const kpiDefs=[
+    {id:'today_calls',icon:'📞',label:"Today's Calls",link:'/dashboard/calls?filter=today',tier:'starter'},
+    {id:'new_leads',icon:'👤',label:'New Leads',link:'/dashboard/leads?filter=today',tier:'starter'},
+    {id:'appointments',icon:'📅',label:'Appointments',link:'/dashboard/calendar?filter=today',tier:'starter'},
+    {id:'lead_conversion',icon:'📊',label:'Lead Conv.',link:'/dashboard/reports/conversion',tier:'starter'},
+    {id:'avg_job_value',icon:'💰',label:'Avg Job Value',link:'/dashboard/reports/job-value',tier:'starter'},
+    {id:'avg_call_length',icon:'⏱',label:'Avg Call Length',link:'/dashboard/calls',tier:'starter'},
+    {id:'missed_calls',icon:'🚫',label:'Missed Calls Prev.',link:'/dashboard/calls?filter=prevented',tier:'starter'},
+    {id:'avg_response_time',icon:'⚡',label:'Avg Response Time',link:'/dashboard/reports/response-time',tier:'pro'},
+    {id:'ai_transfer_rate',icon:'🔄',label:'AI Transfer Rate',link:'/dashboard/calls?filter=transferred',tier:'pro'},
+  ];
+  function loadKpiGrid(){const g=document.getElementById('kpiGrid'),total=simulatedCalls.length,today=simulatedCalls.filter(c=>{try{const d=new Date(c.receivedAt||c.time);return!isNaN(d.getTime())&&d.toDateString()===new Date().toDateString()}catch(e){return false}}).length,scheduled=simulatedCalls.filter(c=>c.status==='scheduled').length,revenue=simulatedCalls.reduce((s,c)=>s+(c.avgPrice||0),0),avg=total>0?Math.round(revenue/total):0,tier=simulatedCalls.length>5?'pro':'starter';let html='';kpiDefs.forEach(k=>{if(k.tier==='pro'&&tier==='starter')return;let val='—',trend='';switch(k.id){case'today_calls':val=today;trend=today>0?'<span class="ds-trend-up">↑</span>':'';break;case'new_leads':val=total;trend=total>0?'<span class="ds-trend-up">↑</span>':'';break;case'appointments':val=scheduled;trend=scheduled>0?'<span class="ds-trend-up">↑</span>':'';break;case'lead_conversion':val=total>0?Math.round((scheduled/total)*100)+'%':'—';break;case'avg_job_value':val=avg>0?'$'+avg.toLocaleString():'—';break;case'avg_call_length':val=total>0?'3:24':'—';break;case'missed_calls':val=today>0?today:'0';trend=today>0?'<span class="ds-trend-up">↑</span>':'';break;default:val='—';}html+='<div class="ds-kpi-card" onclick="window.location.href=\''+k.link+'\'"><div class="ds-kpi-icon" style="background:var(--neutral-50);color:var(--neutral-500);"><span style="font-size:20px;">'+k.icon+'</span></div><div class="ds-kpi-value">'+val+'</div><div class="ds-kpi-label">'+k.label+'</div><div class="ds-kpi-trend">'+trend+'</div></div>';});g.innerHTML=html;}
+  // Revenue Trends (canvas)
+  let currentTrendPeriod='30d';
+  function switchTrendPeriod(p){currentTrendPeriod=p;document.querySelectorAll('#trendPeriodPills .ds-pill').forEach(el=>el.classList.toggle('active',el.dataset.period===p));loadTrendChart();}
+  function loadTrendChart(){const sk=document.getElementById('chartSkeleton'),cv=document.getElementById('trendChartCanvas'),em=document.getElementById('chartEmpty');sk.style.display='block';cv.style.display='none';em.style.display='none';if(simulatedCalls.length===0){setTimeout(()=>{sk.style.display='none';em.style.display='block';},400);return;}setTimeout(()=>{sk.style.display='none';const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,rect=cv.parentElement.getBoundingClientRect(),w=rect.width;cv.width=w*dpr;cv.height=280*dpr;cv.style.width=w+'px';cv.style.height='280px';ctx.scale(dpr,dpr);const pad={top:20,right:20,bottom:30,left:50},cw=w-pad.left-pad.right,ch=280-pad.top-pad.bottom;ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,w,280);const pts=12,data=[];for(let i=0;i<pts;i++)data.push(Math.round(1e3+Math.random()*8e3));const mx=Math.max(...data)*1.1,mn=Math.min(...data)*0.9;ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;for(let i=0;i<=4;i++){const y=pad.top+(ch/4)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(pad.left+cw,y);ctx.stroke();const val=Math.round(mx-(mx-mn)*(i/4));ctx.fillStyle='#94a3b8';ctx.font='11px Inter, sans-serif';ctx.textAlign='right';ctx.fillText('$'+val.toLocaleString(),pad.left-8,y+4);}ctx.beginPath();ctx.strokeStyle='#D4AF37';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';data.forEach((v,i)=>{const x=pad.left+(cw/(pts-1))*i,y=pad.top+ch-((v-mn)/(mx-mn))*ch;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();const g=ctx.createLinearGradient(0,pad.top,0,pad.top+ch);g.addColorStop(0,'rgba(212,175,55,0.2)');g.addColorStop(1,'rgba(212,175,55,0.01)');ctx.lineTo(pad.left+cw,pad.top+ch);ctx.lineTo(pad.left,pad.top+ch);ctx.closePath();ctx.fillStyle=g;ctx.fill();data.forEach((v,i)=>{const x=pad.left+(cw/(pts-1))*i,y=pad.top+ch-((v-mn)/(mx-mn))*ch;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle='#D4AF37';ctx.fill();ctx.beginPath();ctx.arc(x,y,2,0,Math.PI*2);ctx.fillStyle='white';ctx.fill();});cv.style.display='block';},500);}
+  // Recent Leads (H3)
+  function loadRecentLeads(){const s=document.getElementById('leadsSkeleton'),l=document.getElementById('recentLeadsList'),e=document.getElementById('recentLeadsEmpty');s.style.display='block';l.innerHTML='';e.style.display='none';setTimeout(()=>{s.style.display='none';const leads=simulatedCalls.slice(0,5);if(leads.length===0){e.style.display='block';return;}l.innerHTML=leads.map(x=>'<div class="ds-list-item"><div class="ds-list-item-icon">👤</div><div class="ds-list-item-content"><div class="ds-list-item-title">'+(x.caller||'Unknown')+'</div><div class="ds-list-item-sub">'+(x.service||'—')+' · '+fmtTime(x.receivedAt||x.time)+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+getHealthIndicator(x.receivedAt||x.time)+getStatusBadge(x.status||'new')+'</div></div>').join('');},400);}
+  // Recent Calls (H2)
+  function loadRecentCalls(){const s=document.getElementById('callsSkeleton'),l=document.getElementById('recentCallsList'),e=document.getElementById('recentCallsEmpty');s.style.display='block';l.innerHTML='';e.style.display='none';setTimeout(()=>{s.style.display='none';const calls=simulatedCalls.slice(0,5);if(calls.length===0){e.style.display='block';return;}const outcomes=['answered','missed','voicemail','transferred'];l.innerHTML=calls.map((c,i)=>{const o=c.status==='scheduled'?'answered':outcomes[i%4];return'<div class="ds-list-item"><div class="ds-list-item-icon">📞</div><div class="ds-list-item-content"><div class="ds-list-item-title">'+(c.caller||'Unknown')+'</div><div class="ds-list-item-sub">'+(c.service||'—')+' · '+fmtTime(c.receivedAt||c.time)+'</div></div>'+getOutcomeBadge(o)+'</div>';}).join('');},400);}
+  // Appointments
+  function loadAppointments(){const s=document.getElementById('apptsSkeleton'),l=document.getElementById('appointmentsList'),e=document.getElementById('appointmentsEmpty');s.style.display='block';l.innerHTML='';e.style.display='none';setTimeout(()=>{s.style.display='none';const appts=simulatedCalls.filter(c=>c.status==='scheduled').slice(0,5);if(appts.length===0){e.style.display='block';return;}l.innerHTML=appts.map(a=>'<div class="ds-list-item"><div class="ds-list-item-icon">📅</div><div class="ds-list-item-content"><div class="ds-list-item-title">'+(a.caller||'Unknown')+'</div><div class="ds-list-item-sub">'+(a.service||'—')+' · '+fmtTime(a.receivedAt||a.time)+'</div></div><span class="call-status-badge answered">Scheduled</span></div>').join('');},400);}
+  // Status (C10: 6 items, 60s polling)
+  const statusItems=[{id:'ai',name:'AI Receptionist',desc:'Connected'},{id:'phone',name:'Phone Line',desc:'Active'},{id:'forwarding',name:'Call Forwarding',desc:'Configured'},{id:'notifications',name:'Notifications',desc:'Active'},{id:'sms',name:'SMS',desc:'Configured'},{id:'voicemail',name:'Voicemail',desc:'Active'}];
+  function loadStatusWidget(){const g=document.getElementById('statusGrid');const sts=['status-active','status-active','status-active','status-active','status-active','status-active'];g.innerHTML=statusItems.map((item,i)=>'<div class="ds-status-item" onclick="showComingSoon(\''+item.name+'\')" style="cursor:pointer;"><span class="ds-status-dot '+sts[i]+'"></span><div><div class="ds-status-name">'+item.name+'</div><div class="ds-status-desc">'+item.desc+'</div></div></div>').join('');}
+  setInterval(loadStatusWidget,60000);
+  // Analytics
+  function loadAnalytics(){const t=simulatedCalls.length,s=simulatedCalls.filter(c=>c.status==='scheduled').length,r=simulatedCalls.reduce((s,c)=>s+(c.avgPrice||0),0),a=t>0?Math.round(r/t):0;document.getElementById('analyticsCalls').textContent=t;document.getElementById('analyticsLeads').textContent=t;document.getElementById('analyticsAppts').textContent=s;document.getElementById('analyticsAvgValue').textContent='$'+a.toLocaleString();document.getElementById('analyticsCallLength').textContent=t>0?'3:24':'0:00';document.getElementById('analyticsConversion').textContent=t>0?Math.round((s/t)*100)+'%':'0%';}
+  // Coach
+  let coachDismissed=false;
+  function loadCoach(){if(coachDismissed){document.getElementById('coachContent').style.display='none';document.getElementById('coachCard').style.display='none';return;}const s=document.getElementById('coachSkeleton'),c=document.getElementById('coachContent');s.style.display='block';c.style.display='none';setTimeout(()=>{s.style.display='none';const hv=simulatedCalls.sort((a,b)=>(b.avgPrice||0)-(a.avgPrice||0))[0];if(hv&&hv.avgPrice>500){document.getElementById('coachText').textContent='Call '+hv.caller+' back - $'+(hv.avgPrice||0).toLocaleString()+' estimate.';document.getElementById('coachReason').textContent='Best opportunity right now.';}else if(simulatedCalls.length>0){document.getElementById('coachText').textContent='You have '+simulatedCalls.length+' lead'+(simulatedCalls.length!==1?'s':'')+' to review.';document.getElementById('coachReason').textContent='Follow up promptly.';}else{document.getElementById('coachText').textContent='Welcome to NorthStar!';document.getElementById('coachReason').textContent='';}c.style.display='block';},400);}
+  function dismissCoach(){coachDismissed=true;document.getElementById('coachCard').style.display='none';showNotification('Coach dismissed.','info');}
+  // Load All
+  function loadDashboard(){loadDailyBrief();loadHeroKPI();loadKpiGrid();loadTrendChart();loadCoach();loadRecentLeads();loadRecentCalls();loadAppointments();loadAnalytics();loadStatusWidget();}
+  // Actions
+  function simulateDemoLead(){const c=genCall();try{simulatedCalls.unshift(c);const e=JSON.parse(sessionStorage.getItem('northstar_calls')||'[]');e.unshift(c);sessionStorage.setItem('northstar_calls',JSON.stringify(e));}catch(e){}showNotification('New lead: '+c.caller+' ($'+(c.avgPrice||0).toLocaleString()+')','success');loadDashboard();}
+  function openTestAIModal(){document.getElementById('testAIModal').style.display='flex';document.getElementById('testAiInput').value='';document.getElementById('testAiResponse').textContent="Your AI's response will appear here.";document.getElementById('testAiInput').focus();}
+  function closeTestAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('testAIModal').style.display='none';}
+  function testAIResponse(){const q=document.getElementById('testAiInput').value.trim();if(!q){showNotification('Please type a question.','warning');return;}const r=["Thanks for reaching out! Could you provide your address?","Great question! I'd recommend scheduling a free estimate.","I'd be glad to help! What's the best number to reach you?"];document.getElementById('testAiResponse').innerHTML='<strong style="color:var(--brand-600);">AI:</strong> '+r[Math.floor(Math.random()*r.length)];showNotification('Response generated.','info');}
+  function openCallMyAIModal(){document.getElementById('callMyAIModal').style.display='flex';}
+  function closeCallMyAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('callMyAIModal').style.display='none';}
+  function showComingSoon(f){document.getElementById('comingSoonMessage').textContent=f+' is under development.';document.getElementById('comingSoonModal').style.display='flex';}
+  function closeComingSoon(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('comingSoonModal').style.display='none';}
+  // Escape key (M2)
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){['testAIModal','callMyAIModal','comingSoonModal'].forEach(id=>{const m=document.getElementById(id);if(m.style.display==='flex')m.style.display='none';});}});
+  document.addEventListener('DOMContentLoaded',loadDashboard);
+  </script>
 </body>
 </html>

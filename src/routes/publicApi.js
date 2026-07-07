@@ -19,6 +19,10 @@ const cache = require('../cache/client');
 const db = require('../db');
 const { getAllLeads, getLead } = require('../leads/store');
 const analytics = require('../analytics/pipeline');
+const revenue = require('../analytics/revenue');
+const coach = require('../coach/engine');
+const brief = require('../coach/brief');
+const { getOrCompute, loadAllSnapshots, computePeriodSummary } = require('../analytics/dailySnapshots');
 const { seedDemoData } = require('../analytics/seeder');
 
 const router = express.Router();
@@ -125,44 +129,10 @@ router.get('/leads/:id', requireAuth, requirePermission('leads', 'view'), async 
 
 /**
  * GET /api/v1/calls
- * List calls with pagination and search.
+ * List calls with pagination and search from database.
  */
 router.get('/calls', requireAuth, requirePermission('calls', 'view'), async (req, res, next) => {
   try {
-    const range = req.query.range || 'today';
-    const data = await analytics.computeOverview(req.user.id, range);
-    res.json({ data });
-  } catch (err) { next(err); }
-});
-
-router.get('/analytics/trends', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
-  try {
-    const data = await analytics.computeTrends(req.user.id);
-    res.json({ data });
-  } catch (err) { next(err); }
-});
-
-router.get('/analytics/pipeline', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
-  try {
-    const data = await analytics.computePipeline(req.user.id);
-    res.json({ data });
-  } catch (err) { next(err); }
-});
-
-router.get('/analytics/by-service', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
-  try {
-    const range = req.query.range || 'month';
-    const data = await analytics.computeByService(req.user.id, range);
-    res.json({ data });
-  } catch (err) { next(err); }
-});
-
-// Seed demo data for the current user
-router.post('/analytics/seed', requireAuth, async (req, res, next) => {
-  try {
-    const seeded = await seedDemoData(req.user.id);
-    res.json({ data: { message: 'Demo data seeded successfully', records: seeded.length } });
-  } catch (err) { next(err); }
     const { cursor, limit: limitParam, status, search } = req.query;
     const limit = Math.min(parseInt(limitParam) || 20, 100);
 
@@ -208,6 +178,38 @@ router.post('/analytics/seed', requireAuth, async (req, res, next) => {
     });
 
     res.json({ data: calls, pagination: { cursor: nextCursor, hasMore } });
+  } catch (err) { next(err); }
+});
+
+// ==================== Analytics ====================
+
+router.get('/analytics/trends', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
+  try {
+    const data = await analytics.computeTrends(req.user.id);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/pipeline', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
+  try {
+    const data = await analytics.computePipeline(req.user.id);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/by-service', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
+  try {
+    const range = req.query.range || 'month';
+    const data = await analytics.computeByService(req.user.id, range);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+// Seed demo data for the current user
+router.post('/analytics/seed', requireAuth, async (req, res, next) => {
+  try {
+    const seeded = await seedDemoData(req.user.id);
+    res.json({ data: { message: 'Demo data seeded successfully', records: seeded.length } });
   } catch (err) { next(err); }
 });
 
@@ -563,84 +565,6 @@ router.get('/dashboard/revenue-trends', requireAuth, async (req, res, next) => {
 
     await cache.set(cacheKey, result, 300);
     res.json({ data: result });
-  } catch (err) { next(err); }
-});
-
-/**
- * GET /api/v1/dashboard/coach
- * Returns the primary recommendation and secondary insight. (V5-07)
- */
-router.get('/dashboard/coach', requireAuth, async (req, res, next) => {
-  try {
-    const leads = getAllLeads();
-    const today = new Date().toISOString().slice(0, 10);
-
-    const todayLeads = leads.filter(l => (l.receivedAt || '').startsWith(today));
-    const callsToday = todayLeads.filter(l => (l.source || 'phone_call') === 'phone_call').length;
-    const appointmentsToday = todayLeads.filter(l => l.callOutcome === 'appointment-set').length;
-    const oldLeads = leads.filter(l => {
-      if (!l.receivedAt) return false;
-      const daysOld = (Date.now() - new Date(l.receivedAt).getTime()) / 86400000;
-      return daysOld > 1 && !['no-interest', 'voicemail', 'appointment-set'].includes(l.callOutcome || '');
-    });
-    const wonCount = leads.filter(l => l.callOutcome === 'appointment-set').length;
-    const lostCount = leads.filter(l => l.callOutcome === 'no-interest').length;
-    const conversionRate = (wonCount + lostCount) > 0
-      ? Math.round((wonCount / (wonCount + lostCount)) * 100) : null;
-
-    const metrics = {
-      callsToday,
-      callsAnswered: callsToday,
-      leadsToday: todayLeads.length,
-      appointmentsScheduled: appointmentsToday,
-      conversionRate,
-      oldLeadsCount: oldLeads.length,
-      callsMissed: 0
-    };
-
-    const recommendation = coach.evaluate(metrics, req.user.name);
-    const insight = coach.secondaryInsight(metrics);
-
-    res.json({ data: { recommendation, insight } });
-  } catch (err) { next(err); }
-});
-
-/**
- * GET /api/v1/dashboard/brief
- * Daily Brief generation — 120-word max. (V5-08)
- */
-router.get('/dashboard/brief', requireAuth, async (req, res, next) => {
-  try {
-    const leads = getAllLeads();
-    const today = new Date().toISOString().slice(0, 10);
-
-    const todayLeads = leads.filter(l => (l.receivedAt || '').startsWith(today));
-    const callsToday = todayLeads.filter(l => (l.source || 'phone_call') === 'phone_call').length;
-    const appointmentsToday = todayLeads.filter(l => l.callOutcome === 'appointment-set').length;
-    const oldLeads = leads.filter(l => {
-      if (!l.receivedAt) return false;
-      const daysOld = (Date.now() - new Date(l.receivedAt).getTime()) / 86400000;
-      return daysOld > 1 && !['no-interest', 'voicemail', 'appointment-set'].includes(l.callOutcome || '');
-    });
-    const wonCount = leads.filter(l => l.callOutcome === 'appointment-set').length;
-    const lostCount = leads.filter(l => l.callOutcome === 'no-interest').length;
-    const conversionRate = (wonCount + lostCount) > 0
-      ? Math.round((wonCount / (wonCount + lostCount)) * 100) : null;
-
-    const metrics = {
-      callsToday,
-      callsAnswered: callsToday,
-      leadsToday: todayLeads.length,
-      appointmentsScheduled: appointmentsToday,
-      conversionRate,
-      oldLeadsCount: oldLeads.length
-    };
-
-    const revOverview = await revenue.computeRevenueOverview(req.user.id, leads);
-    const name = req.user.name || req.user.email || 'there';
-    const briefText = brief.generate(metrics, revOverview, name);
-
-    res.json({ data: { brief: briefText, wordCount: briefText.split(/\s+/).length } });
   } catch (err) { next(err); }
 });
 

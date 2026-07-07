@@ -1,100 +1,67 @@
 /**
- * Daily Brief Generation (V5-08)
- * 
- * Generates a concise 120-word max executive summary from current metrics.
- * Timezone-aware greeting. Answers: "What happened? What needs attention?
- * What's the revenue? What should I do next?"
+ * Daily Brief Generator (V5-08) — Phase 3 Remediation C7
+ * 3-paragraph structure, max 120 words, omits zero-value stats.
  */
 
 const coach = require('./engine');
-const revenue = require('../analytics/revenue');
 
-/**
- * Generate a daily brief from current metrics and leads data.
- *
- * @param {Object} metrics - { callsToday, callsAnswered, leadsToday, appointmentsScheduled, conversionRate, oldLeadsCount, callsMissed, avgCallLength }
- * @param {Object} revenueOverview - result from revenue.computeRevenueOverview()
- * @param {string} contractorName - business owner name
- * @param {string} [timezone] - contractor timezone (optional, defaults to Eastern)
- * @returns {string} Brief text, max 120 words
- */
-function generate(metrics, revenueOverview, contractorName, timezone) {
-  const greeting = getGreeting(contractorName);
+function generate(metrics, contractorName) {
+  const name = contractorName || 'there';
+  const greeting = getGreeting();
+  const summaryParts = [];
 
-  // Yesterday's summary
-  let summary = '';
-  if (metrics.callsToday > 0) {
-    const parts = [];
-    parts.push(`NorthStar answered ${metrics.callsToday} call${metrics.callsToday !== 1 ? 's' : ''}`);
-    if (metrics.leadsToday > 0) {
-      parts.push(`captured ${metrics.leadsToday} new lead${metrics.leadsToday !== 1 ? 's' : ''}`);
-    }
-    if (metrics.appointmentsScheduled > 0) {
-      parts.push(`booked ${metrics.appointmentsScheduled} estimate appointment${metrics.appointmentsScheduled !== 1 ? 's' : ''}`);
-    }
-    summary = parts.join(', ') + '.';
+  if (metrics.callsToday > 0) summaryParts.push(`${metrics.callsToday} call${metrics.callsToday !== 1 ? 's were' : ' was'} answered`);
+  if (metrics.leadsToday > 0) summaryParts.push(`${metrics.leadsToday} new lead${metrics.leadsToday !== 1 ? 's were' : ' was'} captured`);
+  if (metrics.appointmentsScheduled > 0) summaryParts.push(`${metrics.appointmentsScheduled} appointment${metrics.appointmentsScheduled !== 1 ? 's were' : ' was'} booked`);
+
+  let p1;
+  if (summaryParts.length > 0) {
+    const last = summaryParts.pop();
+    const joined = summaryParts.length > 0 ? summaryParts.join(', ') + ' and ' + last : last;
+    p1 = `${greeting} Yesterday ${joined}.`;
   } else {
-    summary = 'Quiet day — no new calls or leads.';
+    p1 = `${greeting} It was a quiet day — no new calls, leads, or appointments.`;
   }
 
-  // Today's priority
+  let p2;
+  const revenuePart = metrics.revenueToday && metrics.revenueToday > 0
+    ? `Your current opportunity is $${(metrics.revenueToday || metrics.pipelineWeightedValue || 0).toLocaleString()} in pipeline value.`
+    : null;
+
+  if (metrics.unrespondedLeads > 0) {
+    p2 = `${metrics.unrespondedLeads} lead${metrics.unrespondedLeads !== 1 ? 's' : ''} from yesterday need${metrics.unrespondedLeads === 1 ? 's' : ''} your attention. `;
+    if (revenuePart) p2 += revenuePart + ' ';
+  } else if (revenuePart) {
+    p2 = revenuePart + ' ';
+  } else {
+    p2 = null;
+  }
+
   const coachRec = coach.evaluate(metrics);
-  let priority = '';
-  if (coachRec.type === 'follow_up' && metrics.oldLeadsCount > 0) {
-    priority = `You have ${metrics.oldLeadsCount} lead${metrics.oldLeadsCount !== 1 ? 's' : ''} awaiting follow-up.`;
-  } else if (coachRec.type === 'all_good') {
-    priority = 'No urgent items needing attention.';
+  let p3;
+  if (coachRec && coachRec.primary && coachRec.primary.type !== 'all_good') {
+    p3 = coachRec.primary.message.split('.')[0].trim() + '.';
+    if (coachRec.primary.action) p3 += ` Head to ${coachRec.primary.action} to get started.`;
+  } else {
+    p3 = 'Everything is running smoothly — NorthStar has you covered.';
   }
 
-  // Revenue opportunity
-  let revenueLine = '';
-  if (revenueOverview) {
-    const pv = revenueOverview.pipelineValue;
-    if (pv > 0) {
-      revenueLine = `Estimated revenue opportunity in your pipeline is $${pv.toLocaleString()}.`;
-    } else {
-      revenueLine = 'No current revenue opportunities in your pipeline.';
-    }
-  }
+  const paragraphs = [p1];
+  if (p2) paragraphs.push(p2);
+  paragraphs.push(p3);
 
-  // Recommendation
-  let recommendation = '';
-  if (coachRec.message) {
-    const sentences = coachRec.message.replace(new RegExp(contractorName, 'gi'), '').trim().split('.');
-    const firstSentence = sentences[0] && sentences[0].length > 0 ? sentences[0].trim() + '.' : '';
-    if (firstSentence && firstSentence.length > 5) {
-      recommendation = `Tip: ${firstSentence}`;
-    }
-  }
+  let brief = paragraphs.join('\n\n');
+  let words = brief.split(/\s+/);
+  if (words.length > 120) brief = words.slice(0, 117).join(' ') + '...';
 
-  // Build brief
-  let brief = `${greeting} ${summary} `;
-  if (revenueLine) brief += `${revenueLine} `;
-  if (priority) brief += `${priority} `;
-  if (recommendation) brief += `${recommendation} `;
-  brief += `Have a great day!`;
-
-  // Enforce 120 word max
-  const words = brief.split(/\s+/);
-  if (words.length > 120) {
-    brief = words.slice(0, 117).join(' ') + '...';
-  }
-
-  return brief.trim();
+  return brief;
 }
 
-/**
- * Generate timezone-aware greeting.
- */
-function getGreeting(name) {
+function getGreeting() {
   const hour = new Date().getHours();
-  let timeGreeting;
-
-  if (hour >= 5 && hour < 12) timeGreeting = 'Good morning';
-  else if (hour >= 12 && hour < 17) timeGreeting = 'Good afternoon';
-  else timeGreeting = 'Good evening';
-
-  return `${timeGreeting}, ${name}.`;
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
-module.exports = { generate, getGreeting };
+module.exports = { generate };

@@ -129,9 +129,22 @@ router.get('/leads/:id', requireAuth, requirePermission('leads', 'view'), async 
  */
 router.get('/calls', requireAuth, requirePermission('calls', 'view'), async (req, res, next) => {
   try {
-    const range = req.query.range || 'today';
-    const data = await analytics.computeOverview(req.user.id, range);
-    res.json({ data });
+    if (!db.isAvailable()) {
+      return res.json({ data: [], message: 'Database not available' });
+    }
+    const result = await db.query(
+      `SELECT id, caller_name, caller_phone, service_type, estimated_price,
+              duration_seconds, status, outcome, summary, is_known_contact, created_at
+       FROM call_records ORDER BY created_at DESC LIMIT 50`
+    );
+    const calls = result.rows.map(r => ({
+      id: r.id, callerName: r.caller_name, phone: r.caller_phone,
+      service: r.service_type, estimatedValue: parseFloat(r.estimated_price || 0),
+      durationSeconds: r.duration_seconds, status: r.status, outcome: r.outcome,
+      summary: r.summary || '', isKnownContact: r.is_known_contact,
+      createdAt: r.created_at
+    }));
+    res.json({ data: calls, total: calls.length });
   } catch (err) { next(err); }
 });
 

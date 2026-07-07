@@ -15,16 +15,26 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const config = require('./config');
 const apiRoutes = require('./routes/api');
+const publicApiRoutes = require('./routes/publicApi');
 const db = require('./db');
+const cache = require('./cache/client');
+const audit = require('./audit/client');
 const { addUser, getAllUsers, getUser } = require('./users/store');
 const { generateToken, generateAdminToken, requireAuth, requireAdmin } = require('./auth/middleware');
+const { errorHandler, notFound } = require('./middleware/errorHandler');
+const { rateLimit, authRateLimit, trackFailedAttempt } = require('./middleware/rateLimit');
+const { securityHeaders, corsOptions } = require('./middleware/security');
+const { correlationId, auditLogger } = require('./middleware/auditLog');
 
 const app = express();
 const PORT = config.port || 3000;
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '1mb' }));
+app.use(securityHeaders);
+app.use(correlationId);
+app.use(auditLogger);
 
 // Static assets (CSS, JS)
 app.use('/css', express.static('public/css'));
@@ -333,16 +343,21 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 // API routes
 app.use('/api', apiRoutes);
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error('[Server] Error:', err.message);
-  res.status(500).json({ error: 'Internal server error' });
-});
+// Public API v1 (versioned, externally-facing)
+app.use('/api/v1', publicApiRoutes);
+
+// 404 handler for unmatched routes
+app.use(notFound);
+
+// Standard error handler
+app.use(errorHandler);
 
 // Start server
 async function start() {
-  // Try to initialize database
+  // Initialize database, cache, and audit logging
   await db.initDatabase();
+  await cache.init();
+  await audit.ensureTable();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

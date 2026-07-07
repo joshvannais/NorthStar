@@ -2538,3 +2538,85 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
   .ds-analytics-grid { grid-template-columns: 1fr 1fr; }
   .ds-status-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================================
+   Phase 3 — Remediation CSS
+   ============================================ */
+
+/* Skip-to-content link (M3) */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  z-index: 10000;
+  padding: 8px 16px;
+  background: var(--brand-600);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 var(--radius-sm) 0;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* Modal CSS classes (M2) */
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--neutral-900);
+}
+.modal-desc {
+  font-size: 13px;
+  color: var(--neutral-500);
+  margin-bottom: 12px;
+}
+.modal-phone-number {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--brand-600);
+  letter-spacing: 1px;
+  margin: 16px 0;
+}
+.modal-emoji {
+  font-size: 48px;
+}
+.modal-ai-response {
+  background: var(--neutral-50);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 13px;
+  min-height: 60px;
+  color: var(--neutral-500);
+  margin-top: 8px;
+}
+
+/* Health Indicators (H3) */
+.health-hot { color: #dc2626; font-weight: 600; }
+.health-warm { color: #d97706; font-weight: 600; }
+.health-cold { color: #6b7280; }
+.health-new { color: var(--brand-600); font-weight: 600; }
+
+/* Outcome Badges (H2) */
+.badge-answered { background: #d1fae5; color: #047857; }
+.badge-missed { background: #fee2e2; color: #b91c1c; }
+.badge-voicemail { background: #fef3c7; color: #a16207; }
+.badge-transferred { background: #f3e8ff; color: #7e22ce; }
+
+/* Dark mode for health indicators */
+[data-theme="dark"] .health-hot { color: #fca5a5; }
+[data-theme="dark"] .health-warm { color: #fbbf24; }
+[data-theme="dark"] .health-cold { color: #9ca3af; }
+[data-theme="dark"] .health-new { color: var(--brand-400); }
+
+/* Dark mode for outcome badges */
+[data-theme="dark"] .badge-answered { background: rgba(4,120,87,0.2); color: #6ee7b7; }
+[data-theme="dark"] .badge-missed { background: rgba(185,28,28,0.2); color: #fca5a5; }
+[data-theme="dark"] .badge-voicemail { background: rgba(161,98,7,0.2); color: #fbbf24; }
+[data-theme="dark"] .badge-transferred { background: rgba(126,34,206,0.2); color: #d8b4fe; }
+
+/* Dark mode for modal classes */
+[data-theme="dark"] .modal-title { color: var(--neutral-800); }
+[data-theme="dark"] .modal-ai-response { background: var(--neutral-200); color: var(--neutral-600); }
+[data-theme="dark"] .modal-phone-number { color: var(--brand-400); }

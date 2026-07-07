@@ -21,19 +21,15 @@ const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
 const { addUser, getAllUsers, getUser } = require('./users/store');
-const { generateToken, generateAdminToken, requireAuth, requireAdmin } = require('./auth/middleware');
-const { errorHandler, notFound } = require('./middleware/errorHandler');
-const { rateLimit, authRateLimit, trackFailedAttempt } = require('./middleware/rateLimit');
-const { securityHeaders, corsOptions } = require('./middleware/security');
-const { correlationId, auditLogger } = require('./middleware/auditLog');
-const { errorHandler, notFound } = require('./middleware/errorHandler');
-const { rateLimit, authRateLimit, trackFailedAttempt } = require('./middleware/rateLimit');
-const { addUser, getAllUsers, getUser } = require('./users/store');
 const {
   generateToken, generateAdminToken, generateRefreshToken, validateRefreshToken,
   revokeAllUserTokens, generateResetToken, validateResetToken,
   checkRateLimit, recordLoginAttempt, requireAuth, requireAdmin
 } = require('./auth/middleware');
+const { errorHandler, notFound } = require('./middleware/errorHandler');
+const { rateLimit, authRateLimit, trackFailedAttempt } = require('./middleware/rateLimit');
+const { securityHeaders, corsOptions } = require('./middleware/security');
+const { correlationId, auditLogger } = require('./middleware/auditLog');
 
 const app = express();
 const PORT = config.port || 3000;

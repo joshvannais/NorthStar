@@ -16,7 +16,11 @@ const bcrypt = require('bcryptjs');
 const config = require('./config');
 const apiRoutes = require('./routes/api');
 const dashboardRoutes = require('./routes/dashboard');
+const publicApiRoutes = require('./routes/publicApi');
 const db = require('./db');
+const cache = require('./cache/client');
+const { errorHandler, notFound } = require('./middleware/errorHandler');
+const { rateLimit, authRateLimit, trackFailedAttempt } = require('./middleware/rateLimit');
 const { addUser, getAllUsers, getUser } = require('./users/store');
 const {
   generateToken, generateAdminToken, generateRefreshToken, validateRefreshToken,
@@ -69,7 +73,7 @@ Object.entries(pages).forEach(([route, file]) => {
  * POST /api/auth/signup
  * Create a new contractor account with password.
  */
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', authRateLimit(), async (req, res) => {
   try {
     const { name, businessName, phone, email, password } = req.body;
 
@@ -471,16 +475,20 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 app.use('/api', apiRoutes);
 app.use('/api/v1', dashboardRoutes);
 
+// Public API v1
+app.use('/api/v1', publicApiRoutes);
+
+// 404 handler
+app.use(notFound);
+
 // Error handler
-app.use((err, req, res, next) => {
-  console.error('[Server] Error:', err.message);
-  res.status(500).json({ error: 'Internal server error' });
-});
+app.use(errorHandler);
 
 // Start server
 async function start() {
-  // Try to initialize database
+  // Initialize database and cache
   await db.initDatabase();
+  await cache.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

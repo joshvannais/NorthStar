@@ -18,10 +18,8 @@ const { ApiError } = require('../middleware/errorHandler');
 const cache = require('../cache/client');
 const db = require('../db');
 const { getAllLeads, getLead } = require('../leads/store');
-const { computePeriodSummary, getOrCompute, loadAllSnapshots } = require('../analytics/dailySnapshots');
-const revenue = require('../analytics/revenue');
-const coach = require('../coach/engine');
-const brief = require('../coach/brief');
+const analytics = require('../analytics/pipeline');
+const { seedDemoData } = require('../analytics/seeder');
 
 const router = express.Router();
 
@@ -161,6 +159,40 @@ router.get('/leads/:id', requireAuth, requirePermission('leads', 'view'), async 
  */
 router.get('/calls', requireAuth, requirePermission('calls', 'view'), async (req, res, next) => {
   try {
+    const range = req.query.range || 'today';
+    const data = await analytics.computeOverview(req.user.id, range);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/trends', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
+  try {
+    const data = await analytics.computeTrends(req.user.id);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/pipeline', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
+  try {
+    const data = await analytics.computePipeline(req.user.id);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/by-service', requireAuth, requirePermission('dashboard', 'view'), async (req, res, next) => {
+  try {
+    const range = req.query.range || 'month';
+    const data = await analytics.computeByService(req.user.id, range);
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+// Seed demo data for the current user
+router.post('/analytics/seed', requireAuth, async (req, res, next) => {
+  try {
+    const seeded = await seedDemoData(req.user.id);
+    res.json({ data: { message: 'Demo data seeded successfully', records: seeded.length } });
+  } catch (err) { next(err); }
     const { cursor, limit: limitParam, status, search } = req.query;
     const limit = Math.min(parseInt(limitParam) || 20, 100);
 

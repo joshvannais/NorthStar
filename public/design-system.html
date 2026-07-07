@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NorthStar Design System</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .ds-wrapper { max-width: 1200px; margin: 0 auto; padding: 48px 24px; }
+    .ds-section { margin-bottom: 48px; }
+    .ds-section h2 { font-size: 24px; font-weight: 700; color: var(--neutral-800); margin-bottom: 24px; padding-bottom: 8px; border-bottom: 2px solid var(--brand-400); }
+    .ds-section h3 { font-size: 17px; font-weight: 600; color: var(--neutral-600); margin-bottom: 16px; margin-top: 24px; }
+    .ds-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+    .ds-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--neutral-400); font-weight: 600; margin-bottom: 8px; }
+    .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .ds-card { background: white; border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); border: 1px solid var(--neutral-200); }
+    [data-theme="dark"] .ds-card { background: var(--neutral-100); border-color: var(--neutral-300); }
+    .ds-header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid var(--neutral-200); }
+    .ds-header h1 { font-size: 28px; font-weight: 800; color: var(--brand-600); }
+    .pre { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: var(--neutral-100); padding: 12px; border-radius: 8px; overflow-x: auto; margin-top: 8px; }
+    [data-theme="dark"] .pre { background: var(--neutral-200); color: var(--neutral-700); }
+  </style>
+</head>
+<body>
+  <div class="ds-wrapper">
+    <div class="ds-header">
+      <h1>NorthStar Design System</h1>
+      <span style="font-size:14px;color:var(--neutral-500);">Component Library — Phase 0.4</span>
+      <button class="theme-toggle" onclick="document.documentElement.toggleAttribute('data-theme');localStorage.setItem('northstar-theme',document.documentElement.getAttribute('data-theme')||'')" style="margin-left:auto;">🌓</button>
+    </div>
+
+    <!-- 1. Colors -->
+    <div class="ds-section">
+      <h2>1. Color Palette</h2>
+      <div class="ds-row">
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-50);border:1px solid var(--neutral-200);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-100);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-200);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-300);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-400);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-500);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-600);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-700);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-800);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--brand-900);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;">900</div>
+      </div>
+      <div class="ds-label">Neutrals</div>
+      <div class="ds-row">
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-50);border:1px solid var(--neutral-200);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-100);border:1px solid var(--neutral-200);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-200);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-300);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-400);"></div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-500);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;">500</div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-600);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;">600</div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-700);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;">700</div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-800);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;">800</div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--neutral-900);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;">900</div>
+      </div>
+      <div class="ds-label">Semantic</div>
+      <div class="ds-row">
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--success);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;">Success</div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--warning);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;">Warning</div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--danger);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;">Danger</div>
+      </div>
+    </div>
+
+    <!-- 2. Typography -->
+    <div class="ds-section">
+      <h2>2. Typography</h2>
+      <div class="ds-grid">
+        <div class="ds-card"><div class="ds-label">--font-3xl (28px)</div><div style="font-size:var(--font-3xl);font-weight:800;">Hero KPI Value</div></div>
+        <div class="ds-card"><div class="ds-label">--font-2xl (24px)</div><div style="font-size:var(--font-2xl);font-weight:700;">Page Heading</div></div>
+        <div class="ds-card"><div class="ds-label">--font-xl (20px)</div><div style="font-size:var(--font-xl);font-weight:600;">Section Title</div></div>
+        <div class="ds-card"><div class="ds-label">--font-lg (17px)</div><div style="font-size:var(--font-lg);font-weight:500;">Data Value</div></div>
+        <div class="ds-card"><div class="ds-label">--font-base (14px)</div><div style="font-size:var(--font-base);">Body text content for paragraphs and general use.</div></div>
+        <div class="ds-card"><div class="ds-label">--font-sm (13px)</div><div style="font-size:var(--font-sm);color:var(--neutral-500);">Helper text, labels, secondary content</div></div>
+        <div class="ds-card"><div class="ds-label">--font-xs (11px)</div><div style="font-size:var(--font-xs);color:var(--neutral-400);text-transform:uppercase;letter-spacing:0.5px;">Caption & Badge Text</div></div>
+      </div>
+    </div>
+
+    <!-- 3. Buttons -->
+    <div class="ds-section">
+      <h2>3. Button System</h2>
+      <h3>Variants</h3>
+      <div class="ds-row">
+        <button class="btn-primary">Primary</button>
+        <button class="btn-secondary">Secondary</button>
+        <button class="btn-secondary" style="border-color:var(--neutral-300);background:transparent;">Ghost</button>
+        <button class="btn-primary" style="background:var(--danger);">Danger</button>
+        <button class="btn-primary" disabled>Disabled</button>
+        <button class="btn-primary btn-loading">Loading</button>
+      </div>
+      <h3>Sizes</h3>
+      <div class="ds-row">
+        <button class="btn-primary" style="height:32px;font-size:13px;padding:0 12px;">Small</button>
+        <button class="btn-primary" style="height:40px;">Medium</button>
+        <button class="btn-primary" style="height:48px;font-size:17px;padding:0 32px;">Large</button>
+      </div>
+    </div>
+
+    <!-- 4. Cards -->
+    <div class="ds-section">
+      <h2>4. Cards</h2>
+      <div class="ds-grid">
+        <div class="ds-card"><div class="ds-label">Standard Card</div><p style="font-size:var(--font-base);color:var(--neutral-600);">Basic card container with 24px padding, 12px radius, and shadow.</p></div>
+        <div class="ds-card" style="border-top:4px solid var(--brand-400);"><div class="ds-label">Accent Card</div><p style="font-size:var(--font-base);color:var(--neutral-600);">Featured card with gold top accent border.</p></div>
+        <div class="ds-card card-clickable" style="cursor:pointer;"><div class="ds-label">Clickable Card</div><p style="font-size:var(--font-base);color:var(--neutral-600);">Hover me — shadow elevates on hover.</p></div>
+      </div>
+    </div>
+
+    <!-- 5. Forms -->
+    <div class="ds-section">
+      <h2>5. Form Inputs</h2>
+      <div class="ds-grid">
+        <div class="ds-card">
+          <div class="ds-label">Text Input</div>
+          <div class="form-group"><label>Full Name</label><input type="text" placeholder="Enter your name"></div>
+        </div>
+        <div class="ds-card">
+          <div class="ds-label">Input Variants</div>
+          <div class="form-group"><label>Disabled</label><input type="text" value="Read only" disabled></div>
+        </div>
+        <div class="ds-card">
+          <div class="ds-label">Select</div>
+          <div class="form-group"><label>Service Type</label><select><option>Tree Removal</option><option>Plumbing</option><option>Electrical</option></select></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Search -->
+    <div class="ds-section">
+      <h2>6. Search Input</h2>
+      <div class="ds-card" style="max-width:400px;">
+        <div class="search-input">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="search" placeholder="Search calls, leads, or customers...">
+          <button class="search-clear" aria-label="Clear search">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. Badges -->
+    <div class="ds-section">
+      <h2>7. Status Badges</h2>
+      <div class="ds-row">
+        <span class="badge badge-booked">Booked</span>
+        <span class="badge badge-estimate">Estimate</span>
+        <span class="badge badge-follow-up">Follow Up</span>
+        <span class="badge badge-voicemail">Voicemail</span>
+        <span class="badge badge-no-interest">No Interest</span>
+        <span class="badge badge-new">New</span>
+        <span class="badge badge-won">Won</span>
+        <span class="badge badge-lost">Lost</span>
+      </div>
+    </div>
+
+    <!-- 8. Tabs -->
+    <div class="ds-section">
+      <h2>8. Tab System</h2>
+      <div class="ds-card">
+        <div class="tab-list">
+          <button class="tab-item active">Details</button>
+          <button class="tab-item">Call History</button>
+          <button class="tab-item">Notes</button>
+        </div>
+        <div class="tab-panel active" style="padding:16px 0;font-size:var(--font-base);color:var(--neutral-600);">Details content panel — active tab shows brand-400 underline.</div>
+      </div>
+    </div>
+
+    <!-- 9. Modal -->
+    <div class="ds-section">
+      <h2>9. Modal Dialog</h2>
+      <button class="btn-primary" onclick="document.getElementById('demo-modal').style.display='flex'">Open Modal</button>
+      <div class="modal-backdrop" id="demo-modal" style="display:none;">
+        <div class="modal-panel modal-md">
+          <div class="modal-header"><h3 style="font-size:17px;font-weight:600;">Confirm Action</h3><button class="modal-close" onclick="this.closest('.modal-backdrop').style.display='none'">✕</button></div>
+          <div class="modal-body"><p style="font-size:var(--font-base);color:var(--neutral-600);">Are you sure you want to delete this lead? This action cannot be undone.</p></div>
+          <div class="modal-footer"><button class="btn-secondary" onclick="document.getElementById('demo-modal').style.display='none'">Cancel</button><button class="btn-primary" style="background:var(--danger);">Delete</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 10. Toast -->
+    <div class="ds-section">
+      <h2>10. Toast Notifications</h2>
+      <div class="ds-row">
+        <button class="btn-primary" onclick="var t=document.createElement('div');t.className='toast';t.style.cssText='position:fixed;bottom:80px;right:24px;z-index:2000;opacity:1;background:var(--success);color:white;padding:12px 16px;border-radius:12px;box-shadow:var(--shadow-md);font-size:13px;display:flex;align-items:center;gap:8px;animation:toastIn 0.3s ease;';t.innerHTML='✅ New Lead Captured';document.body.appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity 0.3s';setTimeout(()=>t.remove(),300)},3000);">Success Toast</button>
+        <button class="btn-primary" style="background:var(--danger);" onclick="var t=document.createElement('div');t.className='toast';t.style.cssText='position:fixed;bottom:80px;right:24px;z-index:2000;opacity:1;background:var(--danger);color:white;padding:12px 16px;border-radius:12px;box-shadow:var(--shadow-md);font-size:13px;display:flex;align-items:center;gap:8px;';t.innerHTML='⚠️ Upload Failed';document.body.appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity 0.3s';setTimeout(()=>t.remove(),300)},4000);">Error Toast</button>
+      </div>
+    </div>
+
+    <!-- 11. Loading States -->
+    <div class="ds-section">
+      <h2>11. Loading States</h2>
+      <div class="ds-row">
+        <div class="spinner"></div>
+        <div class="spinner spinner-sm"></div>
+        <div class="spinner spinner-lg"></div>
+      </div>
+      <div class="ds-row" style="flex-direction:column;align-items:stretch;max-width:400px;">
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-text"></div>
+        <div class="skeleton skeleton-text"></div>
+        <div class="skeleton skeleton-text" style="width:40%;"></div>
+      </div>
+      <div class="ds-row">
+        <div class="skeleton skeleton-card" style="width:200px;"></div>
+        <div class="skeleton skeleton-card" style="width:200px;"></div>
+      </div>
+    </div>
+
+    <!-- 12. Toggle -->
+    <div class="ds-section">
+      <h2>12. Toggle / Switch</h2>
+      <div class="ds-row">
+        <label class="toggle" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+          <div class="toggle-track" style="width:32px;height:20px;border-radius:999px;background:var(--brand-400);position:relative;transition:background 0.2s;">
+            <div class="toggle-thumb" style="width:16px;height:16px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.2);position:absolute;top:2px;left:2px;transform:translateX(14px);transition:transform 0.2s;"></div>
+          </div>
+          <span style="font-size:13px;color:var(--neutral-600);">Auto-schedule enabled</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 13. Tooltip -->
+    <div class="ds-section">
+      <h2>13. Tooltip</h2>
+      <div class="ds-row">
+        <span style="font-size:var(--font-base);color:var(--neutral-600);">Hover the info icon:</span>
+        <span style="display:inline-flex;width:20px;height:20px;border-radius:50%;border:1px solid var(--neutral-300);align-items:center;justify-content:center;font-size:11px;cursor:help;color:var(--neutral-500);position:relative;" onmouseenter="this.nextElementSibling.classList.add('visible')" onmouseleave="this.nextElementSibling.classList.remove('visible')">?</span>
+        <div class="tooltip visible" style="position:absolute;top:auto;margin-top:60px;opacity:0;transition:opacity 0.15s;">Estimated pipeline value based on qualified opportunities.</div>
+      </div>
+    </div>
+
+    <!-- 14. KPI Stat Cards -->
+    <div class="ds-section">
+      <h2>14. KPI Stat Cards</h2>
+      <div class="stats-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-md);">
+        <div class="stat-card"><div class="stat-icon" style="background:#3B82F6;">📞</div><div><div class="stat-value">12</div><div class="stat-label">Calls Today</div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:var(--success);">📋</div><div><div class="stat-value">5</div><div class="stat-label">New Leads</div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#8B5CF6;">📅</div><div><div class="stat-value">3</div><div class="stat-label">Appointments</div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:var(--brand-400);">💰</div><div><div class="stat-value">$2,400</div><div class="stat-label">Revenue</div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:var(--warning);">⏰</div><div><div class="stat-value">8</div><div class="stat-label">Missed Saved</div></div></div>
+      </div>
+    </div>
+
+    <!-- 15. Empty State -->
+    <div class="ds-section">
+      <h2>15. Empty State</h2>
+      <div class="ds-card empty-state" style="display:flex;flex-direction:column;align-items:center;padding:48px;text-align:center;">
+        <div class="empty-state-icon">📭</div>
+        <h3 style="font-size:20px;font-weight:600;color:var(--neutral-600);margin-bottom:8px;">No leads yet</h3>
+        <p style="font-size:var(--font-base);color:var(--neutral-400);max-width:360px;margin-bottom:24px;">New leads will appear here after NorthStar answers your first call. Get started by setting up your AI Office Manager.</p>
+        <button class="btn-primary">Get Started</button>
+      </div>
+    </div>
+
+    <!-- 16. Error State -->
+    <div class="ds-section">
+      <h2>16. Error State</h2>
+      <div class="error-state ds-card">
+        <div class="error-state-icon">⚠️</div>
+        <div class="error-state-title">Unable to load data</div>
+        <div class="error-state-message">Something went wrong while fetching your call history. Please try again.</div>
+        <button class="btn-secondary">Try Again</button>
+      </div>
+    </div>
+
+    <!-- 17. Filter Bar -->
+    <div class="ds-section">
+      <h2>17. Filter Bar</h2>
+      <div class="call-filters">
+        <div class="filter-group">
+          <button class="call-filter-btn active">All</button>
+          <button class="call-filter-btn">Booked</button>
+          <button class="call-filter-btn">Estimate</button>
+          <button class="call-filter-btn">Follow Up</button>
+          <button class="call-filter-btn">Voicemail</button>
+          <button class="call-filter-btn">No Interest</button>
+        </div>
+        <span class="filter-separator"></span>
+        <div class="filter-group">
+          <button class="call-filter-btn">Today</button>
+          <button class="call-filter-btn">This Week</button>
+        </div>
+        <div class="filter-right">
+          <button class="call-filter-btn" style="color:var(--neutral-400);border-color:transparent;">Clear All</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 18. Dark Mode -->
+    <div class="ds-section">
+      <h2>18. Theme</h2>
+      <p style="font-size:var(--font-base);color:var(--neutral-500);margin-bottom:16px;">Toggle between light and dark mode using the 🌓 button in the header. All components automatically adapt.</p>
+      <div class="ds-row">
+        <span class="badge badge-booked">Booked</span>
+        <span class="badge badge-estimate">Estimate</span>
+        <span class="badge badge-new">New</span>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Apply saved theme on load
+    if(localStorage.getItem('northstar-theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+  </script>
+</body>
+</html>

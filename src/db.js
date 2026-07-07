@@ -1,18 +1,25 @@
 /**
  * Database connection for Northstar Solutions.
  * Supports PostgreSQL via Railway's DATABASE_URL env var.
- * Falls back to simple in-memory storage when no DB is available
- * (so the app still runs during development).
+ * Falls back to simple in-memory storage when no DB is available.
+ *
+ * Implements V3-28 Database Architecture specification:
+ * - Versioned SQL migrations in migrations/
+ * - Connection pooling (pg-pool, max 20 connections)
+ * - UUID primary keys, organization_id on all tenant tables
+ * - Proper indexes on query access patterns
  */
 
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
 
 let pool = null;
 let dbAvailable = false;
 
 function getPool() {
   if (pool) return pool;
-  
+
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     return null;
@@ -24,6 +31,13 @@ function getPool() {
       ssl: connectionString.includes('railway')
         ? { rejectUnauthorized: false }
         : false,
+      // Connection management per V3-28 §7
+      max: parseInt(process.env.DB_POOL_MAX || '20', 10),
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 30000,
+    });
+    pool.on('error', (err) => {
+      console.error('[DB] Pool error:', err.message);
     });
     return pool;
   } catch (err) {
@@ -33,74 +47,91 @@ function getPool() {
 }
 
 /**
- * Initialize the database — create tables if needed.
+ * Run all pending SQL migrations from the migrations/ directory.
+ * Migrations are run in filename order, wrapped in transactions.
+ * Tracks completed migrations in a `_migrations` table.
+ */
+async function runMigrations() {
+  const p = getPool();
+  if (!p) return false;
+
+  try {
+    // Create migrations tracking table if it doesn't exist
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS _migrations (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) UNIQUE NOT NULL,
+        applied_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    const migrationsDir = path.join(__dirname, '..', 'migrations');
+    if (!fs.existsSync(migrationsDir)) {
+      console.log('[DB] No migrations directory found');
+      return true;
+    }
+
+    const files = fs.readdirSync(migrationsDir)
+      .filter(f => f.endsWith('.sql'))
+      .sort();
+
+    const { rows: applied } = await p.query('SELECT filename FROM _migrations');
+    const appliedSet = new Set(applied.map(r => r.filename));
+
+    for (const file of files) {
+      if (appliedSet.has(file)) {
+        console.log(`[DB] Migration ${file} already applied, skipping`);
+        continue;
+      }
+
+      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+      console.log(`[DB] Running migration: ${file}...`);
+
+      try {
+        await p.query('BEGIN');
+        await p.query(sql);
+        await p.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
+        await p.query('COMMIT');
+        console.log(`[DB] Migration ${file} applied successfully`);
+      } catch (err) {
+        await p.query('ROLLBACK');
+        console.error(`[DB] Migration ${file} failed:`, err.message);
+        throw err;
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('[DB] Migration runner error:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Initialize the database — run migrations.
  */
 async function initDatabase() {
   const p = getPool();
   if (!p) {
-    console.log('[DB] No DATABASE_URL set — using in-memory storage');
+    console.log('[DB] No DATABASE_URL set — using in-memory/file storage');
     dbAvailable = false;
     return false;
   }
 
   try {
-    await p.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(255) NOT NULL,
-        business_name VARCHAR(255) DEFAULT '',
-        email VARCHAR(255) UNIQUE NOT NULL,
-        phone VARCHAR(50) DEFAULT '',
-        password_hash VARCHAR(255) NOT NULL,
-        plan_type VARCHAR(50) DEFAULT 'Trial',
-        status VARCHAR(50) DEFAULT 'trial',
-        signup_date TIMESTAMP DEFAULT NOW(),
-        trial_ends TIMESTAMP DEFAULT NOW() + INTERVAL '14 days',
-        last_payment_date TIMESTAMP,
-        payment_status VARCHAR(50) DEFAULT 'none',
-        forwarding_number VARCHAR(50) DEFAULT '',
-        ai_active BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
+    // Test connection
+    await p.query('SELECT 1');
+    console.log('[DB] PostgreSQL connected');
 
-    await p.query(`
-      CREATE TABLE IF NOT EXISTS payment_history (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID REFERENCES users(id),
-        amount DECIMAL(10,2) NOT NULL,
-        status VARCHAR(50) DEFAULT 'paid',
-        period VARCHAR(7),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-    await p.query(`
-      CREATE TABLE IF NOT EXISTS call_records (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        caller_name VARCHAR(255) DEFAULT '',
-        service_type VARCHAR(255) NOT NULL,
-        estimated_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        job_detail VARCHAR(500) DEFAULT '',
-        source VARCHAR(50) DEFAULT 'simulator',
-        outcome VARCHAR(50) DEFAULT ''::character varying,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-    // Add Jobber columns if they don't exist (for existing users tables)
-    try {
-      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_access_token TEXT`);
-      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_refresh_token TEXT`);
-      await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS jobber_token_expires TIMESTAMP`);
-    } catch (e) {
-      // Columns may already exist, ignore
-    }
+    // Run migrations
+    await runMigrations();
 
-    console.log('[DB] PostgreSQL connected and tables ready');
+    console.log('[DB] PostgreSQL ready');
     dbAvailable = true;
     return true;
   } catch (err) {
     console.warn('[DB] PostgreSQL init failed:', err.message);
-    console.log('[DB] Falling back to in-memory storage');
+    console.log('[DB] Falling back to in-memory/file storage');
     dbAvailable = false;
     return false;
   }

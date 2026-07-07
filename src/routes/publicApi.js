@@ -209,6 +209,169 @@ router.post('/analytics/seed', requireAuth, async (req, res, next) => {
   }
 });
 
+// ==================== Dashboard ====================
+
+/**
+ * GET /api/v1/dashboard/overview
+ * Pre-computed daily/weekly/monthly aggregates. (V3-18)
+ */
+router.get('/dashboard/overview', requireAuth, async (req, res, next) => {
+  try {
+    const cacheKey = cache.buildKey('dashboard:overview', req.user.id);
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const leads = getAllLeads();
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Get or compute snapshots for today, last 7 days, last 30 days
+    const todaySnap = await getOrCompute(req.user.id, today, leads);
+    const allSnaps = loadAllSnapshots(req.user.id);
+
+    const todaySummary = computePeriodSummary(req.user.id, 'current_day', allSnaps.length > 0 ? allSnaps : [todaySnap]);
+    const weekSummary = computePeriodSummary(req.user.id, 'current_week', allSnaps);
+    const monthSummary = computePeriodSummary(req.user.id, 'current_month', allSnaps);
+
+    const overview = {
+      today: {
+        callsReceived: todaySummary.callsReceived,
+        callsAnswered: todaySummary.callsAnswered,
+        leadsCaptured: todaySummary.leadsCaptured,
+        appointmentsScheduled: todaySummary.appointmentsScheduled,
+        missedCallsSaved: todaySummary.missedCallsSaved,
+        estimatedRevenue: todaySummary.estimatedRevenue,
+        avgCallLength: todaySummary.totalCallDurationSecs > 0 && todaySummary.callsReceived > 0
+          ? Math.round(todaySummary.totalCallDurationSecs / todaySummary.callsReceived) : 0
+      },
+      thisWeek: {
+        callsReceived: weekSummary.callsReceived,
+        leadsCaptured: weekSummary.leadsCaptured,
+        appointmentsScheduled: weekSummary.appointmentsScheduled,
+        revenueWon: weekSummary.revenueWon,
+        estimatedRevenue: weekSummary.estimatedRevenue,
+        conversionRate: weekSummary.conversionRate
+      },
+      thisMonth: {
+        callsReceived: monthSummary.callsReceived,
+        leadsCaptured: monthSummary.leadsCaptured,
+        appointmentsScheduled: monthSummary.appointmentsScheduled,
+        revenueWon: monthSummary.revenueWon,
+        estimatedRevenue: monthSummary.estimatedRevenue,
+        conversionRate: monthSummary.conversionRate
+      }
+    };
+
+    await cache.set(cacheKey, overview, 120);
+    res.json({ data: overview });
+  } catch (err) { next(err); }
+});
+
+/**
+ * GET /api/v1/dashboard/revenue-trends
+ * Pipeline value with trend direction. (V5-17)
+ */
+router.get('/dashboard/revenue-trends', requireAuth, async (req, res, next) => {
+  try {
+    const cacheKey = cache.buildKey('dashboard:revenue', req.user.id);
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const leads = getAllLeads();
+    const revOverview = await revenue.computeRevenueOverview(req.user.id, leads);
+
+    const result = {
+      pipelineValue: revOverview.pipelineValue,
+      activeLeads: revOverview.activeLeads,
+      averageLeadValue: revOverview.averageLeadValue,
+      todayRevenue: revOverview.todayRevenue,
+      yesterdayRevenue: revOverview.yesterdayRevenue,
+      trend: revOverview.trend,
+      topLead: revOverview.topLead
+    };
+
+    await cache.set(cacheKey, result, 300);
+    res.json({ data: result });
+  } catch (err) { next(err); }
+});
+
+/**
+ * GET /api/v1/dashboard/coach
+ * Returns the primary recommendation and secondary insight. (V5-07)
+ */
+router.get('/dashboard/coach', requireAuth, async (req, res, next) => {
+  try {
+    const leads = getAllLeads();
+    const today = new Date().toISOString().slice(0, 10);
+
+    const todayLeads = leads.filter(l => (l.receivedAt || '').startsWith(today));
+    const callsToday = todayLeads.filter(l => (l.source || 'phone_call') === 'phone_call').length;
+    const appointmentsToday = todayLeads.filter(l => l.callOutcome === 'appointment-set').length;
+    const oldLeads = leads.filter(l => {
+      if (!l.receivedAt) return false;
+      const daysOld = (Date.now() - new Date(l.receivedAt).getTime()) / 86400000;
+      return daysOld > 1 && !['no-interest', 'voicemail', 'appointment-set'].includes(l.callOutcome || '');
+    });
+    const wonCount = leads.filter(l => l.callOutcome === 'appointment-set').length;
+    const lostCount = leads.filter(l => l.callOutcome === 'no-interest').length;
+    const conversionRate = (wonCount + lostCount) > 0
+      ? Math.round((wonCount / (wonCount + lostCount)) * 100) : null;
+
+    const metrics = {
+      callsToday,
+      callsAnswered: callsToday,
+      leadsToday: todayLeads.length,
+      appointmentsScheduled: appointmentsToday,
+      conversionRate,
+      oldLeadsCount: oldLeads.length,
+      callsMissed: 0
+    };
+
+    const recommendation = coach.evaluate(metrics, req.user.name);
+    const insight = coach.secondaryInsight(metrics);
+
+    res.json({ data: { recommendation, insight } });
+  } catch (err) { next(err); }
+});
+
+/**
+ * GET /api/v1/dashboard/brief
+ * Daily Brief generation — 120-word max. (V5-08)
+ */
+router.get('/dashboard/brief', requireAuth, async (req, res, next) => {
+  try {
+    const leads = getAllLeads();
+    const today = new Date().toISOString().slice(0, 10);
+
+    const todayLeads = leads.filter(l => (l.receivedAt || '').startsWith(today));
+    const callsToday = todayLeads.filter(l => (l.source || 'phone_call') === 'phone_call').length;
+    const appointmentsToday = todayLeads.filter(l => l.callOutcome === 'appointment-set').length;
+    const oldLeads = leads.filter(l => {
+      if (!l.receivedAt) return false;
+      const daysOld = (Date.now() - new Date(l.receivedAt).getTime()) / 86400000;
+      return daysOld > 1 && !['no-interest', 'voicemail', 'appointment-set'].includes(l.callOutcome || '');
+    });
+    const wonCount = leads.filter(l => l.callOutcome === 'appointment-set').length;
+    const lostCount = leads.filter(l => l.callOutcome === 'no-interest').length;
+    const conversionRate = (wonCount + lostCount) > 0
+      ? Math.round((wonCount / (wonCount + lostCount)) * 100) : null;
+
+    const metrics = {
+      callsToday,
+      callsAnswered: callsToday,
+      leadsToday: todayLeads.length,
+      appointmentsScheduled: appointmentsToday,
+      conversionRate,
+      oldLeadsCount: oldLeads.length
+    };
+
+    const revOverview = await revenue.computeRevenueOverview(req.user.id, leads);
+    const name = req.user.name || req.user.email || 'there';
+    const briefText = brief.generate(metrics, revOverview, name);
+
+    res.json({ data: { brief: briefText, wordCount: briefText.split(/\s+/).length } });
+  } catch (err) { next(err); }
+});
+
 // ==================== Health ====================
 
 /**

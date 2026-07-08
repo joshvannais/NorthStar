@@ -8,8 +8,243 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+<style>
+/* === KPI Standardization === */
+.stat-card {
+  background: var(--neutral-100);
+  border-radius: var(--radius-md);
+  padding: 20px 22px;
+  transition: all 0.2s ease;
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+}
+[data-theme="dark"] .stat-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
+.stat-label { font-size: 12px; font-weight: 600; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.stat-value { font-size: 28px; font-weight: 800; color: var(--neutral-900); line-height: 1.2; }
+.stat-change { font-size: 12px; font-weight: 500; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+.stat-change.up { color: #059669; }
+.stat-change.down { color: #dc2626; }
+[data-theme="dark"] .stat-value { color: var(--neutral-100); }
+.stat-card .stat-icon-bg {
+  position: absolute; top: -10px; right: -10px;
+  width: 70px; height: 70px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.12;
+}
+.stat-card .stat-icon-bg svg { width: 32px; height: 32px; }
+/* === POLARIS Executive Summary Card === */
+.polaris-summary {
+  background: linear-gradient(135deg, rgba(212,175,55,0.08), rgba(212,175,55,0.02));
+  border: 1px solid rgba(212,175,55,0.25);
+  border-radius: var(--radius-md);
+  padding: 24px 28px;
+  margin-bottom: 24px;
+}
+[data-theme="dark"] .polaris-summary {
+  background: linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03));
+  border-color: rgba(212,175,55,0.2);
+}
+.polaris-summary-header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 18px;
+}
+.polaris-summary-logo {
+  width: 36px; height: 36px; background: linear-gradient(135deg, #d4af37, #f5d97e);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; color: #1a1a1a; flex-shrink: 0;
+}
+.polaris-summary-title {
+  font-size: 17px; font-weight: 700; color: var(--neutral-900);
+  letter-spacing: 0.02em;
+}
+.polaris-summary-title span { color: #b8960f; }
+[data-theme="dark"] .polaris-summary-title span { color: var(--brand-400); }
+.polaris-summary-title .trademark { font-size: 11px; vertical-align: super; font-weight: 500; }
+.polaris-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+@media (max-width: 900px) { .polaris-summary-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 500px) { .polaris-summary-grid { grid-template-columns: 1fr; } }
+.polaris-metric {
+  padding: 14px 16px;
+  background: var(--neutral-100);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--neutral-200);
+}
+[data-theme="dark"] .polaris-metric {
+  background: rgba(0,0,0,0.15);
+  border-color: rgba(212,175,55,0.1);
+}
+.polaris-metric-label { font-size: 11px; font-weight: 600; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+.polaris-metric-value { font-size: 20px; font-weight: 800; color: var(--neutral-900); }
+.polaris-metric-desc { font-size: 11px; color: var(--neutral-500); margin-top: 2px; }
+[data-theme="dark"] .polaris-metric-value { color: var(--neutral-100); }
+/* === KPI Grid === */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+@media (max-width: 768px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px) { .kpi-grid { grid-template-columns: 1fr 1fr; } }
+/* === Filter System === */
+.call-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+.call-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.call-filter-btn {
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--neutral-300);
+  background: var(--neutral-100);
+  color: var(--neutral-600);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.call-filter-btn:hover {
+  border-color: var(--brand-400);
+  color: var(--brand-600);
+}
+.call-filter-btn.active {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: white;
+}
+[data-theme="dark"] .call-filter-btn {
+  border-color: var(--neutral-300);
+  background: var(--neutral-100);
+  color: var(--neutral-500);
+}
+.call-search-bar {
+  margin-bottom: 16px;
+}
+.call-search-bar input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  background: var(--neutral-100);
+  color: var(--neutral-800);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+.call-search-bar input:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+}
+/* === Call Cards === */
+.call-card {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+.call-card:hover {
+  border-color: var(--neutral-300);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+[data-theme="dark"] .call-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.call-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  cursor: pointer;
+  gap: 12px;
+}
+.call-caller { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.call-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; flex-shrink: 0;
+}
+.call-info { min-width: 0; }
+.call-name { font-size: 15px; font-weight: 700; color: var(--neutral-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call-meta { font-size: 12px; color: var(--neutral-500); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call-status-badge {
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.call-status-badge.booked { background: rgba(5,150,105,0.12); color: #059669; }
+.call-status-badge.estimate { background: rgba(37,99,235,0.12); color: #2563eb; }
+.call-status-badge.followup { background: rgba(217,119,6,0.12); color: #d97706; }
+.call-status-badge.voicemail { background: rgba(107,114,128,0.12); color: #6b7280; }
+.call-status-badge.nointerest { background: rgba(107,114,128,0.08); color: #6b7280; }
+.call-card-body { padding: 0 18px 18px; display: none; }
+.call-card.expanded .call-card-body { display: block; }
+.call-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.call-detail-item { }
+.call-detail-label { font-size: 11px; font-weight: 600; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+.call-detail-value { font-size: 14px; color: var(--neutral-800); font-weight: 500; }
+.call-job-value {
+  margin: 12px 0; padding: 12px;
+  background: var(--neutral-200);
+  border-radius: var(--radius-sm);
+}
+.call-job-value-amount { font-size: 15px; font-weight: 700; color: var(--brand-600); }
+.call-job-value-desc { font-size: 12px; color: var(--neutral-500); margin-top: 2px; }
+.call-actions {
+  display: flex; gap: 8px; margin-top: 12px;
+}
+.call-actions button {
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--neutral-300);
+  background: var(--neutral-100);
+  color: var(--neutral-700);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.call-actions button:hover {
+  background: var(--neutral-200);
+  border-color: var(--brand-400);
+}
+/* === Empty State === */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--neutral-500);
+}
+.empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
+.empty-state h3 { font-size: 18px; font-weight: 600; color: var(--neutral-700); margin-bottom: 6px; }
+.empty-state p { font-size: 14px; color: var(--neutral-500); }
+</style>
 </head>
 <body>
+<a href="#mainContent" class="skip-link">Skip to main content</a>
 <div class="mobile-header">
   <button class="hamburger-btn" onclick="toggleMobileMenu()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -24,16 +259,19 @@
     <button class="mobile-menu-close" onclick="toggleMobileMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   </div>
   <nav class="mobile-menu-nav">
-    <a href="/dashboard" id="mnav-dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
-    <a href="/dashboard/leads" id="mnav-leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
-    <a href="/dashboard/calls" id="mnav-calls" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Call History</a>
-    <a href="/dashboard/my-number" id="mnav-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>My Number</a>
-    <a href="/dashboard/settings" id="mnav-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
-    <a href="/dashboard/integrations" id="mnav-integrations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>Integrations</a>
+    <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+    <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
+    <a href="/dashboard/calls" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Call History</a>
+    <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>My Number</a>
+    <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Calendar</a>
+    <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>AI Settings</a>
+    <a href="/dashboard/business-profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Business Profile</a>
+    <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l
+.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
   </nav>
   <div class="mobile-menu-footer">
     <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>
-    <button onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--neutral-500);width:100%;text-align:left;">&#127769; Toggle Theme</button>
+    <button onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--neutral-500);width:100%;text-align:left;">🌙 Toggle Theme</button>
   </div>
 </div>
 <script>
@@ -42,58 +280,148 @@ function toggleMobileMenu() {
   document.getElementById('mobileMenu').classList.toggle('open');
 }
 </script>
-<div class="dashboard-layout"><aside class="sidebar">
-<a href="/dashboard" class="sidebar-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a>
-<nav class="sidebar-nav">
-<a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
-<a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
-<a href="/dashboard/calls" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call History</span></a>
-<a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
-<a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
-</nav>
-<a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
-<button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">&#127769;</button>
-</aside><main class="main-content">
-<div class="page-header"><div><h1>Call History</h1><p>Every call your AI Office Manager has handled.</p></div><button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">📞 Simulate Call</button></div>
-<div style="margin-bottom:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;" id="callStats">
-<div class="stat-card"><div class="stat-label">Total Calls</div><div class="stat-value" id="totalCalls">0</div></div>
-<div class="stat-card"><div class="stat-label">Avg Duration</div><div class="stat-value" id="avgDuration">—</div></div>
-<div class="stat-card"><div class="stat-label">Answer Rate</div><div class="stat-value" id="answerRate">—</div></div>
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <a href="/dashboard" class="sidebar-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a>
+    <nav class="sidebar-nav">
+      <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
+      <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
+      <a href="/dashboard/calls" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call History</span></a>
+      <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
+      <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg><span>Calendar</span></a>
+      <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg><span>AI Settings</span></a>
+      <a href="/dashboard/business-profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Business Profile</span></a>
+      <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l
+.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
+    </nav>
+    <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
+    <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button>
+  </aside>
+  <main class="main-content" id="mainContent">
+    <div class="page-header">
+      <div><h1>Call History</h1><p>Every call your AI Office Manager has handled.</p></div>
+      <button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">📞 Simulate Call</button>
+    </div>
+    <!-- POLARIS Executive Summary -->
+    <div class="polaris-summary">
+      <div class="polaris-summary-header">
+        <div class="polaris-summary-logo">★</div>
+        <div class="polaris-summary-title">POLARIS™ <span>Executive Briefing</span> — AI Revenue Intelligence</div>
+      </div>
+      <div class="polaris-summary-grid" id="polarisSummary">
+        <div class="polaris-metric">
+          <div class="polaris-metric-label">📞 Calls Today</div>
+          <div class="polaris-metric-value" id="psCallsToday">0</div>
+          <div class="polaris-metric-desc">Incoming calls handled</div>
+        </div>
+        <div class="polaris-metric">
+          <div class="polaris-metric-label">📅 Booked Appointments</div>
+          <div class="polaris-metric-value" id="psBooked">0</div>
+          <div class="polaris-metric-desc">Scheduled estimate visits</div>
+        </div>
+        <div class="polaris-metric">
+          <div class="polaris-metric-label">📊 Estimates Created</div>
+          <div class="polaris-metric-value" id="psEstimates">0</div>
+          <div class="polaris-metric-desc">Quotes prepared by AI</div>
+        </div>
+        <div class="polaris-metric">
+          <div class="polaris-metric-label">🔄 Follow Ups Needed</div>
+          <div class="polaris-metric-value" id="psFollowUps">0</div>
+          <div class="polaris-metric-desc">Requires attention</div>
+        </div>
+        <div class="polaris-metric">
+          <div class="polaris-metric-label">💰 Revenue Generated</div>
+          <div class="polaris-metric-value" id="psRevenue">$0</div>
+          <div class="polaris-metric-desc">Estimated job value</div>
+        </div>
+        <div class="polaris-metric">
+          <div class="polaris-metric-label">🏆 Highest Value Lead</div>
+          <div class="polaris-metric-value" id="psHighest">—</div>
+          <div class="polaris-metric-desc">Top opportunity</div>
+        </div>
+        <div class="polaris-metric">
+          <div class="polaris-metric-label">📈 Avg Opportunity</div>
+          <div class="polaris-metric-value" id="psAvgOpp">$0</div>
+          <div class="polaris-metric-desc">Per lead average</div>
+        </div>
+        <div class="polaris-metric">
+          <div class="polaris-metric-label">🎯 Recommended Next Action</div>
+          <div class="polaris-metric-value" id="psNextAction" style="font-size:14px;">—</div>
+          <div class="polaris-metric-desc">AI suggests focus area</div>
+        </div>
+      </div>
+    </div>
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="callStats">
+      <div class="stat-card">
+        <div class="stat-icon-bg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
+        <div class="stat-label">Calls Today</div>
+        <div class="stat-value" id="kpiCallsToday">0</div>
+        <div class="stat-change up" id="kpiCallsChange">All time</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-bg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="8"/></svg></div>
+        <div class="stat-label">Revenue Generated</div>
+        <div class="stat-value" id="kpiRevenue">$0</div>
+        <div class="stat-change up" id="kpiRevenueChange">Estimated total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-bg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+        <div class="stat-label">Booking Rate</div>
+        <div class="stat-value" id="kpiBookingRate">0%</div>
+        <div class="stat-change up" id="kpiBookingChange">Conversion</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-bg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <div class="stat-label">Missed Opportunities</div>
+        <div class="stat-value" id="kpiMissed">0</div>
+        <div class="stat-change down" id="kpiMissedChange">Needs attention</div>
+      </div>
+    </div>
+    <!-- Search -->
+    <div class="call-search-bar">
+      <input type="text" id="callSearchInput" placeholder="🔍 Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)">
+    </div>
+    <!-- Filters -->
+    <div class="call-filters">
+      <span class="call-filter-group">
+        <button class="call-filter-btn active" data-filter="all" onclick="setFilter('all')">📋 All</button>
+        <button class="call-filter-btn" data-filter="booked" onclick="setFilter('booked')">🟢 Booked</button>
+        <button class="call-filter-btn" data-filter="estimate" onclick="setFilter('estimate')">🔵 Estimate</button>
+        <button class="call-filter-btn" data-filter="follow-up" onclick="setFilter('follow-up')">🟡 Follow Up</button>
+        <button class="call-filter-btn" data-filter="voicemail" onclick="setFilter('voicemail')">⚪ Voicemail</button>
+        <button class="call-filter-btn" data-filter="no-interest" onclick="setFilter('no-interest')">⚫ No Interest</button>
+      </span>
+      <span class="call-filter-group" style="margin-left:auto;">
+        <button class="call-filter-btn" data-filter="today" onclick="setFilter('today')">📅 Today</button>
+        <button class="call-filter-btn" data-filter="week" onclick="setFilter('week')">📅 This Week</button>
+        <button class="call-filter-btn" style="color:var(--danger);border-color:rgba(220,38,38,0.3);" onclick="clearAllCalls()">🗑 Clear All</button>
+      </span>
+    </div>
+    <!-- Call List -->
+    <div id="callHistoryList"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div></div>
+  </main>
 </div>
-<div class="call-search-bar">
-<input type="text" id="callSearchInput" placeholder="🔍 Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)" style="width:100%;padding:10px 14px;border:1px solid var(--neutral-300);border-radius:var(--radius-md);font-size:14px;background:var(--neutral-100);color:var(--neutral-800);box-sizing:border-box;">
-</div>
-<div class="call-filters">
-<span class="filter-group">
-<button class="call-filter-btn active" data-filter="all" onclick="setFilter('all')">📋 All</button>
-<button class="call-filter-btn" data-filter="booked" onclick="setFilter('booked')">🟢 Booked</button>
-<button class="call-filter-btn" data-filter="estimate" onclick="setFilter('estimate')">🔵 Estimate</button>
-<button class="call-filter-btn" data-filter="follow-up" onclick="setFilter('follow-up')">🟡 Follow Up</button>
-<button class="call-filter-btn" data-filter="voicemail" onclick="setFilter('voicemail')">⚪ Voicemail</button>
-<button class="call-filter-btn" data-filter="no-interest" onclick="setFilter('no-interest')">⚫ No Interest</button>
-</span>
-<span class="call-filters-row2">
-<button class="call-filter-btn" data-filter="today" onclick="setFilter('today')">📅 Today</button>
-<button class="call-filter-btn" data-filter="week" onclick="setFilter('week')">📅 This Week</button>
-<button class="call-filter-btn call-filter-clear" onclick="clearAllCalls()">🗑 Clear All</button>
-</span>
-</div>
-<div id="callHistoryList"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div></div>
-</main></div>
 <div id="toast" class="toast"></div>
 <script src="/js/simulator.js"></script>
 <script src="/js/api.js"></script>
 <script>
-// Pricing Engine — 13 services with logic-based pricing
+// ===== Data =====
+let allCalls = [];
+let curFilter = "all";
+let curSearch = "";
 try{const d=sessionStorage.getItem("northstar_calls");if(d)allCalls=JSON.parse(d);const nav=performance.getEntriesByType('navigation');if(nav.length>0&&nav[0].type==='reload')sessionStorage.removeItem("northstar_calls")}catch(e){}
 function loadCalls(){renderCalls()}
+function isToday(d){const n=new Date();return d.getDate()===n.getDate()&&d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear()}
+function isThisWeek(d){const n=new Date();const s=new Date(n);s.setDate(n.getDate()-n.getDay());const e=new Date(s);e.setDate(s.getDate()+6);return d>=s&&d<=e}
+function matchSearch(c,q){const l=q.toLowerCase();return (c.caller||"").toLowerCase().includes(l)||(c.phone||"").includes(l)||(c.address||"").toLowerCase().includes(l)||(c.service||"").toLowerCase().includes(l)||(c.transcript||"").toLowerCase().includes(l)||(c.summary||"").toLowerCase().includes(l)}
+// ===== Render =====
 function renderCalls(){
   let f=allCalls;
   if(curSearch)f=f.filter(c=>matchSearch(c,curSearch));
   if(curFilter!="all"){
     if(curFilter==="today")f=f.filter(c=>{try{const d=new Date(c.receivedAt);return isToday(d);}catch(e){return false;}});
     else if(curFilter==="week")f=f.filter(c=>{try{const d=new Date(c.receivedAt);return isThisWeek(d);}catch(e){return false;}});
-    else if(curFilter==="voicemail")f=f.filter(c=>c.status==="voicemail");
     else {
       const outcomeMap={"booked":"appointment-set","estimate":"lead-captured","follow-up":"follow-up","voicemail":"voicemail","no-interest":"no-interest"};
       const mapped=outcomeMap[curFilter];
@@ -102,24 +430,74 @@ function renderCalls(){
     }
   }
   const el=document.getElementById("callHistoryList");
-  if(f.length===0){el.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';upStats();return;}
-  const oc={"appointment-set":{bg:"#059669",label:"Booked"},"lead-captured":{bg:"#2563eb",label:"Estimate"},"follow-up":{bg:"#d97706",label:"Follow Up"},"no-interest":{bg:"#6b7280",label:"No Interest"}};
-  const sc={answered:"#059669",missed:"#dc2626",voicemail:"#d97706"};
+  if(f.length===0){el.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';upStats();updatePolaris();return;}
+  const oc={"appointment-set":{cls:"booked",label:"Booked"},"lead-captured":{cls:"estimate",label:"Estimate"},"follow-up":{cls:"followup",label:"Follow Up"},"no-interest":{cls:"nointerest",label:"No Interest"}};
   let html="";
   f.forEach((c,i)=>{
     const inits=c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
-    const ob=oc[c.outcome]||{bg:"#6b7280",label:c.outcome};
-    html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+' '+(c.icon||"")+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge" style="background:'+ob.bg+'20;color:'+ob.bg+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div style="margin:12px 0;padding:12px;background:var(--neutral-200);border-radius:var(--radius-sm);"><div style="font-size:15px;font-weight:700;color:var(--brand-600);">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div style="font-size:12px;color:var(--neutral-500);margin-top:2px;">'+c.jobDetail+'</div>'+((c.pricingBreakdown&&c.pricingBreakdown.length>0)?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(function(pb){return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>';}).join('')+'<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:6px 0 0;border-top:2px solid var(--neutral-400);margin-top:4px;"><span>Total</span><span>$'+c.avgPrice.toLocaleString()+'</span></div></div>':'')+'<div class="call-detail-label">Summary</div><div class="call-summary">'+c.summary+'</div><div class="call-detail-label">Transcript</div><div class="call-transcript">'+function(){try{return c.transcript.split("\n").map(function(l){if(l.startsWith("AI:"))return '<div class=\"chat-msg chat-ai\"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div class=\"chat-msg chat-customer\"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div class=\"chat-msg\">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to \'+c.phone+\'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>' });
-  el.innerHTML=html;upStats();
+    const ob=oc[c.outcome]||{cls:"voicemail",label:c.outcome||c.status};
+    const statusClass=c.status==="voicemail"?"voicemail":ob.cls;
+    html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
+  });
+  el.innerHTML=html;upStats();updatePolaris();
 }
 function setSearch(q){curSearch=q;renderCalls()}
 function toggleCall(i){document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});document.getElementById("call-"+i).classList.toggle("expanded")}
 function setFilter(f){curFilter=f;document.querySelectorAll(".call-filter-btn").forEach(b=>b.classList.toggle("active",b.dataset.filter===f));renderCalls()}
-function upStats(){const t=allCalls.length;const a=allCalls.filter(c=>c.status==="answered").length;const ts=allCalls.reduce((s,c)=>{const p=c.duration.split(":");return s+parseInt(p[0])*60+parseInt(p[1])},0);const am=t>0?Math.floor(ts/t/60):0;const as=t>0?Math.floor(ts/t%60):0;const r=t>0?Math.round((a/t)*100):0;document.getElementById("totalCalls").textContent=t;document.getElementById("avgDuration").textContent=t>0?am+":"+as.toString().padStart(2,"0"):"—";document.getElementById("answerRate").textContent=t>0?r+"%":"—"}
-function simulateDemoCall(){const c=genCall();allCalls.unshift(c);try{const existing=JSON.parse(sessionStorage.getItem("northstar_calls")||"[]");existing.unshift(c);sessionStorage.setItem("northstar_calls",JSON.stringify(existing))}catch(e){}renderCalls();showToast("Call from "+c.caller+" — $"+c.avgPrice.toLocaleString()+" estimated")}
-function clearAllCalls(){if(confirm("Clear all call history?")){allCalls=[];sessionStorage.removeItem("northstar_calls");renderCalls();showToast("Calls cleared")}}
+// ===== Stats =====
+function upStats(){
+  const t=allCalls.length;
+  const book=allCalls.filter(c=>c.outcome==="appointment-set").length;
+  const est=allCalls.filter(c=>c.outcome==="lead-captured").length;
+  const fu=allCalls.filter(c=>c.outcome==="follow-up").length;
+  const voicemail=allCalls.filter(c=>c.status==="voicemail").length;
+  const noi=allCalls.filter(c=>c.outcome==="no-interest").length;
+  const rev=allCalls.reduce((s,c)=>s+(c.avgPrice||0),0);
+  document.getElementById("kpiCallsToday").textContent=t;
+  document.getElementById("kpiRevenue").textContent=t>0?'$'+rev.toLocaleString():'$0';
+  document.getElementById("kpiBookingRate").textContent=t>0?Math.round((book/t)*100)+'%':'0%';
+  document.getElementById("kpiMissed").textContent=(voicemail+noi);
+  const today=allCalls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  document.getElementById("kpiCallsChange").textContent=today>0?today+' today':'All time';
+  document.getElementById("kpiRevenueChange").textContent='$'+rev.toLocaleString()+' total';
+  document.getElementById("kpiBookingChange").textContent=book+' booked';
+  document.getElementById("kpiMissedChange").textContent=(voicemail+noi)>0?'Needs attention':'None';
+}
+function updatePolaris(){
+  const t=allCalls.length;const today=allCalls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  const book=allCalls.filter(c=>c.outcome==="appointment-set").length;
+  const est=allCalls.filter(c=>c.outcome==="lead-captured").length;
+  const fu=allCalls.filter(c=>c.outcome==="follow-up").length;
+  const rev=allCalls.reduce((s,c)=>s+(c.avgPrice||0),0);
+  const highest=allCalls.reduce((m,c)=>Math.max(m,c.avgPrice||0),0);
+  const avg=t>0?Math.round(rev/t):0;
+  document.getElementById("psCallsToday").textContent=today;
+  document.getElementById("psBooked").textContent=book;
+  document.getElementById("psEstimates").textContent=est;
+  document.getElementById("psFollowUps").textContent=fu;
+  document.getElementById("psRevenue").textContent='$'+rev.toLocaleString();
+  document.getElementById("psHighest").textContent=highest>0?'$'+highest.toLocaleString():"—";
+  document.getElementById("psAvgOpp").textContent='$'+avg.toLocaleString();
+  let action="Review pending leads";
+  if(fu>0)action="Follow up on "+fu+" leads";
+  if(book===0&&est===0&&t>0)action="Improve booking rate — review AI scripts";
+  document.getElementById("psNextAction").textContent=action;
+}
+// ===== Actions =====
+function simulateDemoCall(){
+  const c=genCall();allCalls.unshift(c);
+  try{const existing=JSON.parse(sessionStorage.getItem("northstar_calls")||"[]");existing.unshift(c);sessionStorage.setItem("northstar_calls",JSON.stringify(existing))}catch(e){}
+  renderCalls();showToast("📞 Call from "+c.caller+" — $"+c.avgPrice.toLocaleString()+" estimated");
+}
+function clearAllCalls(){if(confirm("Clear all call history?")){allCalls=[];sessionStorage.removeItem("northstar_calls");renderCalls();showToast("🗑 Calls cleared")}}
 function showToast(m){const e=document.getElementById("toast");e.textContent=m;e.className="toast show";setTimeout(()=>e.classList.remove("show"),3000)}
 loadCalls();
 </script>
+<script src="/js/event-bus.js"></script>
+<script src="/js/business-models.js"></script>
+<script src="/js/app-store.js"></script>
+<script src="/js/polaris-engine.js"></script>
+<script src="/js/notification-service.js"></script>
+<script src="/js/theme.js"></script>
 </body>
 </html>

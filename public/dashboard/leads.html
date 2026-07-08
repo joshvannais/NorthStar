@@ -559,6 +559,11 @@ function toggleMobileMenu() {
 
   <div class="toast-container" id="toastContainer"></div>
 
+  <script src="/js/event-bus.js"></script>
+  <script src="/js/business-models.js"></script>
+  <script src="/js/app-store.js"></script>
+  <script src="/js/polaris-engine.js"></script>
+  <script src="/js/notification-service.js"></script>
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
   <script>
@@ -579,6 +584,7 @@ function toggleMobileMenu() {
       }, 4000);
     }
     window.showToast = showNotification;
+    window.showNotification = NotificationService.show;
 
     // In-memory leads
     let allLeads = [];
@@ -681,41 +687,9 @@ function toggleMobileMenu() {
     }
 
     function generatePolarisInsight(lead) {
-      const service = lead.service || lead.serviceRequested || 'a home service job';
-      const desc = lead.jobDetail || lead.summary || '';
-      const price = lead.avgPrice || 0;
-      const pbItems = lead.pricingBreakdown;
-      const hasPB = pbItems && Array.isArray(pbItems) && pbItems.length > 0;
-      const caller = lead.caller || 'this customer';
-      const parts = [];
-      parts.push('POLARIS\u2122 evaluated ' + capitalizeFirst(service).toLowerCase() + ' for ' + caller + '.');
-      if (desc) parts.push('Scope: ' + capitalizeFirst(desc) + '.');
-      if (hasPB) {
-        const labor = pbItems.filter(function(i) { return /labor|hour|install/i.test(i.l); }).reduce(function(s,i) { return s + (i.a||0); }, 0);
-        const mat = pbItems.filter(function(i) { return /material|equip|part|supply/i.test(i.l); }).reduce(function(s,i) { return s + (i.a||0); }, 0);
-        if (labor > 0) parts.push('Estimated ' + Math.round(labor / 85) + ' labor hours at standard trade rates.');
-        if (mat > 0) parts.push('Material & equipment costs factored at $' + Math.round(mat).toLocaleString() + '.');
-        var disp = pbItems.filter(function(i) { return /disposal|dump|haul/i.test(i.l); }).reduce(function(s,i) { return s + (i.a||0); }, 0);
-        if (disp > 0) parts.push('Disposal and site cleanup: $' + Math.round(disp).toLocaleString() + '.');
-      }
-      var difficulty = price > 5000 ? 'high-complexity' : price > 1500 ? 'moderate-difficulty' : 'straightforward';
-      parts.push('This is a ' + difficulty + ' job requiring specialized equipment and trained personnel.');
-      var seasons = ['spring', 'summer', 'fall', 'winter'];
-      var season = seasons[Math.floor(Math.random() * seasons.length)];
-      var demand = Math.random() > 0.5 ? 'high' : 'steady';
-      parts.push('Seasonal demand is ' + demand + ' for ' + season + ' \u2014 pricing reflects current market conditions.');
-      var adjustment = (Math.random() * 0.2 - 0.1);
-      var adjPct = Math.round(adjustment * 100);
-      var adjDir = adjustment > 0 ? 'premium' : 'discount';
-      parts.push('Regional market adjustment: ' + adjPct + '% ' + adjDir + ' applied for your service area.');
-      var confidence = price > 3000 ? 'High' : price > 1000 ? 'Medium' : 'Low';
-      parts.push('POLARIS confidence: ' + confidence + ' \u2014 based on ' + (hasPB ? 'itemized breakdown' : 'estimated scope') + ' and historical pricing data.');
-      if (price > 2000) {
-        parts.push('Upsell opportunity identified: consider gutter cleaning, pressure washing, or preventative maintenance add-ons.');
-      }
-      return parts.join('\n');
+      var result = PolarisEngine.analyzeLead(lead);
+      return result.insight || result;
     }
-
     function openDrawer(lead) {
       currentDrawerLead = lead;
       document.getElementById('drawerTitle').textContent = 'POLARIS™ Revenue Intelligence by NorthStar';

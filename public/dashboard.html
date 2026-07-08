@@ -520,20 +520,12 @@ function toggleMobileMenu() {
       document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your business overview.`;
     }
 
-    // In-memory calls (shared via sessionStorage)
-    var simulatedCalls = [];
+    // Dashboard data (live reference to AppStore)
+    var simulatedCalls = AppStore.getLeads();
+    var dashboardKpis = AppStore.getKpis();
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
-    try {
-      const saved = sessionStorage.getItem('northstar_calls');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) simulatedCalls = parsed;
-      }
-      const nav = performance.getEntriesByType('navigation');
-      if (nav.length > 0 && nav[0].type === 'reload') {
-        sessionStorage.removeItem('northstar_calls');
-      }
-    } catch(e) {}
+    // Auto-refresh dashboard when store changes
+    EventBus.on('store:changed', function() { loadDashboard(); });
 
     // ═══════════════════════════════════════════════════════════════
     // API Fetch Helper — calls backend, falls back to simulated data

@@ -586,23 +586,11 @@ function toggleMobileMenu() {
     window.showToast = showNotification;
     window.showNotification = NotificationService.show;
 
-    // In-memory leads
-    let allLeads = [];
+    // In-memory leads (live reference to AppStore)
+    let allLeads = AppStore.getLeads();
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
-
-    // Initialize from sessionStorage if data exists
-    try {
-      const synced = sessionStorage.getItem('northstar_calls');
-      if (synced) {
-        const parsed = JSON.parse(synced);
-        if (Array.isArray(parsed)) allLeads = parsed;
-      }
-      const nav = performance.getEntriesByType('navigation');
-      if (nav.length > 0 && nav[0].type === 'reload') {
-        sessionStorage.removeItem('northstar_calls');
-      }
-    } catch(e) {}
-
+    // Subscribe to store changes for auto-refresh
+    EventBus.on('store:changed', function() { loadLeads(); });
     function loadLeads() {
       document.getElementById('leadCount').textContent = allLeads.length + ' leads';
       renderLeads(allLeads);

@@ -407,11 +407,17 @@ function toggleMobileMenu() {
 <script src="/js/api.js"></script>
 <script>
 // ===== Data =====
-let allCalls = [];
 let curFilter = "all";
 let curSearch = "";
-try{const d=sessionStorage.getItem("northstar_calls");if(d)allCalls=JSON.parse(d);const nav=performance.getEntriesByType('navigation');if(nav.length>0&&nav[0].type==='reload')sessionStorage.removeItem("northstar_calls")}catch(e){}
 function loadCalls(){renderCalls()}
+function getAllCalls() {
+  try {
+    if (typeof AppStore !== 'undefined' && AppStore.getLeads) {
+      return AppStore.getLeads();
+    }
+  } catch(e) {}
+  return [];
+}
 function isToday(d){const n=new Date();return d.getDate()===n.getDate()&&d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear()}
 function isThisWeek(d){const n=new Date();const s=new Date(n);s.setDate(n.getDate()-n.getDay());const e=new Date(s);e.setDate(s.getDate()+6);return d>=s&&d<=e}
 function matchSearch(c,q){const l=q.toLowerCase();return (c.caller||"").toLowerCase().includes(l)||(c.phone||"").includes(l)||(c.address||"").toLowerCase().includes(l)||(c.service||"").toLowerCase().includes(l)||(c.transcript||"").toLowerCase().includes(l)||(c.summary||"").toLowerCase().includes(l)}
@@ -446,30 +452,30 @@ function toggleCall(i){document.querySelectorAll(".call-card.expanded").forEach(
 function setFilter(f){curFilter=f;document.querySelectorAll(".call-filter-btn").forEach(b=>b.classList.toggle("active",b.dataset.filter===f));renderCalls()}
 // ===== Stats =====
 function upStats(){
-  const t=allCalls.length;
-  const book=allCalls.filter(c=>c.outcome==="appointment-set").length;
-  const est=allCalls.filter(c=>c.outcome==="lead-captured").length;
-  const fu=allCalls.filter(c=>c.outcome==="follow-up").length;
-  const voicemail=allCalls.filter(c=>c.status==="voicemail").length;
-  const noi=allCalls.filter(c=>c.outcome==="no-interest").length;
-  const rev=allCalls.reduce((s,c)=>s+(c.avgPrice||0),0);
+  const calls=getAllCalls();const t=calls.length;
+  const book=calls.filter(c=>c.outcome==="appointment-set").length;
+  const est=calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu=calls.filter(c=>c.outcome==="follow-up").length;
+  const voicemail=calls.filter(c=>c.status==="voicemail").length;
+  const noi=calls.filter(c=>c.outcome==="no-interest").length;
+  const rev=calls.reduce((s,c)=>s+(c.avgPrice||0),0);
   document.getElementById("kpiCallsToday").textContent=t;
   document.getElementById("kpiRevenue").textContent=t>0?'$'+rev.toLocaleString():'$0';
   document.getElementById("kpiBookingRate").textContent=t>0?Math.round((book/t)*100)+'%':'0%';
   document.getElementById("kpiMissed").textContent=(voicemail+noi);
-  const today=allCalls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  const today=calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
   document.getElementById("kpiCallsChange").textContent=today>0?today+' today':'All time';
   document.getElementById("kpiRevenueChange").textContent='$'+rev.toLocaleString()+' total';
   document.getElementById("kpiBookingChange").textContent=book+' booked';
   document.getElementById("kpiMissedChange").textContent=(voicemail+noi)>0?'Needs attention':'None';
 }
 function updatePolaris(){
-  const t=allCalls.length;const today=allCalls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
-  const book=allCalls.filter(c=>c.outcome==="appointment-set").length;
-  const est=allCalls.filter(c=>c.outcome==="lead-captured").length;
-  const fu=allCalls.filter(c=>c.outcome==="follow-up").length;
-  const rev=allCalls.reduce((s,c)=>s+(c.avgPrice||0),0);
-  const highest=allCalls.reduce((m,c)=>Math.max(m,c.avgPrice||0),0);
+  const calls=getAllCalls();const t=calls.length;const today=calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  const book=calls.filter(c=>c.outcome==="appointment-set").length;
+  const est=calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu=calls.filter(c=>c.outcome==="follow-up").length;
+  const rev=calls.reduce((s,c)=>s+(c.avgPrice||0),0);
+  const highest=calls.reduce((m,c)=>Math.max(m,c.avgPrice||0),0);
   const avg=t>0?Math.round(rev/t):0;
   document.getElementById("psCallsToday").textContent=today;
   document.getElementById("psBooked").textContent=book;
@@ -485,12 +491,22 @@ function updatePolaris(){
 }
 // ===== Actions =====
 function simulateDemoCall(){
-  const c=genCall();allCalls.unshift(c);
-  try{const existing=JSON.parse(sessionStorage.getItem("northstar_calls")||"[]");existing.unshift(c);sessionStorage.setItem("northstar_calls",JSON.stringify(existing))}catch(e){}
+  const c=genCall();
+  try {
+    if (typeof AppStore !== 'undefined' && AppStore.addLead) {
+      AppStore.addLead(c);
+      // Let EventBus handle the refresh
+      if (typeof EventBus !== 'undefined') {
+        EventBus.emit('call:generated', c);
+      }
+    }
+  } catch(e){}
   renderCalls();showToast("📞 Call from "+c.caller+" — $"+c.avgPrice.toLocaleString()+" estimated");
 }
-function clearAllCalls(){if(confirm("Clear all call history?")){allCalls=[];sessionStorage.removeItem("northstar_calls");renderCalls();showToast("🗑 Calls cleared")}}
+function clearAllCalls(){if(confirm("Clear all call history?")){try{sessionStorage.removeItem("northstar_calls");if(typeof AppStore!=='undefined'&&AppStore.getLeads){AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id)});}}catch(e){}renderCalls();showToast("🗑 Calls cleared")}}
 function showToast(m){const e=document.getElementById("toast");e.textContent=m;e.className="toast show";setTimeout(()=>e.classList.remove("show"),3000)}
+// Auto-refresh on store changes
+try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
 loadCalls();
 </script>
 <script src="/js/event-bus.js"></script>

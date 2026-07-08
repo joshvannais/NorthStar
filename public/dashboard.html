@@ -544,7 +544,7 @@ function toggleMobileMenu() {
     });    var user = JSON.parse(localStorage.getItem('user') || '{}');
     if (user.name) {
 // In-memory calls (shared via sessionStorage)
-    window.simulatedCalls = window.simulatedCalls || [];
+    var simulatedCalls = window.simulatedCalls || [];
     // Seed demo data on first load so the dashboard is not empty
     if (simulatedCalls.length === 0 && typeof genCall === "function") {
       for (var i = 0; i < 12; i++) {

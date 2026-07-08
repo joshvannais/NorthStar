@@ -543,30 +543,30 @@ function toggleMobileMenu() {
       window.location.reload();
     });    var user = JSON.parse(localStorage.getItem('user') || '{}');
     if (user.name) {
-      document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your business overview.`;
-    }
-
-    try {
-    // In-memory calls (shared via sessionStorage)
+// In-memory calls (shared via sessionStorage)
     simulatedCalls = simulatedCalls || [];
     // Seed demo data on first load so the dashboard is not empty
-    if (simulatedCalls.length === 0) {
-      simulatedCalls = [
-        {caller:"Mike Johnson",phone:"(860) 555-7234",address:"42 Maple St, Hartford CT",service:"Tree removal",icon:"🌳",avgPrice:4200,jobDetail:"Large oak removal - 55ft, near house, stump grinding",duration:"4:30",status:"scheduled",outcome:"appointment-set",time:"Today, 9:15 AM",receivedAt:new Date().toISOString(),summary:"Tree removal: Large oak removal. Estimated $4,200.",transcript:"Mike: Hi, I have a large oak tree near my house that needs to come down.\\nAI: Thanks for calling NorthStar! I'd be happy to help with that. Could you tell me more about the tree?\\nMike: It's about 55 feet tall and pretty close to the house.\\nAI: Got it. I've scheduled a estimator to come out this afternoon. Does 2pm work?"},
-        {caller:"Sarah Williams",phone:"(203) 555-8912",address:"18 Oak Ave, New Haven CT",service:"Landscaping",icon:"🌿",avgPrice:2800,jobDetail:"Full yard renovation - 0.5 acre, new sod, irrigation system",duration:"3:15",status:"new",outcome:"lead-captured",time:"Today, 10:30 AM",receivedAt:new Date().toISOString(),summary:"Landscaping: Full yard renovation. Estimated $2,800.",transcript:"Sarah: Hi, I'm looking to get my yard completely redone.\\nAI: I'd be happy to help! What kind of work are you thinking?\\nSarah: New sod, maybe some irrigation, the whole thing.\\nAI: Great, I've captured your details. A team member will call you back within the hour with a quote."},
-        {caller:"Dave Chen",phone:"(475) 555-3401",address:"7 Elm Rd, Stamford CT",service:"Plumbing",icon:"🔧",avgPrice:1850,jobDetail:"Emergency pipe burst - main water line, basement flooding",duration:"2:45",status:"contacted",outcome:"follow-up",time:"Yesterday, 3:45 PM",receivedAt:new Date(Date.now()-86400000).toISOString(),summary:"Plumbing: Emergency pipe burst. Estimated $1,850.",transcript:"Dave: My basement is flooding! A pipe burst!\\nAI: I understand this is urgent. I'm sending your information to our emergency plumbing team right now.\\nDave: How fast can someone get here?\\nAI: I've flagged this as an emergency. Someone will call you within 15 minutes."},
-        {caller:"Lisa Martinez",phone:"(959) 555-2109",address:"55 Pine St, Bridgeport CT",service:"HVAC",icon:"❄️",avgPrice:3500,jobDetail:"Full AC replacement - 4-ton unit, ductwork inspection",duration:"5:00",status:"scheduled",outcome:"appointment-set",time:"Yesterday, 11:20 AM",receivedAt:new Date(Date.now()-86400000).toISOString(),summary:"HVAC: Full AC replacement. Estimated $3,500.",transcript:"Lisa: Our AC died in this heat! We need a new unit.\\nAI: I'm sorry to hear that. Let me help you get a new system scheduled. What type of property?\\nLisa: Single family home, about 2000 sq ft.\\nAI: Great. I've scheduled a technician for tomorrow morning between 8-10am."},
-        {caller:"Tom Bradley",phone:"(860) 555-6723",address:"120 Cedar Ln, Middletown CT",service:"Roofing",icon:"🏠",avgPrice:8700,jobDetail:"Full roof replacement - 30-square, architectural shingles, ridge vent",duration:"6:30",status:"new",outcome:"lead-captured",time:"2 days ago, 2:10 PM",receivedAt:new Date(Date.now()-172800000).toISOString(),summary:"Roofing: Full roof replacement. Estimated $8,700.",transcript:"Tom: I need a new roof. Got some leaks after the last storm.\\nAI: I can help with that. How big is your home?\\nTom: Single story ranch, about 1500 sq ft.\\nAI: Thanks Tom. I've entered your information and someone will reach out with a quote."},
-        {caller:"Emily Park",phone:"(203) 555-4598",address:"32 Birch St, Danbury CT",service:"Painting",icon:"🎨",avgPrice:2400,jobDetail:"Interior painting - living room, dining room, 2 bedrooms",duration:"3:00",status:"new",outcome:"lead-captured",time:"2 days ago, 4:30 PM",receivedAt:new Date(Date.now()-172800000).toISOString(),summary:"Painting: Interior painting. Estimated $2,400."},
-        {caller:"James Wilson",phone:"(475) 555-8876",address:"89 Harbor Dr, New London CT",service:"Solar",icon:"☀️",avgPrice:18500,jobDetail:"12-panel solar array with battery backup, ground mount",duration:"8:00",status:"new",outcome:"lead-captured",time:"3 days ago, 10:00 AM",receivedAt:new Date(Date.now()-259200000).toISOString(),summary:"Solar: 12-panel solar array. Estimated $18,500."},
-        {caller:"Rachel Green",phone:"(860) 555-3321",address:"200 Elm St, Waterbury CT",service:"Flooring",icon:"🏗️",avgPrice:5600,jobDetail:"Hardwood flooring installation - 1200 sq ft, white oak, stain",duration:"4:00",status:"contacted",outcome:"follow-up",time:"3 days ago, 1:15 PM",receivedAt:new Date(Date.now()-259200000).toISOString(),summary:"Flooring: Hardwood flooring installation. Estimated $5,600."},
-        {caller:"Alex Turner",phone:"(203) 555-9900",address:"65 River Rd, Greenwich CT",service:"Pool service",icon:"🏊",avgPrice:3200,jobDetail:"Pool opening - remove cover, balance chemicals, inspect equipment",duration:"2:30",status:"completed",outcome:"appointment-set",time:"4 days ago, 8:45 AM",receivedAt:new Date(Date.now()-345600000).toISOString(),summary:"Pool service: Pool opening. Estimated $3,200."},
-        {caller:"Maria Santos",phone:"(959) 555-4432",address:"15 Hill St, Norwalk CT",service:"Electrical",icon:"⚡",avgPrice:1800,jobDetail:"Panel upgrade - 200amp service, whole house surge protector",duration:"3:45",status:"new",outcome:"lead-captured",time:"4 days ago, 3:00 PM",receivedAt:new Date(Date.now()-345600000).toISOString(),summary:"Electrical: Panel upgrade. Estimated $1,800."},
-        {caller:"Kevin Brown",phone:"(860) 555-7765",address:"400 Lake Ave, Bristol CT",service:"Tree removal",icon:"🌳",avgPrice:1500,jobDetail:"Single dead pine removal - 40ft, easy access",duration:"2:00",status:"new",outcome:"lead-captured",time:"5 days ago, 11:30 AM",receivedAt:new Date(Date.now()-432000000).toISOString(),summary:"Tree removal: Single dead pine removal. Estimated $1,500."},
-        {caller:"Jennifer Lee",phone:"(203) 555-1234",address:"88 Park Blvd, Shelton CT",service:"HVAC",icon:"❄️",avgPrice:650,jobDetail:"AC tune-up - clean coils, check refrigerant, filter replacement",duration:"1:15",status:"scheduled",outcome:"appointment-set",time:"5 days ago, 9:00 AM",receivedAt:new Date(Date.now()-432000000).toISOString(),summary:"HVAC: AC tune-up. Estimated $650."}
-      ];
-      sessionStorage.setItem('northstar_calls', JSON.stringify(simulatedCalls));
+    if (simulatedCalls.length === 0 && typeof genCall === "function") {
+      for (var i = 0; i < 12; i++) {
+        simulatedCalls.push(genCall());
+      }
+      simulatedCalls.sort(function(a, b) { return new Date(b.receivedAt || b.time) - new Date(a.receivedAt || a.time); });
     }
+    function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
+    try {
+      const saved = sessionStorage.getItem('northstar_calls');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) simulatedCalls = parsed;
+      }
+      const nav = performance.getEntriesByType('navigation');
+      if (nav.length > 0 && nav[0].type === 'reload') {
+        sessionStorage.removeItem('northstar_calls');
+      }
+    } catch(e) {}      document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your business overview.`;
+    }
+    function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
+    try {
       const saved = sessionStorage.getItem('northstar_calls');
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -577,6 +577,11 @@ function toggleMobileMenu() {
         sessionStorage.removeItem('northstar_calls');
       }
     } catch(e) {}
+
+    // ═══════════════════════════════════════════════════════════════
+    // API Fetch Helper — calls backend, falls back to simulated data
+    }
+
 
     // ═══════════════════════════════════════════════════════════════
     // API Fetch Helper — calls backend, falls back to simulated data

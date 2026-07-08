@@ -1049,15 +1049,18 @@ function toggleMobileMenu() {
     // Actions: Simulate Lead, Test AI, Call My AI, Coming Soon
     // ═══════════════════════════════════════════════════════════════
     function simulateDemoLead() {
-      const c = genCall();
       try {
+        const c = genCall();
         simulatedCalls.unshift(c);
-        const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
+        var existing = [];
+        try { existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]'); } catch(e) {}
         existing.unshift(c);
         sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
-      } catch (e) {}
-      showNotification("✅ New lead: " + c.caller + " ($" + (c.avgPrice||0).toLocaleString() + " estimated)", 'success');
-      loadDashboard();
+        showNotification("✅ New lead: " + c.caller + " ($" + (c.avgPrice||0).toLocaleString() + " estimated)", 'success');
+        loadDashboard();
+      } catch(e) {
+        showNotification("Could not generate lead. Please try again.", 'error');
+      }
     }
 
     function openTestAIModal() {

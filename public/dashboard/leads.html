@@ -335,13 +335,13 @@
 }
 /* Description box styling */
 .drawer-description-box {
-  padding: 12px 14px;
+  padding: 14px 16px;
   background: var(--neutral-50);
   border-radius: var(--radius-sm);
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.8;
   color: var(--neutral-800);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 [data-theme="dark"] .drawer-description-box {
   background: var(--neutral-200);
@@ -470,7 +470,11 @@ function toggleMobileMenu() {
       <!-- Polaris Revenue Intelligence Card -->
       <div class="polaris-card" id="polarisCard">
         <div class="polaris-header">
-          <h2>⭐ Polaris Revenue Intelligence</h2>
+          <h2 style="display:flex;align-items:center;gap:8px;">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 1l2.39 4.84 5.34.78-3.87 3.77.91 5.32L10 13.77l-4.77 2.94.91-5.32L2.27 6.62l5.34-.78L10 1z" fill="#D4AF37" stroke="#B8860B" stroke-width="0.8"/>
+            </svg>
+            POLARIS™ Revenue Intelligence</h2>
           <span class="polaris-badge">Live</span>
         </div>
         <div class="polaris-grid" id="polarisGrid">
@@ -532,6 +536,8 @@ function toggleMobileMenu() {
         <h3>Job Details</h3>
         <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">—</span></div>
         <div class="drawer-detail-row"><span class="drawer-detail-label">Description</span></div>
+        <div style="height:4px;"></div>
+        <div style="border-bottom:1px solid var(--neutral-200);margin:0 0 8px 0;"></div>
         <div class="drawer-description-box" id="drawerDescription">—</div>
         <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">—</span></div>
         <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerStatus">—</span></div>

@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
+  <!-- SPA routing: intercept sidebar/mobile nav clicks for dashboard routes -->
+  <script>document.addEventListener("click",function(e){var t=e.target.closest("a");if(t&&t.href&&t.href.indexOf("/dashboard/")>-1&&t.href.indexOf(window.location.origin+"/dashboard/")===0){e.preventDefault();var u=t.getAttribute("href");if(u&&u!==window.location.pathname+window.location.search+window.location.hash){history.pushState(null,"",u);window.dispatchEvent(new CustomEvent("navigate",{detail:{path:u}}));}}},false);window.addEventListener("popstate",function(){window.dispatchEvent(new CustomEvent("navigate",{detail:{path:window.location.pathname+window.location.search}}));});</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard — NorthStar AI</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">

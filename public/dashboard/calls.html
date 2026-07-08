@@ -302,10 +302,14 @@ function toggleMobileMenu() {
       <div><h1>Call History</h1><p>Every call your AI Office Manager has handled.</p></div>
       <button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">📞 Simulate Call</button>
     </div>
+    <!-- Search -->
+    <div class="call-search-bar">
+      <input type="text" id="callSearchInput" placeholder="🔍 Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)">
+    </div>
     <!-- POLARIS Executive Summary -->
     <div class="polaris-summary">
       <div class="polaris-summary-header">
-        <div class="polaris-summary-logo">★</div>
+        <div class="polaris-summary-logo" style="padding:0;overflow:hidden;"><img src="/assets/logo.png" alt="N" style="height:24px;width:24px;border-radius:6px;"></div>
         <div class="polaris-summary-title">POLARIS™ <span>Executive Briefing</span> — AI Revenue Intelligence</div>
       </div>
       <div class="polaris-summary-grid" id="polarisSummary">
@@ -378,10 +382,6 @@ function toggleMobileMenu() {
         <div class="stat-change down" id="kpiMissedChange">Needs attention</div>
       </div>
     </div>
-    <!-- Search -->
-    <div class="call-search-bar">
-      <input type="text" id="callSearchInput" placeholder="🔍 Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)">
-    </div>
     <!-- Filters -->
     <div class="call-filters">
       <span class="call-filter-group">
@@ -391,8 +391,6 @@ function toggleMobileMenu() {
         <button class="call-filter-btn" data-filter="follow-up" onclick="setFilter('follow-up')">🟡 Follow Up</button>
         <button class="call-filter-btn" data-filter="voicemail" onclick="setFilter('voicemail')">⚪ Voicemail</button>
         <button class="call-filter-btn" data-filter="no-interest" onclick="setFilter('no-interest')">⚫ No Interest</button>
-      </span>
-      <span class="call-filter-group" style="margin-left:auto;">
         <button class="call-filter-btn" data-filter="today" onclick="setFilter('today')">📅 Today</button>
         <button class="call-filter-btn" data-filter="week" onclick="setFilter('week')">📅 This Week</button>
         <button class="call-filter-btn" style="color:var(--danger);border-color:rgba(220,38,38,0.3);" onclick="clearAllCalls()">🗑 Clear All</button>
@@ -405,6 +403,7 @@ function toggleMobileMenu() {
 <div id="toast" class="toast"></div>
 <script src="/js/simulator.js"></script>
 <script src="/js/api.js"></script>
+
 <script>
 // ===== Data =====
 let curFilter = "all";
@@ -509,11 +508,7 @@ function showToast(m){const e=document.getElementById("toast");e.textContent=m;e
 try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
 loadCalls();
 </script>
-<script src="/js/event-bus.js"></script>
-<script src="/js/business-models.js"></script>
-<script src="/js/app-store.js"></script>
-<script src="/js/polaris-engine.js"></script>
-<script src="/js/notification-service.js"></script>
+
 <script src="/js/theme.js"></script>
 </body>
 </html>

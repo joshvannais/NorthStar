@@ -213,6 +213,90 @@ function toggleMobileMenu() {
         </details>
       </div>
       </div>
+
+  <!-- Integrations Section -->
+  <div class="settings-section">
+    <h2>🔌 Integrations</h2>
+    <p class="description">Connect NorthStar to your essential business tools and services.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:12px;">
+      <div class="integration-card" id="integration-twilio">
+        <div class="icon">📞</div>
+        <div class="info"><h4>Twilio</h4><p>Phone system &amp; SMS provider for AI calls</p></div>
+        <span><span class="status-dot disconnected"></span>Not connected</span>
+        <button class="btn btn-sm" onclick="showToast('Twilio integration coming soon')">Connect</button>
+      </div>
+      <div class="integration-card" id="integration-openai">
+        <div class="icon">🤖</div>
+        <div class="info"><h4>OpenAI</h4><p>AI conversation engine for natural dialogue</p></div>
+        <span><span class="status-dot connected"></span>Connected</span>
+        <button class="btn btn-sm btn-ghost" onclick="showToast('OpenAI is active')">Configure</button>
+      </div>
+      <div class="integration-card" id="integration-elevenlabs">
+        <div class="icon">🎙️</div>
+        <div class="info"><h4>ElevenLabs</h4><p>Voice synthesis for lifelike AI responses</p></div>
+        <span><span class="status-dot disconnected"></span>Not connected</span>
+        <button class="btn btn-sm" onclick="showToast('ElevenLabs integration coming soon')">Connect</button>
+      </div>
+      <div class="integration-card" id="integration-stripe">
+        <div class="icon">💳</div>
+        <div class="info"><h4>Stripe</h4><p>Payment processing for estimates &amp; invoices</p></div>
+        <span><span class="status-dot disconnected"></span>Not connected</span>
+        <button class="btn btn-sm" onclick="showToast('Stripe integration coming soon')">Connect</button>
+      </div>
+      <div class="integration-card" id="integration-google-cal">
+        <div class="icon">📅</div>
+        <div class="info"><h4>Google Calendar</h4><p>Auto-schedule appointments</p></div>
+        <span><span class="status-dot disconnected"></span>Not connected</span>
+        <button class="btn btn-sm" onclick="showToast('Google Calendar integration coming soon')">Connect</button>
+      </div>
+      <div class="integration-card" id="integration-email">
+        <div class="icon">✉️</div>
+        <div class="info"><h4>Email Provider</h4><p>Send estimates, invoices &amp; follow-ups</p></div>
+        <span><span class="status-dot disconnected"></span>Not connected</span>
+        <button class="btn btn-sm" onclick="showToast('Email integration coming soon')">Connect</button>
+      </div>
+      <div class="integration-card" style="opacity:0.6;cursor:default;border-style:dashed;">
+        <div class="icon">🔌</div>
+        <div class="info"><h4>More Coming Soon</h4><p>Zapier, QuickBooks, Salesforce &amp; more</p></div>
+        <span style="font-size:11px;color:var(--brand-500);font-weight:600;">Future</span>
+      </div>
+    </div>
+  </div>
+<style>
+.integration-card {
+  display:flex;flex-direction:column;gap:10px;
+  padding:18px;
+  background:var(--neutral-100);
+  border:1px solid var(--neutral-200);
+  border-radius:var(--radius-md);
+  transition:all 0.15s ease;
+}
+.integration-card:hover {
+  border-color:var(--neutral-300);
+  box-shadow:0 2px 8px rgba(0,0,0,0.04);
+}
+[data-theme="dark"] .integration-card {
+  background:rgba(0,0,0,0.15);
+  border-color:var(--neutral-300);
+}
+.integration-card .icon { font-size:24px; }
+.integration-card .info h4 { font-size:14px;font-weight:600;color:var(--neutral-900);margin:0; }
+.integration-card .info p { font-size:12px;color:var(--neutral-500);margin:2px 0 0; }
+.status-dot {
+  display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;
+}
+.status-dot.connected { background:#059669; }
+.status-dot.disconnected { background:#6b7280; }
+.btn-ghost {
+  background:transparent;
+  border:1px solid var(--neutral-300);
+  color:var(--neutral-600);
+}
+.btn-ghost:hover {
+  background:var(--neutral-200);
+}
+</style>
+
     </main>
   </div>
 

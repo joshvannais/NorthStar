@@ -8,6 +8,332 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+<style>
+/* ===== Leads CRM Specific Styles ===== */
+
+/* KPI Cards with icons */
+.leads-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+@media (max-width: 1024px) { .leads-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px) { .leads-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px) { .leads-kpi-grid { grid-template-columns: 1fr 1fr; } }
+
+.stat-card-qualified .stat-icon { background: #dbeafe; color: #1d4ed8; }
+.stat-card-won .stat-icon { background: #d1fae5; color: #047857; }
+.stat-card-conversion .stat-icon { background: #fef3c7; color: #b45309; }
+.stat-card-avgvalue .stat-icon { background: #f3e8ff; color: #7e22ce; }
+
+[data-theme="dark"] .stat-card-qualified .stat-icon { background: rgba(30,64,175,0.2); color: #93c5fd; }
+[data-theme="dark"] .stat-card-won .stat-icon { background: rgba(4,120,87,0.2); color: #6ee7b7; }
+[data-theme="dark"] .stat-card-conversion .stat-icon { background: rgba(180,83,9,0.2); color: #fbbf24; }
+[data-theme="dark"] .stat-card-avgvalue .stat-icon { background: rgba(126,34,206,0.2); color: #d8b4fe; }
+
+/* Polaris Revenue Intelligence Card */
+.polaris-card {
+  background: linear-gradient(135deg, #FFF8E7, #FFECB3);
+  border: 1px solid var(--brand-300);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.polaris-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(212, 175, 55, 0.08);
+}
+.polaris-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.polaris-header h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--brand-800);
+}
+.polaris-header .polaris-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: var(--brand-600);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-weight: 600;
+}
+.polaris-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 768px) { .polaris-grid { grid-template-columns: 1fr; } }
+.polaris-item {
+  background: rgba(255,255,255,0.6);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  border: 1px solid rgba(212,175,55,0.2);
+}
+.polaris-item .polaris-item-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brand-700);
+  margin-bottom: 4px;
+}
+.polaris-item .polaris-item-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--neutral-900);
+  margin-bottom: 2px;
+}
+.polaris-item .polaris-item-desc {
+  font-size: 12px;
+  color: var(--neutral-600);
+}
+.polaris-item .polaris-confidence {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 100px;
+  margin-top: 4px;
+}
+.polaris-confidence.high { background: #d1fae5; color: #047857; }
+.polaris-confidence.medium { background: #fef3c7; color: #b45309; }
+.polaris-confidence.low { background: #fee2e2; color: #b91c1c; }
+[data-theme="dark"] .polaris-card {
+  background: linear-gradient(135deg, #2a2510, #3d3010);
+  border-color: var(--brand-700);
+}
+[data-theme="dark"] .polaris-header h2 { color: var(--brand-300); }
+[data-theme="dark"] .polaris-item { background: rgba(0,0,0,0.2); border-color: rgba(212,175,55,0.15); }
+[data-theme="dark"] .polaris-item .polaris-item-label { color: var(--brand-400); }
+[data-theme="dark"] .polaris-item .polaris-item-value { color: var(--neutral-800); }
+[data-theme="dark"] .polaris-item .polaris-item-desc { color: var(--neutral-500); }
+[data-theme="dark"] .polaris-confidence.high { background: rgba(4,120,87,0.2); color: #6ee7b7; }
+[data-theme="dark"] .polaris-confidence.medium { background: rgba(180,83,9,0.2); color: #fbbf24; }
+[data-theme="dark"] .polaris-confidence.low { background: rgba(185,28,28,0.2); color: #fca5a5; }
+
+/* Customer Detail Drawer */
+.drawer-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 500;
+}
+.drawer-overlay.open { display: block; }
+[data-theme="dark"] .drawer-overlay { background: rgba(0,0,0,0.6); }
+
+.customer-drawer {
+  position: fixed;
+  top: 0; right: -480px;
+  width: 480px;
+  max-width: 95vw;
+  height: 100%;
+  background: white;
+  z-index: 501;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.customer-drawer.open { right: 0; }
+[data-theme="dark"] .customer-drawer {
+  background: var(--neutral-100);
+  box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--neutral-200);
+  flex-shrink: 0;
+}
+.drawer-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--neutral-900);
+}
+.drawer-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--neutral-500);
+  font-size: 20px;
+}
+.drawer-close:hover { background: var(--neutral-100); }
+[data-theme="dark"] .drawer-close:hover { background: var(--neutral-200); }
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+.drawer-section { margin-bottom: 20px; }
+.drawer-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--neutral-500);
+  margin-bottom: 8px;
+}
+.drawer-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+  border-bottom: 1px solid var(--neutral-100);
+}
+.drawer-detail-row:last-child { border-bottom: none; }
+.drawer-detail-label { color: var(--neutral-500); }
+.drawer-detail-value { font-weight: 500; color: var(--neutral-800); }
+[data-theme="dark"] .drawer-detail-row { border-bottom-color: var(--neutral-200); }
+[data-theme="dark"] .drawer-detail-value { color: var(--neutral-700); }
+
+.drawer-transcript {
+  background: var(--neutral-50);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+[data-theme="dark"] .drawer-transcript { background: var(--neutral-200); color: var(--neutral-700); }
+
+.drawer-pricing-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  font-size: 13px;
+  color: var(--neutral-700);
+  border-bottom: 1px solid var(--neutral-100);
+}
+.drawer-pricing-item:last-child { border-bottom: none; font-weight: 600; color: var(--neutral-900); }
+[data-theme="dark"] .drawer-pricing-item { border-bottom-color: var(--neutral-200); }
+[data-theme="dark"] .drawer-pricing-item:last-child { color: var(--neutral-800); }
+
+/* More action menu */
+.more-menu-container {
+  position: relative;
+  display: inline-block;
+}
+.more-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--neutral-500);
+  font-size: 16px;
+  transition: all 0.15s;
+}
+.more-btn:hover { background: var(--neutral-100); color: var(--neutral-700); }
+[data-theme="dark"] .more-btn:hover { background: var(--neutral-200); color: var(--neutral-600); }
+.more-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background: white;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  min-width: 170px;
+  padding: 4px;
+  display: none;
+}
+.more-dropdown.open { display: block; }
+[data-theme="dark"] .more-dropdown { background: var(--neutral-100); border-color: var(--neutral-300); }
+.more-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--neutral-700);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+}
+.more-dropdown-item:hover { background: var(--neutral-50); }
+[data-theme="dark"] .more-dropdown-item { color: var(--neutral-600); }
+[data-theme="dark"] .more-dropdown-item:hover { background: var(--neutral-200); }
+.more-dropdown-item.danger { color: var(--danger); }
+
+/* Leads table enhancements */
+.leads-table td { vertical-align: middle; }
+.lead-service-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--neutral-50);
+  color: var(--neutral-600);
+  border: 1px solid var(--neutral-200);
+}
+[data-theme="dark"] .lead-service-badge {
+  background: var(--neutral-200);
+  color: var(--neutral-500);
+  border-color: var(--neutral-300);
+}
+.lead-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--neutral-500);
+}
+.lead-actions-cell { width: 44px; }
+
+/* Status animations */
+@keyframes kpiPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+.kpi-updated { animation: kpiPulse 0.4s ease; }
+
+/* Responsive table improvements */
+@media (max-width: 768px) {
+  .leads-table { min-width: 400px; }
+}
+</style>
 </head>
 <body>
 <div class="mobile-header">
@@ -70,6 +396,75 @@ function toggleMobileMenu() {
         <button class="btn btn-primary btn-sm" onclick="simulateLead()">➕ Simulate Lead</button>
       </div>
 
+      <!-- 6 Executive KPI Cards -->
+      <div class="leads-kpi-grid" id="leadsKpiGrid">
+        <div class="stat-card stat-card-calls">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div class="stat-label">Total Leads</div>
+          <div class="stat-value" id="kpiTotalLeads">0</div>
+          <div class="stat-change up" id="kpiTotalLeadChange">All time</div>
+        </div>
+        <div class="stat-card stat-card-leads">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          <div class="stat-label">Qualified</div>
+          <div class="stat-value" id="kpiQualified">0</div>
+          <div class="stat-change up">Ready for quote</div>
+        </div>
+        <div class="stat-card stat-card-won">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="stat-label">Won</div>
+          <div class="stat-value" id="kpiWon">0</div>
+          <div class="stat-change up">Closed deals</div>
+        </div>
+        <div class="stat-card stat-card-revenue">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="12" x2="12" y1="1" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <div class="stat-label">Est. Revenue</div>
+          <div class="stat-value revenue-positive" id="kpiRevenue">$0</div>
+          <div class="stat-change up">From active leads</div>
+        </div>
+        <div class="stat-card stat-card-conversion">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+          <div class="stat-label">Conversion Rate</div>
+          <div class="stat-value" id="kpiConversion">0%</div>
+          <div class="stat-change up" id="kpiConversionDetail">Won ÷ Qualified</div>
+        </div>
+        <div class="stat-card stat-card-avgvalue">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <div class="stat-label">Avg. Lead Value</div>
+          <div class="stat-value" id="kpiAvgValue">$0</div>
+          <div class="stat-change up">Per lead estimate</div>
+        </div>
+      </div>
+
+      <!-- Polaris Revenue Intelligence Card -->
+      <div class="polaris-card" id="polarisCard">
+        <div class="polaris-header">
+          <h2>⭐ Polaris Revenue Intelligence</h2>
+          <span class="polaris-badge">Live</span>
+        </div>
+        <div class="polaris-grid" id="polarisGrid">
+          <div class="polaris-item">
+            <div class="polaris-item-label">Top Opportunity</div>
+            <div class="polaris-item-value" id="polarisTopOpp">—</div>
+            <div class="polaris-item-desc" id="polarisTopOppDesc">Lead with highest potential value</div>
+            <span class="polaris-confidence high" id="polarisTopConf">High</span>
+          </div>
+          <div class="polaris-item">
+            <div class="polaris-item-label">Estimated Pipeline</div>
+            <div class="polaris-item-value" id="polarisPipeline">$0</div>
+            <div class="polaris-item-desc">Total qualified lead value</div>
+            <span class="polaris-confidence medium" id="polarisPipeConf">Medium</span>
+          </div>
+          <div class="polaris-item">
+            <div class="polaris-item-label">Recommended Focus</div>
+            <div class="polaris-item-value" id="polarisFocus">—</div>
+            <div class="polaris-item-desc" id="polarisFocusDesc">Highest volume service category</div>
+            <span class="polaris-confidence high" id="polarisFocusConf">High</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leads Table -->
       <div class="table-container">
         <div class="table-header">
           <h2>Leads</h2>
@@ -79,30 +474,82 @@ function toggleMobileMenu() {
           <div class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <h3>No leads yet</h3>
-            <p>Leads will appear here when your AI Office Manager answers calls.</p>
+            <p>Click "Simulate Lead" to generate a lead, or connect your phone number to receive real calls.</p>
           </div>
         </div>
       </div>
     </main>
   </div>
 
-  <div id="toast" class="toast"></div>
-<script src="/js/simulator.js"></script>
-<script src="/js/api.js"></script>
+  <!-- Drawer overlay -->
+  <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
 
+  <!-- Customer Detail Drawer -->
+  <div class="customer-drawer" id="customerDrawer">
+    <div class="drawer-header">
+      <h2 id="drawerTitle">Customer Details</h2>
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+    <div class="drawer-body" id="drawerBody">
+      <div class="drawer-section">
+        <h3>Contact Information</h3>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="drawerName">—</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="drawerPhone">—</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="drawerAddress">—</span></div>
+      </div>
+      <div class="drawer-section">
+        <h3>Job Details</h3>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">—</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Description</span><span class="drawer-detail-value" id="drawerDescription">—</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">—</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerStatus">—</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Date</span><span class="drawer-detail-value" id="drawerDate">—</span></div>
+      </div>
+      <div class="drawer-section">
+        <h3>Pricing Breakdown</h3>
+        <div id="drawerPricingBreakdown"><p style="font-size:13px;color:var(--neutral-500);">No pricing data available.</p></div>
+      </div>
+      <div class="drawer-section">
+        <h3>Call Transcript</h3>
+        <div class="drawer-transcript" id="drawerTranscript">No transcript available.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/js/simulator.js"></script>
+  <script src="/js/api.js"></script>
   <script>
-    // In-memory leads — resets on each page load
+    // Premium notification toasts
+    function showNotification(message, type) {
+      type = type || 'info';
+      const icons = { success: '✅', info: 'ℹ️', warning: '⚠️' };
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast-notification ' + type;
+      toast.innerHTML = '<span class="toast-icon">' + (icons[type] || 'ℹ️') + '</span>' +
+        '<span>' + message + '</span>' +
+        '<button class="toast-close" onclick="this.parentElement.remove()">×</button>';
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.animation = 'toastOut 0.3s ease-out forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+    window.showToast = showNotification;
+
+    // In-memory leads
     let allLeads = [];
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
 
-    // Initialize from sessionStorage if data exists (shared across pages)
+    // Initialize from sessionStorage if data exists
     try {
       const synced = sessionStorage.getItem('northstar_calls');
       if (synced) {
         const parsed = JSON.parse(synced);
         if (Array.isArray(parsed)) allLeads = parsed;
       }
-      // On page reload (F5/Cmd+R), clear sessionStorage after reading
       const nav = performance.getEntriesByType('navigation');
       if (nav.length > 0 && nav[0].type === 'reload') {
         sessionStorage.removeItem('northstar_calls');
@@ -110,34 +557,172 @@ function toggleMobileMenu() {
     } catch(e) {}
 
     function loadLeads() {
-      document.getElementById('leadCount').textContent = `${allLeads.length} leads`;
+      document.getElementById('leadCount').textContent = allLeads.length + ' leads';
       renderLeads(allLeads);
+      renderKpiCards(allLeads);
+      renderPolarisCard(allLeads);
     }
 
+    // === 6 Executive KPI Cards ===
+    function renderKpiCards(leads) {
+      const total = leads.length;
+      const qualified = leads.filter(l => l.status === 'scheduled' || l.status === 'contacted' || l.status === 'new').length;
+      const won = leads.filter(l => l.status === 'completed' || l.outcome === 'appointment-set').length;
+      const totalRevenue = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
+      const conversionRate = qualified > 0 ? Math.round((won / qualified) * 100) : 0;
+      const avgValue = total > 0 ? Math.round(totalRevenue / total) : 0;
+      const qualifiedScheduled = leads.filter(l => l.status === 'scheduled').length;
+
+      document.getElementById('kpiTotalLeads').textContent = total;
+      document.getElementById('kpiTotalLeadChange').textContent = total > 0 ? total + ' total leads' : 'All time';
+
+      document.getElementById('kpiQualified').textContent = qualified;
+      document.getElementById('kpiWon').textContent = won;
+      document.getElementById('kpiRevenue').textContent = '$' + Math.round(totalRevenue).toLocaleString();
+      document.getElementById('kpiConversion').textContent = conversionRate + '%';
+      document.getElementById('kpiConversionDetail').textContent = won + ' won of ' + qualified + ' qualified';
+      document.getElementById('kpiAvgValue').textContent = '$' + avgValue.toLocaleString();
+    }
+
+    // === Polaris Revenue Intelligence Card ===
+    function renderPolarisCard(leads) {
+      if (leads.length === 0) {
+        document.getElementById('polarisTopOpp').textContent = '—';
+        document.getElementById('polarisTopOppDesc').textContent = 'Add leads to see opportunities';
+        document.getElementById('polarisPipeline').textContent = '$0';
+        document.getElementById('polarisPipeConf').textContent = 'N/A';
+        document.getElementById('polarisPipeConf').className = 'polaris-confidence low';
+        document.getElementById('polarisFocus').textContent = '—';
+        document.getElementById('polarisFocusDesc').textContent = 'Simulate leads to get started';
+        return;
+      }
+
+      // Top opportunity = highest priced lead
+      const sorted = [...leads].sort((a, b) => (b.avgPrice || 0) - (a.avgPrice || 0));
+      const top = sorted[0];
+      document.getElementById('polarisTopOpp').textContent = top.caller || '—';
+      const topJob = top.jobDetail || top.service || '—';
+      document.getElementById('polarisTopOppDesc').textContent = '$' + Math.round(top.avgPrice || 0).toLocaleString() + ' — ' + (typeof top.service === 'string' ? top.service : 'Service');
+      const topConfidence = (top.avgPrice || 0) > 2000 ? 'High' : (top.avgPrice || 0) > 500 ? 'Medium' : 'Low';
+      const topConfClass = topConfidence.toLowerCase();
+      document.getElementById('polarisTopConf').textContent = topConfidence;
+      document.getElementById('polarisTopConf').className = 'polaris-confidence ' + topConfClass;
+
+      // Pipeline = sum of all qualified lead values
+      const pipeline = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
+      document.getElementById('polarisPipeline').textContent = '$' + Math.round(pipeline).toLocaleString();
+      const pipeConf = leads.length > 5 ? 'High' : leads.length > 2 ? 'Medium' : 'Low';
+      document.getElementById('polarisPipeConf').textContent = pipeConf;
+      document.getElementById('polarisPipeConf').className = 'polaris-confidence ' + pipeConf.toLowerCase();
+
+      // Recommended focus = highest frequency service
+      const svcCounts = {};
+      leads.forEach(l => {
+        const svc = l.service || 'Other';
+        svcCounts[svc] = (svcCounts[svc] || 0) + 1;
+      });
+      let topSvc = '—', topSvcCount = 0;
+      for (const [svc, count] of Object.entries(svcCounts)) {
+        if (count > topSvcCount) { topSvc = svc; topSvcCount = count; }
+      }
+      document.getElementById('polarisFocus').textContent = topSvc;
+      document.getElementById('polarisFocusDesc').textContent = topSvcCount + ' lead' + (topSvcCount !== 1 ? 's' : '') + ' — highest volume service';
+      document.getElementById('polarisFocusConf').textContent = topSvcCount > 3 ? 'High' : topSvcCount > 1 ? 'Medium' : 'Low';
+      document.getElementById('polarisFocusConf').className = 'polaris-confidence ' + (topSvcCount > 3 ? 'high' : topSvcCount > 1 ? 'medium' : 'low');
+    }
+
+    // === Customer Detail Drawer ===
+    let currentDrawerLead = null;
+
+    function openDrawer(lead) {
+      currentDrawerLead = lead;
+      document.getElementById('drawerTitle').textContent = (lead.caller || 'Customer') + ' — Details';
+      document.getElementById('drawerName').textContent = lead.caller || lead.customerName || '—';
+      document.getElementById('drawerPhone').textContent = lead.phone || lead.phoneNumber || '—';
+      document.getElementById('drawerAddress').textContent = lead.address || '—';
+      document.getElementById('drawerService').textContent = lead.service || lead.serviceRequested || '—';
+
+      // Intelligent service description from jobDetail
+      const desc = lead.jobDetail || lead.summary || '';
+      document.getElementById('drawerDescription').textContent = desc || '—';
+      document.getElementById('drawerValue').textContent = lead.avgPrice ? '$' + Math.round(lead.avgPrice).toLocaleString() : '—';
+      document.getElementById('drawerStatus').innerHTML = getStatusBadge(lead.status || 'new');
+      document.getElementById('drawerDate').textContent = fmtTime(lead.time || (lead.receivedAt ? lead.receivedAt : null));
+
+      // Pricing breakdown
+      const pbDiv = document.getElementById('drawerPricingBreakdown');
+      if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
+        let pbHtml = '';
+        let pbTotal = 0;
+        lead.pricingBreakdown.forEach(item => {
+          pbTotal += item.a || 0;
+          pbHtml += '<div class="drawer-pricing-item"><span>' + item.l + '</span><span>$' + Math.round(item.a || 0).toLocaleString() + '</span></div>';
+        });
+        pbHtml += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>$' + Math.round(pbTotal).toLocaleString() + '</strong></span></div>';
+        pbDiv.innerHTML = pbHtml;
+      } else {
+        pbDiv.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">Est. value: $' + Math.round(lead.avgPrice || 0).toLocaleString() + '</p>';
+      }
+
+      // Transcript
+      document.getElementById('drawerTranscript').textContent = lead.transcript || 'No transcript available for this lead.';
+
+      document.getElementById('drawerOverlay').classList.add('open');
+      document.getElementById('customerDrawer').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeDrawer() {
+      document.getElementById('drawerOverlay').classList.remove('open');
+      document.getElementById('customerDrawer').classList.remove('open');
+      document.body.style.overflow = '';
+      currentDrawerLead = null;
+    }
+
+    // Close drawer on Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeDrawer();
+    });
+
+    // === Leads Table ===
     function renderLeads(leads) {
       if (leads.length === 0) {
         document.getElementById('leadsContent').innerHTML = `
           <div class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <h3>No leads yet</h3>
-            <p>Leads will appear here when your AI Office Manager answers calls.</p>
+            <p>Click "Simulate Lead" to generate a lead, or connect your phone number to receive real calls.</p>
           </div>`;
         return;
       }
 
-      let html = `<table><thead><tr>
-        <th>Customer</th><th>Phone</th><th>Address</th><th>Service</th><th>Date</th><th>Status</th>
+      let html = `<table class="leads-table"><thead><tr>
+        <th>Customer</th><th>Phone</th><th>Service</th><th>Est. Value</th><th>Date</th><th>Status</th><th></th>
       </tr></thead><tbody>`;
 
-      leads.slice().forEach(c => {
+      leads.slice().forEach((c, idx) => {
         const status = c.status || 'new';
+        const svc = c.service || c.serviceRequested || '—';
+        const val = c.avgPrice ? '$' + Math.round(c.avgPrice).toLocaleString() : '—';
         html += `<tr>
           <td><strong>${c.caller || c.customerName || 'Unknown'}</strong></td>
           <td>${c.phone || c.phoneNumber || '-'}</td>
-          <td>${c.address || '-'}</td>
-          <td>${c.service || c.serviceRequested || '-'}</td>
+          <td><span class="lead-service-badge">${svc}</span></td>
+          <td><strong>${val}</strong></td>
           <td>${fmtTime(c.time || (c.receivedAt ? c.receivedAt : null))}</td>
           <td>${getStatusBadge(status)}</td>
+          <td class="lead-actions-cell">
+            <div class="more-menu-container">
+              <button class="more-btn" onclick="event.stopPropagation(); toggleMoreMenu(this)" title="Actions">•••</button>
+              <div class="more-dropdown">
+                <button class="more-dropdown-item" onclick="closeAllMenus(); openDrawer(allLeads[${idx}])">👁️ View Details</button>
+                <button class="more-dropdown-item" onclick="closeAllMenus(); updateLeadStatus(${idx}, 'contacted')">📞 Mark Contacted</button>
+                <button class="more-dropdown-item" onclick="closeAllMenus(); updateLeadStatus(${idx}, 'scheduled')">📅 Mark Scheduled</button>
+                <button class="more-dropdown-item" onclick="closeAllMenus(); updateLeadStatus(${idx}, 'completed')">✅ Mark Completed</button>
+                <button class="more-dropdown-item danger" onclick="closeAllMenus(); removeLead(${idx})">🗑️ Remove</button>
+              </div>
+            </div>
+          </td>
         </tr>`;
       });
 
@@ -145,17 +730,65 @@ function toggleMobileMenu() {
       document.getElementById('leadsContent').innerHTML = html;
     }
 
-        function simulateLead() {
+    // === More Action Menu ===
+    function toggleMoreMenu(btn) {
+      closeAllMenus();
+      const dropdown = btn.parentElement.querySelector('.more-dropdown');
+      if (dropdown) dropdown.classList.add('open');
+    }
+
+    function closeAllMenus() {
+      document.querySelectorAll('.more-dropdown.open').forEach(m => m.classList.remove('open'));
+    }
+
+    // Close menus on outside click
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.more-menu-container')) {
+        closeAllMenus();
+      }
+    });
+
+    // === Lead Actions ===
+    function updateLeadStatus(idx, newStatus) {
+      if (!allLeads[idx]) return;
+      allLeads[idx].status = newStatus;
+      syncSessionStorage();
+      showNotification('✅ ' + (allLeads[idx].caller || 'Lead') + ' marked as ' + newStatus, 'success');
+      loadLeads();
+    }
+
+    function removeLead(idx) {
+      if (!allLeads[idx]) return;
+      const name = allLeads[idx].caller || 'Lead';
+      allLeads.splice(idx, 1);
+      syncSessionStorage();
+      showNotification('🗑️ ' + name + ' removed', 'warning');
+      loadLeads();
+    }
+
+    function syncSessionStorage() {
+      try {
+        sessionStorage.setItem('northstar_calls', JSON.stringify(allLeads));
+      } catch(e) {}
+    }
+
+    // === Simulate Lead ===
+    function simulateLead() {
       const c = genCall();
+      c.status = 'new';
       allLeads.unshift(c);
       try {
         const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
         existing.unshift(c);
         sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
       } catch(e) {}
-      showToast("✅ New lead: " + c.caller + " (" + c.service + ")");
+      showNotification("✅ New lead: " + c.caller + " (" + c.service + " — $" + Math.round(c.avgPrice).toLocaleString() + ")", "success");
       loadLeads();
-    }</script>
-<script src="/js/theme.js"></script>
+    }
+
+    // Initial load
+    loadLeads();
+  </script>
+  <script src="/js/theme.js"></script>
 </body>
 </html>

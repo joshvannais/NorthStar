@@ -704,7 +704,7 @@ function toggleMobileMenu() {
         const status = c.status || 'new';
         const svc = c.service || c.serviceRequested || '—';
         const val = c.avgPrice ? '$' + Math.round(c.avgPrice).toLocaleString() : '—';
-        html += `<tr>
+        html += `<tr style="cursor:pointer;" onclick="openDrawer(allLeads[${idx}])">
           <td><strong>${c.caller || c.customerName || 'Unknown'}</strong></td>
           <td>${c.phone || c.phoneNumber || '-'}</td>
           <td><span class="lead-service-badge">${svc}</span></td>
@@ -715,11 +715,13 @@ function toggleMobileMenu() {
             <div class="more-menu-container">
               <button class="more-btn" onclick="event.stopPropagation(); toggleMoreMenu(this)" title="Actions">•••</button>
               <div class="more-dropdown">
-                <button class="more-dropdown-item" onclick="closeAllMenus(); openDrawer(allLeads[${idx}])">👁️ View Details</button>
-                <button class="more-dropdown-item" onclick="closeAllMenus(); updateLeadStatus(${idx}, 'contacted')">📞 Mark Contacted</button>
-                <button class="more-dropdown-item" onclick="closeAllMenus(); updateLeadStatus(${idx}, 'scheduled')">📅 Mark Scheduled</button>
-                <button class="more-dropdown-item" onclick="closeAllMenus(); updateLeadStatus(${idx}, 'completed')">✅ Mark Completed</button>
-                <button class="more-dropdown-item danger" onclick="closeAllMenus(); removeLead(${idx})">🗑️ Remove</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); openDrawer(allLeads[${idx}])">👁️ View Details</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'contacted')">📞 Mark Contacted</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'scheduled')">📅 Schedule</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'completed')">✅ Mark Completed</button>
+                <button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;" onclick="event.stopPropagation()">🔧 Assign Technician</button>
+                <button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;" onclick="event.stopPropagation()">📁 Archive</button>
+                <button class="more-dropdown-item danger" onclick="event.stopPropagation(); closeAllMenus(); removeLead(${idx})">🗑️ Delete</button>
               </div>
             </div>
           </td>

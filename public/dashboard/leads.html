@@ -210,6 +210,7 @@
   border-bottom: 1px solid var(--neutral-100);
 }
 .drawer-detail-row:last-child { border-bottom: none; }
+.drawer-detail-row-nb { border-bottom: none !important; }
 .drawer-detail-label { color: var(--neutral-500); }
 .drawer-detail-value { font-weight: 500; color: var(--neutral-800); }
 [data-theme="dark"] .drawer-detail-row { border-bottom-color: var(--neutral-200); }
@@ -306,6 +307,7 @@
   background: var(--neutral-50);
   color: var(--neutral-600);
   border: 1px solid var(--neutral-200);
+  text-align: center;
 }
 [data-theme="dark"] .lead-service-badge {
   background: var(--neutral-200);
@@ -533,7 +535,7 @@ function toggleMobileMenu() {
       <div class="drawer-section">
         <h3>Job Details</h3>
         <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Description</span></div>
+        <div class="drawer-detail-row drawer-detail-row-nb"><span class="drawer-detail-label">Description</span></div>
         <div class="drawer-description-box" id="drawerDescription">—</div>
         <div style="border-bottom:1px solid var(--neutral-200);margin:8px 0 0 0;"></div>
         <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">—</span></div>

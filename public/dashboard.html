@@ -532,12 +532,15 @@ function toggleMobileMenu() {
       document.querySelector('.ds-widget-area') ? document.querySelector('.ds-widget-area').appendChild(placeholder) : mainContent.appendChild(placeholder);
     }
 
-    // Intercept nav link clicks for SPA routing (no full page reload)
+    // Intercept nav link clicks — allow real pages to navigate normally
+    var realPages = ['/dashboard/leads', '/dashboard/calls', '/dashboard/my-number', '/dashboard/settings', '/dashboard/integrations'];
     document.addEventListener('click', function(e) {
       var link = e.target.closest('a');
       if (!link) return;
       var href = link.getAttribute('href');
       if (!href || !href.startsWith('/dashboard') || href.startsWith('http') || link.hasAttribute('download')) return;
+      // Allow real pages to navigate normally
+      if (realPages.indexOf(href) !== -1) return;
       e.preventDefault();
       history.pushState(null, '', href);
       window.location.reload();

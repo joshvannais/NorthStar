@@ -1134,102 +1134,6 @@ function toggleMobileMenu() {
 
     function closeCallMyAIModal(e) {
       if (e && e.target !== e.currentTarget) return;
-  <script>
-  // ═══════════════════════════════════════════════════════════════
-  // Pre-populate dashboard widgets with demo data (no JS dependencies)
-  // ═══════════════════════════════════════════════════════════════
-  (function() {
-    // Hero KPI
-    var heroVal = document.getElementById('heroKpiValue');
-    var heroSub = document.getElementById('heroKpiSubtitle');
-    var heroTrend = document.getElementById('heroKpiTrend');
-    if (heroVal) heroVal.textContent = '$63,700';
-    if (heroSub) heroSub.textContent = 'From 12 qualified opportunities across 9 services';
-    if (heroTrend) heroTrend.innerHTML = '<span class="ds-trend-up">↑ 12% vs last month</span>';
-
-    // Daily Brief
-    var briefSkeleton = document.getElementById('briefSkeleton');
-    var briefContent = document.getElementById('briefContent');
-    var briefBody = document.getElementById('briefBody');
-    var briefTime = document.getElementById('briefTimestamp');
-    if (briefSkeleton) briefSkeleton.style.display = 'none';
-    if (briefContent) briefContent.style.display = 'block';
-    if (briefBody) briefBody.innerHTML = '<p>Good afternoon, Demo Contractor. NorthStar answered 2 calls today, captured 12 leads, and booked 4 appointments. Your top opportunity is an $18,500 solar installation with James Wilson. Action recommended: Follow up with James Wilson — it could be your highest-value opportunity this quarter.</p>';
-    if (briefTime) briefTime.textContent = 'Last updated: ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
-
-    // KPI Grid
-    var kpiGrid = document.getElementById('kpiGrid');
-    if (kpiGrid) {
-      kpiGrid.innerHTML =
-        '<div class="ds-kpi-card"><div class="ds-kpi-icon">📞</div><div class="ds-kpi-label">Today\'s Calls</div><div class="ds-kpi-value">2</div></div>' +
-        '<div class="ds-kpi-card"><div class="ds-kpi-icon">👤</div><div class="ds-kpi-label">New Leads</div><div class="ds-kpi-value">12</div></div>' +
-        '<div class="ds-kpi-card"><div class="ds-kpi-icon">📅</div><div class="ds-kpi-label">Appointments</div><div class="ds-kpi-value">4</div></div>' +
-        '<div class="ds-kpi-card"><div class="ds-kpi-icon">📊</div><div class="ds-kpi-label">Lead Conv.</div><div class="ds-kpi-value">33%</div></div>' +
-        '<div class="ds-kpi-card"><div class="ds-kpi-icon">💰</div><div class="ds-kpi-label">Avg Job Value</div><div class="ds-kpi-value">$5,308</div></div>' +
-        '<div class="ds-kpi-card"><div class="ds-kpi-icon">⏱</div><div class="ds-kpi-label">Avg Call Length</div><div class="ds-kpi-value">3:15</div></div>' +
-        '<div class="ds-kpi-card"><div class="ds-kpi-icon">🚫</div><div class="ds-kpi-label">Missed Calls Prev.</div><div class="ds-kpi-value">0</div></div>' +
-        '<div class="ds-kpi-card"><div class="ds-kpi-icon">⚡</div><div class="ds-kpi-label">Avg Response Time</div><div class="ds-kpi-value">12s</div></div>';
-    }
-
-    // Recent Leads
-    var leadsList = document.getElementById('recentLeadsList');
-    var leadsEmpty = document.getElementById('recentLeadsEmpty');
-    if (leadsList) {
-      leadsList.innerHTML =
-        '<div class="ds-lead-item"><span class="ds-lead-name">James Wilson</span><span class="ds-lead-service">Solar</span><span class="badge badge-new">new</span><span class="ds-lead-value">$18,500</span></div>' +
-        '<div class="ds-lead-item"><span class="ds-lead-name">Tom Bradley</span><span class="ds-lead-service">Roofing</span><span class="badge badge-new">new</span><span class="ds-lead-value">$8,700</span></div>' +
-        '<div class="ds-lead-item"><span class="ds-lead-name">Maria Santos</span><span class="ds-lead-service">Electrical</span><span class="badge badge-new">new</span><span class="ds-lead-value">$1,800</span></div>' +
-        '<div class="ds-lead-item"><span class="ds-lead-name">Rachel Green</span><span class="ds-lead-service">Flooring</span><span class="badge badge-contacted">contacted</span><span class="ds-lead-value">$5,600</span></div>' +
-        '<div class="ds-lead-item"><span class="ds-lead-name">Dave Chen</span><span class="ds-lead-service">Plumbing</span><span class="badge badge-contacted">contacted</span><span class="ds-lead-value">$1,850</span></div>';
-      if (leadsEmpty) leadsEmpty.style.display = 'none';
-    }
-
-    // Recent Calls
-    var callsList = document.getElementById('recentCallsList');
-    var callsEmpty = document.getElementById('recentCallsEmpty');
-    if (callsList) {
-      callsList.innerHTML =
-        '<div class="ds-call-item"><span class="ds-call-caller">Mike Johnson</span><span class="ds-call-service">Tree removal</span><span class="ds-call-time">9:15 AM</span></div>' +
-        '<div class="ds-call-item"><span class="ds-call-caller">Sarah Williams</span><span class="ds-call-service">Landscaping</span><span class="ds-call-time">10:30 AM</span></div>' +
-        '<div class="ds-call-item"><span class="ds-call-caller">Dave Chen</span><span class="ds-call-service">Plumbing</span><span class="ds-call-time">Yesterday</span></div>' +
-        '<div class="ds-call-item"><span class="ds-call-caller">Lisa Martinez</span><span class="ds-call-service">HVAC</span><span class="ds-call-time">Yesterday</span></div>' +
-        '<div class="ds-call-item"><span class="ds-call-caller">Tom Bradley</span><span class="ds-call-service">Roofing</span><span class="ds-call-time">2 days ago</span></div>';
-      if (callsEmpty) callsEmpty.style.display = 'none';
-    }
-
-    // Appointments
-    var apptList = document.getElementById('appointmentsList');
-    var apptEmpty = document.getElementById('appointmentsEmpty');
-    if (apptList) {
-      apptList.innerHTML =
-        '<div class="ds-appt-item"><span class="ds-appt-name">Mike Johnson</span><span class="ds-appt-service">🌳 Tree removal</span><span class="ds-appt-time">Today, 2:00 PM</span></div>' +
-        '<div class="ds-appt-item"><span class="ds-appt-name">Lisa Martinez</span><span class="ds-appt-service">❄️ HVAC</span><span class="ds-appt-time">Tomorrow, 8-10 AM</span></div>' +
-        '<div class="ds-appt-item"><span class="ds-appt-name">Jennifer Lee</span><span class="ds-appt-service">❄️ AC Tune-up</span><span class="ds-appt-time">Fri, 9:00 AM</span></div>';
-      if (apptEmpty) apptEmpty.style.display = 'none';
-    }
-
-    // Coach
-    var coachText = document.getElementById('coachText');
-    if (coachText) {
-      coachText.textContent = 'You have 12 leads to review. Follow up promptly to maximize conversions. Top priority: Contact James Wilson regarding his $18,500 solar installation inquiry.';
-    }
-
-    // Revenue Trends chart placeholder
-    var chartEmpty = document.getElementById('chartEmpty');
-    var chartSkeleton = document.getElementById('chartSkeleton');
-    if (chartSkeleton) chartSkeleton.style.display = 'none';
-    if (chartEmpty) {
-      chartEmpty.style.display = 'block';
-      chartEmpty.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--neutral-500);font-size:14px;">📈 Revenue trend chart available in Pro plan</div>';
-    }
-
-    // Analytics
-    var statusWidget = document.getElementById('statusWidget');
-    if (statusWidget) {
-      statusWidget.innerHTML = '<div class="ds-stat"><span class="ds-stat-label">Total Leads</span><span class="ds-stat-value">12</span></div><div class="ds-stat"><span class="ds-stat-label">Scheduled</span><span class="ds-stat-value">4</span></div><div class="ds-stat"><span class="ds-stat-label">Est. Revenue</span><span class="ds-stat-value">$63,700</span></div>';
-    }
-  })();
-  </script>
       document.getElementById('callMyAIModal').style.display = 'none';
     }
 
@@ -1246,7 +1150,7 @@ function toggleMobileMenu() {
     // ═══════════════════════════════════════════════════════════════
     // Kick off
     // ═══════════════════════════════════════════════════════════════
-    // document.addEventListener("DOMContentLoaded", loadDashboard); // Initial render handled by pre-populate script below
+    document.addEventListener('DOMContentLoaded', loadDashboard);
   </script>
 
 </body>

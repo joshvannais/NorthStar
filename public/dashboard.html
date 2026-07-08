@@ -3,8 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
-  <!-- SPA routing: intercept sidebar/mobile nav clicks for dashboard routes -->
-  <script>document.addEventListener('click',function(e){var t=e.target.closest('a');if(t&&t.href&&t.href.indexOf('/dashboard/')>-1&&t.href.indexOf(window.location.origin+'/dashboard/')===0){e.preventDefault();var u=t.getAttribute('href');if(u&&u!==window.location.pathname+window.location.search+window.location.hash){history.pushState(null,'',u);window.dispatchEvent(new CustomEvent('navigate',{detail:{path:u}}));}}},false);window.addEventListener('popstate',function(){window.dispatchEvent(new CustomEvent('navigate',{detail:{path:window.location.pathname+window.location.search}}));});</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard — NorthStar AI</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -461,6 +459,10 @@ function toggleMobileMenu() {
       <div class="modal-footer"><button class="btn btn-primary" onclick="closeComingSoon()">OK</button></div>
     </div>
   </div>
+  <script>
+    </div>
+  </div>
+
   <!-- Premium Notification Toasts -->
   <script>
     function showNotification(message, type) {
@@ -483,201 +485,604 @@ function toggleMobileMenu() {
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/theme.js"></script>
-  const user=JSON.parse(localStorage.getItem('user')||'{}');
-  if(user.name)document.getElementById('welcomeMessage').textContent='Welcome back, '+user.name+'!';
-  let simulatedCalls=[];
-  function fmtTime(t){if(!t)return'-';try{const d=new Date(t);if(!isNaN(d.getTime()))return d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch(e){}return t;}
-  try{const s=sessionStorage.getItem('northstar_calls');if(s){const p=JSON.parse(s);if(Array.isArray(p))simulatedCalls=p;}const n=performance.getEntriesByType('navigation');if(n.length>0&&n[0].type==='reload')sessionStorage.removeItem('northstar_calls');}catch(e){}
-  function getStatusBadge(s){const m={new:'badge-new',scheduled:'badge-scheduled',contacted:'badge-contacted',completed:'badge-completed'};return'<span class="badge '+(m[s]||'badge-new')+'">'+(s||'new')+'</span>';}
-  function showTooltip(e,t){const x=document.querySelector('.tooltip');if(x)x.remove();const tip=document.createElement('div');tip.className='tooltip visible';tip.textContent=t;const r=e.target.getBoundingClientRect();tip.style.left=Math.min(r.left+r.width/2-100,window.innerWidth-220)+'px';tip.style.top=(r.bottom+8)+'px';document.body.appendChild(tip);setTimeout(()=>tip.remove(),4000);}
-  function getOutcomeBadge(o){const m={answered:'badge-answered Answered',missed:'badge-missed Missed',voicemail:'badge-voicemail Voicemail',transferred:'badge-transferred Transferred'};const e=m[o]||'badge-answered Answered';const[c,l]=e.split(' ');return'<span class="call-status-badge '+c+'">'+l+'</span>';}
-  function getHealthIndicator(t){const n=new Date(),r=new Date(t);if(isNaN(r.getTime()))return'<span class="health-new" style="font-size:11px;">New</span>';const h=(n-r)/(1e3*3600);if(h<1)return'<span class="health-hot" style="font-size:11px;">Hot</span>';if(h<24)return'<span class="health-warm" style="font-size:11px;">Warm</span>';return'<span class="health-cold" style="font-size:11px;">Cold</span>';}
-  // Day-Reset (H8)
-  const hps='northstar_hero_kpi_period',sd=sessionStorage.getItem('northstar_kpi_day'),ts=new Date().toDateString();if(sd&&sd!==ts)sessionStorage.removeItem(hps);sessionStorage.setItem('northstar_kpi_day',ts);
-  let currentHeroPeriod=sessionStorage.getItem(hps)||'month';
-  // Daily Brief
-  let briefLastRefresh=0;
-  function refreshBrief(){const n=Date.now();if(n-briefLastRefresh<60000){showNotification('Please wait 60 seconds.','warning');return;}briefLastRefresh=n;loadDailyBrief();}
-  function loadDailyBrief(){const s=document.getElementById('briefSkeleton'),c=document.getElementById('briefContent'),e=document.getElementById('briefError');s.style.display='block';c.style.display='none';e.style.display='none';setTimeout(()=>{s.style.display='none';const today=simulatedCalls.filter(c=>{try{const d=new Date(c.receivedAt||c.time);return!isNaN(d.getTime())&&d.toDateString()===new Date().toDateString()}catch(e){return false}}).length,apps=simulatedCalls.filter(c=>c.status==='scheduled').length,hr=new Date().getHours(),g=hr<12?'Good morning':hr<17?'Good afternoon':'Good evening',n=user.name||'there';let b=g+', '+n+'. ';if(today>0)b+='NorthStar answered '+today+' call'+(today!==1?'s':'')+' today';const l=simulatedCalls.length;if(l>0&&today>0)b+=', captured '+l+' lead'+(l!==1?'s':'');else if(l>0)b+='NorthStar has captured '+l+' lead'+(l!==1?'s':'');if(apps>0)b+=', and booked '+apps+' appointment'+(apps!==1?'s':'');b+='. ';const hv=simulatedCalls.sort((a,b)=>(b.avgPrice||0)-(a.avgPrice||0))[0];if(hv&&hv.avgPrice>0)b+='Your top opportunity is a $'+(hv.avgPrice||0).toLocaleString()+' '+hv.service+' with '+hv.caller+'.';else if(simulatedCalls.length>0)b+='Keep an eye on your recent leads.';else b=g+', '+n+'. Welcome to NorthStar!';document.getElementById('briefBody').innerHTML='<p>'+b+'</p>';document.getElementById('briefTimestamp').textContent='Last updated: '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});c.style.display='block';},600);}
-  // Hero KPI
-  function loadHeroKPI(){const s=document.getElementById('heroSkeleton'),c=document.getElementById('heroContent'),e=document.getElementById('heroError');s.style.display='block';c.style.display='none';e.style.display='none';setTimeout(()=>{s.style.display='none';const l=simulatedCalls,v=l.reduce((s,c)=>s+(c.avgPrice||0),0),cnt=l.length,svc=new Set(l.map(x=>x.service).filter(Boolean)).size,val=cnt>0?v:0;document.getElementById('heroKpiValue').textContent='$'+Math.round(val).toLocaleString();if(val>0){const trend=cnt>3?12:0,arrow=trend>0?'↑':trend<0?'↓':'→',cls=trend>0?'ds-trend-up':trend<0?'ds-trend-down':'ds-trend-flat';document.getElementById('heroKpiTrend').innerHTML='<span class="'+cls+'">'+arrow+' '+Math.abs(trend)+'% vs last '+currentHeroPeriod+'</span>';}else document.getElementById('heroKpiTrend').innerHTML='';document.getElementById('heroKpiSubtitle').textContent=cnt>0?'From '+cnt+' opportunit'+(cnt!==1?'ies':'y')+' across '+svc+' service'+(svc!==1?'s':''):'No qualified opportunities yet.';c.style.display='block';},500);}
-  function switchHeroPeriod(p){currentHeroPeriod=p;sessionStorage.setItem(hps,p);document.querySelectorAll('#heroPeriodPills .ds-pill').forEach(el=>el.classList.toggle('active',el.dataset.period===p));loadHeroKPI();}
-  function navigateToRevenue(){window.location.href='/dashboard/reports/revenue?period='+currentHeroPeriod;}
-  document.querySelectorAll('#heroPeriodPills .ds-pill').forEach(p=>p.classList.toggle('active',p.dataset.period===currentHeroPeriod));
-  // KPI Grid (H1: tier gating)
-  const kpiDefs=[
-    {id:'today_calls',icon:'📞',label:"Today's Calls",link:'/dashboard/calls?filter=today',tier:'starter'},
-    {id:'new_leads',icon:'👤',label:'New Leads',link:'/dashboard/leads?filter=today',tier:'starter'},
-    {id:'appointments',icon:'📅',label:'Appointments',link:'/dashboard/calendar?filter=today',tier:'starter'},
-    {id:'lead_conversion',icon:'📊',label:'Lead Conv.',link:'/dashboard/reports/conversion',tier:'starter'},
-    {id:'avg_job_value',icon:'💰',label:'Avg Job Value',link:'/dashboard/reports/job-value',tier:'starter'},
-    {id:'avg_call_length',icon:'⏱',label:'Avg Call Length',link:'/dashboard/calls',tier:'starter'},
-    {id:'missed_calls',icon:'🚫',label:'Missed Calls Prev.',link:'/dashboard/calls?filter=prevented',tier:'starter'},
-    {id:'avg_response_time',icon:'⚡',label:'Avg Response Time',link:'/dashboard/reports/response-time',tier:'pro'},
-    {id:'ai_transfer_rate',icon:'🔄',label:'AI Transfer Rate',link:'/dashboard/calls?filter=transferred',tier:'pro'},
-  ];
-  function loadKpiGrid(){const g=document.getElementById('kpiGrid'),total=simulatedCalls.length,today=simulatedCalls.filter(c=>{try{const d=new Date(c.receivedAt||c.time);return!isNaN(d.getTime())&&d.toDateString()===new Date().toDateString()}catch(e){return false}}).length,scheduled=simulatedCalls.filter(c=>c.status==='scheduled').length,revenue=simulatedCalls.reduce((s,c)=>s+(c.avgPrice||0),0),avg=total>0?Math.round(revenue/total):0,tier=simulatedCalls.length>5?'pro':'starter';let html='';kpiDefs.forEach(k=>{if(k.tier==='pro'&&tier==='starter')return;let val='—',trend='';switch(k.id){case'today_calls':val=today;trend=today>0?'<span class="ds-trend-up">↑</span>':'';break;case'new_leads':val=total;trend=total>0?'<span class="ds-trend-up">↑</span>':'';break;case'appointments':val=scheduled;trend=scheduled>0?'<span class="ds-trend-up">↑</span>':'';break;case'lead_conversion':val=total>0?Math.round((scheduled/total)*100)+'%':'—';break;case'avg_job_value':val=avg>0?'$'+avg.toLocaleString():'—';break;case'avg_call_length':val=total>0?'3:24':'—';break;case'missed_calls':val=today>0?today:'0';trend=today>0?'<span class="ds-trend-up">↑</span>':'';break;default:val='—';}html+='<div class="ds-kpi-card" onclick="window.location.href=\''+k.link+'\'"><div class="ds-kpi-icon" style="background:var(--neutral-50);color:var(--neutral-500);"><span style="font-size:20px;">'+k.icon+'</span></div><div class="ds-kpi-value">'+val+'</div><div class="ds-kpi-label">'+k.label+'</div><div class="ds-kpi-trend">'+trend+'</div></div>';});g.innerHTML=html;}
-  // Revenue Trends (canvas)
-  let currentTrendPeriod='30d';
-  function switchTrendPeriod(p){currentTrendPeriod=p;document.querySelectorAll('#trendPeriodPills .ds-pill').forEach(el=>el.classList.toggle('active',el.dataset.period===p));loadTrendChart();}
-  function loadTrendChart(){const sk=document.getElementById('chartSkeleton'),cv=document.getElementById('trendChartCanvas'),em=document.getElementById('chartEmpty');sk.style.display='block';cv.style.display='none';em.style.display='none';if(simulatedCalls.length===0){setTimeout(()=>{sk.style.display='none';em.style.display='block';},400);return;}setTimeout(()=>{sk.style.display='none';const ctx=cv.getContext('2d'),dpr=window.devicePixelRatio||1,rect=cv.parentElement.getBoundingClientRect(),w=rect.width;cv.width=w*dpr;cv.height=280*dpr;cv.style.width=w+'px';cv.style.height='280px';ctx.scale(dpr,dpr);const pad={top:20,right:20,bottom:30,left:50},cw=w-pad.left-pad.right,ch=280-pad.top-pad.bottom;ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,w,280);const pts=12,data=[];for(let i=0;i<pts;i++)data.push(Math.round(1e3+Math.random()*8e3));const mx=Math.max(...data)*1.1,mn=Math.min(...data)*0.9;ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;for(let i=0;i<=4;i++){const y=pad.top+(ch/4)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(pad.left+cw,y);ctx.stroke();const val=Math.round(mx-(mx-mn)*(i/4));ctx.fillStyle='#94a3b8';ctx.font='11px Inter, sans-serif';ctx.textAlign='right';ctx.fillText('$'+val.toLocaleString(),pad.left-8,y+4);}ctx.beginPath();ctx.strokeStyle='#D4AF37';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';data.forEach((v,i)=>{const x=pad.left+(cw/(pts-1))*i,y=pad.top+ch-((v-mn)/(mx-mn))*ch;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();const g=ctx.createLinearGradient(0,pad.top,0,pad.top+ch);g.addColorStop(0,'rgba(212,175,55,0.2)');g.addColorStop(1,'rgba(212,175,55,0.01)');ctx.lineTo(pad.left+cw,pad.top+ch);ctx.lineTo(pad.left,pad.top+ch);ctx.closePath();ctx.fillStyle=g;ctx.fill();data.forEach((v,i)=>{const x=pad.left+(cw/(pts-1))*i,y=pad.top+ch-((v-mn)/(mx-mn))*ch;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle='#D4AF37';ctx.fill();ctx.beginPath();ctx.arc(x,y,2,0,Math.PI*2);ctx.fillStyle='white';ctx.fill();});cv.style.display='block';},500);}
-  // Recent Leads (H3)
-  function loadRecentLeads(){const s=document.getElementById('leadsSkeleton'),l=document.getElementById('recentLeadsList'),e=document.getElementById('recentLeadsEmpty');s.style.display='block';l.innerHTML='';e.style.display='none';setTimeout(()=>{s.style.display='none';const leads=simulatedCalls.slice(0,5);if(leads.length===0){e.style.display='block';return;}l.innerHTML=leads.map(x=>'<div class="ds-list-item"><div class="ds-list-item-icon">👤</div><div class="ds-list-item-content"><div class="ds-list-item-title">'+(x.caller||'Unknown')+'</div><div class="ds-list-item-sub">'+(x.service||'—')+' · '+fmtTime(x.receivedAt||x.time)+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+getHealthIndicator(x.receivedAt||x.time)+getStatusBadge(x.status||'new')+'</div></div>').join('');},400);}
-  // Recent Calls (H2)
-  function loadRecentCalls(){const s=document.getElementById('callsSkeleton'),l=document.getElementById('recentCallsList'),e=document.getElementById('recentCallsEmpty');s.style.display='block';l.innerHTML='';e.style.display='none';setTimeout(()=>{s.style.display='none';const calls=simulatedCalls.slice(0,5);if(calls.length===0){e.style.display='block';return;}const outcomes=['answered','missed','voicemail','transferred'];l.innerHTML=calls.map((c,i)=>{const o=c.status==='scheduled'?'answered':outcomes[i%4];return'<div class="ds-list-item"><div class="ds-list-item-icon">📞</div><div class="ds-list-item-content"><div class="ds-list-item-title">'+(c.caller||'Unknown')+'</div><div class="ds-list-item-sub">'+(c.service||'—')+' · '+fmtTime(c.receivedAt||c.time)+'</div></div>'+getOutcomeBadge(o)+'</div>';}).join('');},400);}
-  // Appointments
-  function loadAppointments(){const s=document.getElementById('apptsSkeleton'),l=document.getElementById('appointmentsList'),e=document.getElementById('appointmentsEmpty');s.style.display='block';l.innerHTML='';e.style.display='none';setTimeout(()=>{s.style.display='none';const appts=simulatedCalls.filter(c=>c.status==='scheduled').slice(0,5);if(appts.length===0){e.style.display='block';return;}l.innerHTML=appts.map(a=>'<div class="ds-list-item"><div class="ds-list-item-icon">📅</div><div class="ds-list-item-content"><div class="ds-list-item-title">'+(a.caller||'Unknown')+'</div><div class="ds-list-item-sub">'+(a.service||'—')+' · '+fmtTime(a.receivedAt||a.time)+'</div></div><span class="call-status-badge answered">Scheduled</span></div>').join('');},400);}
-  // Status (C10: 6 items, 60s polling)
-  const statusItems=[{id:'ai',name:'AI Receptionist',desc:'Connected'},{id:'phone',name:'Phone Line',desc:'Active'},{id:'forwarding',name:'Call Forwarding',desc:'Configured'},{id:'notifications',name:'Notifications',desc:'Active'},{id:'sms',name:'SMS',desc:'Configured'},{id:'voicemail',name:'Voicemail',desc:'Active'}];
-  function loadStatusWidget(){const g=document.getElementById('statusGrid');const sts=['status-active','status-active','status-active','status-active','status-active','status-active'];g.innerHTML=statusItems.map((item,i)=>'<div class="ds-status-item" onclick="showComingSoon(\''+item.name+'\')" style="cursor:pointer;"><span class="ds-status-dot '+sts[i]+'"></span><div><div class="ds-status-name">'+item.name+'</div><div class="ds-status-desc">'+item.desc+'</div></div></div>').join('');}
-  setInterval(loadStatusWidget,60000);
-  // Analytics
-  function loadAnalytics(){const t=simulatedCalls.length,s=simulatedCalls.filter(c=>c.status==='scheduled').length,r=simulatedCalls.reduce((s,c)=>s+(c.avgPrice||0),0),a=t>0?Math.round(r/t):0;document.getElementById('analyticsCalls').textContent=t;document.getElementById('analyticsLeads').textContent=t;document.getElementById('analyticsAppts').textContent=s;document.getElementById('analyticsAvgValue').textContent='$'+a.toLocaleString();document.getElementById('analyticsCallLength').textContent=t>0?'3:24':'0:00';document.getElementById('analyticsConversion').textContent=t>0?Math.round((s/t)*100)+'%':'0%';}
-  // Coach
-  let coachDismissed=false;
-  function loadCoach(){if(coachDismissed){document.getElementById('coachContent').style.display='none';document.getElementById('coachCard').style.display='none';return;}const s=document.getElementById('coachSkeleton'),c=document.getElementById('coachContent');s.style.display='block';c.style.display='none';setTimeout(()=>{s.style.display='none';const hv=simulatedCalls.sort((a,b)=>(b.avgPrice||0)-(a.avgPrice||0))[0];if(hv&&hv.avgPrice>500){document.getElementById('coachText').textContent='Call '+hv.caller+' back - $'+(hv.avgPrice||0).toLocaleString()+' estimate.';document.getElementById('coachReason').textContent='Best opportunity right now.';}else if(simulatedCalls.length>0){document.getElementById('coachText').textContent='You have '+simulatedCalls.length+' lead'+(simulatedCalls.length!==1?'s':'')+' to review.';document.getElementById('coachReason').textContent='Follow up promptly.';}else{document.getElementById('coachText').textContent='Welcome to NorthStar!';document.getElementById('coachReason').textContent='';}c.style.display='block';},400);}
-  function dismissCoach(){coachDismissed=true;document.getElementById('coachCard').style.display='none';showNotification('Coach dismissed.','info');}
-  // API fetch helper
-  async function loadDashboardData() {
-    const token = localStorage.getItem('token');
-    if (!token) return;
+  <script>
+    // ═══════════════════════════════════════════════════════════════
+    // Application State
+    // ═══════════════════════════════════════════════════════════════
+    var user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (user.name) {
+      document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your business overview.`;
+    }
+
+    // In-memory calls (shared via sessionStorage)
+    simulatedCalls = simulatedCalls || [];
+    function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
     try {
-      // Fetch overview data
-      const overviewRes = await fetch('/api/v1/dashboard/overview', { headers: { 'Authorization': 'Bearer ' + token } });
-      const overview = await overviewRes.json();
-      const d = overview.data || overview;
-      if (d.hero) {
-        const h = d.hero;
-        document.getElementById('heroKpiValue').textContent = '
-  // Actions
-  function simulateDemoLead(){const c=genCall();try{simulatedCalls.unshift(c);const e=JSON.parse(sessionStorage.getItem('northstar_calls')||'[]');e.unshift(c);sessionStorage.setItem('northstar_calls',JSON.stringify(e));}catch(e){}showNotification('New lead: '+c.caller+' ($'+(c.avgPrice||0).toLocaleString()+')','success');loadDashboard();}
-  function openTestAIModal(){document.getElementById('testAIModal').style.display='flex';document.getElementById('testAiInput').value='';document.getElementById('testAiResponse').textContent="Your AI's response will appear here.";document.getElementById('testAiInput').focus();}
-  function closeTestAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('testAIModal').style.display='none';}
-  function testAIResponse(){const q=document.getElementById('testAiInput').value.trim();if(!q){showNotification('Please type a question.','warning');return;}const r=["Thanks for reaching out! Could you provide your address?","Great question! I'd recommend scheduling a free estimate.","I'd be glad to help! What's the best number to reach you?"];document.getElementById('testAiResponse').innerHTML='<strong style="color:var(--brand-600);">AI:</strong> '+r[Math.floor(Math.random()*r.length)];showNotification('Response generated.','info');}
-  function openCallMyAIModal(){document.getElementById('callMyAIModal').style.display='flex';}
-  function closeCallMyAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('callMyAIModal').style.display='none';}
-  function showComingSoon(f){document.getElementById('comingSoonMessage').textContent=f+' is under development.';document.getElementById('comingSoonModal').style.display='flex';}
-  function closeComingSoon(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('comingSoonModal').style.display='none';}
-  // Escape key (M2)
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'){['testAIModal','callMyAIModal','comingSoonModal'].forEach(id=>{const m=document.getElementById(id);if(m.style.display==='flex')m.style.display='none';});}});
-  document.addEventListener('DOMContentLoaded',loadDashboard);
-  </script>
-</body>
-</html>
- + Math.round(h.estimatedRevenue || 0).toLocaleString();
-        document.getElementById('heroKpiSubtitle').textContent = 'From ' + (h.totalLeads || 0) + ' opportunities';
-        document.getElementById('heroContent').style.display = 'block';
-        document.getElementById('heroSkeleton').style.display = 'none';
-        document.getElementById('heroError').style.display = 'none';
-        if (h.callsToday !== undefined) document.getElementById('analyticsCalls').textContent = h.callsToday;
-        if (h.newLeads !== undefined) document.getElementById('analyticsLeads').textContent = h.newLeads;
-        if (h.appointmentsBooked !== undefined) document.getElementById('analyticsAppts').textContent = h.appointmentsBooked;
+      const saved = sessionStorage.getItem('northstar_calls');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) simulatedCalls = parsed;
       }
-      // Fetch KPI data
-      const kpisRes = await fetch('/api/v1/dashboard/kpis', { headers: { 'Authorization': 'Bearer ' + token } });
-      const kpis = await kpisRes.json();
-      const k = kpis.data || kpis;
-      if (k.kpis) {
-        const grid = document.getElementById('kpiGrid');
-        const vals = k.kpis;
-        const tier = k.tier || {};
-        const visible = tier.visibleKpis || Object.keys(vals);
-        const labels = { callsToday:'📞 Today\'s Calls', newLeads:'👤 New Leads', appointments:'📅 Appointments', leadConversionRate:'📊 Lead Conv.', avgJobValue:'💰 Avg Job Value', avgCallLength:'⏱ Avg Call Length', missedCallsPrevented:'🚫 Missed Calls Prev.', avgResponseTime:'⚡ Avg Response Time', aiTransferRate:'🔄 AI Transfer Rate' };
-        const links = { callsToday:'/dashboard/calls', newLeads:'/dashboard/leads', appointments:'/dashboard/calendar', leadConversionRate:'/dashboard/reports/conversion', avgJobValue:'/dashboard/reports/job-value', avgCallLength:'/dashboard/calls', missedCallsPrevented:'/dashboard/calls', avgResponseTime:'/dashboard/reports/response-time', aiTransferRate:'/dashboard/calls' };
-        const icons = { callsToday:'📞', newLeads:'👤', appointments:'📅', leadConversionRate:'📊', avgJobValue:'💰', avgCallLength:'⏱', missedCallsPrevented:'🚫', avgResponseTime:'⚡', aiTransferRate:'🔄' };
-        let html = '';
-        visible.forEach(key => {
-          let val = vals[key];
-          if (key === 'leadConversionRate') val = (val * 100).toFixed(0) + '%';
-          else if (key === 'avgJobValue' || key === 'avgResponseTime') val = '
-  // Actions
-  function simulateDemoLead(){const c=genCall();try{simulatedCalls.unshift(c);const e=JSON.parse(sessionStorage.getItem('northstar_calls')||'[]');e.unshift(c);sessionStorage.setItem('northstar_calls',JSON.stringify(e));}catch(e){}showNotification('New lead: '+c.caller+' ($'+(c.avgPrice||0).toLocaleString()+')','success');loadDashboard();}
-  function openTestAIModal(){document.getElementById('testAIModal').style.display='flex';document.getElementById('testAiInput').value='';document.getElementById('testAiResponse').textContent="Your AI's response will appear here.";document.getElementById('testAiInput').focus();}
-  function closeTestAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('testAIModal').style.display='none';}
-  function testAIResponse(){const q=document.getElementById('testAiInput').value.trim();if(!q){showNotification('Please type a question.','warning');return;}const r=["Thanks for reaching out! Could you provide your address?","Great question! I'd recommend scheduling a free estimate.","I'd be glad to help! What's the best number to reach you?"];document.getElementById('testAiResponse').innerHTML='<strong style="color:var(--brand-600);">AI:</strong> '+r[Math.floor(Math.random()*r.length)];showNotification('Response generated.','info');}
-  function openCallMyAIModal(){document.getElementById('callMyAIModal').style.display='flex';}
-  function closeCallMyAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('callMyAIModal').style.display='none';}
-  function showComingSoon(f){document.getElementById('comingSoonMessage').textContent=f+' is under development.';document.getElementById('comingSoonModal').style.display='flex';}
-  function closeComingSoon(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('comingSoonModal').style.display='none';}
-  // Escape key (M2)
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'){['testAIModal','callMyAIModal','comingSoonModal'].forEach(id=>{const m=document.getElementById(id);if(m.style.display==='flex')m.style.display='none';});}});
-  document.addEventListener('DOMContentLoaded',loadDashboard);
-  </script>
-</body>
-</html>
- + Number(val).toLocaleString();
-          else if (key === 'avgCallLength') val = Math.floor(val/60) + ':' + String(Math.floor(val%60)).padStart(2,'0');
-          else if (typeof val === 'number') val = Math.round(val).toLocaleString();
-          html += '<div class="ds-kpi-card" onclick="window.location.href=\'' + (links[key]||'') + '\'"><div class="ds-kpi-icon"><span style="font-size:20px;">' + (icons[key]||'📊') + '</span></div><div class="ds-kpi-value">' + (val||'0') + '</div><div class="ds-kpi-label">' + (labels[key]||key) + '</div><div class="ds-kpi-trend"></div></div>';
+      const nav = performance.getEntriesByType('navigation');
+      if (nav.length > 0 && nav[0].type === 'reload') {
+        sessionStorage.removeItem('northstar_calls');
+      }
+    } catch(e) {}
+
+    // ═══════════════════════════════════════════════════════════════
+    // API Fetch Helper — calls backend, falls back to simulated data
+    // ═══════════════════════════════════════════════════════════════
+    const API_BASE = '/api/v1';
+    function getAuthHeaders() {
+      const token = localStorage.getItem('token');
+      return token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+    }
+    async function apiFetch(endpoint, params) {
+      var url = API_BASE + endpoint;
+      if (params) url += '?' + new URLSearchParams(params).toString();
+      try {
+        var resp = await fetch(url, { headers: getAuthHeaders() });
+        if (!resp.ok) { console.warn('[API] ' + endpoint + ' returned ' + resp.status); return null; }
+        var json = await resp.json();
+        return json.data || json;
+      } catch (err) {
+        console.warn('[API] Fetch failed for ' + endpoint + ':', err.message);
+        return null;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Helpers
+    // ═══════════════════════════════════════════════════════════════
+    function getStatusBadge(status) {
+      const map = { new:'badge-new', scheduled:'badge-scheduled', contacted:'badge-contacted', completed:'badge-completed' };
+      const cls = map[status] || 'badge-new';
+      return `<span class="badge ${cls}">${status || 'new'}</span>`;
+    }
+
+    // Simple tooltip
+    function showTooltip(e,text) {
+      const existing = document.querySelector('.tooltip');
+      if(existing) existing.remove();
+      const tip = document.createElement('div');
+      tip.className = 'tooltip visible';
+      tip.textContent = text;
+      const rect = e.target.getBoundingClientRect();
+      tip.style.left = Math.min(rect.left + rect.width/2 - 100, window.innerWidth-220) + 'px';
+      tip.style.top = (rect.bottom + 8) + 'px';
+      document.body.appendChild(tip);
+      setTimeout(() => tip.remove(), 4000);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: Daily Brief (V1-02)
+    // ═══════════════════════════════════════════════════════════════
+    var briefLastRefresh = 0;
+    function refreshBrief() {
+      const now = Date.now();
+      if (now - briefLastRefresh < 60000) {
+        showNotification('Please wait 60 seconds before refreshing.', 'warning');
+        return;
+      }
+      briefLastRefresh = now;
+      loadDailyBrief();
+    }
+
+    async function loadDailyBrief() {
+      const skeleton = document.getElementById('briefSkeleton');
+      const content = document.getElementById('briefContent');
+      const error = document.getElementById('briefError');
+      skeleton.style.display = 'block';
+      content.style.display = 'none';
+      error.style.display = 'none';
+
+      // Try API first
+      var apiData = await apiFetch('/dashboard/brief');
+      if (apiData) {
+        skeleton.style.display = 'none';
+        document.getElementById('briefBody').innerHTML = '<p>' + apiData.brief + '</p>';
+        document.getElementById('briefTimestamp').textContent = 'Last updated: ' + new Date(apiData.updatedAt).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
+        content.style.display = 'block';
+        return;
+      }
+
+      // Fallback to simulated data
+      setTimeout(() => {
+        skeleton.style.display = 'none';
+        const count = simulatedCalls.length;
+        const today = simulatedCalls.filter(c => {
+          try { const d = new Date(c.receivedAt || c.time); return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString(); } catch(e) { return false; }
+        }).length;
+        const leads = simulatedCalls.length;
+        const appointments = simulatedCalls.filter(c => c.status === 'scheduled').length;
+        const rev = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
+
+        const hours = new Date().getHours();
+        const greeting = hours < 12 ? 'Good morning' : hours < 17 ? 'Good afternoon' : 'Good evening';
+        const name = user.name || 'there';
+
+        let body = greeting + ', ' + name + '. ';
+        if (today > 0) body += 'NorthStar answered ' + today + ' call' + (today !== 1 ? 's' : '') + ' today';
+        if (leads > 0 && today > 0) body += ', captured ' + leads + ' lead' + (leads !== 1 ? 's' : '');
+        else if (leads > 0) body += 'NorthStar has captured ' + leads + ' lead' + (leads !== 1 ? 's' : '');
+        if (appointments > 0) body += ', and booked ' + appointments + ' appointment' + (appointments !== 1 ? 's' : '');
+        body += '. ';
+
+        const highVal = simulatedCalls.sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
+        if (highVal && highVal.avgPrice > 0) {
+          body += 'Your top opportunity is a $' + (highVal.avgPrice||0).toLocaleString() + ' ' + (highVal.service||'job') + ' with ' + (highVal.caller||'a prospect') + '. ';
+          body += 'Action recommended: Follow up with ' + (highVal.caller||'this lead') + ' - it could be your highest-value opportunity.';
+        } else if (simulatedCalls.length > 0) {
+          body += 'Keep an eye on your recent leads - timely follow-up makes the difference.';
+        } else {
+          body = greeting + ', ' + name + '. Welcome to NorthStar! Once you connect your phone number, I\'ll start answering calls and capturing leads for you.';
+        }
+
+        document.getElementById('briefBody').innerHTML = '<p>' + body + '</p>';
+        document.getElementById('briefTimestamp').textContent = 'Last updated: ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
+        content.style.display = 'block';
+      }, 600);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: Hero KPI (V1-04)
+    // ═══════════════════════════════════════════════════════════════
+    var heroPeriodStorage = 'northstar_hero_kpi_period';
+    var currentHeroPeriod = sessionStorage.getItem(heroPeriodStorage) || 'month';
+    function loadHeroKPI() {
+      const skeleton = document.getElementById('heroSkeleton');
+      const content = document.getElementById('heroContent');
+      const error = document.getElementById('heroError');
+      skeleton.style.display = 'block';
+      content.style.display = 'none';
+      error.style.display = 'none';
+
+      setTimeout(() => {
+        skeleton.style.display = 'none';
+        const leads = simulatedCalls;
+        const totalValue = leads.reduce((s,c) => s + (c.avgPrice||0), 0);
+        const count = leads.length;
+        const services = new Set(leads.map(l => l.service).filter(Boolean)).size;
+
+        const value = count > 0 ? totalValue : 0;
+        document.getElementById('heroKpiValue').textContent = '$' + Math.round(value).toLocaleString();
+        if (value > 0) {
+          const trend = count > 3 ? 12 : 0;
+          const arrow = trend > 0 ? '↑' : trend < 0 ? '↓' : '→';
+          const cls = trend > 0 ? 'ds-trend-up' : trend < 0 ? 'ds-trend-down' : 'ds-trend-flat';
+          document.getElementById('heroKpiTrend').innerHTML = `<span class="${cls}">${arrow} ${Math.abs(trend)}% vs last ${currentHeroPeriod}</span>`;
+        } else {
+          document.getElementById('heroKpiTrend').innerHTML = '';
+        }
+        document.getElementById('heroKpiSubtitle').textContent = count > 0
+          ? `From ${count} qualified opportunit${count!==1?'ies':'y'} across ${services} service${services!==1?'s':''}`
+          : 'No qualified opportunities yet. New opportunities will appear here after NorthStar qualifies leads.';
+        content.style.display = 'block';
+      }, 500);
+    }
+
+    function switchHeroPeriod(period) {
+      currentHeroPeriod = period;
+      sessionStorage.setItem(heroPeriodStorage, period);
+      document.querySelectorAll('#heroPeriodPills .ds-pill').forEach(p => {
+        p.classList.toggle('active', p.dataset.period === period);
+      });
+      loadHeroKPI();
+    }
+
+    function navigateToRevenue() {
+      window.location.href = '/dashboard/reports/revenue?period=' + currentHeroPeriod;
+    }
+
+    // Initialize hero period pills
+    document.querySelectorAll('#heroPeriodPills .ds-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.period === currentHeroPeriod);
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: KPI Grid (V1-05)
+    // ═══════════════════════════════════════════════════════════════
+    var kpiDefinitions = [
+      { id:'today_calls', icon:'📞', label:"Today's Calls", format:'int', link:'/dashboard/calls?filter=today', tier:'starter' },
+      { id:'new_leads', icon:'👤', label:'New Leads', format:'int', link:'/dashboard/leads?filter=today', tier:'starter' },
+      { id:'appointments', icon:'📅', label:'Appointments', format:'int', link:'/dashboard/calendar?filter=today', tier:'starter' },
+      { id:'lead_conversion', icon:'📊', label:'Lead Conv.', format:'pct', link:'/dashboard/reports/conversion', tier:'starter' },
+      { id:'avg_job_value', icon:'💰', label:'Avg Job Value', format:'cur', link:'/dashboard/reports/job-value', tier:'starter' },
+      { id:'avg_call_length', icon:'⏱', label:'Avg Call Length', format:'dur', link:'/dashboard/calls', tier:'starter' },
+      { id:'missed_calls', icon:'🚫', label:'Missed Calls Prev.', format:'int', link:'/dashboard/calls?filter=prevented', tier:'starter' },
+      { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', format:'dur', link:'/dashboard/reports/response-time', tier:'pro' },
+      { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', format:'pct', link:'/dashboard/calls?filter=transferred', tier:'pro' },
+    ];
+
+    function loadKpiGrid() {
+      const grid = document.getElementById('kpiGrid');
+      const total = simulatedCalls.length;
+      const today = simulatedCalls.filter(c => {
+        try { const d = new Date(c.receivedAt || c.time); return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString(); } catch(e) { return false; }
+      }).length;
+      const scheduled = simulatedCalls.filter(c => c.status === 'scheduled').length;
+      const revenue = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
+      const avgValue = total > 0 ? Math.round(revenue / total) : 0;
+
+      // For demo, treat all as "starter" tier
+      let html = '';
+      kpiDefinitions.forEach(kpi => {
+        let value = '—';
+        let trend = '';
+        switch(kpi.id) {
+          case 'today_calls': value = today; trend = today > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
+          case 'new_leads': value = total; trend = total > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
+          case 'appointments': value = scheduled; trend = scheduled > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
+          case 'lead_conversion': value = total > 0 ? Math.round((scheduled/total)*100)+'%' : '—'; break;
+          case 'avg_job_value': value = avgValue > 0 ? '$'+avgValue.toLocaleString() : '—'; break;
+          case 'avg_call_length': value = total > 0 ? '3:24' : '—'; break;
+          case 'missed_calls': value = today > 0 ? today : '0'; trend = today > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
+          case 'avg_response_time': value = '—'; break;
+          case 'ai_transfer_rate': value = '—'; break;
+        }
+        html += `<div class="ds-kpi-card" onclick="window.location.href='${kpi.link}'">
+          <div class="ds-kpi-icon" style="background:var(--kpi-${kpi.id}-bg,var(--neutral-50));color:var(--kpi-${kpi.id}-color,var(--neutral-500));">
+            <span style="font-size:20px;">${kpi.icon}</span>
+          </div>
+          <div class="ds-kpi-value">${value}</div>
+          <div class="ds-kpi-label">${kpi.label}</div>
+          <div class="ds-kpi-trend">${trend}</div>
+        </div>`;
+      });
+      grid.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: Revenue Trends (V1-06) — Simulated chart
+    // ═══════════════════════════════════════════════════════════════
+    var currentTrendPeriod = '30d';
+
+    function switchTrendPeriod(period) {
+      currentTrendPeriod = period;
+      document.querySelectorAll('#trendPeriodPills .ds-pill').forEach(p => {
+        p.classList.toggle('active', p.dataset.period === period);
+      });
+      loadTrendChart();
+    }
+
+    function loadTrendChart() {
+      const skeleton = document.getElementById('chartSkeleton');
+      const canvas = document.getElementById('trendChartCanvas');
+      const empty = document.getElementById('chartEmpty');
+      skeleton.style.display = 'block';
+      canvas.style.display = 'none';
+      empty.style.display = 'none';
+
+      if (simulatedCalls.length === 0) {
+        setTimeout(() => {
+          skeleton.style.display = 'none';
+          empty.style.display = 'block';
+        }, 400);
+        return;
+      }
+
+      setTimeout(() => {
+        skeleton.style.display = 'none';
+        // Draw simple chart using canvas
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const w = rect.width;
+        canvas.width = w * dpr;
+        canvas.height = 280 * dpr;
+        canvas.style.width = w + 'px';
+        canvas.style.height = '280px';
+        ctx.scale(dpr, dpr);
+
+        const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+        const cw = w - padding.left - padding.right;
+        const ch = 280 - padding.top - padding.bottom;
+
+        // Background
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neutral-50') || '#f8fafc';
+        ctx.fillRect(0, 0, w, 280);
+
+        // Generate demo data points
+        const points = 12;
+        const data = [];
+        for (let i = 0; i < points; i++) {
+          data.push(Math.round(1000 + Math.random() * 8000));
+        }
+
+        const maxVal = Math.max(...data) * 1.1;
+        const minVal = Math.min(...data) * 0.9;
+
+        // Grid lines
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neutral-200') || '#e2e8f0';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const y = padding.top + (ch / 4) * i;
+          ctx.beginPath();
+          ctx.moveTo(padding.left, y);
+          ctx.lineTo(padding.left + cw, y);
+          ctx.stroke();
+          const val = Math.round(maxVal - (maxVal - minVal) * (i / 4));
+          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neutral-400') || '#94a3b8';
+          ctx.font = '11px Inter, sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText('$' + val.toLocaleString(), padding.left - 8, y + 4);
+        }
+
+        // Line
+        ctx.beginPath();
+        ctx.strokeStyle = '#D4AF37';
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        data.forEach((val, i) => {
+          const x = padding.left + (cw / (points - 1)) * i;
+          const y = padding.top + ch - ((val - minVal) / (maxVal - minVal)) * ch;
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         });
-        grid.innerHTML = html;
+        ctx.stroke();
+
+        // Gradient fill
+        const gradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + ch);
+        gradient.addColorStop(0, 'rgba(212, 175, 55, 0.2)');
+        gradient.addColorStop(1, 'rgba(212, 175, 55, 0.01)');
+        ctx.lineTo(padding.left + cw, padding.top + ch);
+        ctx.lineTo(padding.left, padding.top + ch);
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Data points
+        data.forEach((val, i) => {
+          const x = padding.left + (cw / (points - 1)) * i;
+          const y = padding.top + ch - ((val - minVal) / (maxVal - minVal)) * ch;
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#D4AF37';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(x, y, 2, 0, Math.PI * 2);
+          ctx.fillStyle = 'white';
+          ctx.fill();
+        });
+
+        canvas.style.display = 'block';
+      }, 500);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: NorthStar Coach (V1-07)
+    // ═══════════════════════════════════════════════════════════════
+    var coachDismissed = false;
+
+    function loadCoach() {
+      if (coachDismissed) {
+        document.getElementById('coachContent').style.display = 'none';
+        document.getElementById('coachCard').style.display = 'none';
+        return;
       }
-      // Fetch leads
-      const leadsRes = await fetch('/api/v1/leads', { headers: { 'Authorization': 'Bearer ' + token } });
-      const leads = await leadsRes.json();
-      const leadsList = leads.leads || leads.items || [];
-      if (leadsList.length > 0) {
-        const l = document.getElementById('recentLeadsList');
-        l.innerHTML = leadsList.slice(0,5).map(x => '<div class="ds-list-item"><div class="ds-list-item-icon">👤</div><div class="ds-list-item-content"><div class="ds-list-item-title">' + (x.callerName||'Unknown') + '</div><div class="ds-list-item-sub">' + (x.service||'—') + ' · ' + (x.estimatedPrice ? '
-  // Actions
-  function simulateDemoLead(){const c=genCall();try{simulatedCalls.unshift(c);const e=JSON.parse(sessionStorage.getItem('northstar_calls')||'[]');e.unshift(c);sessionStorage.setItem('northstar_calls',JSON.stringify(e));}catch(e){}showNotification('New lead: '+c.caller+' ($'+(c.avgPrice||0).toLocaleString()+')','success');loadDashboard();}
-  function openTestAIModal(){document.getElementById('testAIModal').style.display='flex';document.getElementById('testAiInput').value='';document.getElementById('testAiResponse').textContent="Your AI's response will appear here.";document.getElementById('testAiInput').focus();}
-  function closeTestAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('testAIModal').style.display='none';}
-  function testAIResponse(){const q=document.getElementById('testAiInput').value.trim();if(!q){showNotification('Please type a question.','warning');return;}const r=["Thanks for reaching out! Could you provide your address?","Great question! I'd recommend scheduling a free estimate.","I'd be glad to help! What's the best number to reach you?"];document.getElementById('testAiResponse').innerHTML='<strong style="color:var(--brand-600);">AI:</strong> '+r[Math.floor(Math.random()*r.length)];showNotification('Response generated.','info');}
-  function openCallMyAIModal(){document.getElementById('callMyAIModal').style.display='flex';}
-  function closeCallMyAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('callMyAIModal').style.display='none';}
-  function showComingSoon(f){document.getElementById('comingSoonMessage').textContent=f+' is under development.';document.getElementById('comingSoonModal').style.display='flex';}
-  function closeComingSoon(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('comingSoonModal').style.display='none';}
-  // Escape key (M2)
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'){['testAIModal','callMyAIModal','comingSoonModal'].forEach(id=>{const m=document.getElementById(id);if(m.style.display==='flex')m.style.display='none';});}});
-  document.addEventListener('DOMContentLoaded',loadDashboard);
+      const skeleton = document.getElementById('coachSkeleton');
+      const content = document.getElementById('coachContent');
+      skeleton.style.display = 'block';
+      content.style.display = 'none';
+
+      setTimeout(() => {
+        skeleton.style.display = 'none';
+        const highVal = simulatedCalls.sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
+        if (highVal && highVal.avgPrice > 500) {
+          document.getElementById('coachText').textContent = `Call ${highVal.caller} back — their ${highVal.service||'job'} is estimated at $${(highVal.avgPrice||0).toLocaleString()}. This is your highest-value opportunity right now.`;
+          document.getElementById('coachReason').textContent = `💡 Why: This lead has been waiting for follow-up. Responding quickly increases your chance of booking by 60%.`;
+        } else if (simulatedCalls.length > 0) {
+          document.getElementById('coachText').textContent = `You have ${simulatedCalls.length} lead${simulatedCalls.length!==1?'s':''} to review. Follow up promptly to maximize conversions.`;
+          document.getElementById('coachReason').textContent = `💡 Tip: Leads contacted within 5 minutes convert at 9x the rate of those contacted after 30 minutes.`;
+        } else {
+          document.getElementById('coachText').textContent = `Welcome to NorthStar! Once you connect your phone number, I'll analyze your calls and provide personalized coaching.`;
+          document.getElementById('coachReason').textContent = '';
+        }
+        content.style.display = 'block';
+      }, 400);
+    }
+
+    function dismissCoach() {
+      coachDismissed = true;
+      document.getElementById('coachCard').style.display = 'none';
+      showNotification('Coach dismissed for now.', 'info');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: Recent Leads (V1-08)
+    // ═══════════════════════════════════════════════════════════════
+    function loadRecentLeads() {
+      const skeleton = document.getElementById('leadsSkeleton');
+      const list = document.getElementById('recentLeadsList');
+      const empty = document.getElementById('recentLeadsEmpty');
+      skeleton.style.display = 'block';
+      list.innerHTML = '';
+      empty.style.display = 'none';
+
+      setTimeout(() => {
+        skeleton.style.display = 'none';
+        const leads = simulatedCalls.slice(0, 5);
+        if (leads.length === 0) {
+          empty.style.display = 'block';
+          return;
+        }
+        let html = '';
+        leads.forEach(l => {
+          html += `<div class="ds-list-item">
+            <div class="ds-list-item-icon">👤</div>
+            <div class="ds-list-item-content">
+              <div class="ds-list-item-title">${l.caller || 'Unknown'}</div>
+              <div class="ds-list-item-sub">${l.service || '—'} · ${fmtTime(l.receivedAt || l.time)}</div>
+            </div>
+            <div>${getStatusBadge(l.status || 'new')}</div>
+          </div>`;
+        });
+        list.innerHTML = html;
+      }, 400);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: Recent Calls (V1-09)
+    // ═══════════════════════════════════════════════════════════════
+    function loadRecentCalls() {
+      const skeleton = document.getElementById('callsSkeleton');
+      const list = document.getElementById('recentCallsList');
+      const empty = document.getElementById('recentCallsEmpty');
+      skeleton.style.display = 'block';
+      list.innerHTML = '';
+      empty.style.display = 'none';
+
+      setTimeout(() => {
+        skeleton.style.display = 'none';
+        const calls = simulatedCalls.slice(0, 5);
+        if (calls.length === 0) {
+          empty.style.display = 'block';
+          return;
+        }
+        let html = '';
+        calls.forEach(c => {
+          const statusClass = c.status === 'scheduled' ? 'answered' : 'answered';
+          html += `<div class="ds-list-item">
+            <div class="ds-list-item-icon">📞</div>
+            <div class="ds-list-item-content">
+              <div class="ds-list-item-title">${c.caller || 'Unknown'}</div>
+              <div class="ds-list-item-sub">${c.service || '—'} · ${fmtTime(c.receivedAt || c.time)}</div>
+            </div>
+            <span class="call-status-badge ${statusClass}">${c.status === 'scheduled' ? 'Booked' : 'Answered'}</span>
+          </div>`;
+        });
+        list.innerHTML = html;
+      }, 400);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: Upcoming Appointments (V1-10)
+    // ═══════════════════════════════════════════════════════════════
+    function loadAppointments() {
+      const skeleton = document.getElementById('apptsSkeleton');
+      const list = document.getElementById('appointmentsList');
+      const empty = document.getElementById('appointmentsEmpty');
+      skeleton.style.display = 'block';
+      list.innerHTML = '';
+      empty.style.display = 'none';
+
+      setTimeout(() => {
+        skeleton.style.display = 'none';
+        const appts = simulatedCalls.filter(c => c.status === 'scheduled').slice(0, 5);
+        if (appts.length === 0) {
+          empty.style.display = 'block';
+          return;
+        }
+        let html = '';
+        appts.forEach(a => {
+          html += `<div class="ds-list-item">
+            <div class="ds-list-item-icon">📅</div>
+            <div class="ds-list-item-content">
+              <div class="ds-list-item-title">${a.caller || 'Unknown'}</div>
+              <div class="ds-list-item-sub">${a.service || '—'} · ${fmtTime(a.receivedAt || a.time)}</div>
+            </div>
+            <span class="call-status-badge answered">Scheduled</span>
+          </div>`;
+        });
+        list.innerHTML = html;
+      }, 400);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: Analytics Overview (existing feature)
+    // ═══════════════════════════════════════════════════════════════
+    function loadAnalytics() {
+      const total = simulatedCalls.length;
+      const scheduled = simulatedCalls.filter(c => c.status === 'scheduled').length;
+      const revenue = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
+      const avgValue = total > 0 ? Math.round(revenue / total) : 0;
+
+      document.getElementById('analyticsCalls').textContent = total;
+      document.getElementById('analyticsLeads').textContent = total;
+      document.getElementById('analyticsAppts').textContent = scheduled;
+      document.getElementById('analyticsAvgValue').textContent = '$' + avgValue.toLocaleString();
+      document.getElementById('analyticsCallLength').textContent = total > 0 ? '3:24' : '0:00';
+      document.getElementById('analyticsConversion').textContent = total > 0 ? Math.round((scheduled/total)*100) + '%' : '0%';
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Initial Load
+    // ═══════════════════════════════════════════════════════════════
+    function loadDashboard() {
+      loadDailyBrief();
+      loadHeroKPI();
+      loadKpiGrid();
+      loadTrendChart();
+      loadCoach();
+      loadRecentLeads();
+      loadRecentCalls();
+      loadAppointments();
+      loadAnalytics();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Actions: Simulate Lead, Test AI, Call My AI, Coming Soon
+    // ═══════════════════════════════════════════════════════════════
+    function simulateDemoLead() {
+      const c = genCall();
+      try {
+        simulatedCalls.unshift(c);
+        const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
+        existing.unshift(c);
+        sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
+      } catch (e) {}
+      showNotification("✅ New lead: " + c.caller + " ($" + (c.avgPrice||0).toLocaleString() + " estimated)", 'success');
+      loadDashboard();
+    }
+
+    function openTestAIModal() {
+      document.getElementById('testAIModal').style.display = 'flex';
+      document.getElementById('testAiInput').value = '';
+      document.getElementById('testAiResponse').textContent = 'Your AI\'s response will appear here.';
+      document.getElementById('testAiInput').focus();
+    }
+
+    function closeTestAIModal(e) {
+      if (e && e.target !== e.currentTarget) return;
+      document.getElementById('testAIModal').style.display = 'none';
+    }
+
+    function testAIResponse() {
+      const q = document.getElementById('testAiInput').value.trim();
+      if (!q) { showNotification('Please type a question first.', 'warning'); return; }
+      const responses = [
+        "Thanks for reaching out to NorthStar! I'd be happy to help with that. Let me check with the team and get back to you with a quote. Could you provide your address and preferred time for an estimate?",
+        "Great question! We offer competitive pricing for that service. I'd recommend scheduling a free estimate so our team can assess your specific needs. When would work best for you?",
+        "I'd be glad to help with that inquiry. Let me take down your details and someone from our team will reach out. What's the best phone number to reach you?",
+      ];
+      document.getElementById('testAiResponse').innerHTML = '<strong style="color:var(--brand-600);">AI:</strong> ' + responses[Math.floor(Math.random() * responses.length)];
+      showNotification('💬 AI response generated.', 'info');
+    }
+
+    function openCallMyAIModal() {
+      document.getElementById('callMyAIModal').style.display = 'flex';
+    }
+
+    function closeCallMyAIModal(e) {
+      if (e && e.target !== e.currentTarget) return;
+      document.getElementById('callMyAIModal').style.display = 'none';
+    }
+
+    function showComingSoon(feature) {
+      document.getElementById('comingSoonMessage').textContent = feature + ' is under development and will be available in an upcoming release.';
+      document.getElementById('comingSoonModal').style.display = 'flex';
+    }
+
+    function closeComingSoon(e) {
+      if (e && e.target !== e.currentTarget) return;
+      document.getElementById('comingSoonModal').style.display = 'none';
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Kick off
+    // ═══════════════════════════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', loadDashboard);
   </script>
-</body>
-</html>
- + x.estimatedPrice : '') + '</div></div>' + getHealthIndicator(x.receivedAt||x.createdAt) + getStatusBadge(x.status||'new') + '</div>').join('');
-        document.getElementById('leadsSkeleton').style.display = 'none';
-      }
-      // Fetch calls
-      const callsRes = await fetch('/api/v1/calls', { headers: { 'Authorization': 'Bearer ' + token } });
-      const calls = await callsRes.json();
-      const callsList = calls.calls || calls.items || [];
-      if (callsList.length > 0) {
-        const c = document.getElementById('recentCallsList');
-        c.innerHTML = callsList.slice(0,5).map(x => '<div class="ds-list-item"><div class="ds-list-item-icon">📞</div><div class="ds-list-item-content"><div class="ds-list-item-title">' + (x.callerName||'Unknown') + '</div><div class="ds-list-item-sub">' + (x.service||'—') + ' · ' + (x.estimatedPrice ? '
-  // Actions
-  function simulateDemoLead(){const c=genCall();try{simulatedCalls.unshift(c);const e=JSON.parse(sessionStorage.getItem('northstar_calls')||'[]');e.unshift(c);sessionStorage.setItem('northstar_calls',JSON.stringify(e));}catch(e){}showNotification('New lead: '+c.caller+' ($'+(c.avgPrice||0).toLocaleString()+')','success');loadDashboard();}
-  function openTestAIModal(){document.getElementById('testAIModal').style.display='flex';document.getElementById('testAiInput').value='';document.getElementById('testAiResponse').textContent="Your AI's response will appear here.";document.getElementById('testAiInput').focus();}
-  function closeTestAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('testAIModal').style.display='none';}
-  function testAIResponse(){const q=document.getElementById('testAiInput').value.trim();if(!q){showNotification('Please type a question.','warning');return;}const r=["Thanks for reaching out! Could you provide your address?","Great question! I'd recommend scheduling a free estimate.","I'd be glad to help! What's the best number to reach you?"];document.getElementById('testAiResponse').innerHTML='<strong style="color:var(--brand-600);">AI:</strong> '+r[Math.floor(Math.random()*r.length)];showNotification('Response generated.','info');}
-  function openCallMyAIModal(){document.getElementById('callMyAIModal').style.display='flex';}
-  function closeCallMyAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('callMyAIModal').style.display='none';}
-  function showComingSoon(f){document.getElementById('comingSoonMessage').textContent=f+' is under development.';document.getElementById('comingSoonModal').style.display='flex';}
-  function closeComingSoon(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('comingSoonModal').style.display='none';}
-  // Escape key (M2)
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'){['testAIModal','callMyAIModal','comingSoonModal'].forEach(id=>{const m=document.getElementById(id);if(m.style.display==='flex')m.style.display='none';});}});
-  document.addEventListener('DOMContentLoaded',loadDashboard);
-  </script>
-</body>
-</html>
- + x.estimatedPrice : '') + '</div></div>' + getOutcomeBadge(x.outcome||'answered') + '</div>').join('');
-        document.getElementById('callsSkeleton').style.display = 'none';
-      }
-    } catch(e) { console.log('API unavailable, using demo data', e); }
-  }
-  // Load All
-  function loadDashboard(){loadDashboardData();loadDailyBrief();loadHeroKPI();loadKpiGrid();loadTrendChart();loadCoach();loadRecentLeads();loadRecentCalls();loadAppointments();loadAnalytics();loadStatusWidget();}
-  // Actions
-  function simulateDemoLead(){const c=genCall();try{simulatedCalls.unshift(c);const e=JSON.parse(sessionStorage.getItem('northstar_calls')||'[]');e.unshift(c);sessionStorage.setItem('northstar_calls',JSON.stringify(e));}catch(e){}showNotification('New lead: '+c.caller+' ($'+(c.avgPrice||0).toLocaleString()+')','success');loadDashboard();}
-  function openTestAIModal(){document.getElementById('testAIModal').style.display='flex';document.getElementById('testAiInput').value='';document.getElementById('testAiResponse').textContent="Your AI's response will appear here.";document.getElementById('testAiInput').focus();}
-  function closeTestAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('testAIModal').style.display='none';}
-  function testAIResponse(){const q=document.getElementById('testAiInput').value.trim();if(!q){showNotification('Please type a question.','warning');return;}const r=["Thanks for reaching out! Could you provide your address?","Great question! I'd recommend scheduling a free estimate.","I'd be glad to help! What's the best number to reach you?"];document.getElementById('testAiResponse').innerHTML='<strong style="color:var(--brand-600);">AI:</strong> '+r[Math.floor(Math.random()*r.length)];showNotification('Response generated.','info');}
-  function openCallMyAIModal(){document.getElementById('callMyAIModal').style.display='flex';}
-  function closeCallMyAIModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('callMyAIModal').style.display='none';}
-  function showComingSoon(f){document.getElementById('comingSoonMessage').textContent=f+' is under development.';document.getElementById('comingSoonModal').style.display='flex';}
-  function closeComingSoon(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('comingSoonModal').style.display='none';}
-  // Escape key (M2)
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'){['testAIModal','callMyAIModal','comingSoonModal'].forEach(id=>{const m=document.getElementById(id);if(m.style.display==='flex')m.style.display='none';});}});
-  document.addEventListener('DOMContentLoaded',loadDashboard);
-  </script>
+
 </body>
 </html>

@@ -64,4 +64,4 @@ function getGreeting() {
   return 'Good evening';
 }
 
-module.exports = { generate };
+module.exports = { generate, getGreeting };

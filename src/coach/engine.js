@@ -74,4 +74,17 @@ function evaluatePriority(priority, metrics) {
   }
 }
 
-module.exports = { evaluate };
+module.exports = { evaluate, secondaryInsight };
+/**
+ * Generate a secondary insight based on high-level metrics.
+ * Compatible with the dashboard.js usage of coach.secondaryInsight().
+ */
+function secondaryInsight(metrics) {
+  if (metrics.callsToday > 10) {
+    return { type: 'volume', message: `High call volume today — ${metrics.callsToday} calls. Consider extending hours if you're seeing after-hours activity.` };
+  }
+  if (metrics.avgCallLength && metrics.avgCallLength > 300) {
+    return { type: 'call_length', message: `Calls averaging ${Math.round(metrics.avgCallLength / 60)} minutes. AI may need more efficient scripting.` };
+  }
+  return null;
+}

@@ -65,5 +65,6 @@ function getStatusBadge(status) {
     'completed': 'badge-completed',
   };
   const cls = map[status] || 'badge-new';
-  return `<span class="badge ${cls}">${status}</span>`;
+  const title = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+  return `<span class="badge ${cls}">${title}</span>`;
 }

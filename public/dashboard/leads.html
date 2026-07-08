@@ -794,7 +794,7 @@ function toggleMobileMenu() {
         html += `<tr style="cursor:pointer;" onclick="openDrawer(allLeads[${idx}])">
           <td><strong>${c.caller || c.customerName || 'Unknown'}</strong></td>
           <td>${c.phone || c.phoneNumber || '-'}</td>
-          <td><span class="lead-service-badge">${svc}</span></td>
+          <td style="text-align:center"><span class="lead-service-badge">${svc}</span></td>
           <td><strong>${val}</strong></td>
           <td>${fmtTime(c.time || (c.receivedAt ? c.receivedAt : null))}</td>
           <td>${getStatusBadge(status)}</td>

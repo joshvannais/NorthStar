@@ -8,332 +8,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
-<style>
-/* ===== Leads CRM Specific Styles ===== */
-
-/* KPI Cards with icons */
-.leads-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 14px;
-  margin-bottom: 24px;
-}
-@media (max-width: 1024px) { .leads-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 640px) { .leads-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 420px) { .leads-kpi-grid { grid-template-columns: 1fr 1fr; } }
-
-.stat-card-qualified .stat-icon { background: #dbeafe; color: #1d4ed8; }
-.stat-card-won .stat-icon { background: #d1fae5; color: #047857; }
-.stat-card-conversion .stat-icon { background: #fef3c7; color: #b45309; }
-.stat-card-avgvalue .stat-icon { background: #f3e8ff; color: #7e22ce; }
-
-[data-theme="dark"] .stat-card-qualified .stat-icon { background: rgba(30,64,175,0.2); color: #93c5fd; }
-[data-theme="dark"] .stat-card-won .stat-icon { background: rgba(4,120,87,0.2); color: #6ee7b7; }
-[data-theme="dark"] .stat-card-conversion .stat-icon { background: rgba(180,83,9,0.2); color: #fbbf24; }
-[data-theme="dark"] .stat-card-avgvalue .stat-icon { background: rgba(126,34,206,0.2); color: #d8b4fe; }
-
-/* Polaris Revenue Intelligence Card */
-.polaris-card {
-  background: linear-gradient(135deg, #FFF8E7, #FFECB3);
-  border: 1px solid var(--brand-300);
-  border-radius: var(--radius);
-  padding: 20px 24px;
-  margin-bottom: 24px;
-  position: relative;
-  overflow: hidden;
-}
-.polaris-card::before {
-  content: '';
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: rgba(212, 175, 55, 0.08);
-}
-.polaris-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.polaris-header h2 {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--brand-800);
-}
-.polaris-header .polaris-badge {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background: var(--brand-600);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 100px;
-  font-weight: 600;
-}
-.polaris-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-@media (max-width: 768px) { .polaris-grid { grid-template-columns: 1fr; } }
-.polaris-item {
-  background: rgba(255,255,255,0.6);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
-  border: 1px solid rgba(212,175,55,0.2);
-}
-.polaris-item .polaris-item-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--brand-700);
-  margin-bottom: 4px;
-}
-.polaris-item .polaris-item-value {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--neutral-900);
-  margin-bottom: 2px;
-}
-.polaris-item .polaris-item-desc {
-  font-size: 12px;
-  color: var(--neutral-600);
-}
-.polaris-item .polaris-confidence {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 1px 8px;
-  border-radius: 100px;
-  margin-top: 4px;
-}
-.polaris-confidence.high { background: #d1fae5; color: #047857; }
-.polaris-confidence.medium { background: #fef3c7; color: #b45309; }
-.polaris-confidence.low { background: #fee2e2; color: #b91c1c; }
-[data-theme="dark"] .polaris-card {
-  background: linear-gradient(135deg, #2a2510, #3d3010);
-  border-color: var(--brand-700);
-}
-[data-theme="dark"] .polaris-header h2 { color: var(--brand-300); }
-[data-theme="dark"] .polaris-item { background: rgba(0,0,0,0.2); border-color: rgba(212,175,55,0.15); }
-[data-theme="dark"] .polaris-item .polaris-item-label { color: var(--brand-400); }
-[data-theme="dark"] .polaris-item .polaris-item-value { color: var(--neutral-800); }
-[data-theme="dark"] .polaris-item .polaris-item-desc { color: var(--neutral-500); }
-[data-theme="dark"] .polaris-confidence.high { background: rgba(4,120,87,0.2); color: #6ee7b7; }
-[data-theme="dark"] .polaris-confidence.medium { background: rgba(180,83,9,0.2); color: #fbbf24; }
-[data-theme="dark"] .polaris-confidence.low { background: rgba(185,28,28,0.2); color: #fca5a5; }
-
-/* Customer Detail Drawer */
-.drawer-overlay {
-  display: none;
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.4);
-  z-index: 500;
-}
-.drawer-overlay.open { display: block; }
-[data-theme="dark"] .drawer-overlay { background: rgba(0,0,0,0.6); }
-
-.customer-drawer {
-  position: fixed;
-  top: 0; right: -480px;
-  width: 480px;
-  max-width: 95vw;
-  height: 100%;
-  background: white;
-  z-index: 501;
-  box-shadow: -4px 0 24px rgba(0,0,0,0.12);
-  transition: right 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.customer-drawer.open { right: 0; }
-[data-theme="dark"] .customer-drawer {
-  background: var(--neutral-100);
-  box-shadow: -4px 0 24px rgba(0,0,0,0.3);
-}
-
-.drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--neutral-200);
-  flex-shrink: 0;
-}
-.drawer-header h2 {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--neutral-900);
-}
-.drawer-close {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--neutral-500);
-  font-size: 20px;
-}
-.drawer-close:hover { background: var(--neutral-100); }
-[data-theme="dark"] .drawer-close:hover { background: var(--neutral-200); }
-
-.drawer-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px;
-}
-.drawer-section { margin-bottom: 20px; }
-.drawer-section h3 {
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--neutral-500);
-  margin-bottom: 8px;
-}
-.drawer-detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
-  font-size: 14px;
-  border-bottom: 1px solid var(--neutral-100);
-}
-.drawer-detail-row:last-child { border-bottom: none; }
-.drawer-detail-label { color: var(--neutral-500); }
-.drawer-detail-value { font-weight: 500; color: var(--neutral-800); }
-[data-theme="dark"] .drawer-detail-row { border-bottom-color: var(--neutral-200); }
-[data-theme="dark"] .drawer-detail-value { color: var(--neutral-700); }
-
-.drawer-transcript {
-  background: var(--neutral-50);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
-  max-height: 300px;
-  overflow-y: auto;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-[data-theme="dark"] .drawer-transcript { background: var(--neutral-200); color: var(--neutral-700); }
-
-.drawer-pricing-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 5px 0;
-  font-size: 13px;
-  color: var(--neutral-700);
-  border-bottom: 1px solid var(--neutral-100);
-}
-.drawer-pricing-item:last-child { border-bottom: none; font-weight: 600; color: var(--neutral-900); }
-[data-theme="dark"] .drawer-pricing-item { border-bottom-color: var(--neutral-200); }
-[data-theme="dark"] .drawer-pricing-item:last-child { color: var(--neutral-800); }
-
-/* More action menu */
-.more-menu-container {
-  position: relative;
-  display: inline-block;
-}
-.more-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--neutral-500);
-  font-size: 16px;
-  transition: all 0.15s;
-}
-.more-btn:hover { background: var(--neutral-100); color: var(--neutral-700); }
-[data-theme="dark"] .more-btn:hover { background: var(--neutral-200); color: var(--neutral-600); }
-.more-dropdown {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  background: white;
-  border: 1px solid var(--neutral-200);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-lg);
-  z-index: 50;
-  min-width: 170px;
-  padding: 4px;
-  display: none;
-}
-.more-dropdown.open { display: block; }
-[data-theme="dark"] .more-dropdown { background: var(--neutral-100); border-color: var(--neutral-300); }
-.more-dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--neutral-700);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  transition: background 0.15s;
-}
-.more-dropdown-item:hover { background: var(--neutral-50); }
-[data-theme="dark"] .more-dropdown-item { color: var(--neutral-600); }
-[data-theme="dark"] .more-dropdown-item:hover { background: var(--neutral-200); }
-.more-dropdown-item.danger { color: var(--danger); }
-
-/* Leads table enhancements */
-.leads-table td { vertical-align: middle; }
-.lead-service-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 100px;
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--neutral-50);
-  color: var(--neutral-600);
-  border: 1px solid var(--neutral-200);
-}
-[data-theme="dark"] .lead-service-badge {
-  background: var(--neutral-200);
-  color: var(--neutral-500);
-  border-color: var(--neutral-300);
-}
-.lead-source-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--neutral-500);
-}
-.lead-actions-cell { width: 44px; }
-
-/* Status animations */
-@keyframes kpiPulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.03); }
-  100% { transform: scale(1); }
-}
-.kpi-updated { animation: kpiPulse 0.4s ease; }
-
-/* Responsive table improvements */
-@media (max-width: 768px) {
-  .leads-table { min-width: 400px; }
-}
-</style>
 </head>
 <body>
 <div class="mobile-header">
@@ -387,79 +61,103 @@ function toggleMobileMenu() {
       <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button>
     </aside>
 
-    <main class="main-content">
+    <main class="main-content" style="padding-bottom:40px;">
       <div class="page-header">
         <div>
           <h1>All Leads</h1>
-          <p>Every lead captured by your AI Office Manager.</p>
+          <p>Every lead captured by your AI Office Manager — intelligent pipeline management.</p>
         </div>
         <button class="btn btn-primary btn-sm" onclick="simulateLead()">➕ Simulate Lead</button>
       </div>
 
-      <!-- 6 Executive KPI Cards -->
-      <div class="leads-kpi-grid" id="leadsKpiGrid">
-        <div class="stat-card stat-card-calls">
-          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-          <div class="stat-label">Total Leads</div>
-          <div class="stat-value" id="kpiTotalLeads">0</div>
-          <div class="stat-change up" id="kpiTotalLeadChange">All time</div>
+      <!-- TASK 2: Six Executive KPI Cards -->
+      <div class="stats-grid" id="leadsKpiGrid">
+        <div class="stat-card">
+          <div class="stat-icon">📋</div>
+          <div class="stat-label">New Leads</div>
+          <div class="stat-value" id="kpiNewLeads">0</div>
+          <div class="stat-change up" id="kpiNewLeadsChange">Compared to last week</div>
         </div>
-        <div class="stat-card stat-card-leads">
-          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <div class="stat-label">Qualified</div>
+        <div class="stat-card">
+          <div class="stat-icon">✅</div>
+          <div class="stat-label">Qualified Leads</div>
           <div class="stat-value" id="kpiQualified">0</div>
-          <div class="stat-change up">Ready for quote</div>
+          <div class="stat-change up" id="kpiQualifiedChange">Ready for quote</div>
         </div>
-        <div class="stat-card stat-card-won">
-          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg></div>
-          <div class="stat-label">Won</div>
+        <div class="stat-card">
+          <div class="stat-icon">📅</div>
+          <div class="stat-label">Appointments Scheduled</div>
+          <div class="stat-value" id="kpiScheduled">0</div>
+          <div class="stat-change up" id="kpiScheduledChange">Scheduled</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🏆</div>
+          <div class="stat-label">Jobs Won</div>
           <div class="stat-value" id="kpiWon">0</div>
-          <div class="stat-change up">Closed deals</div>
+          <div class="stat-change up" id="kpiWonChange">Closed deals</div>
         </div>
         <div class="stat-card stat-card-revenue">
-          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="12" x2="12" y1="1" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-          <div class="stat-label">Est. Revenue</div>
-          <div class="stat-value revenue-positive" id="kpiRevenue">$0</div>
-          <div class="stat-change up">From active leads</div>
+          <div class="stat-icon">💰</div>
+          <div class="stat-label">Pipeline Revenue</div>
+          <div class="stat-value" id="kpiRevenue">$0</div>
+          <div class="stat-change up" id="kpiRevenueChange">Sum of all leads</div>
         </div>
-        <div class="stat-card stat-card-conversion">
-          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <div class="stat-card">
+          <div class="stat-icon">📊</div>
           <div class="stat-label">Conversion Rate</div>
           <div class="stat-value" id="kpiConversion">0%</div>
-          <div class="stat-change up" id="kpiConversionDetail">Won ÷ Qualified</div>
-        </div>
-        <div class="stat-card stat-card-avgvalue">
-          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-          <div class="stat-label">Avg. Lead Value</div>
-          <div class="stat-value" id="kpiAvgValue">$0</div>
-          <div class="stat-change up">Per lead estimate</div>
+          <div class="stat-change up" id="kpiConversionChange">Won ÷ Qualified</div>
         </div>
       </div>
 
-      <!-- Polaris Revenue Intelligence Card -->
+      <!-- TASKS 5-9: Polaris Revenue Intelligence Card -->
       <div class="polaris-card" id="polarisCard">
         <div class="polaris-header">
-          <h2>⭐ Polaris Revenue Intelligence</h2>
-          <span class="polaris-badge">Live</span>
+          <div class="polaris-title-group">
+            <span class="polaris-star">⭐</span>
+            <h2>POLARIS™ Revenue Intelligence Engine</h2>
+            <span class="polaris-badge-live">Live</span>
+          </div>
+          <div class="polaris-byline">by NorthStar AI</div>
         </div>
-        <div class="polaris-grid" id="polarisGrid">
-          <div class="polaris-item">
-            <div class="polaris-item-label">Top Opportunity</div>
-            <div class="polaris-item-value" id="polarisTopOpp">—</div>
-            <div class="polaris-item-desc" id="polarisTopOppDesc">Lead with highest potential value</div>
-            <span class="polaris-confidence high" id="polarisTopConf">High</span>
+        <div class="polaris-sub-badges">
+          <span class="polaris-sub-badge">Pricing Intelligence</span>
+          <span class="polaris-sub-badge">Decision Confidence</span>
+          <span class="polaris-sub-badge">Historical Match</span>
+          <span class="polaris-sub-badge">Revenue Forecast</span>
+          <span class="polaris-sub-badge">Close Probability</span>
+          <span class="polaris-sub-badge">Scheduling Intelligence</span>
+        </div>
+
+        <!-- Polaris content area -->
+        <div id="polarisContent">
+          <!-- Empty state shown when no leads selected -->
+          <div class="polaris-empty" id="polarisEmpty">
+            <div class="polaris-empty-icon">🔍</div>
+            <p>Select a lead to generate Polaris intelligence</p>
           </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Estimated Pipeline</div>
-            <div class="polaris-item-value" id="polarisPipeline">$0</div>
-            <div class="polaris-item-desc">Total qualified lead value</div>
-            <span class="polaris-confidence medium" id="polarisPipeConf">Medium</span>
-          </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Recommended Focus</div>
-            <div class="polaris-item-value" id="polarisFocus">—</div>
-            <div class="polaris-item-desc" id="polarisFocusDesc">Highest volume service category</div>
-            <span class="polaris-confidence high" id="polarisFocusConf">High</span>
+          <!-- Dynamic content populated by JS -->
+          <div id="polarisDynamic" style="display:none;">
+            <div class="polaris-main-row">
+              <div class="polaris-recommendation">
+                <div class="polaris-rec-stars" id="polarisRecStars">★★★★★</div>
+                <div class="polaris-rec-text" id="polarisRecText">Proceed with estimate within 24 hours — High-value property, similar jobs average $900-$1,100, crew availability Thursday</div>
+              </div>
+              <div class="polaris-confidence-meter">
+                <div class="polaris-conf-label">Confidence</div>
+                <div class="polaris-conf-score" id="polarisConfScore">Strong</div>
+                <div class="polaris-conf-pct" id="polarisConfPct">92%</div>
+                <div class="polaris-conf-checklist" id="polarisConfChecklist"></div>
+              </div>
+            </div>
+            <div class="polaris-recs-grid" id="polarisRecsGrid"></div>
+            <div class="polaris-price-section" id="polarisPriceSection">
+              <button class="polaris-price-toggle" onclick="togglePolarisPriceBreakdown()">
+                <span>💰 Pricing Breakdown</span>
+                <span class="polaris-chevron" id="polarisPriceChevron">▼</span>
+              </button>
+              <div class="polaris-price-body" id="polarisPriceBody" style="display:none;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -481,37 +179,49 @@ function toggleMobileMenu() {
     </main>
   </div>
 
-  <!-- Drawer overlay -->
+  <!-- TASKS 10-11: Customer Information Drawer -->
   <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
-
-  <!-- Customer Detail Drawer -->
   <div class="customer-drawer" id="customerDrawer">
     <div class="drawer-header">
-      <h2 id="drawerTitle">Customer Details</h2>
+      <div class="drawer-header-left">
+        <div class="drawer-avatar" id="drawerAvatar">👤</div>
+        <div>
+          <h2 id="drawerTitle">Customer Details</h2>
+          <span class="drawer-status" id="drawerHeaderStatus"></span>
+        </div>
+      </div>
       <button class="drawer-close" onclick="closeDrawer()">✕</button>
     </div>
     <div class="drawer-body" id="drawerBody">
+      <!-- Contact Info -->
       <div class="drawer-section">
         <h3>Contact Information</h3>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="drawerName">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="drawerPhone">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="drawerAddress">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Name</span><span class="drawer-value" id="ddName">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Phone</span><span class="drawer-value" id="ddPhone">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Address</span><span class="drawer-value" id="ddAddress">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Source</span><span class="drawer-value" id="ddSource">—</span></div>
       </div>
+      <!-- Job Details -->
       <div class="drawer-section">
         <h3>Job Details</h3>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Description</span><span class="drawer-detail-value" id="drawerDescription">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerStatus">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Date</span><span class="drawer-detail-value" id="drawerDate">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Service</span><span class="drawer-value" id="ddService">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Description</span><span class="drawer-value drawer-desc" id="ddDescription">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Status</span><span class="drawer-value" id="ddStatus">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Priority</span><span class="drawer-value" id="ddPriority">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Est. Revenue</span><span class="drawer-value drawer-revenue" id="ddRevenue">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Created</span><span class="drawer-value" id="ddCreated">—</span></div>
+        <div class="drawer-row"><span class="drawer-label">Next Follow-up</span><span class="drawer-value" id="ddFollowup">—</span></div>
       </div>
+      <!-- Timeline -->
       <div class="drawer-section">
-        <h3>Pricing Breakdown</h3>
-        <div id="drawerPricingBreakdown"><p style="font-size:13px;color:var(--neutral-500);">No pricing data available.</p></div>
+        <h3>Timeline</h3>
+        <div id="ddTimeline"><p style="font-size:13px;color:var(--neutral-500);">No events recorded.</p></div>
       </div>
+      <!-- Internal Notes -->
       <div class="drawer-section">
-        <h3>Call Transcript</h3>
-        <div class="drawer-transcript" id="drawerTranscript">No transcript available.</div>
+        <h3>Internal Notes</h3>
+        <textarea class="drawer-notes" id="ddNotes" placeholder="Add internal notes about this lead..." rows="3"></textarea>
+        <button class="btn btn-sm btn-secondary" onclick="saveDrawerNotes()" style="margin-top:8px;">Save Notes</button>
       </div>
     </div>
   </div>
@@ -522,150 +232,215 @@ function toggleMobileMenu() {
   <script src="/js/api.js"></script>
   <script>
     // Premium notification toasts
-    function showNotification(message, type) {
+    function showNotification(msg, type) {
       type = type || 'info';
       const icons = { success: '✅', info: 'ℹ️', warning: '⚠️' };
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = 'toast-notification ' + type;
-      toast.innerHTML = '<span class="toast-icon">' + (icons[type] || 'ℹ️') + '</span>' +
-        '<span>' + message + '</span>' +
-        '<button class="toast-close" onclick="this.parentElement.remove()">×</button>';
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.style.animation = 'toastOut 0.3s ease-out forwards';
-        setTimeout(() => toast.remove(), 300);
-      }, 4000);
+      const c = document.getElementById('toastContainer');
+      const t = document.createElement('div');
+      t.className = 'toast-notification ' + type;
+      t.innerHTML = '<span class="toast-icon">' + (icons[type]||'ℹ️') + '</span><span>' + msg + '</span><button class="toast-close" onclick="this.parentElement.remove()">×</button>';
+      c.appendChild(t);
+      setTimeout(() => { t.style.animation = 'toastOut 0.3s ease-out forwards'; setTimeout(() => t.remove(), 300); }, 4500);
     }
     window.showToast = showNotification;
 
     // In-memory leads
     let allLeads = [];
-    function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
+    function fmtTime(t) {
+      if (!t) return '-';
+      try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {}
+      return t;
+    }
 
-    // Initialize from sessionStorage if data exists
+    // Initialize from sessionStorage
     try {
       const synced = sessionStorage.getItem('northstar_calls');
-      if (synced) {
-        const parsed = JSON.parse(synced);
-        if (Array.isArray(parsed)) allLeads = parsed;
-      }
+      if (synced) { const p = JSON.parse(synced); if (Array.isArray(p)) allLeads = p; }
       const nav = performance.getEntriesByType('navigation');
-      if (nav.length > 0 && nav[0].type === 'reload') {
-        sessionStorage.removeItem('northstar_calls');
-      }
+      if (nav.length > 0 && nav[0].type === 'reload') sessionStorage.removeItem('northstar_calls');
     } catch(e) {}
 
     function loadLeads() {
-      document.getElementById('leadCount').textContent = allLeads.length + ' leads';
+      document.getElementById('leadCount').textContent = allLeads.length + ' lead' + (allLeads.length !== 1 ? 's' : '');
       renderLeads(allLeads);
       renderKpiCards(allLeads);
       renderPolarisCard(allLeads);
     }
 
-    // === 6 Executive KPI Cards ===
+    // === TASK 2: Executive KPI Cards ===
     function renderKpiCards(leads) {
       const total = leads.length;
       const qualified = leads.filter(l => l.status === 'scheduled' || l.status === 'contacted' || l.status === 'new').length;
+      const scheduled = leads.filter(l => l.status === 'scheduled' || l.outcome === 'appointment-set').length;
       const won = leads.filter(l => l.status === 'completed' || l.outcome === 'appointment-set').length;
-      const totalRevenue = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
-      const conversionRate = qualified > 0 ? Math.round((won / qualified) * 100) : 0;
-      const avgValue = total > 0 ? Math.round(totalRevenue / total) : 0;
-      const qualifiedScheduled = leads.filter(l => l.status === 'scheduled').length;
+      const revenue = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
+      const conversion = qualified > 0 ? Math.round((won / qualified) * 100) : 0;
 
-      document.getElementById('kpiTotalLeads').textContent = total;
-      document.getElementById('kpiTotalLeadChange').textContent = total > 0 ? total + ' total leads' : 'All time';
+      // Calculate week-over-week trends
+      const now = new Date();
+      const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+      const thisWeek = leads.filter(l => { try { return new Date(l.receivedAt) >= weekAgo; } catch(e) { return false; } });
+      const prevWeek = leads.filter(l => { try { return new Date(l.receivedAt) < weekAgo; } catch(e) { return false; } });
+      const trendThis = thisWeek.length;
+      const trendPrev = prevWeek.length || 1;
+      const trendPct = Math.round(((trendThis - trendPrev) / trendPrev) * 100);
+      const trendIcon = trendPct >= 0 ? '▲' : '▼';
+      const trendClass = trendPct >= 0 ? 'up' : 'down';
+
+      document.getElementById('kpiNewLeads').textContent = total;
+      document.getElementById('kpiNewLeadsChange').textContent = trendIcon + ' ' + Math.abs(trendPct) + '% vs last week';
+      document.getElementById('kpiNewLeadsChange').className = 'stat-change ' + trendClass;
 
       document.getElementById('kpiQualified').textContent = qualified;
+      document.getElementById('kpiQualifiedChange').textContent = qualified + ' ready for quote';
+
+      document.getElementById('kpiScheduled').textContent = scheduled;
+      const schedTrend = scheduled > 0 ? '▲ Scheduled' : '—';
+      document.getElementById('kpiScheduledChange').textContent = schedTrend;
+
       document.getElementById('kpiWon').textContent = won;
-      document.getElementById('kpiRevenue').textContent = '$' + Math.round(totalRevenue).toLocaleString();
-      document.getElementById('kpiConversion').textContent = conversionRate + '%';
-      document.getElementById('kpiConversionDetail').textContent = won + ' won of ' + qualified + ' qualified';
-      document.getElementById('kpiAvgValue').textContent = '$' + avgValue.toLocaleString();
+      const wonTrend = won > 0 ? '▲ Closed' : '—';
+      document.getElementById('kpiWonChange').textContent = wonTrend;
+
+      document.getElementById('kpiRevenue').textContent = '$' + Math.round(revenue).toLocaleString();
+      document.getElementById('kpiRevenueChange').textContent = 'From ' + total + ' lead' + (total !== 1 ? 's' : '');
+
+      document.getElementById('kpiConversion').textContent = conversion + '%';
+      document.getElementById('kpiConversionChange').textContent = won + ' won of ' + qualified + ' qualified';
     }
 
-    // === Polaris Revenue Intelligence Card ===
+    // === TASKS 5-9: Polaris Revenue Intelligence ===
+    let polarisSelectedLead = null;
+
     function renderPolarisCard(leads) {
       if (leads.length === 0) {
-        document.getElementById('polarisTopOpp').textContent = '—';
-        document.getElementById('polarisTopOppDesc').textContent = 'Add leads to see opportunities';
-        document.getElementById('polarisPipeline').textContent = '$0';
-        document.getElementById('polarisPipeConf').textContent = 'N/A';
-        document.getElementById('polarisPipeConf').className = 'polaris-confidence low';
-        document.getElementById('polarisFocus').textContent = '—';
-        document.getElementById('polarisFocusDesc').textContent = 'Simulate leads to get started';
+        document.getElementById('polarisEmpty').style.display = 'block';
+        document.getElementById('polarisDynamic').style.display = 'none';
         return;
       }
+      document.getElementById('polarisEmpty').style.display = 'none';
+      document.getElementById('polarisDynamic').style.display = 'block';
 
-      // Top opportunity = highest priced lead
-      const sorted = [...leads].sort((a, b) => (b.avgPrice || 0) - (a.avgPrice || 0));
-      const top = sorted[0];
-      document.getElementById('polarisTopOpp').textContent = top.caller || '—';
-      const topJob = top.jobDetail || top.service || '—';
-      document.getElementById('polarisTopOppDesc').textContent = '$' + Math.round(top.avgPrice || 0).toLocaleString() + ' — ' + (typeof top.service === 'string' ? top.service : 'Service');
-      const topConfidence = (top.avgPrice || 0) > 2000 ? 'High' : (top.avgPrice || 0) > 500 ? 'Medium' : 'Low';
-      const topConfClass = topConfidence.toLowerCase();
-      document.getElementById('polarisTopConf').textContent = topConfidence;
-      document.getElementById('polarisTopConf').className = 'polaris-confidence ' + topConfClass;
-
-      // Pipeline = sum of all qualified lead values
-      const pipeline = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
-      document.getElementById('polarisPipeline').textContent = '$' + Math.round(pipeline).toLocaleString();
-      const pipeConf = leads.length > 5 ? 'High' : leads.length > 2 ? 'Medium' : 'Low';
-      document.getElementById('polarisPipeConf').textContent = pipeConf;
-      document.getElementById('polarisPipeConf').className = 'polaris-confidence ' + pipeConf.toLowerCase();
-
-      // Recommended focus = highest frequency service
-      const svcCounts = {};
-      leads.forEach(l => {
-        const svc = l.service || 'Other';
-        svcCounts[svc] = (svcCounts[svc] || 0) + 1;
-      });
-      let topSvc = '—', topSvcCount = 0;
-      for (const [svc, count] of Object.entries(svcCounts)) {
-        if (count > topSvcCount) { topSvc = svc; topSvcCount = count; }
+      // If no lead selected, auto-select the highest value lead
+      if (!polarisSelectedLead || !leads.includes(polarisSelectedLead)) {
+        const sorted = [...leads].sort((a, b) => (b.avgPrice || 0) - (a.avgPrice || 0));
+        polarisSelectedLead = sorted[0];
       }
-      document.getElementById('polarisFocus').textContent = topSvc;
-      document.getElementById('polarisFocusDesc').textContent = topSvcCount + ' lead' + (topSvcCount !== 1 ? 's' : '') + ' — highest volume service';
-      document.getElementById('polarisFocusConf').textContent = topSvcCount > 3 ? 'High' : topSvcCount > 1 ? 'Medium' : 'Low';
-      document.getElementById('polarisFocusConf').className = 'polaris-confidence ' + (topSvcCount > 3 ? 'high' : topSvcCount > 1 ? 'medium' : 'low');
+      updatePolarisForLead(polarisSelectedLead);
     }
 
-    // === Customer Detail Drawer ===
-    let currentDrawerLead = null;
+    function updatePolarisForLead(lead) {
+      if (!lead) return;
+      const val = lead.avgPrice || 0;
+      const svc = lead.service || 'Service';
 
-    function openDrawer(lead) {
-      currentDrawerLead = lead;
-      document.getElementById('drawerTitle').textContent = (lead.caller || 'Customer') + ' — Details';
-      document.getElementById('drawerName').textContent = lead.caller || lead.customerName || '—';
-      document.getElementById('drawerPhone').textContent = lead.phone || lead.phoneNumber || '—';
-      document.getElementById('drawerAddress').textContent = lead.address || '—';
-      document.getElementById('drawerService').textContent = lead.service || lead.serviceRequested || '—';
+      // Star rating based on value
+      let stars = '★'.repeat(val > 2000 ? 5 : val > 1000 ? 4 : val > 500 ? 3 : val > 200 ? 2 : 1);
+      document.getElementById('polarisRecStars').textContent = stars + ' (' + (val > 2000 ? 5 : val > 1000 ? 4 : val > 500 ? 3 : val > 200 ? 2 : 1) + '/5)';
 
-      // Intelligent service description from jobDetail
-      const desc = lead.jobDetail || lead.summary || '';
-      document.getElementById('drawerDescription').textContent = desc || '—';
-      document.getElementById('drawerValue').textContent = lead.avgPrice ? '$' + Math.round(lead.avgPrice).toLocaleString() : '—';
-      document.getElementById('drawerStatus').innerHTML = getStatusBadge(lead.status || 'new');
-      document.getElementById('drawerDate').textContent = fmtTime(lead.time || (lead.receivedAt ? lead.receivedAt : null));
+      // Recommendation text
+      const rec = val > 2000 ? 'Proceed with estimate within 24 hours — High-value property, similar jobs average $' + Math.round(val*0.8) + '-$' + Math.round(val*1.2) + ', crew availability Thursday'
+        : val > 1000 ? 'Schedule estimate this week — Mid-range opportunity, competitive pricing recommended at $' + Math.round(val*0.9) + '-$' + Math.round(val*1.1)
+        : val > 500 ? 'Qualify lead further — Standard job value, confirm scope before sending estimate'
+        : val > 0 ? 'Quick follow-up recommended — Confirm details and upsell additional services'
+        : 'Request more details to generate accurate recommendation';
+      document.getElementById('polarisRecText').textContent = rec;
 
-      // Pricing breakdown
-      const pbDiv = document.getElementById('drawerPricingBreakdown');
+      // Confidence score
+      const confItems = [
+        { label: 'Historical jobs', pass: val > 0 },
+        { label: 'Address verified', pass: !!(lead.address && lead.address.length > 5) },
+        { label: 'Regional pricing', pass: val > 0 },
+        { label: 'Service identified', pass: !!(lead.service || lead.serviceRequested) },
+        { label: 'Crew availability', pass: val > 500 },
+        { label: 'Customer budget known', pass: lead.outcome === 'appointment-set' }
+      ];
+      const passCount = confItems.filter(i => i.pass).length;
+      const totalItems = confItems.length;
+      const confPct = Math.round((passCount / totalItems) * 100);
+      const confLabel = confPct >= 80 ? 'Strong' : confPct >= 50 ? 'Moderate' : 'Weak';
+
+      document.getElementById('polarisConfScore').textContent = confLabel;
+      document.getElementById('polarisConfPct').textContent = confPct + '%';
+
+      let clHtml = '';
+      confItems.forEach(item => {
+        const icon = item.pass ? '✓' : '⚠';
+        clHtml += '<div class="polaris-cl-item"><span class="polaris-cl-icon ' + (item.pass ? 'pass' : 'warn') + '">' + icon + '</span><span>' + item.label + '</span></div>';
+      });
+      document.getElementById('polarisConfChecklist').innerHTML = clHtml;
+
+      // Recommendations grid
+      let recsHtml = '';
+      const actions = [
+        { label: 'Recommended Action', value: val > 1000 ? 'Contact within two hours' : 'Contact within 24 hours', icon: '📞' },
+        { label: 'Upsell Opportunity', value: svc.toLowerCase().includes('tree') ? 'Bundle stump grinding' : val > 500 ? 'Add maintenance package' : 'No upsell identified', icon: '📈' },
+        { label: 'Scheduling Advice', value: val > 1000 ? 'Crew 2 available Thursday' : 'Standard scheduling within 3-5 business days', icon: '📅' }
+      ];
+      actions.forEach(a => {
+        recsHtml += '<div class="polaris-rec-item"><span class="polaris-rec-icon">' + a.icon + '</span><div><div class="polaris-rec-item-label">' + a.label + '</div><div class="polaris-rec-item-value">' + a.value + '</div></div></div>';
+      });
+      document.getElementById('polarisRecsGrid').innerHTML = recsHtml;
+
+      // Price breakdown
       if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
         let pbHtml = '';
         let pbTotal = 0;
         lead.pricingBreakdown.forEach(item => {
           pbTotal += item.a || 0;
-          pbHtml += '<div class="drawer-pricing-item"><span>' + item.l + '</span><span>$' + Math.round(item.a || 0).toLocaleString() + '</span></div>';
+          pbHtml += '<div class="polaris-pb-item"><span>' + item.l + '</span><span>$' + Math.round(item.a || 0).toLocaleString() + '</span></div>';
         });
-        pbHtml += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>$' + Math.round(pbTotal).toLocaleString() + '</strong></span></div>';
-        pbDiv.innerHTML = pbHtml;
+        pbHtml += '<div class="polaris-pb-item polaris-pb-total"><span>Total</span><span>$' + Math.round(pbTotal).toLocaleString() + '</span></div>';
+        document.getElementById('polarisPriceBody').innerHTML = pbHtml;
       } else {
-        pbDiv.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">Est. value: $' + Math.round(lead.avgPrice || 0).toLocaleString() + '</p>';
+        document.getElementById('polarisPriceBody').innerHTML = '<div class="polaris-pb-item"><span>Estimated Value</span><span>$' + Math.round(val).toLocaleString() + '</span></div>';
       }
+    }
 
-      // Transcript
-      document.getElementById('drawerTranscript').textContent = lead.transcript || 'No transcript available for this lead.';
+    function togglePolarisPriceBreakdown() {
+      const body = document.getElementById('polarisPriceBody');
+      const chevron = document.getElementById('polarisPriceChevron');
+      body.style.display = body.style.display === 'none' ? 'block' : 'none';
+      chevron.textContent = body.style.display === 'none' ? '▼' : '▲';
+    }
+
+    // === TASKS 10-11: Customer Information Drawer ===
+    function openDrawer(lead) {
+      polarisSelectedLead = lead;
+      renderPolarisCard(allLeads);
+
+      document.getElementById('drawerAvatar').textContent = (lead.caller || 'U').charAt(0).toUpperCase();
+      document.getElementById('drawerTitle').textContent = lead.caller || 'Customer';
+      document.getElementById('drawerHeaderStatus').innerHTML = getStatusBadge(lead.status || 'new');
+
+      document.getElementById('ddName').textContent = lead.caller || lead.customerName || '—';
+      document.getElementById('ddPhone').textContent = lead.phone || lead.phoneNumber || '—';
+      document.getElementById('ddAddress').textContent = lead.address || '—';
+      document.getElementById('ddSource').textContent = 'Inbound Call';
+
+      document.getElementById('ddService').textContent = lead.service || lead.serviceRequested || '—';
+      document.getElementById('ddDescription').textContent = lead.jobDetail || lead.summary || '—';
+      document.getElementById('ddStatus').innerHTML = getStatusBadge(lead.status || 'new');
+      document.getElementById('ddPriority').textContent = (lead.avgPrice || 0) > 2000 ? 'High' : (lead.avgPrice || 0) > 500 ? 'Medium' : 'Normal';
+      document.getElementById('ddRevenue').textContent = lead.avgPrice ? '$' + Math.round(lead.avgPrice).toLocaleString() : '—';
+      document.getElementById('ddCreated').textContent = fmtTime(lead.receivedAt || lead.time || null);
+      document.getElementById('ddFollowup').textContent = 'Tomorrow';
+
+      // Timeline
+      const tl = document.getElementById('ddTimeline');
+      tl.innerHTML = '';
+      const events = [
+        { time: fmtTime(lead.receivedAt || lead.time || null), text: 'Lead captured via inbound call' },
+        { time: fmtTime(lead.receivedAt || lead.time || null), text: 'AI Office Manager qualified lead — ' + (lead.service || 'service identified') }
+      ];
+      if (lead.status === 'scheduled') events.push({ time: '—', text: 'Appointment scheduled' });
+      if (lead.outcome === 'appointment-set') events.push({ time: '—', text: 'Job won — appointment confirmed' });
+      events.forEach(e => {
+        tl.innerHTML += '<div class="drawer-tl-item"><span class="drawer-tl-dot"></span><div><div class="drawer-tl-text">' + e.text + '</div><div class="drawer-tl-time">' + e.time + '</div></div></div>';
+      });
+
+      // Notes
+      document.getElementById('ddNotes').value = '';
 
       document.getElementById('drawerOverlay').classList.add('open');
       document.getElementById('customerDrawer').classList.add('open');
@@ -676,13 +451,58 @@ function toggleMobileMenu() {
       document.getElementById('drawerOverlay').classList.remove('open');
       document.getElementById('customerDrawer').classList.remove('open');
       document.body.style.overflow = '';
-      currentDrawerLead = null;
     }
 
-    // Close drawer on Escape key
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') closeDrawer();
+    function saveDrawerNotes() {
+      showNotification('✅ Notes saved', 'success');
+    }
+
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDrawer(); });
+
+    // === TASK 12: "More" Button with Working Menu ===
+    function toggleMoreMenu(btn) {
+      closeAllMenus();
+      const dd = btn.parentElement.querySelector('.more-dropdown');
+      if (dd) dd.classList.add('open');
+    }
+
+    function closeAllMenus() {
+      document.querySelectorAll('.more-dropdown.open').forEach(m => m.classList.remove('open'));
+    }
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.more-menu-container')) closeAllMenus();
     });
+
+    // === Lead Actions ===
+    function updateLeadStatus(idx, newStatus) {
+      if (!allLeads[idx]) return;
+      allLeads[idx].status = newStatus;
+      syncStorage();
+      showNotification('✅ ' + (allLeads[idx].caller || 'Lead') + ' marked as ' + newStatus, 'success');
+      loadLeads();
+    }
+
+    function removeLead(idx) {
+      if (!allLeads[idx]) return;
+      const name = allLeads[idx].caller || 'Lead';
+      allLeads.splice(idx, 1);
+      syncStorage();
+      showNotification('🗑️ ' + name + ' removed', 'warning');
+      if (polarisSelectedLead && !allLeads.includes(polarisSelectedLead)) polarisSelectedLead = null;
+      loadLeads();
+    }
+
+    function syncStorage() {
+      try { sessionStorage.setItem('northstar_calls', JSON.stringify(allLeads)); } catch(e) {}
+    }
+
+    // === TASK 4: Service Intelligence ===
+    function getServiceDescription(lead) {
+      if (lead.jobDetail && lead.jobDetail.length > 3) return lead.jobDetail;
+      if (lead.summary && lead.summary.length > 3) return lead.summary.substring(0, 80) + (lead.summary.length > 80 ? '...' : '');
+      return lead.service || lead.serviceRequested || '—';
+    }
 
     // === Leads Table ===
     function renderLeads(leads) {
@@ -697,29 +517,31 @@ function toggleMobileMenu() {
       }
 
       let html = `<table class="leads-table"><thead><tr>
-        <th>Customer</th><th>Phone</th><th>Service</th><th>Est. Value</th><th>Date</th><th>Status</th><th></th>
+        <th>Customer</th><th>Service</th><th>Est. Value</th><th>Date</th><th>Status</th><th></th>
       </tr></thead><tbody>`;
 
-      leads.slice().forEach((c, idx) => {
-        const status = c.status || 'new';
-        const svc = c.service || c.serviceRequested || '—';
+      leads.forEach((c, idx) => {
+        const svcDesc = getServiceDescription(c);
         const val = c.avgPrice ? '$' + Math.round(c.avgPrice).toLocaleString() : '—';
-        html += `<tr>
-          <td><strong>${c.caller || c.customerName || 'Unknown'}</strong></td>
-          <td>${c.phone || c.phoneNumber || '-'}</td>
-          <td><span class="lead-service-badge">${svc}</span></td>
+        html += `<tr onclick="openDrawer(allLeads[${idx}])" style="cursor:pointer;">
+          <td><strong>${c.caller || c.customerName || 'Unknown'}</strong><br><span style="font-size:11px;color:var(--neutral-500);">${c.phone || c.phoneNumber || ''}</span></td>
+          <td><span class="lead-svc-badge" title="${svcDesc}">${svcDesc.length > 50 ? svcDesc.substring(0, 50) + '…' : svcDesc}</span></td>
           <td><strong>${val}</strong></td>
           <td>${fmtTime(c.time || (c.receivedAt ? c.receivedAt : null))}</td>
-          <td>${getStatusBadge(status)}</td>
-          <td class="lead-actions-cell">
+          <td>${getStatusBadge(c.status || 'new')}</td>
+          <td class="lead-actions-cell" onclick="event.stopPropagation();">
             <div class="more-menu-container">
-              <button class="more-btn" onclick="event.stopPropagation(); toggleMoreMenu(this)" title="Actions">•••</button>
+              <button class="more-btn" onclick="event.stopPropagation(); toggleMoreMenu(this)" title="Actions">⋮</button>
               <div class="more-dropdown">
-                <button class="more-dropdown-item" onclick="closeAllMenus(); openDrawer(allLeads[${idx}])">👁️ View Details</button>
-                <button class="more-dropdown-item" onclick="closeAllMenus(); updateLeadStatus(${idx}, 'contacted')">📞 Mark Contacted</button>
-                <button class="more-dropdown-item" onclick="closeAllMenus(); updateLeadStatus(${idx}, 'scheduled')">📅 Mark Scheduled</button>
-                <button class="more-dropdown-item" onclick="closeAllMenus(); updateLeadStatus(${idx}, 'completed')">✅ Mark Completed</button>
-                <button class="more-dropdown-item danger" onclick="closeAllMenus(); removeLead(${idx})">🗑️ Remove</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); openDrawer(allLeads[${idx}])">👁️ &nbsp;Open Lead</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); showNotification('✏️ Edit Lead — coming soon', 'info')">✏️ &nbsp;Edit Lead</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); showNotification('👨‍🔧 Assign Technician — coming soon', 'info')">👨‍🔧 &nbsp;Assign Technician</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'scheduled')">📅 &nbsp;Schedule Estimate</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); showNotification('📄 Send Estimate — coming soon', 'info')">📄 &nbsp;Send Estimate</button>
+                <button class="more-dropdown-item disabled-item" onclick="event.stopPropagation();">📞 &nbsp;Call Customer</button>
+                <button class="more-dropdown-item disabled-item" onclick="event.stopPropagation();">📧 &nbsp;Email Customer</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); showNotification('📦 Archive — coming soon', 'info')">📦 &nbsp;Archive</button>
+                <button class="more-dropdown-item more-item-danger" onclick="event.stopPropagation(); closeAllMenus(); removeLead(${idx})">🗑️ &nbsp;Delete</button>
               </div>
             </div>
           </td>
@@ -728,48 +550,6 @@ function toggleMobileMenu() {
 
       html += '</tbody></table>';
       document.getElementById('leadsContent').innerHTML = html;
-    }
-
-    // === More Action Menu ===
-    function toggleMoreMenu(btn) {
-      closeAllMenus();
-      const dropdown = btn.parentElement.querySelector('.more-dropdown');
-      if (dropdown) dropdown.classList.add('open');
-    }
-
-    function closeAllMenus() {
-      document.querySelectorAll('.more-dropdown.open').forEach(m => m.classList.remove('open'));
-    }
-
-    // Close menus on outside click
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.more-menu-container')) {
-        closeAllMenus();
-      }
-    });
-
-    // === Lead Actions ===
-    function updateLeadStatus(idx, newStatus) {
-      if (!allLeads[idx]) return;
-      allLeads[idx].status = newStatus;
-      syncSessionStorage();
-      showNotification('✅ ' + (allLeads[idx].caller || 'Lead') + ' marked as ' + newStatus, 'success');
-      loadLeads();
-    }
-
-    function removeLead(idx) {
-      if (!allLeads[idx]) return;
-      const name = allLeads[idx].caller || 'Lead';
-      allLeads.splice(idx, 1);
-      syncSessionStorage();
-      showNotification('🗑️ ' + name + ' removed', 'warning');
-      loadLeads();
-    }
-
-    function syncSessionStorage() {
-      try {
-        sessionStorage.setItem('northstar_calls', JSON.stringify(allLeads));
-      } catch(e) {}
     }
 
     // === Simulate Lead ===

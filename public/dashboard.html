@@ -486,7 +486,62 @@ function toggleMobileMenu() {
     // ═══════════════════════════════════════════════════════════════
     // Application State
     // ═══════════════════════════════════════════════════════════════
-    var user = JSON.parse(localStorage.getItem('user') || '{}');
+// ═══════════════════════════════════════════════════════════════
+    // SPA Routing — handle active nav, page title, coming soon
+    // ═══════════════════════════════════════════════════════════════
+    var currentPage = window.location.pathname.replace('/dashboard', '') || '/';
+    var pageTitles = {
+      '/': 'Dashboard',
+      '/leads': 'Leads',
+      '/calls': 'Call History',
+      '/my-number': 'My Number',
+      '/calendar': 'Calendar',
+      '/ai-settings': 'AI Settings',
+      '/business-profile': 'Business Profile',
+      '/settings': 'Settings',
+      '/integrations': 'Integrations'
+    };
+    var pageTitle = pageTitles[currentPage] || 'Dashboard';
+    document.title = pageTitle + ' — NorthStar AI';
+
+    // Highlight the correct nav link
+    document.querySelectorAll('.sidebar-nav a, .mobile-menu-nav a').forEach(function(link) {
+      link.classList.remove('active');
+      link.removeAttribute('aria-current');
+    });
+    var activeNavId = 'nav-' + (currentPage === '/' ? 'dashboard' : currentPage.replace('/', ''));
+    var activeLink = document.getElementById(activeNavId) || document.querySelector('.sidebar-nav a[href="/dashboard' + currentPage + '"], .mobile-menu-nav a[href="/dashboard' + currentPage + '"]');
+    if (activeLink) {
+      activeLink.classList.add('active');
+      activeLink.setAttribute('aria-current', 'page');
+    }
+
+    // Only show dashboard widgets on the main dashboard page
+    var isDashboard = currentPage === '/';
+    document.querySelectorAll('.ds-widget').forEach(function(w) { w.style.display = isDashboard ? '' : 'none'; });
+    document.querySelector('.page-header .btn-container') && (document.querySelector('.page-header .btn-container').style.display = isDashboard ? '' : 'none');
+
+    // Show placeholder content for non-dashboard pages
+    if (!isDashboard) {
+      var mainContent = document.getElementById('mainContent');
+      var placeholder = document.createElement('div');
+      placeholder.className = 'ds-card';
+      placeholder.style.textAlign = 'center';
+      placeholder.style.padding = '60px 24px';
+      placeholder.innerHTML = '<div style="font-size:48px;margin-bottom:16px;">🚧</div><h2 style="margin-bottom:8px;">' + pageTitle + '</h2><p style="color:var(--neutral-500);max-width:400px;margin:0 auto 24px;">This section is under development and will be available in an upcoming release.</p><a href="/dashboard" class="btn btn-primary">Back to Dashboard</a>';
+      document.querySelector('.ds-widget-area') ? document.querySelector('.ds-widget-area').appendChild(placeholder) : mainContent.appendChild(placeholder);
+    }
+
+    // Intercept nav link clicks for SPA routing (no full page reload)
+    document.addEventListener('click', function(e) {
+      var link = e.target.closest('a');
+      if (!link) return;
+      var href = link.getAttribute('href');
+      if (!href || !href.startsWith('/dashboard') || href.startsWith('http') || link.hasAttribute('download')) return;
+      e.preventDefault();
+      history.pushState(null, '', href);
+      window.location.reload();
+    });    var user = JSON.parse(localStorage.getItem('user') || '{}');
     if (user.name) {
       document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your business overview.`;
     }

@@ -1,43 +1,40 @@
-/* Theme Toggle — shared across all pages */
+/* NorthStar Theme Manager -- Global controller */
 (function() {
-  const STORAGE_KEY = 'northstar-theme';
-
+  "use strict";
+  var STORAGE_KEY = "northstar-theme";
+  var loaded = false;
   function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute("data-theme", theme);
   }
-
+  function updateToggleButtons(theme) {
+    var btns = document.querySelectorAll(".theme-toggle-btn");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].textContent = theme === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+      btns[i].setAttribute("aria-label", theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
+    }
+  }
   function toggleTheme() {
-    const current = document.documentElement.getAttribute('data-theme') || 'light';
-    const next = current === 'dark' ? 'light' : 'dark';
+    var current = document.documentElement.getAttribute("data-theme") || "light";
+    var next = current === "dark" ? "light" : "dark";
     applyTheme(next);
     try { localStorage.setItem(STORAGE_KEY, next); } catch(e) {}
-    document.querySelectorAll('.theme-toggle').forEach(btn => {
-      btn.textContent = next === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
-    });
+    updateToggleButtons(next);
   }
-
   function loadTheme() {
+    if (loaded) return;
+    loaded = true;
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === 'dark') {
-        applyTheme('dark');
-        document.querySelectorAll('.theme-toggle').forEach(btn => {
-          btn.textContent = '\u2600\uFE0F';
-        });
-      } else {
-        applyTheme('light');
-        document.querySelectorAll('.theme-toggle').forEach(btn => {
-          btn.textContent = '\uD83C\uDF19';
-        });
-      }
-    } catch(e) {}
+      var saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === "dark") { applyTheme("dark"); updateToggleButtons("dark"); }
+      else { applyTheme("light"); updateToggleButtons("light"); }
+    } catch(e) { applyTheme("light"); }
   }
-
-  window.NorthStarTheme = { toggleTheme, loadTheme, applyTheme };
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadTheme);
-  } else {
-    loadTheme();
-  }
+  window.NorthStarTheme = {
+    toggleTheme: toggleTheme,
+    loadTheme: loadTheme,
+    getTheme: function() { return document.documentElement.getAttribute("data-theme") || "light"; }
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", loadTheme);
+  } else { loadTheme(); }
 })();

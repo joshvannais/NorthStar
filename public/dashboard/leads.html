@@ -559,6 +559,11 @@ function toggleMobileMenu() {
 
   <div class="toast-container" id="toastContainer"></div>
 
+  <script src="/js/event-bus.js"></script>
+  <script src="/js/business-models.js"></script>
+  <script src="/js/app-store.js"></script>
+  <script src="/js/polaris-engine.js"></script>
+  <script src="/js/notification-service.js"></script>
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
   <script>
@@ -580,8 +585,10 @@ function toggleMobileMenu() {
     }
     window.showToast = showNotification;
 
-    // In-memory leads
-    let allLeads = [];
+    // In-memory leads — backed by the unified App Store (POLARIS-006).
+    // `allLeads` is a live reference to AppStore.state.leads, so existing
+    // read sites keep working and writes route through the store.
+    let allLeads = window.AppStore ? window.AppStore.getLeads() : [];
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
 
     // Initialize from sessionStorage if data exists
@@ -589,7 +596,10 @@ function toggleMobileMenu() {
       const synced = sessionStorage.getItem('northstar_calls');
       if (synced) {
         const parsed = JSON.parse(synced);
-        if (Array.isArray(parsed)) allLeads = parsed;
+        if (Array.isArray(parsed) && window.AppStore) {
+          // Hydrate the store from sessionStorage (old data shape → Lead model)
+          parsed.forEach(function (c) { try { window.AppStore.addLead(c); } catch (e) { /* skip */ } });
+        }
       }
       const nav = performance.getEntriesByType('navigation');
       if (nav.length > 0 && nav[0].type === 'reload') {
@@ -840,7 +850,11 @@ function toggleMobileMenu() {
     // === Lead Actions ===
     function updateLeadStatus(idx, newStatus) {
       if (!allLeads[idx]) return;
-      allLeads[idx].status = newStatus;
+      if (window.AppStore && typeof window.AppStore.updateLead === 'function') {
+        window.AppStore.updateLead(idx, { status: newStatus });
+      } else {
+        allLeads[idx].status = newStatus;
+      }
       syncSessionStorage();
       showNotification('✅ ' + (allLeads[idx].caller || 'Lead') + ' marked as ' + newStatus, 'success');
       loadLeads();
@@ -849,7 +863,11 @@ function toggleMobileMenu() {
     function removeLead(idx) {
       if (!allLeads[idx]) return;
       const name = allLeads[idx].caller || 'Lead';
-      allLeads.splice(idx, 1);
+      if (window.AppStore && typeof window.AppStore.removeLead === 'function') {
+        window.AppStore.removeLead(idx);
+      } else {
+        allLeads.splice(idx, 1);
+      }
       syncSessionStorage();
       showNotification('🗑️ ' + name + ' removed', 'warning');
       loadLeads();
@@ -864,8 +882,15 @@ function toggleMobileMenu() {
     // === Simulate Lead ===
     function simulateLead() {
       const c = genCall();
-      c.status = 'new';
-      allLeads.unshift(c);
+      // genCall() already routes through AppStore.addLead (POLARIS-006).
+      // New leads land at index 0 — promote their status from "answered"
+      // (default) to "new" so the leads CRM treats them as a fresh lead.
+      if (window.AppStore && typeof window.AppStore.updateLead === 'function') {
+        try { window.AppStore.updateLead(0, { status: 'new' }); } catch (e) { /* fallback below */ }
+      } else {
+        c.status = 'new';
+      }
+      // Mirror to sessionStorage for cross-page compat with older paths.
       try {
         const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
         existing.unshift(c);
@@ -873,6 +898,15 @@ function toggleMobileMenu() {
       } catch(e) {}
       showNotification("✅ New lead: " + c.caller + " (" + c.service + " — $" + Math.round(c.avgPrice).toLocaleString() + ")", "success");
       loadLeads();
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // POLARIS-006: Subscribe to the App Store so the table + KPIs + Polaris
+    // card refresh automatically whenever a lead is added/updated/removed
+    // from any code path.
+    // ════════════════════════════════════════════════════════════════════
+    if (window.AppStore && typeof window.AppStore.subscribe === 'function') {
+      window.AppStore.subscribe('store:changed', function () { try { loadLeads(); } catch (e) { /* non-fatal */ } });
     }
 
     // Initial load

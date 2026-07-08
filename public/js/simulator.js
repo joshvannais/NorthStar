@@ -1010,3 +1010,30 @@ function matchSearch(c,q){
 }
 function isToday(d){const t=new Date();return d.getDate()===t.getDate()&&d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear();}
 function isThisWeek(d){const t=new Date();const w=t.getTime()-t.getDay()*86400000;return d.getTime()>=w;}
+
+// ════════════════════════════════════════════════════════════════════════════
+// POLARIS-006: Route genCall() through the unified App Store + EventBus.
+// The original genCall() above is preserved verbatim; this wrapper adds the
+// store side-effect without changing call shape or any existing callers.
+// ════════════════════════════════════════════════════════════════════════════
+(function () {
+  var originalGenCall = genCall;
+  function routedGenCall() {
+    var call = originalGenCall();
+    try {
+      if (window.AppStore && typeof window.AppStore.addLead === 'function') {
+        window.AppStore.addLead(call);
+      }
+    } catch (e) { console.warn('[simulator] store addLead failed:', e); }
+    try {
+      if (window.EventBus && typeof window.EventBus.emit === 'function') {
+        window.EventBus.emit('call:generated', call);
+      }
+    } catch (e) { /* non-fatal */ }
+    return call;
+  }
+  // Replace both the local and global references so all current callers get
+  // the routed version transparently.
+  genCall = routedGenCall;
+  if (typeof window !== 'undefined') window.genCall = routedGenCall;
+})();

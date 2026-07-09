@@ -507,6 +507,67 @@
   font-size: 12px;
   font-weight: 500;
 }
+/* === Button System (NorthStar Design System v1) === */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 1px 3px rgba(212, 175, 55, 0.3);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.btn-secondary {
+  background: var(--neutral-100);
+  color: var(--neutral-700);
+  border: 1px solid var(--neutral-200);
+}
+.btn-secondary:hover {
+  background: var(--neutral-200);
+}
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+[data-theme="dark"] .btn-secondary {
+  background: var(--neutral-200);
+  color: var(--neutral-700);
+  border: 1px solid var(--neutral-300);
+}
+[data-theme="dark"] .btn-secondary:hover {
+  background: var(--neutral-300);
+}
+/* === Toast Notifications (matching Dashboard/Leads) === */
+.toast-container { position:fixed; top:16px; right:16px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+.toast-notification { display:flex; align-items:center; gap:10px; padding:12px 16px; border-radius:var(--radius-sm); background:var(--neutral-800); color:#fff; font-size:14px; font-weight:500; box-shadow:0 4px 12px rgba(0,0,0,0.2); pointer-events:auto; min-width:280px; max-width:420px; animation:toastIn 0.3s ease-out; }
+.toast-notification.info { background:var(--brand-600); }
+.toast-notification.success { background:#059669; }
+.toast-notification.warning { background:#d97706; }
+.toast-icon { font-size:18px; flex-shrink:0; }
+.toast-close { background:none; border:none; color:rgba(255,255,255,0.7); font-size:18px; cursor:pointer; padding:0; margin-left:auto; line-height:1; }
+.toast-close:hover { color:#fff; }
+@keyframes toastIn { from { opacity:0; transform:translateX(100%); } to { opacity:1; transform:translateX(0); } }
+@keyframes toastOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(100%); } }
+[data-theme="dark"] .toast-notification { background:var(--neutral-700); box-shadow:0 4px 12px rgba(0,0,0,0.4); }
+[data-theme="dark"] .toast-notification.info { background:#1d4ed8; }
+[data-theme="dark"] .toast-notification.success { background:#065f46; }
+[data-theme="dark"] .toast-notification.warning { background:#92400e; }
 </style>
 </head>
 <body>
@@ -729,7 +790,7 @@ function toggleMobileMenu() {
     <div id="callHistoryList"><div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><h3>No communications yet</h3><p>Click <strong>Simulate Call</strong> to see how communications appear here.</p></div></div>
   </main>
 </div>
-<div id="toast" class="toast"></div>
+<div id="toastContainer"></div>
 <script src="/js/event-bus.js"></script>
 <script src="/js/business-models.js"></script>
 <script src="/js/app-store.js"></script>
@@ -1034,7 +1095,7 @@ function renderCalls() {
     const inits = c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
     const ob = oc[c.outcome] || {cls:"voicemail", label: c.outcome ? toTitle(c.outcome.replace(/-/g," ")) : toTitle(c.status)};
     const statusClass = c.status === "voicemail" ? "voicemail" : ob.cls;
-    html += '<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
+    html += '<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div><div class="call-actions"><button class="btn btn-primary btn-sm" onclick="showToast(\'Sent SMS to '+c.phone+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg> Send SMS</button><button class="btn btn-secondary btn-sm" onclick="showToast(\'Email sent\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button></div></div></div>';
   });
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
@@ -1123,11 +1184,10 @@ function clearAllCalls() {
     showToast("🗑 Calls cleared");
   }
 }
-function showToast(m) {
-  const e = document.getElementById("toast");
-  e.textContent = m;
-  e.className = "toast show";
-  setTimeout(()=>e.classList.remove("show"), 3000);
+function showToast(m, type) {
+  if (typeof NotificationService !== 'undefined') {
+    NotificationService.show(m, type || 'success');
+  }
 }
 // Auto-refresh on store changes
 try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}

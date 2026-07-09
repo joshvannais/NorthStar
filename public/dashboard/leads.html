@@ -223,8 +223,20 @@
   max-height: 300px;
   overflow-y: auto;
   font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.drawer-transcript .transcript-line {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--neutral-100);
+}
+.drawer-transcript .transcript-line:last-child { border-bottom: none; }
+.drawer-transcript .transcript-ai { color: var(--brand-600); }
+.drawer-transcript .transcript-customer { color: var(--neutral-700); }
+.drawer-transcript .transcript-speaker {
+  font-weight: 600;
+  margin-right: 8px;
+  display: inline-block;
+  min-width: 60px;
 }
 [data-theme="dark"] .drawer-transcript { background: var(--neutral-200); color: var(--neutral-700); }
 
@@ -718,7 +730,17 @@ function toggleMobileMenu() {
 
       // Transcript
       const transcriptEl = document.getElementById('drawerTranscript');
-      transcriptEl.textContent = lead.transcript || 'No transcript available for this lead.';
+      function formatTranscript(t) {
+        if (!t) return 'No transcript available for this lead.';
+        try {
+          return t.split("\n").map(function(l) {
+            if (l.startsWith("AI:")) return '<div class="transcript-line transcript-ai"><span class="transcript-speaker">AI</span> ' + l.substring(3) + '</div>';
+            if (l.startsWith("Customer:")) return '<div class="transcript-line transcript-customer"><span class="transcript-speaker">' + lead.name.split(" ")[0] + '</span> ' + l.substring(9) + '</div>';
+            return '<div class="transcript-line">' + l + '</div>';
+          }).join("");
+        } catch(e) { return t; }
+      }
+      transcriptEl.innerHTML = formatTranscript(lead.transcript);
       transcriptEl.scrollTop = 0;
 
       document.getElementById('drawerOverlay').classList.add('open');

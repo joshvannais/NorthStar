@@ -713,8 +713,8 @@ function toggleMobileMenu() {
         switch(kpi.id) {
           case 'today_calls': value = today; trend = today > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
           case 'new_leads': value = total; trend = total > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
-          case 'appointments': value = scheduled; trend = scheduled > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
-          case 'lead_conversion': value = total > 0 ? Math.round((scheduled/total)*100)+'%' : '—'; break;
+          case 'appointments': value = simulatedCalls.filter(c => c.outcome === 'appointment-set').length; trend = ''; break;
+          case 'lead_conversion': value = total > 0 ? Math.round((simulatedCalls.filter(c => c.outcome === 'appointment-set' || c.status === 'completed').length/total)*100)+'%' : '—'; break;
           case 'avg_job_value': value = avgValue > 0 ? '$'+avgValue.toLocaleString() : '—'; break;
           case 'avg_call_length': value = total > 0 ? '3:24' : '—'; break;
           case 'missed_calls': value = simulatedCalls.filter(c => c.status === 'voicemail' || c.outcome === 'voicemail').length; trend = '0'; break;

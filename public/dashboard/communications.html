@@ -1216,6 +1216,16 @@ function updateFilterUI() {
 // EventBus 'store:changed' listener we re-render the list. This keeps
 // Dashboard, Leads, and Communications in lock-step on a single
 // source of truth.
+// Safe value display - never shows "undefined" or "null"
+function safe(v, fallback) {
+  if (v === null || v === undefined || v === 'undefined' || v === 'null') return fallback || '—';
+  return v;
+}
+function safeNum(v, fallback) {
+  if (v === null || v === undefined || isNaN(v)) return fallback || 0;
+  return v;
+}
+
 var allCalls = (typeof AppStore !== 'undefined' && AppStore.getLeads) ? AppStore.getLeads() : [];
 function getAllCalls() {
   try {
@@ -1329,10 +1339,10 @@ function renderCalls() {
   }
   let html = "";
   f.forEach((c, i) => {
-    const inits = c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
-    const ob = oc[c.outcome] || {cls:"voicemail", label: c.outcome ? toTitle(c.outcome.replace(/-/g," ")) : toTitle(c.status)};
+    const inits = safe(c.caller,'Unknown').split(" ").map(w=>w[0]).join("").substring(0,2);
+    const ob = oc[c.outcome] || {cls:"voicemail", label: c.outcome ? toTitle(c.outcome.replace(/-/g," ")) : (c.status ? toTitle(c.status) : 'Unknown')};
     const statusClass = c.status === "voicemail" ? "voicemail" : ob.cls;
-    const pbHtml = c.pricingBreakdown && c.pricingBreakdown.length > 0 ?
+    const pbHtml = c.pricingBreakdown && Array.isArray(c.pricingBreakdown) && c.pricingBreakdown.length > 0 ?
       '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;">' +
       '<div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">Pricing Breakdown</div>' +
       c.pricingBreakdown.map(pb => '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('') +
@@ -1344,8 +1354,8 @@ function renderCalls() {
           '<div class="call-caller">' +
             '<div class="call-avatar">'+inits+'</div>' +
             '<div class="call-info">' +
-              '<div class="call-name">'+c.caller+'</div>' +
-              '<div class="call-meta">'+c.time+' <span class="meta-sep">|</span> '+c.duration+' <span class="meta-sep">|</span> '+c.service+'</div>' +
+              '<div class="call-name">'+safe(c.caller,'Unknown')+'</div>' +
+              '<div class="call-meta">'+safe(c.time,'')+' <span class="meta-sep">|</span> '+safe(c.duration,'')+' <span class="meta-sep">|</span> '+safe(c.service,'')+'</div>' +
             '</div>' +
           '</div>' +
           '<span class="call-status-badge '+statusClass+'">'+ob.label+'</span>' +
@@ -1358,12 +1368,12 @@ function renderCalls() {
             '<div class="call-detail-item"><div class="call-detail-label">Duration</div><div class="call-detail-value">'+c.duration+'</div></div>' +
           '</div>' +
           '<div class="call-job-value">' +
-            '<div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' <span class="call-job-value-suffix">Estimated Job Value</span></div>' +
-            '<div class="call-job-value-desc">'+c.jobDetail+'</div>' +
+            '<div class="call-job-value-amount">$'+safeNum(c.avgPrice,0).toLocaleString()+' <span class="call-job-value-suffix">Estimated Job Value</span></div>' +
+            '<div class="call-job-value-desc">'+safe(c.jobDetail,'')+'</div>' +
             pbHtml +
           '</div>' +
           '<div class="call-section-label">Call Summary</div>' +
-          '<div class="call-summary-text">'+c.summary+'</div>' +
+          '<div class="call-summary-text">'+safe(c.summary,'No summary available')+'</div>' +
           '<div class="call-section-label">Transcript</div>' +
           '<div class="call-transcript">'+function(){try{return c.transcript.split("\\n").map(l=>{if(l.startsWith("AI:"))return '<div class="transcript-line transcript-ai"><span class="transcript-speaker">AI</span> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div class="transcript-line transcript-customer"><span class="transcript-speaker">'+c.caller.split(" ")[0]+'</span> '+l.substring(9)+'</div>';return '<div class="transcript-line">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div>' +
           '<div class="call-exec-summary" id="'+execSummaryId+'">' +

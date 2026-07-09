@@ -1368,7 +1368,7 @@ function renderCalls() {
           '<div class="call-section-label">Transcript</div>' +
           '<div class="call-transcript">'+function(){try{return c.transcript.split("\\n").map(l=>{if(l.startsWith("AI:"))return '<div class="transcript-line transcript-ai"><span class="transcript-speaker">AI</span> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div class="transcript-line transcript-customer"><span class="transcript-speaker">'+c.caller.split(" ")[0]+'</span> '+l.substring(9)+'</div>';return '<div class="transcript-line">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div>' +
           '<div class="call-exec-summary" id="'+execSummaryId+'">' +
-            '<div class="exec-summary-header" onclick="toggleExecutiveSummary(''+execSummaryId+'')">' +
+            '<div class="exec-summary-header" onclick="toggleExecutiveSummary(\x27+execSummaryId+\x27)">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' +
               'POLARIS Executive Analysis' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="exec-chevron" style="width:14px;height:14px;"><polyline points="6 9 12 15 18 9"/></svg>' +
@@ -1385,13 +1385,13 @@ function renderCalls() {
             '</div>' +
           '</div>' +
           '<div class="call-actions">' +
-            '<button class="action-btn action-primary" onclick="showToast('Sent SMS to '+c.phone+'')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send SMS</button>' +
-            '<button class="action-btn action-secondary" onclick="showToast('Email sent')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button>' +
-            '<button class="action-btn action-tertiary" onclick="document.getElementById(''+execSummaryId+'').classList.toggle('exec-open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Summary</button>' +
+            '<button class="action-btn action-primary" onclick="showToast(\x27Sent SMS to \x27+c.phone+\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send SMS</button>' +
+            '<button class="action-btn action-secondary" onclick="showToast(\x27Email sent\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button>' +
+            '<button class="action-btn action-tertiary" onclick="document.getElementById(\x27+execSummaryId+\x27).classList.toggle(\x27exec-open\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Summary</button>' +
           '</div>' +
         '</div>' +
       '</div>';
-  }); });
+  });
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
   upStats();

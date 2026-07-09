@@ -996,8 +996,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
         pricingBreakdown:calcBreakdown(svc,s)
       };
     }
-// Initialize from sessionStorage if data exists
-let allCalls=[],curFilter="all",curSearch="";
+// Filter state is managed by the page-specific inline script
 function matchSearch(c,q){
   if(!q)return true;
   const l=q.toLowerCase();

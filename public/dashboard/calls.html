@@ -453,6 +453,7 @@ function renderCalls(){
 }
 function setSearch(q){curSearch=q;renderCalls()}
 function toggleCall(i){document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});document.getElementById("call-"+i).classList.toggle("expanded")}
+function toTitleCase(s){return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase();}
 function setFilter(f){curFilter=f;document.querySelectorAll(".call-filter-btn").forEach(b=>b.classList.toggle("active",b.dataset.filter===f));renderCalls()}
 // ===== Stats =====
 function upStats(){

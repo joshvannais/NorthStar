@@ -60,6 +60,10 @@ window.PolarisEngine = (function() {
     const result = { insight, confidence, estimatedPrice, difficulty, demand: category.demand, upsell, service: svc };
 
     bus.emit('polaris:analysis-complete', { leadId: lead.id, result });
+    // Persist analysis to the Lead in AppStore so drawer/cards read persisted data
+    if (store && typeof store.updateLead === 'function' && lead && lead.id) {
+      try { store.updateLead(lead.id, { polarisAnalysis: result }); } catch(e) {}
+    }
     return result;
   }
 

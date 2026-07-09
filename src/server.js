@@ -54,7 +54,6 @@ const pages = {
   '/dashboard': 'public/dashboard.html',
   '/dashboard/leads': 'public/dashboard/leads.html',
   '/dashboard/communications': 'public/dashboard/communications.html',
-  '/dashboard/calls': (req, res) => res.redirect(301, '/dashboard/communications'),
   '/dashboard/calendar': 'public/dashboard/calendar.html',
   '/dashboard/ai-settings': 'public/dashboard/ai-settings.html',
   '/dashboard/business-profile': 'public/dashboard/business-profile.html',
@@ -70,6 +69,11 @@ const pages = {
   '/preview-dark': 'public/previews/dark.html',
   '/preview-light': 'public/previews/light.html',
 };
+
+// Redirect old /dashboard/calls to /dashboard/communications
+app.get('/dashboard/calls', (req, res) => {
+  res.redirect(301, '/dashboard/communications');
+});
 
 Object.entries(pages).forEach(([route, file]) => {
   app.get(route, (req, res) => {

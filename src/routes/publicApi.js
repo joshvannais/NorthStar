@@ -407,7 +407,7 @@ router.get('/dashboard/coach', requireAuth, async function(req, res, next) {
     if (callsToday === 0 && leadsToday === 0) {
       recommendations.push({ id: 'check-forwarding', title: 'Verify your phone forwarding', description: "You haven't received any calls today. Make sure your business number is forwarded to NorthStar.", actionLabel: 'Check Settings', actionUrl: '/dashboard/my-number', priority: 'medium' });
     } else if (callsToday > 0) {
-      recommendations.push({ id: 'review-calls', title: 'Review ' + callsToday + ' call(s) handled today', description: 'NorthStar handled ' + callsToday + ' call(s) and captured ' + leadsToday + ' lead(s). Review the call summaries to stay informed.', actionLabel: 'View Call History', actionUrl: '/dashboard/calls', priority: 'low' });
+      recommendations.push({ id: 'review-calls', title: 'Review ' + callsToday + ' call(s) handled today', description: 'NorthStar handled ' + callsToday + ' call(s) and captured ' + leadsToday + ' lead(s). Review the call summaries to stay informed.', actionLabel: 'View Communications', actionUrl: '/dashboard/communications', priority: 'low' });
     }
 
     if (recommendations.length === 0) {

@@ -9,34 +9,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 <style>
-/* === KPI Standardization === */
-.stat-card {
-  background: var(--neutral-100);
-  border-radius: var(--radius-md);
-  padding: 20px 22px;
-  transition: all 0.2s ease;
-  cursor: default;
-  position: relative;
-  overflow: hidden;
-}
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-}
-[data-theme="dark"] .stat-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
-.stat-label { font-size: 12px; font-weight: 600; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
-.stat-value { font-size: 28px; font-weight: 800; color: var(--neutral-900); line-height: 1.2; }
-.stat-change { font-size: 12px; font-weight: 500; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
-.stat-change.up { color: #059669; }
-.stat-change.down { color: #dc2626; }
-[data-theme="dark"] .stat-value { color: var(--neutral-100); }
-.stat-card .stat-icon-bg {
-  position: absolute; top: -10px; right: -10px;
-  width: 70px; height: 70px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0.12;
-}
-.stat-card .stat-icon-bg svg { width: 32px; height: 32px; }
 /* === POLARIS Executive Summary Card === */
 .polaris-summary {
   background: linear-gradient(135deg, rgba(212,175,55,0.08), rgba(212,175,55,0.02));

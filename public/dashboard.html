@@ -453,7 +453,6 @@ function toggleMobileMenu() {
 
     </main>
   </div>
-  <div class="toast-container" id="toastContainer"></div>
   <!-- Modals -->
   <div class="modal-backdrop" id="testAIModal" style="display:none;" role="dialog" aria-modal="true" aria-label="Test your AI" onclick="closeTestAIModal(event)">
     <div class="modal-panel modal-sm" onclick="event.stopPropagation()">
@@ -484,30 +483,12 @@ function toggleMobileMenu() {
       <div class="modal-footer"><button class="btn btn-primary" onclick="closeComingSoon()">OK</button></div>
     </div>
   </div>
-  <!-- Premium Notification Toasts -->
-  <script>
-    function showNotification(message, type) {
-      type = type || 'info';
-      const icons = { success: '✅', info: 'ℹ️', warning: '⚠️' };
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = 'toast-notification ' + type;
-      toast.innerHTML = '<span class="toast-icon">' + (icons[type] || 'ℹ️') + '</span>' +
-        '<span>' + message + '</span>' +
-        '<button class="toast-close" onclick="this.parentElement.remove()">×</button>';
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.style.animation = 'toastOut 0.3s ease-out forwards';
-        setTimeout(() => toast.remove(), 300);
-      }, 4000);
-    }
-    window.showToast = showNotification;
-  </script>
   <script src="/js/event-bus.js"></script>
   <script src="/js/business-models.js"></script>
   <script src="/js/app-store.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
+  <script>window.showToast = NotificationService.show;</script>
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/theme.js"></script>
@@ -579,7 +560,7 @@ function toggleMobileMenu() {
     function refreshBrief() {
       const now = Date.now();
       if (now - briefLastRefresh < 60000) {
-        showNotification('Please wait 60 seconds before refreshing.', 'warning');
+        NotificationService.show('Please wait 60 seconds before refreshing.', 'warning');
         return;
       }
       briefLastRefresh = now;
@@ -903,7 +884,7 @@ function toggleMobileMenu() {
     function dismissCoach() {
       coachDismissed = true;
       document.getElementById('coachCard').style.display = 'none';
-      showNotification('Coach dismissed for now.', 'info');
+      NotificationService.show('Coach dismissed for now.', 'info');
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1070,14 +1051,14 @@ function toggleMobileMenu() {
 
     function testAIResponse() {
       const q = document.getElementById('testAiInput').value.trim();
-      if (!q) { showNotification('Please type a question first.', 'warning'); return; }
+      if (!q) { NotificationService.show('Please type a question first.', 'warning'); return; }
       const responses = [
         "Thanks for reaching out to NorthStar! I'd be happy to help with that. Let me check with the team and get back to you with a quote. Could you provide your address and preferred time for an estimate?",
         "Great question! We offer competitive pricing for that service. I'd recommend scheduling a free estimate so our team can assess your specific needs. When would work best for you?",
         "I'd be glad to help with that inquiry. Let me take down your details and someone from our team will reach out. What's the best phone number to reach you?",
       ];
       document.getElementById('testAiResponse').innerHTML = '<strong style="color:var(--brand-600);">AI:</strong> ' + responses[Math.floor(Math.random() * responses.length)];
-      showNotification('💬 AI response generated.', 'info');
+      NotificationService.show('💬 AI response generated.', 'info');
     }
 
     function openCallMyAIModal() {

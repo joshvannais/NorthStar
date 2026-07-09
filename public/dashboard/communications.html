@@ -344,44 +344,6 @@
   background: rgba(79,70,229,0.15);
   color: var(--brand-400);
 }
-.exec-chevron {
-  margin-left: auto;
-  transition: transform 0.2s;
-}
-.exec-open .exec-chevron { transform: rotate(180deg); }
-.exec-summary-body {
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition: max-height 0.35s ease, opacity 0.3s ease, padding 0.3s ease;
-  padding: 0 14px;
-  background: var(--neutral-100);
-}
-[data-theme="dark"] .exec-summary-body { background: var(--neutral-200); }
-.exec-open .exec-summary-body {
-  max-height: 800px;
-  opacity: 1;
-  padding: 14px;
-}
-.exec-section {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--neutral-200);
-}
-.exec-section:last-child { border-bottom: none; }
-.exec-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--neutral-500);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 3px;
-}
-.exec-value {
-  font-size: 13px;
-  color: var(--neutral-800);
-  line-height: 1.5;
-}
-[data-theme="dark"] .exec-value { color: var(--neutral-300); }
 .confidence-high {
   color: #059669;
   font-weight: 700;
@@ -429,11 +391,6 @@
 [data-theme="dark"] .action-tertiary:hover { background: rgba(79,70,229,0.1); }
 
 /* === Toggle Executive Summary === */
-.exec-open .exec-summary-body {
-  max-height: 800px;
-  opacity: 1;
-  padding: 14px;
-}
 
 </style>
 </head>
@@ -983,7 +940,7 @@ function sortCalls(arr, sort) {
       '<div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">Pricing Breakdown</div>' +
       c.pricingBreakdown.map(pb => '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('') +
       '</div>' : '';
-    const execSummaryId = 'execSummary-' + i;
+
     html += '' +
       '<div class="call-card" id="call-'+i+'">' +
         '<div class="call-card-header" onclick="CustomerDrawer.open(f['+i+'])">' +
@@ -999,23 +956,7 @@ function sortCalls(arr, sort) {
         '<div class="call-card-body">' +\n          '<p style="padding:12px;text-align:center;color:var(--neutral-500);font-size:13px;">Click to view full customer details, POLARIS analysis, and transcript.</p>' +'</div>' +
           
           
-            '<div class="exec-summary-body">' +
-              '<div class="exec-section"><div class="exec-label">Executive Summary</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.insight:c.summary)+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Customer Intent</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.service:'')+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Key Concerns</div><div class="exec-value">Pricing, timeline, availability</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Outcome</div><div class="exec-value">'+ob.label+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Recommended Action</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.upsell:'Follow up within 24 hours with a detailed estimate')+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">POLARIS AI Reasoning</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.insight:'Lead matched to '+c.service+' service line')+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">AI Confidence Score</div><div class="exec-value"><span class="confidence-high">'+(c.polarisAnalysis?c.polarisAnalysis.confidence+'%':'87%')+'</span></div></div>' +
-              '<div class="exec-section"><div class="exec-label">Revenue Opportunity</div><div class="exec-value" style="color:var(--brand-600);font-weight:700;">$'+(c.polarisAnalysis?c.polarisAnalysis.estimatedPrice.toLocaleString():c.avgPrice.toLocaleString())+'</div></div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="call-actions">' +
-            '<button class="btn btn-sm btn-primary" onclick="NotificationService.show(\x27Sent SMS to \x27+c.phone+\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send SMS</button>' +
-            '<button class="btn btn-sm btn-secondary" onclick="NotificationService.show(\x27Email sent\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button>' +
-            '<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\x27+execSummaryId+\x27).classList.toggle(\x27exec-open\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Polaris</button>' +
-          '</div>' +
-        '</div>' +
+            
       '</div>';
   });
   el.innerHTML = html;

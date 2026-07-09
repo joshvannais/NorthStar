@@ -507,6 +507,106 @@
   font-size: 12px;
   font-weight: 500;
 }
+/* === Polaris Card (per-call analysis) === */
+.polaris-card {
+  background: linear-gradient(135deg, #FFF8E7, #FFECB3);
+  border: 1px solid var(--brand-300);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin: 12px 0;
+  position: relative;
+  overflow: hidden;
+}
+.polaris-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(212, 175, 55, 0.08);
+}
+.polaris-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.polaris-header h2 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-800);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.polaris-header .polaris-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: var(--brand-600);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 100px;
+  font-weight: 600;
+}
+.polaris-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (max-width: 500px) { .polaris-grid { grid-template-columns: 1fr; } }
+.polaris-item {
+  background: rgba(255,255,255,0.6);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  border: 1px solid rgba(212,175,55,0.2);
+}
+.polaris-item .polaris-item-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brand-700);
+  margin-bottom: 2px;
+}
+.polaris-item .polaris-item-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--neutral-900);
+  margin-bottom: 2px;
+}
+.polaris-item .polaris-item-desc {
+  font-size: 11px;
+  color: var(--neutral-600);
+}
+.polaris-item .polaris-confidence {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 100px;
+  margin-top: 2px;
+}
+.polaris-confidence.high { background: #d1fae5; color: #047857; }
+.polaris-confidence.medium { background: #fef3c7; color: #b45309; }
+.polaris-confidence.low { background: #fee2e2; color: #b91c1c; }
+[data-theme="dark"] .polaris-card {
+  background: linear-gradient(135deg, #2a2510, #3d3010);
+  border-color: var(--brand-700);
+}
+[data-theme="dark"] .polaris-header h2 { color: var(--brand-300); }
+[data-theme="dark"] .polaris-item { background: rgba(0,0,0,0.2); border-color: rgba(212,175,55,0.15); }
+[data-theme="dark"] .polaris-item .polaris-item-label { color: var(--brand-400); }
+[data-theme="dark"] .polaris-item .polaris-item-value { color: var(--neutral-800); }
+[data-theme="dark"] .polaris-item .polaris-item-desc { color: var(--neutral-500); }
+[data-theme="dark"] .polaris-confidence.high { background: rgba(4,120,87,0.2); color: #6ee7b7; }
+[data-theme="dark"] .polaris-confidence.medium { background: rgba(180,83,9,0.2); color: #fbbf24; }
+[data-theme="dark"] .polaris-confidence.low { background: rgba(185,28,28,0.2); color: #fca5a5; }
+.polaris-full-width {
+  grid-column: 1 / -1;
+}
 </style>
 </head>
 <body>
@@ -1034,7 +1134,22 @@ function renderCalls() {
     const inits = c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
     const ob = oc[c.outcome] || {cls:"voicemail", label: c.outcome ? toTitle(c.outcome.replace(/-/g," ")) : toTitle(c.status)};
     const statusClass = c.status === "voicemail" ? "voicemail" : ob.cls;
-    html += '<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
+    var polarisHtml = '';
+        try {
+          if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
+            var pa = PolarisEngine.analyzeLead(c);
+            if (pa && pa.insight) {
+              var confLevel = pa.confidence >= 75 ? 'high' : pa.confidence >= 50 ? 'medium' : 'low';
+              var confLabel = pa.confidence >= 75 ? 'High' : pa.confidence >= 50 ? 'Medium' : 'Low';
+              var priorityLabel = pa.demand === 'high' ? 'High Priority' : pa.demand === 'medium' ? 'Standard Priority' : 'Low Priority';
+              var priorityClass = pa.demand === 'high' ? 'high' : pa.demand === 'medium' ? 'medium' : 'low';
+              var closeProb = Math.min(95, pa.confidence);
+              var nextAction = pa.upsell && pa.upsell.length > 0 ? pa.upsell : 'Schedule follow-up call';
+              polarisHtml = '<div class="polaris-card"><div class="polaris-header"><h2><img src="/assets/logo.png" alt="N" style="height:14px;width:auto;vertical-align:middle;"> POLARIS™ Analysis</h2><span class="polaris-badge">AI</span></div><div class="polaris-grid"><div class="polaris-item polaris-full-width"><div class="polaris-item-label">Executive AI Summary</div><div class="polaris-item-value" style="font-size:12px;font-weight:500;line-height:1.4;">'+pa.insight+'</div></div><div class="polaris-item"><div class="polaris-item-label">Opportunity Score</div><div class="polaris-item-value">'+pa.confidence+'%</div><div class="polaris-item-desc">AI confidence estimate</div><span class="polaris-confidence '+confLevel+'">'+confLabel+'</span></div><div class="polaris-item"><div class="polaris-item-label">Revenue Intelligence</div><div class="polaris-item-value">$'+(pa.estimatedPrice||0).toLocaleString()+'</div><div class="polaris-item-desc">Market-adjusted price estimate</div><span class="polaris-confidence '+confLevel+'">'+confLabel+'</span></div><div class="polaris-item"><div class="polaris-item-label">Confidence Indicator</div><div class="polaris-item-value">'+pa.confidence+'%</div><div class="polaris-item-desc">AI reasoning confidence level</div><span class="polaris-confidence '+confLevel+'">'+confLabel+'</span></div><div class="polaris-item"><div class="polaris-item-label">Customer Priority</div><div class="polaris-item-value">'+priorityLabel+'</div><div class="polaris-item-desc">Based on market demand analysis</div><span class="polaris-confidence '+priorityClass+'">'+priorityLabel+'</span></div><div class="polaris-item"><div class="polaris-item-label">Estimated Close Probability</div><div class="polaris-item-value">'+closeProb+'%</div><div class="polaris-item-desc">Probability of closing this lead</div><span class="polaris-confidence '+confLevel+'">'+confLabel+'</span></div><div class="polaris-item"><div class="polaris-item-label">Suggested Follow-up</div><div class="polaris-item-value" style="font-size:12px;font-weight:500;">'+pa.upsell+'</div></div><div class="polaris-item"><div class="polaris-item-label">Recommended Next Action</div><div class="polaris-item-value" style="font-size:12px;font-weight:500;">'+nextAction+'</div></div></div></div>';
+        }
+      }
+    } catch(e) { /* polaris analysis non-critical */ }
+    html += '<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div>'+polarisHtml+'<div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
   });
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
@@ -1114,7 +1229,323 @@ function simulateDemoCall() {
 function clearAllCalls() {
   if(confirm("Clear all call history?")) {
     try {
-      sessionStorage.removeItem("northstar_calls");
+      localStorage.removeItem("northstar_calls");
+      if(typeof AppStore!=='undefined' && AppStore.getLeads) {
+        AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id);});
+      }
+    } catch(e) {}
+    renderCalls();
+    showToast("🗑 Calls cleared");
+  }
+}
+function showToast(m) {
+  const e = document.getElementById("toast");
+  e.textContent = m;
+  e.className = "toast show";
+  setTimeout(()=>e.classList.remove("show"), 3000);
+}
+// Auto-refresh on store changes
+try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
+// Initialize
+function loadCalls() { renderCalls(); }
+loadCalls();
+</script>
+<script src="/js/theme.js"></script>
+</body>
+</html>
++(pa.estimatedPrice||0).toLocaleString()+'</div><div class="polaris-item-desc">Market-adjusted price estimate</div><span class="polaris-confidence '+confLevel+'">'+confLabel+'</span></div><div class="polaris-item"><div class="polaris-item-label">Confidence Indicator</div><div class="polaris-item-value">'+pa.confidence+'%</div><div class="polaris-item-desc">AI reasoning confidence level</div><span class="polaris-confidence '+confLevel+'">'+confLabel+'</span></div><div class="polaris-item"><div class="polaris-item-label">Customer Priority</div><div class="polaris-item-value">'+priorityLabel+'</div><div class="polaris-item-desc">Based on market demand analysis</div><span class="polaris-confidence '+priorityClass+'">'+priorityLabel+'</span></div><div class="polaris-item"><div class="polaris-item-label">Estimated Close Probability</div><div class="polaris-item-value">'+closeProb+'%</div><div class="polaris-item-desc">Probability of closing this lead</div><span class="polaris-confidence '+confLevel+'">'+confLabel+'</span></div><div class="polaris-item"><div class="polaris-item-label">Suggested Follow-up</div><div class="polaris-item-value" style="font-size:12px;font-weight:500;">'+pa.upsell+'</div></div><div class="polaris-item"><div class="polaris-item-label">Recommended Next Action</div><div class="polaris-item-value" style="font-size:12px;font-weight:500;">'+nextAction+'</div></div></div></div>';
+            }
+          }
+        } catch(e) { /* polaris analysis non-critical */ }
+        html += '<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">
+  });
+  el.innerHTML = html;
+  resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
+  upStats();
+  updatePolaris();
+}
+function setSearch(q) {
+  curSearch = q;
+  renderCalls();
+}
+function toggleCall(i) {
+  document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});
+  document.getElementById("call-"+i).classList.toggle("expanded");
+}
+
+// ===== Stats =====
+function upStats() {
+  const calls = getAllCalls();
+  const t = calls.length;
+  const book = calls.filter(c=>c.outcome==="appointment-set").length;
+  const est = calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu = calls.filter(c=>c.outcome==="follow-up").length;
+  const voicemail = calls.filter(c=>c.status==="voicemail").length;
+  const noi = calls.filter(c=>c.outcome==="no-interest").length;
+  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
+  document.getElementById("kpiCallsToday").textContent = t;
+  document.getElementById("kpiRevenue").textContent = t>0 ? '$'+rev.toLocaleString() : '$0';
+  document.getElementById("kpiBookingRate").textContent = t>0 ? Math.round((book/t)*100)+'%' : '0%';
+  document.getElementById("kpiMissed").textContent = (voicemail+noi);
+  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  document.getElementById("kpiCallsChange").textContent = today>0 ? today+' today' : 'All time';
+  document.getElementById("kpiRevenueChange").textContent = '$'+rev.toLocaleString()+' total';
+  document.getElementById("kpiBookingChange").textContent = book+' booked';
+  document.getElementById("kpiMissedChange").textContent = (voicemail+noi)>0 ? 'Needs attention' : 'None';
+}
+function updatePolaris() {
+  const calls = getAllCalls();
+  const t = calls.length;
+  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  const book = calls.filter(c=>c.outcome==="appointment-set").length;
+  const est = calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu = calls.filter(c=>c.outcome==="follow-up").length;
+  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
+  const highest = calls.reduce((m,c)=>Math.max(m,c.avgPrice||0), 0);
+  const avg = t>0 ? Math.round(rev/t) : 0;
+  document.getElementById("psCallsToday").textContent = today;
+  document.getElementById("psBooked").textContent = book;
+  document.getElementById("psEstimates").textContent = est;
+  document.getElementById("psFollowUps").textContent = fu;
+  document.getElementById("psRevenue").textContent = '$'+rev.toLocaleString();
+  document.getElementById("psHighest").textContent = highest>0 ? '$'+highest.toLocaleString() : "—";
+  document.getElementById("psAvgOpp").textContent = '$'+avg.toLocaleString();
+  let action = "Review pending leads";
+  if(fu > 0) action = "Follow up on "+fu+" leads";
+  if(book===0 && est===0 && t>0) action = "Improve booking rate — review AI scripts";
+  document.getElementById("psNextAction").textContent = action;
+}
+
+// ===== Actions =====
+function simulateDemoCall() {
+  try {
+    // genCall() is already routed through AppStore.addLead + EventBus by
+    // the simulator.js wrapper — do NOT call addLead again here (would
+    // create duplicates). genCall throws on failure; the catch surfaces
+    // a friendly toast instead of a silent broken button.
+    const c = genCall();
+    if (!c) throw new Error('genCall returned no lead');
+    renderCalls();
+    showToast("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
+    // Re-populate service types now that we have data
+    try { populateServiceTypes(); } catch(e) { /* non-fatal */ }
+  } catch (e) {
+    try { showToast("Could not simulate call. Please try again."); } catch (_) {}
+    console.error('simulateDemoCall:', e);
+  }
+}
+function clearAllCalls() {
+  if(confirm("Clear all call history?")) {
+    try {
+      localStorage.removeItem("northstar_calls");
+      if(typeof AppStore!=='undefined' && AppStore.getLeads) {
+        AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id);});
+      }
+    } catch(e) {}
+    renderCalls();
+    showToast("🗑 Calls cleared");
+  }
+}
+function showToast(m) {
+  const e = document.getElementById("toast");
+  e.textContent = m;
+  e.className = "toast show";
+  setTimeout(()=>e.classList.remove("show"), 3000);
+}
+// Auto-refresh on store changes
+try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
+// Initialize
+function loadCalls() { renderCalls(); }
+loadCalls();
+</script>
+<script src="/js/theme.js"></script>
+</body>
+</html>
++c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">
+  });
+  el.innerHTML = html;
+  resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
+  upStats();
+  updatePolaris();
+}
+function setSearch(q) {
+  curSearch = q;
+  renderCalls();
+}
+function toggleCall(i) {
+  document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});
+  document.getElementById("call-"+i).classList.toggle("expanded");
+}
+
+// ===== Stats =====
+function upStats() {
+  const calls = getAllCalls();
+  const t = calls.length;
+  const book = calls.filter(c=>c.outcome==="appointment-set").length;
+  const est = calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu = calls.filter(c=>c.outcome==="follow-up").length;
+  const voicemail = calls.filter(c=>c.status==="voicemail").length;
+  const noi = calls.filter(c=>c.outcome==="no-interest").length;
+  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
+  document.getElementById("kpiCallsToday").textContent = t;
+  document.getElementById("kpiRevenue").textContent = t>0 ? '$'+rev.toLocaleString() : '$0';
+  document.getElementById("kpiBookingRate").textContent = t>0 ? Math.round((book/t)*100)+'%' : '0%';
+  document.getElementById("kpiMissed").textContent = (voicemail+noi);
+  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  document.getElementById("kpiCallsChange").textContent = today>0 ? today+' today' : 'All time';
+  document.getElementById("kpiRevenueChange").textContent = '$'+rev.toLocaleString()+' total';
+  document.getElementById("kpiBookingChange").textContent = book+' booked';
+  document.getElementById("kpiMissedChange").textContent = (voicemail+noi)>0 ? 'Needs attention' : 'None';
+}
+function updatePolaris() {
+  const calls = getAllCalls();
+  const t = calls.length;
+  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  const book = calls.filter(c=>c.outcome==="appointment-set").length;
+  const est = calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu = calls.filter(c=>c.outcome==="follow-up").length;
+  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
+  const highest = calls.reduce((m,c)=>Math.max(m,c.avgPrice||0), 0);
+  const avg = t>0 ? Math.round(rev/t) : 0;
+  document.getElementById("psCallsToday").textContent = today;
+  document.getElementById("psBooked").textContent = book;
+  document.getElementById("psEstimates").textContent = est;
+  document.getElementById("psFollowUps").textContent = fu;
+  document.getElementById("psRevenue").textContent = '$'+rev.toLocaleString();
+  document.getElementById("psHighest").textContent = highest>0 ? '$'+highest.toLocaleString() : "—";
+  document.getElementById("psAvgOpp").textContent = '$'+avg.toLocaleString();
+  let action = "Review pending leads";
+  if(fu > 0) action = "Follow up on "+fu+" leads";
+  if(book===0 && est===0 && t>0) action = "Improve booking rate — review AI scripts";
+  document.getElementById("psNextAction").textContent = action;
+}
+
+// ===== Actions =====
+function simulateDemoCall() {
+  try {
+    // genCall() is already routed through AppStore.addLead + EventBus by
+    // the simulator.js wrapper — do NOT call addLead again here (would
+    // create duplicates). genCall throws on failure; the catch surfaces
+    // a friendly toast instead of a silent broken button.
+    const c = genCall();
+    if (!c) throw new Error('genCall returned no lead');
+    renderCalls();
+    showToast("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
+    // Re-populate service types now that we have data
+    try { populateServiceTypes(); } catch(e) { /* non-fatal */ }
+  } catch (e) {
+    try { showToast("Could not simulate call. Please try again."); } catch (_) {}
+    console.error('simulateDemoCall:', e);
+  }
+}
+function clearAllCalls() {
+  if(confirm("Clear all call history?")) {
+    try {
+      localStorage.removeItem("northstar_calls");
+      if(typeof AppStore!=='undefined' && AppStore.getLeads) {
+        AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id);});
+      }
+    } catch(e) {}
+    renderCalls();
+    showToast("🗑 Calls cleared");
+  }
+}
+function showToast(m) {
+  const e = document.getElementById("toast");
+  e.textContent = m;
+  e.className = "toast show";
+  setTimeout(()=>e.classList.remove("show"), 3000);
+}
+// Auto-refresh on store changes
+try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
+// Initialize
+function loadCalls() { renderCalls(); }
+loadCalls();
+</script>
+<script src="/js/theme.js"></script>
+</body>
+</html>
++Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div>'+polarisHtml+'<div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
+  });
+  el.innerHTML = html;
+  resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
+  upStats();
+  updatePolaris();
+}
+function setSearch(q) {
+  curSearch = q;
+  renderCalls();
+}
+function toggleCall(i) {
+  document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});
+  document.getElementById("call-"+i).classList.toggle("expanded");
+}
+
+// ===== Stats =====
+function upStats() {
+  const calls = getAllCalls();
+  const t = calls.length;
+  const book = calls.filter(c=>c.outcome==="appointment-set").length;
+  const est = calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu = calls.filter(c=>c.outcome==="follow-up").length;
+  const voicemail = calls.filter(c=>c.status==="voicemail").length;
+  const noi = calls.filter(c=>c.outcome==="no-interest").length;
+  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
+  document.getElementById("kpiCallsToday").textContent = t;
+  document.getElementById("kpiRevenue").textContent = t>0 ? '$'+rev.toLocaleString() : '$0';
+  document.getElementById("kpiBookingRate").textContent = t>0 ? Math.round((book/t)*100)+'%' : '0%';
+  document.getElementById("kpiMissed").textContent = (voicemail+noi);
+  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  document.getElementById("kpiCallsChange").textContent = today>0 ? today+' today' : 'All time';
+  document.getElementById("kpiRevenueChange").textContent = '$'+rev.toLocaleString()+' total';
+  document.getElementById("kpiBookingChange").textContent = book+' booked';
+  document.getElementById("kpiMissedChange").textContent = (voicemail+noi)>0 ? 'Needs attention' : 'None';
+}
+function updatePolaris() {
+  const calls = getAllCalls();
+  const t = calls.length;
+  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  const book = calls.filter(c=>c.outcome==="appointment-set").length;
+  const est = calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu = calls.filter(c=>c.outcome==="follow-up").length;
+  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
+  const highest = calls.reduce((m,c)=>Math.max(m,c.avgPrice||0), 0);
+  const avg = t>0 ? Math.round(rev/t) : 0;
+  document.getElementById("psCallsToday").textContent = today;
+  document.getElementById("psBooked").textContent = book;
+  document.getElementById("psEstimates").textContent = est;
+  document.getElementById("psFollowUps").textContent = fu;
+  document.getElementById("psRevenue").textContent = '$'+rev.toLocaleString();
+  document.getElementById("psHighest").textContent = highest>0 ? '$'+highest.toLocaleString() : "—";
+  document.getElementById("psAvgOpp").textContent = '$'+avg.toLocaleString();
+  let action = "Review pending leads";
+  if(fu > 0) action = "Follow up on "+fu+" leads";
+  if(book===0 && est===0 && t>0) action = "Improve booking rate — review AI scripts";
+  document.getElementById("psNextAction").textContent = action;
+}
+
+// ===== Actions =====
+function simulateDemoCall() {
+  try {
+    // genCall() is already routed through AppStore.addLead + EventBus by
+    // the simulator.js wrapper — do NOT call addLead again here (would
+    // create duplicates). genCall throws on failure; the catch surfaces
+    // a friendly toast instead of a silent broken button.
+    const c = genCall();
+    if (!c) throw new Error('genCall returned no lead');
+    renderCalls();
+    showToast("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
+    // Re-populate service types now that we have data
+    try { populateServiceTypes(); } catch(e) { /* non-fatal */ }
+  } catch (e) {
+    try { showToast("Could not simulate call. Please try again."); } catch (_) {}
+    console.error('simulateDemoCall:', e);
+  }
+}
+function clearAllCalls() {
+  if(confirm("Clear all call history?")) {
+    try {
+      localStorage.removeItem("northstar_calls");
       if(typeof AppStore!=='undefined' && AppStore.getLeads) {
         AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id);});
       }

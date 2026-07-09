@@ -94,14 +94,14 @@ window.AppStore = (function() {
   function setUi(key, value) { state.ui[key] = value; bus.emit('ui:changed', { key, value }); }
   function getUi(key) { return state.ui[key]; }
 
-  // --- Persistence ---
+  // --- Persistence (localStorage for cross-page sync) ---
   function saveToSession() {
-    try { sessionStorage.setItem('northstar_calls', JSON.stringify(state.leads)); } catch(e) {}
+    try { localStorage.setItem('northstar_calls', JSON.stringify(state.leads)); } catch(e) {}
   }
 
   function loadFromSession() {
     try {
-      const saved = sessionStorage.getItem('northstar_calls');
+      const saved = localStorage.getItem('northstar_calls');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -112,9 +112,30 @@ window.AppStore = (function() {
     } catch(e) {}
   }
 
+  /**
+   * reloadFromStorage — Called by other tabs/pages to re-read state
+   * from localStorage when a 'storage' event fires. This ensures
+   * cross-page synchronization: when Communications adds a call,
+   * Dashboard (open in another tab) receives the storage event and
+   * re-reads the data.
+   */
+  function reloadFromStorage() {
+    loadFromSession();
+    bus.emit('store:changed', { type: 'lead', action: 'synced' });
+  }
+
+  // Listen for cross-page storage events (fired when another tab writes to localStorage)
+  try {
+    window.addEventListener('storage', function(e) {
+      if (e.key === 'northstar_calls') {
+        reloadFromStorage();
+      }
+    });
+  } catch(e) {}
+
   // Initialize
   loadFromSession();
   bus.on('lead:created', () => { /* trigger recalculations */ });
 
-  return { addLead, updateLead, removeLead, getLeads, getLead, getKpis, setSetting, getSetting, setUi, getUi, getState: () => state, loadFromSession, saveToSession };
+  return { addLead, updateLead, removeLead, getLeads, getLead, getKpis, setSetting, getSetting, setUi, getUi, getState: () => state, loadFromSession, saveToSession, reloadFromStorage };
 })();

@@ -10,7 +10,7 @@ window.NotificationService = (function() {
     if (!container) {
       container = document.createElement('div');
       container.id = 'toastContainer';
-      container.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;';
+      container.style.cssText = 'position:fixed;top:28px;right:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;';
       document.body.appendChild(container);
     }
     return container;

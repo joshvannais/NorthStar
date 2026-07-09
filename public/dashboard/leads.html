@@ -426,6 +426,7 @@ function toggleMobileMenu() {
   <script src="/js/app-store.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
+  <script src="/js/customer-drawer.js"></script>
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
   <script>
@@ -530,80 +531,15 @@ function toggleMobileMenu() {
 
     // === Customer Detail Drawer ===
     let currentDrawerLead = null;
-
-    function capitalizeFirst(str) {
-      if (!str) return str;
-      return str.charAt(0).toUpperCase() + str.slice(1);
-    }
-
-    function generatePolarisInsight(lead) {
-      var result = PolarisEngine.analyzeLead(lead);
-      return result.insight || result;
-    }
     function openDrawer(lead) {
-      currentDrawerLead = lead;
-      document.getElementById('drawerTitle').textContent = 'POLARIS™ Revenue Intelligence by NorthStar';
-      document.getElementById('drawerName').textContent = lead.caller || lead.customerName || '—';
-      document.getElementById('drawerPhone').textContent = lead.phone || lead.phoneNumber || '—';
-      document.getElementById('drawerAddress').textContent = lead.address || '—';
-      document.getElementById('drawerService').textContent = lead.service || lead.serviceRequested || '—';
-
-      // Intelligent service description from jobDetail
-      const desc = lead.jobDetail || lead.summary || '';
-      document.getElementById('drawerDescription').textContent = desc ? capitalizeFirst(desc) : '—';
-      document.getElementById('drawerValue').textContent = lead.avgPrice ? '$' + Math.round(lead.avgPrice).toLocaleString() : '—';
-      document.getElementById('drawerStatus').innerHTML = getStatusBadge(lead.status || 'new');
-      document.getElementById('drawerDate').textContent = fmtTime(lead.time || (lead.receivedAt ? lead.receivedAt : null));
-
-      // POLARIS Insight
-      document.getElementById('drawerPolarisInsight').textContent = generatePolarisInsight(lead);
-
-      // Pricing breakdown
-      const pbDiv = document.getElementById('drawerPricingBreakdown');
-      if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
-        let pbHtml = '';
-        let pbTotal = 0;
-        lead.pricingBreakdown.forEach(item => {
-          pbTotal += item.a || 0;
-          pbHtml += '<div class="drawer-pricing-item"><span>' + item.l + '</span><span>$' + Math.round(item.a || 0).toLocaleString() + '</span></div>';
-        });
-        pbHtml += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>$' + Math.round(pbTotal).toLocaleString() + '</strong></span></div>';
-        pbDiv.innerHTML = pbHtml;
-      } else {
-        pbDiv.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">Est. value: $' + Math.round(lead.avgPrice || 0).toLocaleString() + '</p>';
-      }
-
-      // Transcript
-      const transcriptEl = document.getElementById('drawerTranscript');
-      function formatTranscript(t) {
-        if (!t) return 'No transcript available for this lead.';
-        try {
-          return t.split("\n").map(function(l) {
-            if (l.startsWith("AI:")) return '<div class="transcript-line transcript-ai"><span class="transcript-speaker">AI</span> ' + l.substring(3) + '</div>';
-            if (l.startsWith("Customer:")) return '<div class="transcript-line transcript-customer"><span class="transcript-speaker">' + lead.name.split(" ")[0] + '</span> ' + l.substring(9) + '</div>';
-            return '<div class="transcript-line">' + l + '</div>';
-          }).join("");
-        } catch(e) { return t; }
-      }
-      transcriptEl.innerHTML = formatTranscript(lead.transcript);
-      transcriptEl.scrollTop = 0;
-
-      document.getElementById('drawerOverlay').classList.add('open');
-      document.getElementById('customerDrawer').classList.add('open');
-      document.body.style.overflow = 'hidden';
+      CustomerDrawer.open(lead);
     }
 
     function closeDrawer() {
-      document.getElementById('drawerOverlay').classList.remove('open');
-      document.getElementById('customerDrawer').classList.remove('open');
-      document.body.style.overflow = '';
-      currentDrawerLead = null;
+      CustomerDrawer.close();
     }
 
-    // Close drawer on Escape key
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') closeDrawer();
-    });
+
 
     // === Leads Table ===
     function renderLeads(leads) {

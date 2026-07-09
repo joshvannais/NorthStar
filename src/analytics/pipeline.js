@@ -13,7 +13,7 @@ async function collectData(userId) {
   const db = require('../db');
   if (db.isAvailable()) {
     try {
-      const r = await db.query('SELECT id, caller_name, service_type, estimated_price, outcome, source, created_at FROM call_records WHERE source = \'real\' ORDER BY created_at DESC');
+      const r = await db.query('SELECT id, caller_name, service_type, estimated_price, outcome, created_at FROM call_records ORDER BY created_at DESC');
       dbCalls = r.rows || [];
     } catch (err) { console.warn('[Analytics] DB query failed:', err.message); }
   }

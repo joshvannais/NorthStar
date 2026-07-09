@@ -41,10 +41,57 @@
 .polaris-summary {
   background: linear-gradient(135deg, rgba(212,175,55,0.08), rgba(212,175,55,0.02));
   border: 1px solid rgba(212,175,55,0.25);
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   padding: 24px 28px;
   margin-bottom: 24px;
 }
+.call-exec-summary {
+  margin-top: 12px;
+  border: 1px solid rgba(212,175,55,0.2);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--neutral-50);
+}
+[data-theme="dark"] .call-exec-summary {
+  background: rgba(212,175,55,0.03);
+  border-color: rgba(212,175,55,0.15);
+}
+.exec-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-500);
+  background: rgba(212,175,55,0.06);
+  border-bottom: 1px solid rgba(212,175,55,0.1);
+  user-select: none;
+}
+.exec-summary-header:hover {
+  background: rgba(212,175,55,0.1);
+}
+.exec-section {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--neutral-200);
+}
+.exec-section:last-child { border-bottom: none; }
+.exec-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--neutral-500);
+  margin-bottom: 2px;
+}
+.exec-value {
+  font-size: 13px;
+  color: var(--neutral-800);
+  line-height: 1.4;
+}
+[data-theme="dark"] .exec-value { color: var(--neutral-200); }
+.confidence-high { color: #059669; font-weight: 700; }
 [data-theme="dark"] .polaris-summary {
   background: linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03));
   border-color: rgba(212,175,55,0.2);
@@ -757,6 +804,16 @@
   flex-wrap: wrap;
   margin-top: 14px;
 }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; line-height: 1; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-primary { background: var(--brand-500); color: #fff; border-color: var(--brand-500); }
+.btn-primary:hover { background: var(--brand-600); }
+.btn-secondary { background: var(--neutral-100); color: var(--neutral-700); border-color: var(--neutral-300); }
+.btn-secondary:hover { background: var(--neutral-200); }
+.btn-ghost { background: transparent; color: var(--neutral-500); border-color: transparent; }
+.btn-ghost:hover { background: var(--neutral-100); color: var(--neutral-700); }
+[data-theme="dark"] .btn-secondary { background: var(--neutral-200); color: var(--neutral-200); border-color: var(--neutral-300); }
+[data-theme="dark"] .btn-ghost:hover { background: var(--neutral-200); }
 .action-btn {
   display: flex;
   align-items: center;
@@ -1314,6 +1371,9 @@ function applyFilters(calls) {
 // ===== Render =====
 function renderCalls() {
   let f = applyFilters(allCalls);
+  if (typeof curSort !== 'undefined' && curSort) {
+    f = sortCalls(f, curSort);
+  }
   const el = document.getElementById("callHistoryList");
   const resultsCountEl = document.getElementById("resultsCount");
   if (f.length === 0) {
@@ -1326,6 +1386,20 @@ function renderCalls() {
     updatePolaris();
     return;
   }
+function sortCalls(arr, sort) {
+  if (!arr || !arr.length) return arr;
+  var sorted = arr.slice();
+  switch(sort) {
+    case 'newest': sorted.sort(function(a,b){return new Date(b.receivedAt||b.time) - new Date(a.receivedAt||a.time);}); break;
+    case 'oldest': sorted.sort(function(a,b){return new Date(a.receivedAt||a.time) - new Date(b.receivedAt||b.time);}); break;
+    case 'highest': sorted.sort(function(a,b){return (b.avgPrice||0) - (a.avgPrice||0);}); break;
+    case 'lowest': sorted.sort(function(a,b){return (a.avgPrice||0) - (b.avgPrice||0);}); break;
+    case 'booked': sorted.sort(function(a,b){return (a.outcome==='appointment-set'?0:1) - (b.outcome==='appointment-set'?0:1);}); break;
+    case 'attention': sorted.sort(function(a,b){return (a.status==='voicemail'||a.outcome==='no-interest'?0:1) - (b.status==='voicemail'||b.outcome==='no-interest'?0:1);}); break;
+    case 'alpha': sorted.sort(function(a,b){return (a.caller||'').localeCompare(b.caller||'');}); break;
+  }
+  return sorted;
+}
   const oc = {
     "appointment-set": {cls:"booked", label:"Booked"},
     "lead-captured": {cls:"estimate", label:"Estimate"},
@@ -1394,9 +1468,9 @@ function renderCalls() {
             '</div>' +
           '</div>' +
           '<div class="call-actions">' +
-            '<button class="action-btn action-primary" onclick="NotificationService.show(\x27Sent SMS to \x27+c.phone+\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send SMS</button>' +
-            '<button class="action-btn action-secondary" onclick="NotificationService.show(\x27Email sent\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button>' +
-            '<button class="action-btn action-tertiary" onclick="document.getElementById(\x27+execSummaryId+\x27).classList.toggle(\x27exec-open\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Summary</button>' +
+            '<button class="btn btn-sm btn-primary" onclick="NotificationService.show(\x27Sent SMS to \x27+c.phone+\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send SMS</button>' +
+            '<button class="btn btn-sm btn-secondary" onclick="NotificationService.show(\x27Email sent\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button>' +
+            '<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\x27+execSummaryId+\x27).classList.toggle(\x27exec-open\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Polaris</button>' +
           '</div>' +
         '</div>' +
       '</div>';

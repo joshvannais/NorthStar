@@ -839,22 +839,27 @@ tr:hover td { background: var(--neutral-50); }
 /* Empty state */
 .empty-state {
   text-align: center;
-  padding: 48px 20px;
+  padding: 60px 20px;
   color: var(--neutral-500);
 }
 
 .empty-state svg {
-  width: 56px;
-  height: 56px;
-  margin-bottom: 14px;
-  opacity: 0.4;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  opacity: 0.3;
 }
 
 .empty-state h3 {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--neutral-700);
   margin-bottom: 6px;
+}
+
+.empty-state p {
+  font-size: 14px;
+  color: var(--neutral-500);
 }
 
 /* Integration status */
@@ -1555,45 +1560,218 @@ tr:hover td { background: var(--neutral-50); }
 [data-theme="dark"] .footer-links a:hover { color: var(--brand-400); }
 
 #callHistoryList { display: flex; flex-direction: column; gap: 20px; }
-/* FEATURE: Call History */
-.call-card { background: var(--card-bg, #fff); border: 1px solid var(--neutral-200); border-radius: 16px; overflow: hidden; }
-.call-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; cursor: pointer; gap: 12px; }
+/* FEATURE: Call History — Premium */
+.call-card {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+.call-card:hover {
+  border-color: var(--neutral-300);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+[data-theme="dark"] .call-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.call-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+  gap: 12px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
 .call-card-header:hover { background: var(--neutral-50); }
-
-.call-caller { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
-.call-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--brand-100); color: var(--brand-600); display: flex; align-items: center; justify-content: center; font-weight: 600; }
-.call-name { font-weight: 600; font-size: 14px; }
-.call-meta { font-size: 12px; color: var(--neutral-500); }
-.call-status-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-.call-status-badge.answered { background: #d1fae5; color: #047857; }
+.call-card.expanded .call-card-header {
+  border-bottom-color: var(--neutral-200);
+}
+.call-caller {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+.call-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+.call-info { min-width: 0; }
+.call-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--neutral-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-theme="dark"] .call-name { color: var(--neutral-100); }
+.call-meta {
+  font-size: 12px;
+  color: var(--neutral-500);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meta-sep { color: var(--neutral-300); margin: 0 4px; }
+.call-status-badge {
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.call-status-badge.booked { background: rgba(5,150,105,0.12); color: #059669; }
+.call-status-badge.estimate { background: rgba(37,99,235,0.12); color: #2563eb; }
+.call-status-badge.followup { background: rgba(217,119,6,0.12); color: #d97706; }
+.call-status-badge.voicemail { background: rgba(107,114,128,0.12); color: #6b7280; }
+.call-status-badge.nointerest { background: rgba(107,114,128,0.08); color: #6b7280; }
+.call-status-badge.answered { background: rgba(5,150,105,0.12); color: #059669; }
 .call-status-badge.missed { background: #fee2e2; color: #b91c1c; }
-.call-status-badge.voicemail { background: #fef3c7; color: #a16207; }
 .call-status-badge.demo { background: #f3e8ff; color: #7e22ce; }
 .call-expand-icon { transition: transform 0.2s ease; }
 .call-card.expanded .call-expand-icon { transform: rotate(180deg); }
-.call-card-body { max-height: 0; overflow: hidden; transition: all 0.3s ease; padding: 0 20px; }
-.call-card.expanded .call-card-body { max-height: none; overflow-y: visible; padding: 8px 20px 24px; }
-
-/* Transcript chat message bubbles */
-.chat-msg { padding: 8px 12px; margin: 4px 0; border-radius: var(--radius-sm); font-size: 13px; line-height: 1.5; }
-.chat-msg.chat-ai { background: rgba(212, 175, 55, 0.12); color: var(--neutral-700); }
-.chat-msg.chat-ai strong { color: var(--brand-600); }
-.chat-msg.chat-customer { background: var(--neutral-50); color: var(--neutral-700); margin-left: 24px; }
-.chat-msg.chat-customer strong { color: var(--neutral-500); }
-[data-theme="dark"] .chat-msg.chat-ai { background: rgba(212, 175, 55, 0.15); color: var(--neutral-600); }
-[data-theme="dark"] .chat-msg.chat-ai strong { color: var(--brand-400); }
-[data-theme="dark"] .chat-msg.chat-customer { background: var(--neutral-100); color: var(--neutral-600); }
-[data-theme="dark"] .chat-msg.chat-customer strong { color: var(--neutral-400); }
-.call-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; font-size: 13px; margin-top: 4px; }
-.call-detail-label { color: var(--neutral-500); font-weight: 500; }
+.call-card-body {
+  padding: 0 20px 20px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.35s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+.call-card.expanded .call-card-body {
+  max-height: 2000px;
+  opacity: 1;
+  padding: 20px 20px 20px;
+}
+.call-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.call-detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.call-detail-value {
+  font-size: 14px;
+  color: var(--neutral-800);
+  font-weight: 500;
+}
+[data-theme="dark"] .call-detail-value { color: var(--neutral-200); }
+.call-job-value {
+  margin: 14px 0;
+  padding: 14px 16px;
+  background: var(--neutral-200);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--brand-500);
+}
+[data-theme="dark"] .call-job-value { background: var(--neutral-300); }
+.call-job-value-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-600);
+}
+.call-job-value-suffix {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--neutral-500);
+  margin-left: 6px;
+}
+.call-job-value-desc {
+  font-size: 13px;
+  color: var(--neutral-700);
+  margin-top: 4px;
+}
+[data-theme="dark"] .call-job-value-desc { color: var(--neutral-400); }
 .call-summary { background: var(--neutral-50); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 12px; font-size: 13px; }
-.call-transcript { border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 12px; max-height: 400px; overflow-y: auto; }
+[data-theme="dark"] .call-summary { background: var(--neutral-200); color: var(--neutral-700); }
+.call-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--neutral-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+  margin-top: 14px;
+}
+.call-summary-text {
+  font-size: 13px;
+  color: var(--neutral-700);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+[data-theme="dark"] .call-summary-text { color: var(--neutral-300); }
+.call-transcript {
+  font-size: 13px;
+  background: var(--neutral-200);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+[data-theme="dark"] .call-transcript { background: var(--neutral-300); }
 .call-transcript .ai-text { color: #D4AF37; }
-.call-actions button { padding: 6px 14px; font-size: 12px; border-radius: var(--radius-sm); border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; }
+.transcript-line {
+  padding: 4px 0;
+  color: var(--neutral-700);
+}
+.transcript-ai { color: var(--brand-600); }
+.transcript-customer { color: var(--neutral-700); }
+.transcript-speaker {
+  font-weight: 700;
+  margin-right: 6px;
+}
+.call-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.call-actions button {
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--neutral-300);
+  background: var(--neutral-100);
+  color: var(--neutral-700);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.call-actions button:hover {
+  background: var(--neutral-200);
+  border-color: var(--brand-400);
+}
+[data-theme="dark"] .call-actions button { background: var(--neutral-200); border-color: var(--neutral-300); color: var(--neutral-200); }
 .call-outcome { font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: 500; }
 .call-outcome.appointment-set { background: #d1fae5; color: #047857; }
 .call-outcome.follow-up { background: #fef3c7; color: #a16207; }
 .call-outcome.no-interest { background: #f3f4f6; color: #6b7280; }
+
 
 /* FEATURE: Demo */
 .demo-msg { padding: 8px 14px; border-radius: var(--radius-sm); margin-bottom: 8px; max-width: 80%; }
@@ -1742,7 +1920,25 @@ tr:hover td { background: var(--neutral-50); }
 }
 
 /* FEATURE: Call History Polish */
-.call-search-bar { margin-bottom: 12px; }
+.call-search-bar {
+  margin-bottom: 12px;
+}
+.call-search-bar input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  background: var(--neutral-100);
+  color: var(--neutral-800);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+.call-search-bar input:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+}
 .call-filters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
 .call-filters .filter-group { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .call-filters .call-filters-row2 { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
@@ -1756,17 +1952,6 @@ tr:hover td { background: var(--neutral-50); }
 .call-filter-btn { padding: 5px 12px; font-size: 12px; border-radius: 20px; border: 1px solid var(--neutral-200); background: #fff; cursor: pointer; color: var(--neutral-600); transition: all 0.2s; white-space: nowrap; flex: 0 0 auto; }
 .call-filter-btn:hover { border-color: var(--brand-300); color: var(--brand-600); }
 .call-filter-btn.active { background: var(--brand-600); color: white; border-color: var(--brand-600); }
-
-/* Dark mode for expanded call card */
-[data-theme="dark"] .call-card-body {
-  background: var(--neutral-200);
-}
-[data-theme="dark"] .call-card { background: var(--neutral-100); border-color: var(--neutral-300); }
-[data-theme="dark"] .call-card-header:hover { background: var(--neutral-200); }
-[data-theme="dark"] .call-summary {
-  background: var(--neutral-200);
-  color: var(--neutral-700);
-}
 
 /* ============================================
    Phase 0.4 — Design System Components

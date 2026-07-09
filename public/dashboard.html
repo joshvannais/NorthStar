@@ -208,7 +208,7 @@ function toggleMobileMenu() {
           <div id="heroContent" style="display:none;">
             <div class="ds-hero-kpi-header">
               <span class="ds-hero-kpi-title">Estimated Revenue Opportunity</span>
-              <button class="ds-info-btn" onclick="event.stopPropagation();showTooltip(event,'Total estimated value of all qualified opportunities managed by NorthStar. This is pipeline value, not earned revenue.')" aria-label="What is estimated revenue opportunity?">?</button>
+              <button class="ds-info-btn" onclick="event.stopPropagation();TooltipService.show(event,'Total estimated value of all qualified opportunities managed by NorthStar. This is pipeline value, not earned revenue.')" aria-label="What is estimated revenue opportunity?">?</button>
             </div>
             <div class="ds-hero-kpi-filters" id="heroPeriodPills">
               <button class="ds-pill active" data-period="today" onclick="event.stopPropagation();switchHeroPeriod('today')">Today</button>
@@ -493,6 +493,7 @@ function toggleMobileMenu() {
   <script src="/js/app-store.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
+  <script src="/js/tooltip-service.js"></script>
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/theme.js"></script>
@@ -543,19 +544,7 @@ function toggleMobileMenu() {
       return `<span class="badge ${cls}">${status || 'new'}</span>`;
     }
 
-    // Simple tooltip
-    function showTooltip(e,text) {
-      const existing = document.querySelector('.tooltip');
-      if(existing) existing.remove();
-      const tip = document.createElement('div');
-      tip.className = 'tooltip visible';
-      tip.textContent = text;
-      const rect = e.target.getBoundingClientRect();
-      tip.style.left = Math.min(rect.left + rect.width/2 - 100, window.innerWidth-220) + 'px';
-      tip.style.top = (rect.bottom + 8) + 'px';
-      document.body.appendChild(tip);
-      setTimeout(() => tip.remove(), 4000);
-    }
+
 
     // ═══════════════════════════════════════════════════════════════
     // WIDGET: Daily Brief (V1-02)

@@ -403,6 +403,11 @@ function toggleMobileMenu() {
 <div id="toast" class="toast"></div>
 <script src="/js/simulator.js"></script>
 <script src="/js/api.js"></script>
+<script src="/js/event-bus.js"></script>
+<script src="/js/business-models.js"></script>
+<script src="/js/app-store.js"></script>
+<script src="/js/polaris-engine.js"></script>
+<script src="/js/notification-service.js"></script>
 
 <script>
 // ===== Data =====
@@ -436,11 +441,11 @@ function renderCalls(){
   }
   const el=document.getElementById("callHistoryList");
   if(f.length===0){el.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';upStats();updatePolaris();return;}
-  const oc={"appointment-set":{cls:"booked",label:"Booked"},"lead-captured":{cls:"estimate",label:"Estimate"},"follow-up":{cls:"followup",label:"Follow Up"},"no-interest":{cls:"nointerest",label:"No Interest"}};
+  const oc={"appointment-set":{cls:"booked",label:"Booked"},"lead-captured":{cls:"estimate",label:"Estimate"},"follow-up":{cls:"followup",label:"Follow Up"},"no-interest":{cls:"nointerest",label:"No Interest"},"voicemail":{cls:"voicemail",label:"Voicemail"},"answered":{cls:"answered",label:"Answered"}};
   let html="";
   f.forEach((c,i)=>{
     const inits=c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
-    const ob=oc[c.outcome]||{cls:"voicemail",label:c.outcome||c.status};
+    function toTitle(s){return s?s.charAt(0).toUpperCase()+s.slice(1).replace(/-/g," "):"Unknown";}const ob=oc[c.outcome]||{cls:"voicemail",label:c.outcome?toTitle(c.outcome.replace(/-/g," ")):toTitle(c.status)};
     const statusClass=c.status==="voicemail"?"voicemail":ob.cls;
     html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
   });

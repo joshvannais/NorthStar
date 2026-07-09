@@ -103,6 +103,11 @@
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
+@media (max-width: 480px) {
+  .filter-bar { flex-direction: column; align-items: stretch; }
+  .filter-bar .filter-btn-wrapper { width: 100%; }
+  .filter-bar .filter-btn { width: 100%; justify-content: center; }
+}
 .filter-btn {
   display: inline-flex;
   align-items: center;
@@ -178,7 +183,10 @@
   box-shadow: 0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
   padding: 20px 22px;
   z-index: 100;
-  display: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
   max-height: 70vh;
   overflow-y: auto;
 }
@@ -187,7 +195,11 @@
   border-color: var(--neutral-300);
   box-shadow: 0 12px 40px rgba(0,0,0,0.4);
 }
-.filter-dropdown.open { display: block; }
+.filter-dropdown.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
 .filter-dropdown-header {
   display: flex;
   align-items: center;
@@ -380,9 +392,11 @@
 .call-card:hover {
   border-color: var(--neutral-300);
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
 }
 [data-theme="dark"] .call-card:hover {
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
 }
 .call-card-header {
   display: flex;
@@ -416,8 +430,8 @@
 .call-status-badge.followup { background: rgba(217,119,6,0.12); color: #d97706; }
 .call-status-badge.voicemail { background: rgba(107,114,128,0.12); color: #6b7280; }
 .call-status-badge.nointerest { background: rgba(107,114,128,0.08); color: #6b7280; }
-.call-card-body { padding: 0 18px 18px; display: none; }
-.call-card.expanded .call-card-body { display: block; }
+.call-card-body { padding: 0 18px 18px; max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.25s ease; }
+.call-card.expanded .call-card-body { max-height: 800px; opacity: 1; padding: 0 18px 18px; }
 .call-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .call-detail-item { }
 .call-detail-label { font-size: 11px; font-weight: 600; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
@@ -552,11 +566,17 @@ function toggleMobileMenu() {
   <main class="main-content" id="mainContent">
     <div class="page-header">
       <div><h1>Communications</h1><p>Every communication your AI Office Manager has handled.</p></div>
-      <button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">📞 Simulate Call</button>
+      <button class="btn btn-primary btn-sm" onclick="simulateDemoCall()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        Simulate Call
+      </button>
     </div>
     <!-- Search -->
     <div class="call-search-bar">
-      <input type="text" id="callSearchInput" placeholder="🔍 Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)">
+      <div style="position:relative;display:flex;align-items:center;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:12px;width:16px;height:16px;color:var(--neutral-400);pointer-events:none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="callSearchInput" placeholder="Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)">
+      </div>
     </div>
     <!-- POLARIS Executive Summary -->
     <div class="polaris-summary">
@@ -655,11 +675,11 @@ function toggleMobileMenu() {
             <div class="filter-section-title">Status</div>
             <div class="filter-options" id="filterStatusOptions">
               <button class="filter-option-btn selected-all" data-status="all" onclick="toggleFilterStatus('all')">All</button>
-              <button class="filter-option-btn" data-status="booked" onclick="toggleFilterStatus('booked')">🟢 Booked</button>
-              <button class="filter-option-btn" data-status="estimate" onclick="toggleFilterStatus('estimate')">🔵 Estimate</button>
-              <button class="filter-option-btn" data-status="follow-up" onclick="toggleFilterStatus('follow-up')">🟡 Follow Up</button>
-              <button class="filter-option-btn" data-status="voicemail" onclick="toggleFilterStatus('voicemail')">⚪ Voicemail</button>
-              <button class="filter-option-btn" data-status="no-interest" onclick="toggleFilterStatus('no-interest')">⚫ No Interest</button>
+              <button class="filter-option-btn" data-status="booked" onclick="toggleFilterStatus('booked')"><span class="filter-dot" style="background:#059669;display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;"></span>Booked</button>
+              <button class="filter-option-btn" data-status="estimate" onclick="toggleFilterStatus('estimate')"><span class="filter-dot" style="background:#3b82f6;display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;"></span>Estimate</button>
+              <button class="filter-option-btn" data-status="follow-up" onclick="toggleFilterStatus('follow-up')"><span class="filter-dot" style="background:#d97706;display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;"></span>Follow Up</button>
+              <button class="filter-option-btn" data-status="voicemail" onclick="toggleFilterStatus('voicemail')"><span class="filter-dot" style="background:#6b7280;display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;"></span>Voicemail</button>
+              <button class="filter-option-btn" data-status="no-interest" onclick="toggleFilterStatus('no-interest')"><span class="filter-dot" style="background:#374151;display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;"></span>No Interest</button>
             </div>
           </div>
           <!-- Date Range Section -->
@@ -667,8 +687,8 @@ function toggleMobileMenu() {
             <div class="filter-section-title">Date Range</div>
             <div class="filter-options" id="filterDateOptions">
               <button class="filter-option-btn selected" data-range="all" onclick="setFilterDateRange('all')">All Time</button>
-              <button class="filter-option-btn" data-range="today" onclick="setFilterDateRange('today')">📅 Today</button>
-              <button class="filter-option-btn" data-range="week" onclick="setFilterDateRange('week')">📅 This Week</button>
+              <button class="filter-option-btn" data-range="today" onclick="setFilterDateRange('today')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Today</button>
+              <button class="filter-option-btn" data-range="week" onclick="setFilterDateRange('week')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>This Week</button>
             </div>
           </div>
           <!-- Service Type Section -->
@@ -706,7 +726,7 @@ function toggleMobileMenu() {
       <span class="results-count" id="resultsCount"></span>
     </div>
     <!-- Call List -->
-    <div id="callHistoryList"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No communications yet</h3><p>Click "Simulate Call" to see how communications appear here.</p></div></div>
+    <div id="callHistoryList"><div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><h3>No communications yet</h3><p>Click <strong>Simulate Call</strong> to see how communications appear here.</p></div></div>
   </main>
 </div>
 <div id="toast" class="toast"></div>
@@ -984,7 +1004,7 @@ function renderCalls() {
   if (f.length === 0) {
     const emptyMsg = allCalls.length > 0 ? 
       '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><h3>No matching calls</h3><p>Try adjusting your filters or search terms.</p></div>' :
-      '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No communications yet</h3><p>Click "Simulate Call" to see how communications appear here.</p></div>';
+      '<div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><h3>No communications yet</h3><p>Click <strong>Simulate Call</strong> to see how communications appear here.</p></div>';
     el.innerHTML = emptyMsg;
     resultsCountEl.textContent = '';
     upStats();

@@ -758,6 +758,7 @@ function toggleMobileMenu() {
 <script src="/js/app-store.js"></script>
 <script src="/js/polaris-engine.js"></script>
 <script src="/js/notification-service.js"></script>
+  <script src="/js/customer-drawer.js"></script>
 <script src="/js/simulator.js"></script>
 <script src="/js/api.js"></script>
 
@@ -1092,7 +1093,7 @@ function sortCalls(arr, sort) {
     const execSummaryId = 'execSummary-' + i;
     html += '' +
       '<div class="call-card" id="call-'+i+'">' +
-        '<div class="call-card-header" onclick="toggleCall('+i+')">' +
+        '<div class="call-card-header" onclick="CustomerDrawer.open(f['+i+'])">' +
           '<div class="call-caller">' +
             '<div class="call-avatar">'+inits+'</div>' +
             '<div class="call-info">' +
@@ -1102,13 +1103,7 @@ function sortCalls(arr, sort) {
           '</div>' +
           '<span class="call-status-badge '+statusClass+'">'+ob.label+'</span>' +
         '</div>' +
-        '<div class="call-card-body">' +
-          '<div class="call-detail-grid">' +
-            '<div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div>' +
-            '<div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div>' +
-            '<div class="call-detail-item"><div class="call-detail-label">Service</div><div class="call-detail-value">'+c.service+'</div></div>' +
-            '<div class="call-detail-item"><div class="call-detail-label">Duration</div><div class="call-detail-value">'+c.duration+'</div></div>' +
-          '</div>' +
+        '<div class="call-card-body">' +\n          '<p style="padding:12px;text-align:center;color:var(--neutral-500);font-size:13px;">Click to view full customer details, POLARIS analysis, and transcript.</p>' +'</div>' +
           '<div class="call-job-value">' +
             '<div class="call-job-value-amount">$'+safeNum(c.avgPrice,0).toLocaleString()+' <span class="call-job-value-suffix">Estimated Job Value</span></div>' +
             '<div class="call-job-value-desc">'+safe(c.jobDetail,'')+'</div>' +
@@ -1152,14 +1147,8 @@ function setSearch(q) {
   curSearch = q;
   renderCalls();
 }
-function toggleExecutiveSummary(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.toggle('exec-open');
-}
-function toggleCall(i) {
-  document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});
-  document.getElementById("call-"+i).classList.toggle("expanded");
-}
+
+
 
 // ===== Stats =====
 function upStats() {

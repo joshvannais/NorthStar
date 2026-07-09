@@ -57,6 +57,7 @@
   border-radius: 8px; display: flex; align-items: center; justify-content: center;
   font-size: 16px; font-weight: 800; color: #1a1a1a; flex-shrink: 0;
 }
+.polaris-summary-logo img { height:24px; width:24px; border-radius:6px; }
 .polaris-summary-title {
   font-size: 17px; font-weight: 700; color: var(--neutral-900);
   letter-spacing: 0.02em;
@@ -94,64 +95,278 @@
 }
 @media (max-width: 768px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 420px) { .kpi-grid { grid-template-columns: 1fr 1fr; } }
-/* === Filter System === */
-.call-filters {
+/* === Executive Filter Dropdown === */
+.filter-bar {
   display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
+}
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 20px;
-  align-items: center;
-}
-.call-filter-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-.call-filter-btn {
-  padding: 6px 14px;
+  padding: 8px 18px;
   border-radius: 100px;
   border: 1px solid var(--neutral-300);
   background: var(--neutral-100);
-  color: var(--neutral-600);
+  color: var(--neutral-700);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+.filter-btn:hover {
+  border-color: var(--brand-400);
+  color: var(--brand-600);
+  background: var(--neutral-100);
+}
+.filter-btn.active {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: white;
+}
+.filter-btn .filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--brand-600);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.filter-btn.active .filter-badge {
+  background: rgba(255,255,255,0.25);
+}
+.filter-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 100px;
+  border: 1px solid rgba(220,38,38,0.3);
+  background: var(--neutral-100);
+  color: var(--danger);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
-.call-filter-btn:hover {
+.filter-btn-danger:hover {
+  background: rgba(220,38,38,0.06);
+  border-color: rgba(220,38,38,0.5);
+}
+/* === Filter Dropdown Panel === */
+.filter-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+  padding: 20px 22px;
+  z-index: 100;
+  display: none;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+[data-theme="dark"] .filter-dropdown {
+  background: #1e1e2a;
+  border-color: var(--neutral-300);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+}
+.filter-dropdown.open { display: block; }
+.filter-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--neutral-200);
+}
+.filter-dropdown-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--neutral-900);
+}
+.filter-dropdown-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--neutral-500);
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.filter-dropdown-close:hover {
+  color: var(--neutral-700);
+  background: var(--neutral-200);
+}
+.filter-section {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--neutral-200);
+}
+.filter-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.filter-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+.filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.filter-option-btn {
+  padding: 5px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--neutral-300);
+  background: var(--neutral-100);
+  color: var(--neutral-600);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.filter-option-btn:hover {
   border-color: var(--brand-400);
   color: var(--brand-600);
 }
-.call-filter-btn.active {
+.filter-option-btn.selected {
   background: var(--brand-600);
   border-color: var(--brand-600);
   color: white;
 }
-[data-theme="dark"] .call-filter-btn {
+.filter-option-btn.selected-all {
+  background: var(--neutral-200);
   border-color: var(--neutral-300);
-  background: var(--neutral-100);
-  color: var(--neutral-500);
+  color: var(--neutral-700);
 }
-.call-search-bar {
-  margin-bottom: 16px;
+.filter-option-btn.selected-all:hover {
+  border-color: var(--brand-400);
+  color: var(--brand-600);
 }
-.call-search-bar input {
+/* Toggle switch */
+.filter-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+.filter-toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--neutral-700);
+}
+.filter-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.filter-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.filter-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--neutral-300);
+  border-radius: 22px;
+  transition: 0.2s;
+}
+.filter-toggle-slider:before {
+  content: "";
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+.filter-toggle input:checked + .filter-toggle-slider {
+  background: var(--brand-600);
+}
+.filter-toggle input:checked + .filter-toggle-slider:before {
+  transform: translateX(18px);
+}
+/* Revenue range inputs */
+.filter-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.filter-range-input {
   width: 100%;
-  padding: 10px 14px;
+  padding: 6px 10px;
   border: 1px solid var(--neutral-300);
-  border-radius: var(--radius-md);
-  font-size: 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
   background: var(--neutral-100);
   color: var(--neutral-800);
   box-sizing: border-box;
-  transition: border-color 0.15s ease;
 }
-.call-search-bar input:focus {
+.filter-range-input:focus {
   outline: none;
   border-color: var(--brand-500);
-  box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+  box-shadow: 0 0 0 2px rgba(79,70,229,0.1);
+}
+.filter-range-sep {
+  color: var(--neutral-500);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+/* Reset button */
+.filter-reset-btn {
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--neutral-300);
+  background: transparent;
+  color: var(--neutral-500);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-top: 4px;
+}
+.filter-reset-btn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(220,38,38,0.04);
+}
+/* Filter button wrapper for positioning */
+.filter-btn-wrapper {
+  position: relative;
+  display: inline-block;
 }
 /* === Call Cards === */
 .call-card {
@@ -241,6 +456,43 @@
 .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
 .empty-state h3 { font-size: 18px; font-weight: 600; color: var(--neutral-700); margin-bottom: 6px; }
 .empty-state p { font-size: 14px; color: var(--neutral-500); }
+/* === Search Bar === */
+.call-search-bar {
+  margin-bottom: 12px;
+}
+.call-search-bar input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  background: var(--neutral-100);
+  color: var(--neutral-800);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+.call-search-bar input:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+}
+/* === Results count === */
+.results-count {
+  font-size: 12px;
+  color: var(--neutral-500);
+  font-weight: 500;
+  margin-left: auto;
+}
+/* === All time pill === */
+.filter-all-time {
+  padding: 5px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--neutral-300);
+  background: var(--neutral-200);
+  color: var(--neutral-700);
+  font-size: 12px;
+  font-weight: 500;
+}
 </style>
 </head>
 <body>
@@ -382,19 +634,76 @@ function toggleMobileMenu() {
         <div class="stat-change down" id="kpiMissedChange">Needs attention</div>
       </div>
     </div>
-    <!-- Filters -->
-    <div class="call-filters">
-      <span class="call-filter-group">
-        <button class="call-filter-btn active" data-filter="all" onclick="setFilter('all')">📋 All</button>
-        <button class="call-filter-btn" data-filter="booked" onclick="setFilter('booked')">🟢 Booked</button>
-        <button class="call-filter-btn" data-filter="estimate" onclick="setFilter('estimate')">🔵 Estimate</button>
-        <button class="call-filter-btn" data-filter="follow-up" onclick="setFilter('follow-up')">🟡 Follow Up</button>
-        <button class="call-filter-btn" data-filter="voicemail" onclick="setFilter('voicemail')">⚪ Voicemail</button>
-        <button class="call-filter-btn" data-filter="no-interest" onclick="setFilter('no-interest')">⚫ No Interest</button>
-        <button class="call-filter-btn" data-filter="today" onclick="setFilter('today')">📅 Today</button>
-        <button class="call-filter-btn" data-filter="week" onclick="setFilter('week')">📅 This Week</button>
-        <button class="call-filter-btn" style="color:var(--danger);border-color:rgba(220,38,38,0.3);" onclick="clearAllCalls()">🗑 Clear All</button>
-      </span>
+    <!-- Executive Filter Bar -->
+    <div class="filter-bar">
+      <div class="filter-btn-wrapper">
+        <button class="filter-btn" id="filterToggleBtn" onclick="toggleFilterDropdown()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
+          Filters
+          <span class="filter-badge" id="filterCountBadge" style="display:none;">0</span>
+        </button>
+        <!-- Filter Dropdown Panel -->
+        <div class="filter-dropdown" id="filterDropdown">
+          <div class="filter-dropdown-header">
+            <div class="filter-dropdown-title">Filter Calls</div>
+            <button class="filter-dropdown-close" onclick="closeFilterDropdown()" aria-label="Close filters">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <!-- Status Section -->
+          <div class="filter-section">
+            <div class="filter-section-title">Status</div>
+            <div class="filter-options" id="filterStatusOptions">
+              <button class="filter-option-btn selected-all" data-status="all" onclick="toggleFilterStatus('all')">All</button>
+              <button class="filter-option-btn" data-status="booked" onclick="toggleFilterStatus('booked')">🟢 Booked</button>
+              <button class="filter-option-btn" data-status="estimate" onclick="toggleFilterStatus('estimate')">🔵 Estimate</button>
+              <button class="filter-option-btn" data-status="follow-up" onclick="toggleFilterStatus('follow-up')">🟡 Follow Up</button>
+              <button class="filter-option-btn" data-status="voicemail" onclick="toggleFilterStatus('voicemail')">⚪ Voicemail</button>
+              <button class="filter-option-btn" data-status="no-interest" onclick="toggleFilterStatus('no-interest')">⚫ No Interest</button>
+            </div>
+          </div>
+          <!-- Date Range Section -->
+          <div class="filter-section">
+            <div class="filter-section-title">Date Range</div>
+            <div class="filter-options" id="filterDateOptions">
+              <button class="filter-option-btn selected" data-range="all" onclick="setFilterDateRange('all')">All Time</button>
+              <button class="filter-option-btn" data-range="today" onclick="setFilterDateRange('today')">📅 Today</button>
+              <button class="filter-option-btn" data-range="week" onclick="setFilterDateRange('week')">📅 This Week</button>
+            </div>
+          </div>
+          <!-- Service Type Section -->
+          <div class="filter-section">
+            <div class="filter-section-title">Service Type</div>
+            <div class="filter-options" id="filterServiceOptions">
+              <button class="filter-option-btn selected" data-service="all" onclick="setFilterService('all')">All Services</button>
+            </div>
+          </div>
+          <!-- AI-Related Calls Toggle -->
+          <div class="filter-section">
+            <div class="filter-toggle-row">
+              <span class="filter-toggle-label">🤖 AI-Related Calls Only</span>
+              <label class="filter-toggle">
+                <input type="checkbox" id="filterAiToggle" onchange="toggleAiFilter(this.checked)">
+                <span class="filter-toggle-slider"></span>
+              </label>
+            </div>
+            <div style="font-size:11px;color:var(--neutral-500);margin-top:2px;">Show only calls where AI reasoning was involved</div>
+          </div>
+          <!-- Revenue Range Section -->
+          <div class="filter-section">
+            <div class="filter-section-title">Revenue Range</div>
+            <div class="filter-range-row">
+              <input type="number" class="filter-range-input" id="filterRevenueMin" placeholder="Min $" min="0" onchange="setFilterRevenue()">
+              <span class="filter-range-sep">to</span>
+              <input type="number" class="filter-range-input" id="filterRevenueMax" placeholder="Max $" min="0" onchange="setFilterRevenue()">
+            </div>
+          </div>
+          <!-- Reset -->
+          <button class="filter-reset-btn" onclick="resetAllFilters()">↺ Reset All Filters</button>
+        </div>
+      </div>
+      <button class="filter-btn-danger" onclick="clearAllCalls()">🗑 Clear All</button>
+      <span class="results-count" id="resultsCount"></span>
     </div>
     <!-- Call List -->
     <div id="callHistoryList"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div></div>
@@ -410,10 +719,179 @@ function toggleMobileMenu() {
 <script src="/js/api.js"></script>
 
 <script>
-// ===== Data =====
-let curFilter = "all";
+// ===== Executive Filter State =====
+const filterState = {
+  statuses: new Set(),       // 'booked','estimate','follow-up','voicemail','no-interest' (empty = all)
+  dateRange: 'all',          // 'all','today','week'
+  serviceType: 'all',        // 'all' or specific service name
+  aiOnly: false,             // AI-related filter toggle
+  revenueMin: null,          // minimum revenue ($)
+  revenueMax: null           // maximum revenue ($)
+};
 let curSearch = "";
-function loadCalls(){renderCalls()}
+
+// ===== Filter Dropdown =====
+function toggleFilterDropdown() {
+  const dd = document.getElementById('filterDropdown');
+  dd.classList.toggle('open');
+  // Populate service types if first open
+  if (dd.classList.contains('open') && document.querySelectorAll('#filterServiceOptions .filter-option-btn[data-service]').length <= 1) {
+    populateServiceTypes();
+  }
+}
+function closeFilterDropdown() {
+  document.getElementById('filterDropdown').classList.remove('open');
+}
+// Close dropdown on click outside
+document.addEventListener('click', function(e) {
+  const wrapper = document.querySelector('.filter-btn-wrapper');
+  if (wrapper && !wrapper.contains(e.target)) {
+    closeFilterDropdown();
+  }
+});
+
+// ===== Status Filters =====
+function toggleFilterStatus(status) {
+  const allBtn = document.querySelector('#filterStatusOptions [data-status="all"]');
+  if (status === 'all') {
+    // Reset: clear all selections
+    filterState.statuses.clear();
+    document.querySelectorAll('#filterStatusOptions .filter-option-btn').forEach(b => {
+      b.classList.toggle('selected', b.dataset.status === 'all');
+      b.classList.toggle('selected-all', b.dataset.status === 'all');
+    });
+    updateFilterUI();
+    renderCalls();
+    return;
+  }
+  // Remove 'all' selection when specific status is chosen
+  allBtn.classList.remove('selected', 'selected-all');
+  // Toggle the status
+  if (filterState.statuses.has(status)) {
+    filterState.statuses.delete(status);
+  } else {
+    filterState.statuses.add(status);
+  }
+  // If no statuses selected, revert to "All"
+  if (filterState.statuses.size === 0) {
+    allBtn.classList.add('selected', 'selected-all');
+  }
+  updateStatusUI();
+  updateFilterUI();
+  renderCalls();
+}
+function updateStatusUI() {
+  const allBtn = document.querySelector('#filterStatusOptions [data-status="all"]');
+  document.querySelectorAll('#filterStatusOptions .filter-option-btn').forEach(b => {
+    const s = b.dataset.status;
+    if (s === 'all') {
+      b.classList.toggle('selected', filterState.statuses.size === 0);
+      b.classList.toggle('selected-all', filterState.statuses.size === 0);
+    } else {
+      b.classList.toggle('selected', filterState.statuses.has(s));
+    }
+  });
+}
+
+// ===== Date Range Filter =====
+function setFilterDateRange(range) {
+  filterState.dateRange = range;
+  document.querySelectorAll('#filterDateOptions .filter-option-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.range === range);
+  });
+  updateFilterUI();
+  renderCalls();
+}
+
+// ===== Service Type Filter =====
+function populateServiceTypes() {
+  const container = document.getElementById('filterServiceOptions');
+  const services = new Set();
+  (allCalls || []).forEach(c => { if (c.service) services.add(c.service); });
+  // Keep "All Services" button, add individual service buttons after it
+  Array.from(services).sort().forEach(svc => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-option-btn';
+    btn.dataset.service = svc;
+    btn.textContent = svc;
+    btn.onclick = function() { setFilterService(svc); };
+    container.appendChild(btn);
+  });
+}
+function setFilterService(service) {
+  filterState.serviceType = service;
+  document.querySelectorAll('#filterServiceOptions .filter-option-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.service === service);
+  });
+  updateFilterUI();
+  renderCalls();
+}
+
+// ===== AI Filter Toggle =====
+function toggleAiFilter(checked) {
+  filterState.aiOnly = checked;
+  updateFilterUI();
+  renderCalls();
+}
+
+// ===== Revenue Range =====
+function setFilterRevenue() {
+  const min = document.getElementById('filterRevenueMin').value;
+  const max = document.getElementById('filterRevenueMax').value;
+  filterState.revenueMin = min !== '' ? parseFloat(min) : null;
+  filterState.revenueMax = max !== '' ? parseFloat(max) : null;
+  updateFilterUI();
+  renderCalls();
+}
+
+// ===== Reset All Filters =====
+function resetAllFilters() {
+  filterState.statuses.clear();
+  filterState.dateRange = 'all';
+  filterState.serviceType = 'all';
+  filterState.aiOnly = false;
+  filterState.revenueMin = null;
+  filterState.revenueMax = null;
+  // Reset all UI elements
+  updateStatusUI();
+  document.querySelectorAll('#filterDateOptions .filter-option-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.range === 'all');
+  });
+  document.querySelectorAll('#filterServiceOptions .filter-option-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.service === 'all');
+  });
+  document.getElementById('filterAiToggle').checked = false;
+  document.getElementById('filterRevenueMin').value = '';
+  document.getElementById('filterRevenueMax').value = '';
+  updateFilterUI();
+  renderCalls();
+}
+
+// ===== Active Filter Count & Badge =====
+function getActiveFilterCount() {
+  let count = 0;
+  if (filterState.statuses.size > 0) count++;
+  if (filterState.dateRange !== 'all') count++;
+  if (filterState.serviceType !== 'all') count++;
+  if (filterState.aiOnly) count++;
+  if (filterState.revenueMin !== null || filterState.revenueMax !== null) count++;
+  return count;
+}
+function updateFilterUI() {
+  const count = getActiveFilterCount();
+  const badge = document.getElementById('filterCountBadge');
+  const btn = document.getElementById('filterToggleBtn');
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline-flex';
+    btn.classList.add('active');
+  } else {
+    badge.style.display = 'none';
+    btn.classList.remove('active');
+  }
+}
+
+// ===== Data =====
 function getAllCalls() {
   try {
     if (typeof AppStore !== 'undefined' && AppStore.getLeads) {
@@ -422,96 +900,210 @@ function getAllCalls() {
   } catch(e) {}
   return [];
 }
-function isToday(d){const n=new Date();return d.getDate()===n.getDate()&&d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear()}
-function isThisWeek(d){const n=new Date();const s=new Date(n);s.setDate(n.getDate()-n.getDay());const e=new Date(s);e.setDate(s.getDate()+6);return d>=s&&d<=e}
-function matchSearch(c,q){const l=q.toLowerCase();return (c.caller||"").toLowerCase().includes(l)||(c.phone||"").includes(l)||(c.address||"").toLowerCase().includes(l)||(c.service||"").toLowerCase().includes(l)||(c.transcript||"").toLowerCase().includes(l)||(c.summary||"").toLowerCase().includes(l)}
-// ===== Render =====
-function renderCalls(){
-  let f=allCalls;
-  if(curSearch)f=f.filter(c=>matchSearch(c,curSearch));
-  if(curFilter!="all"){
-    if(curFilter==="today")f=f.filter(c=>{try{const d=new Date(c.receivedAt);return isToday(d);}catch(e){return false;}});
-    else if(curFilter==="week")f=f.filter(c=>{try{const d=new Date(c.receivedAt);return isThisWeek(d);}catch(e){return false;}});
-    else {
-      const outcomeMap={"booked":"appointment-set","estimate":"lead-captured","follow-up":"follow-up","voicemail":"voicemail","no-interest":"no-interest"};
-      const mapped=outcomeMap[curFilter];
-      if(mapped==="voicemail")f=f.filter(c=>c.status==="voicemail");
-      else f=f.filter(c=>c.outcome===mapped);
-    }
+function isToday(d) {
+  const n = new Date();
+  return d.getDate() === n.getDate() && d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+}
+function isThisWeek(d) {
+  const n = new Date();
+  const s = new Date(n);
+  s.setDate(n.getDate() - n.getDay());
+  const e = new Date(s);
+  e.setDate(s.getDate() + 6);
+  return d >= s && d <= e;
+}
+function matchSearch(c, q) {
+  const l = q.toLowerCase();
+  return (c.caller||"").toLowerCase().includes(l) ||
+    (c.phone||"").includes(l) ||
+    (c.address||"").toLowerCase().includes(l) ||
+    (c.service||"").toLowerCase().includes(l) ||
+    (c.transcript||"").toLowerCase().includes(l) ||
+    (c.summary||"").toLowerCase().includes(l);
+}
+
+// ===== Multi-Filter Engine =====
+function applyFilters(calls) {
+  let f = calls;
+  // Search filter
+  if (curSearch) f = f.filter(c => matchSearch(c, curSearch));
+  // Status filter (AND logic — call must match any selected status)
+  if (filterState.statuses.size > 0) {
+    f = f.filter(c => {
+      const outcomeMap = {
+        'booked': 'appointment-set',
+        'estimate': 'lead-captured',
+        'follow-up': 'follow-up',
+        'voicemail': 'voicemail',
+        'no-interest': 'no-interest'
+      };
+      return Array.from(filterState.statuses).some(s => {
+        const mapped = outcomeMap[s];
+        if (s === 'voicemail' || mapped === 'voicemail') return c.status === 'voicemail';
+        return c.outcome === mapped;
+      });
+    });
   }
-  const el=document.getElementById("callHistoryList");
-  if(f.length===0){el.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';upStats();updatePolaris();return;}
-  const oc={"appointment-set":{cls:"booked",label:"Booked"},"lead-captured":{cls:"estimate",label:"Estimate"},"follow-up":{cls:"followup",label:"Follow Up"},"no-interest":{cls:"nointerest",label:"No Interest"},"voicemail":{cls:"voicemail",label:"Voicemail"},"answered":{cls:"answered",label:"Answered"}};
-  let html="";
-  f.forEach((c,i)=>{
-    const inits=c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
-    function toTitle(s){return s?s.charAt(0).toUpperCase()+s.slice(1).replace(/-/g," "):"Unknown";}const ob=oc[c.outcome]||{cls:"voicemail",label:c.outcome?toTitle(c.outcome.replace(/-/g," ")):toTitle(c.status)};
-    const statusClass=c.status==="voicemail"?"voicemail":ob.cls;
-    html+='<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
+  // Date range filter
+  if (filterState.dateRange === 'today') {
+    f = f.filter(c => { try { return isToday(new Date(c.receivedAt)); } catch(e) { return false; } });
+  } else if (filterState.dateRange === 'week') {
+    f = f.filter(c => { try { return isThisWeek(new Date(c.receivedAt)); } catch(e) { return false; } });
+  }
+  // Service type filter
+  if (filterState.serviceType !== 'all') {
+    f = f.filter(c => c.service === filterState.serviceType);
+  }
+  // AI filter (show only calls with AI-related content in transcript/summary)
+  if (filterState.aiOnly) {
+    f = f.filter(c => {
+      const text = (c.transcript||'') + ' ' + (c.summary||'') + ' ' + (c.jobDetail||'');
+      return text.toLowerCase().includes('ai') || 
+             text.toLowerCase().includes('artificial intelligence') ||
+             text.toLowerCase().includes('machine learning') ||
+             text.toLowerCase().includes('automated') ||
+             text.toLowerCase().includes('smart') ||
+             text.toLowerCase().includes('intelligent');
+    });
+  }
+  // Revenue range filter
+  if (filterState.revenueMin !== null) {
+    f = f.filter(c => (c.avgPrice||0) >= filterState.revenueMin);
+  }
+  if (filterState.revenueMax !== null) {
+    f = f.filter(c => (c.avgPrice||0) <= filterState.revenueMax);
+  }
+  return f;
+}
+
+// ===== Render =====
+function renderCalls() {
+  let f = applyFilters(allCalls);
+  const el = document.getElementById("callHistoryList");
+  const resultsCountEl = document.getElementById("resultsCount");
+  if (f.length === 0) {
+    const emptyMsg = allCalls.length > 0 ? 
+      '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><h3>No matching calls</h3><p>Try adjusting your filters or search terms.</p></div>' :
+      '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><h3>No calls yet</h3><p>Click "Simulate Call" to see how calls appear here.</p></div>';
+    el.innerHTML = emptyMsg;
+    resultsCountEl.textContent = '';
+    upStats();
+    updatePolaris();
+    return;
+  }
+  const oc = {
+    "appointment-set": {cls:"booked", label:"Booked"},
+    "lead-captured": {cls:"estimate", label:"Estimate"},
+    "follow-up": {cls:"followup", label:"Follow Up"},
+    "no-interest": {cls:"nointerest", label:"No Interest"},
+    "voicemail": {cls:"voicemail", label:"Voicemail"},
+    "answered": {cls:"answered", label:"Answered"}
+  };
+  function toTitle(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ") : "Unknown";
+  }
+  let html = "";
+  f.forEach((c, i) => {
+    const inits = c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
+    const ob = oc[c.outcome] || {cls:"voicemail", label: c.outcome ? toTitle(c.outcome.replace(/-/g," ")) : toTitle(c.status)};
+    const statusClass = c.status === "voicemail" ? "voicemail" : ob.cls;
+    html += '<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
   });
-  el.innerHTML=html;upStats();updatePolaris();
+  el.innerHTML = html;
+  resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
+  upStats();
+  updatePolaris();
 }
-function setSearch(q){curSearch=q;renderCalls()}
-function toggleCall(i){document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});document.getElementById("call-"+i).classList.toggle("expanded")}
-function toTitleCase(s){return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase();}
-function setFilter(f){curFilter=f;document.querySelectorAll(".call-filter-btn").forEach(b=>b.classList.toggle("active",b.dataset.filter===f));renderCalls()}
+function setSearch(q) {
+  curSearch = q;
+  renderCalls();
+}
+function toggleCall(i) {
+  document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});
+  document.getElementById("call-"+i).classList.toggle("expanded");
+}
+
 // ===== Stats =====
-function upStats(){
-  const calls=getAllCalls();const t=calls.length;
-  const book=calls.filter(c=>c.outcome==="appointment-set").length;
-  const est=calls.filter(c=>c.outcome==="lead-captured").length;
-  const fu=calls.filter(c=>c.outcome==="follow-up").length;
-  const voicemail=calls.filter(c=>c.status==="voicemail").length;
-  const noi=calls.filter(c=>c.outcome==="no-interest").length;
-  const rev=calls.reduce((s,c)=>s+(c.avgPrice||0),0);
-  document.getElementById("kpiCallsToday").textContent=t;
-  document.getElementById("kpiRevenue").textContent=t>0?'$'+rev.toLocaleString():'$0';
-  document.getElementById("kpiBookingRate").textContent=t>0?Math.round((book/t)*100)+'%':'0%';
-  document.getElementById("kpiMissed").textContent=(voicemail+noi);
-  const today=calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
-  document.getElementById("kpiCallsChange").textContent=today>0?today+' today':'All time';
-  document.getElementById("kpiRevenueChange").textContent='$'+rev.toLocaleString()+' total';
-  document.getElementById("kpiBookingChange").textContent=book+' booked';
-  document.getElementById("kpiMissedChange").textContent=(voicemail+noi)>0?'Needs attention':'None';
+function upStats() {
+  const calls = getAllCalls();
+  const t = calls.length;
+  const book = calls.filter(c=>c.outcome==="appointment-set").length;
+  const est = calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu = calls.filter(c=>c.outcome==="follow-up").length;
+  const voicemail = calls.filter(c=>c.status==="voicemail").length;
+  const noi = calls.filter(c=>c.outcome==="no-interest").length;
+  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
+  document.getElementById("kpiCallsToday").textContent = t;
+  document.getElementById("kpiRevenue").textContent = t>0 ? '$'+rev.toLocaleString() : '$0';
+  document.getElementById("kpiBookingRate").textContent = t>0 ? Math.round((book/t)*100)+'%' : '0%';
+  document.getElementById("kpiMissed").textContent = (voicemail+noi);
+  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  document.getElementById("kpiCallsChange").textContent = today>0 ? today+' today' : 'All time';
+  document.getElementById("kpiRevenueChange").textContent = '$'+rev.toLocaleString()+' total';
+  document.getElementById("kpiBookingChange").textContent = book+' booked';
+  document.getElementById("kpiMissedChange").textContent = (voicemail+noi)>0 ? 'Needs attention' : 'None';
 }
-function updatePolaris(){
-  const calls=getAllCalls();const t=calls.length;const today=calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
-  const book=calls.filter(c=>c.outcome==="appointment-set").length;
-  const est=calls.filter(c=>c.outcome==="lead-captured").length;
-  const fu=calls.filter(c=>c.outcome==="follow-up").length;
-  const rev=calls.reduce((s,c)=>s+(c.avgPrice||0),0);
-  const highest=calls.reduce((m,c)=>Math.max(m,c.avgPrice||0),0);
-  const avg=t>0?Math.round(rev/t):0;
-  document.getElementById("psCallsToday").textContent=today;
-  document.getElementById("psBooked").textContent=book;
-  document.getElementById("psEstimates").textContent=est;
-  document.getElementById("psFollowUps").textContent=fu;
-  document.getElementById("psRevenue").textContent='$'+rev.toLocaleString();
-  document.getElementById("psHighest").textContent=highest>0?'$'+highest.toLocaleString():"—";
-  document.getElementById("psAvgOpp").textContent='$'+avg.toLocaleString();
-  let action="Review pending leads";
-  if(fu>0)action="Follow up on "+fu+" leads";
-  if(book===0&&est===0&&t>0)action="Improve booking rate — review AI scripts";
-  document.getElementById("psNextAction").textContent=action;
+function updatePolaris() {
+  const calls = getAllCalls();
+  const t = calls.length;
+  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
+  const book = calls.filter(c=>c.outcome==="appointment-set").length;
+  const est = calls.filter(c=>c.outcome==="lead-captured").length;
+  const fu = calls.filter(c=>c.outcome==="follow-up").length;
+  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
+  const highest = calls.reduce((m,c)=>Math.max(m,c.avgPrice||0), 0);
+  const avg = t>0 ? Math.round(rev/t) : 0;
+  document.getElementById("psCallsToday").textContent = today;
+  document.getElementById("psBooked").textContent = book;
+  document.getElementById("psEstimates").textContent = est;
+  document.getElementById("psFollowUps").textContent = fu;
+  document.getElementById("psRevenue").textContent = '$'+rev.toLocaleString();
+  document.getElementById("psHighest").textContent = highest>0 ? '$'+highest.toLocaleString() : "—";
+  document.getElementById("psAvgOpp").textContent = '$'+avg.toLocaleString();
+  let action = "Review pending leads";
+  if(fu > 0) action = "Follow up on "+fu+" leads";
+  if(book===0 && est===0 && t>0) action = "Improve booking rate — review AI scripts";
+  document.getElementById("psNextAction").textContent = action;
 }
+
 // ===== Actions =====
-function simulateDemoCall(){
-  const c=genCall();
+function simulateDemoCall() {
+  const c = genCall();
   try {
     if (typeof AppStore !== 'undefined' && AppStore.addLead) {
       AppStore.addLead(c);
-      // Let EventBus handle the refresh
       if (typeof EventBus !== 'undefined') {
         EventBus.emit('call:generated', c);
       }
     }
-  } catch(e){}
-  renderCalls();showToast("📞 Call from "+c.caller+" — $"+c.avgPrice.toLocaleString()+" estimated");
+  } catch(e) {}
+  renderCalls();
+  showToast("📞 Call from "+c.caller+" — $"+c.avgPrice.toLocaleString()+" estimated");
+  // Re-populate service types now that we have data
+  populateServiceTypes();
 }
-function clearAllCalls(){if(confirm("Clear all call history?")){try{sessionStorage.removeItem("northstar_calls");if(typeof AppStore!=='undefined'&&AppStore.getLeads){AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id)});}}catch(e){}renderCalls();showToast("🗑 Calls cleared")}}
-function showToast(m){const e=document.getElementById("toast");e.textContent=m;e.className="toast show";setTimeout(()=>e.classList.remove("show"),3000)}
+function clearAllCalls() {
+  if(confirm("Clear all call history?")) {
+    try {
+      sessionStorage.removeItem("northstar_calls");
+      if(typeof AppStore!=='undefined' && AppStore.getLeads) {
+        AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id);});
+      }
+    } catch(e) {}
+    renderCalls();
+    showToast("🗑 Calls cleared");
+  }
+}
+function showToast(m) {
+  const e = document.getElementById("toast");
+  e.textContent = m;
+  e.className = "toast show";
+  setTimeout(()=>e.classList.remove("show"), 3000);
+}
 // Auto-refresh on store changes
 try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
+// Initialize
+function loadCalls() { renderCalls(); }
 loadCalls();
 </script>
 <script src="/js/theme.js"></script>

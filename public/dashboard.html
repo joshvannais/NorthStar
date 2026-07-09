@@ -506,8 +506,8 @@ function toggleMobileMenu() {
     }
 
     // Dashboard data (live reference to AppStore)
-    var simulatedCalls = AppStore.getLeads();
-    var dashboardKpis = AppStore.getKpis();
+    function getLiveLeads() { return AppStore.getLeads(); }
+    function getLiveKpis() { return AppStore.getKpis(); }
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
     // Auto-refresh dashboard when store changes
     EventBus.on('store:changed', function() { loadDashboard(); });
@@ -592,13 +592,13 @@ function toggleMobileMenu() {
       // Fallback to simulated data
       setTimeout(() => {
         skeleton.style.display = 'none';
-        const count = simulatedCalls.length;
-        const today = simulatedCalls.filter(c => {
+        const count = getLiveLeads().length;
+        const today = getLiveLeads().filter(c => {
           try { const d = new Date(c.receivedAt || c.time); return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString(); } catch(e) { return false; }
         }).length;
-        const leads = simulatedCalls.length;
-        const appointments = simulatedCalls.filter(c => c.status === 'scheduled').length;
-        const rev = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
+        const leads = getLiveLeads().length;
+        const appointments = getLiveLeads().filter(c => c.status === 'scheduled').length;
+        const rev = getLiveLeads().reduce((s,c) => s + (c.avgPrice||0), 0);
 
         const hours = new Date().getHours();
         const greeting = hours < 12 ? 'Good morning' : hours < 17 ? 'Good afternoon' : 'Good evening';
@@ -611,11 +611,11 @@ function toggleMobileMenu() {
         if (appointments > 0) body += ', and booked ' + appointments + ' appointment' + (appointments !== 1 ? 's' : '');
         body += '. ';
 
-        const highVal = simulatedCalls.sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
+        const highVal = getLiveLeads().sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
         if (highVal && highVal.avgPrice > 0) {
           body += 'Your top opportunity is a $' + (highVal.avgPrice||0).toLocaleString() + ' ' + (highVal.service||'job') + ' with ' + (highVal.caller||'a prospect') + '. ';
           body += 'Action recommended: Follow up with ' + (highVal.caller||'this lead') + ' - it could be your highest-value opportunity.';
-        } else if (simulatedCalls.length > 0) {
+        } else if (getLiveLeads().length > 0) {
           body += 'Keep an eye on your recent leads - timely follow-up makes the difference.';
         } else {
           body = greeting + ', ' + name + '. Welcome to NorthStar! Once you connect your phone number, I\'ll start answering calls and capturing leads for you.';
@@ -642,7 +642,7 @@ function toggleMobileMenu() {
 
       setTimeout(() => {
         skeleton.style.display = 'none';
-        const leads = simulatedCalls;
+        const leads = getLiveLeads();
         const totalValue = leads.reduce((s,c) => s + (c.avgPrice||0), 0);
         const count = leads.length;
         const services = new Set(leads.map(l => l.service).filter(Boolean)).size;
@@ -699,10 +699,10 @@ function toggleMobileMenu() {
 
     function loadKpiGrid() {
       const grid = document.getElementById('kpiGrid');
-      const total = simulatedCalls.length;
-      const today = simulatedCalls.length; // All calls are "today" in demo mode
-      const scheduled = simulatedCalls.filter(c => c.status === 'scheduled').length;
-      const revenue = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
+      const total = getLiveLeads().length;
+      const today = getLiveLeads().length; // All calls are "today" in demo mode
+      const scheduled = getLiveLeads().filter(c => c.status === 'scheduled').length;
+      const revenue = getLiveLeads().reduce((s,c) => s + (c.avgPrice||0), 0);
       const avgValue = total > 0 ? Math.round(revenue / total) : 0;
 
       // For demo, treat all as "starter" tier
@@ -713,13 +713,13 @@ function toggleMobileMenu() {
         switch(kpi.id) {
           case 'today_calls': value = today; trend = today > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
           case 'new_leads': value = total; trend = total > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
-          case 'appointments': value = simulatedCalls.filter(c => c.outcome === 'appointment-set').length; trend = ''; break;
-          case 'lead_conversion': value = total > 0 ? Math.round((simulatedCalls.filter(c => c.outcome === 'appointment-set' || c.status === 'completed').length/total)*100)+'%' : '—'; break;
+          case 'appointments': value = getLiveLeads().filter(c => c.outcome === 'appointment-set').length; trend = ''; break;
+          case 'lead_conversion': value = total > 0 ? Math.round((getLiveLeads().filter(c => c.outcome === 'appointment-set' || c.status === 'completed').length/total)*100)+'%' : '—'; break;
           case 'avg_job_value': value = avgValue > 0 ? '$'+avgValue.toLocaleString() : '—'; break;
           case 'avg_call_length': value = total > 0 ? '3:24' : '—'; break;
-          case 'missed_calls': value = simulatedCalls.filter(c => c.status === 'voicemail' || c.outcome === 'voicemail').length; trend = '0'; break;
+          case 'missed_calls': value = getLiveLeads().filter(c => c.status === 'voicemail' || c.outcome === 'voicemail').length; trend = '0'; break;
           case 'avg_response_time': value = total > 0 ? '2:30' : '—'; break;
-          case 'ai_transfer_rate': value = total > 0 ? Math.round((simulatedCalls.filter(c => c.status === 'answered').length/total)*100)+'%' : '—'; break;
+          case 'ai_transfer_rate': value = total > 0 ? Math.round((getLiveLeads().filter(c => c.status === 'answered').length/total)*100)+'%' : '—'; break;
         }
         html += `<div class="ds-kpi-card" onclick="window.location.href='${kpi.link}'">
           <div class="ds-kpi-icon" style="background:var(--kpi-${kpi.id}-bg,var(--neutral-50));color:var(--kpi-${kpi.id}-color,var(--neutral-500));">
@@ -754,7 +754,7 @@ function toggleMobileMenu() {
       canvas.style.display = 'none';
       empty.style.display = 'none';
 
-      if (simulatedCalls.length === 0) {
+      if (getLiveLeads().length === 0) {
         setTimeout(() => {
           skeleton.style.display = 'none';
           empty.style.display = 'block';
@@ -868,12 +868,12 @@ function toggleMobileMenu() {
 
       setTimeout(() => {
         skeleton.style.display = 'none';
-        const highVal = simulatedCalls.sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
+        const highVal = getLiveLeads().sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
         if (highVal && highVal.avgPrice > 500) {
           document.getElementById('coachText').textContent = `Call ${highVal.caller} back — their ${highVal.service||'job'} is estimated at $${(highVal.avgPrice||0).toLocaleString()}. This is your highest-value opportunity right now.`;
           document.getElementById('coachReason').textContent = `💡 Why: This lead has been waiting for follow-up. Responding quickly increases your chance of booking by 60%.`;
-        } else if (simulatedCalls.length > 0) {
-          document.getElementById('coachText').textContent = `You have ${simulatedCalls.length} lead${simulatedCalls.length!==1?'s':''} to review. Follow up promptly to maximize conversions.`;
+        } else if (getLiveLeads().length > 0) {
+          document.getElementById('coachText').textContent = `You have ${getLiveLeads().length} lead${getLiveLeads().length!==1?'s':''} to review. Follow up promptly to maximize conversions.`;
           document.getElementById('coachReason').textContent = `💡 Tip: Leads contacted within 5 minutes convert at 9x the rate of those contacted after 30 minutes.`;
         } else {
           document.getElementById('coachText').textContent = `Welcome to NorthStar! Once you connect your phone number, I'll analyze your calls and provide personalized coaching.`;
@@ -902,7 +902,7 @@ function toggleMobileMenu() {
 
       setTimeout(() => {
         skeleton.style.display = 'none';
-        const leads = simulatedCalls.slice(0, 5);
+        const leads = getLiveLeads().slice(0, 5);
         if (leads.length === 0) {
           empty.style.display = 'block';
           return;
@@ -935,7 +935,7 @@ function toggleMobileMenu() {
 
       setTimeout(() => {
         skeleton.style.display = 'none';
-        const calls = simulatedCalls.slice(0, 5);
+        const calls = getLiveLeads().slice(0, 5);
         if (calls.length === 0) {
           empty.style.display = 'block';
           return;
@@ -969,7 +969,7 @@ function toggleMobileMenu() {
 
       setTimeout(() => {
         skeleton.style.display = 'none';
-        const appts = simulatedCalls.filter(c => c.status === 'scheduled').slice(0, 5);
+        const appts = getLiveLeads().filter(c => c.status === 'scheduled').slice(0, 5);
         if (appts.length === 0) {
           empty.style.display = 'block';
           return;
@@ -993,9 +993,9 @@ function toggleMobileMenu() {
     // WIDGET: Analytics Overview (existing feature)
     // ═══════════════════════════════════════════════════════════════
     function loadAnalytics() {
-      const total = simulatedCalls.length;
-      const scheduled = simulatedCalls.filter(c => c.status === 'scheduled').length;
-      const revenue = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
+      const total = getLiveLeads().length;
+      const scheduled = getLiveLeads().filter(c => c.status === 'scheduled').length;
+      const revenue = getLiveLeads().reduce((s,c) => s + (c.avgPrice||0), 0);
       const avgValue = total > 0 ? Math.round(revenue / total) : 0;
 
       document.getElementById('analyticsCalls').textContent = total;

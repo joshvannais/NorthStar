@@ -912,6 +912,13 @@ function updateFilterUI() {
 }
 
 // ===== Data =====
+// allCalls is a live reference to AppStore.getLeads() — same source as
+// Dashboard. Mutating AppStore.state.leads (via AppStore.addLead /
+// removeLead / etc.) is automatically reflected here, and via the
+// EventBus 'store:changed' listener we re-render the list. This keeps
+// Dashboard, Leads, and Communications in lock-step on a single
+// source of truth.
+var allCalls = (typeof AppStore !== 'undefined' && AppStore.getLeads) ? AppStore.getLeads() : [];
 function getAllCalls() {
   try {
     if (typeof AppStore !== 'undefined' && AppStore.getLeads) {
@@ -1088,19 +1095,21 @@ function updatePolaris() {
 
 // ===== Actions =====
 function simulateDemoCall() {
-  const c = genCall();
   try {
-    if (typeof AppStore !== 'undefined' && AppStore.addLead) {
-      AppStore.addLead(c);
-      if (typeof EventBus !== 'undefined') {
-        EventBus.emit('call:generated', c);
-      }
-    }
-  } catch(e) {}
-  renderCalls();
-  showToast("📞 Call from "+c.caller+" — $"+c.avgPrice.toLocaleString()+" estimated");
-  // Re-populate service types now that we have data
-  populateServiceTypes();
+    // genCall() is already routed through AppStore.addLead + EventBus by
+    // the simulator.js wrapper — do NOT call addLead again here (would
+    // create duplicates). genCall throws on failure; the catch surfaces
+    // a friendly toast instead of a silent broken button.
+    const c = genCall();
+    if (!c) throw new Error('genCall returned no lead');
+    renderCalls();
+    showToast("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
+    // Re-populate service types now that we have data
+    try { populateServiceTypes(); } catch(e) { /* non-fatal */ }
+  } catch (e) {
+    try { showToast("Could not simulate call. Please try again."); } catch (_) {}
+    console.error('simulateDemoCall:', e);
+  }
 }
 function clearAllCalls() {
   if(confirm("Clear all call history?")) {

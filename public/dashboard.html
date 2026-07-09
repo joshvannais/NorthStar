@@ -1043,15 +1043,15 @@ function toggleMobileMenu() {
     // ═══════════════════════════════════════════════════════════════
     function simulateDemoLead() {
       try {
-        // genCall() is already routed through AppStore.addLead + EventBus by
-        // the simulator.js wrapper, so we don't call addLead again here (that
-        // would create duplicates). genCall returns the normalized lead.
+        // genCall() is already routed through AppStore.addLead + EventBus
+        // by the simulator.js wrapper — do NOT call addLead again (dup).
         const lead = genCall();
-        PolarisEngine.analyzeLead(lead);
+        if (!lead) throw new Error('genCall returned no lead');
+        try { PolarisEngine.analyzeLead(lead); } catch (e) { /* non-fatal */ }
         NotificationService.show("✅ New lead: " + lead.caller + " ($" + (lead.avgPrice||0).toLocaleString() + " estimated)", 'success');
         loadDashboard();
       } catch(e) {
-        NotificationService.show("Could not generate lead. Please try again.", 'error');
+        try { NotificationService.show("Could not generate lead. Please try again.", 'error'); } catch (_) {}
         console.error('simulateDemoLead:', e);
       }
     }

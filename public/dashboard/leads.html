@@ -830,22 +830,33 @@ function toggleMobileMenu() {
 
     // === Simulate Lead ===
     function simulateLead() {
-      // genCall() is already routed through AppStore.addLead + EventBus by
-      // the simulator.js wrapper. We just need to promote the new lead
-      // (already in the store at index 0) from "answered" to "new" so the
-      // leads CRM treats it as a fresh lead. No second addLead — would dup.
-      const c = genCall();
       try {
-        AppStore.updateLead(0, { status: 'new' });
-      } catch (e) { /* store may not exist on older pages */ }
-      // Mirror to sessionStorage for cross-page compat with older paths.
-      try {
-        const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
-        existing.unshift(c);
-        sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
-      } catch(e) {}
-      showNotification("✅ New lead: " + c.caller + " (" + c.service + " — $" + Math.round(c.avgPrice).toLocaleString() + ")", "success");
-      loadLeads();
+        // genCall() is already routed through AppStore.addLead + EventBus
+        // by the simulator.js wrapper. The new lead is at index 0 of the
+        // store. The default Lead model status is 'new', so we do NOT need
+        // a second addLead or a status update — but we fetch the lead by
+        // its actual id from the store (not by array index) so the call is
+        // correct if the wrapper or default ever change.
+        const c = genCall();
+        if (!c) throw new Error('genCall returned no lead');
+        try {
+          const newLead = (window.AppStore && window.AppStore.getLeads) ? window.AppStore.getLeads()[0] : null;
+          if (newLead && newLead.id && window.AppStore.updateLead) {
+            window.AppStore.updateLead(newLead.id, { status: 'new' });
+          }
+        } catch (e) { /* store may be missing on older pages; non-fatal */ }
+        // Mirror to sessionStorage for cross-page compat with older paths.
+        try {
+          const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
+          existing.unshift(c);
+          sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
+        } catch(e) {}
+        showNotification("✅ New lead: " + c.caller + " (" + c.service + " — $" + Math.round(c.avgPrice).toLocaleString() + ")", "success");
+        loadLeads();
+      } catch (e) {
+        try { showNotification("Could not generate lead. Please try again.", "error"); } catch (_) {}
+        console.error('simulateLead:', e);
+      }
     }
 
     // Initial load

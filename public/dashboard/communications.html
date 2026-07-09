@@ -496,11 +496,19 @@ function updatePolaris(){
 }
 // ===== Actions =====
 function simulateDemoCall(){
-  // genCall() is already routed through AppStore.addLead + EventBus by the
-  // simulator.js wrapper, so we don't call addLead again here (would create
-  // duplicates). Just re-render to pick up the new lead and notify the user.
-  const c=genCall();
-  renderCalls();showToast("📞 Call from "+c.caller+" — $"+c.avgPrice.toLocaleString()+" estimated");
+  try {
+    // genCall() is already routed through AppStore.addLead + EventBus by the
+    // simulator.js wrapper — do NOT call addLead again here (would dup).
+    // genCall throws on failure (e.g. simulator not loaded); the catch
+    // surfaces a friendly toast instead of a silent broken button.
+    const c = genCall();
+    if (!c) throw new Error('genCall returned no lead');
+    renderCalls();
+    showToast("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
+  } catch (e) {
+    try { showToast("Could not simulate call. Please try again."); } catch (_) {}
+    console.error('simulateDemoCall:', e);
+  }
 }
 function clearAllCalls(){if(confirm("Clear all call history?")){try{sessionStorage.removeItem("northstar_calls");if(typeof AppStore!=='undefined'&&AppStore.getLeads){AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id)});}}catch(e){}renderCalls();showToast("🗑 Calls cleared")}}
 function showToast(m){const e=document.getElementById("toast");e.textContent=m;e.className="toast show";setTimeout(()=>e.classList.remove("show"),3000)}

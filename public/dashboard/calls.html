@@ -401,13 +401,13 @@ function toggleMobileMenu() {
   </main>
 </div>
 <div id="toast" class="toast"></div>
-<script src="/js/simulator.js"></script>
-<script src="/js/api.js"></script>
 <script src="/js/event-bus.js"></script>
 <script src="/js/business-models.js"></script>
 <script src="/js/app-store.js"></script>
 <script src="/js/polaris-engine.js"></script>
 <script src="/js/notification-service.js"></script>
+<script src="/js/simulator.js"></script>
+<script src="/js/api.js"></script>
 
 <script>
 // ===== Data =====
@@ -514,7 +514,6 @@ function showToast(m){const e=document.getElementById("toast");e.textContent=m;e
 try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
 loadCalls();
 </script>
-
 <script src="/js/theme.js"></script>
 </body>
 </html>

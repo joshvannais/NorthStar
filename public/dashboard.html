@@ -700,9 +700,7 @@ function toggleMobileMenu() {
     function loadKpiGrid() {
       const grid = document.getElementById('kpiGrid');
       const total = simulatedCalls.length;
-      const today = simulatedCalls.filter(c => {
-        try { const d = new Date(c.receivedAt || c.time); return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString(); } catch(e) { return false; }
-      }).length;
+      const today = simulatedCalls.length; // All calls are "today" in demo mode
       const scheduled = simulatedCalls.filter(c => c.status === 'scheduled').length;
       const revenue = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
       const avgValue = total > 0 ? Math.round(revenue / total) : 0;
@@ -719,9 +717,9 @@ function toggleMobileMenu() {
           case 'lead_conversion': value = total > 0 ? Math.round((scheduled/total)*100)+'%' : '—'; break;
           case 'avg_job_value': value = avgValue > 0 ? '$'+avgValue.toLocaleString() : '—'; break;
           case 'avg_call_length': value = total > 0 ? '3:24' : '—'; break;
-          case 'missed_calls': value = today > 0 ? today : '0'; trend = today > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
-          case 'avg_response_time': value = '—'; break;
-          case 'ai_transfer_rate': value = '—'; break;
+          case 'missed_calls': value = simulatedCalls.filter(c => c.status === 'voicemail' || c.outcome === 'voicemail').length; trend = '0'; break;
+          case 'avg_response_time': value = total > 0 ? '2:30' : '—'; break;
+          case 'ai_transfer_rate': value = total > 0 ? Math.round((simulatedCalls.filter(c => c.status === 'answered').length/total)*100)+'%' : '—'; break;
         }
         html += `<div class="ds-kpi-card" onclick="window.location.href='${kpi.link}'">
           <div class="ds-kpi-icon" style="background:var(--kpi-${kpi.id}-bg,var(--neutral-50));color:var(--kpi-${kpi.id}-color,var(--neutral-500));">

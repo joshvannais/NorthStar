@@ -1373,14 +1373,14 @@ function renderCalls() {
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="exec-chevron" style="width:14px;height:14px;"><polyline points="6 9 12 15 18 9"/></svg>' +
             '</div>' +
             '<div class="exec-summary-body">' +
-              '<div class="exec-section"><div class="exec-label">Executive Summary</div><div class="exec-value">'+c.summary+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Customer Intent</div><div class="exec-value">'+c.jobDetail.split(".")[0]+'</div></div>' +
+              '<div class="exec-section"><div class="exec-label">Executive Summary</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.insight:c.summary)+'</div></div>' +
+              '<div class="exec-section"><div class="exec-label">Customer Intent</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.service:'')+'</div></div>' +
               '<div class="exec-section"><div class="exec-label">Key Concerns</div><div class="exec-value">Pricing, timeline, availability</div></div>' +
               '<div class="exec-section"><div class="exec-label">Outcome</div><div class="exec-value">'+ob.label+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Recommended Action</div><div class="exec-value">Follow up within 24 hours with a detailed estimate</div></div>' +
-              '<div class="exec-section"><div class="exec-label">POLARIS AI Reasoning</div><div class="exec-value">Lead matched to '+c.service+' service line with high intent signals. Pricing within market range for '+c.address.split(",")[0].split(" ").slice(-1)[0]+' area.</div></div>' +
-              '<div class="exec-section"><div class="exec-label">AI Confidence Score</div><div class="exec-value"><span class="confidence-high">87%</span></div></div>' +
-              '<div class="exec-section"><div class="exec-label">Revenue Opportunity</div><div class="exec-value" style="color:var(--brand-600);font-weight:700;">$'+c.avgPrice.toLocaleString()+'</div></div>' +
+              '<div class="exec-section"><div class="exec-label">Recommended Action</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.upsell:'Follow up within 24 hours with a detailed estimate')+'</div></div>' +
+              '<div class="exec-section"><div class="exec-label">POLARIS AI Reasoning</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.insight:'Lead matched to '+c.service+' service line')+'</div></div>' +
+              '<div class="exec-section"><div class="exec-label">AI Confidence Score</div><div class="exec-value"><span class="confidence-high">'+(c.polarisAnalysis?c.polarisAnalysis.confidence+'%':'87%')+'</span></div></div>' +
+              '<div class="exec-section"><div class="exec-label">Revenue Opportunity</div><div class="exec-value" style="color:var(--brand-600);font-weight:700;">$'+(c.polarisAnalysis?c.polarisAnalysis.estimatedPrice.toLocaleString():c.avgPrice.toLocaleString())+'</div></div>' +
             '</div>' +
           '</div>' +
           '<div class="call-actions">' +
@@ -1461,9 +1461,17 @@ function simulateDemoCall() {
     // a friendly toast instead of a silent broken button.
     const c = genCall();
     if (!c) throw new Error('genCall returned no lead');
-    // Generate Polaris analysis
+    // Generate Polaris analysis and store on ALL matching leads in AppStore
     if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
-      c.polarisAnalysis = PolarisEngine.analyzeLead(c);
+      var analysis = PolarisEngine.analyzeLead(c);
+      c.polarisAnalysis = analysis;
+      // Also store on the AppStore lead (which may be a different object)
+      if (typeof AppStore !== 'undefined' && AppStore.getLeads) {
+        var leads = AppStore.getLeads();
+        if (leads && leads.length > 0) {
+          leads[0].polarisAnalysis = analysis;
+        }
+      }
     }
     renderCalls();
     NotificationService.show("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");

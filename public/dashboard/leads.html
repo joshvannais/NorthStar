@@ -830,9 +830,15 @@ function toggleMobileMenu() {
 
     // === Simulate Lead ===
     function simulateLead() {
+      // genCall() is already routed through AppStore.addLead + EventBus by
+      // the simulator.js wrapper. We just need to promote the new lead
+      // (already in the store at index 0) from "answered" to "new" so the
+      // leads CRM treats it as a fresh lead. No second addLead — would dup.
       const c = genCall();
-      c.status = 'new';
-      allLeads.unshift(c);
+      try {
+        AppStore.updateLead(0, { status: 'new' });
+      } catch (e) { /* store may not exist on older pages */ }
+      // Mirror to sessionStorage for cross-page compat with older paths.
       try {
         const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
         existing.unshift(c);

@@ -1043,8 +1043,10 @@ function toggleMobileMenu() {
     // ═══════════════════════════════════════════════════════════════
     function simulateDemoLead() {
       try {
-        const raw = genCall();
-        const lead = AppStore.addLead(raw);
+        // genCall() is already routed through AppStore.addLead + EventBus by
+        // the simulator.js wrapper, so we don't call addLead again here (that
+        // would create duplicates). genCall returns the normalized lead.
+        const lead = genCall();
         PolarisEngine.analyzeLead(lead);
         NotificationService.show("✅ New lead: " + lead.caller + " ($" + (lead.avgPrice||0).toLocaleString() + " estimated)", 'success');
         loadDashboard();

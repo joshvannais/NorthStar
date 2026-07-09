@@ -427,7 +427,7 @@ function isThisWeek(d){const n=new Date();const s=new Date(n);s.setDate(n.getDat
 function matchSearch(c,q){const l=q.toLowerCase();return (c.caller||"").toLowerCase().includes(l)||(c.phone||"").includes(l)||(c.address||"").toLowerCase().includes(l)||(c.service||"").toLowerCase().includes(l)||(c.transcript||"").toLowerCase().includes(l)||(c.summary||"").toLowerCase().includes(l)}
 // ===== Render =====
 function renderCalls(){
-  let f=allCalls;
+  let f=getAllCalls();
   if(curSearch)f=f.filter(c=>matchSearch(c,curSearch));
   if(curFilter!="all"){
     if(curFilter==="today")f=f.filter(c=>{try{const d=new Date(c.receivedAt);return isToday(d);}catch(e){return false;}});
@@ -496,16 +496,10 @@ function updatePolaris(){
 }
 // ===== Actions =====
 function simulateDemoCall(){
+  // genCall() is already routed through AppStore.addLead + EventBus by the
+  // simulator.js wrapper, so we don't call addLead again here (would create
+  // duplicates). Just re-render to pick up the new lead and notify the user.
   const c=genCall();
-  try {
-    if (typeof AppStore !== 'undefined' && AppStore.addLead) {
-      AppStore.addLead(c);
-      // Let EventBus handle the refresh
-      if (typeof EventBus !== 'undefined') {
-        EventBus.emit('call:generated', c);
-      }
-    }
-  } catch(e){}
   renderCalls();showToast("📞 Call from "+c.caller+" — $"+c.avgPrice.toLocaleString()+" estimated");
 }
 function clearAllCalls(){if(confirm("Clear all call history?")){try{sessionStorage.removeItem("northstar_calls");if(typeof AppStore!=='undefined'&&AppStore.getLeads){AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id)});}}catch(e){}renderCalls();showToast("🗑 Calls cleared")}}

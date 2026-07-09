@@ -1028,7 +1028,6 @@ function toggleMobileMenu() {
     <div id="callHistoryList"><div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><h3>No communications yet</h3><p>Click <strong>Simulate Call</strong> to see how communications appear here.</p></div></div>
   </main>
 </div>
-<div id="toast" class="toast"></div>
 <script src="/js/event-bus.js"></script>
 <script src="/js/business-models.js"></script>
 <script src="/js/app-store.js"></script>
@@ -1385,8 +1384,8 @@ function renderCalls() {
             '</div>' +
           '</div>' +
           '<div class="call-actions">' +
-            '<button class="action-btn action-primary" onclick="showToast(\x27Sent SMS to \x27+c.phone+\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send SMS</button>' +
-            '<button class="action-btn action-secondary" onclick="showToast(\x27Email sent\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button>' +
+            '<button class="action-btn action-primary" onclick="NotificationService.show(\x27Sent SMS to \x27+c.phone+\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send SMS</button>' +
+            '<button class="action-btn action-secondary" onclick="NotificationService.show(\x27Email sent\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button>' +
             '<button class="action-btn action-tertiary" onclick="document.getElementById(\x27+execSummaryId+\x27).classList.toggle(\x27exec-open\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Summary</button>' +
           '</div>' +
         '</div>' +
@@ -1462,12 +1461,16 @@ function simulateDemoCall() {
     // a friendly toast instead of a silent broken button.
     const c = genCall();
     if (!c) throw new Error('genCall returned no lead');
+    // Generate Polaris analysis
+    if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
+      c.polarisAnalysis = PolarisEngine.analyzeLead(c);
+    }
     renderCalls();
-    showToast("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
+    NotificationService.show("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
     // Re-populate service types now that we have data
     try { populateServiceTypes(); } catch(e) { /* non-fatal */ }
   } catch (e) {
-    try { showToast("Could not simulate call. Please try again."); } catch (_) {}
+    try { NotificationService.show("Could not simulate call. Please try again.", "error"); } catch (_) {}
     console.error('simulateDemoCall:', e);
   }
 }
@@ -1480,14 +1483,8 @@ function clearAllCalls() {
       }
     } catch(e) {}
     renderCalls();
-    showToast("🗑 Calls cleared");
+    NotificationService.show("🗑 Calls cleared", "info");
   }
-}
-function showToast(m) {
-  const e = document.getElementById("toast");
-  e.textContent = m;
-  e.className = "toast show";
-  setTimeout(()=>e.classList.remove("show"), 3000);
 }
 // Auto-refresh on store changes
 try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}

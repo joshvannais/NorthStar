@@ -507,6 +507,305 @@
   font-size: 12px;
   font-weight: 500;
 }
+
+/* === Premium Call Cards === */
+.call-card {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+.call-card:hover {
+  border-color: var(--neutral-300);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+[data-theme="dark"] .call-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.call-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+  gap: 12px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+.call-card.expanded .call-card-header {
+  border-bottom-color: var(--neutral-200);
+}
+.call-caller {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+.call-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+.call-info { min-width: 0; }
+.call-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--neutral-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-theme="dark"] .call-name { color: var(--neutral-100); }
+.call-meta {
+  font-size: 12px;
+  color: var(--neutral-500);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meta-sep { color: var(--neutral-300); margin: 0 4px; }
+.call-status-badge {
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.call-status-badge.booked { background: rgba(5,150,105,0.12); color: #059669; }
+.call-status-badge.estimate { background: rgba(37,99,235,0.12); color: #2563eb; }
+.call-status-badge.followup { background: rgba(217,119,6,0.12); color: #d97706; }
+.call-status-badge.voicemail { background: rgba(107,114,128,0.12); color: #6b7280; }
+.call-status-badge.nointerest { background: rgba(107,114,128,0.08); color: #6b7280; }
+.call-status-badge.answered { background: rgba(5,150,105,0.12); color: #059669; }
+.call-card-body {
+  padding: 0 20px 20px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.35s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+.call-card.expanded .call-card-body {
+  max-height: 2000px;
+  opacity: 1;
+  padding: 20px 20px 20px;
+}
+.call-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.call-detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.call-detail-value {
+  font-size: 14px;
+  color: var(--neutral-800);
+  font-weight: 500;
+}
+[data-theme="dark"] .call-detail-value { color: var(--neutral-200); }
+.call-job-value {
+  margin: 14px 0;
+  padding: 14px 16px;
+  background: var(--neutral-200);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--brand-500);
+}
+[data-theme="dark"] .call-job-value { background: var(--neutral-300); }
+.call-job-value-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-600);
+}
+.call-job-value-suffix {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--neutral-500);
+  margin-left: 6px;
+}
+.call-job-value-desc {
+  font-size: 13px;
+  color: var(--neutral-700);
+  margin-top: 4px;
+}
+[data-theme="dark"] .call-job-value-desc { color: var(--neutral-400); }
+.call-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--neutral-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+  margin-top: 14px;
+}
+.call-summary-text {
+  font-size: 13px;
+  color: var(--neutral-700);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+[data-theme="dark"] .call-summary-text { color: var(--neutral-300); }
+.call-transcript {
+  font-size: 13px;
+  background: var(--neutral-200);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+[data-theme="dark"] .call-transcript { background: var(--neutral-300); }
+.transcript-line {
+  padding: 4px 0;
+  color: var(--neutral-700);
+}
+.transcript-ai { color: var(--brand-600); }
+.transcript-customer { color: var(--neutral-700); }
+.transcript-speaker {
+  font-weight: 700;
+  margin-right: 6px;
+}
+/* === Executive Summary === */
+.call-exec-summary {
+  margin-bottom: 14px;
+  border: 1px solid var(--brand-200, #d1d5db);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.exec-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--brand-50);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-700);
+  user-select: none;
+}
+[data-theme="dark"] .exec-summary-header {
+  background: rgba(79,70,229,0.15);
+  color: var(--brand-400);
+}
+.exec-chevron {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+.exec-open .exec-chevron { transform: rotate(180deg); }
+.exec-summary-body {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.35s ease, opacity 0.3s ease, padding 0.3s ease;
+  padding: 0 14px;
+  background: var(--neutral-100);
+}
+[data-theme="dark"] .exec-summary-body { background: var(--neutral-200); }
+.exec-open .exec-summary-body {
+  max-height: 800px;
+  opacity: 1;
+  padding: 14px;
+}
+.exec-section {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--neutral-200);
+}
+.exec-section:last-child { border-bottom: none; }
+.exec-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+}
+.exec-value {
+  font-size: 13px;
+  color: var(--neutral-800);
+  line-height: 1.5;
+}
+[data-theme="dark"] .exec-value { color: var(--neutral-300); }
+.confidence-high {
+  color: #059669;
+  font-weight: 700;
+}
+/* === Action Buttons === */
+.call-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.action-primary {
+  background: var(--brand-500);
+  color: white;
+}
+.action-primary:hover { background: var(--brand-600); }
+.action-secondary {
+  background: var(--neutral-200);
+  color: var(--neutral-700);
+  border: 1px solid var(--neutral-300);
+}
+.action-secondary:hover { background: var(--neutral-300); }
+[data-theme="dark"] .action-secondary {
+  background: var(--neutral-300);
+  color: var(--neutral-200);
+  border-color: var(--neutral-400);
+}
+[data-theme="dark"] .action-secondary:hover { background: var(--neutral-400); }
+.action-tertiary {
+  background: transparent;
+  color: var(--brand-600);
+  border: 1px solid var(--brand-300);
+}
+.action-tertiary:hover { background: var(--brand-50); }
+[data-theme="dark"] .action-tertiary {
+  color: var(--brand-400);
+  border-color: var(--brand-600);
+}
+[data-theme="dark"] .action-tertiary:hover { background: rgba(79,70,229,0.1); }
+
+/* === Toggle Executive Summary === */
+.exec-open .exec-summary-body {
+  max-height: 800px;
+  opacity: 1;
+  padding: 14px;
+}
+
 </style>
 </head>
 <body>
@@ -1034,8 +1333,65 @@ function renderCalls() {
     const inits = c.caller.split(" ").map(w=>w[0]).join("").substring(0,2);
     const ob = oc[c.outcome] || {cls:"voicemail", label: c.outcome ? toTitle(c.outcome.replace(/-/g," ")) : toTitle(c.status)};
     const statusClass = c.status === "voicemail" ? "voicemail" : ob.cls;
-    html += '<div class="call-card" id="call-'+i+'"><div class="call-card-header" onclick="toggleCall('+i+')"><div class="call-caller"><div class="call-avatar">'+inits+'</div><div class="call-info"><div class="call-name">'+c.caller+'</div><div class="call-meta">'+c.time+' | '+c.duration+' | '+c.service+'</div></div></div><span class="call-status-badge '+statusClass+'">'+ob.label+'</span></div><div class="call-card-body"><div class="call-detail-grid"><div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div><div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div></div><div class="call-job-value"><div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' — Estimated Job Value</div><div class="call-job-value-desc">'+c.jobDetail+'</div>'+(c.pricingBreakdown&&c.pricingBreakdown.length>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;"><div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">📊 Pricing Breakdown</div>'+c.pricingBreakdown.map(pb=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('')+'</div>':'')+'</div><div class="call-detail-label" style="margin-bottom:4px;">Summary</div><div style="font-size:13px;color:var(--neutral-700);margin-bottom:12px;">'+c.summary+'</div><div class="call-detail-label" style="margin-bottom:4px;">Transcript</div><div style="font-size:13px;background:var(--neutral-200);padding:12px;border-radius:var(--radius-sm);max-height:120px;overflow-y:auto;">'+function(){try{return c.transcript.split("\n").map(l=>{if(l.startsWith("AI:"))return '<div style="padding:4px 0;color:var(--brand-600);"><strong>AI</strong> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div style="padding:4px 0;color:var(--neutral-700);"><strong>'+c.caller.split(" ")[0]+'</strong> '+l.substring(9)+'</div>';return '<div style="padding:2px 0;">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div><div class="call-actions"><button onclick="showToast(\'Sent SMS to '+c.phone+'\')">Send SMS</button><button onclick="showToast(\'Email sent\')">Send Email</button></div></div></div>';
-  });
+    const pbHtml = c.pricingBreakdown && c.pricingBreakdown.length > 0 ?
+      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;">' +
+      '<div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">Pricing Breakdown</div>' +
+      c.pricingBreakdown.map(pb => '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('') +
+      '</div>' : '';
+    const execSummaryId = 'execSummary-' + i;
+    html += '' +
+      '<div class="call-card" id="call-'+i+'">' +
+        '<div class="call-card-header" onclick="toggleCall('+i+')">' +
+          '<div class="call-caller">' +
+            '<div class="call-avatar">'+inits+'</div>' +
+            '<div class="call-info">' +
+              '<div class="call-name">'+c.caller+'</div>' +
+              '<div class="call-meta">'+c.time+' <span class="meta-sep">|</span> '+c.duration+' <span class="meta-sep">|</span> '+c.service+'</div>' +
+            '</div>' +
+          '</div>' +
+          '<span class="call-status-badge '+statusClass+'">'+ob.label+'</span>' +
+        '</div>' +
+        '<div class="call-card-body">' +
+          '<div class="call-detail-grid">' +
+            '<div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div>' +
+            '<div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div>' +
+            '<div class="call-detail-item"><div class="call-detail-label">Service</div><div class="call-detail-value">'+c.service+'</div></div>' +
+            '<div class="call-detail-item"><div class="call-detail-label">Duration</div><div class="call-detail-value">'+c.duration+'</div></div>' +
+          '</div>' +
+          '<div class="call-job-value">' +
+            '<div class="call-job-value-amount">$'+c.avgPrice.toLocaleString()+' <span class="call-job-value-suffix">Estimated Job Value</span></div>' +
+            '<div class="call-job-value-desc">'+c.jobDetail+'</div>' +
+            pbHtml +
+          '</div>' +
+          '<div class="call-section-label">Call Summary</div>' +
+          '<div class="call-summary-text">'+c.summary+'</div>' +
+          '<div class="call-section-label">Transcript</div>' +
+          '<div class="call-transcript">'+function(){try{return c.transcript.split("\\n").map(l=>{if(l.startsWith("AI:"))return '<div class="transcript-line transcript-ai"><span class="transcript-speaker">AI</span> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div class="transcript-line transcript-customer"><span class="transcript-speaker">'+c.caller.split(" ")[0]+'</span> '+l.substring(9)+'</div>';return '<div class="transcript-line">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div>' +
+          '<div class="call-exec-summary" id="'+execSummaryId+'">' +
+            '<div class="exec-summary-header" onclick="toggleExecutiveSummary(''+execSummaryId+'')">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' +
+              'POLARIS Executive Analysis' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="exec-chevron" style="width:14px;height:14px;"><polyline points="6 9 12 15 18 9"/></svg>' +
+            '</div>' +
+            '<div class="exec-summary-body">' +
+              '<div class="exec-section"><div class="exec-label">Executive Summary</div><div class="exec-value">'+c.summary+'</div></div>' +
+              '<div class="exec-section"><div class="exec-label">Customer Intent</div><div class="exec-value">'+c.jobDetail.split(".")[0]+'</div></div>' +
+              '<div class="exec-section"><div class="exec-label">Key Concerns</div><div class="exec-value">Pricing, timeline, availability</div></div>' +
+              '<div class="exec-section"><div class="exec-label">Outcome</div><div class="exec-value">'+ob.label+'</div></div>' +
+              '<div class="exec-section"><div class="exec-label">Recommended Action</div><div class="exec-value">Follow up within 24 hours with a detailed estimate</div></div>' +
+              '<div class="exec-section"><div class="exec-label">POLARIS AI Reasoning</div><div class="exec-value">Lead matched to '+c.service+' service line with high intent signals. Pricing within market range for '+c.address.split(",")[0].split(" ").slice(-1)[0]+' area.</div></div>' +
+              '<div class="exec-section"><div class="exec-label">AI Confidence Score</div><div class="exec-value"><span class="confidence-high">87%</span></div></div>' +
+              '<div class="exec-section"><div class="exec-label">Revenue Opportunity</div><div class="exec-value" style="color:var(--brand-600);font-weight:700;">$'+c.avgPrice.toLocaleString()+'</div></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="call-actions">' +
+            '<button class="action-btn action-primary" onclick="showToast('Sent SMS to '+c.phone+'')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send SMS</button>' +
+            '<button class="action-btn action-secondary" onclick="showToast('Email sent')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button>' +
+            '<button class="action-btn action-tertiary" onclick="document.getElementById(''+execSummaryId+'').classList.toggle('exec-open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Summary</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }); });
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
   upStats();

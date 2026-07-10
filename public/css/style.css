@@ -2636,3 +2636,98 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 [data-theme="dark"] .toast-notification.info { background:#1d4ed8; }
 [data-theme="dark"] .toast-notification.success { background:#065f46; }
 [data-theme="dark"] .toast-notification.warning { background:#92400e; }
+
+/* Polaris Revenue Intelligence Card */
+.polaris-card {
+  background: linear-gradient(135deg, #FFF8E7, #FFECB3);
+  border: 1px solid var(--brand-300);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.polaris-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(212, 175, 55, 0.08);
+}
+.polaris-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.polaris-header h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--brand-800);
+}
+.polaris-header .polaris-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: var(--brand-600);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-weight: 600;
+}
+.polaris-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 768px) { .polaris-grid { grid-template-columns: 1fr; } }
+.polaris-item {
+  background: rgba(255,255,255,0.6);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  border: 1px solid rgba(212,175,55,0.2);
+}
+.polaris-item .polaris-item-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brand-700);
+  margin-bottom: 4px;
+}
+.polaris-item .polaris-item-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--neutral-900);
+  margin-bottom: 2px;
+}
+.polaris-item .polaris-item-desc {
+  font-size: 12px;
+  color: var(--neutral-600);
+}
+.polaris-item .polaris-confidence {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 100px;
+  margin-top: 4px;
+}
+.polaris-confidence.high { background: #d1fae5; color: #047857; }
+.polaris-confidence.medium { background: #fef3c7; color: #b45309; }
+.polaris-confidence.low { background: #fee2e2; color: #b91c1c; }
+[data-theme="dark"] .polaris-card {
+  background: linear-gradient(135deg, #2a2510, #3d3010);
+  border-color: var(--brand-700);
+}
+[data-theme="dark"] .polaris-header h2 { color: var(--brand-300); }
+[data-theme="dark"] .polaris-item { background: rgba(0,0,0,0.2); border-color: rgba(212,175,55,0.15); }
+[data-theme="dark"] .polaris-item .polaris-item-label { color: var(--brand-400); }
+[data-theme="dark"] .polaris-item .polaris-item-value { color: var(--neutral-800); }
+[data-theme="dark"] .polaris-item .polaris-item-desc { color: var(--neutral-500); }
+[data-theme="dark"] .polaris-confidence.high { background: rgba(4,120,87,0.2); color: #6ee7b7; }
+[data-theme="dark"] .polaris-confidence.medium { background: rgba(180,83,9,0.2); color: #fbbf24; }
+[data-theme="dark"] .polaris-confidence.low { background: rgba(185,28,28,0.2); color: #fca5a5; }

@@ -32,101 +32,6 @@
 [data-theme="dark"] .stat-card-conversion .stat-icon { background: rgba(180,83,9,0.2); color: #fbbf24; }
 [data-theme="dark"] .stat-card-avgvalue .stat-icon { background: rgba(126,34,206,0.2); color: #d8b4fe; }
 
-/* Polaris Revenue Intelligence Card */
-.polaris-card {
-  background: linear-gradient(135deg, #FFF8E7, #FFECB3);
-  border: 1px solid var(--brand-300);
-  border-radius: var(--radius);
-  padding: 20px 24px;
-  margin-bottom: 24px;
-  position: relative;
-  overflow: hidden;
-}
-.polaris-card::before {
-  content: '';
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: rgba(212, 175, 55, 0.08);
-}
-.polaris-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.polaris-header h2 {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--brand-800);
-}
-.polaris-header .polaris-badge {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background: var(--brand-600);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 100px;
-  font-weight: 600;
-}
-.polaris-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-@media (max-width: 768px) { .polaris-grid { grid-template-columns: 1fr; } }
-.polaris-item {
-  background: rgba(255,255,255,0.6);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
-  border: 1px solid rgba(212,175,55,0.2);
-}
-.polaris-item .polaris-item-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--brand-700);
-  margin-bottom: 4px;
-}
-.polaris-item .polaris-item-value {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--neutral-900);
-  margin-bottom: 2px;
-}
-.polaris-item .polaris-item-desc {
-  font-size: 12px;
-  color: var(--neutral-600);
-}
-.polaris-item .polaris-confidence {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 1px 8px;
-  border-radius: 100px;
-  margin-top: 4px;
-}
-.polaris-confidence.high { background: #d1fae5; color: #047857; }
-.polaris-confidence.medium { background: #fef3c7; color: #b45309; }
-.polaris-confidence.low { background: #fee2e2; color: #b91c1c; }
-[data-theme="dark"] .polaris-card {
-  background: linear-gradient(135deg, #2a2510, #3d3010);
-  border-color: var(--brand-700);
-}
-[data-theme="dark"] .polaris-header h2 { color: var(--brand-300); }
-[data-theme="dark"] .polaris-item { background: rgba(0,0,0,0.2); border-color: rgba(212,175,55,0.15); }
-[data-theme="dark"] .polaris-item .polaris-item-label { color: var(--brand-400); }
-[data-theme="dark"] .polaris-item .polaris-item-value { color: var(--neutral-800); }
-[data-theme="dark"] .polaris-item .polaris-item-desc { color: var(--neutral-500); }
-[data-theme="dark"] .polaris-confidence.high { background: rgba(4,120,87,0.2); color: #6ee7b7; }
-[data-theme="dark"] .polaris-confidence.medium { background: rgba(180,83,9,0.2); color: #fbbf24; }
-[data-theme="dark"] .polaris-confidence.low { background: rgba(185,28,28,0.2); color: #fca5a5; }
-
 /* Customer Detail Drawer */
 .drawer-overlay {
   display: none;
@@ -522,13 +427,13 @@ function toggleMobileMenu() {
   </div>
 
   <!-- Drawer overlay -->
-  <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+  <div class="drawer-overlay" id="drawerOverlay" onclick="CustomerDrawer ? CustomerDrawer.close() : closeDrawer()"></div>
 
   <!-- Customer Detail Drawer -->
   <div class="customer-drawer" id="customerDrawer">
     <div class="drawer-header">
       <h2 id="drawerTitle">Customer Details</h2>
-      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+      <button class="drawer-close" onclick="CustomerDrawer ? CustomerDrawer.close() : closeDrawer()">✕</button>
     </div>
     <div class="drawer-body" id="drawerBody">
       <div class="drawer-section">
@@ -562,8 +467,7 @@ function toggleMobileMenu() {
     </div>
   </div>
 
-  <div class="toast-container" id="toastContainer"></div>
-
+  
   <script src="/js/event-bus.js"></script>
   <script src="/js/business-models.js"></script>
   <script src="/js/app-store.js"></script>
@@ -573,22 +477,7 @@ function toggleMobileMenu() {
   <script src="/js/api.js"></script>
   <script>
     // Premium notification toasts
-    function showNotification(message, type) {
-      type = type || 'info';
-      const icons = { success: '✅', info: 'ℹ️', warning: '⚠️' };
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = 'toast-notification ' + type;
-      toast.innerHTML = '<span class="toast-icon">' + (icons[type] || 'ℹ️') + '</span>' +
-        '<span>' + message + '</span>' +
-        '<button class="toast-close" onclick="this.parentElement.remove()">×</button>';
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.style.animation = 'toastOut 0.3s ease-out forwards';
-        setTimeout(() => toast.remove(), 300);
-      }, 4000);
-    }
-    window.showToast = showNotification;
+    window.showToast = NotificationService.show;
     window.showNotification = NotificationService.show;
 
     // In-memory leads (live reference to AppStore)
@@ -684,6 +573,10 @@ function toggleMobileMenu() {
       return result.insight || result;
     }
     function openDrawer(lead) {
+      if (typeof CustomerDrawer !== 'undefined') {
+        CustomerDrawer.open(lead);
+        return;
+      }
       currentDrawerLead = lead;
       document.getElementById('drawerTitle').textContent = 'POLARIS™ Revenue Intelligence by NorthStar';
       document.getElementById('drawerName').textContent = lead.caller || lead.customerName || '—';
@@ -727,6 +620,10 @@ function toggleMobileMenu() {
     }
 
     function closeDrawer() {
+      if (typeof CustomerDrawer !== 'undefined') {
+        CustomerDrawer.close();
+        return;
+      }
       document.getElementById('drawerOverlay').classList.remove('open');
       document.getElementById('customerDrawer').classList.remove('open');
       document.body.style.overflow = '';

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Leads — NorthStar AI</title>
+  <title>Leads - NorthStar AI</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
@@ -31,101 +31,6 @@
 [data-theme="dark"] .stat-card-won .stat-icon { background: rgba(4,120,87,0.2); color: #6ee7b7; }
 [data-theme="dark"] .stat-card-conversion .stat-icon { background: rgba(180,83,9,0.2); color: #fbbf24; }
 [data-theme="dark"] .stat-card-avgvalue .stat-icon { background: rgba(126,34,206,0.2); color: #d8b4fe; }
-
-/* Polaris Revenue Intelligence Card */
-.polaris-card {
-  background: linear-gradient(135deg, #FFF8E7, #FFECB3);
-  border: 1px solid var(--brand-300);
-  border-radius: var(--radius);
-  padding: 20px 24px;
-  margin-bottom: 24px;
-  position: relative;
-  overflow: hidden;
-}
-.polaris-card::before {
-  content: '';
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: rgba(212, 175, 55, 0.08);
-}
-.polaris-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.polaris-header h2 {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--brand-800);
-}
-.polaris-header .polaris-badge {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background: var(--brand-600);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 100px;
-  font-weight: 600;
-}
-.polaris-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-@media (max-width: 768px) { .polaris-grid { grid-template-columns: 1fr; } }
-.polaris-item {
-  background: rgba(255,255,255,0.6);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
-  border: 1px solid rgba(212,175,55,0.2);
-}
-.polaris-item .polaris-item-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--brand-700);
-  margin-bottom: 4px;
-}
-.polaris-item .polaris-item-value {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--neutral-900);
-  margin-bottom: 2px;
-}
-.polaris-item .polaris-item-desc {
-  font-size: 12px;
-  color: var(--neutral-600);
-}
-.polaris-item .polaris-confidence {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 1px 8px;
-  border-radius: 100px;
-  margin-top: 4px;
-}
-.polaris-confidence.high { background: #d1fae5; color: #047857; }
-.polaris-confidence.medium { background: #fef3c7; color: #b45309; }
-.polaris-confidence.low { background: #fee2e2; color: #b91c1c; }
-[data-theme="dark"] .polaris-card {
-  background: linear-gradient(135deg, #2a2510, #3d3010);
-  border-color: var(--brand-700);
-}
-[data-theme="dark"] .polaris-header h2 { color: var(--brand-300); }
-[data-theme="dark"] .polaris-item { background: rgba(0,0,0,0.2); border-color: rgba(212,175,55,0.15); }
-[data-theme="dark"] .polaris-item .polaris-item-label { color: var(--brand-400); }
-[data-theme="dark"] .polaris-item .polaris-item-value { color: var(--neutral-800); }
-[data-theme="dark"] .polaris-item .polaris-item-desc { color: var(--neutral-500); }
-[data-theme="dark"] .polaris-confidence.high { background: rgba(4,120,87,0.2); color: #6ee7b7; }
-[data-theme="dark"] .polaris-confidence.medium { background: rgba(180,83,9,0.2); color: #fbbf24; }
-[data-theme="dark"] .polaris-confidence.low { background: rgba(185,28,28,0.2); color: #fca5a5; }
 
 /* Customer Detail Drawer */
 /* More action menu */
@@ -336,13 +241,13 @@ function toggleMobileMenu() {
         <div class="polaris-header">
           <h2 style="display:flex;align-items:center;gap:8px;">
             <img src="/assets/logo.png" alt="NorthStar" style="height:18px;width:auto;vertical-align:middle;">
-            POLARIS™ Revenue Intelligence</h2>
+            POLARIS Revenue Intelligence</h2>
           <span class="polaris-badge">Live</span>
         </div>
         <div class="polaris-grid" id="polarisGrid">
           <div class="polaris-item">
             <div class="polaris-item-label">Top Opportunity</div>
-            <div class="polaris-item-value" id="polarisTopOpp">—</div>
+            <div class="polaris-item-value" id="polarisTopOpp">-</div>
             <div class="polaris-item-desc" id="polarisTopOppDesc">Lead with highest potential value</div>
             <span class="polaris-confidence high" id="polarisTopConf">High</span>
           </div>
@@ -354,7 +259,7 @@ function toggleMobileMenu() {
           </div>
           <div class="polaris-item">
             <div class="polaris-item-label">Recommended Focus</div>
-            <div class="polaris-item-value" id="polarisFocus">—</div>
+            <div class="polaris-item-value" id="polarisFocus">-</div>
             <div class="polaris-item-desc" id="polarisFocusDesc">Highest volume service category</div>
             <span class="polaris-confidence high" id="polarisFocusConf">High</span>
           </div>
@@ -379,33 +284,33 @@ function toggleMobileMenu() {
   </div>
 
   <!-- Drawer overlay -->
-  <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+  <div class="drawer-overlay" id="drawerOverlay" onclick="CustomerDrawer.close()"></div>
 
   <!-- Customer Detail Drawer -->
   <div class="customer-drawer" id="customerDrawer">
     <div class="drawer-header">
       <h2 id="drawerTitle">Customer Details</h2>
-      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+      <button class="drawer-close" onclick="CustomerDrawer.close()">x</button>
     </div>
     <div class="drawer-body" id="drawerBody">
       <div class="drawer-section">
         <h3>Contact Information</h3>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="drawerName">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="drawerPhone">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="drawerAddress">—</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="drawerName">-</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="drawerPhone">-</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="drawerAddress">-</span></div>
       </div>
       <div class="drawer-section">
         <h3>Job Details</h3>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">—</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">-</span></div>
         <div class="drawer-detail-row drawer-detail-row-nb"><span class="drawer-detail-label">Description</span></div>
-        <div class="drawer-description-box" id="drawerDescription">—</div>
-        <div style="border-bottom:1px solid var(--neutral-200);margin:8px 0 0 0;"></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerStatus">—</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Date</span><span class="drawer-detail-value" id="drawerDate">—</span></div>
+        <div class="drawer-description-box" id="drawerDescription">-</div>
+        
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">-</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerStatus">-</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Date</span><span class="drawer-detail-value" id="drawerDate">-</span></div>
       </div>
       <div class="drawer-section">
-        <h3>POLARIS™ Revenue Intelligence</h3>
+        <h3>POLARIS Revenue Intelligence</h3>
         <div id="drawerPolarisInsight" class="drawer-polaris-insight">No insight available.</div>
       </div>
       <div class="drawer-section">
@@ -419,7 +324,7 @@ function toggleMobileMenu() {
     </div>
   </div>
 
-  <div class="toast-container" id="toastContainer"></div>
+  
 
   <script src="/js/event-bus.js"></script>
   <script src="/js/business-models.js"></script>
@@ -431,21 +336,7 @@ function toggleMobileMenu() {
   <script src="/js/api.js"></script>
   <script>
     // Premium notification toasts
-    function showNotification(message, type) {
-      type = type || 'info';
-      const icons = { success: '✅', info: 'ℹ️', warning: '⚠️' };
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = 'toast-notification ' + type;
-      toast.innerHTML = '<span class="toast-icon">' + (icons[type] || 'ℹ️') + '</span>' +
-        '<span>' + message + '</span>' +
-        '<button class="toast-close" onclick="this.parentElement.remove()">×</button>';
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.style.animation = 'toastOut 0.3s ease-out forwards';
-        setTimeout(() => toast.remove(), 300);
-      }, 4000);
-    }
+    
     window.showToast = showNotification;
     window.showNotification = NotificationService.show;
 
@@ -485,12 +376,12 @@ function toggleMobileMenu() {
     // === Polaris Revenue Intelligence Card ===
     function renderPolarisCard(leads) {
       if (leads.length === 0) {
-        document.getElementById('polarisTopOpp').textContent = '—';
+        document.getElementById('polarisTopOpp').textContent = '-';
         document.getElementById('polarisTopOppDesc').textContent = 'Add leads to see opportunities';
         document.getElementById('polarisPipeline').textContent = '$0';
         document.getElementById('polarisPipeConf').textContent = 'N/A';
         document.getElementById('polarisPipeConf').className = 'polaris-confidence low';
-        document.getElementById('polarisFocus').textContent = '—';
+        document.getElementById('polarisFocus').textContent = '-';
         document.getElementById('polarisFocusDesc').textContent = 'Simulate leads to get started';
         return;
       }
@@ -498,9 +389,9 @@ function toggleMobileMenu() {
       // Top opportunity = highest priced lead
       const sorted = [...leads].sort((a, b) => (b.avgPrice || 0) - (a.avgPrice || 0));
       const top = sorted[0];
-      document.getElementById('polarisTopOpp').textContent = top.caller || '—';
-      const topJob = top.jobDetail || top.service || '—';
-      document.getElementById('polarisTopOppDesc').textContent = '$' + Math.round(top.avgPrice || 0).toLocaleString() + ' — ' + (typeof top.service === 'string' ? top.service : 'Service');
+      document.getElementById('polarisTopOpp').textContent = top.caller || '-';
+      const topJob = top.jobDetail || top.service || '-';
+      document.getElementById('polarisTopOppDesc').textContent = '$' + Math.round(top.avgPrice || 0).toLocaleString() + ' - ' + (typeof top.service === 'string' ? top.service : 'Service');
       const topConfidence = (top.avgPrice || 0) > 2000 ? 'High' : (top.avgPrice || 0) > 500 ? 'Medium' : 'Low';
       const topConfClass = topConfidence.toLowerCase();
       document.getElementById('polarisTopConf').textContent = topConfidence;
@@ -519,25 +410,20 @@ function toggleMobileMenu() {
         const svc = l.service || 'Other';
         svcCounts[svc] = (svcCounts[svc] || 0) + 1;
       });
-      let topSvc = '—', topSvcCount = 0;
+      let topSvc = '-', topSvcCount = 0;
       for (const [svc, count] of Object.entries(svcCounts)) {
         if (count > topSvcCount) { topSvc = svc; topSvcCount = count; }
       }
       document.getElementById('polarisFocus').textContent = topSvc;
-      document.getElementById('polarisFocusDesc').textContent = topSvcCount + ' lead' + (topSvcCount !== 1 ? 's' : '') + ' — highest volume service';
+      document.getElementById('polarisFocusDesc').textContent = topSvcCount + ' lead' + (topSvcCount !== 1 ? 's' : '') + ' - highest volume service';
       document.getElementById('polarisFocusConf').textContent = topSvcCount > 3 ? 'High' : topSvcCount > 1 ? 'Medium' : 'Low';
       document.getElementById('polarisFocusConf').className = 'polaris-confidence ' + (topSvcCount > 3 ? 'high' : topSvcCount > 1 ? 'medium' : 'low');
     }
 
     // === Customer Detail Drawer ===
-    let currentDrawerLead = null;
-    function openDrawer(lead) {
-      CustomerDrawer.open(lead);
-    }
+    
 
-    function closeDrawer() {
-      CustomerDrawer.close();
-    }
+    
 
 
 
@@ -559,9 +445,9 @@ function toggleMobileMenu() {
 
       leads.slice().forEach((c, idx) => {
         const status = c.status || 'new';
-        const svc = c.service || c.serviceRequested || '—';
-        const val = c.avgPrice ? '$' + Math.round(c.avgPrice).toLocaleString() : '—';
-        html += `<tr style="cursor:pointer;" onclick="openDrawer(allLeads[${idx}])">
+        const svc = c.service || c.serviceRequested || '-';
+        const val = c.avgPrice ? '$' + Math.round(c.avgPrice).toLocaleString() : '-';
+        html += `<tr style="cursor:pointer;" onclick="CustomerDrawer.open(allLeads[${idx}])">
           <td><strong>${c.caller || c.customerName || 'Unknown'}</strong></td>
           <td>${c.phone || c.phoneNumber || '-'}</td>
           <td style="text-align:center"><span class="lead-service-badge">${svc}</span></td>
@@ -572,7 +458,7 @@ function toggleMobileMenu() {
             <div class="more-menu-container">
               <button class="more-btn" onclick="event.stopPropagation(); toggleMoreMenu(this)" title="Actions">•••</button>
               <div class="more-dropdown">
-                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); openDrawer(allLeads[${idx}])">👁️ View Details</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); CustomerDrawer.open(allLeads[${idx}])">👁️ View Details</button>
                 <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'contacted')">📞 Mark Contacted</button>
                 <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'scheduled')">📅 Schedule</button>
                 <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'completed')">✅ Mark Completed</button>
@@ -637,7 +523,7 @@ function toggleMobileMenu() {
         // genCall() is already routed through AppStore.addLead + EventBus
         // by the simulator.js wrapper. The new lead lands at index 0 of
         // the store with default status 'new'. We fetch the lead by its
-        // real id (not by array index — AppStore.updateLead looks up by
+        // real id (not by array index - AppStore.updateLead looks up by
         // id; passing 0 is a silent no-op) and idempotently re-assert the
         // status, then mirror to sessionStorage for older paths.
         const c = genCall();
@@ -653,7 +539,7 @@ function toggleMobileMenu() {
           existing.unshift(c);
           sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
         } catch(e) {}
-        showNotification("✅ New lead: " + c.caller + " (" + c.service + " — $" + Math.round(c.avgPrice).toLocaleString() + ")", "success");
+        showNotification("✅ New lead: " + c.caller + " (" + c.service + " - $" + Math.round(c.avgPrice).toLocaleString() + ")", "success");
         loadLeads();
       } catch (e) {
         try { showNotification("Could not generate lead. Please try again.", "error"); } catch (_) {}

@@ -490,6 +490,35 @@ function toggleMobileMenu() {
         <div class="stat-change down" id="kpiMissedChange">Needs attention</div>
       </div>
     </div>
+      <div class="polaris-card" id="polarisCard">
+        <div class="polaris-header">
+          <h2 style="display:flex;align-items:center;gap:8px;">
+            <img src="/assets/logo.png" alt="NorthStar" style="height:18px;width:auto;vertical-align:middle;">
+            POLARIS™ Revenue Intelligence</h2>
+          <span class="polaris-badge">Live</span>
+        </div>
+        <div class="polaris-grid" id="polarisGrid">
+          <div class="polaris-item">
+            <div class="polaris-item-label">Top Opportunity</div>
+            <div class="polaris-item-value" id="polarisTopOpp">—</div>
+            <div class="polaris-item-desc" id="polarisTopOppDesc">Lead with highest potential value</div>
+            <span class="polaris-confidence high" id="polarisTopConf">High</span>
+          </div>
+          <div class="polaris-item">
+            <div class="polaris-item-label">Estimated Pipeline</div>
+            <div class="polaris-item-value" id="polarisPipeline">$0</div>
+            <div class="polaris-item-desc">Total qualified lead value</div>
+            <span class="polaris-confidence medium" id="polarisPipeConf">Medium</span>
+          </div>
+          <div class="polaris-item">
+            <div class="polaris-item-label">Recommended Focus</div>
+            <div class="polaris-item-value" id="polarisFocus">—</div>
+            <div class="polaris-item-desc" id="polarisFocusDesc">Highest volume service category</div>
+            <span class="polaris-confidence high" id="polarisFocusConf">High</span>
+          </div>
+        </div>
+      </div>
+
     <!-- Executive Filter Bar -->
     <div class="filter-bar">
       <div class="filter-btn-wrapper">
@@ -888,6 +917,40 @@ function applyFilters(calls) {
 }
 
 // ===== Render =====
+
+    // === Polaris Revenue Intelligence Card ===
+    function renderPolarisCard(leads) {
+      if (leads.length === 0) {
+        document.getElementById('polarisTopOpp').textContent = '—';
+        document.getElementById('polarisTopOppDesc').textContent = 'Add leads to see opportunities';
+        document.getElementById('polarisPipeline').textContent = '$0';
+        document.getElementById('polarisPipeConf').textContent = 'N/A';
+        document.getElementById('polarisPipeConf').className = 'polaris-confidence low';
+        document.getElementById('polarisFocus').textContent = '—';
+        document.getElementById('polarisFocusDesc').textContent = 'Simulate leads to get started';
+        return;
+      }
+      const sorted = [...leads].sort((a, b) => (b.avgPrice || 0) - (a.avgPrice || 0));
+      const top = sorted[0];
+      document.getElementById('polarisTopOpp').textContent = top.caller || '—';
+      document.getElementById('polarisTopOppDesc').textContent = '$' + Math.round(top.avgPrice || 0).toLocaleString() + ' — ' + (typeof top.service === 'string' ? top.service : 'Service');
+      const topConfidence = (top.avgPrice || 0) > 2000 ? 'High' : (top.avgPrice || 0) > 500 ? 'Medium' : 'Low';
+      document.getElementById('polarisTopConf').textContent = topConfidence;
+      document.getElementById('polarisTopConf').className = 'polaris-confidence ' + topConfidence.toLowerCase();
+      const pipeline = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
+      document.getElementById('polarisPipeline').textContent = '$' + Math.round(pipeline).toLocaleString();
+      const pipeConf = leads.length > 5 ? 'High' : leads.length > 2 ? 'Medium' : 'Low';
+      document.getElementById('polarisPipeConf').textContent = pipeConf;
+      document.getElementById('polarisPipeConf').className = 'polaris-confidence ' + pipeConf.toLowerCase();
+      const svcCounts = {};
+      leads.forEach(l => { const svc = l.service || 'Other'; svcCounts[svc] = (svcCounts[svc] || 0) + 1; });
+      let topSvc = '—', topSvcCount = 0;
+      for (const [svc, count] of Object.entries(svcCounts)) { if (count > topSvcCount) { topSvc = svc; topSvcCount = count; } }
+      document.getElementById('polarisFocus').textContent = topSvc;
+      document.getElementById('polarisFocusDesc').textContent = topSvcCount + ' lead' + (topSvcCount !== 1 ? 's' : '') + ' — highest volume service';
+      document.getElementById('polarisFocusConf').textContent = topSvcCount > 3 ? 'High' : topSvcCount > 1 ? 'Medium' : 'Low';
+      document.getElementById('polarisFocusConf').className = 'polaris-confidence ' + (topSvcCount > 3 ? 'high' : topSvcCount > 1 ? 'medium' : 'low');
+    }
 function renderCalls() {
   let f = applyFilters(allCalls);
   if (typeof curSort !== 'undefined' && curSort) {
@@ -902,7 +965,8 @@ function renderCalls() {
     el.innerHTML = emptyMsg;
     resultsCountEl.textContent = '';
     upStats();
-    updatePolaris();
+  renderPolarisCard(allCalls);
+    
     return;
   }
 function sortCalls(arr, sort) {
@@ -962,7 +1026,7 @@ function sortCalls(arr, sort) {
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
   upStats();
-  updatePolaris();
+  
 }
 function setSearch(q) {
   curSearch = q;
@@ -991,30 +1055,7 @@ function upStats() {
   document.getElementById("kpiBookingChange").textContent = book+' booked';
   document.getElementById("kpiMissedChange").textContent = (voicemail+noi)>0 ? 'Needs attention' : 'None';
 }
-function updatePolaris() {
-  const calls = getAllCalls();
-  const t = calls.length;
-  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
-  const book = calls.filter(c=>c.outcome==="appointment-set").length;
-  const est = calls.filter(c=>c.outcome==="lead-captured").length;
-  const fu = calls.filter(c=>c.outcome==="follow-up").length;
-  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
-  const highest = calls.reduce((m,c)=>Math.max(m,c.avgPrice||0), 0);
-  const avg = t>0 ? Math.round(rev/t) : 0;
-  document.getElementById("psCallsToday").textContent = today;
-  document.getElementById("psBooked").textContent = book;
-  document.getElementById("psEstimates").textContent = est;
-  document.getElementById("psFollowUps").textContent = fu;
-  document.getElementById("psRevenue").textContent = '$'+rev.toLocaleString();
-  document.getElementById("psHighest").textContent = highest>0 ? '$'+highest.toLocaleString() : "—";
-  document.getElementById("psAvgOpp").textContent = '$'+avg.toLocaleString();
-  let action = "Review pending leads";
-  if(fu > 0) action = "Follow up on "+fu+" leads";
-  if(book===0 && est===0 && t>0) action = "Improve booking rate — review AI scripts";
-  document.getElementById("psNextAction").textContent = action;
-}
 
-// ===== Actions =====
 function simulateDemoCall() {
   try {
     // genCall() is already routed through AppStore.addLead + EventBus by

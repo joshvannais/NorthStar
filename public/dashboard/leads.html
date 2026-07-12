@@ -348,6 +348,11 @@ function toggleMobileMenu() {
 
     // In-memory leads (live reference to AppStore)
     let allLeads = AppStore.getLeads();
+    function openLeadDrawer(el) {
+      var idx = parseInt(el.getAttribute('data-lead-index'), 10);
+      var lead = allLeads[idx];
+      if (lead && typeof CustomerDrawer !== 'undefined') CustomerDrawer.open(lead);
+    }
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
     // Subscribe to store changes for auto-refresh
     EventBus.on('store:changed', function() { loadLeads(); });
@@ -453,7 +458,7 @@ function toggleMobileMenu() {
         const status = c.status || 'new';
         const svc = c.service || c.serviceRequested || '-';
         const val = c.avgPrice ? '$' + Math.round(c.avgPrice).toLocaleString() : '-';
-        html += `<tr style="cursor:pointer;" onclick="CustomerDrawer.open(allLeads[${idx}])">
+        html += `<tr style="cursor:pointer;" data-lead-index="${idx}" onclick="openLeadDrawer(this)">
           <td><strong>${c.caller || c.customerName || 'Unknown'}</strong></td>
           <td>${c.phone || c.phoneNumber || '-'}</td>
           <td style="text-align:center"><span class="lead-service-badge">${svc}</span></td>
@@ -464,7 +469,7 @@ function toggleMobileMenu() {
             <div class="more-menu-container">
               <button class="more-btn" onclick="event.stopPropagation(); toggleMoreMenu(this)" title="Actions">•••</button>
               <div class="more-dropdown">
-                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); CustomerDrawer.open(allLeads[${idx}])">👁️ View Details</button>
+                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); openLeadDrawer(this.closest('tr'))">👁️ View Details</button>
                 <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'contacted')">📞 Mark Contacted</button>
                 <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'scheduled')">📅 Schedule</button>
                 <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'completed')">✅ Mark Completed</button>

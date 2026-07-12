@@ -1025,7 +1025,8 @@ function isThisWeek(d){const t=new Date();const w=t.getTime()-t.getDay()*8640000
     console.log('[DEBUG simulator] originalGenCall() returned:', call ? call.caller : 'NULL');
     try {
       if (window.AppStore && typeof window.AppStore.addLead === 'function') {
-        window.AppStore.addLead(call);
+        var storedLead = window.AppStore.addLead(call);
+        if (storedLead) call = storedLead;
       }
     } catch (e) { console.warn('[simulator] store addLead failed:', e); }
     try {

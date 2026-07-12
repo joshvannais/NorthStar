@@ -985,15 +985,27 @@ function applyFilters(calls) {
       document.getElementById('polarisFocusConf').textContent = topSvcCount > 3 ? 'High' : topSvcCount > 1 ? 'Medium' : 'Low';
       document.getElementById('polarisFocusConf').className = 'polaris-confidence ' + (topSvcCount > 3 ? 'high' : topSvcCount > 1 ? 'medium' : 'low');
     }
-function renderCalls() {
-  console.log('[DEBUG renderCalls] ENTERED');
-  console.log('[DEBUG renderCalls] allCalls length:', allCalls ? allCalls.length : 'allCalls is NULL');
-  let f = applyFilters(allCalls);
-  console.log('[DEBUG renderCalls] applyFilters returned:', f ? f.length + ' calls' : 'NULL');
-  if (curSort) {
-    f = sortCalls(f, curSort);
-    console.log('[DEBUG renderCalls] after sortCalls:', f ? f.length + ' calls' : 'NULL');
+// Global reference to the current filtered/sorted view for the CustomerDrawer click handler
+var currentFilteredCalls = [];
+
+function openCallCard(el) {
+  var idx = parseInt(el.getAttribute('data-lead-index'), 10);
+  var lead = currentFilteredCalls[idx];
+  if (lead && typeof CustomerDrawer !== 'undefined') {
+    CustomerDrawer.open(lead);
   }
+}
+
+function renderCalls() {
+      console.log('[DEBUG renderCalls] ENTERED');
+      console.log('[DEBUG renderCalls] allCalls length:', allCalls ? allCalls.length : 'allCalls is NULL');
+      let f = applyFilters(allCalls);
+      console.log('[DEBUG renderCalls] applyFilters returned:', f ? f.length + ' calls' : 'NULL');
+      if (curSort) {
+        f = sortCalls(f, curSort);
+        console.log('[DEBUG renderCalls] after sortCalls:', f ? f.length + ' calls' : 'NULL');
+      }
+      currentFilteredCalls = f;
   const el = document.getElementById("callHistoryList");
   const resultsCountEl = document.getElementById("resultsCount");
   console.log('[DEBUG renderCalls] el found:', !!el, 'resultsCountEl found:', !!resultsCountEl);
@@ -1038,7 +1050,7 @@ function renderCalls() {
 
     html += '' +
       '<div class="call-card" id="call-'+i+'">' +
-        '<div class="call-card-header" onclick="CustomerDrawer.open(f['+i+'])">' +
+        '<div class="call-card-header" data-lead-index="'+i+'" onclick="openCallCard(this)">' +
           '<div class="call-caller">' +
             '<div class="call-avatar">'+inits+'</div>' +
             '<div class="call-info">' +

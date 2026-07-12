@@ -959,7 +959,6 @@ function genTranscript(svc,s,name,phone,num,sn,st){
     }
     function genCall(){
       console.log('[DEBUG simulator] genCall() ENTERED');
-      try {
       const svc=services[Math.floor(Math.random()*services.length)];
       const s=svc.scenarios[Math.floor(Math.random()*svc.scenarios.length)];
       const price=calcPrice(svc,s);

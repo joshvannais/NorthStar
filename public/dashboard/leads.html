@@ -9,12 +9,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 <style>
-/* Override main-content grid layout — Leads is single-column */
-@media (min-width: 1024px) {
-  .main-content {
-    display: block !important;
-  }
-}
 /* ===== Leads CRM Specific Styles ===== */
 
 /* KPI Cards with icons */
@@ -203,6 +197,7 @@ function toggleMobileMenu() {
       </div>
 
       <!-- 6 Executive KPI Cards -->
+      <div class="ds-widget ds-widget-full">
       <div class="leads-kpi-grid" id="leadsKpiGrid">
         <div class="stat-card stat-card-calls">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
@@ -241,8 +236,10 @@ function toggleMobileMenu() {
           <div class="stat-change up">Per lead estimate</div>
         </div>
       </div>
+      </div>
 
       <!-- Polaris Revenue Intelligence Card -->
+      <div class="ds-widget ds-widget-full">
       <div class="polaris-card" id="polarisCard">
         <div class="polaris-header">
           <h2 style="display:flex;align-items:center;gap:8px;">
@@ -271,8 +268,10 @@ function toggleMobileMenu() {
           </div>
         </div>
       </div>
+      </div>
 
       <!-- Leads Table -->
+      <div class="ds-widget ds-widget-full">
       <div class="table-container">
         <div class="table-header">
           <h2>Leads</h2>
@@ -285,6 +284,7 @@ function toggleMobileMenu() {
             <p>Click "Simulate Lead" to generate a lead, or connect your phone number to receive real calls.</p>
           </div>
         </div>
+      </div>
       </div>
     </main>
   </div>

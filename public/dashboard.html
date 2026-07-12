@@ -651,12 +651,12 @@ function toggleMobileMenu() {
       const skeleton = document.getElementById('heroSkeleton');
       const content = document.getElementById('heroContent');
       const error = document.getElementById('heroError');
-      skeleton.style.display = 'block';
-      content.style.display = 'none';
-      error.style.display = 'none';
+      if (skeleton) skeleton.style.display = 'block';
+      if (content) content.style.display = 'none';
+      if (error) error.style.display = 'none';
 
       setTimeout(() => {
-        skeleton.style.display = 'none';
+        if (skeleton) skeleton.style.display = 'none';
         const leads = getLiveLeads();
         const totalValue = leads.reduce((s,c) => s + (c.avgPrice||0), 0);
         const count = leads.length;
@@ -675,7 +675,7 @@ function toggleMobileMenu() {
         document.getElementById('heroKpiSubtitle').textContent = count > 0
           ? `From ${count} qualified opportunit${count!==1?'ies':'y'} across ${services} service${services!==1?'s':''}`
           : 'No qualified opportunities yet. New opportunities will appear here after NorthStar qualifies leads.';
-        content.style.display = 'block';
+        if (content) content.style.display = 'block';
       }, 500);
     }
 

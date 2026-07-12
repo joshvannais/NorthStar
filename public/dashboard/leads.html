@@ -357,10 +357,12 @@ function toggleMobileMenu() {
     // Subscribe to store changes for auto-refresh
     EventBus.on('store:changed', function() { loadLeads(); });
     function loadLeads() {
-      document.getElementById('leadCount').textContent = allLeads.length + ' leads';
-      renderLeads(allLeads);
-      renderKpiCards(allLeads);
-      renderPolarisCard(allLeads);
+      // Always read fresh from shared AppStore
+      const leads = AppStore.getLeads();
+      document.getElementById('leadCount').textContent = leads.length + ' leads';
+      renderLeads(leads);
+      renderKpiCards(leads);
+      renderPolarisCard(leads);
     }
 
     // === 6 Executive KPI Cards ===

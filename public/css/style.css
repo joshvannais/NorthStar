@@ -2952,13 +2952,20 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 [data-theme="dark"] .drawer-pricing-item:last-child { color: var(--neutral-800); }
 
 .drawer-polaris-insight {
-  font-size: 14px;
-  color: var(--neutral-700);
-  line-height: 1.5;
-  padding: 10px 14px;
-  background: linear-gradient(135deg, rgba(212,175,55,0.06), rgba(212,175,55,0.01));
-  border: 1px solid rgba(212,175,55,0.2);
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #FFF8E7, #FFECB3);
+  border: 1px solid var(--brand-300);
   border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  color: var(--brand-900);
+  margin-top: 4px;
+}
+[data-theme="dark"] .drawer-polaris-insight {
+  background: rgba(212,175,55,0.1);
+  border-color: rgba(212,175,55,0.3);
+  color: var(--brand-300);
 }
 
 /* Description box styling */

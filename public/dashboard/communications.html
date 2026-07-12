@@ -1084,15 +1084,9 @@ function sortCalls(arr, sort) {
     const inits = safe(c.caller,'Unknown').split(" ").map(w=>w[0]).join("").substring(0,2);
     const ob = oc[c.outcome] || {cls:"voicemail", label: c.outcome ? toTitle(c.outcome.replace(/-/g," ")) : (c.status ? toTitle(c.status) : 'Unknown')};
     const statusClass = c.status === "voicemail" ? "voicemail" : ob.cls;
-    const pbHtml = c.pricingBreakdown && Array.isArray(c.pricingBreakdown) && c.pricingBreakdown.length > 0 ?
-      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;">' +
-      '<div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">Pricing Breakdown</div>' +
-      c.pricingBreakdown.map(pb => '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('') +
-      '</div>' : '';
-    const execSummaryId = 'execSummary-' + i;
     html += '' +
       '<div class="call-card" id="call-'+i+'">' +
-        '<div class="call-card-header" onclick="toggleCall('+i+')">' +
+        '<div class="call-card-header" onclick="CustomerDrawer.open(allCalls['+i+'])">' +
           '<div class="call-caller">' +
             '<div class="call-avatar">'+inits+'</div>' +
             '<div class="call-info">' +
@@ -1102,45 +1096,6 @@ function sortCalls(arr, sort) {
           '</div>' +
           '<span class="call-status-badge '+statusClass+'">'+ob.label+'</span>' +
         '</div>' +
-        '<div class="call-card-body">' +
-          '<div class="call-detail-grid">' +
-            '<div class="call-detail-item"><div class="call-detail-label">Phone</div><div class="call-detail-value">'+c.phone+'</div></div>' +
-            '<div class="call-detail-item"><div class="call-detail-label">Address</div><div class="call-detail-value">'+c.address+'</div></div>' +
-            '<div class="call-detail-item"><div class="call-detail-label">Service</div><div class="call-detail-value">'+c.service+'</div></div>' +
-            '<div class="call-detail-item"><div class="call-detail-label">Duration</div><div class="call-detail-value">'+c.duration+'</div></div>' +
-          '</div>' +
-          '<div class="call-job-value">' +
-            '<div class="call-job-value-amount">$'+safeNum(c.avgPrice,0).toLocaleString()+' <span class="call-job-value-suffix">Estimated Job Value</span></div>' +
-            '<div class="call-job-value-desc">'+safe(c.jobDetail,'')+'</div>' +
-            pbHtml +
-          '</div>' +
-          '<div class="call-section-label">Call Summary</div>' +
-          '<div class="call-summary-text">'+safe(c.summary,'No summary available')+'</div>' +
-          '<div class="call-section-label">Transcript</div>' +
-          '<div class="call-transcript">'+function(){try{return c.transcript.split("\\n").map(l=>{if(l.startsWith("AI:"))return '<div class="transcript-line transcript-ai"><span class="transcript-speaker">AI</span> '+l.substring(3)+'</div>';if(l.startsWith("Customer:"))return '<div class="transcript-line transcript-customer"><span class="transcript-speaker">'+c.caller.split(" ")[0]+'</span> '+l.substring(9)+'</div>';return '<div class="transcript-line">'+l+'</div>';}).join("");}catch(e){return c.transcript;}}()+'</div>' +
-          '<div class="call-exec-summary" id="'+execSummaryId+'">' +
-            '<div class="exec-summary-header" onclick="toggleExecutiveSummary(\x27+execSummaryId+\x27)">' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' +
-              'POLARIS Executive Analysis' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="exec-chevron" style="width:14px;height:14px;"><polyline points="6 9 12 15 18 9"/></svg>' +
-            '</div>' +
-            '<div class="exec-summary-body">' +
-              '<div class="exec-section"><div class="exec-label">Executive Summary</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.insight:c.summary)+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Customer Intent</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.service:'')+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Key Concerns</div><div class="exec-value">Pricing, timeline, availability</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Outcome</div><div class="exec-value">'+ob.label+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">Recommended Action</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.upsell:'Follow up within 24 hours with a detailed estimate')+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">POLARIS AI Reasoning</div><div class="exec-value">'+(c.polarisAnalysis?c.polarisAnalysis.insight:'Lead matched to '+c.service+' service line')+'</div></div>' +
-              '<div class="exec-section"><div class="exec-label">AI Confidence Score</div><div class="exec-value"><span class="confidence-high">'+(c.polarisAnalysis?c.polarisAnalysis.confidence+'%':'87%')+'</span></div></div>' +
-              '<div class="exec-section"><div class="exec-label">Revenue Opportunity</div><div class="exec-value" style="color:var(--brand-600);font-weight:700;">$'+(c.polarisAnalysis?c.polarisAnalysis.estimatedPrice.toLocaleString():c.avgPrice.toLocaleString())+'</div></div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="call-actions">' +
-            '<button class="btn btn-sm btn-primary" onclick="NotificationService.show(\x27Sent SMS to \x27+c.phone+\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Send SMS</button>' +
-            '<button class="btn btn-sm btn-secondary" onclick="NotificationService.show(\x27Email sent\x27, \x27success\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Email</button>' +
-            '<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\x27+execSummaryId+\x27).classList.toggle(\x27exec-open\x27)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Polaris</button>' +
-          '</div>' +
-        '</div>' +
       '</div>';
   });
   el.innerHTML = html;
@@ -1148,19 +1103,6 @@ function sortCalls(arr, sort) {
   upStats();
   updatePolaris();
 }
-function setSearch(q) {
-  curSearch = q;
-  renderCalls();
-}
-function toggleExecutiveSummary(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.toggle('exec-open');
-}
-function toggleCall(i) {
-  document.querySelectorAll(".call-card.expanded").forEach(c=>{if(c.id!=="call-"+i)c.classList.remove("expanded")});
-  document.getElementById("call-"+i).classList.toggle("expanded");
-}
-
 // ===== Stats =====
 function upStats() {
   const calls = getAllCalls();
@@ -1253,5 +1195,45 @@ function loadCalls() { renderCalls(); }
 loadCalls();
 </script>
 <script src="/js/theme.js"></script>
+<script src="/js/customer-drawer.js"></script>
+
+<!-- Customer Drawer (shared component) -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="CustomerDrawer.close()"></div>
+<div class="customer-drawer" id="customerDrawer">
+  <div class="drawer-header">
+    <h2 id="drawerTitle">Customer Details</h2>
+    <button class="drawer-close" onclick="CustomerDrawer.close()">✕</button>
+  </div>
+  <div class="drawer-body" id="drawerBody">
+    <div class="drawer-section">
+      <h3>Contact Information</h3>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="drawerName">—</span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="drawerPhone">—</span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="drawerAddress">—</span></div>
+    </div>
+    <div class="drawer-section">
+      <h3>Job Details</h3>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">—</span></div>
+      <div class="drawer-detail-row drawer-detail-row-nb"><span class="drawer-detail-label">Description</span></div>
+      <div class="drawer-description-box" id="drawerDescription">—</div>
+      <div style="border-bottom:1px solid var(--neutral-200);margin:8px 0 0 0;"></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">—</span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerStatus">—</span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Date</span><span class="drawer-detail-value" id="drawerDate">—</span></div>
+    </div>
+    <div class="drawer-section">
+      <h3>POLARIS™ Revenue Intelligence</h3>
+      <div id="drawerPolarisInsight" class="drawer-polaris-insight">No insight available.</div>
+    </div>
+    <div class="drawer-section">
+      <h3>Pricing Breakdown</h3>
+      <div id="drawerPricingBreakdown"><p style="font-size:13px;color:var(--neutral-500);">No pricing data available.</p></div>
+    </div>
+    <div class="drawer-section">
+      <h3>Call Transcript</h3>
+      <div class="drawer-transcript" id="drawerTranscript">No transcript available.</div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

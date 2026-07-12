@@ -986,23 +986,34 @@ function applyFilters(calls) {
       document.getElementById('polarisFocusConf').className = 'polaris-confidence ' + (topSvcCount > 3 ? 'high' : topSvcCount > 1 ? 'medium' : 'low');
     }
 function renderCalls() {
+  console.log('[DEBUG renderCalls] ENTERED');
+  console.log('[DEBUG renderCalls] allCalls length:', allCalls ? allCalls.length : 'allCalls is NULL');
   let f = applyFilters(allCalls);
+  console.log('[DEBUG renderCalls] applyFilters returned:', f ? f.length + ' calls' : 'NULL');
   if (curSort) {
     f = sortCalls(f, curSort);
+    console.log('[DEBUG renderCalls] after sortCalls:', f ? f.length + ' calls' : 'NULL');
   }
   const el = document.getElementById("callHistoryList");
   const resultsCountEl = document.getElementById("resultsCount");
+  console.log('[DEBUG renderCalls] el found:', !!el, 'resultsCountEl found:', !!resultsCountEl);
   if (f.length === 0) {
+    console.log('[DEBUG renderCalls] f.length === 0, showing empty state');
+    console.log('[DEBUG renderCalls] allCalls.length:', allCalls.length);
     const emptyMsg = allCalls.length > 0 ? 
       '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><h3>No matching calls</h3><p>Try adjusting your filters or search terms.</p></div>' :
       '<div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><h3>No communications yet</h3><p>Click <strong>Simulate Call</strong> to see how communications appear here.</p></div>';
     el.innerHTML = emptyMsg;
     resultsCountEl.textContent = '';
+    console.log('[DEBUG renderCalls] Calling upStats()...');
     upStats();
+    console.log('[DEBUG renderCalls] Calling renderPolarisCard()...');
     renderPolarisCard(allCalls);
+    console.log('[DEBUG renderCalls] EXIT (empty state shown)');
     return;
   }
   
+  console.log('[DEBUG renderCalls] Rendering', f.length, 'call cards');
   const oc = {
     "appointment-set": {cls:"booked", label:"Booked"},
     "lead-captured": {cls:"estimate", label:"Estimate"},
@@ -1046,7 +1057,7 @@ function renderCalls() {
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
   upStats();
-  
+  console.log('[DEBUG renderCalls] EXIT - rendered', f.length, 'call cards');
 }
 function setSearch(q) {
   curSearch = q;
@@ -1107,30 +1118,48 @@ function loadKpiGrid() {
 }
 
 function simulateDemoCall() {
+  console.log('[DEBUG] STEP 1: Simulate Call button clicked');
   try {
-    // genCall() is already routed through AppStore.addLead + EventBus by
-    // the simulator.js wrapper — do NOT call addLead again here (would
-    // create duplicates). genCall throws on failure; the catch surfaces
-    // a friendly toast instead of a silent broken button.
+    console.log('[DEBUG] STEP 2: Entered simulateDemoCall()');
+    console.log('[DEBUG] STEP 3: Calling genCall()...');
     const c = genCall();
+    console.log('[DEBUG] STEP 3: genCall() returned:', c ? 'OK - caller=' + c.caller : 'NULL');
     if (!c) throw new Error('genCall returned no lead');
-    // Generate Polaris analysis and store on ALL matching leads in AppStore
+    
+    console.log('[DEBUG] STEP 4: genCall() returned valid call object:', JSON.stringify({caller:c.caller,phone:c.phone,service:c.service,avgPrice:c.avgPrice,status:c.status,outcome:c.outcome}));
+    
+    console.log('[DEBUG] STEP 5: Checking PolarisEngine...');
     if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
+      console.log('[DEBUG] STEP 5: PolarisEngine found, analyzing lead...');
       var analysis = PolarisEngine.analyzeLead(c);
+      console.log('[DEBUG] STEP 5: PolarisEngine.analyzeLead() returned:', analysis ? 'OK' : 'NULL');
       c.polarisAnalysis = analysis;
-      // Also store on the AppStore lead (which may be a different object)
       if (typeof AppStore !== 'undefined' && AppStore.getLeads) {
+        console.log('[DEBUG] STEP 6: AppStore found, checking leads...');
         var leads = AppStore.getLeads();
+        console.log('[DEBUG] STEP 6: AppStore.getLeads() returned', leads ? leads.length + ' leads' : 'NULL');
         if (leads && leads.length > 0) {
           leads[0].polarisAnalysis = analysis;
+          console.log('[DEBUG] STEP 6: Polaris analysis stored on AppStore lead[0]');
         }
       }
+    } else {
+      console.log('[DEBUG] STEP 5: PolarisEngine NOT available');
     }
+    
+    console.log('[DEBUG] STEP 7: Calling renderCalls()...');
     renderCalls();
+    console.log('[DEBUG] STEP 7: renderCalls() completed');
+    
+    console.log('[DEBUG] STEP 8: Showing notification...');
     NotificationService.show("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
-    // Re-populate service types now that we have data
+    console.log('[DEBUG] STEP 8: Notification shown');
+    
     try { populateServiceTypes(); } catch(e) { /* non-fatal */ }
+    console.log('[DEBUG] STEP 14: Simulate Call workflow COMPLETE');
   } catch (e) {
+    console.log('[DEBUG] STEP FAILED at:', e.message);
+    console.log('[DEBUG] Stack:', e.stack);
     try { NotificationService.show("Could not simulate call. Please try again.", "error"); } catch (_) {}
     console.error('simulateDemoCall:', e);
   }
@@ -1150,8 +1179,10 @@ function clearAllCalls() {
 // Auto-refresh on store changes
 try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
 // Initialize
-function loadCalls() { renderCalls(); }
+function loadCalls() { console.log('[DEBUG] Initial page load - calling renderCalls()'); renderCalls(); }
+console.log('[DEBUG] Page loaded, about to call loadCalls()');
 loadCalls();
+console.log('[DEBUG] Initial loadCalls() completed');
 </script>
 <script src="/js/theme.js"></script>
 </body>

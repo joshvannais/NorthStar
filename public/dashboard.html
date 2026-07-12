@@ -585,45 +585,67 @@ function toggleMobileMenu() {
         return;
       }
 
-      // Fallback to simulated data
+            // Fallback to simulated data
       setTimeout(() => {
         skeleton.style.display = 'none';
-        const count = getLiveLeads().length;
-        const today = getLiveLeads().filter(c => {
+        const allLeads = getLiveLeads();
+        const count = allLeads.length;
+        const today = allLeads.filter(c => {
           try { const d = new Date(c.receivedAt || c.time); return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString(); } catch(e) { return false; }
         }).length;
-        const leads = getLiveLeads().length;
-        const appointments = getLiveLeads().filter(c => c.status === 'scheduled').length;
-        const rev = getLiveLeads().reduce((s,c) => s + (c.avgPrice||0), 0);
-
+        const appointments = allLeads.filter(c => c.status === 'scheduled').length;
+        const pipeline = allLeads.filter(c => c.status === 'new' || c.status === 'contacted' || c.status === 'qualified');
+        const totalPipeline = pipeline.reduce((s,c) => s + (c.avgPrice||0), 0);
+        const totalRev = allLeads.reduce((s,c) => s + (c.avgPrice||0), 0);
         const hours = new Date().getHours();
         const greeting = hours < 12 ? 'Good morning' : hours < 17 ? 'Good afternoon' : 'Good evening';
         const name = user.name || 'there';
+        const highVal = allLeads.sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
 
-        let body = greeting + ', ' + name + '. ';
-        if (today > 0) body += 'NorthStar answered ' + today + ' call' + (today !== 1 ? 's' : '') + ' today';
-        if (leads > 0 && today > 0) body += ', captured ' + leads + ' lead' + (leads !== 1 ? 's' : '');
-        else if (leads > 0) body += 'NorthStar has captured ' + leads + ' lead' + (leads !== 1 ? 's' : '');
-        if (appointments > 0) body += ', and booked ' + appointments + ' appointment' + (appointments !== 1 ? 's' : '');
-        body += '. ';
+        let html = '<p>' + greeting + ', ' + name + '.</p>';
 
-        const highVal = getLiveLeads().sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
-        if (highVal && highVal.avgPrice > 0) {
-          body += 'Your top opportunity is a $' + (highVal.avgPrice||0).toLocaleString() + ' ' + (highVal.service||'job') + ' with ' + (highVal.caller||'a prospect') + '. ';
-          body += 'Action recommended: Follow up with ' + (highVal.caller||'this lead') + ' - it could be your highest-value opportunity.';
-        } else if (getLiveLeads().length > 0) {
-          body += 'Keep an eye on your recent leads - timely follow-up makes the difference.';
-        } else {
-          body = greeting + ', ' + name + '. Welcome to NorthStar! Once you connect your phone number, I\'ll start answering calls and capturing leads for you.';
+        // Summary stats
+        html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;">';
+        html += '<div style="background:var(--neutral-50);padding:12px;border-radius:8px;text-align:center;"><div style="font-size:22px;font-weight:800;color:var(--neutral-900);">' + count + '</div><div style="font-size:11px;color:var(--neutral-500);">Total Leads</div></div>';
+        html += '<div style="background:var(--neutral-50);padding:12px;border-radius:8px;text-align:center;"><div style="font-size:22px;font-weight:800;color:var(--brand-600);">$' + Math.round(totalPipeline).toLocaleString() + '</div><div style="font-size:11px;color:var(--neutral-500);">Pipeline Value</div></div>';
+        const avgVal = count > 0 ? Math.round(totalRev / count) : 0;
+        html += '<div style="background:var(--neutral-50);padding:12px;border-radius:8px;text-align:center;"><div style="font-size:22px;font-weight:800;color:var(--neutral-900);">$' + avgVal.toLocaleString() + '</div><div style="font-size:11px;color:var(--neutral-500);">Avg Lead Value</div></div>';
+        html += '</div>';
+
+        // Recent leads with pricing
+        if (allLeads.length > 0) {
+          html += '<div style="font-size:13px;font-weight:600;color:var(--neutral-700);margin-bottom:8px;">Recent Leads</div>';
+          html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+          const recent = allLeads.slice(0, 5);
+          recent.forEach(function(l) {
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--neutral-50);border-radius:6px;font-size:13px;">' +
+              '<span style="font-weight:600;color:var(--neutral-900);">' + (l.caller || 'Unknown') + '</span>' +
+              '<span style="color:var(--neutral-600);">' + (l.service || '—') + '</span>' +
+              '<span style="font-weight:700;color:var(--brand-600);">$' + Math.round(l.avgPrice || 0).toLocaleString() + '</span>' +
+            '</div>';
+          });
+          html += '</div>';
         }
 
-        document.getElementById('briefBody').innerHTML = '<p>' + body + '</p>';
+        // Top opportunity
+        if (highVal && highVal.avgPrice > 0) {
+          html += '<div style="margin-top:14px;padding:12px;background:var(--brand-50, #eef2ff);border-radius:8px;border:1px solid var(--brand-200, #c7d2fe);">' +
+            '<div style="font-size:12px;font-weight:600;color:var(--brand-700);margin-bottom:4px;">Top Opportunity</div>' +
+            '<div style="font-size:14px;font-weight:700;color:var(--neutral-900);">' + highVal.caller + '</div>' +
+            '<div style="font-size:13px;color:var(--neutral-600);">$' + Math.round(highVal.avgPrice).toLocaleString() + ' — ' + (highVal.service || 'Service') + '</div>' +
+            '<div style="font-size:12px;color:var(--brand-600);margin-top:4px;">→ Follow up to close this opportunity.</div>' +
+          '</div>';
+        } else if (allLeads.length > 0) {
+          html += '<p style="margin-top:12px;color:var(--neutral-500);">Keep an eye on your recent leads — timely follow-up makes the difference.</p>';
+        } else {
+          html += '<p style="margin-top:12px;color:var(--neutral-500);">Welcome to NorthStar! Once you connect your phone number, I'll start answering calls and capturing leads for you.</p>';
+        }
+
+        document.getElementById('briefBody').innerHTML = html;
         document.getElementById('briefTimestamp').textContent = 'Last updated: ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
         content.style.display = 'block';
       }, 600);
     }
-
-    // ═══════════════════════════════════════════════════════════════
     // WIDGET: KPI Grid (V1-05)
     // ═══════════════════════════════════════════════════════════════
     var kpiDefinitions = [

@@ -360,6 +360,7 @@ function toggleMobileMenu() {
     function loadLeads() {
       // Always read fresh from shared AppStore
       const leads = AppStore.getLeads();
+      console.log('[TRACE loadLeads] AppStore.getLeads() returned', leads.length, 'leads');
       document.getElementById('leadCount').textContent = leads.length + ' leads';
       renderLeads(leads);
       renderKpiCards(leads);

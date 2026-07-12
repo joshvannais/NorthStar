@@ -535,8 +535,16 @@ function toggleMobileMenu() {
 
 
     // Initial load
-    if (typeof AppStore !== 'undefined' && AppStore.loadFromSession) AppStore.loadFromSession();
+    console.log('[TRACE leads.html] Initial load executing');
+    if (typeof AppStore !== 'undefined' && AppStore.loadFromSession) {
+      console.log('[TRACE leads.html] Calling AppStore.loadFromSession()');
+      AppStore.loadFromSession();
+    } else {
+      console.log('[TRACE leads.html] AppStore.loadFromSession NOT available');
+    }
+    console.log('[TRACE leads.html] About to call loadLeads()');
     loadLeads();
+    console.log('[TRACE leads.html] After loadLeads()');
   </script>
   <script src="/js/theme.js"></script>
 </body>

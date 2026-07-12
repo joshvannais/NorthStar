@@ -199,8 +199,8 @@ function toggleMobileMenu() {
           <h1>All Leads</h1>
           <p>Every lead captured by your AI Office Manager.</p>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="simulateLead()">➕ Simulate Lead</button>
-      </div>
+        </div>
+      
 
       <!-- 6 Executive KPI Cards -->
       <div class="leads-kpi-grid" id="leadsKpiGrid">
@@ -248,7 +248,7 @@ function toggleMobileMenu() {
           <h2 style="display:flex;align-items:center;gap:8px;">
             <img src="/assets/logo.png" alt="NorthStar" style="height:18px;width:auto;vertical-align:middle;">
             POLARIS Revenue Intelligence</h2>
-          <span class="polaris-badge">Live</span>
+          <span class="polaris-badge">LIVE</span>
         </div>
         <div class="polaris-grid" id="polarisGrid">
           <div class="polaris-item">
@@ -282,7 +282,7 @@ function toggleMobileMenu() {
           <div class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <h3>No leads yet</h3>
-            <p>Click "Simulate Lead" to generate a lead, or connect your phone number to receive real calls.</p>
+            <p>Connect your phone number to start receiving calls.</p>
           </div>
         </div>
       </div>
@@ -393,7 +393,7 @@ function toggleMobileMenu() {
         document.getElementById('polarisPipeConf').textContent = 'N/A';
         document.getElementById('polarisPipeConf').className = 'polaris-confidence low';
         document.getElementById('polarisFocus').textContent = '-';
-        document.getElementById('polarisFocusDesc').textContent = 'Simulate leads to get started';
+        document.getElementById('polarisFocusDesc').textContent = 'Add leads to see recommendations';
         return;
       }
 
@@ -445,7 +445,7 @@ function toggleMobileMenu() {
           <div class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <h3>No leads yet</h3>
-            <p>Click "Simulate Lead" to generate a lead, or connect your phone number to receive real calls.</p>
+            <p>Connect your phone number to start receiving calls.</p>
           </div>`;
         return;
       }
@@ -528,35 +528,6 @@ function toggleMobileMenu() {
       } catch(e) {}
     }
 
-    // === Simulate Lead ===
-    function simulateLead() {
-      try {
-        // genCall() is already routed through AppStore.addLead + EventBus
-        // by the simulator.js wrapper. The new lead lands at index 0 of
-        // the store with default status 'new'. We fetch the lead by its
-        // real id (not by array index - AppStore.updateLead looks up by
-        // id; passing 0 is a silent no-op) and idempotently re-assert the
-        // status, then mirror to sessionStorage for older paths.
-        const c = genCall();
-        if (!c) throw new Error('genCall returned no lead');
-        try {
-          const newLead = (window.AppStore && window.AppStore.getLeads) ? window.AppStore.getLeads()[0] : null;
-          if (newLead && newLead.id && window.AppStore.updateLead) {
-            window.AppStore.updateLead(newLead.id, { status: 'new' });
-          }
-        } catch (e) { /* store may be missing on older pages; non-fatal */ }
-        try {
-          const existing = JSON.parse(sessionStorage.getItem('northstar_calls') || '[]');
-          existing.unshift(c);
-          sessionStorage.setItem('northstar_calls', JSON.stringify(existing));
-        } catch(e) {}
-        showNotification("✅ New lead: " + c.caller + " (" + c.service + " - $" + Math.round(c.avgPrice).toLocaleString() + ")", "success");
-        loadLeads();
-      } catch (e) {
-        try { showNotification("Could not generate lead. Please try again.", "error"); } catch (_) {}
-        console.error('simulateLead:', e);
-      }
-    }
 
     // Initial load
     loadLeads();

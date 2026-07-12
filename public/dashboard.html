@@ -245,7 +245,7 @@ function toggleMobileMenu() {
         <div class="polaris-card">
           <div class="polaris-header">
             <h2>🏆 POLARIS Revenue Intelligence</h2>
-            <span class="polaris-badge">AI-POWERED</span>
+            <span class="polaris-badge">LIVE</span>
           </div>
           <div class="polaris-grid" id="polarisCardGrid">
             <div class="polaris-item">
@@ -571,9 +571,10 @@ function toggleMobileMenu() {
     // Helpers
     // ═══════════════════════════════════════════════════════════════
     function getStatusBadge(status) {
-      const map = { new:'badge-new', scheduled:'badge-scheduled', contacted:'badge-contacted', completed:'badge-completed' };
-      const cls = map[status] || 'badge-new';
-      return `<span class="badge ${cls}">${status || 'new'}</span>`;
+      const map = { new:'answered', scheduled:'booked', contacted:'estimate', completed:'followup' };
+      const cls = map[status] || 'answered';
+      const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'New';
+      return `<span class="call-status-badge ${cls}">${label}</span>`;
     }
 
 
@@ -963,7 +964,7 @@ function toggleMobileMenu() {
         }
         let html = '';
         calls.forEach(c => {
-          const statusClass = c.status === 'scheduled' ? 'answered' : 'answered';
+          const statusClass = c.status === 'scheduled' ? 'booked' : 'answered';
           html += `<div class="ds-list-item">
             <div class="ds-list-item-icon">📞</div>
             <div class="ds-list-item-content">
@@ -1003,7 +1004,7 @@ function toggleMobileMenu() {
               <div class="ds-list-item-title">${a.caller || 'Unknown'}</div>
               <div class="ds-list-item-sub">${a.service || '—'} · ${fmtTime(a.receivedAt || a.time)}</div>
             </div>
-            <span class="call-status-badge answered">Scheduled</span>
+            <span class="call-status-badge booked">Scheduled</span>
           </div>`;
         });
         list.innerHTML = html;

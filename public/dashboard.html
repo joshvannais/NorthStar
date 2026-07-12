@@ -238,6 +238,37 @@ function toggleMobileMenu() {
           <!-- Each KPI card loaded by JS -->
         </div>
       </div>
+      <!-- ════════════════════════════════════════════════════════
+           POLARIS Revenue Intelligence Card
+           ════════════════════════════════════════════════════════ -->
+      <div class="ds-widget ds-widget-full" id="widget-polaris-card">
+        <div class="polaris-card">
+          <div class="polaris-header">
+            <h2>🏆 POLARIS Revenue Intelligence</h2>
+            <span class="polaris-badge">AI-POWERED</span>
+          </div>
+          <div class="polaris-grid" id="polarisCardGrid">
+            <div class="polaris-item">
+              <div class="polaris-item-label">Top Opportunity</div>
+              <div class="polaris-item-value" id="polarisTopOpp">—</div>
+              <div class="polaris-item-desc" id="polarisTopOppDesc">—</div>
+              <div class="polaris-confidence" id="polarisTopConf">—</div>
+            </div>
+            <div class="polaris-item">
+              <div class="polaris-item-label">Pipeline Value</div>
+              <div class="polaris-item-value" id="polarisPipeline">$0</div>
+              <div class="polaris-item-desc" id="polarisPipelineDesc">Total qualified pipeline</div>
+              <div class="polaris-confidence" id="polarisPipeConf">—</div>
+            </div>
+            <div class="polaris-item">
+              <div class="polaris-item-label">Recommended Focus</div>
+              <div class="polaris-item-value" id="polarisFocus">—</div>
+              <div class="polaris-item-desc" id="polarisFocusDesc">—</div>
+              <div class="polaris-confidence" id="polarisFocusConf">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- ════════════════════════════════════════════════════════
            WIDGET 5: Revenue Trends (V1-06) — Professional+
@@ -496,6 +527,7 @@ function toggleMobileMenu() {
   <script src="/js/tooltip-service.js"></script>
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/customer-drawer.js"></script>
   <script src="/js/theme.js"></script>
   <script>
     // ═══════════════════════════════════════════════════════════════
@@ -898,7 +930,7 @@ function toggleMobileMenu() {
         }
         let html = '';
         leads.forEach(l => {
-          html += `<div class="ds-list-item">
+          html += `<div class="ds-list-item" style="cursor:pointer;" onclick="CustomerDrawer.open(getLiveLeads().find(lead => lead.id === '${l.id}') || getLiveLeads().filter(lead => lead.caller === '${l.caller}' && lead.service === '${l.service}')[0])">
             <div class="ds-list-item-icon">👤</div>
             <div class="ds-list-item-content">
               <div class="ds-list-item-title">${l.caller || 'Unknown'}</div>
@@ -999,6 +1031,7 @@ function toggleMobileMenu() {
     // Initial Load
     // ═══════════════════════════════════════════════════════════════
     function loadDashboard() {
+      renderPolarisCard();
       loadDailyBrief();
       loadHeroKPI();
       loadKpiGrid();
@@ -1074,8 +1107,94 @@ function toggleMobileMenu() {
     // ═══════════════════════════════════════════════════════════════
     // Kick off
     // ═══════════════════════════════════════════════════════════════
+    // ============================================================
+    // POLARIS Revenue Intelligence Card
+    // ============================================================
+    function renderPolarisCard() {
+      var leads = getLiveLeads();
+      if (leads.length === 0) {
+        document.getElementById('polarisTopOpp').textContent = '—';
+        document.getElementById('polarisTopOppDesc').textContent = 'Add leads to see opportunities';
+        document.getElementById('polarisPipeline').textContent = '$0';
+        document.getElementById('polarisPipeConf').textContent = 'N/A';
+        document.getElementById('polarisPipeConf').className = 'polaris-confidence low';
+        document.getElementById('polarisFocus').textContent = '—';
+        document.getElementById('polarisFocusDesc').textContent = 'Simulate leads to get started';
+        return;
+      }
+      var sorted = leads.slice().sort(function(a, b) { return (b.avgPrice || 0) - (a.avgPrice || 0); });
+      var top = sorted[0];
+      document.getElementById('polarisTopOpp').textContent = top.caller || '—';
+      document.getElementById('polarisTopOppDesc').textContent = '$' + Math.round(top.avgPrice || 0).toLocaleString() + ' — ' + (top.service || 'Service');
+      var topConfidence = (top.avgPrice || 0) > 2000 ? 'High' : (top.avgPrice || 0) > 500 ? 'Medium' : 'Low';
+      var topConf = document.getElementById('polarisTopConf');
+      topConf.textContent = topConfidence;
+      topConf.className = 'polaris-confidence ' + topConfidence.toLowerCase();
+      var pipeline = leads.reduce(function(s, l) { return s + (l.avgPrice || 0); }, 0);
+      document.getElementById('polarisPipeline').textContent = '$' + Math.round(pipeline).toLocaleString();
+      var pipeConf = document.getElementById('polarisPipeConf');
+      var pipeConfidence = leads.length > 5 ? 'High' : leads.length > 2 ? 'Medium' : 'Low';
+      pipeConf.textContent = pipeConfidence;
+      pipeConf.className = 'polaris-confidence ' + pipeConfidence.toLowerCase();
+      var svcCounts = {};
+      leads.forEach(function(l) {
+        var svc = l.service || 'Other';
+        svcCounts[svc] = (svcCounts[svc] || 0) + 1;
+      });
+      var topSvc = '—', topSvcCount = 0;
+      for (var svc in svcCounts) {
+        if (svcCounts[svc] > topSvcCount) { topSvc = svc; topSvcCount = svcCounts[svc]; }
+      }
+      document.getElementById('polarisFocus').textContent = topSvc;
+      document.getElementById('polarisFocusDesc').textContent = topSvcCount + ' lead' + (topSvcCount !== 1 ? 's' : '') + ' — highest volume service';
+      var focusConf = document.getElementById('polarisFocusConf');
+      var focusConfidence = topSvcCount > 3 ? 'High' : topSvcCount > 1 ? 'Medium' : 'Low';
+      focusConf.textContent = focusConfidence;
+      focusConf.className = 'polaris-confidence ' + focusConfidence.toLowerCase();
+    }
+
+    // ============================================================
+    // Kick off
+    // ============================================================
     document.addEventListener('DOMContentLoaded', loadDashboard);
   </script>
 
+<!-- Customer Drawer (shared component) -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="CustomerDrawer.close()"></div>
+<div class="customer-drawer" id="customerDrawer">
+  <div class="drawer-header">
+    <h2 id="drawerTitle">Customer Details</h2>
+    <button class="drawer-close" onclick="CustomerDrawer.close()">x</button>
+  </div>
+  <div class="drawer-body" id="drawerBody">
+    <div class="drawer-section">
+      <h3>Contact Information</h3>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="drawerName">-</span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="drawerPhone">-</span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="drawerAddress">-</span></div>
+    </div>
+    <div class="drawer-section">
+      <h3>Job Details</h3>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">-</span></div>
+      <div class="drawer-detail-row drawer-detail-row-nb"><span class="drawer-detail-label">Description</span></div>
+      <div class="drawer-description-box" id="drawerDescription">-</div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">-</span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerStatus">-</span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Date</span><span class="drawer-detail-value" id="drawerDate">-</span></div>
+    </div>
+    <div class="drawer-section">
+      <h3>POLARIS Revenue Intelligence</h3>
+      <div id="drawerPolarisInsight" class="drawer-polaris-insight">No insight available.</div>
+    </div>
+    <div class="drawer-section">
+      <h3>Pricing Breakdown</h3>
+      <div id="drawerPricingBreakdown"><p style="font-size:13px;color:var(--neutral-500);">No pricing data available.</p></div>
+    </div>
+    <div class="drawer-section">
+      <h3>Call Transcript</h3>
+      <div class="drawer-transcript" id="drawerTranscript">No transcript available.</div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

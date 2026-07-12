@@ -350,7 +350,8 @@ function toggleMobileMenu() {
     let allLeads = AppStore.getLeads();
     function openLeadDrawer(el) {
       var idx = parseInt(el.getAttribute('data-lead-index'), 10);
-      var lead = allLeads[idx];
+      const leads = AppStore.getLeads();
+      var lead = leads[idx];
       if (lead && typeof CustomerDrawer !== 'undefined') CustomerDrawer.open(lead);
     }
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
@@ -508,25 +509,26 @@ function toggleMobileMenu() {
 
     // === Lead Actions ===
     function updateLeadStatus(idx, newStatus) {
-      if (!allLeads[idx]) return;
-      allLeads[idx].status = newStatus;
+      const leads = AppStore.getLeads();
+      if (!leads[idx]) return;
+      AppStore.updateLead(leads[idx].id, { status: newStatus });
       syncSessionStorage();
-      showNotification('✅ ' + (allLeads[idx].caller || 'Lead') + ' marked as ' + newStatus, 'success');
+      showNotification('✅ ' + (leads[idx].caller || 'Lead') + ' marked as ' + newStatus, 'success');
       loadLeads();
     }
 
     function removeLead(idx) {
-      if (!allLeads[idx]) return;
-      const name = allLeads[idx].caller || 'Lead';
-      allLeads.splice(idx, 1);
-      syncSessionStorage();
+      const leads = AppStore.getLeads();
+      if (!leads[idx]) return;
+      const name = leads[idx].caller || 'Lead';
+      AppStore.removeLead(leads[idx].id);
       showNotification('🗑️ ' + name + ' removed', 'warning');
       loadLeads();
     }
 
     function syncSessionStorage() {
       try {
-        sessionStorage.setItem('northstar_calls', JSON.stringify(allLeads));
+        sessionStorage.setItem('northstar_calls', JSON.stringify(AppStore.getLeads()));
       } catch(e) {}
     }
 

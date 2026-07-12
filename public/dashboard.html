@@ -193,14 +193,34 @@ function toggleMobileMenu() {
         </div>
       </div>
 
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 3: Hero KPI — Estimated Revenue Opportunity (V1-04)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full" id="widget-hero-kpi">
-        <div class="ds-card ds-hero-kpi" id="heroKpiCard" onclick="navigateToRevenue()">
-          <!-- Skeleton -->
-          <div class="ds-skeleton" id="heroSkeleton">
-            <div class="skeleton skeleton-title" style="width:40%;"></div>
+      <div class="ds-widget ds-widget-full" id="widget-polaris-card">
+        <div class="polaris-card">
+          <div class="polaris-header">
+            <h2>🏆 POLARIS Revenue Intelligence</h2>
+            <span class="polaris-badge">LIVE</span>
+          </div>
+          <div class="polaris-grid" id="polarisCardGrid">
+            <div class="polaris-item">
+              <div class="polaris-item-label">Top Opportunity</div>
+              <div class="polaris-item-value" id="polarisTopOpp">—</div>
+              <div class="polaris-item-desc" id="polarisTopOppDesc">—</div>
+              <div class="polaris-confidence" id="polarisTopConf">—</div>
+            </div>
+            <div class="polaris-item">
+              <div class="polaris-item-label">Pipeline Value</div>
+              <div class="polaris-item-value" id="polarisPipeline">$0</div>
+              <div class="polaris-item-desc" id="polarisPipelineDesc">Total qualified pipeline</div>
+              <div class="polaris-confidence" id="polarisPipeConf">—</div>
+            </div>
+            <div class="polaris-item">
+              <div class="polaris-item-label">Recommended Focus</div>
+              <div class="polaris-item-value" id="polarisFocus">—</div>
+              <div class="polaris-item-desc" id="polarisFocusDesc">—</div>
+              <div class="polaris-confidence" id="polarisFocusConf">—</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
             <div class="skeleton skeleton-text" style="width:25%;height:40px;margin:12px 0;"></div>
             <div class="skeleton skeleton-text" style="width:35%;"></div>
           </div>
@@ -241,34 +261,7 @@ function toggleMobileMenu() {
       <!-- ════════════════════════════════════════════════════════
            POLARIS Revenue Intelligence Card
            ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full" id="widget-polaris-card">
-        <div class="polaris-card">
-          <div class="polaris-header">
-            <h2>🏆 POLARIS Revenue Intelligence</h2>
-            <span class="polaris-badge">LIVE</span>
-          </div>
-          <div class="polaris-grid" id="polarisCardGrid">
-            <div class="polaris-item">
-              <div class="polaris-item-label">Top Opportunity</div>
-              <div class="polaris-item-value" id="polarisTopOpp">—</div>
-              <div class="polaris-item-desc" id="polarisTopOppDesc">—</div>
-              <div class="polaris-confidence" id="polarisTopConf">—</div>
-            </div>
-            <div class="polaris-item">
-              <div class="polaris-item-label">Pipeline Value</div>
-              <div class="polaris-item-value" id="polarisPipeline">$0</div>
-              <div class="polaris-item-desc" id="polarisPipelineDesc">Total qualified pipeline</div>
-              <div class="polaris-confidence" id="polarisPipeConf">—</div>
-            </div>
-            <div class="polaris-item">
-              <div class="polaris-item-label">Recommended Focus</div>
-              <div class="polaris-item-value" id="polarisFocus">—</div>
-              <div class="polaris-item-desc" id="polarisFocusDesc">—</div>
-              <div class="polaris-confidence" id="polarisFocusConf">—</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      
 
       <!-- ════════════════════════════════════════════════════════
            WIDGET 5: Revenue Trends (V1-06) — Professional+
@@ -743,7 +736,7 @@ function toggleMobileMenu() {
           case 'avg_response_time': value = total > 0 ? '2:30' : '—'; break;
           case 'ai_transfer_rate': value = total > 0 ? Math.round((getLiveLeads().filter(c => c.status === 'answered').length/total)*100)+'%' : '—'; break;
         }
-        html += `<div class="ds-kpi-card" onclick="window.location.href='${kpi.link}'">
+        html += `<div class="ds-kpi-card" onclick="window.location.href=(kpi.link || '#')">
           <div class="ds-kpi-icon" style="background:var(--kpi-${kpi.id}-bg,var(--neutral-50));color:var(--kpi-${kpi.id}-color,var(--neutral-500));">
             <span style="font-size:20px;">${kpi.icon}</span>
           </div>

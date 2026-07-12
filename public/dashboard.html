@@ -1025,16 +1025,16 @@ function toggleMobileMenu() {
     // Initial Load
     // ═══════════════════════════════════════════════════════════════
     function loadDashboard() {
-      renderPolarisCard();
-      loadDailyBrief();
-      loadHeroKPI();
-      loadKpiGrid();
-      loadTrendChart();
-      loadCoach();
-      loadRecentLeads();
-      loadRecentCalls();
-      loadAppointments();
-      loadAnalytics();
+      try { renderPolarisCard(); } catch(e) { console.warn('renderPolarisCard:', e.message); }
+      try { loadDailyBrief(); } catch(e) { console.warn('loadDailyBrief:', e.message); }
+      try { loadHeroKPI(); } catch(e) { console.warn('loadHeroKPI:', e.message); }
+      try { loadKpiGrid(); } catch(e) { console.warn('loadKpiGrid:', e.message); }
+      try { loadTrendChart(); } catch(e) { console.warn('loadTrendChart:', e.message); }
+      try { loadCoach(); } catch(e) { console.warn('loadCoach:', e.message); }
+      try { loadRecentLeads(); } catch(e) { console.warn('loadRecentLeads:', e.message); }
+      try { loadRecentCalls(); } catch(e) { console.warn('loadRecentCalls:', e.message); }
+      try { loadAppointments(); } catch(e) { console.warn('loadAppointments:', e.message); }
+      try { loadAnalytics(); } catch(e) { console.warn('loadAnalytics:', e.message); }
     }
 
     // ═══════════════════════════════════════════════════════════════

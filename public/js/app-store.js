@@ -31,11 +31,9 @@ window.AppStore = (function() {
   function addLead(leadData) {
     const lead = leadData instanceof window.Models.Lead ? leadData : new window.Models.Lead(leadData);
     state.leads.unshift(lead);
-    console.log('[TRACE addLead] state.leads.length after unshift:', state.leads.length, 'caller:', lead.caller);
     bus.emit('lead:created', lead);
     bus.emit('store:changed', { type: 'lead', action: 'created', data: lead });
     saveToSession();
-    console.log('[TRACE addLead] after saveToSession');
     return lead;
   }
 
@@ -98,33 +96,20 @@ window.AppStore = (function() {
 
   // --- Persistence ---
   function saveToSession() {
-    try {
-      const data = JSON.stringify(state.leads);
-      sessionStorage.setItem('northstar_calls', data);
-      console.log('[TRACE saveToSession] wrote', state.leads.length, 'leads to sessionStorage, size:', data.length, 'bytes');
-    } catch(e) {
-      console.error('[TRACE saveToSession] FAILED:', e.message);
-    }
+    try { sessionStorage.setItem('northstar_calls', JSON.stringify(state.leads)); } catch(e) {}
   }
 
   function loadFromSession() {
     try {
       const saved = sessionStorage.getItem('northstar_calls');
-      console.log('[TRACE loadFromSession] sessionStorage.getItem returned:', saved ? saved.slice(0, 80) + '...' : 'null');
       if (saved) {
         const parsed = JSON.parse(saved);
-        console.log('[TRACE loadFromSession] parsed length:', Array.isArray(parsed) ? parsed.length : 'NOT_ARRAY');
         if (Array.isArray(parsed)) {
           state.leads = parsed;
-          console.log('[TRACE loadFromSession] state.leads set to', state.leads.length, 'leads');
           bus.emit('store:loaded', { from: 'session', count: parsed.length });
         }
-      } else {
-        console.log('[TRACE loadFromSession] no data found in sessionStorage');
       }
-    } catch(e) {
-      console.error('[TRACE loadFromSession] FAILED:', e.message);
-    }
+    } catch(e) {}
   }
 
   // Initialize

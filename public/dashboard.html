@@ -32,16 +32,10 @@
   padding: 5px 14px;
   margin-right: 6px;
 }
-/* Dashboard grid layout */
-.main-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  align-content: start;
-}
-.ds-widget-full { grid-column: 1 / -1; }
-.ds-widget-half { grid-column: span 1; }
-.ds-widget { margin-bottom: 0; }
+/* Dashboard grid layout — stable vertical stack */
+.main-content > .ds-widget { margin-bottom: var(--space-lg); }
+.main-content > .ds-widget-full { width: 100%; }
+.main-content > .ds-widget-half { width: 100%; }
 /* KPI card border fix */
 .ds-kpi-card {
   border: 1px solid var(--neutral-200);

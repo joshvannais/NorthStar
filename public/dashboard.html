@@ -227,7 +227,7 @@ function toggleMobileMenu() {
           <!-- Populated -->
           <div id="heroContent" style="display:none;">
             <div class="ds-hero-kpi-header">
-              
+              <span class="ds-hero-kpi-title">Estimated Revenue Opportunity</span>
               <button class="ds-info-btn" onclick="event.stopPropagation();TooltipService.show(event,'Total estimated value of all qualified opportunities managed by NorthStar. This is pipeline value, not earned revenue.')" aria-label="What is estimated revenue opportunity?">?</button>
             </div>
             <div class="ds-hero-kpi-filters" id="heroPeriodPills">
@@ -237,15 +237,15 @@ function toggleMobileMenu() {
               <button class="ds-pill" data-period="quarter" onclick="event.stopPropagation();switchHeroPeriod('quarter')">Quarter</button>
               <button class="ds-pill" data-period="year" onclick="event.stopPropagation();switchHeroPeriod('year')">Year</button>
             </div>
-            
-            
-            
+            <div class="ds-hero-kpi-value" id="heroKpiValue">$0</div>
+            <div class="ds-hero-kpi-trend" id="heroKpiTrend"></div>
+            <div class="ds-hero-kpi-subtitle" id="heroKpiSubtitle">From 0 qualified opportunities</div>
           </div>
           <!-- Error -->
           <div class="ds-error-inline" id="heroError" style="display:none;">
             <span>⚠️</span>
             <span>Unable to load revenue data.</span>
-            <button class="btn btn-sm btn-ghost" onclick="()">Retry</button>
+            <button class="btn btn-sm btn-ghost" onclick="loadHeroKPI()">Retry</button>
           </div>
         </div>
       </div>
@@ -325,7 +325,7 @@ function toggleMobileMenu() {
       <!-- ════════════════════════════════════════════════════════
            WIDGET 7: Recent Leads (V1-08)
            ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-half" id="widget-recent-leads" style="padding:0 12px;">
+      <div class="ds-widget ds-widget-half" id="widget-recent-leads">
         <div class="ds-card">
           <div class="ds-card-header">
             <span class="ds-card-title">📋 Recent Leads</span>
@@ -349,7 +349,7 @@ function toggleMobileMenu() {
       <!-- ════════════════════════════════════════════════════════
            WIDGET 8: Recent Communications (V1-09)
            ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-half" id="widget-recent-calls" style="padding:0 12px;">
+      <div class="ds-widget ds-widget-half" id="widget-recent-calls">
         <div class="ds-card">
           <div class="ds-card-header">
             <span class="ds-card-title">📞 Recent Communications</span>
@@ -647,6 +647,105 @@ function toggleMobileMenu() {
     // ═══════════════════════════════════════════════════════════════
     var heroPeriodStorage = 'northstar_hero_kpi_period';
     var currentHeroPeriod = sessionStorage.getItem(heroPeriodStorage) || 'month';
+    function loadHeroKPI() {
+      const skeleton = document.getElementById('heroSkeleton');
+      const content = document.getElementById('heroContent');
+      const error = document.getElementById('heroError');
+      skeleton.style.display = 'block';
+      content.style.display = 'none';
+      error.style.display = 'none';
+
+      setTimeout(() => {
+        skeleton.style.display = 'none';
+        const leads = getLiveLeads();
+        const totalValue = leads.reduce((s,c) => s + (c.avgPrice||0), 0);
+        const count = leads.length;
+        const services = new Set(leads.map(l => l.service).filter(Boolean)).size;
+
+        const value = count > 0 ? totalValue : 0;
+        document.getElementById('heroKpiValue').textContent = '$' + Math.round(value).toLocaleString();
+        if (value > 0) {
+          const trend = count > 3 ? 12 : 0;
+          const arrow = trend > 0 ? '↑' : trend < 0 ? '↓' : '→';
+          const cls = trend > 0 ? 'ds-trend-up' : trend < 0 ? 'ds-trend-down' : 'ds-trend-flat';
+          document.getElementById('heroKpiTrend').innerHTML = `<span class="${cls}">${arrow} ${Math.abs(trend)}% vs last ${currentHeroPeriod}</span>`;
+        } else {
+          document.getElementById('heroKpiTrend').innerHTML = '';
+        }
+        document.getElementById('heroKpiSubtitle').textContent = count > 0
+          ? `From ${count} qualified opportunit${count!==1?'ies':'y'} across ${services} service${services!==1?'s':''}`
+          : 'No qualified opportunities yet. New opportunities will appear here after NorthStar qualifies leads.';
+        content.style.display = 'block';
+      }, 500);
+    }
+
+    function switchHeroPeriod(period) {
+      currentHeroPeriod = period;
+      sessionStorage.setItem(heroPeriodStorage, period);
+      document.querySelectorAll('#heroPeriodPills .ds-pill').forEach(p => {
+        p.classList.toggle('active', p.dataset.period === period);
+      });
+      loadHeroKPI();
+    }
+
+    function navigateToRevenue() {
+      window.location.href = '/dashboard/reports/revenue?period=' + currentHeroPeriod;
+    }
+
+    // Initialize hero period pills
+    document.querySelectorAll('#heroPeriodPills .ds-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.period === currentHeroPeriod);
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // WIDGET: KPI Grid (V1-05)
+    // ═══════════════════════════════════════════════════════════════
+    var kpiDefinitions = [
+      { id:'today_calls', icon:'📞', label:"Today's Communications", format:'int', link:'/dashboard/communications?filter=today', tier:'starter' },
+      { id:'new_leads', icon:'👤', label:'New Leads', format:'int', link:'/dashboard/leads?filter=today', tier:'starter' },
+      { id:'appointments', icon:'📅', label:'Appointments', format:'int', link:'/dashboard/calendar?filter=today', tier:'starter' },
+      { id:'lead_conversion', icon:'📊', label:'Lead Conv.', format:'pct', link:'/dashboard/reports/conversion', tier:'starter' },
+      { id:'avg_job_value', icon:'💰', label:'Avg Job Value', format:'cur', link:'/dashboard/reports/job-value', tier:'starter' },
+      { id:'avg_call_length', icon:'⏱', label:'Avg Communication Length', format:'dur', link:'/dashboard/communications', tier:'starter' },
+      { id:'missed_calls', icon:'🚫', label:'Missed Communications Prev.', format:'int', link:'/dashboard/communications?filter=prevented', tier:'starter' },
+      { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', format:'dur', link:'/dashboard/reports/response-time', tier:'pro' },
+      { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', format:'pct', link:'/dashboard/communications?filter=transferred', tier:'pro' },
+    ];
+
+    function loadKpiGrid() {
+      const grid = document.getElementById('kpiGrid');
+      const total = getLiveLeads().length;
+      const today = getLiveLeads().length; // All calls are "today" in demo mode
+      const scheduled = getLiveLeads().filter(c => c.status === 'scheduled').length;
+      const revenue = getLiveLeads().reduce((s,c) => s + (c.avgPrice||0), 0);
+      const avgValue = total > 0 ? Math.round(revenue / total) : 0;
+
+      // For demo, treat all as "starter" tier
+      let html = '';
+      kpiDefinitions.forEach(kpi => {
+        let value = '—';
+        let trend = '';
+        switch(kpi.id) {
+          case 'today_calls': value = today; trend = today > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
+          case 'new_leads': value = total; trend = total > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
+          case 'appointments': value = getLiveLeads().filter(c => c.outcome === 'appointment-set').length; trend = ''; break;
+          case 'lead_conversion': value = total > 0 ? Math.round((getLiveLeads().filter(c => c.outcome === 'appointment-set' || c.status === 'completed').length/total)*100)+'%' : '—'; break;
+          case 'avg_job_value': value = avgValue > 0 ? '$'+avgValue.toLocaleString() : '—'; break;
+          case 'avg_call_length': value = total > 0 ? '3:24' : '—'; break;
+          case 'missed_calls': value = getLiveLeads().filter(c => c.status === 'voicemail' || c.outcome === 'voicemail').length; trend = '0'; break;
+          case 'avg_response_time': value = total > 0 ? '2:30' : '—'; break;
+          case 'ai_transfer_rate': value = total > 0 ? Math.round((getLiveLeads().filter(c => c.status === 'answered').length/total)*100)+'%' : '—'; break;
+        }
+        html += `<div class="ds-kpi-card" onclick="window.location.href=(kpi.link || '#')">
+          <div class="ds-kpi-icon" style="background:var(--kpi-${kpi.id}-bg,var(--neutral-50));color:var(--kpi-${kpi.id}-color,var(--neutral-500));">
+            <span style="font-size:20px;">${kpi.icon}</span>
+          </div>
+          <div class="ds-kpi-value">${value}</div>
+          <div class="ds-kpi-label">${kpi.label}</div>
+          <div class="ds-kpi-trend">${trend}</div>
+        </div>`;
+      });
+      grid.innerHTML = html;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -928,6 +1027,7 @@ function toggleMobileMenu() {
     function loadDashboard() {
       renderPolarisCard();
       loadDailyBrief();
+      loadHeroKPI();
       loadKpiGrid();
       loadTrendChart();
       loadCoach();

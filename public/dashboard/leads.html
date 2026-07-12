@@ -534,6 +534,7 @@ function toggleMobileMenu() {
 
 
     // Initial load
+    if (typeof AppStore !== 'undefined' && AppStore.loadFromSession) AppStore.loadFromSession();
     loadLeads();
   </script>
   <script src="/js/theme.js"></script>

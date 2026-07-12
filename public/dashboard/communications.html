@@ -851,19 +851,6 @@ function renderCalls() {
     return;
   }
   
-  if (!arr || !arr.length) return arr;
-  var sorted = arr.slice();
-  switch(sort) {
-    case 'newest': sorted.sort(function(a,b){return new Date(b.receivedAt||b.time) - new Date(a.receivedAt||a.time);}); break;
-    case 'oldest': sorted.sort(function(a,b){return new Date(a.receivedAt||a.time) - new Date(b.receivedAt||b.time);}); break;
-    case 'highest': sorted.sort(function(a,b){return (b.avgPrice||0) - (a.avgPrice||0);}); break;
-    case 'lowest': sorted.sort(function(a,b){return (a.avgPrice||0) - (b.avgPrice||0);}); break;
-    case 'booked': sorted.sort(function(a,b){return (a.outcome==='appointment-set'?0:1) - (b.outcome==='appointment-set'?0:1);}); break;
-    case 'attention': sorted.sort(function(a,b){return (a.status==='voicemail'||a.outcome==='no-interest'?0:1) - (b.status==='voicemail'||b.outcome==='no-interest'?0:1);}); break;
-    case 'alpha': sorted.sort(function(a,b){return (a.caller||'').localeCompare(b.caller||'');}); break;
-  }
-  return sorted;
-}
   const oc = {
     "appointment-set": {cls:"booked", label:"Booked"},
     "lead-captured": {cls:"estimate", label:"Estimate"},

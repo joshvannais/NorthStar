@@ -2837,22 +2837,30 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 
 .customer-drawer {
   position: fixed;
-  top: 0; right: -480px;
-  width: 480px;
-  max-width: 95vw;
-  height: 100%;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  width: 520px;
+  max-width: 92vw;
+  max-height: 85vh;
   background: white;
   z-index: 501;
-  box-shadow: -4px 0 24px rgba(0,0,0,0.12);
-  transition: right 0.3s ease;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+  transition: transform 0.25s ease, opacity 0.25s ease;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-radius: 16px;
+  opacity: 0;
+  pointer-events: none;
 }
-.customer-drawer.open { right: 0; }
+.customer-drawer.open {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
 [data-theme="dark"] .customer-drawer {
   background: var(--neutral-100);
-  box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
 }
 
 .drawer-header {

@@ -9,16 +9,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 <style>
-/* === KPI Grid === */
-.kpi-grid {
+/* === KPI Grid (Dashboard Design System) === */
+.ds-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   margin-bottom: 24px;
 }
-@media (max-width: 768px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 420px) { .kpi-grid { grid-template-columns: 1fr 1fr; } }
-/* === Executive Filter Dropdown === */
+@media (max-width: 768px) { .ds-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px) { .ds-kpi-grid { grid-template-columns: 1fr 1fr; } }
+/* === Filter Bar === */
 .filter-bar {
   display: flex;
   align-items: center;
@@ -48,19 +48,39 @@
   user-select: none;
 }
 .filter-btn:hover {
-  border-color: var(--brand-400);
-  color: var(--brand-600);
-  background: var(--neutral-100);
+  background: var(--neutral-200);
+  border-color: var(--brand-300);
 }
 .filter-btn.active {
   background: var(--brand-600);
-  border-color: var(--brand-600);
   color: white;
+  border-color: var(--brand-600);
 }
-.filter-btn .filter-badge {
+.filter-btn-danger {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--neutral-300);
+  background: transparent;
+  color: var(--neutral-500);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-btn-danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+[data-theme="dark"] .filter-btn-danger:hover { background: rgba(220,38,38,0.1); color: #fca5a5; border-color: rgba(220,38,38,0.3); }
+.filter-btn-wrapper { position: relative; display: inline-block; }
+.filter-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
@@ -71,111 +91,137 @@
   font-weight: 700;
   line-height: 1;
 }
-.filter-btn.active .filter-badge {
-  background: rgba(255,255,255,0.25);
-}
-.filter-btn-danger {
-  display: inline-flex;
+.filter-btn.active .filter-badge { background: rgba(255,255,255,0.25); }
+/* === Search Bar === */
+.search-bar {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 16px;
-  border-radius: 100px;
-  border: 1px solid rgba(220,38,38,0.3);
-  background: var(--neutral-100);
-  color: var(--danger);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-.filter-btn-danger:hover {
-  background: rgba(220,38,38,0.06);
-  border-color: rgba(220,38,38,0.5);
-}
-/* === Filter Dropdown Panel === */
-.filter-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  width: 480px;
-  max-width: calc(100vw - 32px);
   background: var(--neutral-100);
   border: 1px solid var(--neutral-300);
-  border-radius: var(--radius-md);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
-  padding: 20px 22px;
-  z-index: 100;
-  opacity: 0;
-  transform: translateY(-4px);
-  pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  max-height: 70vh;
-  overflow-y: auto;
+  border-radius: 100px;
+  flex: 1;
+  min-width: 200px;
+  max-width: 400px;
+  transition: border-color 0.15s;
 }
-[data-theme="dark"] .filter-dropdown {
-  background: #1e1e2a;
-  border-color: var(--neutral-300);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+.search-bar:focus-within { border-color: var(--brand-400); }
+.search-bar input {
+  border: none;
+  background: none;
+  outline: none;
+  font-size: 13px;
+  color: var(--neutral-800);
+  width: 100%;
 }
-.filter-dropdown.open {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
+[data-theme="dark"] .search-bar input { color: var(--neutral-200); }
+.search-bar svg { flex-shrink: 0; }
+/* === Call Cards (ds-widget style) === */
+.call-card {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-sm, 8px);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.15s, border-color 0.15s;
 }
-.filter-dropdown-header {
+.call-card:hover {
+  border-color: var(--brand-300);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0,0,0,0.1));
+}
+.call-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--neutral-200);
-}
-.filter-dropdown-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--neutral-900);
-}
-.filter-dropdown-close {
-  background: none;
-  border: none;
+  padding: 14px 18px;
   cursor: pointer;
-  color: var(--neutral-500);
-  padding: 4px;
-  border-radius: 4px;
+  transition: background 0.15s;
+}
+.call-card-header:hover { background: var(--neutral-200); }
+.call-caller { display: flex; align-items: center; gap: 12px; }
+.call-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--brand-100);
+  color: var(--brand-700);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.filter-dropdown-close:hover {
-  color: var(--neutral-700);
-  background: var(--neutral-200);
-}
-.filter-section {
-  margin-bottom: 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--neutral-200);
-}
-.filter-section:last-of-type {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-.filter-section-title {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
+  flex-shrink: 0;
+}
+.call-info { display: flex; flex-direction: column; gap: 2px; }
+.call-name { font-size: 15px; font-weight: 600; color: var(--neutral-900); }
+.call-meta { font-size: 12px; color: var(--neutral-500); }
+.meta-sep { margin: 0 4px; opacity: 0.4; }
+.call-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.call-status-badge.booked { background: #d1fae5; color: #047857; }
+.call-status-badge.estimate { background: #dbeafe; color: #1d4ed8; }
+.call-status-badge.followup { background: #fef3c7; color: #b45309; }
+.call-status-badge.nointerest { background: #f3e8ff; color: #7e22ce; }
+.call-status-badge.voicemail { background: #f1f5f9; color: #64748b; }
+.call-status-badge.answered { background: #dcfce7; color: #166534; }
+[data-theme="dark"] .call-status-badge.booked { background: rgba(4,120,87,0.2); color: #6ee7b7; }
+[data-theme="dark"] .call-status-badge.estimate { background: rgba(30,64,175,0.2); color: #93c5fd; }
+[data-theme="dark"] .call-status-badge.followup { background: rgba(180,83,9,0.2); color: #fbbf24; }
+[data-theme="dark"] .call-status-badge.nointerest { background: rgba(126,34,206,0.2); color: #d8b4fe; }
+[data-theme="dark"] .call-status-badge.voicemail { background: rgba(100,116,139,0.2); color: #94a3b8; }
+[data-theme="dark"] .call-status-badge.answered { background: rgba(22,101,52,0.2); color: #6ee7b7; }
+.call-card-body {
+  padding: 0 18px 14px;
+  font-size: 13px;
+  color: var(--neutral-600);
+}
+/* === Empty State === */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
   color: var(--neutral-500);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 10px;
 }
-.filter-options {
+.empty-state-icon svg {
+  width: 64px;
+  height: 64px;
+  opacity: 0.3;
+  margin-bottom: 16px;
+}
+.empty-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--neutral-700);
+  margin: 0 0 8px;
+}
+.empty-state p {
+  font-size: 14px;
+  color: var(--neutral-500);
+  margin: 0;
+}
+/* === Sort Controls === */
+.sort-controls {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
-.filter-option-btn {
-  padding: 5px 14px;
+.sort-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--neutral-500);
+  margin-right: 4px;
+}
+.sort-btn {
+  padding: 5px 12px;
   border-radius: 100px;
   border: 1px solid var(--neutral-300);
   background: var(--neutral-100);
@@ -183,215 +229,48 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
+  transition: all 0.15s;
 }
-.filter-option-btn:hover {
-  border-color: var(--brand-400);
-  color: var(--brand-600);
-}
-.filter-option-btn.selected {
-  background: var(--brand-600);
-  border-color: var(--brand-600);
-  color: white;
-}
-.filter-option-btn.selected-all {
-  background: var(--neutral-200);
-  border-color: var(--neutral-300);
-  color: var(--neutral-700);
-}
-.filter-option-btn.selected-all:hover {
-  border-color: var(--brand-400);
-  color: var(--brand-600);
-}
-/* Toggle switch */
-.filter-toggle-row {
+.sort-btn:hover { background: var(--neutral-200); border-color: var(--brand-300); }
+.sort-btn.active { background: var(--brand-600); color: white; border-color: var(--brand-600); }
+/* === Stats Row === */
+.stats-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 0;
+  gap: 20px;
+  padding: 10px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--neutral-200);
 }
-.filter-toggle-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--neutral-700);
-}
-.filter-toggle {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  flex-shrink: 0;
-}
-.filter-toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-  position: absolute;
-}
-.filter-toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background: var(--neutral-300);
-  border-radius: 22px;
-  transition: 0.2s;
-}
-.filter-toggle-slider:before {
-  content: "";
-  position: absolute;
-  height: 16px;
-  width: 16px;
-  left: 3px;
-  bottom: 3px;
-  background: white;
-  border-radius: 50%;
-  transition: 0.2s;
-}
-.filter-toggle input:checked + .filter-toggle-slider {
-  background: var(--brand-600);
-}
-.filter-toggle input:checked + .filter-toggle-slider:before {
-  transform: translateX(18px);
-}
-/* Revenue range inputs */
-.filter-range-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.filter-range-input {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  background: var(--neutral-100);
-  color: var(--neutral-800);
-  box-sizing: border-box;
-}
-.filter-range-input:focus {
-  outline: none;
-  border-color: var(--brand-500);
-  box-shadow: 0 0 0 2px rgba(79,70,229,0.1);
-}
-.filter-range-sep {
-  color: var(--neutral-500);
-  font-size: 12px;
-  flex-shrink: 0;
-}
-/* Reset button */
-.filter-reset-btn {
-  width: 100%;
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  border: 1px dashed var(--neutral-300);
-  background: transparent;
-  color: var(--neutral-500);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  margin-top: 4px;
-}
-.filter-reset-btn:hover {
-  border-color: var(--danger);
-  color: var(--danger);
-  background: rgba(220,38,38,0.04);
-}
-/* Filter button wrapper for positioning */
-.filter-btn-wrapper {
-  position: relative;
-  display: inline-block;
-}
-/* === Results count === */
-.results-count {
-  font-size: 12px;
-  color: var(--neutral-500);
-  font-weight: 500;
-  margin-left: auto;
-}
-/* === All time pill === */
-.filter-all-time {
-  padding: 5px 14px;
-  border-radius: 100px;
-  border: 1px solid var(--neutral-300);
-  background: var(--neutral-200);
-  color: var(--neutral-700);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-/* === Executive Summary === */
-.call-exec-summary {
-  margin-bottom: 14px;
-  border: 1px solid var(--brand-200, #d1d5db);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-.exec-summary-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--brand-50);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--brand-700);
-  user-select: none;
-}
-[data-theme="dark"] .exec-summary-header {
-  background: rgba(79,70,229,0.15);
-  color: var(--brand-400);
-}
-.confidence-high {
-  color: #059669;
-  font-weight: 700;
-}
-.action-btn {
+.stat-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
   font-size: 13px;
-  font-weight: 600;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
+  color: var(--neutral-600);
 }
-.action-primary {
-  background: var(--brand-500);
-  color: white;
+.stat-item strong { color: var(--neutral-900); }
+/* === Results Count === */
+.results-count {
+  font-size: 13px;
+  color: var(--neutral-500);
+  margin-bottom: 12px;
 }
-.action-primary:hover { background: var(--brand-600); }
-.action-secondary {
-  background: var(--neutral-200);
-  color: var(--neutral-700);
-  border: 1px solid var(--neutral-300);
+/* === Page Header === */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.action-secondary:hover { background: var(--neutral-300); }
-[data-theme="dark"] .action-secondary {
-  background: var(--neutral-300);
-  color: var(--neutral-200);
-  border-color: var(--neutral-400);
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--neutral-900);
+  margin: 0;
 }
-[data-theme="dark"] .action-secondary:hover { background: var(--neutral-400); }
-.action-tertiary {
-  background: transparent;
-  color: var(--brand-600);
-  border: 1px solid var(--brand-300);
-}
-.action-tertiary:hover { background: var(--brand-50); }
-[data-theme="dark"] .action-tertiary {
-  color: var(--brand-400);
-  border-color: var(--brand-600);
-}
-[data-theme="dark"] .action-tertiary:hover { background: rgba(79,70,229,0.1); }
-
-/* === Toggle Executive Summary === */
-
+.page-header h1 span { color: var(--neutral-500); font-weight: 400; }
 </style>
 </head>
 <body>
@@ -463,31 +342,10 @@ function toggleMobileMenu() {
         <input type="text" id="callSearchInput" placeholder="Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)">
       </div>
     </div>
-<!-- KPI Cards -->
-    <div class="kpi-grid" id="callStats">
-      <div class="stat-card">
-        <div class="stat-icon-bg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
-        <div class="stat-label">Calls Today</div>
-        <div class="stat-value" id="kpiCallsToday">0</div>
-        <div class="stat-change up" id="kpiCallsChange">All time</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon-bg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="8"/></svg></div>
-        <div class="stat-label">Revenue Generated</div>
-        <div class="stat-value" id="kpiRevenue">$0</div>
-        <div class="stat-change up" id="kpiRevenueChange">Estimated total</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon-bg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-        <div class="stat-label">Booking Rate</div>
-        <div class="stat-value" id="kpiBookingRate">0%</div>
-        <div class="stat-change up" id="kpiBookingChange">Conversion</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon-bg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-        <div class="stat-label">Missed Opportunities</div>
-        <div class="stat-value" id="kpiMissed">0</div>
-        <div class="stat-change down" id="kpiMissedChange">Needs attention</div>
+<!-- KPI Grid (Dashboard Design System) -->
+    <div class="ds-widget ds-widget-full" id="widget-kpi-grid">
+      <div class="ds-kpi-grid" id="kpiGrid">
+        <!-- KPI cards loaded by JS -->
       </div>
     </div>
       <div class="polaris-card" id="polarisCard">
@@ -1037,23 +895,91 @@ function setSearch(q) {
 
 // ===== Stats =====
 function upStats() {
+  loadKpiGrid();
+}
+function loadKpiGrid() {
+  const grid = document.getElementById('kpiGrid');
+  if (!grid) return;
   const calls = getAllCalls();
-  const t = calls.length;
-  const book = calls.filter(c=>c.outcome==="appointment-set").length;
-  const est = calls.filter(c=>c.outcome==="lead-captured").length;
-  const fu = calls.filter(c=>c.outcome==="follow-up").length;
-  const voicemail = calls.filter(c=>c.status==="voicemail").length;
-  const noi = calls.filter(c=>c.outcome==="no-interest").length;
-  const rev = calls.reduce((s,c)=>s+(c.avgPrice||0), 0);
-  document.getElementById("kpiCallsToday").textContent = t;
-  document.getElementById("kpiRevenue").textContent = t>0 ? '$'+rev.toLocaleString() : '$0';
-  document.getElementById("kpiBookingRate").textContent = t>0 ? Math.round((book/t)*100)+'%' : '0%';
-  document.getElementById("kpiMissed").textContent = (voicemail+noi);
-  const today = calls.filter(c=>{try{return isToday(new Date(c.receivedAt));}catch(e){return false;}}).length;
-  document.getElementById("kpiCallsChange").textContent = today>0 ? today+' today' : 'All time';
-  document.getElementById("kpiRevenueChange").textContent = '$'+rev.toLocaleString()+' total';
-  document.getElementById("kpiBookingChange").textContent = book+' booked';
-  document.getElementById("kpiMissedChange").textContent = (voicemail+noi)>0 ? 'Needs attention' : 'None';
+  const total = calls.length;
+  const today = calls.length;
+  const scheduled = calls.filter(c => c.status === 'scheduled' || c.outcome === 'appointment-set').length;
+  const revenue = calls.reduce((s,c) => s + (c.avgPrice||0), 0);
+  const avgValue = total > 0 ? Math.round(revenue / total) : 0;
+  const kpiDefinitions = [
+    { id:'today_calls', icon:'📞', label:"Today's Communications", value: today, trend: today > 0 ? '<span class="ds-trend-up">↑</span>' : '' },
+    { id:'new_leads', icon:'👤', label:'New Leads', value: total, trend: total > 0 ? '<span class="ds-trend-up">↑</span>' : '' },
+    { id:'appointments', icon:'📅', label:'Appointments', value: scheduled, trend: '' },
+    { id:'lead_conversion', icon:'📊', label:'Lead Conv.', value: total > 0 ? Math.round((scheduled/total)*100)+'%' : '—', trend: '' },
+    { id:'avg_job_value', icon:'💰', label:'Avg Job Value', value: avgValue > 0 ? '
+
+function simulateDemoCall() {
+  try {
+    // genCall() is already routed through AppStore.addLead + EventBus by
+    // the simulator.js wrapper — do NOT call addLead again here (would
+    // create duplicates). genCall throws on failure; the catch surfaces
+    // a friendly toast instead of a silent broken button.
+    const c = genCall();
+    if (!c) throw new Error('genCall returned no lead');
+    // Generate Polaris analysis and store on ALL matching leads in AppStore
+    if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
+      var analysis = PolarisEngine.analyzeLead(c);
+      c.polarisAnalysis = analysis;
+      // Also store on the AppStore lead (which may be a different object)
+      if (typeof AppStore !== 'undefined' && AppStore.getLeads) {
+        var leads = AppStore.getLeads();
+        if (leads && leads.length > 0) {
+          leads[0].polarisAnalysis = analysis;
+        }
+      }
+    }
+    renderCalls();
+    NotificationService.show("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
+    // Re-populate service types now that we have data
+    try { populateServiceTypes(); } catch(e) { /* non-fatal */ }
+  } catch (e) {
+    try { NotificationService.show("Could not simulate call. Please try again.", "error"); } catch (_) {}
+    console.error('simulateDemoCall:', e);
+  }
+}
+function clearAllCalls() {
+  if(confirm("Clear all call history?")) {
+    try {
+      sessionStorage.removeItem("northstar_calls");
+      if(typeof AppStore!=='undefined' && AppStore.getLeads) {
+        AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id);});
+      }
+    } catch(e) {}
+    renderCalls();
+    NotificationService.show("🗑 Calls cleared", "info");
+  }
+}
+// Auto-refresh on store changes
+try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
+// Initialize
+function loadCalls() { renderCalls(); }
+loadCalls();
+</script>
+<script src="/js/theme.js"></script>
+</body>
+</html>
++avgValue.toLocaleString() : '—', trend: '' },
+    { id:'missed_calls', icon:'🚫', label:'Missed Calls', value: calls.filter(c => c.status === 'voicemail' || c.outcome === 'voicemail').length, trend: '0' },
+    { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', value: total > 0 ? '2:30' : '—', trend: '' },
+    { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', value: total > 0 ? Math.round((calls.filter(c => c.status === 'answered').length/total)*100)+'%' : '—', trend: '' },
+  ];
+  let html = '';
+  kpiDefinitions.forEach(function(kpi) {
+    html += '<div class="ds-kpi-card">' +
+      '<div class="ds-kpi-icon" style="background:var(--kpi-' + kpi.id + '-bg,var(--neutral-50));color:var(--kpi-' + kpi.id + '-color,var(--neutral-500));">' +
+        '<span style="font-size:20px;">' + kpi.icon + '</span>' +
+      '</div>' +
+      '<div class="ds-kpi-value">' + kpi.value + '</div>' +
+      '<div class="ds-kpi-label">' + kpi.label + '</div>' +
+      '<div class="ds-kpi-trend">' + kpi.trend + '</div>' +
+    '</div>';
+  });
+  grid.innerHTML = html;
 }
 
 function simulateDemoCall() {

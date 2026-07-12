@@ -9,6 +9,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 <style>
+/* Override main-content grid layout — Communications is single-column */
+@media (min-width: 1024px) {
+  .main-content {
+    display: block !important;
+  }
+}
+/* Smaller KPI icons for Communications page */
+.ds-kpi-icon {
+  width: 36px;
+  height: 36px;
+}
 /* === KPI Grid (Dashboard Design System) === */
 .ds-kpi-grid {
   display: grid;

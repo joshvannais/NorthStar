@@ -238,34 +238,32 @@ function toggleMobileMenu() {
           <!-- Each KPI card loaded by JS -->
         </div>
       </div>
-      <!-- ════════════════════════════════════════════════════════
-           POLARIS Revenue Intelligence Card
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full" id="widget-polaris-card">
-        <div class="polaris-card">
-          <div class="polaris-header">
-            <h2>🏆 POLARIS Revenue Intelligence</h2>
-            <span class="polaris-badge">AI-POWERED</span>
+      <!-- Polaris Revenue Intelligence Card -->
+      <div class="polaris-card" id="polarisCard">
+        <div class="polaris-header">
+          <h2 style="display:flex;align-items:center;gap:8px;">
+            <img src="/assets/logo.png" alt="NorthStar" style="height:18px;width:auto;vertical-align:middle;">
+            POLARIS Revenue Intelligence</h2>
+          <span class="polaris-badge">Live</span>
+        </div>
+        <div class="polaris-grid" id="polarisGrid">
+          <div class="polaris-item">
+            <div class="polaris-item-label">Top Opportunity</div>
+            <div class="polaris-item-value" id="polarisTopOpp">-</div>
+            <div class="polaris-item-desc" id="polarisTopOppDesc">Lead with highest potential value</div>
+            <span class="polaris-confidence high" id="polarisTopConf">High</span>
           </div>
-          <div class="polaris-grid" id="polarisCardGrid">
-            <div class="polaris-item">
-              <div class="polaris-item-label">Top Opportunity</div>
-              <div class="polaris-item-value" id="polarisTopOpp">—</div>
-              <div class="polaris-item-desc" id="polarisTopOppDesc">—</div>
-              <div class="polaris-confidence" id="polarisTopConf">—</div>
-            </div>
-            <div class="polaris-item">
-              <div class="polaris-item-label">Pipeline Value</div>
-              <div class="polaris-item-value" id="polarisPipeline">$0</div>
-              <div class="polaris-item-desc" id="polarisPipelineDesc">Total qualified pipeline</div>
-              <div class="polaris-confidence" id="polarisPipeConf">—</div>
-            </div>
-            <div class="polaris-item">
-              <div class="polaris-item-label">Recommended Focus</div>
-              <div class="polaris-item-value" id="polarisFocus">—</div>
-              <div class="polaris-item-desc" id="polarisFocusDesc">—</div>
-              <div class="polaris-confidence" id="polarisFocusConf">—</div>
-            </div>
+          <div class="polaris-item">
+            <div class="polaris-item-label">Estimated Pipeline</div>
+            <div class="polaris-item-value" id="polarisPipeline">$0</div>
+            <div class="polaris-item-desc">Total qualified lead value</div>
+            <span class="polaris-confidence medium" id="polarisPipeConf">Medium</span>
+          </div>
+          <div class="polaris-item">
+            <div class="polaris-item-label">Recommended Focus</div>
+            <div class="polaris-item-value" id="polarisFocus">-</div>
+            <div class="polaris-item-desc" id="polarisFocusDesc">Highest volume service category</div>
+            <span class="polaris-confidence high" id="polarisFocusConf">High</span>
           </div>
         </div>
       </div>
@@ -1031,7 +1029,7 @@ function toggleMobileMenu() {
     // Initial Load
     // ═══════════════════════════════════════════════════════════════
     function loadDashboard() {
-      renderPolarisCard();
+      renderPolarisCard(getLiveLeads());
       loadDailyBrief();
       loadHeroKPI();
       loadKpiGrid();
@@ -1110,47 +1108,50 @@ function toggleMobileMenu() {
     // ============================================================
     // POLARIS Revenue Intelligence Card
     // ============================================================
-    function renderPolarisCard() {
-      var leads = getLiveLeads();
+    function renderPolarisCard(leads) {
       if (leads.length === 0) {
-        document.getElementById('polarisTopOpp').textContent = '—';
+        document.getElementById('polarisTopOpp').textContent = '-';
         document.getElementById('polarisTopOppDesc').textContent = 'Add leads to see opportunities';
         document.getElementById('polarisPipeline').textContent = '$0';
         document.getElementById('polarisPipeConf').textContent = 'N/A';
         document.getElementById('polarisPipeConf').className = 'polaris-confidence low';
-        document.getElementById('polarisFocus').textContent = '—';
+        document.getElementById('polarisFocus').textContent = '-';
         document.getElementById('polarisFocusDesc').textContent = 'Simulate leads to get started';
         return;
       }
-      var sorted = leads.slice().sort(function(a, b) { return (b.avgPrice || 0) - (a.avgPrice || 0); });
-      var top = sorted[0];
-      document.getElementById('polarisTopOpp').textContent = top.caller || '—';
-      document.getElementById('polarisTopOppDesc').textContent = '$' + Math.round(top.avgPrice || 0).toLocaleString() + ' — ' + (top.service || 'Service');
-      var topConfidence = (top.avgPrice || 0) > 2000 ? 'High' : (top.avgPrice || 0) > 500 ? 'Medium' : 'Low';
-      var topConf = document.getElementById('polarisTopConf');
-      topConf.textContent = topConfidence;
-      topConf.className = 'polaris-confidence ' + topConfidence.toLowerCase();
-      var pipeline = leads.reduce(function(s, l) { return s + (l.avgPrice || 0); }, 0);
+
+      // Top opportunity = highest priced lead
+      const sorted = [...leads].sort((a, b) => (b.avgPrice || 0) - (a.avgPrice || 0));
+      const top = sorted[0];
+      document.getElementById('polarisTopOpp').textContent = top.caller || '-';
+      const topJob = top.jobDetail || top.service || '-';
+      document.getElementById('polarisTopOppDesc').textContent = '$' + Math.round(top.avgPrice || 0).toLocaleString() + ' - ' + (typeof top.service === 'string' ? top.service : 'Service');
+      const topConfidence = (top.avgPrice || 0) > 2000 ? 'High' : (top.avgPrice || 0) > 500 ? 'Medium' : 'Low';
+      const topConfClass = topConfidence.toLowerCase();
+      document.getElementById('polarisTopConf').textContent = topConfidence;
+      document.getElementById('polarisTopConf').className = 'polaris-confidence ' + topConfClass;
+
+      // Pipeline = sum of all qualified lead values
+      const pipeline = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
       document.getElementById('polarisPipeline').textContent = '$' + Math.round(pipeline).toLocaleString();
-      var pipeConf = document.getElementById('polarisPipeConf');
-      var pipeConfidence = leads.length > 5 ? 'High' : leads.length > 2 ? 'Medium' : 'Low';
-      pipeConf.textContent = pipeConfidence;
-      pipeConf.className = 'polaris-confidence ' + pipeConfidence.toLowerCase();
-      var svcCounts = {};
-      leads.forEach(function(l) {
-        var svc = l.service || 'Other';
+      const pipeConf = leads.length > 5 ? 'High' : leads.length > 2 ? 'Medium' : 'Low';
+      document.getElementById('polarisPipeConf').textContent = pipeConf;
+      document.getElementById('polarisPipeConf').className = 'polaris-confidence ' + pipeConf.toLowerCase();
+
+      // Recommended focus = highest frequency service
+      const svcCounts = {};
+      leads.forEach(l => {
+        const svc = l.service || 'Other';
         svcCounts[svc] = (svcCounts[svc] || 0) + 1;
       });
-      var topSvc = '—', topSvcCount = 0;
-      for (var svc in svcCounts) {
-        if (svcCounts[svc] > topSvcCount) { topSvc = svc; topSvcCount = svcCounts[svc]; }
+      let topSvc = '-', topSvcCount = 0;
+      for (const [svc, count] of Object.entries(svcCounts)) {
+        if (count > topSvcCount) { topSvc = svc; topSvcCount = count; }
       }
       document.getElementById('polarisFocus').textContent = topSvc;
-      document.getElementById('polarisFocusDesc').textContent = topSvcCount + ' lead' + (topSvcCount !== 1 ? 's' : '') + ' — highest volume service';
-      var focusConf = document.getElementById('polarisFocusConf');
-      var focusConfidence = topSvcCount > 3 ? 'High' : topSvcCount > 1 ? 'Medium' : 'Low';
-      focusConf.textContent = focusConfidence;
-      focusConf.className = 'polaris-confidence ' + focusConfidence.toLowerCase();
+      document.getElementById('polarisFocusDesc').textContent = topSvcCount + ' lead' + (topSvcCount !== 1 ? 's' : '') + ' - highest volume service';
+      document.getElementById('polarisFocusConf').textContent = topSvcCount > 3 ? 'High' : topSvcCount > 1 ? 'Medium' : 'Low';
+      document.getElementById('polarisFocusConf').className = 'polaris-confidence ' + (topSvcCount > 3 ? 'high' : topSvcCount > 1 ? 'medium' : 'low');
     }
 
     // ============================================================

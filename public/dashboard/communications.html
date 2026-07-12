@@ -1545,18 +1545,22 @@ function simulateDemoCall() {
     // a friendly toast instead of a silent broken button.
     const c = genCall();
     if (!c) throw new Error('genCall returned no lead');
-    // Generate Polaris analysis and store on ALL matching leads in AppStore
-    if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
-      var analysis = PolarisEngine.analyzeLead(c);
-      c.polarisAnalysis = analysis;
-      // Also store on the AppStore lead (which may be a different object)
-      if (typeof AppStore !== 'undefined' && AppStore.getLeads) {
-        var leads = AppStore.getLeads();
-        if (leads && leads.length > 0) {
-          leads[0].polarisAnalysis = analysis;
-        }
+    // After genCall() creates the lead, persist Polaris analysis to the store
+    try {
+      if (c && c.id && window.AppStore && typeof window.AppStore.updateLead === 'function') {
+        const analysis = {
+          executiveSummary: c.summary || '',
+          customerIntent: (c.jobDetail || '').split('.')[0] || '',
+          scopeAnalysis: c.jobDetail || '',
+          pricingBreakdown: c.pricingBreakdown || [],
+          confidenceScore: 87,
+          recommendedFollowUp: 'Follow up within 24 hours with a detailed estimate',
+          upsellOpportunities: [],
+          revenue: c.avgPrice || 0
+        };
+        AppStore.updateLead(c.id, { polarisAnalysis: analysis });
       }
-    }
+    } catch (e) { console.warn('polaris persist:', e); }
     renderCalls();
     NotificationService.show("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
     // Re-populate service types now that we have data

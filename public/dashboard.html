@@ -597,7 +597,7 @@ function toggleMobileMenu() {
           try { const d = new Date(c.receivedAt || c.time); return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString(); } catch(e) { return false; }
         }).length;
         const leads = simulatedCalls.length;
-        const appointments = simulatedCalls.filter(c => c.status === 'scheduled').length;
+        const appointments = simulatedCalls.filter(c => c.outcome === 'appointment-set').length;
         const rev = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
 
         const hours = new Date().getHours();
@@ -701,7 +701,7 @@ function toggleMobileMenu() {
       const grid = document.getElementById('kpiGrid');
       const total = simulatedCalls.length;
       const today = simulatedCalls.length; // All calls are "today" in demo mode
-      const scheduled = simulatedCalls.filter(c => c.status === 'scheduled').length;
+      const scheduled = simulatedCalls.filter(c => c.outcome === 'appointment-set').length;
       const revenue = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
       const avgValue = total > 0 ? Math.round(revenue / total) : 0;
 
@@ -994,7 +994,7 @@ function toggleMobileMenu() {
     // ═══════════════════════════════════════════════════════════════
     function loadAnalytics() {
       const total = simulatedCalls.length;
-      const scheduled = simulatedCalls.filter(c => c.status === 'scheduled').length;
+      const scheduled = simulatedCalls.filter(c => c.outcome === 'appointment-set').length;
       const revenue = simulatedCalls.reduce((s,c) => s + (c.avgPrice||0), 0);
       const avgValue = total > 0 ? Math.round(revenue / total) : 0;
 

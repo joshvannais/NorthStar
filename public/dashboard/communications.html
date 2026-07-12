@@ -917,59 +917,7 @@ function loadKpiGrid() {
     { id:'new_leads', icon:'👤', label:'New Leads', value: total, trend: total > 0 ? '<span class="ds-trend-up">↑</span>' : '' },
     { id:'appointments', icon:'📅', label:'Appointments', value: scheduled, trend: '' },
     { id:'lead_conversion', icon:'📊', label:'Lead Conv.', value: total > 0 ? Math.round((scheduled/total)*100)+'%' : '—', trend: '' },
-    { id:'avg_job_value', icon:'💰', label:'Avg Job Value', value: avgValue > 0 ? '
-
-function simulateDemoCall() {
-  try {
-    // genCall() is already routed through AppStore.addLead + EventBus by
-    // the simulator.js wrapper — do NOT call addLead again here (would
-    // create duplicates). genCall throws on failure; the catch surfaces
-    // a friendly toast instead of a silent broken button.
-    const c = genCall();
-    if (!c) throw new Error('genCall returned no lead');
-    // Generate Polaris analysis and store on ALL matching leads in AppStore
-    if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
-      var analysis = PolarisEngine.analyzeLead(c);
-      c.polarisAnalysis = analysis;
-      // Also store on the AppStore lead (which may be a different object)
-      if (typeof AppStore !== 'undefined' && AppStore.getLeads) {
-        var leads = AppStore.getLeads();
-        if (leads && leads.length > 0) {
-          leads[0].polarisAnalysis = analysis;
-        }
-      }
-    }
-    renderCalls();
-    NotificationService.show("📞 Call from " + c.caller + " — $" + Number(c.avgPrice||0).toLocaleString() + " estimated");
-    // Re-populate service types now that we have data
-    try { populateServiceTypes(); } catch(e) { /* non-fatal */ }
-  } catch (e) {
-    try { NotificationService.show("Could not simulate call. Please try again.", "error"); } catch (_) {}
-    console.error('simulateDemoCall:', e);
-  }
-}
-function clearAllCalls() {
-  if(confirm("Clear all call history?")) {
-    try {
-      sessionStorage.removeItem("northstar_calls");
-      if(typeof AppStore!=='undefined' && AppStore.getLeads) {
-        AppStore.getLeads().forEach(l=>{AppStore.removeLead(l.id);});
-      }
-    } catch(e) {}
-    renderCalls();
-    NotificationService.show("🗑 Calls cleared", "info");
-  }
-}
-// Auto-refresh on store changes
-try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
-// Initialize
-function loadCalls() { renderCalls(); }
-loadCalls();
-</script>
-<script src="/js/theme.js"></script>
-</body>
-</html>
-+avgValue.toLocaleString() : '—', trend: '' },
+    { id:'avg_job_value', icon:'💰', label:'Avg Job Value', value: avgValue > 0 ? '$'+avgValue.toLocaleString() : '—', trend: '' },
     { id:'missed_calls', icon:'🚫', label:'Missed Calls', value: calls.filter(c => c.status === 'voicemail' || c.outcome === 'voicemail').length, trend: '0' },
     { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', value: total > 0 ? '2:30' : '—', trend: '' },
     { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', value: total > 0 ? Math.round((calls.filter(c => c.status === 'answered').length/total)*100)+'%' : '—', trend: '' },
@@ -987,6 +935,8 @@ loadCalls();
   });
   grid.innerHTML = html;
 }
+
+function simulateDemoCall() {
 
 function simulateDemoCall() {
   try {

@@ -984,7 +984,15 @@ function applyFilters(calls) {
 
     // === Polaris Revenue Intelligence Card ===
         function renderPolarisCard(leads) {
-      PolarisEngine.renderPolarisCard(leads);
+      console.log('[DEBUG] renderPolarisCard called with', leads ? leads.length : 0, 'leads, PolarisEngine:', typeof PolarisEngine);
+      if (leads && leads.length > 0) {
+        console.log('[DEBUG] first lead:', leads[0].caller, 'polarisAnalysis:', leads[0].polarisAnalysis ? 'present' : 'null');
+      }
+      if (typeof PolarisEngine !== 'undefined' && PolarisEngine.renderPolarisCard) {
+        PolarisEngine.renderPolarisCard(leads);
+      } else {
+        console.log('[DEBUG] PolarisEngine.renderPolarisCard NOT AVAILABLE');
+      }
     }// Global reference to the current filtered/sorted view for the CustomerDrawer click handler
 var currentFilteredCalls = [];
 
@@ -1061,6 +1069,7 @@ function renderCalls() {
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
   upStats();
+  renderPolarisCard(allCalls);
   console.log('[DEBUG renderCalls] EXIT - rendered', f.length, 'call cards');
 }
 function setSearch(q) {

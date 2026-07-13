@@ -552,7 +552,7 @@ function toggleMobileMenu() {
     }
 
     // Dashboard data (live reference to AppStore)
-    function getLiveLeads() { return AppStore.getLeads(); }
+    function getLiveLeads() { if (typeof CommunicationsEngine !== 'undefined' && CommunicationsEngine.getConversations) { return CommunicationsEngine.getConversations(); } return AppStore.getLeads(); }
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
     // Auto-refresh dashboard when store changes
     EventBus.on('store:changed', function() { try { loadDashboard(); } catch(e) { console.warn('store:changed refresh skipped:', e.message); } });

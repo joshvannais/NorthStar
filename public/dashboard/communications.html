@@ -877,7 +877,7 @@ function safeNum(v, fallback) {
   return v;
 }
 
-var allCalls = (typeof AppStore !== 'undefined' && AppStore.getLeads) ? AppStore.getLeads() : [];
+var allCalls = (typeof CommunicationsEngine !== 'undefined' && CommunicationsEngine.getConversations) ? CommunicationsEngine.getConversations() : [];
 var curSort = 'newest';
 function setSort(sort) {
   curSort = sort;
@@ -888,8 +888,8 @@ function setSort(sort) {
 }
 function getAllCalls() {
   try {
-    if (typeof AppStore !== 'undefined' && AppStore.getLeads) {
-      return AppStore.getLeads();
+    if (typeof CommunicationsEngine !== 'undefined' && CommunicationsEngine.getConversations) {
+      return CommunicationsEngine.getConversations();
     }
   } catch(e) {}
   return [];

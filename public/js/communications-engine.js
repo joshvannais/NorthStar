@@ -110,42 +110,59 @@ window.CommunicationsEngine = (function() {
    * @returns {array} Normalized Conversation objects
    */
   function getConversations(filters) {
+    return getRawLeads(filters);
+  }
+
+  /**
+   * Get raw leads from AppStore (backward-compatible with existing page code).
+   * Returns the exact same objects as AppStore.getLeads() — no normalization.
+   * All existing CustomerCard, CustomerDrawer, PolarisEngine consumers work unchanged.
+   */
+  function getRawLeads(filters) {
     var raw = [];
     var store = window.AppStore;
     if (store && store.getLeads) {
       raw = store.getLeads();
     }
-    var convs = raw.map(normalizeFromLead).filter(Boolean);
 
     if (filters) {
       if (filters.status && filters.status !== 'all') {
-        convs = convs.filter(function(c) { return c.status === filters.status; });
+        raw = raw.filter(function(c) { return c.status === filters.status; });
       }
       if (filters.service && filters.service !== 'all') {
-        convs = convs.filter(function(c) { return c.service === filters.service; });
+        raw = raw.filter(function(c) { return (c.service || c.serviceRequested) === filters.service; });
       }
       if (filters.search) {
         var q = filters.search.toLowerCase();
-        convs = convs.filter(function(c) {
-          return c.caller.toLowerCase().indexOf(q) >= 0 ||
-                 c.phone.indexOf(q) >= 0 ||
-                 c.service.toLowerCase().indexOf(q) >= 0;
+        raw = raw.filter(function(c) {
+          return (c.caller || c.customerName || '').toLowerCase().indexOf(q) >= 0 ||
+                 (c.phone || c.phoneNumber || '').indexOf(q) >= 0 ||
+                 (c.service || c.serviceRequested || '').toLowerCase().indexOf(q) >= 0;
         });
       }
       if (filters.minRevenue !== undefined) {
-        convs = convs.filter(function(c) { return c.avgPrice >= filters.minRevenue; });
+        raw = raw.filter(function(c) { return (c.avgPrice || 0) >= filters.minRevenue; });
       }
       if (filters.maxRevenue !== undefined) {
-        convs = convs.filter(function(c) { return c.avgPrice <= filters.maxRevenue; });
+        raw = raw.filter(function(c) { return (c.avgPrice || 0) <= filters.maxRevenue; });
       }
     }
 
     // Sort by receivedAt descending (newest first)
-    convs.sort(function(a, b) {
-      return new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime();
+    raw.sort(function(a, b) {
+      return new Date(b.receivedAt || b.time || 0).getTime() - new Date(a.receivedAt || a.time || 0).getTime();
     });
 
-    return convs;
+    return raw;
+  }
+
+  /**
+   * Get normalized Conversation objects (provider-agnostic format).
+   * For future use with non-simulated providers. Current pages use getConversations().
+   */
+  function getNormalizedConversations(filters) {
+    var raw = getRawLeads(filters);
+    return raw.map(normalizeFromLead).filter(Boolean);
   }
 
   /**
@@ -154,8 +171,7 @@ window.CommunicationsEngine = (function() {
   function getConversation(id) {
     var store = window.AppStore;
     if (store && store.getLead) {
-      var lead = store.getLead(id);
-      return normalizeFromLead(lead);
+      return store.getLead(id);
     }
     return null;
   }
@@ -274,6 +290,8 @@ window.CommunicationsEngine = (function() {
   return {
     getConversations: getConversations,
     getConversation: getConversation,
+    getRawLeads: getRawLeads,
+    getNormalizedConversations: getNormalizedConversations,
     getCount: getCount,
     registerProvider: registerProvider,
     setActiveProvider: setActiveProvider,

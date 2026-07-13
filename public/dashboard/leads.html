@@ -414,10 +414,10 @@ function toggleMobileMenu() {
     window.showNotification = NotificationService.show;
 
     // In-memory leads (live reference to AppStore)
-    let allLeads = AppStore.getLeads();
+    let allLeads = (typeof CommunicationsEngine !== 'undefined' && CommunicationsEngine.getConversations) ? CommunicationsEngine.getConversations() : AppStore.getLeads();
     function openLeadDrawer(el) {
       var idx = parseInt(el.getAttribute('data-lead-index'), 10);
-      const leads = AppStore.getLeads();
+      const leads = CommunicationsEngine.getConversations ? CommunicationsEngine.getConversations() : AppStore.getLeads();
       var lead = leads[idx];
       if (lead && typeof CustomerDrawer !== 'undefined') CustomerDrawer.open(lead);
     }
@@ -426,7 +426,7 @@ function toggleMobileMenu() {
     EventBus.on('store:changed', function() { loadLeads(); });
     function loadLeads() {
       // Always read fresh from shared AppStore
-      const leads = AppStore.getLeads();
+      const leads = CommunicationsEngine.getConversations ? CommunicationsEngine.getConversations() : AppStore.getLeads();
       document.getElementById('leadCount').textContent = leads.length + ' leads';
       renderLeads(leads);
       renderKpiCards(leads);
@@ -507,7 +507,7 @@ function toggleMobileMenu() {
 
     // === Lead Actions ===
     function updateLeadStatus(idx, newStatus) {
-      const leads = AppStore.getLeads();
+      const leads = CommunicationsEngine.getConversations ? CommunicationsEngine.getConversations() : AppStore.getLeads();
       if (!leads[idx]) return;
       AppStore.updateLead(leads[idx].id, { status: newStatus });
       syncSessionStorage();
@@ -516,7 +516,7 @@ function toggleMobileMenu() {
     }
 
     function removeLead(idx) {
-      const leads = AppStore.getLeads();
+      const leads = CommunicationsEngine.getConversations ? CommunicationsEngine.getConversations() : AppStore.getLeads();
       if (!leads[idx]) return;
       const name = leads[idx].caller || 'Lead';
       AppStore.removeLead(leads[idx].id);

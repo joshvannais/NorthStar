@@ -989,7 +989,7 @@ function applyFilters(calls) {
         console.log('[DEBUG] first lead:', leads[0].caller, 'polarisAnalysis:', leads[0].polarisAnalysis ? 'present' : 'null');
       }
       if (typeof PolarisEngine !== 'undefined' && PolarisEngine.renderPolarisCard) {
-        PolarisEngine.renderPolarisCard(leads);
+        PolarisEngine.renderPolarisCard(getAllCalls());
       } else {
         console.log('[DEBUG] PolarisEngine.renderPolarisCard NOT AVAILABLE');
       }

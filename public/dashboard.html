@@ -576,14 +576,6 @@ function toggleMobileMenu() {
       error.style.display = 'none';
 
       // Try API first
-      var apiData = await apiFetch('/dashboard/brief');
-      if (apiData) {
-        skeleton.style.display = 'none';
-        document.getElementById('briefBody').innerHTML = '<p>' + apiData.brief + '</p>';
-        document.getElementById('briefTimestamp').textContent = 'Last updated: ' + new Date(apiData.updatedAt).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
-        content.style.display = 'block';
-        return;
-      }
 
                   // Fallback to simulated data
       setTimeout(() => {

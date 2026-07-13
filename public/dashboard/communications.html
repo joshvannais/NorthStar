@@ -973,14 +973,10 @@ function applyFilters(calls) {
 
     // === Polaris Revenue Intelligence Card ===
         function renderPolarisCard(leads) {
-      console.log('[DEBUG] renderPolarisCard called with', leads ? leads.length : 0, 'leads, PolarisEngine:', typeof PolarisEngine);
-      if (leads && leads.length > 0) {
-        console.log('[DEBUG] first lead:', leads[0].caller, 'polarisAnalysis:', leads[0].polarisAnalysis ? 'present' : 'null');
-      }
       if (typeof PolarisEngine !== 'undefined' && PolarisEngine.renderPolarisCard) {
-        PolarisEngine.renderPolarisCard(getAllCalls());
+        PolarisEngine.renderPolarisCard(leads && leads.length > 0 ? leads : getAllCalls());
       } else {
-        console.log('[DEBUG] PolarisEngine.renderPolarisCard NOT AVAILABLE');
+        // PolarisEngine not available
       }
     }// Global reference to the current filtered/sorted view for the CustomerDrawer click handler
 var currentFilteredCalls = [];
@@ -1007,59 +1003,18 @@ function renderCalls() {
       '<div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><h3>No communications yet</h3><p>Connect your phone number to start receiving calls.</p></div>';
     el.innerHTML = emptyMsg;
     resultsCountEl.textContent = '';
-    console.log('[DEBUG renderCalls] Calling upStats()...');
     upStats();
     renderPolarisCard(allCalls);
-    console.log('[DEBUG renderCalls] EXIT (empty state shown)');
     return;
   }
   
-  console.log('[DEBUG renderCalls] Rendering', f.length, 'call cards');
-  const oc = {
-    "appointment-set": {cls:"booked", label:"Booked"},
-    "lead-captured": {cls:"estimate", label:"Estimate"},
-    "follow-up": {cls:"followup", label:"Follow Up"},
-    "no-interest": {cls:"nointerest", label:"No Interest"},
-    "voicemail": {cls:"voicemail", label:"Voicemail"},
-    "answered": {cls:"answered", label:"Answered"}
-  };
-  function toTitle(s) {
-    return s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ") : "Unknown";
-  }
-  let html = "";
-  f.forEach((c, i) => {
-    const inits = safe(c.caller,'Unknown').split(" ").map(w=>w[0]).join("").substring(0,2);
-    const ob = oc[c.outcome] || {cls:"voicemail", label: c.outcome ? toTitle(c.outcome.replace(/-/g," ")) : (c.status ? toTitle(c.status) : 'Unknown')};
-    const statusClass = c.status === "voicemail" ? "voicemail" : ob.cls;
-    const pbHtml = c.pricingBreakdown && Array.isArray(c.pricingBreakdown) && c.pricingBreakdown.length > 0 ?
-      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;">' +
-      '<div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">Pricing Breakdown</div>' +
-      c.pricingBreakdown.map(pb => '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);"><span>'+pb.l+'</span><span style="font-weight:'+(pb.l==='Total'?'700':'400')+';color:var(--neutral-700);">$'+Math.abs(pb.a).toLocaleString()+'</span></div>').join('') +
-      '</div>' : '';
-
-    html += '' +
-      '<div class="call-card" id="call-'+i+'">' +
-        '<div class="call-card-header" data-lead-index="'+i+'" onclick="openCallCard(this)">' +
-          '<div class="call-caller">' +
-            '<div class="call-avatar">'+inits+'</div>' +
-            '<div class="call-info">' +
-              '<div class="call-name">'+safe(c.caller,'Unknown')+'</div>' +
-              '<div class="call-meta">'+safe(c.time,'')+' <span class="meta-sep">|</span> '+safe(c.duration,'')+' <span class="meta-sep">|</span> '+safe(c.service,'')+'</div>' +
-            '</div>' +
-          '</div>' +
-          '<span class="call-status-badge '+statusClass+'">'+ob.label+'</span>' +
-        '</div>' +
-        '<div class="call-card-body">' + '<p style="padding:12px;text-align:center;color:var(--neutral-500);font-size:13px;">Click to view full customer details, POLARIS analysis, and transcript.</p>' +'</div>' +
-          
-          
-            
-      '</div>';
-  });
+  let html = f.map(function(c, i) {
+    return CustomerCard.render(c, { layout: 'call', index: i, outcome: c.outcome });
+  }).join('');
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
   upStats();
   renderPolarisCard(allCalls);
-  console.log('[DEBUG renderCalls] EXIT - rendered', f.length, 'call cards');
 }
 function setSearch(q) {
   curSearch = q;
@@ -1132,11 +1087,10 @@ function clearAllCalls() {
 // Auto-refresh on store changes
 try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
 // Initialize
-function loadCalls() { console.log('[DEBUG] Initial page load - calling renderCalls()'); renderCalls(); }
-console.log('[DEBUG] Page loaded, about to call loadCalls()');
+function loadCalls() { renderCalls(); }
 loadCalls();
-console.log('[DEBUG] Initial loadCalls() completed');
 </script>
+<script src="/js/tooltip-service.js"></script>
 <script src="/js/theme.js"></script>
 </body>
 </html>

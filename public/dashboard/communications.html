@@ -431,6 +431,16 @@
   color: var(--text-primary, #222);
   line-height: 1.5;
 }
+[data-theme="dark"] .drawer-polaris-item {
+  background: rgba(212,175,55,0.1);
+  border-color: rgba(212,175,55,0.3);
+}
+[data-theme="dark"] .drawer-polaris-item-label {
+  color: var(--brand-400);
+}
+[data-theme="dark"] .drawer-polaris-item-value {
+  color: var(--neutral-300);
+}
 </style>
 </head>
 <body>
@@ -650,7 +660,7 @@ function toggleMobileMenu() {
         <div class="drawer-detail-row"><span class="drawer-detail-label">Date</span><span class="drawer-detail-value" id="drawerDate">-</span></div>
       </div>
       <div class="drawer-section">
-        <h3>POLARIS Revenue Intelligence</h3>
+        <h3>POLARIS™ Revenue Intelligence</h3>
         <div id="drawerPolarisInsight" class="drawer-polaris-insight">No insight available.</div>
       </div>
       <div class="drawer-section">

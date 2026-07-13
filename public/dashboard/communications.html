@@ -242,6 +242,17 @@
 }
 .sort-btn:hover { background: var(--neutral-200); border-color: var(--brand-300); }
 .sort-btn.active { background: var(--brand-600); color: white; border-color: var(--brand-600); }
+.sort-btn-wrapper { position: relative; display: inline-block; }
+.sort-btn-trigger { display: flex; align-items: center; gap: 6px; padding: 6px 14px; background: var(--neutral-50); border: 1px solid var(--neutral-300); border-radius: var(--radius); font-size: 13px; font-weight: 500; color: var(--neutral-700); cursor: pointer; transition: all 0.15s; }
+.sort-btn-trigger:hover { background: var(--neutral-100); border-color: var(--brand-300); }
+.sort-dropdown { display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; min-width: 180px; background: white; border: 1px solid var(--neutral-200); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.12); z-index: 100; padding: 6px; }
+[data-theme="dark"] .sort-dropdown { background: var(--neutral-800); border-color: var(--neutral-700); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+.sort-dropdown.open { display: block; }
+.sort-dropdown .sort-btn { display: block; width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; border-radius: 6px; font-size: 13px; color: var(--neutral-700); cursor: pointer; }
+.sort-dropdown .sort-btn:hover { background: var(--neutral-100); }
+.sort-dropdown .sort-btn.active { background: var(--brand-50); color: var(--brand-700); font-weight: 600; }
+[data-theme="dark"] .sort-dropdown .sort-btn:hover { background: var(--neutral-700); }
+[data-theme="dark"] .sort-dropdown .sort-btn.active { background: var(--brand-900); color: var(--brand-300); }
 /* === Stats Row === */
 .stats-row {
   display: flex;
@@ -636,14 +647,19 @@ function toggleMobileMenu() {
       <span class="results-count" id="resultsCount"></span>
     </div>
         <!-- Sort Controls -->
-    <div class="sort-controls">
-      <span class="sort-label">Sort by:</span>
-      <button class="sort-btn active" data-sort="newest" onclick="setSort('newest')">Newest</button>
-      <button class="sort-btn" data-sort="oldest" onclick="setSort('oldest')">Oldest</button>
-      <button class="sort-btn" data-sort="highest" onclick="setSort('highest')">Highest</button>
-      <button class="sort-btn" data-sort="lowest" onclick="setSort('lowest')">Lowest</button>
-      <button class="sort-btn" data-sort="booked" onclick="setSort('booked')">Booked</button>
-      <button class="sort-btn" data-sort="alpha" onclick="setSort('alpha')">A-Z</button>
+    <div class="sort-btn-wrapper">
+      <button class="sort-btn-trigger" id="sortToggleBtn" onclick="toggleSortDropdown()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+        Sort: <span id="sortLabel">Newest</span>
+      </button>
+      <div class="sort-dropdown" id="sortDropdown">
+        <button class="sort-btn active" data-sort="newest" onclick="setSort('newest')">Newest</button>
+        <button class="sort-btn" data-sort="oldest" onclick="setSort('oldest')">Oldest</button>
+        <button class="sort-btn" data-sort="highest" onclick="setSort('highest')">Highest</button>
+        <button class="sort-btn" data-sort="lowest" onclick="setSort('lowest')">Lowest</button>
+        <button class="sort-btn" data-sort="booked" onclick="setSort('booked')">Booked</button>
+        <button class="sort-btn" data-sort="alpha" onclick="setSort('alpha')">A-Z</button>
+      </div>
     </div>
 <!-- Call List -->
     <div id="callHistoryList" style="padding:0 12px;"><div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><h3>No communications yet</h3><p>Connect your phone number to start receiving calls.</p></div></div>
@@ -723,9 +739,13 @@ function closeFilterDropdown() {
 }
 // Close dropdown on click outside
 document.addEventListener('click', function(e) {
-  const wrapper = document.querySelector('.filter-btn-wrapper');
+  var wrapper = document.querySelector('.filter-btn-wrapper');
   if (wrapper && !wrapper.contains(e.target)) {
     closeFilterDropdown();
+  }
+  var sortWrapper = document.querySelector('.sort-btn-wrapper');
+  if (sortWrapper && !sortWrapper.contains(e.target)) {
+    closeSortDropdown();
   }
 });
 
@@ -891,10 +911,20 @@ var allCalls = (typeof AppStore !== 'undefined' && AppStore.getLeads) ? AppStore
 var curSort = 'newest';
 function setSort(sort) {
   curSort = sort;
-  document.querySelectorAll('.sort-btn').forEach(function(b) {
+  document.querySelectorAll('.sort-dropdown .sort-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.sort === sort);
   });
+  var label = document.getElementById('sortLabel');
+  var activeBtn = document.querySelector('.sort-dropdown .sort-btn.active');
+  if (label && activeBtn) label.textContent = activeBtn.textContent;
+  closeSortDropdown();
   renderCalls();
+}
+function toggleSortDropdown() {
+  document.getElementById('sortDropdown').classList.toggle('open');
+}
+function closeSortDropdown() {
+  document.getElementById('sortDropdown').classList.remove('open');
 }
 function getAllCalls() {
   try {

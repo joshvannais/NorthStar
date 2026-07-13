@@ -92,9 +92,18 @@ window.CustomerDrawer = (function() {
       analysis = PolarisEngine.analyzeLead(lead);
     }
     if (analysis && analysis.insight) {
-      polarisEl.textContent = analysis.insight;
+      var confLabel = analysis.confidence >= 80 ? 'High' : analysis.confidence >= 50 ? 'Medium' : 'Low';
+      var confClass = confLabel.toLowerCase();
+      var price = Math.round(analysis.estimatedPrice || 0).toLocaleString();
+      polarisEl.innerHTML = '<div class="drawer-polaris-grid">' +
+        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Summary</div><div class="drawer-polaris-item-value">' + analysis.insight + '</div></div>' +
+        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Pricing Recommendation</div><div class="drawer-polaris-item-value">$' + price + '</div></div>' +
+        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Confidence Score</div><div class="drawer-polaris-item-value"><span class="polaris-confidence ' + confClass + '">' + confLabel + ' (' + analysis.confidence + '%)</span></div></div>' +
+        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Revenue Opportunity</div><div class="drawer-polaris-item-value">$' + price + ' \u2014 ' + (analysis.service || 'Service') + '</div></div>' +
+        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Recommendation</div><div class="drawer-polaris-item-value">' + (analysis.upsell || 'Standard service') + '</div></div>' +
+        '</div>';
     } else {
-      polarisEl.textContent = generatePolarisInsight(lead);
+      polarisEl.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">' + generatePolarisInsight(lead) + '</p>';
     }
 
     // Pricing Breakdown

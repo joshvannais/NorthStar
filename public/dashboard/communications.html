@@ -984,6 +984,10 @@ function applyFilters(calls) {
 
     // === Polaris Revenue Intelligence Card ===
         function renderPolarisCard(leads) {
+      console.log('[DEBUG] renderPolarisCard called with', leads ? leads.length : 0, 'leads');
+      if (leads && leads.length > 0) {
+        console.log('[DEBUG] first lead:', leads[0].caller, 'polarisAnalysis:', leads[0].polarisAnalysis ? 'present' : 'null');
+      }
       PolarisEngine.renderPolarisCard(leads);
     }// Global reference to the current filtered/sorted view for the CustomerDrawer click handler
 var currentFilteredCalls = [];

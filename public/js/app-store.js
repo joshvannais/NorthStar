@@ -112,9 +112,73 @@ window.AppStore = (function() {
     } catch(e) {}
   }
 
-  // Initialize
-  loadFromSession();
+  // --- Backend Sync ---
+  var syncInProgress = false;
+
+  async function loadFromServer() {
+    if (syncInProgress) return;
+    syncInProgress = true;
+    try {
+      if (typeof API !== 'undefined' && API.getLeads) {
+        const result = await API.getLeads();
+        if (result && Array.isArray(result.items)) {
+          state.leads = result.items;
+          bus.emit('store:loaded', { from: 'server', count: result.items.length });
+        }
+      }
+    } catch(e) {
+      // Backend not available — use session data
+      loadFromSession();
+    }
+    syncInProgress = false;
+  }
+
+  function wrapWithBackend(fn, apiCall) {
+    return function() {
+      var result = fn.apply(this, arguments);
+      if (typeof API !== 'undefined' && apiCall) {
+        try {
+          apiCall(result);
+        } catch(e) {
+          // Backend sync failed — data still in local state
+        }
+      }
+      return result;
+    };
+  }
+
+  // Override addLead to sync to backend
+  var _origAddLead = addLead;
+  addLead = function(leadData) {
+    var lead = _origAddLead(leadData);
+    if (typeof API !== 'undefined' && API.createLead) {
+      API.createLead(leadData).catch(function() {});
+    }
+    return lead;
+  };
+
+  var _origUpdateLead = updateLead;
+  updateLead = function(id, updates) {
+    var result = _origUpdateLead(id, updates);
+    if (typeof API !== 'undefined' && API.updateLead) {
+      API.updateLead(id, updates).catch(function() {});
+    }
+    return result;
+  };
+
+  var _origRemoveLead = removeLead;
+  removeLead = function(id) {
+    var result = _origRemoveLead(id);
+    if (typeof API !== 'undefined' && API.deleteLead) {
+      API.deleteLead(id).catch(function() {});
+    }
+    return result;
+  };
+
+  // Initialize — try server first, fall back to session
+  loadFromServer();
+
   bus.on('lead:created', () => { /* trigger recalculations */ });
 
-  return { addLead, updateLead, removeLead, getLeads, getLead, getKpis, setSetting, getSetting, setUi, getUi, getState: () => state, loadFromSession, saveToSession };
+  return { addLead, updateLead, removeLead, getLeads, getLead, getKpis, setSetting, getSetting, setUi, getUi, getState: () => state, loadFromSession, saveToSession, loadFromServer };
 })();

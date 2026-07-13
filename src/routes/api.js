@@ -83,6 +83,42 @@ router.get('/leads/:id', (req, res) => {
 });
 
 /**
+ * POST /api/leads
+ * Create a new lead.
+ */
+router.post('/leads', (req, res) => {
+  const { addLead } = require('../leads/store');
+  const lead = addLead(req.body);
+  res.json({ success: true, lead });
+});
+
+/**
+ * PUT /api/leads/:id
+ * Update an existing lead.
+ */
+router.put('/leads/:id', (req, res) => {
+  const { updateLead } = require('../leads/store');
+  const updated = updateLead(req.params.id, req.body);
+  if (!updated) {
+    return res.status(404).json({ error: 'Lead not found' });
+  }
+  res.json({ success: true, lead: updated });
+});
+
+/**
+ * DELETE /api/leads/:id
+ * Delete a lead.
+ */
+router.delete('/leads/:id', (req, res) => {
+  const { removeLead } = require('../leads/store');
+  const removed = removeLead(req.params.id);
+  if (!removed) {
+    return res.status(404).json({ error: 'Lead not found' });
+  }
+  res.json({ success: true });
+});
+
+/**
  * POST /api/retell/webhook
  * Receive call events from Retell AI.
  */

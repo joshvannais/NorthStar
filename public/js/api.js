@@ -3,8 +3,17 @@
  * Handles all communication with the backend API.
  */
 
+// Detect backend URL — same origin in production, port 3001 in dev
+const API_BASE = (function() {
+  // If running on port 3000 (static server), use port 3001 for API
+  if (window.location.port === '3000' || window.location.port === '') {
+    return 'http://localhost:3001/api';
+  }
+  return '/api';
+})();
+
 const API = {
-  base: '/api',
+  base: API_BASE,
 
   async request(method, path, body) {
     const headers = { 'Content-Type': 'application/json' };
@@ -24,9 +33,14 @@ const API = {
 
   get(path) { return this.request('GET', path); },
   post(path, body) { return this.request('POST', path, body); },
+  put(path, body) { return this.request('PUT', path, body); },
+  del(path) { return this.request('DELETE', path); },
 
   async getLeads() { return this.get('/leads'); },
   async getLead(id) { return this.get(`/leads/${id}`); },
+  async createLead(data) { return this.post('/leads', data); },
+  async updateLead(id, data) { return this.put(`/leads/${id}`, data); },
+  async deleteLead(id) { return this.del(`/leads/${id}`); },
   async simulateLead(data) { return this.post('/leads/simulate', data); },
   async health() { return this.get('/health'); },
 };

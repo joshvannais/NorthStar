@@ -1061,6 +1061,7 @@ function renderCalls() {
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
   upStats();
+  renderPolarisCard(allCalls);
   console.log('[DEBUG renderCalls] EXIT - rendered', f.length, 'call cards');
 }
 function setSearch(q) {

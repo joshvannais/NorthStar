@@ -91,10 +91,142 @@ window.CustomerDrawer = (function() {
     if (!analysis && typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
       analysis = PolarisEngine.analyzeLead(lead);
     }
-    if (analysis && analysis.insight) {
-      polarisEl.textContent = analysis.insight;
+            if (analysis && analysis.insight) {
+      var confLabel = analysis.confidence >= 80 ? 'High' : analysis.confidence >= 50 ? 'Medium' : 'Low';
+      var confClass = confLabel.toLowerCase();
+      polarisEl.innerHTML =
+        '<div class="drawer-polaris-grid">' +
+          '<div class="drawer-polaris-item">' +
+            '<div class="drawer-polaris-item-label">Summary</div>' +
+            '<div class="drawer-polaris-item-value">' + analysis.insight + '</div>' +
+          '</div>' +
+          '<div class="drawer-polaris-item">' +
+            '<div class="drawer-polaris-item-label">Pricing Recommendation</div>' +
+            '<div class="drawer-polaris-item-value">$' + Math.round(analysis.estimatedPrice || 0).toLocaleString() + '</div>' +
+          '</div>' +
+          '<div class="drawer-polaris-item">' +
+            '<div class="drawer-polaris-item-label">Confidence Score</div>' +
+            '<div class="drawer-polaris-item-value"><span class="polaris-confidence ' + confClass + '">' + confLabel + ' (' + analysis.confidence + '%)</span></div>' +
+          '</div>' +
+          '<div class="drawer-polaris-item">' +
+            '<div class="drawer-polaris-item-label">Revenue Opportunity</div>' +
+            '<div class="drawer-polaris-item-value">$' + Math.round(analysis.estimatedPrice || 0).toLocaleString() + ' \u2014 ' + (analysis.service || 'Service') + '</div>' +
+          '</div>' +
+          '<div class="drawer-polaris-item">' +
+            '<div class="drawer-polaris-item-label">Recommendation</div>' +
+            '<div class="drawer-polaris-item-value">' + (analysis.upsell || 'Standard service') + '</div>' +
+          '</div>' +
+        '</div>';
     } else {
-      polarisEl.textContent = generatePolarisInsight(lead);
+      polarisEl.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">' + generatePolarisInsight(lead) + '</p>';
+    }
+        // Pricing Breakdown
+    var pbDiv = el('drawerPricingBreakdown');
+    if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
+      var pbHtml = '';
+      var pbTotal = 0;
+      lead.pricingBreakdown.forEach(function(item) {
+        pbTotal += item.a || 0;
+        pbHtml += '<div class="drawer-pricing-item"><span>' + (item.l || 'Item') + '</span><span>$' + Math.round(item.a || 0).toLocaleString() + '</span></div>';
+      });
+      pbHtml += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>$' + Math.round(pbTotal).toLocaleString() + '</strong></span></div>';
+      pbDiv.innerHTML = pbHtml;
+    } else {
+      pbDiv.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">Est. value: $' + Math.round(lead.avgPrice || 0).toLocaleString() + '</p>';
+    }
+
+    // Call Transcript
+    var transcriptEl = el('drawerTranscript');
+    transcriptEl.innerHTML = formatTranscript(lead.transcript, lead.caller || lead.customerName);
+    transcriptEl.scrollTop = 0;
+
+    // Open the drawer
+    el('drawerOverlay').classList.add('open');
+    el('customerDrawer').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function close() {
+    var overlay = document.getElementById('drawerOverlay');
+    var drawer = document.getElementById('customerDrawer');
+    if (overlay) overlay.classList.remove('open');
+    if (drawer) drawer.classList.remove('open');
+    document.body.style.overflow = '';
+    currentLead = null;
+  }
+
+  // Close on Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') close();
+  });
+
+  return {
+    open: open,
+    close: close
+  };
+})(); + Math.round(analysis.estimatedPrice || 0).toLocaleString() + '</div>' +
+          '</div>' +
+          '<div class="drawer-polaris-item">' +
+            '<div class="drawer-polaris-item-label">Confidence Score</div>' +
+            '<div class="drawer-polaris-item-value"><span class="polaris-confidence ' + confClass + '">' + confLabel + ' (' + analysis.confidence + '%)</span></div>' +
+          '</div>' +
+          '<div class="drawer-polaris-item">' +
+            '<div class="drawer-polaris-item-label">Revenue Opportunity</div>' +
+            '<div class="drawer-polaris-item-value">
+
+    // Pricing Breakdown
+    var pbDiv = el('drawerPricingBreakdown');
+    if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
+      var pbHtml = '';
+      var pbTotal = 0;
+      lead.pricingBreakdown.forEach(function(item) {
+        pbTotal += item.a || 0;
+        pbHtml += '<div class="drawer-pricing-item"><span>' + (item.l || 'Item') + '</span><span>$' + Math.round(item.a || 0).toLocaleString() + '</span></div>';
+      });
+      pbHtml += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>$' + Math.round(pbTotal).toLocaleString() + '</strong></span></div>';
+      pbDiv.innerHTML = pbHtml;
+    } else {
+      pbDiv.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">Est. value: $' + Math.round(lead.avgPrice || 0).toLocaleString() + '</p>';
+    }
+
+    // Call Transcript
+    var transcriptEl = el('drawerTranscript');
+    transcriptEl.innerHTML = formatTranscript(lead.transcript, lead.caller || lead.customerName);
+    transcriptEl.scrollTop = 0;
+
+    // Open the drawer
+    el('drawerOverlay').classList.add('open');
+    el('customerDrawer').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function close() {
+    var overlay = document.getElementById('drawerOverlay');
+    var drawer = document.getElementById('customerDrawer');
+    if (overlay) overlay.classList.remove('open');
+    if (drawer) drawer.classList.remove('open');
+    document.body.style.overflow = '';
+    currentLead = null;
+  }
+
+  // Close on Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') close();
+  });
+
+  return {
+    open: open,
+    close: close
+  };
+})(); + Math.round(analysis.estimatedPrice || 0).toLocaleString() + ' — ' + (analysis.service || 'Service') + '</div>' +
+          '</div>' +
+          '<div class="drawer-polaris-item">' +
+            '<div class="drawer-polaris-item-label">Recommendation</div>' +
+            '<div class="drawer-polaris-item-value">' + (analysis.upsell || 'Standard service') + '</div>' +
+          '</div>' +
+        '</div>';
+    } else {
+      polarisEl.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">' + generatePolarisInsight(lead) + '</p>';
     }
 
     // Pricing Breakdown

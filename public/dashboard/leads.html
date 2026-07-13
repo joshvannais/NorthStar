@@ -388,53 +388,9 @@ function toggleMobileMenu() {
     }
 
     // === Polaris Revenue Intelligence Card ===
-    function renderPolarisCard(leads) {
-      if (leads.length === 0) {
-        document.getElementById('polarisTopOpp').textContent = '-';
-        document.getElementById('polarisTopOppDesc').textContent = 'Add leads to see opportunities';
-        document.getElementById('polarisPipeline').textContent = '$0';
-        document.getElementById('polarisPipeConf').textContent = 'N/A';
-        document.getElementById('polarisPipeConf').className = 'polaris-confidence low';
-        document.getElementById('polarisFocus').textContent = '-';
-        document.getElementById('polarisFocusDesc').textContent = 'Add leads to see recommendations';
-        return;
-      }
-
-      // Top opportunity = highest priced lead
-      const sorted = [...leads].sort((a, b) => (b.avgPrice || 0) - (a.avgPrice || 0));
-      const top = sorted[0];
-      document.getElementById('polarisTopOpp').textContent = top.caller || '-';
-      const topJob = top.jobDetail || top.service || '-';
-      document.getElementById('polarisTopOppDesc').textContent = '$' + Math.round(top.avgPrice || 0).toLocaleString() + ' - ' + (typeof top.service === 'string' ? top.service : 'Service');
-      const topConfidence = (top.avgPrice || 0) > 2000 ? 'High' : (top.avgPrice || 0) > 500 ? 'Medium' : 'Low';
-      const topConfClass = topConfidence.toLowerCase();
-      document.getElementById('polarisTopConf').textContent = topConfidence;
-      document.getElementById('polarisTopConf').className = 'polaris-confidence ' + topConfClass;
-
-      // Pipeline = sum of all qualified lead values
-      const pipeline = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
-      document.getElementById('polarisPipeline').textContent = '$' + Math.round(pipeline).toLocaleString();
-      const pipeConf = leads.length > 5 ? 'High' : leads.length > 2 ? 'Medium' : 'Low';
-      document.getElementById('polarisPipeConf').textContent = pipeConf;
-      document.getElementById('polarisPipeConf').className = 'polaris-confidence ' + pipeConf.toLowerCase();
-
-      // Recommended focus = highest frequency service
-      const svcCounts = {};
-      leads.forEach(l => {
-        const svc = l.service || 'Other';
-        svcCounts[svc] = (svcCounts[svc] || 0) + 1;
-      });
-      let topSvc = '-', topSvcCount = 0;
-      for (const [svc, count] of Object.entries(svcCounts)) {
-        if (count > topSvcCount) { topSvc = svc; topSvcCount = count; }
-      }
-      document.getElementById('polarisFocus').textContent = topSvc;
-      document.getElementById('polarisFocusDesc').textContent = topSvcCount + ' lead' + (topSvcCount !== 1 ? 's' : '') + ' - highest volume service';
-      document.getElementById('polarisFocusConf').textContent = topSvcCount > 3 ? 'High' : topSvcCount > 1 ? 'Medium' : 'Low';
-      document.getElementById('polarisFocusConf').className = 'polaris-confidence ' + (topSvcCount > 3 ? 'high' : topSvcCount > 1 ? 'medium' : 'low');
-    }
-
-    // === Customer Detail Drawer ===
+        function renderPolarisCard(leads) {
+      PolarisEngine.renderPolarisCard(leads);
+    }    // === Customer Detail Drawer ===
     
 
     

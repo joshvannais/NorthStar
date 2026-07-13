@@ -958,7 +958,6 @@ function genTranscript(svc,s,name,phone,num,sn,st){
       }
     }
     function genCall(){
-      console.log('[DEBUG simulator] genCall() ENTERED');
       const svc=services[Math.floor(Math.random()*services.length)];
       const s=svc.scenarios[Math.floor(Math.random()*svc.scenarios.length)];
       const price=calcPrice(svc,s);
@@ -985,7 +984,6 @@ function genTranscript(svc,s,name,phone,num,sn,st){
       const weights=[0.4,0.3,0.2,0.1];
       let rr=Math.random(),outcome=outcomes[0];
       for(let i=0;i<weights.length;i++){rr-=weights[i];if(rr<=0){outcome=outcomes[i];break;}}
-      console.log('[DEBUG simulator] genCall() returning call for:', name);
       return{
         caller:name,phone:phone,
         address:num+" "+sn+" "+st,service:svc.name,icon:svc.icon,
@@ -1020,9 +1018,7 @@ function isThisWeek(d){const t=new Date();const w=t.getTime()-t.getDay()*8640000
 (function () {
   var originalGenCall = genCall;
   function routedGenCall() {
-    console.log('[DEBUG simulator] routedGenCall() ENTERED');
     var call = originalGenCall();
-    console.log('[DEBUG simulator] originalGenCall() returned:', call ? call.caller : 'NULL');
     try {
       if (window.AppStore && typeof window.AppStore.addLead === 'function') {
         var storedLead = window.AppStore.addLead(call);

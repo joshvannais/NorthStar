@@ -404,15 +404,14 @@ function toggleMobileMenu() {
       renderPolarisCard(leads);
     }
 
-    // === 6 Executive KPI Cards ===
+    // === 6 Executive KPI Cards (via shared AnalyticsEngine) ===
     function renderKpiCards(leads) {
-      const total = leads.length;
-      const qualified = leads.filter(l => l.status === 'scheduled' || l.status === 'contacted' || l.status === 'new').length;
-      const won = leads.filter(l => l.status === 'completed' || l.outcome === 'appointment-set').length;
-      const totalRevenue = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
-      const conversionRate = qualified > 0 ? Math.round((won / qualified) * 100) : 0;
-      const avgValue = total > 0 ? Math.round(totalRevenue / total) : 0;
-      const qualifiedScheduled = leads.filter(l => l.status === 'scheduled').length;
+      const total = AnalyticsEngine.total();
+      const qualified = AnalyticsEngine.qualified();
+      const won = AnalyticsEngine.won();
+      const totalRevenue = AnalyticsEngine.totalRevenue();
+      const conversionRate = AnalyticsEngine.conversionRateNumeric();
+      const avgValue = AnalyticsEngine.avgJobValue();
 
       document.getElementById('kpiTotalLeads').textContent = total;
       document.getElementById('kpiTotalLeadChange').textContent = total > 0 ? total + ' total leads' : 'All time';

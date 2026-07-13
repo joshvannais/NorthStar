@@ -552,7 +552,6 @@ function toggleMobileMenu() {
 
     // Dashboard data (live reference to AppStore)
     function getLiveLeads() { return AppStore.getLeads(); }
-    function getLiveKpis() { return AppStore.getKpis(); }
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
     // Auto-refresh dashboard when store changes
     EventBus.on('store:changed', function() { try { loadDashboard(); } catch(e) { console.warn('store:changed refresh skipped:', e.message); } });
@@ -664,13 +663,10 @@ function toggleMobileMenu() {
 
     function loadKpiGrid() {
       const grid = document.getElementById('kpiGrid');
-      const total = getLiveLeads().length;
-      const today = getLiveLeads().length; // All calls are "today" in demo mode
-      const scheduled = getLiveLeads().filter(c => c.status === 'scheduled').length;
-      const revenue = getLiveLeads().reduce((s,c) => s + (c.avgPrice||0), 0);
-      const avgValue = total > 0 ? Math.round(revenue / total) : 0;
+      const total = AnalyticsEngine.total();
+      const today = AnalyticsEngine.todayCalls();
+      const avgValue = AnalyticsEngine.avgJobValue();
 
-      // For demo, treat all as "starter" tier
       let html = '';
       kpiDefinitions.forEach(kpi => {
         let value = '—';
@@ -678,13 +674,13 @@ function toggleMobileMenu() {
         switch(kpi.id) {
           case 'today_calls': value = today; trend = today > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
           case 'new_leads': value = total; trend = total > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
-          case 'appointments': value = getLiveLeads().filter(c => c.outcome === 'appointment-set').length; trend = ''; break;
-          case 'lead_conversion': value = total > 0 ? Math.round((getLiveLeads().filter(c => c.outcome === 'appointment-set' || c.status === 'completed').length/total)*100)+'%' : '—'; break;
+          case 'appointments': value = AnalyticsEngine.appointments(); trend = ''; break;
+          case 'lead_conversion': value = AnalyticsEngine.conversionRate(); break;
           case 'avg_job_value': value = avgValue > 0 ? '$'+avgValue.toLocaleString() : '—'; break;
-          case 'avg_call_length': value = total > 0 ? '3:24' : '—'; break;
-          case 'missed_calls': value = getLiveLeads().filter(c => c.status === 'voicemail' || c.outcome === 'voicemail').length; trend = '0'; break;
-          case 'avg_response_time': value = total > 0 ? '2:30' : '—'; break;
-          case 'ai_transfer_rate': value = total > 0 ? Math.round((getLiveLeads().filter(c => c.status === 'answered').length/total)*100)+'%' : '—'; break;
+          case 'avg_call_length': value = AnalyticsEngine.avgCallLength(); break;
+          case 'missed_calls': value = AnalyticsEngine.missedCalls(); trend = '0'; break;
+          case 'avg_response_time': value = AnalyticsEngine.avgResponseTime(); break;
+          case 'ai_transfer_rate': value = total > 0 ? Math.round((AnalyticsEngine.qualified()/total)*100)+'%' : '—'; break;
         }
         html += `<div class="ds-kpi-card" onclick="window.location.href=(kpi.link || '#')">
           <div class="ds-kpi-icon" style="background:var(--kpi-${kpi.id}-bg,var(--neutral-50));color:var(--kpi-${kpi.id}-color,var(--neutral-500));">

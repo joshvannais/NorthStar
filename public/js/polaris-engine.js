@@ -81,7 +81,7 @@ window.PolarisEngine = (function() {
         count++;
       }
     }
-    if (count > 0) console.log('[Polaris] Analyzed ' + count + ' leads without persisted analysis');
+    // debug log removed for production
   }
 
   /**

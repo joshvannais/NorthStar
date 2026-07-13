@@ -228,6 +228,10 @@ function toggleMobileMenu() {
           <h1>All Leads</h1>
           <p>Every lead captured by your AI Office Manager.</p>
         </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('importCsvInput').click()" id="leadsImportBtn">📥 Import CSV</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportLeadsCSV()" id="leadsExportBtn">📤 Export CSV</button>
+        </div>
         </div>
       
 
@@ -325,7 +329,20 @@ function toggleMobileMenu() {
   </div>
 
   <!-- Drawer overlay -->
-  <div class="drawer-overlay" id="drawerOverlay" onclick="CustomerDrawer.close()"></div>
+  
+    <input type="file" id="importCsvInput" accept=".csv" style="display:none;" onchange="handleImportCSV(event)">
+    <div id="importModal" class="drawer-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;" onclick="if(event.target===this)closeImportModal()">
+      <div style="background:var(--neutral-50);border-radius:var(--radius);padding:24px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);" onclick="event.stopPropagation()">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h3 style="font-size:16px;font-weight:600;margin:0;">Import Leads</h3>
+          <button class="btn btn-secondary btn-sm" onclick="closeImportModal()" style="padding:2px 8px;">x</button>
+        </div>
+        <div id="importResult" style="margin-bottom:12px;font-size:14px;"></div>
+        <div id="importProgress" style="display:none;font-size:14px;color:var(--neutral-500);">⏳ Importing...</div>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('importCsvInput').click()" style="width:100%;justify-content:center;">Choose File</button>
+      </div>
+    </div>
+    <div class="drawer-overlay" id="drawerOverlay" onclick="CustomerDrawer.close()"></div>
 
   <!-- Customer Detail Drawer -->
   <div class="customer-drawer" id="customerDrawer">

@@ -5,6 +5,7 @@
 const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
 const { handleWebhook } = require('../retell/webhook');
+const customersRouter = require('./customers');
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
 const jobber = require('../integrations/jobber');
@@ -71,6 +72,30 @@ router.get('/leads', (req, res) => {
 });
 
 /**
+ * GET /api/leads/export
+ * Export all leads as CSV.
+ */
+router.get('/leads/export', (req, res) => {
+  const { getAllLeads } = require('../leads/store');
+  const leads = getAllLeads();
+  const fields = ['id','caller','customerName','phone','phoneNumber','service','serviceRequested','status','avgPrice','address','jobAddress','receivedAt','updatedAt','duration','outcome','summary','transcript'];
+  const header = fields.join(',');
+  const rows = leads.map(function(l) {
+    return fields.map(function(f) {
+      var val = l[f] !== undefined && l[f] !== null ? String(l[f]) : '';
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        val = '"' + val.replace(/"/g, '""') + '"';
+      }
+      return val;
+    }).join(',');
+  });
+  var csv = '\ufeff' + header + '\n' + rows.join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename=leads-export-' + new Date().toISOString().slice(0,10) + '.csv');
+  res.send(csv);
+});
+
+/**
  * GET /api/leads/:id
  * Return a single lead by ID.
  */
@@ -116,6 +141,60 @@ router.delete('/leads/:id', (req, res) => {
     return res.status(404).json({ error: 'Lead not found' });
   }
   res.json({ success: true });
+});
+
+/**
+ * POST /api/leads/import
+ * Import leads from CSV file upload.
+ */
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+router.post('/leads/import', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const { addLead } = require('../leads/store');
+    var csv = req.file.buffer.toString('utf8');
+    if (csv.charCodeAt(0) === 0xFEFF) csv = csv.slice(1);
+    var lines = csv.split('\n').filter(function(l) { return l.trim(); });
+    if (lines.length < 2) return res.status(400).json({ error: 'CSV must have a header row and at least one data row' });
+    var headers = lines[0].split(',').map(function(h) { return h.trim().replace(/^"(.*)"$/, '$1'); });
+    var imported = 0, errors = [], skipped = 0;
+    for (var i = 1; i < lines.length; i++) {
+      try {
+        var vals = [], current = '', inQuotes = false;
+        for (var c = 0; c < lines[i].length; c++) {
+          var ch = lines[i][c];
+          if (ch === '"') {
+            if (inQuotes && c + 1 < lines[i].length && lines[i][c+1] === '"') {
+              current += '"'; c++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (ch === ',' && !inQuotes) {
+            vals.push(current.trim()); current = '';
+          } else {
+            current += ch;
+          }
+        }
+        vals.push(current.trim());
+        var lead = {};
+        for (var j = 0; j < headers.length && j < vals.length; j++) {
+          if (vals[j]) lead[headers[j]] = vals[j];
+        }
+        if (lead.caller || lead.customerName || lead.phone || lead.phoneNumber) {
+          addLead(lead);
+          imported++;
+        } else {
+          skipped++;
+        }
+      } catch(e) {
+        errors.push({ row: i + 1, error: e.message });
+      }
+    }
+    res.json({ success: true, imported: imported, skipped: skipped, errors: errors.length > 0 ? errors : undefined });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /**

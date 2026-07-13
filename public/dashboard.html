@@ -529,6 +529,7 @@ function toggleMobileMenu() {
   <script src="/js/customer-drawer.js"></script>
   <script src="/js/status-pill.js"></script>
   <script src="/js/customer-card.js"></script>
+  <script src="/js/analytics-engine.js"></script>
   <script src="/js/theme.js"></script>
   <script>
     // ═══════════════════════════════════════════════════════════════
@@ -737,15 +738,15 @@ function toggleMobileMenu() {
         ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neutral-50') || '#f8fafc';
         ctx.fillRect(0, 0, w, 280);
 
-        // Generate demo data points
-        const points = 12;
-        const data = [];
-        for (let i = 0; i < points; i++) {
-          data.push(Math.round(1000 + Math.random() * 8000));
-        }
+        // Generate data points from actual revenue history
+        const trends = AnalyticsEngine.revenueTrends();
+        const data = trends.length > 0 ? trends.map(function(t) { return t.revenue; }) : [0];
+        // Pad to at least 2 points for display
+        while (data.length < 2) data.push(0);
 
-        const maxVal = Math.max(...data) * 1.1;
-        const minVal = Math.min(...data) * 0.9;
+        const points = data.length;
+        const maxVal = Math.max.apply(null, data) * 1.1 || 1000;
+        const minVal = Math.min.apply(null, data) * 0.9 || 0;
 
         // Grid lines
         ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neutral-200') || '#e2e8f0';

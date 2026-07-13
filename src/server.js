@@ -60,6 +60,7 @@ const pages = {
   '/dashboard/my-number': 'public/dashboard/my-number.html',
   '/dashboard/settings': 'public/dashboard/settings.html',
   '/dashboard/integrations': 'public/dashboard/integrations.html',
+  '/dashboard/lead': 'public/dashboard/lead.html',
   '/contact': 'public/contact.html',
   '/privacy': 'public/privacy.html',
   '/terms': 'public/terms.html',

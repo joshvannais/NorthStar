@@ -123,6 +123,16 @@ window.CustomerDrawer = (function() {
       polarisEl.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">' + generatePolarisInsight(lead) + '</p>';
     }
 
+    // Generate Polaris estimate
+    if (typeof PolarisEngine !== 'undefined' && PolarisEngine.generateEstimate && lead && lead.id) {
+      if (!lead.polarisEstimate) {
+        try { PolarisEngine.generateEstimate(lead); } catch(e) {}
+      }
+      if (lead.polarisEstimate) {
+        renderDrawerEstimate(lead.polarisEstimate);
+      }
+    }
+
     // Pricing Breakdown
     var pbDiv = el('drawerPricingBreakdown');
     if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
@@ -147,6 +157,24 @@ window.CustomerDrawer = (function() {
     el('drawerOverlay').classList.add('open');
     el('customerDrawer').classList.add('open');
     document.body.style.overflow = 'hidden';
+  }
+
+  function renderDrawerEstimate(estimate) {
+    var panelEl = document.getElementById('drawerEstimatePanel');
+    if (!panelEl) return;
+    if (!estimate || !estimate.items) {
+      panelEl.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">Add more lead details for a detailed estimate.</p>';
+      return;
+    }
+    var itemRows = estimate.items.map(function(item) {
+      var tl = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+      return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--neutral-100);font-size:12px;"><span>' + tl + '</span><span>$' + item.amount.toFixed(2) + '</span></div>';
+    }).join('');
+    var totalRow = '<div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:4px;border-top:2px solid var(--neutral-300);font-size:15px;font-weight:700;"><span>Total</span><span style="color:var(--brand-600);">$' + estimate.total.toFixed(2) + '</span></div>';
+    var confClass = (estimate.confidenceLabel || 'low').toLowerCase();
+    var badgeStyle = confClass === 'high' ? 'background:#dcfce7;color:#166534;' : confClass === 'medium' ? 'background:#fef3c7;color:#92400e;' : 'background:#fee2e2;color:#991b1b;';
+    panelEl.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-size:13px;font-weight:500;">' + estimate.service + '</span><span style="font-size:10px;padding:1px 6px;border-radius:3px;' + badgeStyle + '">' + estimate.confidenceLabel + ' ' + estimate.confidence + '%</span></div>' + itemRows + totalRow;
+    panelEl.parentElement.style.display = '';
   }
 
   function close() {

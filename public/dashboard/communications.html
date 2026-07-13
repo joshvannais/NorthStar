@@ -672,6 +672,7 @@ function toggleMobileMenu() {
   <script src="/js/customer-drawer.js"></script>
   <script src="/js/status-pill.js"></script>
   <script src="/js/customer-card.js"></script>
+  <script src="/js/analytics-engine.js"></script>
 <script src="/js/simulator.js"></script>
 <script src="/js/api.js"></script>
 
@@ -1078,21 +1079,19 @@ function upStats() {
 function loadKpiGrid() {
   const grid = document.getElementById('kpiGrid');
   if (!grid) return;
-  const calls = getAllCalls();
-  const total = calls.length;
-  const today = calls.length;
-  const scheduled = calls.filter(c => c.status === 'scheduled' || c.outcome === 'appointment-set').length;
-  const revenue = calls.reduce((s,c) => s + (c.avgPrice||0), 0);
-  const avgValue = total > 0 ? Math.round(revenue / total) : 0;
+  const total = AnalyticsEngine.total();
+  const today = AnalyticsEngine.todayCalls();
+  const scheduled = AnalyticsEngine.scheduled();
+  const avgValue = AnalyticsEngine.avgJobValue();
   const kpiDefinitions = [
     { id:'today_calls', icon:'📞', label:"Today's Communications", value: today, trend: today > 0 ? '<span class="ds-trend-up">↑</span>' : '' },
     { id:'new_leads', icon:'👤', label:'New Leads', value: total, trend: total > 0 ? '<span class="ds-trend-up">↑</span>' : '' },
-    { id:'appointments', icon:'📅', label:'Appointments', value: scheduled, trend: '' },
-    { id:'lead_conversion', icon:'📊', label:'Lead Conv.', value: total > 0 ? Math.round((scheduled/total)*100)+'%' : '—', trend: '' },
+    { id:'appointments', icon:'📅', label:'Appointments', value: AnalyticsEngine.appointments(), trend: '' },
+    { id:'lead_conversion', icon:'📊', label:'Lead Conv.', value: AnalyticsEngine.conversionRate(), trend: '' },
     { id:'avg_job_value', icon:'💰', label:'Avg Job Value', value: avgValue > 0 ? '$'+avgValue.toLocaleString() : '—', trend: '' },
-    { id:'missed_calls', icon:'🚫', label:'Missed Calls', value: calls.filter(c => c.status === 'voicemail' || c.outcome === 'voicemail').length, trend: '0' },
-    { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', value: total > 0 ? '2:30' : '—', trend: '' },
-    { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', value: total > 0 ? Math.round((calls.filter(c => c.status === 'answered').length/total)*100)+'%' : '—', trend: '' },
+    { id:'missed_calls', icon:'🚫', label:'Missed Calls', value: AnalyticsEngine.missedCalls(), trend: '0' },
+    { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', value: AnalyticsEngine.avgResponseTime(), trend: '' },
+    { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', value: total > 0 ? Math.round((AnalyticsEngine.qualified()/total)*100)+'%' : '—', trend: '' },
   ];
   let html = '';
   kpiDefinitions.forEach(function(kpi) {

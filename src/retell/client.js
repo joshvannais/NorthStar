@@ -110,4 +110,42 @@ async function getCall(callId) {
   return request('GET', `/get-call/${callId}`);
 }
 
-module.exports = { createAgent, buildPrompt, registerWebhook, getCall };
+
+/**
+ * Create an outbound call via Retell AI.
+ * https://docs.retellai.com/api-reference/create-phone-call
+ */
+async function createCall(phoneNumber, agentId, options) {
+  if (!agentId) {
+    console.log('[Retell] No agent ID configured - cannot create call.');
+    return null;
+  }
+  return request('POST', '/create-phone-call', {
+    agent_id: agentId,
+    from_number: options.fromNumber || (config.twilio ? config.twilio.phoneNumber : '') || '',
+    to_number: phoneNumber,
+    retell_llm_dynamic_variables: {
+      service: options.service || 'home services',
+      customer_name: options.caller || '',
+    },
+  });
+}
+
+/**
+ * Verify the Retell API key is valid by fetching account info.
+ */
+async function verifyApiKey() {
+  const result = await request('GET', '/get-agent/' + (config.retell.agentId || ''));
+  return { success: !!result, agent: result };
+}
+
+/**
+ * Send an SMS via Retell's capabilities (if supported) or fallback.
+ */
+async function sendSMS(phoneNumber, message) {
+  // Retell does not natively support SMS.
+  // This is a placeholder for future SMS integration (e.g., Twilio).
+  return { success: false, message: 'SMS not yet supported via Retell. Consider using Twilio.' };
+}
+
+module.exports = { createAgent, buildPrompt, registerWebhook, getCall, createCall, verifyApiKey, sendSMS };

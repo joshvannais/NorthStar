@@ -9,6 +9,7 @@ const customersRouter = require('./customers');
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
 const jobber = require('../integrations/jobber');
+const config = require('../config');
 
 const router = express.Router();
 
@@ -265,6 +266,70 @@ router.post('/retell/create-agent', async (req, res) => {
     scheduleUrl: req.body.scheduleUrl,
   });
   res.json(result || { error: 'Retell API not configured' });
+});
+
+/**
+ * POST /api/retell/create-call
+ * Initiate an outbound call via the active Retell AI agent.
+ */
+router.post('/retell/create-call', async (req, res) => {
+  try {
+    const { createCall } = require('../retell/client');
+    const result = await createCall(req.body.phoneNumber, config.retell.agentId, {
+      service: req.body.service,
+      caller: req.body.caller,
+      fromNumber: config.twilio ? config.twilio.phoneNumber : undefined,
+    });
+    if (!result) {
+      return res.json({ success: false, error: 'Retell API not configured', status: 'unconfigured' });
+    }
+    const { addLead } = require('../leads/store');
+    const { appendLead } = require('../sheets/client');
+    const lead = addLead({
+      caller: req.body.caller || 'Outbound Call',
+      phone: req.body.phoneNumber,
+      phoneNumber: req.body.phoneNumber,
+      service: req.body.service || 'General',
+      status: result.call_status || 'in-progress',
+      type: 'outbound',
+      outcome: 'outbound_call',
+      receivedAt: new Date().toISOString(),
+      summary: 'Outbound call via Retell AI',
+    });
+    await appendLead(lead).catch(function() {});
+    res.json({ success: true, callId: result.call_id, status: result.call_status, lead });
+  } catch (err) {
+    console.error('[API] Retell create-call error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/retell/verify
+ * Verify the Retell API key and agent configuration.
+ */
+router.post('/retell/verify', async (req, res) => {
+  try {
+    const { verifyApiKey } = require('../retell/client');
+    const result = await verifyApiKey();
+    res.json(result);
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/retell/send-sms
+ * Send an SMS via the configured provider.
+ */
+router.post('/retell/send-sms', async (req, res) => {
+  try {
+    const { sendSMS } = require('../retell/client');
+    const result = await sendSMS(req.body.phoneNumber, req.body.message);
+    res.json(result);
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
 });
 
 /**

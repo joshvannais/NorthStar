@@ -10,7 +10,7 @@ window.NotificationService = (function() {
     if (!container) {
       container = document.createElement('div');
       container.id = 'toastContainer';
-      container.style.cssText = 'position:fixed;top:28px;right:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;';
+      container.style.cssText = 'position:fixed;top:28px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:8px;align-items:center;';
       document.body.appendChild(container);
     }
     return container;
@@ -22,8 +22,7 @@ window.NotificationService = (function() {
     const container = ensureContainer();
     const toast = document.createElement('div');
     toast.className = 'toast-notification ' + type;
-    toast.innerHTML = '<span class="toast-icon">' + (icons[type] || 'ℹ️') + '</span>' +
-      '<span>' + message + '</span>' +
+    toast.innerHTML = '<span class="toast-body">' + message + '</span>' +
       '<button class="toast-close" onclick="this.parentElement.remove()">×</button>';
     container.appendChild(toast);
     setTimeout(() => {

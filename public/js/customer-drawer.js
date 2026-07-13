@@ -89,6 +89,19 @@ window.CustomerDrawer = (function() {
     el('drawerStatus').innerHTML = getStatusBadge(lead.status || 'new');
     el('drawerDate').textContent = fmtTime(lead.time || (lead.receivedAt ? lead.receivedAt : null));
 
+    // Check for existing customer profile
+    if (typeof AppStore !== 'undefined' && AppStore.getCustomer) {
+      var customer = AppStore.getCustomer(lead.id);
+      if (customer) {
+        showCustomerProfile(customer, lead);
+      } else {
+        var custSection = document.getElementById('drawerCustomerSection');
+        var convSection = document.getElementById('drawerConvertSection');
+        if (custSection) custSection.style.display = 'none';
+        if (convSection) convSection.style.display = '';
+      }
+    }
+
     // POLARIS Revenue Intelligence
     var polarisEl = el('drawerPolarisInsight');
     var analysis = lead.polarisAnalysis;
@@ -145,6 +158,32 @@ window.CustomerDrawer = (function() {
     currentLead = null;
   }
 
+  function convertToCustomer() {
+    var lead = currentLead;
+    if (!lead) return;
+    if (typeof AppStore !== 'undefined' && AppStore.convertLeadToCustomer) {
+      AppStore.convertLeadToCustomer(lead);
+      var customer = AppStore.getCustomer(lead.id);
+      if (customer) showCustomerProfile(customer, lead);
+    }
+  }
+
+  function showCustomerProfile(customer, lead) {
+    var custSection = document.getElementById('drawerCustomerSection');
+    var convSection = document.getElementById('drawerConvertSection');
+    if (!custSection || !convSection) return;
+    custSection.style.display = '';
+    convSection.style.display = 'none';
+    var statusEl = document.getElementById('drawerCustomerStatus');
+    var jobsEl = document.getElementById('drawerCustomerJobs');
+    var revenueEl = document.getElementById('drawerCustomerRevenue');
+    var notesEl = document.getElementById('drawerCustomerNotes');
+    if (statusEl) statusEl.innerHTML = '<span class="badge badge-won">' + (customer.status || 'active') + '</span>';
+    if (jobsEl) jobsEl.textContent = customer.totalJobs || 0;
+    if (revenueEl) revenueEl.textContent = '$' + ((customer.totalRevenue || 0)).toLocaleString();
+    if (notesEl) notesEl.textContent = customer.notes || 'No notes yet.';
+  }
+
   // Close on Escape key
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') close();
@@ -152,6 +191,7 @@ window.CustomerDrawer = (function() {
 
   return {
     open: open,
-    close: close
+    close: close,
+    convertToCustomer: convertToCustomer
   };
 })();

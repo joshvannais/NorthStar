@@ -1068,6 +1068,16 @@ function toggleMobileMenu() {
       <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="drawerName">-</span></div>
       <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="drawerPhone">-</span></div>
       <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="drawerAddress">-</span></div>
+    </div>    <div class="drawer-section" id="drawerCustomerSection" style="display:none;">
+      <h3>Customer Profile</h3>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerCustomerStatus"><span class="badge badge-won">Active</span></span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Jobs</span><span class="drawer-detail-value" id="drawerCustomerJobs">0</span></div>
+      <div class="drawer-detail-row"><span class="drawer-detail-label">Revenue</span><span class="drawer-detail-value" id="drawerCustomerRevenue">$0</span></div>
+      <div class="drawer-detail-row drawer-detail-row-nb"><span class="drawer-detail-label">Notes</span></div>
+      <div class="drawer-description-box" id="drawerCustomerNotes" style="font-size:13px;white-space:pre-wrap;">-</div>
+    </div>
+    <div class="drawer-section" id="drawerConvertSection">
+      <button class="btn btn-primary btn-sm" onclick="CustomerDrawer.convertToCustomer()" id="drawerConvertBtn" style="width:100%;justify-content:center;">Convert to Customer</button>
     </div>
     <div class="drawer-section">
       <h3>Job Details</h3>

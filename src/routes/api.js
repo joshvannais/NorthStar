@@ -315,4 +315,7 @@ router.get('/contact/messages', (req, res) => {
   res.json({ messages: [], count: 0 });
 });
 
+// Mount customer profile routes
+router.use('/customers', customersRouter);
+
 module.exports = router;

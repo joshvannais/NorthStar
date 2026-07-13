@@ -363,6 +363,8 @@ function toggleMobileMenu() {
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
   <script src="/js/customer-drawer.js"></script>
+  <script src="/js/status-pill.js"></script>
+  <script src="/js/customer-card.js"></script>
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
   <script>
@@ -439,31 +441,7 @@ function toggleMobileMenu() {
       </tr></thead><tbody>`;
 
       leads.slice().forEach((c, idx) => {
-        const status = c.status || 'new';
-        const svc = c.service || c.serviceRequested || '-';
-        const val = c.avgPrice ? '$' + Math.round(c.avgPrice).toLocaleString() : '-';
-        html += `<tr style="cursor:pointer;" data-lead-index="${idx}" onclick="openLeadDrawer(this)">
-          <td><strong>${c.caller || c.customerName || 'Unknown'}</strong></td>
-          <td>${c.phone || c.phoneNumber || '-'}</td>
-          <td style="text-align:center"><span class="lead-service-badge">${svc}</span></td>
-          <td><strong>${val}</strong></td>
-          <td>${fmtTime(c.time || (c.receivedAt ? c.receivedAt : null))}</td>
-          <td>${getStatusBadge(status)}</td>
-          <td class="lead-actions-cell">
-            <div class="more-menu-container">
-              <button class="more-btn" onclick="event.stopPropagation(); toggleMoreMenu(this)" title="Actions">•••</button>
-              <div class="more-dropdown">
-                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); openLeadDrawer(this.closest('tr'))">👁️ View Details</button>
-                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'contacted')">📞 Mark Contacted</button>
-                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'scheduled')">📅 Schedule</button>
-                <button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(${idx}, 'completed')">✅ Mark Completed</button>
-                <button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;" onclick="event.stopPropagation()">🔧 Assign Technician</button>
-                <button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;" onclick="event.stopPropagation()">📁 Archive</button>
-                <button class="more-dropdown-item danger" onclick="event.stopPropagation(); closeAllMenus(); removeLead(${idx})">🗑️ Delete</button>
-              </div>
-            </div>
-          </td>
-        </tr>`;
+        html += CustomerCard.render(c, {layout: "row", index: idx});
       });
 
       html += '</tbody></table>';

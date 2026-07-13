@@ -29,6 +29,10 @@ window.CustomerDrawer = (function() {
   }
 
   function getStatusBadge(status) {
+    if (typeof StatusPill !== 'undefined' && StatusPill.renderDrawer) {
+      return StatusPill.renderDrawer(status);
+    }
+    // Fallback if StatusPill not loaded
     var cls = 'badge-new';
     var label = 'New';
     if (status === 'contacted' || status === 'follow-up') { cls = 'badge-contacted'; label = 'Follow-up'; }

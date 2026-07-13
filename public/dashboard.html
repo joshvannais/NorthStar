@@ -527,6 +527,8 @@ function toggleMobileMenu() {
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/customer-drawer.js"></script>
+  <script src="/js/status-pill.js"></script>
+  <script src="/js/customer-card.js"></script>
   <script src="/js/theme.js"></script>
   <script>
     // ═══════════════════════════════════════════════════════════════
@@ -569,12 +571,7 @@ function toggleMobileMenu() {
     // ═══════════════════════════════════════════════════════════════
     // Helpers
     // ═══════════════════════════════════════════════════════════════
-    function getStatusBadge(status) {
-      const map = { new:'answered', scheduled:'booked', contacted:'estimate', completed:'followup' };
-      const cls = map[status] || 'answered';
-      const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'New';
-      return `<span class="call-status-badge ${cls}">${label}</span>`;
-    }
+    // Status rendered via shared StatusPill.render()
 
 
 
@@ -872,7 +869,7 @@ function toggleMobileMenu() {
               <div class="ds-list-item-title">${l.caller || 'Unknown'}</div>
               <div class="ds-list-item-sub">${l.service || '—'} · ${fmtTime(l.receivedAt || l.time)}</div>
             </div>
-            <div>${getStatusBadge(l.status || 'new')}</div>
+            <div>${StatusPill.render(l.status || 'new')}</div>
           </div>`;
         });
         list.innerHTML = html;
@@ -899,14 +896,13 @@ function toggleMobileMenu() {
         }
         let html = '';
         calls.forEach(c => {
-          const statusClass = c.status === 'scheduled' ? 'booked' : 'answered';
           html += `<div class="ds-list-item">
             <div class="ds-list-item-icon">📞</div>
             <div class="ds-list-item-content">
               <div class="ds-list-item-title">${c.caller || 'Unknown'}</div>
               <div class="ds-list-item-sub">${c.service || '—'} · ${fmtTime(c.receivedAt || c.time)}</div>
             </div>
-            <span class="call-status-badge ${statusClass}">${c.status === 'scheduled' ? 'Booked' : 'Answered'}</span>
+            <div>${StatusPill.render(c.status || 'new')}</div>
           </div>`;
         });
         list.innerHTML = html;

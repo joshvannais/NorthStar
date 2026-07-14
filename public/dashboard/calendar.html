@@ -384,21 +384,66 @@ function toggleMobileMenu() {
 <script src="/js/theme.js"></script>
 <script src="/js/calendar-engine.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', async function() {
+// Ensure AppStore has data — seed demo leads if empty (same as Dashboard)
+(function ensureAppStoreData() {
   try {
-    // Load events from AppStore and API
-    const events = await window.calData.fetchEvents();
-    const leadEvents = window.syncCalendarFromAppStore();
-    const existingIds = new Set(events.map(e => e.id));
-    const newLeadEvents = leadEvents.filter(e => !existingIds.has(e.id));
-    window.calState.events = [...events, ...newLeadEvents];
-    window.calState.onChange(() => window.calRenderer.render());
-    window.calRenderer.render();
+    var existing = (window.AppStore && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
+    if (!existing || existing.length === 0) {
+      // Try loading from API first
+      if (typeof API !== 'undefined' && API.getLeads) {
+        API.getLeads().then(function(result) {
+          if (!result || !result.items || result.items.length === 0) {
+            seedDemoLeads();
+          }
+          runInit();
+        }).catch(function() {
+          seedDemoLeads();
+          runInit();
+        });
+      } else {
+        seedDemoLeads();
+        runInit();
+      }
+    } else {
+      runInit();
+    }
   } catch(e) {
-    console.warn('Calendar init:', e.message);
-    window.calRenderer.render();
+    runInit();
   }
-});
+
+  function seedDemoLeads() {
+    if (typeof genCall === 'function') {
+      for (var i = 0; i < 3; i++) {
+        try { genCall(); } catch(e) {}
+      }
+    }
+  }
+
+  function runInit() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initCalendar);
+    } else {
+      initCalendar();
+    }
+  }
+})();
+
+function initCalendar() {
+  Promise.all([
+    window.calData.fetchEvents().catch(function() { return []; }),
+    Promise.resolve(window.syncCalendarFromAppStore())
+  ]).then(function(results) {
+    var apiEvents = results[0];
+    var leadEvents = results[1];
+    var existingIds = new Set(apiEvents.map(function(e) { return e.id; }));
+    var newLeadEvents = leadEvents.filter(function(e) { return !existingIds.has(e.id); });
+    window.calState.events = apiEvents.concat(newLeadEvents);
+    window.calState.onChange(function() { window.calRenderer.render(); });
+    window.calRenderer.render();
+  }).catch(function() {
+    window.calRenderer.render();
+  });
+}
 </script>
 </body>
 </html>

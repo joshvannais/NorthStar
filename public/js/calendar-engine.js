@@ -60,16 +60,26 @@ class CalendarState {
 
   setView(v) {
     this.view = v;
-    // Sync date when switching views
+    // Sync date when switching views — share one source of truth
     if (v === 'day') {
       // Day view: use selectedDate if set, otherwise currentDate
       if (!this.selectedDate) this.selectedDate = this._formatDate(this.currentDate);
-    } else if (v === 'week') {
-      // Week view: center on currentDate (already uses currentDate)
+    } else if (v === 'week' && this.selectedDate) {
+      // Week view: center on selectedDate if one is set
+      const dt = this.selectedDate instanceof Date ? new Date(this.selectedDate) : new Date(this.selectedDate + 'T12:00:00');
+      this.currentDate = dt;
     }
     this._notify();
   }
-  selectDate(d) { this.selectedDate = d; this._notify(); }
+  selectDate(d) {
+    this.selectedDate = d;
+    // Sync currentDate so week/day views use the selected date
+    if (d) {
+      const dt = d instanceof Date ? new Date(d) : new Date(d + 'T12:00:00');
+      this.currentDate = new Date(dt.getFullYear(), dt.getMonth(), 1);
+    }
+    this._notify();
+  }
   navigateDay(delta) {
     if (!this.selectedDate) this.selectedDate = this._formatDate(new Date());
     const d = this.selectedDate instanceof Date ? new Date(this.selectedDate) : new Date(this.selectedDate + 'T12:00:00');

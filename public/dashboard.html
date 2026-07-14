@@ -543,6 +543,8 @@ function toggleMobileMenu() {
   <script src="/js/analytics-engine.js"></script>
   <script src="/js/theme.js"></script>
   <script>
+console.log("DASHBOARD_INIT: executing");
+try {
 
 console.log("DASHBOARD_INIT: script started");
     // ═══════════════════════════════════════════════════════════════
@@ -1064,6 +1066,12 @@ if (document.readyState === 'loading') {
   loadDashboard();
 }
   
-</script>
+
+console.log("DASHBOARD_INIT: completed");
+} catch(e) {
+  console.error("DASHBOARD_INIT ERROR:", e.message);
+  var errDiv = document.getElementById('briefError');
+  if (errDiv) { errDiv.style.display = 'block'; errDiv.textContent = 'Init Error: ' + e.message; }
+}</script>
 </body>
 </html>

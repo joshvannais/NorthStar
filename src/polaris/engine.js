@@ -64,6 +64,36 @@ function getLearningSummary() {
   return learning.getLearningSummary();
 }
 
+/**
+ * Get seasonal trend data for service types.
+ */
+function getSeasonalTrends(serviceType) {
+  return learning.getSeasonalTrends(serviceType);
+}
+
+/**
+ * Get crew efficiency data with extended dimensions.
+ */
+function getCrewEfficiency(crewId) {
+  return learning.getCrewEfficiency(crewId);
+}
+
+/**
+ * Get property-based performance data.
+ */
+function getPropertyPerformance(serviceType) {
+  return learning.getPropertyPerformance(serviceType);
+}
+
+/**
+ * Derive season from a date string.
+ * @param {string|Date} dateInput
+ * @returns {string} 'spring', 'summer', 'fall', 'winter', or 'unknown'
+ */
+function deriveSeason(dateInput) {
+  return learning._deriveSeason(dateInput);
+}
+
 // ── Recommendations ──
 
 function generateRecommendations(data) {
@@ -307,6 +337,10 @@ module.exports = {
   getDurationPredictions,
   applyLearningToEstimate,
   getLearningSummary,
+  getSeasonalTrends,
+  getCrewEfficiency,
+  getPropertyPerformance,
+  deriveSeason,
   // Recommendations
   generateRecommendations,
   getRecommendations,

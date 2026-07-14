@@ -17,6 +17,7 @@ const config = require('./config');
 const apiRoutes = require('./routes/api');
 const dashboardRoutes = require('./routes/dashboard');
 const publicApiRoutes = require('./routes/publicApi');
+const polarisRoutes = require('./routes/polaris');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -490,6 +491,7 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 app.use('/api', apiRoutes);
 app.use('/api/v1', dashboardRoutes);
 app.use('/api/v1', publicApiRoutes);
+app.use('/api/v1/polaris', polarisRoutes);
 
 // 404 + error handler (single instances)
 app.use(notFound);
@@ -501,6 +503,10 @@ async function start() {
   await db.initDatabase();
   await cache.init();
   await audit.ensureTable();
+
+  // Initialize Polaris Intelligence Engine
+  const polaris = require('./polaris/engine');
+  polaris.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

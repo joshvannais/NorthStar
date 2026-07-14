@@ -175,8 +175,11 @@ window.AppStore = (function() {
     return result;
   };
 
-  // Initialize — try server first, fall back to session
-  loadFromServer();
+  // Initialize — try session first (preserves simulated data across pages), fall back to server
+  loadFromSession();
+  if (state.leads.length === 0) {
+    loadFromServer();
+  }
 
   bus.on('lead:created', () => { /* trigger recalculations */ });
 

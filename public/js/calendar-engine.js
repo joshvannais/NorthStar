@@ -503,9 +503,35 @@ class CalendarData {
 
   async fetchEvents() {
     try {
+      // Fetch from server API (custom events + server-side lead events)
       const resp = await fetch(`${this.baseUrl}/events`);
       const data = await resp.json();
-      return data.events || [];
+      let events = data.events || [];
+
+      // Also include client-side AppStore leads (simulated data)
+      const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
+      const appStoreLeadEvents = allLeads
+        .filter(l => l.outcome === 'appointment-set' || l.outcome === 'booked' || l.status === 'booked')
+        .filter(l => !events.some(e => e.leadId === l.id)) // deduplicate with server events
+        .map(l => ({
+          id: 'lead-' + l.id,
+          title: l.caller + ' - ' + l.service,
+          date: l.receivedAt ? l.receivedAt.split('T')[0] : new Date().toISOString().split('T')[0],
+          time: l.time || '09:00',
+          endTime: null,
+          description: l.summary || '',
+          color: '#007AFF',
+          type: 'lead',
+          leadId: l.id,
+          caller: l.caller,
+          phone: l.phone,
+          service: l.service,
+          price: l.avgPrice || 0,
+          createdAt: l.receivedAt || new Date().toISOString()
+        }));
+
+      events = [...events, ...appStoreLeadEvents];
+      return events;
     } catch (e) {
       console.warn('[CalendarData] fetchEvents error:', e.message);
       return [];

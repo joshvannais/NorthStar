@@ -24,6 +24,7 @@ const learning = require('./learning');
 const recommendations = require('./recommendations');
 const duration = require('./duration');
 const travel = require('./travel');
+const crew = require('./crew');
 
 /**
  * Initialize Polaris — load all data stores.
@@ -154,6 +155,20 @@ function getProviderInterface(provider) {
 
 function getSupportedProviders() {
   return travel.getSupportedProviders();
+}
+
+// ── Crew Intelligence ──
+
+function getCrewIntelligence(config) {
+  return crew.getCrewIntelligence(config);
+}
+
+function getCrewForService(serviceType, options) {
+  return crew.getCrewForService(serviceType, options);
+}
+
+function getCrewEquipment(serviceType, crewSize) {
+  return crew.getCrewEquipment(serviceType, crewSize);
 }
 
 // ── Analytics Queries ──
@@ -392,6 +407,10 @@ module.exports = {
   getTravelForService,
   getProviderInterface,
   getSupportedProviders,
+  // Crew Intelligence
+  getCrewIntelligence,
+  getCrewForService,
+  getCrewEquipment,
   // Analytics
   analyzePipeline,
   analyzeSchedule,

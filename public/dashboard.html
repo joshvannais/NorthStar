@@ -1053,7 +1053,12 @@ function toggleMobileMenu() {
     }    // ============================================================
     // Kick off
     // ============================================================
-    document.addEventListener('DOMContentLoaded', loadDashboard);
+    // Load on DOMContentLoaded, or immediately if the event already fired
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', loadDashboard);
+} else {
+  loadDashboard();
+}
   </script>
 
 <!-- Customer Drawer (shared component) -->

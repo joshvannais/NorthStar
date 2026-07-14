@@ -1,9 +1,8 @@
 
-console.log("DASHBOARD_INIT: script started");
+    var DASHBOARD_INIT_LOADED = true;
     // ═══════════════════════════════════════════════════════════════
     // Application State
     // ═══════════════════════════════════════════════════════════════
-    console.log("DASHBOARD_INIT: localStorage check");
     var user = JSON.parse(localStorage.getItem('user') || '{}');
     if (user.name) {
       document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your business overview.`;

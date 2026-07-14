@@ -688,7 +688,7 @@ console.log("DASHBOARD_INIT: script started");
           case 'avg_response_time': value = AnalyticsEngine.avgResponseTime(); break;
           case 'ai_transfer_rate': value = total > 0 ? Math.round((AnalyticsEngine.qualified()/total)*100)+'%' : '—'; break;
         }
-        html += `<div class="ds-kpi-card" onclick="window.location.href=(kpi.link || '#')">
+        html += `<div class="ds-kpi-card" onclick="window.location.href='${kpi.link || '#'}'">
           <div class="ds-kpi-icon" style="background:var(--kpi-${kpi.id}-bg,var(--neutral-50));color:var(--kpi-${kpi.id}-color,var(--neutral-500));">
             <span style="font-size:20px;">${kpi.icon}</span>
           </div>

@@ -1,1 +1,40 @@
-[]
+[
+  {
+    "id": "706458a8ebfb78bd",
+    "metricType": "duration_accuracy",
+    "serviceType": "Test",
+    "sampleSize": 1,
+    "meanVariance": 0.5,
+    "meanAbsoluteError": 0.5,
+    "accuracyPct": 75,
+    "computedAt": "2026-07-14T21:02:55.870Z"
+  },
+  {
+    "id": "b28ba1d8010daca3",
+    "metricType": "revenue_accuracy",
+    "serviceType": "Test",
+    "sampleSize": 1,
+    "meanVariance": 50,
+    "accuracyPct": 90,
+    "computedAt": "2026-07-14T21:02:55.870Z"
+  },
+  {
+    "id": "f5c8dc0c523cdd02",
+    "metricType": "duration_accuracy",
+    "serviceType": "Tree Removal",
+    "sampleSize": 1,
+    "meanVariance": 1.5,
+    "meanAbsoluteError": 1.5,
+    "accuracyPct": 62.5,
+    "computedAt": "2026-07-14T21:02:55.872Z"
+  },
+  {
+    "id": "bc35c0dbf09a1017",
+    "metricType": "revenue_accuracy",
+    "serviceType": "Tree Removal",
+    "sampleSize": 1,
+    "meanVariance": 150,
+    "accuracyPct": 87.5,
+    "computedAt": "2026-07-14T21:02:55.872Z"
+  }
+]

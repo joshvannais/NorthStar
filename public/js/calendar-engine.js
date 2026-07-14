@@ -1,7 +1,20 @@
 /**
- * Calendar Engine — Phase 1
- * Dispatch-ready calendar architecture with pluggable view renderers.
+ * NorthStar Calendar Engine
+ * 
+ * Phase 1 — Dispatch-ready calendar architecture with pluggable view renderers.
  * Event interface: { id, title, date, time, endTime, description, color, type, leadId, ... }
+ * 
+ * This is the foundation for NorthStar's operational dispatch center.
+ * Future phases will add:
+ * - Drag-and-drop scheduling (Phase 2)
+ * - Technician management (Phase 2)
+ * - Route optimization (Phase 3)
+ * - Weather awareness (Phase 3)
+ * - Polaris job intelligence (Phase 3)
+ * - Automated reminders (Phase 3)
+ * 
+ * Architecture: CalendarState, CalendarRenderer, CalendarData, CalendarModal
+ * All new features should slot into this architecture without rewrites.
  */
 
 // ================================================================
@@ -193,28 +206,16 @@ class CalendarRenderer {
     const todayEvents = this.state.events.filter(e => e.date === todayStr);
     const leadEvents = this.state.events.filter(e => e.type === 'lead');
     const total = this.state.events.length;
-    const conversion = total > 0 ? Math.round((leadEvents.length / total) * 100) : 0;
+    const pipelineValue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
 
     this.kpiBar.innerHTML = `
-      <div class="cal-kpi-item">
-        <span class="cal-kpi-value">${monthEvents.length}</span>
-        <span class="cal-kpi-label">Appointments this month</span>
-      </div>
-      <div class="cal-kpi-divider"></div>
-      <div class="cal-kpi-item">
-        <span class="cal-kpi-value">${todayEvents.length}</span>
-        <span class="cal-kpi-label">Today</span>
-      </div>
-      <div class="cal-kpi-divider"></div>
-      <div class="cal-kpi-item">
-        <span class="cal-kpi-value">${total}</span>
-        <span class="cal-kpi-label">Total events</span>
-      </div>
-      <div class="cal-kpi-divider"></div>
-      <div class="cal-kpi-item">
-        <span class="cal-kpi-value">${conversion}%</span>
-        <span class="cal-kpi-label">Lead conversion</span>
-      </div>
+      <span class="cal-kpi-pill">📅 <strong>${monthEvents.length}</strong> appointments this month</span>
+      <span class="cal-kpi-divider"></span>
+      <span class="cal-kpi-pill">📞 <strong>${todayEvents.length}</strong> today</span>
+      <span class="cal-kpi-divider"></span>
+      <span class="cal-kpi-pill">📊 <strong>${total}</strong> total events</span>
+      <span class="cal-kpi-divider"></span>
+      <span class="cal-kpi-pill">💰 <strong>${pipelineValue.toLocaleString()}</strong> pipeline</span>
     `;
   }
 
@@ -356,7 +357,20 @@ class CalendarRenderer {
 
     let html = '<div class="cal-agenda-view">';
     if (sorted.length === 0) {
-      html += '<div class="cal-agenda-empty">No events scheduled. Click a day to create one.</div>';
+      const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
+      const hasLeads = allLeads.length > 0;
+      html += '<div class="cal-agenda-empty">';
+      html += '<div style="font-size:32px;margin-bottom:12px;">📅</div>';
+      html += '<div style="font-size:16px;font-weight:600;color:var(--neutral-700);margin-bottom:8px;">No events scheduled</div>';
+      if (hasLeads) {
+        html += '<div style="font-size:13px;color:var(--neutral-500);margin-bottom:12px;">You have leads ready to schedule. Click a day to create an event.</div>';
+      } else {
+        html += '<div style="font-size:13px;color:var(--neutral-500);margin-bottom:12px;">Click a day to create an event, or receive calls to auto-schedule appointments.</div>';
+        if (typeof window.genCall === 'function') {
+          html += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="padding:8px 20px;background:var(--brand-500);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
+        }
+      }
+      html += '</div>';
     } else {
       let currentDate = '';
       sorted.forEach(e => {
@@ -435,16 +449,40 @@ class CalendarRenderer {
     }
     miniHtml += '</div>';
 
-    // Polaris panel
+    // Polaris panel — smart empty states
     miniHtml += '<div class="cal-sidebar-section cal-polaris-section">';
     miniHtml += '<h3 class="cal-sidebar-title">POLARIS™ Intelligence</h3>';
     const leadEvents = this.state.events.filter(e => e.type === 'lead');
-    const topOpportunity = leadEvents.length > 0 ? leadEvents[0].title : 'No opportunities';
-    const pipelineValue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
-    miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Top Opportunity</span><span class="cal-polaris-value">${topOpportunity}</span></div>`;
-    miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">$${pipelineValue.toLocaleString()}</span></div>`;
+    const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
+    const unscheduledLeads = allLeads.filter(l => l.outcome !== 'appointment-set' && l.status !== 'booked' && l.status !== 'estimate-scheduled');
+    const totalPipeline = allLeads.reduce((sum, l) => sum + (parseFloat(l.estimated_price) || 0), 0);
+    const topLead = allLeads.length > 0 ? allLeads.sort((a,b) => (parseFloat(b.estimated_price)||0) - (parseFloat(a.estimated_price)||0))[0] : null;
+
     if (leadEvents.length > 0) {
+      // Normal state with events
+      const pipelineValue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
+      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Top Opportunity</span><span class="cal-polaris-value">${leadEvents[0].title}</span></div>`;
+      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">${pipelineValue.toLocaleString()}</span></div>`;
       miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Focus</span><span class="cal-polaris-value">${leadEvents.length} appointments to follow up</span></div>`;
+    } else if (unscheduledLeads.length > 0) {
+      // Has leads but no scheduled events
+      const topOpp = topLead ? `${topLead.caller_name || 'Lead'} — ${(parseFloat(topLead.estimated_price)||0).toLocaleString()}` : 'N/A';
+      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">📊 Unscheduled Leads</span><span class="cal-polaris-value">${unscheduledLeads.length}</span></div>`;
+      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">💰 Est. Pipeline</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      if (topLead) {
+        miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">👤 Top Opportunity</span><span class="cal-polaris-value">${topOpp}</span></div>`;
+      }
+      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">📅 Suggestion</span><span class="cal-polaris-value">Schedule pending leads</span></div>`;
+    } else {
+      // No leads at all — onboarding state
+      miniHtml += '<div class="cal-polaris-item" style="flex-direction:column;gap:8px;padding:12px 0;">';
+      miniHtml += '<div style="font-size:24px;text-align:center;">📅</div>';
+      miniHtml += '<div style="font-size:13px;font-weight:600;color:var(--neutral-900);text-align:center;">Welcome to NorthStar Calendar</div>';
+      miniHtml += '<div style="font-size:12px;color:var(--neutral-500);text-align:center;">Your appointments will appear here once you receive calls.</div>';
+      if (typeof window.genCall === 'function') {
+        miniHtml += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="margin-top:8px;padding:8px 16px;background:var(--brand-500);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
+      }
+      miniHtml += '</div>';
     }
     miniHtml += '</div>';
 
@@ -723,18 +761,132 @@ class CalendarModal {
 }
 
 // ================================================================
+// CalendarEventDetail — Accordion panel for dispatch center vision
+// ================================================================
+class CalendarEventDetail {
+  constructor() {
+    this.panel = null;
+  }
+
+  open(event) {
+    this.close();
+    const overlay = document.createElement('div');
+    overlay.className = 'cal-modal-overlay';
+    overlay.onclick = () => this.close();
+    overlay.innerHTML = `
+      <div class="cal-modal" onclick="event.stopPropagation()" style="width:520px;">
+        <div class="cal-modal-header">
+          <h2>${event.title || 'Event Details'}</h2>
+          <button class="cal-modal-close" onclick="window.calEventDetail.close()">×</button>
+        </div>
+        <div class="cal-modal-body" style="max-height:60vh;overflow-y:auto;">
+          ${this._renderCustomerSection(event)}
+          ${this._renderServiceSection(event)}
+          ${this._renderCrewSection(event)}
+          ${this._renderFinancialsSection(event)}
+          ${this._renderPolarisSection(event)}
+          ${this._renderWeatherSection(event)}
+          ${this._renderNotesSection(event)}
+        </div>
+        <div class="cal-modal-footer">
+          <button class="cal-modal-btn cal-modal-cancel" onclick="window.calEventDetail.close()">Close</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    this.panel = overlay;
+  }
+
+  close() {
+    if (this.panel) { this.panel.remove(); this.panel = null; }
+  }
+
+  _renderSection(emoji, title, content, isFuture = false) {
+    const futureTag = isFuture ? ' <span style="font-size:10px;color:var(--neutral-400);font-weight:400;">— Phase 2</span>' : '';
+    return `
+      <div class="cal-detail-section" onclick="this.classList.toggle('collapsed')">
+        <div class="cal-detail-section-header">
+          <span>${emoji} ${title}${futureTag}</span>
+          <span class="cal-detail-toggle">▼</span>
+        </div>
+        <div class="cal-detail-section-body">${content}</div>
+      </div>
+    `;
+  }
+
+  _renderCustomerSection(event) {
+    return this._renderSection('👤', 'Customer Information', `
+      <div class="cal-detail-row"><span class="cal-detail-label">Name</span><span>${event.title || '—'}</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Phone</span><span>${event.phone || '—'}</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Address</span><span>${event.address || '—'}</span></div>
+    `);
+  }
+
+  _renderServiceSection(event) {
+    const desc = event.description || event.serviceType || '—';
+    const duration = event.polaris?.estimatedDuration || '—';
+    return this._renderSection('🔧', 'Service Details', `
+      <div class="cal-detail-row"><span class="cal-detail-label">Service</span><span>${event.serviceType || '—'}</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Description</span><span>${desc}</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Est. Duration</span><span>${duration === '—' ? '— Available in Phase 2' : duration + ' min'}</span></div>
+    `);
+  }
+
+  _renderCrewSection(event) {
+    return this._renderSection('👥', 'Crew Assignment', `
+      <div class="cal-detail-row"><span class="cal-detail-label">Technician</span><span style="color:var(--neutral-400);font-style:italic;">— Crew assignment available in Phase 2</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Equipment</span><span style="color:var(--neutral-400);font-style:italic;">— Equipment tracking available in Phase 2</span></div>
+    `, true);
+  }
+
+  _renderFinancialsSection(event) {
+    const price = event.estimatedPrice || event.price || 0;
+    const margin = price > 0 ? '35%' : '—';
+    return this._renderSection('💰', 'Financials', `
+      <div class="cal-detail-row"><span class="cal-detail-label">Est. Cost</span><span>${parseFloat(price).toLocaleString()}</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Suggested Bid</span><span style="color:var(--neutral-400);font-style:italic;">— Available in Phase 3</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Gross Profit</span><span style="color:var(--neutral-400);font-style:italic;">— Available in Phase 3</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Margin</span><span>${margin}</span></div>
+    `);
+  }
+
+  _renderPolarisSection(event) {
+    return this._renderSection('📊', 'Polaris Intelligence', `
+      <div class="cal-detail-row"><span class="cal-detail-label">Confidence Score</span><span style="color:var(--neutral-400);font-style:italic;">— Available in Phase 3</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Recommendations</span><span style="color:var(--neutral-400);font-style:italic;">— Available in Phase 3</span></div>
+    `, true);
+  }
+
+  _renderWeatherSection(event) {
+    return this._renderSection('🌤', 'Weather', `
+      <div class="cal-detail-row"><span class="cal-detail-label">Conditions</span><span style="color:var(--neutral-400);font-style:italic;">— Weather awareness available in Phase 3</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Alerts</span><span style="color:var(--neutral-400);font-style:italic;">— Weather awareness available in Phase 3</span></div>
+    `, true);
+  }
+
+  _renderNotesSection(event) {
+    return this._renderSection('📝', 'Notes & History', `
+      <div class="cal-detail-row"><span class="cal-detail-label">Notes</span><span style="color:var(--neutral-400);font-style:italic;">— Notes available in Phase 2</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">History</span><span style="color:var(--neutral-400);font-style:italic;">— Communication history available in Phase 2</span></div>
+    `, true);
+  }
+}
+
+// ================================================================
 // Initialize
 // ================================================================
 const calState = new CalendarState();
 const calRenderer = new CalendarRenderer(calState);
 const calData = new CalendarData();
 const calModal = new CalendarModal();
+const calEventDetail = new CalendarEventDetail();
 
 // Expose globals
 window.calState = calState;
 window.calRenderer = calRenderer;
 window.calData = calData;
 window.calModal = calModal;
+window.calEventDetail = calEventDetail;
 
 // Open event modal for selected date
 window.openEventModal = function() {
@@ -754,7 +906,7 @@ calState.onChange((state) => {
   calRenderer.render();
   if (state.selectedEvent) {
     const event = state.selectedEvent;
-    // If lead event, open Customer Drawer
+    // If lead event, open Customer Drawer (existing pattern)
     if (event.type === 'lead' && window.CustomerDrawer) {
       const lead = {
         id: event.leadId,
@@ -765,8 +917,9 @@ calState.onChange((state) => {
         estimated_price: event.estimatedPrice
       };
       window.CustomerDrawer.open(lead);
-    } else if (event.type === 'custom' || !event.type || event.type === 'recurring') {
-      calModal.openEditEvent(event);
+    } else if (event.type === 'custom' || !event.type) {
+      // For custom events, open the CalendarEventDetail accordion panel
+      calEventDetail.open(event);
     }
   }
 });

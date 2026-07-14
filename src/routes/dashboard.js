@@ -7,6 +7,8 @@
 
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const db = require('../db');
 const { requireAuth } = require('../auth/middleware');
 const { computeOverview, computeTrends, computePipeline, computeByService } = require('../analytics/pipeline');
@@ -758,6 +760,255 @@ router.post('/calls/:id/mark-known', async (req, res) => {
   } catch (err) {
     console.error('[API] Mark known error:', err.message);
     res.status(500).json({ error: 'Failed to mark contact' });
+  }
+});
+
+// ================================================================
+// Calendar API — Phase 1
+// ================================================================
+
+const CALENDAR_DATA_FILE = path.join(__dirname, '..', '..', 'data', 'events.json');
+
+function loadCalendarEvents() {
+  try {
+    if (fs.existsSync(CALENDAR_DATA_FILE)) {
+      const raw = fs.readFileSync(CALENDAR_DATA_FILE, 'utf8');
+      return JSON.parse(raw);
+    }
+  } catch(e) {
+    console.warn('[Calendar] Failed to load events file:', e.message);
+  }
+  return [];
+}
+
+function saveCalendarEvents(events) {
+  try {
+    const dir = path.dirname(CALENDAR_DATA_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(CALENDAR_DATA_FILE, JSON.stringify(events, null, 2));
+  } catch(e) {
+    console.warn('[Calendar] Failed to save events file:', e.message);
+  }
+}
+
+// GET /api/v1/calendar/events — returns custom events + lead-sourced events
+router.get('/calendar/events', (req, res) => {
+  try {
+    const customEvents = loadCalendarEvents();
+    // Get lead events from the store
+    const leads = getAllLeads ? getAllLeads() : [];
+    const leadEvents = leads
+      .filter(l => l.outcome === 'appointment-set' || l.status === 'estimate-scheduled' || l.preferred_time)
+      .map(l => ({
+        id: 'lead-' + l.id,
+        title: l.caller_name || 'Lead Appointment',
+        date: l.preferred_time ? l.preferred_time.split('T')[0] : new Date().toISOString().split('T')[0],
+        time: l.preferred_time ? l.preferred_time.split('T')[1]?.substring(0, 5) || '09:00' : '09:00',
+        endTime: null,
+        description: l.service_type ? `${l.service_type} service` : 'Appointment',
+        color: '#3b82f6',
+        type: 'lead',
+        leadId: l.id,
+        status: l.status || 'scheduled',
+        callerName: l.caller_name,
+        phone: l.phone,
+        address: l.address,
+        serviceType: l.service_type,
+        estimatedPrice: l.estimated_price,
+        createdAt: l.created_at
+      }));
+    const events = [...customEvents, ...leadEvents];
+    res.json({ events });
+  } catch (err) {
+    console.error('[API] Calendar events error:', err.message);
+    res.status(500).json({ error: 'Failed to load events' });
+  }
+});
+
+// POST /api/v1/calendar/events — create custom event
+router.post('/calendar/events', (req, res) => {
+  try {
+    const { title, date, time, endTime, description, color, type } = req.body;
+    if (!title || !date) {
+      return res.status(400).json({ error: 'Title and date are required' });
+    }
+    const events = loadCalendarEvents();
+    const event = {
+      id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
+      title,
+      date,
+      time: time || null,
+      endTime: endTime || null,
+      description: description || '',
+      color: color || '#3b82f6',
+      type: type || 'custom',
+      leadId: null,
+      technicianId: null,
+      recurring: null,
+      location: null,
+      status: 'scheduled',
+      polaris: {
+        estimatedDuration: null,
+        crewSize: null,
+        profitScore: null,
+        confidenceScore: null
+      },
+      createdAt: new Date().toISOString()
+    };
+    events.push(event);
+    saveCalendarEvents(events);
+    res.status(201).json({ event });
+  } catch (err) {
+    console.error('[API] Create event error:', err.message);
+    res.status(500).json({ error: 'Failed to create event' });
+  }
+});
+
+// PUT /api/v1/calendar/events/:id — update event
+router.put('/calendar/events/:id', (req, res) => {
+  try {
+    const events = loadCalendarEvents();
+    const idx = events.findIndex(e => e.id === req.params.id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    const { title, date, time, endTime, description, color, status } = req.body;
+    const updated = { ...events[idx] };
+    if (title !== undefined) updated.title = title;
+    if (date !== undefined) updated.date = date;
+    if (time !== undefined) updated.time = time;
+    if (endTime !== undefined) updated.endTime = endTime;
+    if (description !== undefined) updated.description = description;
+    if (color !== undefined) updated.color = color;
+    if (status !== undefined) updated.status = status;
+    events[idx] = updated;
+    saveCalendarEvents(events);
+    res.json({ event: updated });
+  } catch (err) {
+    console.error('[API] Update event error:', err.message);
+    res.status(500).json({ error: 'Failed to update event' });
+  }
+});
+
+// DELETE /api/v1/calendar/events/:id — delete event
+router.delete('/calendar/events/:id', (req, res) => {
+  try {
+    const events = loadCalendarEvents();
+    const idx = events.findIndex(e => e.id === req.params.id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    events.splice(idx, 1);
+    saveCalendarEvents(events);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[API] Delete event error:', err.message);
+    res.status(500).json({ error: 'Failed to delete event' });
+  }
+});
+
+// GET /api/v1/calendar/export/ics — ICS export
+router.get('/calendar/export/ics', (req, res) => {
+  try {
+    const customEvents = loadCalendarEvents();
+    const leads = getAllLeads ? getAllLeads() : [];
+    const leadEvents = leads
+      .filter(l => l.outcome === 'appointment-set' || l.status === 'estimate-scheduled' || l.preferred_time)
+      .map(l => ({
+        title: l.caller_name || 'Lead Appointment',
+        date: l.preferred_time ? l.preferred_time.split('T')[0] : new Date().toISOString().split('T')[0],
+        time: l.preferred_time ? l.preferred_time.split('T')[1]?.substring(0, 5) || '09:00' : '09:00',
+        description: l.service_type ? `${l.service_type} service` : 'Appointment'
+      }));
+    const allEvents = [...customEvents, ...leadEvents];
+    let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//NorthStar//Calendar//EN\r\n';
+    allEvents.forEach(evt => {
+      const startDate = evt.date.replace(/-/g, '');
+      const startTime = (evt.time || '09:00').replace(/:/g, '');
+      ics += 'BEGIN:VEVENT\r\n';
+      ics += `DTSTART:${startDate}T${startTime}00\r\n`;
+      ics += `SUMMARY:${evt.title}\r\n`;
+      if (evt.description) ics += `DESCRIPTION:${evt.description}\r\n`;
+      ics += 'END:VEVENT\r\n';
+    });
+    ics += 'END:VCALENDAR\r\n';
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=calendar.ics');
+    res.send(ics);
+  } catch (err) {
+    console.error('[API] ICS export error:', err.message);
+    res.status(500).json({ error: 'Failed to export ICS' });
+  }
+});
+
+// POST /api/v1/calendar/import/ics — ICS import
+router.post('/calendar/import/ics', (req, res) => {
+  try {
+    const { icsContent } = req.body;
+    if (!icsContent) {
+      return res.status(400).json({ error: 'ICS content is required' });
+    }
+    const events = [];
+    const lines = icsContent.split('\n');
+    let currentEvent = null;
+    let inEvent = false;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed === 'BEGIN:VEVENT') {
+        inEvent = true;
+        currentEvent = {};
+      } else if (trimmed === 'END:VEVENT') {
+        if (currentEvent) {
+          const dtstart = currentEvent.DTSTART || '';
+          let date = '';
+          let time = null;
+          if (dtstart.length >= 8) {
+            date = `${dtstart.substring(0, 4)}-${dtstart.substring(4, 6)}-${dtstart.substring(6, 8)}`;
+            if (dtstart.length >= 15) {
+              time = `${dtstart.substring(9, 11)}:${dtstart.substring(11, 13)}`;
+            }
+          }
+          events.push({
+            id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
+            title: currentEvent.SUMMARY || 'Imported Event',
+            date: date || new Date().toISOString().split('T')[0],
+            time,
+            endTime: null,
+            description: currentEvent.DESCRIPTION || '',
+            color: '#3b82f6',
+            type: 'custom',
+            leadId: null,
+            technicianId: null,
+            recurring: null,
+            location: null,
+            status: 'scheduled',
+            polaris: {
+              estimatedDuration: null,
+              crewSize: null,
+              profitScore: null,
+              confidenceScore: null
+            },
+            createdAt: new Date().toISOString()
+          });
+        }
+        inEvent = false;
+        currentEvent = null;
+      } else if (inEvent && currentEvent) {
+        const colonIdx = trimmed.indexOf(':');
+        if (colonIdx > -1) {
+          const key = trimmed.substring(0, colonIdx);
+          const value = trimmed.substring(colonIdx + 1);
+          currentEvent[key] = value;
+        }
+      }
+    }
+    const existing = loadCalendarEvents();
+    const merged = [...existing, ...events];
+    saveCalendarEvents(merged);
+    res.status(201).json({ events, count: events.length });
+  } catch (err) {
+    console.error('[API] ICS import error:', err.message);
+    res.status(500).json({ error: 'Failed to import ICS' });
   }
 });
 

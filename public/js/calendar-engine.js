@@ -178,20 +178,22 @@ class CalendarRenderer {
   renderHeader() {
     if (!this.header) return;
     this.header.innerHTML = `
-      <div class="cal-header-left">
-        <h1 class="cal-title">${this.state.getMonthLabel()}</h1>
-        <div class="cal-nav-btns">
-          <button class="cal-nav-btn" onclick="window.calState.navigate(-1)" title="Previous">‹</button>
-          <button class="cal-nav-btn" onclick="window.calState.navigate(1)" title="Next">›</button>
-          <button class="cal-today-btn" onclick="window.calState.goToday()">Today</button>
+      <div class="cal-header-inner">
+        <div class="cal-header-left">
+          <h1 class="cal-title">${this.state.getMonthLabel()}</h1>
+          <div class="cal-nav-btns">
+            <button class="cal-nav-btn" onclick="window.calState.navigate(-1)" title="Previous">‹</button>
+            <button class="cal-nav-btn" onclick="window.calState.navigate(1)" title="Next">›</button>
+            <button class="cal-today-btn" onclick="window.calState.goToday()">Today</button>
+          </div>
         </div>
-      </div>
-      <div class="cal-header-right">
-        <div class="cal-view-tabs">
-          <button class="cal-view-tab ${this.state.view === 'month' ? 'active' : ''}" onclick="window.calState.setView('month')">Month</button>
-          <button class="cal-view-tab ${this.state.view === 'week' ? 'active' : ''}" onclick="window.calState.setView('week')">Week</button>
-          <button class="cal-view-tab ${this.state.view === 'day' ? 'active' : ''}" onclick="window.calState.setView('day')">Day</button>
-          <button class="cal-view-tab ${this.state.view === 'agenda' ? 'active' : ''}" onclick="window.calState.setView('agenda')">Agenda</button>
+        <div class="cal-header-right">
+          <div class="cal-view-tabs">
+            <button class="cal-view-tab ${this.state.view === 'month' ? 'active' : ''}" onclick="window.calState.setView('month')">Month</button>
+            <button class="cal-view-tab ${this.state.view === 'week' ? 'active' : ''}" onclick="window.calState.setView('week')">Week</button>
+            <button class="cal-view-tab ${this.state.view === 'day' ? 'active' : ''}" onclick="window.calState.setView('day')">Day</button>
+            <button class="cal-view-tab ${this.state.view === 'agenda' ? 'active' : ''}" onclick="window.calState.setView('agenda')">Agenda</button>
+          </div>
         </div>
       </div>
     `;
@@ -211,13 +213,10 @@ class CalendarRenderer {
     const pipelineValue = qualifiedLeads.reduce((s, c) => s + (parseFloat(c.avgPrice) || 0), 0);
 
     this.kpiBar.innerHTML = `
-      <span class="cal-kpi-pill">📅 <strong>${monthEvents.length}</strong> appointments this month</span>
-      <span class="cal-kpi-divider"></span>
+      <span class="cal-kpi-pill">📅 <strong>${monthEvents.length}</strong> this month</span>
       <span class="cal-kpi-pill">📞 <strong>${todayEvents.length}</strong> today</span>
-      <span class="cal-kpi-divider"></span>
-      <span class="cal-kpi-pill">📊 <strong>${total}</strong> total events</span>
-      <span class="cal-kpi-divider"></span>
-      <span class="cal-kpi-pill">💰 <strong>$${pipelineValue.toLocaleString()}</strong> pipeline</span>
+      <span class="cal-kpi-pill">📊 <strong>${total}</strong> total</span>
+      <span class="cal-kpi-pill">💰 <strong>${pipelineValue.toLocaleString()}</strong> pipeline</span>
     `;
   }
 

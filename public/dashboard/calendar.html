@@ -17,18 +17,29 @@
 /* === Layout — single scroll === */
 .cal-layout { display: flex; flex-direction: column; }
 
-/* === Header === */
+/* === Header — matches ds-card styling === */
 .cal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--space-md) var(--space-lg);
-  border-bottom: 1px solid var(--neutral-200);
   flex-shrink: 0;
   position: sticky;
   top: 0;
   z-index: 10;
   background: var(--neutral-0);
+  border-bottom: 1px solid var(--neutral-200);
+}
+.cal-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: var(--neutral-0);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-md);
+  box-shadow: var(--shadow);
 }
 .cal-header-left {
   display: flex;
@@ -99,31 +110,26 @@
 }
 .cal-view-tab:hover:not(.active) { color: var(--neutral-700); }
 
-/* === KPI Strip === */
+/* === KPI Strip — premium compact chips === */
 .cal-kpi-bar {
   display: flex; align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-lg);
-  border-bottom: 1px solid var(--neutral-200);
   background: var(--neutral-50);
   flex-shrink: 0; flex-wrap: wrap;
 }
 .cal-kpi-pill {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px;
   background: var(--neutral-0);
   border: 1px solid var(--neutral-200);
   border-radius: 100px;
   font-size: var(--font-xs);
   color: var(--neutral-500);
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 .cal-kpi-pill strong { font-weight: 700; color: var(--neutral-900); }
-.cal-kpi-divider {
-  width: 1px; height: 18px;
-  background: var(--neutral-200);
-  flex-shrink: 0;
-}
 
 /* === Calendar Grid — full width === */
 .cal-grid-container {
@@ -622,6 +628,7 @@
 
 /* === Dark Mode — matches Dashboard exactly === */
 [data-theme="dark"] .cal-header { background: var(--neutral-100); border-bottom-color: var(--neutral-300); }
+[data-theme="dark"] .cal-header-inner { background: var(--neutral-100); border-color: var(--neutral-300); box-shadow: none; }
 [data-theme="dark"] .cal-title { color: var(--neutral-800); }
 [data-theme="dark"] .cal-nav-btn { background: var(--neutral-100); border-color: var(--neutral-300); color: var(--neutral-500); }
 [data-theme="dark"] .cal-nav-btn:hover { background: var(--neutral-200); color: var(--neutral-800); }
@@ -631,10 +638,9 @@
 [data-theme="dark"] .cal-view-tab { color: var(--neutral-500); }
 [data-theme="dark"] .cal-view-tab.active { background: var(--neutral-100); color: var(--neutral-800); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 [data-theme="dark"] .cal-view-tab:hover:not(.active) { color: var(--neutral-600); }
-[data-theme="dark"] .cal-kpi-bar { background: var(--neutral-50); border-bottom-color: var(--neutral-300); }
+[data-theme="dark"] .cal-kpi-bar { background: var(--neutral-50); }
 [data-theme="dark"] .cal-kpi-pill { background: var(--neutral-100); border-color: var(--neutral-300); color: var(--neutral-500); }
 [data-theme="dark"] .cal-kpi-pill strong { color: var(--neutral-800); }
-[data-theme="dark"] .cal-kpi-divider { background: var(--neutral-300); }
 [data-theme="dark"] .cal-month-grid { background: var(--neutral-300); border-color: var(--neutral-300); }
 [data-theme="dark"] .cal-month-day-header { background: var(--neutral-200); color: var(--neutral-500); }
 [data-theme="dark"] .cal-month-cell { background: var(--neutral-100); }

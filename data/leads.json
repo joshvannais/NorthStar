@@ -1,1 +1,310 @@
-[]
+[
+  {
+    "id": "mrk123jsklz6yk",
+    "caller": "Elizabeth Garcia",
+    "phone": "(607) 555-5303",
+    "address": "3342 Maple Rd",
+    "service": "Mold Remediation",
+    "icon": "🦠",
+    "avgPrice": 500,
+    "jobDetail": "bathroom 50sqft +water-source visible",
+    "duration": "1:03",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "Yesterday, 8:14 AM",
+    "receivedAt": "2026-07-14T02:23:54.174Z",
+    "summary": "Mold Remediation: Bathroom mold. bathroom 50sqft +water-source visible. Estimated $500.",
+    "priceBreakdown": "bathroom remediation 50sqft x $4, Water source remediation",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I have mold in my  bathroom.\nAI: How many square feet are affected?\nCustomer: About 50 sqft.\nAI: Can you see visible mold growth?\nCustomer: Yes, it's visible.\nAI: Is there an active water source causing the mold?\nCustomer: Yes, there's a moisture issue.\nAI: Great! Let me get some details. What is your name?\nCustomer: Elizabeth Garcia.\nAI: Thanks Elizabeth! And a phone number I can reach you at?\nCustomer: (607) 555-5303.\nAI: Perfect. And what's the address for the service?\nCustomer: 3342 Maple Rd.\nAI: Thanks Elizabeth. We'll have a mold remediation specialist reach out to assess the 50sqft area. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "bathroom remediation 50sqft x $4",
+        "a": 200
+      },
+      {
+        "l": "Water source remediation",
+        "a": 300
+      }
+    ]
+  },
+  {
+    "id": "mrk123k23isjlg",
+    "caller": "Thomas Williams",
+    "phone": "(518) 555-7610",
+    "address": "2704 Chestnut Dr",
+    "service": "Appliance Repair",
+    "icon": "🔌",
+    "avgPrice": 350,
+    "jobDetail": "oven ge no heat",
+    "duration": "1:55",
+    "status": "answered",
+    "outcome": "follow-up",
+    "time": "Today, 10:33 AM",
+    "receivedAt": "2026-07-14T02:23:54.216Z",
+    "summary": "Appliance Repair: Oven not heating. oven ge no heat. Estimated $350.",
+    "priceBreakdown": "Oven repair",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: My oven is having issues.\nAI: What brand is it?\nCustomer: It's a ge.\nAI: What symptoms are you experiencing?\nCustomer: It's no heat.\nAI: Is it still under warranty?\nCustomer: No, it's out of warranty.\nAI: Great! Let me get some details. What is your name?\nCustomer: Thomas Williams.\nAI: Thanks Thomas! And a phone number I can reach you at?\nCustomer: (518) 555-7610.\nAI: Perfect. And what's the address for the service?\nCustomer: 2704 Chestnut Dr.\nAI: Thanks Thomas. We'll send an appliance tech to look at your ge oven. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Oven repair",
+        "a": 350
+      }
+    ]
+  },
+  {
+    "id": "mrk123k88pxjmh",
+    "caller": "Christopher Jackson",
+    "phone": "(401) 555-3167",
+    "address": "4385 Juniper Pl",
+    "service": "Electrical panel upgrade",
+    "icon": "⚡",
+    "avgPrice": 180,
+    "jobDetail": "Fixture install",
+    "duration": "1:00",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "Today, 16:50 PM",
+    "receivedAt": "2026-07-14T02:23:54.222Z",
+    "summary": "Electrical panel upgrade: Lighting fixture install 6. Fixture install. Estimated $180.",
+    "priceBreakdown": "Fixture installation",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need some light fixtures installed.\nAI: Got it. How many fixtures are you looking to install?\nCustomer: About 6 fixtures.\nAI: Great! Let me get some details. What is your name?\nCustomer: Christopher Jackson.\nAI: Thanks Christopher! And a phone number I can reach you at?\nCustomer: (401) 555-3167.\nAI: Perfect. And what's the address for the service?\nCustomer: 4385 Juniper Pl.\nAI: Thanks Christopher. We'll have someone reach out to schedule the install. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Fixture installation",
+        "a": 180
+      }
+    ]
+  },
+  {
+    "id": "mrk12dgbh2e9r1",
+    "caller": "Jennifer Jackson",
+    "phone": "(959) 555-1482",
+    "address": "697 Magnolia Ln",
+    "service": "Concrete driveway",
+    "icon": "🏗️",
+    "avgPrice": 2800,
+    "jobDetail": "350sqft broom finish",
+    "duration": "1:44",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "Today, 10:36 AM",
+    "receivedAt": "2026-07-14T02:24:06.991Z",
+    "summary": "Concrete driveway: Walkway patio. 350sqft broom finish. Estimated $2,800.",
+    "priceBreakdown": "350sqft x $8 concrete",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I want to pour a new concrete walkway.\nAI: Great! What's the total square footage?\nCustomer: About 350 square feet.\nAI: A nice walkway. Do you want it reinforced with rebar or wire mesh?\nCustomer: No, standard concrete is fine.\nAI: And what type of finish are you looking for — broom, smooth, or stamped?\nCustomer: We'd like a broom finish.\nAI: New pour, 350 sqft, broom finish. Sounds good!\nAI: Great! Let me get some details. What is your name?\nCustomer: Jennifer Jackson.\nAI: Thanks Jennifer! And a phone number I can reach you at?\nCustomer: (959) 555-1482.\nAI: Perfect. And what's the address for the service?\nCustomer: 697 Magnolia Ln.\nAI: Thanks Jennifer. We'll have a concrete crew reach out for the pour. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "350sqft x $8 concrete",
+        "a": 2800
+      }
+    ]
+  },
+  {
+    "id": "mrk12dgfjam0hx",
+    "caller": "John Miller",
+    "phone": "(860) 555-8813",
+    "address": "1599 Sycamore Rd",
+    "service": "Drywall Repair/Installation",
+    "icon": "🧱",
+    "avgPrice": 900,
+    "jobDetail": "full wall textured water-damage 200sqft",
+    "duration": "1:31",
+    "status": "answered",
+    "outcome": "follow-up",
+    "time": "Today, 18:26 PM",
+    "receivedAt": "2026-07-14T02:24:07.057Z",
+    "summary": "Drywall Repair/Installation: Water damage restoration. full wall textured water-damage 200sqft. Estimated $900.",
+    "priceBreakdown": "Water damage repair, 200sqft x $2.50 drywall",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need water damage drywall repair.\nAI: What's the total square footage?\nCustomer: About 200 square feet.\nAI: Was there water damage involved?\nCustomer: Yes, we had a leak that damaged the drywall.\nAI: Do you need the texture matched to the existing wall?\nCustomer: Yes, we want it to match the rest of the wall.\nAI: Great! Let me get some details. What is your name?\nCustomer: John Miller.\nAI: Thanks John! And a phone number I can reach you at?\nCustomer: (860) 555-8813.\nAI: Perfect. And what's the address for the service?\nCustomer: 1599 Sycamore Rd.\nAI: Thanks John. 200sqft wall textured water-damage. We'll have a drywall pro reach out. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Water damage repair",
+        "a": 400
+      },
+      {
+        "l": "200sqft x $2.50 drywall",
+        "a": 500
+      }
+    ]
+  },
+  {
+    "id": "mrk12dgte0nusm",
+    "caller": "Linda Miller",
+    "phone": "(845) 555-3997",
+    "address": "1047 Cedar Cir",
+    "service": "Chimney Service",
+    "icon": "🔥",
+    "avgPrice": 250,
+    "jobDetail": "cleaning",
+    "duration": "1:41",
+    "status": "answered",
+    "outcome": "no-interest",
+    "time": "Today, 13:35 PM",
+    "receivedAt": "2026-07-14T02:24:07.066Z",
+    "summary": "Chimney Service: Annual cleaning. cleaning. Estimated $250.",
+    "priceBreakdown": "Standard cleaning",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need my chimney cleaned.\nAI: Great! How many stories is your home?\nCustomer: Single story.\nAI: Great! Let me get some details. What is your name?\nCustomer: Linda Miller.\nAI: Thanks Linda! And a phone number I can reach you at?\nCustomer: (845) 555-3997.\nAI: Perfect. And what's the address for the service?\nCustomer: 1047 Cedar Cir.",
+    "pricingBreakdown": [
+      {
+        "l": "Standard cleaning",
+        "a": 250
+      }
+    ]
+  },
+  {
+    "id": "mrk131t0sr3t6e",
+    "caller": "James Martinez",
+    "phone": "(845) 555-9032",
+    "address": "6207 Oak Ave",
+    "service": "Window replacement",
+    "icon": "",
+    "avgPrice": 1800,
+    "jobDetail": "1 windows double pane",
+    "duration": "1:42",
+    "status": "answered",
+    "outcome": "follow-up",
+    "time": "Today, 11:05 AM",
+    "receivedAt": "2026-07-14T02:24:38.591Z",
+    "summary": "Window replacement: Bay window install. 1 windows double pane. Estimated $1,800.",
+    "priceBreakdown": "1 x double-pane window @ $1800 each",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I'm looking to replace some windows.\nAI: How many windows are you looking to replace?\nCustomer: 1 window.\nAI: Are you looking at double-pane or triple-pane windows?\nCustomer: We want double-pane windows.\nAI: What floor are the windows on?\nCustomer: They're on the first floor.\nAI: First floor is straightforward. \nAI: Great! Let me get some details. What is your name?\nCustomer: James Martinez.\nAI: Thanks James! And a phone number I can reach you at?\nCustomer: (845) 555-9032.\nAI: Perfect. And what's the address for the service?\nCustomer: 6207 Oak Ave.\nAI: Thanks James. I have 1 double-pane windows on the first floor. An installer will reach out to schedule. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "1 x double-pane window @ $1800 each",
+        "a": 1800
+      }
+    ]
+  },
+  {
+    "id": "mrk131t8wpdodv",
+    "caller": "James Lopez",
+    "phone": "(845) 555-2734",
+    "address": "6842 Birch Dr",
+    "service": "Concrete driveway",
+    "icon": "🏗️",
+    "avgPrice": 2800,
+    "jobDetail": "350sqft broom finish",
+    "duration": "1:18",
+    "status": "answered",
+    "outcome": "lead-captured",
+    "time": "Yesterday, 9:15 AM",
+    "receivedAt": "2026-07-14T02:24:38.633Z",
+    "summary": "Concrete driveway: Walkway patio. 350sqft broom finish. Estimated $2,800.",
+    "priceBreakdown": "350sqft x $8 concrete",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I want to pour a new concrete walkway.\nAI: Great! What's the total square footage?\nCustomer: About 350 square feet.\nAI: A nice walkway. Do you want it reinforced with rebar or wire mesh?\nCustomer: No, standard concrete is fine.\nAI: And what type of finish are you looking for — broom, smooth, or stamped?\nCustomer: We'd like a broom finish.\nAI: New pour, 350 sqft, broom finish. Sounds good!\nAI: Great! Let me get some details. What is your name?\nCustomer: James Lopez.\nAI: Thanks James! And a phone number I can reach you at?\nCustomer: (845) 555-2734.\nAI: Perfect. And what's the address for the service?\nCustomer: 6842 Birch Dr.\nAI: Thanks James. We'll have a concrete crew reach out for the pour. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "350sqft x $8 concrete",
+        "a": 2800
+      }
+    ]
+  },
+  {
+    "id": "mrk131tkg3asna",
+    "caller": "Jessica Martin",
+    "phone": "(914) 555-6085",
+    "address": "5817 Pine St",
+    "service": "Carpet cleaning",
+    "icon": "🧹",
+    "avgPrice": 175,
+    "jobDetail": "2 rooms 500sqft",
+    "duration": "1:06",
+    "status": "answered",
+    "outcome": "lead-captured",
+    "time": "Yesterday, 10:20 AM",
+    "receivedAt": "2026-07-14T02:24:38.638Z",
+    "summary": "Carpet cleaning: Living room hallway. 2 rooms 500sqft. Estimated $175.",
+    "priceBreakdown": "500sqft x $0.35",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need my carpets cleaned.\nAI: How many rooms need cleaning?\nCustomer: 2 rooms.\nAI: What's the total square footage?\nCustomer: About 500 square feet.\nAI: Do you have any stubborn stains that need special treatment?\nCustomer: No, just a general clean.\nAI: Great, a standard deep clean. Let me get your info. Your name?\nCustomer: Jessica Martin.\nAI: Thanks Jessica! And a phone number I can reach you at?\nCustomer: (914) 555-6085.\nAI: Perfect. And what's the address for the service?\nCustomer: 5817 Pine St.\nAI: Thanks Jessica. We have 2 rooms, 500 sqft. A cleaning crew will reach out to schedule. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "500sqft x $0.35",
+        "a": 175
+      }
+    ]
+  },
+  {
+    "id": "mrk13ezqr2pjnc",
+    "caller": "Elizabeth Lopez",
+    "phone": "(845) 555-1617",
+    "address": "2834 Elm Pl",
+    "service": "Insulation Installation",
+    "icon": "🌡️",
+    "avgPrice": 1440,
+    "jobDetail": "walls injection 800sqft r-15",
+    "duration": "1:49",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "2 days ago, 9:44 AM",
+    "receivedAt": "2026-07-14T02:24:55.642Z",
+    "summary": "Insulation Installation: Wall injection. walls injection 800sqft r-15. Estimated $1,440.",
+    "priceBreakdown": "walls 800sqft injection x $1.8",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need insulation installed in my walls.\nAI: We inject cellulose or spray foam into the wall cavities. What R-value are you looking for?\nCustomer: We want R-15.\nAI: \nAI: Let me get your info. Your name?\nCustomer: Elizabeth Lopez.\nAI: Thanks Elizabeth! And a phone number I can reach you at?\nCustomer: (845) 555-1617.\nAI: Perfect. And what's the address for the service?\nCustomer: 2834 Elm Pl.",
+    "pricingBreakdown": [
+      {
+        "l": "walls 800sqft injection x $1.8",
+        "a": 1440
+      }
+    ]
+  },
+  {
+    "id": "mrk13f010614a0",
+    "caller": "Matthew Garcia",
+    "phone": "(401) 555-6865",
+    "address": "8932 Magnolia Ave",
+    "service": "Interior Painting",
+    "icon": "🎨",
+    "avgPrice": 4360,
+    "jobDetail": "0 rooms 800sqft +trim premium color-change",
+    "duration": "1:07",
+    "status": "answered",
+    "outcome": "no-interest",
+    "time": "Yesterday, 8:15 AM",
+    "receivedAt": "2026-07-14T02:24:55.698Z",
+    "summary": "Interior Painting: Exterior trim painting. 0 rooms 800sqft +trim premium color-change. Estimated $4,360.",
+    "priceBreakdown": "0 rooms 800sqft x $3.5, Trim painting 800sqft x $0.50, Premium paint upgrade (+30%), Color change fee",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need some interior painting done.\nAI: Great! How many rooms are we painting?\nCustomer: Just the exterior trim.\nAI: What's the total wall square footage?\nCustomer: About 800 square feet.\nAI: And what's the ceiling height — standard 8ft or higher?\nCustomer: It's 10 feet, we have vaulted ceilings.\nAI: Are you looking for economy or premium grade paint?\nCustomer: We want premium — it lasts longer.\nAI: Will there be any trim work — baseboards, crown molding, or cabinets?\nCustomer: Yes, we need the trim done too.\nAI: Is this a color change or same color touch-up?\nCustomer: It's a color change, so we'll need coverage.\nAI: Great! Let me get some details. What is your name?\nCustomer: Matthew Garcia.\nAI: Thanks Matthew! And a phone number I can reach you at?\nCustomer: (401) 555-6865.\nAI: Perfect. And what's the address for the service?\nCustomer: 8932 Magnolia Ave.",
+    "pricingBreakdown": [
+      {
+        "l": "0 rooms 800sqft x $3.5",
+        "a": 2800
+      },
+      {
+        "l": "Trim painting 800sqft x $0.50",
+        "a": 400
+      },
+      {
+        "l": "Premium paint upgrade (+30%)",
+        "a": 840
+      },
+      {
+        "l": "Color change fee",
+        "a": 200
+      }
+    ]
+  },
+  {
+    "id": "mrk13f0301q12i",
+    "caller": "Robert Thomas",
+    "phone": "(845) 555-8554",
+    "address": "3629 Spruce Way",
+    "service": "Bathroom Remodeling",
+    "icon": "🛁",
+    "avgPrice": 2800,
+    "jobDetail": "vanity",
+    "duration": "1:34",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "Today, 10:59 AM",
+    "receivedAt": "2026-07-14T02:24:55.703Z",
+    "summary": "Bathroom Remodeling: Vanity and lighting update. vanity. Estimated $2,800.",
+    "priceBreakdown": "Vanity & lighting update",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I want to update my bathroom vanity and lighting.\nAI: Nice! Is this a full tear-out of the existing vanity?\nCustomer: No, just swapping fixtures.\nAI: Great! Let me get some details. What is your name?\nCustomer: Robert Thomas.\nAI: Thanks Robert! And a phone number I can reach you at?\nCustomer: (845) 555-8554.\nAI: Perfect. And what's the address for the service?\nCustomer: 3629 Spruce Way.\nAI: Thanks Robert. We'll have a remodeling consultant reach out to discuss your vanity update. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Vanity & lighting update",
+        "a": 2800
+      }
+    ]
+  }
+]

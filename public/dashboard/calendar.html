@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
+  <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"dark")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Calendar — NorthStar AI</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,14 +13,16 @@
    Calendar Phase 1 — Apple-quality NorthStar Design
    ================================================================ */
 
-/* Layout — full-height */
+/* Layout — full-height, mockup-spec */
 .cal-layout {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   height: 100%;
   min-height: 0;
-  padding: 16px;
+  padding: 24px 32px 32px;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 .main-content { height: calc(100vh - 80px); overflow: auto; }
 
@@ -158,33 +160,34 @@
 .cal-kpi-divider { display: none; }
 
 /* ================================================================
-   Main content — flex layout
+   Main content — flex layout (mockup match)
    ================================================================ */
 .cal-main {
   display: flex;
   flex: 1;
-  overflow: hidden;
-  min-height: 0;
-  gap: 12px;
+  overflow: visible;
+  min-height: 300px;
+  gap: 16px;
 }
 .cal-grid-container {
   flex: 1;
   overflow: auto;
   min-width: 0;
-  background: var(--neutral-0);
-  border: 1px solid var(--neutral-200);
+  max-width: 580px;
+  background: #11151b;
+  border: 1px solid rgba(255,255,255,0.06);
   border-radius: var(--radius, 10px);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  padding: 12px;
+  box-shadow: none;
+  padding: 16px;
 }
 .cal-sidebar {
-  width: 240px;
+  width: 230px;
   flex-shrink: 0;
-  background: var(--neutral-0);
-  border: 1px solid var(--neutral-200);
+  background: #05080e;
+  border: 1px solid rgba(255,255,255,0.04);
   border-radius: var(--radius, 10px);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  padding: 14px;
+  box-shadow: none;
+  padding: 16px;
   overflow-y: auto;
 }
 
@@ -349,6 +352,16 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cal-sidebar-event-time { font-size: 10px; color: var(--neutral-500); }
+
+/* Full-width Polaris section below two-column layout */
+.cal-polaris-fullwidth {
+  width: 100%;
+  background: #11151b;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius, 10px);
+  padding: 20px 24px;
+  box-sizing: border-box;
+}
 
 /* Mini month */
 .cal-mini-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -724,6 +737,8 @@ function toggleMobileMenu() {
         <div class="cal-grid-container" id="calendarGrid"></div>
         <div class="cal-sidebar" id="calendarSidebar"></div>
       </div>
+      <!-- Full-width Polaris intelligence -->
+      <div class="cal-polaris-fullwidth" id="calendarPolarisFull"></div>
     </div>
   </main>
 </div>

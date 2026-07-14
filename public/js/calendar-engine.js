@@ -162,6 +162,7 @@ class CalendarRenderer {
     this.sidebar = document.getElementById('calendarSidebar');
     this.header = document.getElementById('calendarHeader');
     this.kpiBar = document.getElementById('calendarKpiBar');
+    this.polarisFull = document.getElementById('calendarPolarisFull');
   }
 
   render() {
@@ -174,6 +175,7 @@ class CalendarRenderer {
       case 'agenda': this.renderAgenda(); break;
     }
     this.renderSidebar();
+    this.renderPolarisFull();
   }
 
   renderHeader() {
@@ -508,6 +510,63 @@ class CalendarRenderer {
     miniHtml += '<button class="cal-new-event-btn" onclick="window.openEventModal()">+ New Event</button>';
 
     this.sidebar.innerHTML = miniHtml;
+  }
+
+  renderPolarisFull() {
+    if (!this.polarisFull) return;
+    const leadEvents = this.state.events.filter(e => e.type === 'lead');
+    const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : (window.__leads || []);
+    const unscheduledLeads = allLeads.filter(l => l.outcome !== 'appointment-set' && l.status !== 'booked' && l.status !== 'estimate-scheduled');
+    const qualifiedLeads = allLeads.filter(l => l.status === 'new' || l.status === 'contacted' || l.status === 'qualified');
+    const totalPipeline = qualifiedLeads.reduce((sum, l) => sum + (parseFloat(l.avgPrice || l.estimated_price) || 0), 0);
+    const topLead = qualifiedLeads.length > 0 ? qualifiedLeads.sort((a,b) => (parseFloat(b.avgPrice || b.estimated_price)||0) - (parseFloat(a.avgPrice || a.estimated_price)||0))[0] : null;
+
+    let html = '<div class="cal-polaris-badge">✦ DAY ANALYSIS</div>';
+    const selectedDate = this.state.selectedDate || new Date();
+    const selectedStr = this.state._formatDate(selectedDate);
+    const dayEvents = this.state.events.filter(e => e.date === selectedStr);
+
+    if (leadEvents.length > 0) {
+      // Normal state with events
+      const dayRevenue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
+      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Appointments</span><span class="cal-polaris-value">${leadEvents.length}</span></div>`;
+      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Day Revenue</span><span class="cal-polaris-value">$${dayRevenue.toLocaleString()}</span></div>`;
+      if (topLead) {
+        const name = topLead.caller_name || topLead.caller || 'Unknown';
+        const service = topLead.service_type || topLead.service || 'Service';
+        html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${name}<br><span style="font-size:11px;font-weight:400;color:var(--neutral-500);">${service}</span> <span style="color:var(--neutral-400);">›</span></span></div>`;
+      }
+      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">$${totalPipeline.toLocaleString()}</span></div>`;
+      if (topLead) {
+        html += `<div class="cal-polaris-row" style="flex-direction:column;align-items:flex-start;gap:4px;border-top:1px solid rgba(255,255,255,0.04);margin-top:4px;padding-top:8px;">
+          <span class="cal-polaris-label" style="font-weight:600;color:#9aa0a6;">Recommended Action <span style="color:var(--neutral-400);">›</span></span>
+          <span style="font-size:12px;color:#6c7278;">Follow up with ${topLead.caller_name || topLead.caller || 'the lead'} today.</span>
+        </div>`;
+      }
+    } else if (unscheduledLeads.length > 0 || qualifiedLeads.length > 0) {
+      const count = unscheduledLeads.length || qualifiedLeads.length;
+      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Unscheduled Leads</span><span class="cal-polaris-value">${count}</span></div>`;
+      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">$${totalPipeline.toLocaleString()}</span></div>`;
+      if (topLead) {
+        html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${topLead.caller_name || 'Lead'} — $${(parseFloat(topLead.avgPrice || topLead.estimated_price)||0).toLocaleString()} <span style="color:var(--neutral-400);">›</span></span></div>`;
+      }
+      html += `<div class="cal-polaris-row" style="flex-direction:column;align-items:flex-start;gap:4px;border-top:1px solid rgba(255,255,255,0.04);margin-top:4px;padding-top:8px;">
+        <span class="cal-polaris-label" style="font-weight:600;color:#9aa0a6;">Recommended Action <span style="color:var(--neutral-400);">›</span></span>
+        <span style="font-size:12px;color:#6c7278;">Schedule pending leads to keep your pipeline moving.</span>
+      </div>`;
+    } else {
+      // No leads at all — onboarding
+      html += '<div style="text-align:center;padding:12px 0;">';
+      html += '<div style="font-size:24px;margin-bottom:8px;">📅</div>';
+      html += '<div style="font-size:13px;font-weight:600;color:#e8eaed;margin-bottom:4px;">Welcome to NorthStar Calendar</div>';
+      html += '<div style="font-size:12px;color:#6c7278;margin-bottom:10px;">Your appointments will appear here once you receive calls.</div>';
+      if (typeof window.genCall === 'function') {
+        html += '<button class="cal-polaris-action" onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)">📞 Simulate a lead</button>';
+      }
+      html += '</div>';
+    }
+
+    this.polarisFull.innerHTML = html;
   }
 }
 

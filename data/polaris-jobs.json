@@ -1,1 +1,34 @@
-[]
+[
+  {
+    "id": "88932c685689e766",
+    "serviceType": "Test",
+    "estimatedDuration": 2,
+    "actualDuration": 2.5,
+    "estimatedRevenue": 500,
+    "actualRevenue": 550,
+    "durationVariance": 0.5,
+    "completionStatus": "completed",
+    "createdAt": "2026-07-14T21:02:55.869Z",
+    "updatedAt": "2026-07-14T21:02:55.869Z"
+  },
+  {
+    "id": "8688d897e7048584",
+    "serviceType": "Tree Removal",
+    "estimatedDuration": 4,
+    "actualDuration": 5.5,
+    "estimatedRevenue": 1200,
+    "actualRevenue": 1350,
+    "crewId": "crew-1",
+    "crewSize": 3,
+    "travelTimeMinutes": 45,
+    "propertySize": "large",
+    "customerOutcome": "won",
+    "estimateConfidence": 82,
+    "equipmentUsed": "chainsaw,chipper,truck",
+    "city": "Portland",
+    "durationVariance": 1.5,
+    "completionStatus": "completed",
+    "createdAt": "2026-07-14T21:02:55.871Z",
+    "updatedAt": "2026-07-14T21:02:55.872Z"
+  }
+]

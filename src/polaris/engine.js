@@ -22,6 +22,7 @@ const store = require('./store');
 const estimation = require('./estimation');
 const learning = require('./learning');
 const recommendations = require('./recommendations');
+const duration = require('./duration');
 
 /**
  * Initialize Polaris — load all data stores.
@@ -120,6 +121,20 @@ function getHistoricalEstimates() {
 
 function getLearningMetrics() {
   return store.getAllMetrics();
+}
+
+// ── Duration Intelligence ──
+
+function estimateDuration(config) {
+  return duration.estimateDuration(config);
+}
+
+function getServiceBaselines() {
+  return duration.getServiceBaselines();
+}
+
+function getFactorMultipliers() {
+  return duration.getFactorMultipliers();
 }
 
 // ── Analytics Queries ──
@@ -349,6 +364,10 @@ module.exports = {
   getCompletedJobs,
   getHistoricalEstimates,
   getLearningMetrics,
+  // Duration Intelligence
+  estimateDuration,
+  getServiceBaselines,
+  getFactorMultipliers,
   // Analytics
   analyzePipeline,
   analyzeSchedule,

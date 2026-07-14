@@ -358,5 +358,85 @@
         "a": 400
       }
     ]
+  },
+  {
+    "id": "mrl43giwxw93hc",
+    "caller": "Thomas Davis",
+    "phone": "(845) 555-4568",
+    "address": "4613 Juniper St",
+    "service": "Bathroom Remodeling",
+    "icon": "🛁",
+    "avgPrice": 2800,
+    "jobDetail": "vanity",
+    "duration": "1:08",
+    "status": "answered",
+    "outcome": "no-interest",
+    "time": "2 days ago, 17:28 PM",
+    "receivedAt": "2026-07-14T20:36:42.700Z",
+    "summary": "Bathroom Remodeling: Vanity and lighting update. vanity. Estimated $2,800.",
+    "priceBreakdown": "Vanity & lighting update",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I want to update my bathroom vanity and lighting.\nAI: Nice! Is this a full tear-out of the existing vanity?\nCustomer: No, just swapping fixtures.\nAI: Great! Let me get some details. What is your name?\nCustomer: Thomas Davis.\nAI: Thanks Thomas! And a phone number I can reach you at?\nCustomer: (845) 555-4568.\nAI: Perfect. And what's the address for the service?\nCustomer: 4613 Juniper St.\nAI: Thanks Thomas. We'll have a remodeling consultant reach out to discuss your vanity update. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Vanity & lighting update",
+        "a": 2800
+      }
+    ]
+  },
+  {
+    "id": "mrl43gjdgm34lk",
+    "caller": "Jennifer Jones",
+    "phone": "(845) 555-5484",
+    "address": "1323 Birch Ct",
+    "service": "Drywall Repair/Installation",
+    "icon": "🧱",
+    "avgPrice": 1800,
+    "jobDetail": "full wall textured 800sqft",
+    "duration": "1:54",
+    "status": "answered",
+    "outcome": "follow-up",
+    "time": "Today, 12:51 PM",
+    "receivedAt": "2026-07-14T20:36:42.719Z",
+    "summary": "Drywall Repair/Installation: Full room drywall. full wall textured 800sqft. Estimated $1,800.",
+    "priceBreakdown": "800sqft x $2 drywall, Texture matching",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need drywall installed.\nAI: What's the total square footage?\nCustomer: About 800 square feet.\nAI: Do you need the texture matched to the existing wall?\nCustomer: Yes, we want it to match the rest of the wall.\nAI: Great! Let me get some details. What is your name?\nCustomer: Jennifer Jones.\nAI: Thanks Jennifer! And a phone number I can reach you at?\nCustomer: (845) 555-5484.\nAI: Perfect. And what's the address for the service?\nCustomer: 1323 Birch Ct.\nAI: Thanks Jennifer. 800sqft wall textured. We'll have a drywall pro reach out. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "800sqft x $2 drywall",
+        "a": 1600
+      },
+      {
+        "l": "Texture matching",
+        "a": 200
+      }
+    ]
+  },
+  {
+    "id": "mrl43gjnvj319k",
+    "caller": "Jennifer Miller",
+    "phone": "(959) 555-8922",
+    "address": "6510 Willow Blvd",
+    "service": "Solar Panel Installation",
+    "icon": "☀️",
+    "avgPrice": 26000,
+    "jobDetail": "10 panels",
+    "duration": "1:39",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "2 days ago, 12:40 PM",
+    "receivedAt": "2026-07-14T20:36:42.730Z",
+    "summary": "Solar Panel Installation: 10-panel roof mount. 10 panels. Estimated $26,000.",
+    "priceBreakdown": "10 panels x $2,500, Permit & interconnection",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I want to install solar panels on my property.\nAI: How many panels are you looking at?\nCustomer: 10 panels.\nAI: What type of roof do you have — asphalt, metal, or tile?\nCustomer: It's asphalt shingles.\nAI: Are you looking at a roof mount or ground mount?\nCustomer: Roof mount is fine.\nAI: Do you need help with permits?\nCustomer: Yes, we need the permits handled.\nAI: Great! Let me get some details. What is your name?\nCustomer: Jennifer Miller.\nAI: Thanks Jennifer! And a phone number I can reach you at?\nCustomer: (959) 555-8922.\nAI: Perfect. And what's the address for the service?\nCustomer: 6510 Willow Blvd.",
+    "pricingBreakdown": [
+      {
+        "l": "10 panels x $2,500",
+        "a": 25000
+      },
+      {
+        "l": "Permit & interconnection",
+        "a": 1000
+      }
+    ]
   }
 ]

@@ -120,10 +120,10 @@ class CalendarRenderer {
     const pipelineValue = qualifiedLeads.reduce((sum, l) => sum + (parseFloat(l.avgPrice || l.estimated_price) || 0), 0);
 
     this.kpiBar.innerHTML = `
-      <span class="cal-kpi-pill">📅 <strong>${monthEvents.length}</strong> appointments this month</span>
-      <span class="cal-kpi-pill">📞 <strong>${todayEvents.length}</strong> today</span>
-      <span class="cal-kpi-pill">📊 <strong>${total}</strong> total events</span>
-      <span class="cal-kpi-pill">💰 <strong>$${pipelineValue.toLocaleString()}</strong> pipeline</span>`;
+      <div class="ds-kpi-card"><div class="ds-kpi-icon" style="background:var(--kpi-1-bg,var(--neutral-50));color:var(--kpi-1-color,var(--neutral-500));"><span style="font-size:20px;">📅</span></div><div class="ds-kpi-value">${monthEvents.length}</div><div class="ds-kpi-label">Appointments This Month</div></div>
+      <div class="ds-kpi-card"><div class="ds-kpi-icon" style="background:var(--kpi-2-bg,var(--neutral-50));color:var(--kpi-2-color,var(--neutral-500));"><span style="font-size:20px;">📞</span></div><div class="ds-kpi-value">${todayEvents.length}</div><div class="ds-kpi-label">Today</div></div>
+      <div class="ds-kpi-card"><div class="ds-kpi-icon" style="background:var(--kpi-3-bg,var(--neutral-50));color:var(--kpi-3-color,var(--neutral-500));"><span style="font-size:20px;">📊</span></div><div class="ds-kpi-value">${total}</div><div class="ds-kpi-label">Total Events</div></div>
+      <div class="ds-kpi-card"><div class="ds-kpi-icon" style="background:var(--kpi-4-bg,var(--neutral-50));color:var(--kpi-4-color,var(--neutral-500));"><span style="font-size:20px;">💰</span></div><div class="ds-kpi-value">$${pipelineValue.toLocaleString()}</div><div class="ds-kpi-label">Pipeline</div></div>`;
   }
 
   renderMonth() {
@@ -322,56 +322,81 @@ class CalendarRenderer {
   }
 
   // ================================================================
-  // Polaris — Full-width intelligence section below two-column layout
+  // Polaris — Executive intelligence panel (Dashboard design language)
   // ================================================================
   renderPolaris() {
     if (!this.polaris) return;
-    const leadEvents = this.state.events.filter(e => e.type === 'lead');
     const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : (window.__leads || []);
-    const unscheduledLeads = allLeads.filter(l => l.outcome !== 'appointment-set' && l.status !== 'booked' && l.status !== 'estimate-scheduled');
     const qualifiedLeads = allLeads.filter(l => l.status === 'new' || l.status === 'contacted' || l.status === 'qualified');
     const totalPipeline = qualifiedLeads.reduce((sum, l) => sum + (parseFloat(l.avgPrice || l.estimated_price) || 0), 0);
     const topLead = qualifiedLeads.length > 0 ? qualifiedLeads.sort((a,b) => (parseFloat(b.avgPrice || b.estimated_price)||0) - (parseFloat(a.avgPrice || a.estimated_price)||0))[0] : null;
+    const today = new Date();
+    const todayStr = this.state._formatDate(today);
+    const todayEvents = this.state.events.filter(e => e.date === todayStr);
+    const leadEvents = this.state.events.filter(e => e.type === 'lead');
+    const dayRevenue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
+    const appointmentsToday = todayEvents.filter(e => e.type === 'lead').length || leadEvents.length;
 
-    let html = '<div class="cal-polaris-badge">✦ DAY ANALYSIS</div>';
-
-    if (leadEvents.length > 0) {
-      const dayRevenue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
-      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Appointments</span><span class="cal-polaris-value">${leadEvents.length}</span></div>`;
-      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Day Revenue</span><span class="cal-polaris-value">$${dayRevenue.toLocaleString()}</span></div>`;
-      if (topLead) {
-        const name = topLead.caller_name || topLead.caller || 'Unknown';
-        const service = topLead.service_type || topLead.service || 'Service';
-        html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${name}<br><span style="font-size:11px;font-weight:400;color:#6c7278;">${service}</span> <span style="color:#6c7278;">›</span></span></div>`;
-      }
-      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">$${totalPipeline.toLocaleString()}</span></div>`;
-      if (topLead) {
-        html += `<div class="cal-polaris-row" style="flex-direction:column;align-items:flex-start;gap:4px;border-top:1px solid rgba(255,255,255,0.04);margin-top:4px;padding-top:8px;">
-          <span class="cal-polaris-label" style="font-weight:600;color:#9aa0a6;">Recommended Action <span style="color:#6c7278;">›</span></span>
-          <span style="font-size:12px;color:#6c7278;">Follow up with ${topLead.caller_name || topLead.caller || 'the lead'} today.</span>
-        </div>`;
-      }
-    } else if (unscheduledLeads.length > 0 || qualifiedLeads.length > 0) {
-      const count = unscheduledLeads.length || qualifiedLeads.length;
-      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Unscheduled Leads</span><span class="cal-polaris-value">${count}</span></div>`;
-      html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">$${totalPipeline.toLocaleString()}</span></div>`;
-      if (topLead) {
-        html += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${topLead.caller_name || 'Lead'} — $${(parseFloat(topLead.avgPrice || topLead.estimated_price)||0).toLocaleString()} <span style="color:#6c7278;">›</span></span></div>`;
-      }
-      html += `<div class="cal-polaris-row" style="flex-direction:column;align-items:flex-start;gap:4px;border-top:1px solid rgba(255,255,255,0.04);margin-top:4px;padding-top:8px;">
-        <span class="cal-polaris-label" style="font-weight:600;color:#9aa0a6;">Recommended Action <span style="color:#6c7278;">›</span></span>
-        <span style="font-size:12px;color:#6c7278;">Schedule pending leads to keep your pipeline moving.</span>
-      </div>`;
+    let html = '<div class="polaris-card">';
+    // Header
+    html += '<div class="polaris-header">';
+    html += '<h2 style="font-size:15px;font-weight:600;color:var(--neutral-100);display:flex;align-items:center;gap:8px;margin:0;">POLARIS<span style="font-size:10px;color:var(--neutral-400);font-weight:400;">™</span> Intelligence</h2>';
+    html += '<span class="polaris-badge" style="background:#a67c00;color:#fff;">✦ DAY ANALYSIS</span>';
+    html += '</div>';
+    // Body — vertically stacked rows
+    html += '<div class="polaris-grid" style="display:flex;flex-direction:column;gap:0;">';
+    // Appointments Today
+    html += '<div class="polaris-item">';
+    html += '<div class="polaris-item-label">Appointments Today</div>';
+    html += `<div class="polaris-item-value">${appointmentsToday}</div>`;
+    html += '<div class="polaris-item-desc">Scheduled for today</div>';
+    html += '</div>';
+    // Today's Revenue
+    html += '<div class="polaris-item">';
+    html += '<div class="polaris-item-label">Today\u2019s Revenue</div>';
+    html += `<div class="polaris-item-value">$${dayRevenue.toLocaleString()}</div>`;
+    html += '<div class="polaris-item-desc">Estimated from appointments</div>';
+    html += '</div>';
+    // Pipeline Value
+    html += '<div class="polaris-item">';
+    html += '<div class="polaris-item-label">Pipeline Value</div>';
+    html += `<div class="polaris-item-value">$${totalPipeline.toLocaleString()}</div>`;
+    html += '<div class="polaris-item-desc">Total qualified pipeline</div>';
+    html += '</div>';
+    // Top Priority Lead
+    if (topLead) {
+      const name = topLead.caller_name || topLead.caller || 'Lead';
+      const service = topLead.service_type || topLead.service || 'Service';
+      html += '<div class="polaris-item">';
+      html += '<div class="polaris-item-label">Top Priority</div>';
+      html += `<div class="polaris-item-value" style="font-size:14px;">${name}</div>`;
+      html += `<div class="polaris-item-desc">${service} \u2014 $${(parseFloat(topLead.avgPrice || topLead.estimated_price)||0).toLocaleString()}</div>`;
+      html += '</div>';
+      // Polaris Recommendation
+      html += '<div class="polaris-item" style="border-bottom:none;">';
+      html += '<div class="polaris-item-label">Recommendation</div>';
+      html += `<div class="polaris-item-value" style="font-size:13px;font-weight:500;color:var(--neutral-100);">Follow up with ${name} today</div>`;
+      html += '<div class="polaris-item-desc">Prioritize this opportunity</div>';
+      html += '</div>';
+      // Polaris Insight
+      html += '<div class="polaris-item" style="border-bottom:none;padding-top:4px;">';
+      html += '<div class="polaris-item-label">Insight</div>';
+      html += `<div class="polaris-item-value" style="font-size:13px;font-weight:400;color:var(--neutral-300);">${name} is your highest-value lead at $$${(parseFloat(topLead.avgPrice || topLead.estimated_price)||0).toLocaleString()}</div>`;
+      html += '</div>';
     } else {
-      html += '<div style="text-align:center;padding:12px 0;">';
-      html += '<div style="font-size:24px;margin-bottom:8px;">📅</div>';
-      html += '<div style="font-size:13px;font-weight:600;color:#e8eaed;margin-bottom:4px;">Welcome to NorthStar Calendar</div>';
-      html += '<div style="font-size:12px;color:#6c7278;margin-bottom:10px;">Your appointments will appear here once you receive calls.</div>';
-      if (typeof window.genCall === 'function') {
-        html += '<button class="cal-polaris-action" onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)">📞 Simulate a lead</button>';
-      }
+      // No qualified leads — show intelligence anyway
+      html += '<div class="polaris-item">';
+      html += '<div class="polaris-item-label">Top Priority</div>';
+      html += '<div class="polaris-item-value" style="font-size:14px;color:var(--neutral-400);">No active leads</div>';
+      html += '<div class="polaris-item-desc">Pipeline is empty</div>';
+      html += '</div>';
+      html += '<div class="polaris-item" style="border-bottom:none;">';
+      html += '<div class="polaris-item-label">Recommendation</div>';
+      html += '<div class="polaris-item-value" style="font-size:13px;font-weight:500;color:var(--neutral-300);">Generate new leads to build your pipeline</div>';
+      html += '<div class="polaris-item-desc">Start with outreach or inbound calls</div>';
       html += '</div>';
     }
+    html += '</div></div>'; // close polaris-grid, polaris-card
     this.polaris.innerHTML = html;
   }
 }

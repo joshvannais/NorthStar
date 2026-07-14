@@ -204,17 +204,20 @@ class CalendarRenderer {
     const today = new Date();
     const todayStr = this.state._formatDate(today);
     const todayEvents = this.state.events.filter(e => e.date === todayStr);
-    const leadEvents = this.state.events.filter(e => e.type === 'lead');
     const total = this.state.events.length;
-    const pipelineValue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
+
+    // Pipeline calculation: same as Dashboard — leads with status new/contacted/qualified
+    const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads)
+      ? window.AppStore.getLeads() : (window.__leads || []);
+    const qualifiedLeads = allLeads.filter(l =>
+      l.status === 'new' || l.status === 'contacted' || l.status === 'qualified'
+    );
+    const pipelineValue = qualifiedLeads.reduce((sum, l) => sum + (parseFloat(l.avgPrice || l.estimated_price) || 0), 0);
 
     this.kpiBar.innerHTML = `
       <span class="cal-kpi-pill">📅 <strong>${monthEvents.length}</strong> appointments this month</span>
-      <span class="cal-kpi-divider"></span>
       <span class="cal-kpi-pill">📞 <strong>${todayEvents.length}</strong> today</span>
-      <span class="cal-kpi-divider"></span>
       <span class="cal-kpi-pill">📊 <strong>${total}</strong> total events</span>
-      <span class="cal-kpi-divider"></span>
       <span class="cal-kpi-pill">💰 <strong>${pipelineValue.toLocaleString()}</strong> pipeline</span>
     `;
   }
@@ -449,38 +452,53 @@ class CalendarRenderer {
     }
     miniHtml += '</div>';
 
-    // Polaris panel — smart empty states
-    miniHtml += '<div class="cal-sidebar-section cal-polaris-section">';
-    miniHtml += '<h3 class="cal-sidebar-title">POLARIS™ Intelligence</h3>';
+    // Polaris panel — Executive Briefing Style
+    miniHtml += '<div class="cal-polaris-section">';
+    miniHtml += '<div class="cal-polaris-title">✦ Day Analysis</div>';
     const leadEvents = this.state.events.filter(e => e.type === 'lead');
-    const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
+    const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : (window.__leads || []);
     const unscheduledLeads = allLeads.filter(l => l.outcome !== 'appointment-set' && l.status !== 'booked' && l.status !== 'estimate-scheduled');
-    const totalPipeline = allLeads.reduce((sum, l) => sum + (parseFloat(l.estimated_price) || 0), 0);
-    const topLead = allLeads.length > 0 ? allLeads.sort((a,b) => (parseFloat(b.estimated_price)||0) - (parseFloat(a.estimated_price)||0))[0] : null;
+    const qualifiedLeads = allLeads.filter(l => l.status === 'new' || l.status === 'contacted' || l.status === 'qualified');
+    const totalPipeline = qualifiedLeads.reduce((sum, l) => sum + (parseFloat(l.avgPrice || l.estimated_price) || 0), 0);
+    const topLead = qualifiedLeads.length > 0 ? qualifiedLeads.sort((a,b) => (parseFloat(b.avgPrice || b.estimated_price)||0) - (parseFloat(a.avgPrice || a.estimated_price)||0))[0] : null;
 
     if (leadEvents.length > 0) {
       // Normal state with events
-      const pipelineValue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Top Opportunity</span><span class="cal-polaris-value">${leadEvents[0].title}</span></div>`;
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">${pipelineValue.toLocaleString()}</span></div>`;
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Focus</span><span class="cal-polaris-value">${leadEvents.length} appointments to follow up</span></div>`;
-    } else if (unscheduledLeads.length > 0) {
-      // Has leads but no scheduled events
-      const topOpp = topLead ? `${topLead.caller_name || 'Lead'} — ${(parseFloat(topLead.estimated_price)||0).toLocaleString()}` : 'N/A';
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">📊 Unscheduled Leads</span><span class="cal-polaris-value">${unscheduledLeads.length}</span></div>`;
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">💰 Est. Pipeline</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      const dayRevenue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
+      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Appointments</span><span class="cal-polaris-value">${leadEvents.length}</span></div>`;
+      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Day Revenue</span><span class="cal-polaris-value">${dayRevenue.toLocaleString()}</span></div>`;
       if (topLead) {
-        miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">👤 Top Opportunity</span><span class="cal-polaris-value">${topOpp}</span></div>`;
+        const name = topLead.caller_name || topLead.caller || 'Unknown';
+        const service = topLead.service_type || topLead.service || 'Service';
+        miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${name}<br><span style="font-size:11px;font-weight:400;color:var(--neutral-500);">${service}</span></span></div>`;
       }
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">📅 Suggestion</span><span class="cal-polaris-value">Schedule pending leads</span></div>`;
+      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      if (topLead) {
+        miniHtml += `<div class="cal-polaris-row" style="flex-direction:column;align-items:flex-start;gap:4px;border-top:1px solid var(--neutral-100);margin-top:4px;padding-top:8px;">
+          <span class="cal-polaris-label" style="font-weight:600;color:var(--neutral-700);">Recommended Action</span>
+          <span style="font-size:12px;color:var(--neutral-600);">Follow up with ${topLead.caller_name || topLead.caller || 'the lead'} today.</span>
+        </div>`;
+      }
+    } else if (unscheduledLeads.length > 0 || qualifiedLeads.length > 0) {
+      // Has leads but no scheduled events
+      const count = unscheduledLeads.length || qualifiedLeads.length;
+      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Unscheduled Leads</span><span class="cal-polaris-value">${count}</span></div>`;
+      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      if (topLead) {
+        miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${topLead.caller_name || 'Lead'} — ${(parseFloat(topLead.avgPrice || topLead.estimated_price)||0).toLocaleString()}</span></div>`;
+      }
+      miniHtml += `<div class="cal-polaris-row" style="flex-direction:column;align-items:flex-start;gap:4px;border-top:1px solid var(--neutral-100);margin-top:4px;padding-top:8px;">
+        <span class="cal-polaris-label" style="font-weight:600;color:var(--neutral-700);">Recommended Action</span>
+        <span style="font-size:12px;color:var(--neutral-600);">Schedule pending leads to keep your pipeline moving.</span>
+      </div>`;
     } else {
-      // No leads at all — onboarding state
-      miniHtml += '<div class="cal-polaris-item" style="flex-direction:column;gap:8px;padding:12px 0;">';
-      miniHtml += '<div style="font-size:24px;text-align:center;">📅</div>';
-      miniHtml += '<div style="font-size:13px;font-weight:600;color:var(--neutral-900);text-align:center;">Welcome to NorthStar Calendar</div>';
-      miniHtml += '<div style="font-size:12px;color:var(--neutral-500);text-align:center;">Your appointments will appear here once you receive calls.</div>';
+      // No leads at all — onboarding
+      miniHtml += '<div style="text-align:center;padding:12px 0;">';
+      miniHtml += '<div style="font-size:24px;margin-bottom:8px;">📅</div>';
+      miniHtml += '<div style="font-size:13px;font-weight:600;color:var(--neutral-900);margin-bottom:4px;">Welcome to NorthStar Calendar</div>';
+      miniHtml += '<div style="font-size:12px;color:var(--neutral-500);margin-bottom:10px;">Your appointments will appear here once you receive calls.</div>';
       if (typeof window.genCall === 'function') {
-        miniHtml += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="margin-top:8px;padding:8px 16px;background:var(--brand-500);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
+        miniHtml += '<button class="cal-polaris-action" onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)">📞 Simulate a lead</button>';
       }
       miniHtml += '</div>';
     }

@@ -3136,3 +3136,100 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
   from { transform: translateX(0); opacity: 1; }
   to { transform: translateX(100%); opacity: 0; }
 }
+
+/* ================================================================
+   Phase 2 Audit — Focus Styles & Calendar Variables
+   ================================================================ */
+
+/* M8 — Focus-visible outline */
+:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
+}
+
+/* M9 — Calendar-specific CSS variables (in dark mode) */
+[data-theme="dark"] {
+  --cal-bg: #02050b;
+  --cal-cell-bg: #0d1118;
+  --cal-text: #e8eaed;
+  --cal-accent: #6395ff;
+  --cal-muted: #6c7278;
+  --cal-header-bg: #1a1d23;
+  --cal-border: #2a2d35;
+}
+
+/* M1+M2+M3 — Standardized loading/empty/error states */
+.ds-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--neutral-400);
+}
+.ds-loading-spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--neutral-200);
+  border-top-color: var(--brand-500);
+  border-radius: 50%;
+  animation: ds-spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+@keyframes ds-spin { to { transform: rotate(360deg); } }
+
+.ds-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+.ds-empty-icon { font-size: 32px; margin-bottom: 12px; }
+.ds-empty-title { font-size: 16px; font-weight: 600; color: var(--neutral-700); margin-bottom: 8px; }
+.ds-empty-text { font-size: 13px; color: var(--neutral-500); margin-bottom: 12px; }
+
+.ds-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+.ds-error-icon { font-size: 32px; margin-bottom: 12px; }
+.ds-error-title { font-size: 16px; font-weight: 600; color: var(--neutral-700); margin-bottom: 8px; }
+.ds-error-text { font-size: 13px; color: var(--neutral-500); margin-bottom: 12px; }
+
+.ds-retry-btn {
+  padding: 8px 20px;
+  background: var(--brand-500);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ds-retry-btn:hover { background: var(--brand-600); }
+
+/* Dark mode for shared states */
+[data-theme="dark"] .ds-loading { color: var(--cal-muted, #6c7278); }
+[data-theme="dark"] .ds-empty-title { color: var(--cal-text, #e8eaed); }
+[data-theme="dark"] .ds-empty-text { color: var(--cal-muted, #6c7278); }
+[data-theme="dark"] .ds-error-title { color: var(--cal-text, #e8eaed); }
+[data-theme="dark"] .ds-error-text { color: var(--cal-muted, #6c7278); }
+
+
+/* M4 — Centralized shared dark mode components */
+[data-theme="dark"] .drawer-polaris-section { background: #11151b; border-color: rgba(255,255,255,0.06); }
+[data-theme="dark"] .drawer-polaris-title { color: var(--cal-muted, #6c7278); }
+[data-theme="dark"] .drawer-polaris-row { border-color: rgba(255,255,255,0.04); }
+[data-theme="dark"] .drawer-polaris-label { color: var(--cal-muted, #6c7278); }
+[data-theme="dark"] .drawer-polaris-value { color: var(--cal-text, #e8eaed); }

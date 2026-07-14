@@ -154,12 +154,17 @@ class CalendarRenderer {
   // ═══════════════════════════════════════════════════════════════
   renderKpiBar() {
     if (!this.kpiBar) return;
-    const monthEvents = this.state.getEventsForMonth();
-    const todayEvents = this.state.getTodayEvents();
-    const totalEvents = this.state.events.length;
-    const allLeads = this.state.getLiveLeads();
-    const qualifiedLeads = allLeads.filter(l => l.status === 'new' || l.status === 'contacted' || l.status === 'qualified');
-    const pipelineValue = qualifiedLeads.reduce((sum, l) => sum + (parseFloat(l.avgPrice || l.estimated_price) || 0), 0);
+    var monthEvents = this.state.getEventsForMonth();
+    var todayEvents = this.state.getTodayEvents();
+    var totalEvents = this.state.events.length;
+    var allLeads = this.state.getLiveLeads();
+    // Pipeline: sum ALL leads' avgPrice (same formula as Dashboard's renderPolarisCard)
+    var pipelineValue = 0;
+    for (var i = 0; i < allLeads.length; i++) {
+      var l = allLeads[i];
+      var a = l.polarisAnalysis;
+      pipelineValue += a ? (parseFloat(a.estimatedPrice) || 0) : (parseFloat(l.avgPrice || l.estimated_price) || 0);
+    }
 
     this.kpiBar.innerHTML = `
       <span class="cal-kpi-pill"><span class="cal-kpi-icon">📅</span><span class="cal-kpi-num">${monthEvents.length}</span><span class="cal-kpi-label">Appointments</span></span>
@@ -223,50 +228,48 @@ class CalendarRenderer {
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
     const todayStr = s._formatDate(new Date());
     const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const hours = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM'];
-    const eventsByDay = {};
-    s.events.forEach(e => { if (e.date) { eventsByDay[e.date] = eventsByDay[e.date] || []; eventsByDay[e.date].push(e); } });
-    let html = '<div class="cal-week-view"><div class="cal-week-grid">';
+    var hours = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM'];
+    var eventsByDay = {};
+    s.events.forEach(function(e) { if (e.date) { eventsByDay[e.date] = eventsByDay[e.date] || []; eventsByDay[e.date].push(e); } });
+    var html = '<div class="cal-week-view"><div class="cal-week-grid">';
     // Header row
     html += '<div class="cal-week-row cal-week-header">';
     html += '<div class="cal-week-time"></div>';
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i);
-      const ds = s._formatDate(d);
-      let cls = 'cal-week-day-header';
-      if (ds === todayStr) cls += ' cal-week-day-header-today';
-      html += `<div class="${cls}">${dayNames[i]} ${d.getDate()}</div>`;
+    for (var wi = 0; wi < 7; wi++) {
+      var wd = new Date(startOfWeek); wd.setDate(startOfWeek.getDate() + wi);
+      var wds = s._formatDate(wd);
+      var wcls = 'cal-week-day-header';
+      if (wds === todayStr) wcls += ' cal-week-day-header-today';
+      html += '<div class="' + wcls + '">' + dayNames[wi] + ' ' + wd.getDate() + '</div>';
     }
     html += '</div>';
-    // Time rows — only show events at their actual scheduled hour
-    hours.forEach(h => {
-      // Extract hour number for matching
-      const hourMatch = h.match(/(\d+)/);
-      const hourNum = hourMatch ? parseInt(hourMatch[1]) : -1;
-      const isPM = h.includes('PM');
-      const hour24 = isPM && hourNum !== 12 ? hourNum + 12 : (!isPM && hourNum === 12 ? 0 : hourNum);
-      const hourStr = String(hour24).padStart(2, '0');
+    // Time rows — each hour slot shows only events whose time starts at that hour
+    var hourMap = {7:0,8:1,9:2,10:3,11:4,12:5,13:6,14:7,15:8,16:9,17:10,18:11,19:12};
+    var hourLabels = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM'];
+    for (var hi = 0; hi < hourLabels.length; hi++) {
+      var hour24 = hi + 7;
       html += '<div class="cal-week-row">';
-      html += `<div class="cal-week-time">${h}</div>`;
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i);
-        const ds = s._formatDate(d);
+      html += '<div class="cal-week-time">' + hourLabels[hi] + '</div>';
+      for (var wi2 = 0; wi2 < 7; wi2++) {
+        var wd2 = new Date(startOfWeek); wd2.setDate(startOfWeek.getDate() + wi2);
+        var wds2 = s._formatDate(wd2);
         html += '<div class="cal-week-cell">';
-        const dayEvts = eventsByDay[ds] || [];
-        // Only show events that start at this hour
-        const hourEvents = dayEvts.filter(e => {
-          if (!e.time) return false;
-          const et = e.time.replace(/^0/, '').split(':')[0];
-          const eHour = parseInt(et);
-          return eHour === hour24 || (hour24 === 0 && eHour === 0) || (Math.abs(eHour - hour24) === 0);
-        });
-        hourEvents.forEach(e => {
-          html += `<div class="cal-week-event" style="background:${e.color || '#6395ff'}" onclick="event.stopPropagation();window.calState.selectEvent(window.calState.events.find(ev => ev.id==='${e.id}'))">${e.title || ''}</div>`;
+        var dayEvts = eventsByDay[wds2] || [];
+        // Match events by their time's hour (e.g., "8:00 AM" → hour 8)
+        dayEvts.forEach(function(e) {
+          if (!e.time) return;
+          var eHour = parseInt(e.time.split(':')[0]);
+          // Handle 12 AM → 0, 12 PM → 12
+          if (e.time.indexOf('PM') > -1 && eHour !== 12) eHour += 12;
+          if (e.time.indexOf('AM') > -1 && eHour === 12) eHour = 0;
+          if (eHour === hour24) {
+            html += '<div class="cal-week-event" style="background:' + (e.color || '#6395ff') + '" onclick="event.stopPropagation();window.calState.selectEvent(window.calState.events.find(function(ev){return ev.id===\'' + e.id + '\'}))">' + (e.title || '') + '</div>';
+          }
         });
         html += '</div>';
       }
       html += '</div>';
-    });
+    }
     html += '</div></div>';
     this.container.innerHTML = html;
   }
@@ -289,26 +292,25 @@ class CalendarRenderer {
     html += '<button class="cal-nav-btn" onclick="window.calState.navigateDay(1)">›</button>';
     html += '</div>';
     // Hours 7AM-7PM
-    const hours = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM'];
-    hours.forEach(h => {
-      const hourMatch = h.match(/(\d+)/);
-      const hourNum = hourMatch ? parseInt(hourMatch[1]) : -1;
-      const isPM = h.includes('PM');
-      const hour24 = isPM && hourNum !== 12 ? hourNum + 12 : (!isPM && hourNum === 12 ? 0 : hourNum);
+    var hours = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM'];
+    hours.forEach(function(h, idx) {
+      var hour24 = idx + 7;
       html += '<div class="cal-day-row">';
-      html += `<div class="cal-day-time">${h}</div>`;
+      html += '<div class="cal-day-time">' + h + '</div>';
       html += '<div class="cal-day-content">';
-      dayEvents.filter(e => {
-        if (!e.time) return false;
-        const et = e.time.replace(/^0/, '').split(':')[0];
-        const eHour = parseInt(et);
-        return eHour === hour24;
-      }).forEach(e => {
-        html += `<div class="cal-day-event-card" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id==='${e.id}'))">`;
-        if (e.time) html += `<div class="cal-day-event-time">${e.time}</div>`;
-        html += `<div class="cal-day-event-title">${e.title || 'Event'}</div>`;
-        if (e.estimatedPrice) html += `<div class="cal-day-event-desc">\$${parseFloat(e.estimatedPrice).toLocaleString()}</div>`;
-        html += '</div>';
+      dayEvents.forEach(function(e) {
+        if (!e.time) return;
+        var eHour = parseInt(e.time.split(':')[0]);
+        if (e.time.indexOf('PM') > -1 && eHour !== 12) eHour += 12;
+        if (e.time.indexOf('AM') > -1 && eHour === 12) eHour = 0;
+        if (eHour === hour24) {
+          html += '<div class="cal-day-event-card" onclick="window.calState.selectEvent(window.calState.events.find(function(ev){return ev.id===\'' + e.id + '\'}))">';
+          html += '<div class="cal-day-event-time">' + (e.time || '') + '</div>';
+          html += '<div class="cal-day-event-title">' + (e.title || 'Event') + '</div>';
+          if (e.serviceType) html += '<div class="cal-day-event-desc">' + e.serviceType + '</div>';
+          else if (e.estimatedPrice) html += '<div class="cal-day-event-desc">\$' + parseFloat(e.estimatedPrice).toLocaleString() + '</div>';
+          html += '</div>';
+        }
       });
       html += '</div></div>';
     });
@@ -391,9 +393,20 @@ class CalendarRenderer {
     if (!this.polarisSection) return;
     const s = this.state;
     const allLeads = s.getLiveLeads();
-    const qualifiedLeads = allLeads.filter(l => l.status === 'new' || l.status === 'contacted' || l.status === 'qualified');
-    const totalPipeline = qualifiedLeads.reduce((sum, l) => sum + (parseFloat(l.avgPrice || l.estimated_price) || 0), 0);
-    const topLead = qualifiedLeads.length > 0 ? qualifiedLeads.sort((a,b) => (parseFloat(b.avgPrice || b.estimated_price)||0) - (parseFloat(a.avgPrice || a.estimated_price)||0))[0] : null;
+    // Pipeline: sum ALL leads' prices (same as Dashboard formula)
+    var totalPipeline = 0;
+    for (var pi = 0; pi < allLeads.length; pi++) {
+      var pl = allLeads[pi];
+      var pa = pl.polarisAnalysis;
+      totalPipeline += pa ? (parseFloat(pa.estimatedPrice) || 0) : (parseFloat(pl.avgPrice || pl.estimated_price) || 0);
+    }
+    // Top lead: highest avgPrice across all leads (same as Dashboard's renderPolarisCard)
+    var topLead = null, topPrice = 0;
+    for (var ti = 0; ti < allLeads.length; ti++) {
+      var tl = allLeads[ti];
+      var tp = parseFloat(tl.avgPrice || tl.estimated_price) || 0;
+      if (tp > topPrice) { topPrice = tp; topLead = tl; }
+    }
     const today = new Date();
     const todayStr = s._formatDate(today);
     const todayEvents = s.events.filter(e => e.date === todayStr);
@@ -606,22 +619,38 @@ window.openEventModal = function() { calModal.openCreateEvent(calState.selectedD
 
 // Build events from AppStore leads + API events
 window.syncCalendarFromAppStore = function() {
-  const allLeads = calState.getLiveLeads();
-  const leadEvents = allLeads
-    .filter(l => l.status === 'booked' || l.status === 'appointment-set' || l.outcome === 'appointment-set' || l.appointment_date)
-    .map(l => ({
+  var allLeads = calState.getLiveLeads();
+  // Generate events from leads that have appointment-ready outcomes
+  // Also use all leads with avgPrice so pipeline values are complete
+  var today = new Date();
+  var todayStr = calState._formatDate(today);
+  // Standard appointment times spread through the day
+  var apptTimes = ['8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'];
+  var timeIdx = 0;
+  var leadEvents = [];
+  allLeads.forEach(function(l) {
+    // Include leads with appointment-related outcome OR any lead with avgPrice (for visibility)
+    var isAppointment = (l.outcome === 'appointment-set' || l.status === 'booked' || l.status === 'appointment-set' || l.appointment_date);
+    if (!isAppointment) return;
+    var time = l.appointment_time || apptTimes[timeIdx % apptTimes.length];
+    var date = l.appointment_date || todayStr;
+    timeIdx++;
+    leadEvents.push({
       id: 'lead-' + l.id,
       title: l.caller_name || l.caller || 'Appointment',
-      date: l.appointment_date || (l.createdAt ? l.createdAt.split('T')[0] : ''),
-      time: l.appointment_time || l.time || '09:00',
+      date: date,
+      time: time,
       type: 'lead',
       leadId: l.id,
       phone: l.phone || '',
       address: l.address || '',
       serviceType: l.service_type || l.service || '',
       estimatedPrice: parseFloat(l.avgPrice || l.estimated_price) || 0,
-      color: '#6395ff'
-    }));
+      color: '#6395ff',
+      status: l.outcome || l.status || 'scheduled',
+      duration: l.duration || '60 min'
+    });
+  });
   return leadEvents;
 };
 

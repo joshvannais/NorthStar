@@ -173,7 +173,6 @@ class CalendarRenderer {
       case 'day': this.renderDay(); break;
       case 'agenda': this.renderAgenda(); break;
     }
-    this.renderSidebar();
   }
 
   renderHeader() {
@@ -225,19 +224,16 @@ class CalendarRenderer {
     const firstDay = this.state.getFirstDayOfMonth();
     const monthEvents = this.state.getEventsForMonth();
 
-    let html = '<div class="cal-month-grid" style="margin: 16px 16px 0;">';
-    // Day headers
+    let html = '<div class="cal-month-grid">';
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     dayNames.forEach(d => {
       html += `<div class="cal-month-day-header">${d}</div>`;
     });
 
-    // Empty cells before first day
     for (let i = 0; i < firstDay; i++) {
       html += '<div class="cal-month-cell cal-month-cell-empty"></div>';
     }
 
-    // Day cells
     const today = new Date();
     const todayStr = this.state._formatDate(today);
     const selectedStr = this.state.selectedDate ? this.state._formatDate(this.state.selectedDate) : null;
@@ -259,9 +255,7 @@ class CalendarRenderer {
       if (dayEvents.length > 0) {
         html += '<div class="cal-month-cell-events">';
         dayEvents.slice(0, 3).forEach(e => {
-          const color = e.color || '#3b82f6';
-          const title = e.title || 'Event';
-          html += `<div class="cal-month-event-dot" style="background:${color}" title="${title}"></div>`;
+          html += `<div class="cal-month-event-dot" style="background:${e.color || '#3b82f6'}" title="${e.title || 'Event'}"></div>`;
         });
         if (dayEvents.length > 3) {
           html += `<span class="cal-month-event-more">+${dayEvents.length - 3} more</span>`;
@@ -273,50 +267,9 @@ class CalendarRenderer {
 
     html += '</div>';
 
-    // Spacious event list section below the grid
-    const selectedDate = this.state.selectedDate || new Date();
-    const selectedStr2 = this.state._formatDate(selectedDate);
-    const dayEvents = this.state.events.filter(e => e.date === selectedStr2);
-    const dateLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    const isSelectedToday = this.state._formatDate(new Date()) === selectedStr2;
-
-    html += '<div class="cal-event-section">';
-    html += `<div class="cal-event-section-header">`;
-    html += `<h2 class="cal-event-section-title">${dateLabel}${isSelectedToday ? ' — Today' : ''}</h2>`;
-    html += `<span class="cal-event-section-count">${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}</span>`;
-    html += `</div>`;
-    html += '<div class="cal-event-list">';
-
-    if (dayEvents.length === 0) {
-      const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
-      html += '<div class="cal-event-card-empty">';
-      html += '<div class="cal-event-card-empty-icon">📅</div>';
-      if (allLeads.length > 0) {
-        html += '<div>No events on this day. Click a day with events to see them here.</div>';
-      } else {
-        html += '<div>No events scheduled. Click a day to create an event, or receive calls to auto-schedule appointments.</div>';
-        if (typeof window.genCall === 'function') {
-          html += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="margin-top:12px;padding:8px 20px;background:var(--brand-500);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
-        }
-      }
-      html += '</div>';
-    } else {
-      dayEvents.forEach(e => {
-        html += `<div class="cal-event-card" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id === '${e.id}'))">`;
-        html += `<div class="cal-event-card-color" style="background:${e.color || '#3b82f6'}"></div>`;
-        html += `<div class="cal-event-card-body">`;
-        html += `<div class="cal-event-card-title">${e.title}</div>`;
-        html += `<div class="cal-event-card-meta">`;
-        if (e.time) html += `<span class="cal-event-card-meta-item">🕐 ${e.time}</span>`;
-        if (e.type === 'lead') html += `<span class="cal-event-card-meta-item">📞 Lead</span>`;
-        if (e.description) html += `<span class="cal-event-card-meta-item">${e.description}</span>`;
-        if (e.caller) html += `<span class="cal-event-card-meta-item">👤 ${e.caller}</span>`;
-        if (e.price) html += `<span class="cal-event-card-meta-item">💰 ${parseFloat(e.price).toLocaleString()}</span>`;
-        html += `</div></div></div>`;
-      });
-    }
-    html += '</div></div>';
-
+    html += this._renderScheduleSection();
+    html += this._renderPolarisSection();
+    html += this._renderActions();
     this.container.innerHTML = html;
   }
 
@@ -325,25 +278,18 @@ class CalendarRenderer {
     const days = this.state.getWeekDays();
     const weekEvents = this.state.getEventsForWeek();
 
-    let html = '<div class="cal-week-view" style="margin: 16px 16px 0;">';
-    // Time column + day columns
-    html += '<div class="cal-week-grid">';
-    // Header row
+    let html = '<div class="cal-week-grid">';
     html += '<div class="cal-week-row cal-week-header">';
     html += '<div class="cal-week-time-header"></div>';
     days.forEach(d => {
       const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
       const dayNum = d.getDate();
-      const dateStr = this.state._formatDate(d);
       const isToday = this.state.isToday(d);
       html += `<div class="cal-week-day-header ${isToday ? 'cal-week-day-header-today' : ''}">${dayName} ${dayNum}</div>`;
     });
     html += '</div>';
 
-    // Time slots (6 AM - 10 PM)
     for (let hour = 6; hour <= 21; hour++) {
-      const timeLabel = hour <= 12 ? `${hour} AM` : `${hour - 12} PM`;
-      if (hour === 12) timeLabel.replace('0 AM', '12 PM');
       html += '<div class="cal-week-row">';
       html += `<div class="cal-week-time">${hour === 0 ? '12 AM' : hour < 12 ? hour + ' AM' : hour === 12 ? '12 PM' : (hour - 12) + ' PM'}</div>`;
       days.forEach(d => {
@@ -358,44 +304,11 @@ class CalendarRenderer {
       });
       html += '</div>';
     }
-    html += '</div></div>';
+    html += '</div>';
 
-    // Event list for selected day
-    const selectedDate = this.state.selectedDate || new Date();
-    const selectedStr = this.state._formatDate(selectedDate);
-    const dayEvents = this.state.events.filter(e => e.date === selectedStr);
-    const dateLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    const isSelectedToday = this.state._formatDate(new Date()) === selectedStr;
-
-    html += '<div class="cal-event-section">';
-    html += `<div class="cal-event-section-header">`;
-    html += `<h2 class="cal-event-section-title">${dateLabel}${isSelectedToday ? ' — Today' : ''}</h2>`;
-    html += `<span class="cal-event-section-count">${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}</span>`;
-    html += `</div>`;
-    html += '<div class="cal-event-list">';
-
-    if (dayEvents.length === 0) {
-      html += '<div class="cal-event-card-empty">';
-      html += '<div class="cal-event-card-empty-icon">📅</div>';
-      html += '<div>No events on this day. Click a day with events to see them here.</div>';
-      html += '</div>';
-    } else {
-      dayEvents.forEach(e => {
-        html += `<div class="cal-event-card" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id === '${e.id}'))">`;
-        html += `<div class="cal-event-card-color" style="background:${e.color || '#3b82f6'}"></div>`;
-        html += `<div class="cal-event-card-body">`;
-        html += `<div class="cal-event-card-title">${e.title}</div>`;
-        html += `<div class="cal-event-card-meta">`;
-        if (e.time) html += `<span class="cal-event-card-meta-item">🕐 ${e.time}</span>`;
-        if (e.type === 'lead') html += `<span class="cal-event-card-meta-item">📞 Lead</span>`;
-        if (e.description) html += `<span class="cal-event-card-meta-item">${e.description}</span>`;
-        if (e.caller) html += `<span class="cal-event-card-meta-item">👤 ${e.caller}</span>`;
-        if (e.price) html += `<span class="cal-event-card-meta-item">💰 ${parseFloat(e.price).toLocaleString()}</span>`;
-        html += `</div></div></div>`;
-      });
-    }
-    html += '</div></div>';
-
+    html += this._renderScheduleSection();
+    html += this._renderPolarisSection();
+    html += this._renderActions();
     this.container.innerHTML = html;
   }
 
@@ -405,10 +318,9 @@ class CalendarRenderer {
     const dateStr = this.state._formatDate(date);
     const dayEvents = this.state.events.filter(e => e.date === dateStr);
 
-    let html = '<div class="cal-day-view" style="margin: 16px 16px 0;">';
+    let html = '<div class="cal-day-view">';
     html += `<h2 class="cal-day-title">${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h2>`;
 
-    // Time slots (6 AM - 10 PM)
     for (let hour = 6; hour <= 21; hour++) {
       const timeStr = String(hour).padStart(2, '0');
       const hourEvents = dayEvents.filter(e => e.time && e.time.startsWith(timeStr));
@@ -426,39 +338,9 @@ class CalendarRenderer {
     }
     html += '</div>';
 
-    // Event list for this day
-    const dateLabel = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    const isToday = this.state._formatDate(new Date()) === dateStr;
-
-    html += '<div class="cal-event-section">';
-    html += `<div class="cal-event-section-header">`;
-    html += `<h2 class="cal-event-section-title">${dateLabel}${isToday ? ' — Today' : ''}</h2>`;
-    html += `<span class="cal-event-section-count">${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}</span>`;
-    html += `</div>`;
-    html += '<div class="cal-event-list">';
-
-    if (dayEvents.length === 0) {
-      html += '<div class="cal-event-card-empty">';
-      html += '<div class="cal-event-card-empty-icon">📅</div>';
-      html += '<div>No events on this day. Click a day with events to see them here.</div>';
-      html += '</div>';
-    } else {
-      dayEvents.forEach(e => {
-        html += `<div class="cal-event-card" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id === '${e.id}'))">`;
-        html += `<div class="cal-event-card-color" style="background:${e.color || '#3b82f6'}"></div>`;
-        html += `<div class="cal-event-card-body">`;
-        html += `<div class="cal-event-card-title">${e.title}</div>`;
-        html += `<div class="cal-event-card-meta">`;
-        if (e.time) html += `<span class="cal-event-card-meta-item">🕐 ${e.time}</span>`;
-        if (e.type === 'lead') html += `<span class="cal-event-card-meta-item">📞 Lead</span>`;
-        if (e.description) html += `<span class="cal-event-card-meta-item">${e.description}</span>`;
-        if (e.caller) html += `<span class="cal-event-card-meta-item">👤 ${e.caller}</span>`;
-        if (e.price) html += `<span class="cal-event-card-meta-item">💰 ${parseFloat(e.price).toLocaleString()}</span>`;
-        html += `</div></div></div>`;
-      });
-    }
-    html += '</div></div>';
-
+    html += this._renderScheduleSection();
+    html += this._renderPolarisSection();
+    html += this._renderActions();
     this.container.innerHTML = html;
   }
 
@@ -476,14 +358,14 @@ class CalendarRenderer {
       const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
       const hasLeads = allLeads.length > 0;
       html += '<div class="cal-agenda-empty">';
-      html += '<div style="font-size:32px;margin-bottom:12px;">📅</div>';
-      html += '<div style="font-size:16px;font-weight:600;color:var(--neutral-700);margin-bottom:8px;">No events scheduled</div>';
+      html += '<div style="font-size:36px;margin-bottom:var(--space-md);">📅</div>';
+      html += '<div style="font-size:var(--font-md);font-weight:600;color:var(--neutral-700);margin-bottom:var(--space-sm);">No events scheduled</div>';
       if (hasLeads) {
-        html += '<div style="font-size:13px;color:var(--neutral-500);margin-bottom:12px;">You have leads ready to schedule. Click a day to create an event.</div>';
+        html += '<div style="font-size:var(--font-sm);color:var(--neutral-500);">You have leads ready to schedule.</div>';
       } else {
-        html += '<div style="font-size:13px;color:var(--neutral-500);margin-bottom:12px;">Click a day to create an event, or receive calls to auto-schedule appointments.</div>';
+        html += '<div style="font-size:var(--font-sm);color:var(--neutral-500);margin-bottom:var(--space-sm);">Receive calls to auto-schedule appointments.</div>';
         if (typeof window.genCall === 'function') {
-          html += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="padding:8px 20px;background:var(--brand-500);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
+          html += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="margin-top:var(--space-sm);padding:var(--space-sm) var(--space-lg);background:var(--brand-500);color:white;border:none;border-radius:var(--radius-sm);font-size:var(--font-sm);font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
         }
       }
       html += '</div>';
@@ -512,100 +394,115 @@ class CalendarRenderer {
       html += '</div></div>';
     }
     html += '</div>';
+
+    html += this._renderPolarisSection();
+    html += this._renderActions();
     this.container.innerHTML = html;
   }
 
-  renderSidebar() {
-    if (!this.sidebar) return;
-    const today = new Date();
-    const todayStr = this.state._formatDate(today);
-    const selectedDate = this.state.selectedDate || today;
+  // === Shared Sections ===
+
+  _renderScheduleSection() {
+    const selectedDate = this.state.selectedDate || new Date();
     const selectedStr = this.state._formatDate(selectedDate);
     const dayEvents = this.state.events.filter(e => e.date === selectedStr);
+    const dateLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const isSelectedToday = this.state._formatDate(new Date()) === selectedStr;
 
-    // Mini month
-    let miniHtml = '<div class="cal-sidebar-section">';
-    miniHtml += '<div class="cal-mini-header">';
-    miniHtml += `<button class="cal-mini-nav" onclick="window.calState.navigate(-1)">‹</button>`;
-    miniHtml += `<span class="cal-mini-label">${selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>`;
-    miniHtml += `<button class="cal-mini-nav" onclick="window.calState.navigate(1)">›</button>`;
-    miniHtml += '</div>';
-    miniHtml += '<div class="cal-mini-grid">';
-    const miniDayNames = ['S','M','T','W','T','F','S'];
-    miniDayNames.forEach(d => { miniHtml += `<div class="cal-mini-day-header">${d}</div>`; });
-    const firstDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1).getDay();
-    const daysInMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate();
-    for (let i = 0; i < firstDay; i++) { miniHtml += '<div class="cal-mini-cell cal-mini-empty"></div>'; }
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), d);
-      const dateStr = this.state._formatDate(date);
-      const isToday = dateStr === todayStr;
-      const isSelected = dateStr === selectedStr;
-      let cls = 'cal-mini-cell';
-      if (isToday) cls += ' cal-mini-today';
-      if (isSelected) cls += ' cal-mini-selected';
-      miniHtml += `<div class="${cls}" onclick="window.calState.selectDate(new Date(${date.getFullYear()}, ${date.getMonth()}, ${d}))">${d}</div>`;
-    }
-    miniHtml += '</div></div>';
+    let html = '<div class="cal-schedule-section">';
+    html += `<div class="cal-schedule-header">`;
+    html += `<h2 class="cal-schedule-title">${dateLabel}${isSelectedToday ? ' — Today' : ''}</h2>`;
+    html += `<span class="cal-schedule-count">${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}</span>`;
+    html += `</div>`;
+    html += '<div class="cal-schedule-list">';
 
-    // Selected day events
-    miniHtml += '<div class="cal-sidebar-section">';
-    miniHtml += `<h3 class="cal-sidebar-title">${selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</h3>`;
     if (dayEvents.length === 0) {
-      miniHtml += '<p class="cal-sidebar-empty">No events</p>';
+      const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
+      html += '<div class="cal-schedule-empty">';
+      html += '<div class="cal-schedule-empty-icon">📅</div>';
+      if (allLeads.length > 0) {
+        html += '<div>No events on this day. Click a day with events to see the schedule.</div>';
+      } else {
+        html += '<div>No events scheduled. Click a day to create an event.</div>';
+        if (typeof window.genCall === 'function') {
+          html += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="margin-top:var(--space-sm);padding:var(--space-sm) var(--space-lg);background:var(--brand-500);color:white;border:none;border-radius:var(--radius-sm);font-size:var(--font-sm);font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
+        }
+      }
+      html += '</div>';
     } else {
       dayEvents.forEach(e => {
-        miniHtml += `<div class="cal-sidebar-event" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id === '${e.id}'))">`;
-        miniHtml += `<div class="cal-sidebar-event-dot" style="background:${e.color || '#3b82f6'}"></div>`;
-        miniHtml += `<div class="cal-sidebar-event-info">`;
-        miniHtml += `<div class="cal-sidebar-event-title">${e.title}</div>`;
-        if (e.time) miniHtml += `<div class="cal-sidebar-event-time">${e.time}</div>`;
-        miniHtml += `</div></div>`;
+        html += `<div class="cal-schedule-card" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id === '${e.id}'))">`;
+        html += `<div class="cal-schedule-card-color" style="background:${e.color || '#3b82f6'}"></div>`;
+        html += `<div class="cal-schedule-card-body">`;
+        html += `<div class="cal-schedule-card-title">${e.title}</div>`;
+        html += `<div class="cal-schedule-card-meta">`;
+        if (e.time) html += `<span class="cal-schedule-card-meta-item">🕐 ${e.time}</span>`;
+        if (e.type === 'lead') html += `<span class="cal-schedule-card-meta-item">📞 Lead</span>`;
+        if (e.description) html += `<span class="cal-schedule-card-meta-item">${e.description}</span>`;
+        if (e.caller) html += `<span class="cal-schedule-card-meta-item">👤 ${e.caller}</span>`;
+        if (e.price) html += `<span class="cal-schedule-card-meta-item">💰 ${parseFloat(e.price).toLocaleString()}</span>`;
+        html += `</div></div></div>`;
       });
     }
-    miniHtml += '</div>';
+    html += '</div></div>';
+    return html;
+  }
 
-    // Polaris panel — smart empty states
-    miniHtml += '<div class="cal-sidebar-section cal-polaris-section">';
-    miniHtml += '<h3 class="cal-sidebar-title">POLARIS™ Intelligence</h3>';
-    const leadEvents = this.state.events.filter(e => e.type === 'lead');
+  _renderPolarisSection() {
+    const selectedDate = this.state.selectedDate || new Date();
+    const selectedStr = this.state._formatDate(selectedDate);
+    const dayEvents = this.state.events.filter(e => e.date === selectedStr);
+    const leadEvents = this.state.events.filter(e => e.type === 'lead' && e.date === selectedStr);
     const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
     const unscheduledLeads = allLeads.filter(l => l.outcome !== 'appointment-set' && l.status !== 'booked' && l.status !== 'estimate-scheduled');
     const totalPipeline = allLeads.reduce((sum, l) => sum + (parseFloat(l.estimated_price) || 0), 0);
     const topLead = allLeads.length > 0 ? allLeads.sort((a,b) => (parseFloat(b.estimated_price)||0) - (parseFloat(a.estimated_price)||0))[0] : null;
+    const dayPipeline = leadEvents.reduce((sum, e) => sum + (parseFloat(e.price) || 0), 0);
 
-    if (leadEvents.length > 0) {
-      // Normal state with events
-      const pipelineValue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Top Opportunity</span><span class="cal-polaris-value">${leadEvents[0].title}</span></div>`;
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">${pipelineValue.toLocaleString()}</span></div>`;
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">Focus</span><span class="cal-polaris-value">${leadEvents.length} appointments to follow up</span></div>`;
+    let html = '<div class="cal-polaris-section">';
+    html += '<div class="cal-polaris-header">';
+    html += '<h3 class="cal-polaris-title">POLARIS™ Intelligence</h3>';
+    html += '<span class="cal-polaris-badge">✦ Day Analysis</span>';
+    html += '</div>';
+
+    if (dayEvents.length > 0) {
+      html += '<div class="cal-polaris-grid">';
+      const topOpp = leadEvents.length > 0 ? leadEvents[0].title : dayEvents[0].title;
+      html += `<div class="cal-polaris-item"><span class="cal-polaris-label">📊 Appointments</span><span class="cal-polaris-value">${dayEvents.length}</span></div>`;
+      if (dayPipeline > 0) html += `<div class="cal-polaris-item"><span class="cal-polaris-label">💰 Day Revenue</span><span class="cal-polaris-value">${dayPipeline.toLocaleString()}</span></div>`;
+      html += `<div class="cal-polaris-item"><span class="cal-polaris-label">🎯 Top Priority</span><span class="cal-polaris-value" style="font-size:var(--font-xs);">${topOpp}</span></div>`;
+      if (totalPipeline > 0) html += `<div class="cal-polaris-item"><span class="cal-polaris-label">📈 Pipeline</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      html += '</div>';
     } else if (unscheduledLeads.length > 0) {
-      // Has leads but no scheduled events
-      const topOpp = topLead ? `${topLead.caller_name || 'Lead'} — ${(parseFloat(topLead.estimated_price)||0).toLocaleString()}` : 'N/A';
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">📊 Unscheduled Leads</span><span class="cal-polaris-value">${unscheduledLeads.length}</span></div>`;
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">💰 Est. Pipeline</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      html += '<div class="cal-polaris-grid">';
+      html += `<div class="cal-polaris-item"><span class="cal-polaris-label">📋 Unscheduled</span><span class="cal-polaris-value">${unscheduledLeads.length}</span></div>`;
+      if (totalPipeline > 0) html += `<div class="cal-polaris-item"><span class="cal-polaris-label">💰 Est. Pipeline</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
       if (topLead) {
-        miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">👤 Top Opportunity</span><span class="cal-polaris-value">${topOpp}</span></div>`;
+        const topOpp = `${topLead.caller_name || 'Lead'} — ${(parseFloat(topLead.estimated_price)||0).toLocaleString()}`;
+        html += `<div class="cal-polaris-item"><span class="cal-polaris-label">👤 Top Opportunity</span><span class="cal-polaris-value" style="font-size:var(--font-xs);">${topOpp}</span></div>`;
       }
-      miniHtml += `<div class="cal-polaris-item"><span class="cal-polaris-label">📅 Suggestion</span><span class="cal-polaris-value">Schedule pending leads</span></div>`;
+      html += `<div class="cal-polaris-item"><span class="cal-polaris-label">📅 Action</span><span class="cal-polaris-value" style="font-size:var(--font-xs);">Schedule pending leads</span></div>`;
+      html += '</div>';
     } else {
-      // No leads at all — onboarding state
-      miniHtml += '<div class="cal-polaris-item" style="flex-direction:column;gap:8px;padding:12px 0;">';
-      miniHtml += '<div style="font-size:24px;text-align:center;">📅</div>';
-      miniHtml += '<div style="font-size:13px;font-weight:600;color:var(--neutral-900);text-align:center;">Welcome to NorthStar Calendar</div>';
-      miniHtml += '<div style="font-size:12px;color:var(--neutral-500);text-align:center;">Your appointments will appear here once you receive calls.</div>';
+      html += '<div class="cal-polaris-empty">';
+      html += '<div style="font-size:24px;margin-bottom:var(--space-sm);">📅</div>';
+      html += '<div>Welcome to NorthStar Calendar. Schedule appointments to see Polaris insights.</div>';
       if (typeof window.genCall === 'function') {
-        miniHtml += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="margin-top:8px;padding:8px 16px;background:var(--brand-500);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
+        html += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="margin-top:var(--space-sm);padding:var(--space-sm) 16px;background:var(--brand-500);color:white;border:none;border-radius:var(--radius-sm);font-size:var(--font-xs);font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
       }
-      miniHtml += '</div>';
+      html += '</div>';
     }
-    miniHtml += '</div>';
 
-    // New event button
-    miniHtml += '<button class="cal-new-event-btn" onclick="window.openEventModal()">+ New Event</button>';
+    html += '</div>';
+    return html;
+  }
 
-    this.sidebar.innerHTML = miniHtml;
+  _renderActions() {
+    return '<div class="cal-actions"><button class="cal-new-event-btn" onclick="window.openEventModal()">+ New Event</button></div>';
+  }
+
+  renderSidebar() {
+    // Sidebar removed — all content moved to main flow
   }
 }
 

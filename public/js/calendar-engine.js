@@ -218,7 +218,7 @@ class CalendarRenderer {
       <span class="cal-kpi-pill">📅 <strong>${monthEvents.length}</strong> appointments this month</span>
       <span class="cal-kpi-pill">📞 <strong>${todayEvents.length}</strong> today</span>
       <span class="cal-kpi-pill">📊 <strong>${total}</strong> total events</span>
-      <span class="cal-kpi-pill">💰 <strong>${pipelineValue.toLocaleString()}</strong> pipeline</span>
+      <span class="cal-kpi-pill">💰 <strong>$${pipelineValue.toLocaleString()}</strong> pipeline</span>
     `;
   }
 
@@ -454,7 +454,7 @@ class CalendarRenderer {
 
     // Polaris panel — Executive Briefing Style
     miniHtml += '<div class="cal-polaris-section">';
-    miniHtml += '<div class="cal-polaris-title">✦ Day Analysis</div>';
+    miniHtml += '<div class="cal-polaris-badge">✦ DAY ANALYSIS</div>';
     const leadEvents = this.state.events.filter(e => e.type === 'lead');
     const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : (window.__leads || []);
     const unscheduledLeads = allLeads.filter(l => l.outcome !== 'appointment-set' && l.status !== 'booked' && l.status !== 'estimate-scheduled');
@@ -466,16 +466,16 @@ class CalendarRenderer {
       // Normal state with events
       const dayRevenue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
       miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Appointments</span><span class="cal-polaris-value">${leadEvents.length}</span></div>`;
-      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Day Revenue</span><span class="cal-polaris-value">${dayRevenue.toLocaleString()}</span></div>`;
+      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Day Revenue</span><span class="cal-polaris-value">$${dayRevenue.toLocaleString()}</span></div>`;
       if (topLead) {
         const name = topLead.caller_name || topLead.caller || 'Unknown';
         const service = topLead.service_type || topLead.service || 'Service';
-        miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${name}<br><span style="font-size:11px;font-weight:400;color:var(--neutral-500);">${service}</span></span></div>`;
+        miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${name}<br><span style="font-size:11px;font-weight:400;color:var(--neutral-500);">${service}</span> <span style="color:var(--neutral-400);">›</span></span></div>`;
       }
-      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">$${totalPipeline.toLocaleString()}</span></div>`;
       if (topLead) {
         miniHtml += `<div class="cal-polaris-row" style="flex-direction:column;align-items:flex-start;gap:4px;border-top:1px solid var(--neutral-100);margin-top:4px;padding-top:8px;">
-          <span class="cal-polaris-label" style="font-weight:600;color:var(--neutral-700);">Recommended Action</span>
+          <span class="cal-polaris-label" style="font-weight:600;color:var(--neutral-700);">Recommended Action <span style="color:var(--neutral-400);">›</span></span>
           <span style="font-size:12px;color:var(--neutral-600);">Follow up with ${topLead.caller_name || topLead.caller || 'the lead'} today.</span>
         </div>`;
       }
@@ -483,12 +483,12 @@ class CalendarRenderer {
       // Has leads but no scheduled events
       const count = unscheduledLeads.length || qualifiedLeads.length;
       miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Unscheduled Leads</span><span class="cal-polaris-value">${count}</span></div>`;
-      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">$${totalPipeline.toLocaleString()}</span></div>`;
       if (topLead) {
-        miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${topLead.caller_name || 'Lead'} — ${(parseFloat(topLead.avgPrice || topLead.estimated_price)||0).toLocaleString()}</span></div>`;
+        miniHtml += `<div class="cal-polaris-row"><span class="cal-polaris-label">Top Priority</span><span class="cal-polaris-value">${topLead.caller_name || 'Lead'} — $${(parseFloat(topLead.avgPrice || topLead.estimated_price)||0).toLocaleString()} <span style="color:var(--neutral-400);">›</span></span></div>`;
       }
       miniHtml += `<div class="cal-polaris-row" style="flex-direction:column;align-items:flex-start;gap:4px;border-top:1px solid var(--neutral-100);margin-top:4px;padding-top:8px;">
-        <span class="cal-polaris-label" style="font-weight:600;color:var(--neutral-700);">Recommended Action</span>
+        <span class="cal-polaris-label" style="font-weight:600;color:var(--neutral-700);">Recommended Action <span style="color:var(--neutral-400);">›</span></span>
         <span style="font-size:12px;color:var(--neutral-600);">Schedule pending leads to keep your pipeline moving.</span>
       </div>`;
     } else {
@@ -861,7 +861,7 @@ class CalendarEventDetail {
     const price = event.estimatedPrice || event.price || 0;
     const margin = price > 0 ? '35%' : '—';
     return this._renderSection('💰', 'Financials', `
-      <div class="cal-detail-row"><span class="cal-detail-label">Est. Cost</span><span>${parseFloat(price).toLocaleString()}</span></div>
+      <div class="cal-detail-row"><span class="cal-detail-label">Est. Cost</span><span>$${parseFloat(price).toLocaleString()}</span></div>
       <div class="cal-detail-row"><span class="cal-detail-label">Suggested Bid</span><span style="color:var(--neutral-400);font-style:italic;">— Available in Phase 3</span></div>
       <div class="cal-detail-row"><span class="cal-detail-label">Gross Profit</span><span style="color:var(--neutral-400);font-style:italic;">— Available in Phase 3</span></div>
       <div class="cal-detail-row"><span class="cal-detail-label">Margin</span><span>${margin}</span></div>

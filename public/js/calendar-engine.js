@@ -48,16 +48,36 @@ class CalendarState {
 
   navigate(delta) {
     this.currentDate.setMonth(this.currentDate.getMonth() + delta);
+    this.selectedDate = null;
     this._notify();
   }
 
   goToday() {
     this.currentDate = new Date();
+    this.selectedDate = null;
     this._notify();
   }
 
-  setView(v) { this.view = v; this._notify(); }
+  setView(v) {
+    this.view = v;
+    // Sync date when switching views
+    if (v === 'day') {
+      // Day view: use selectedDate if set, otherwise currentDate
+      if (!this.selectedDate) this.selectedDate = this._formatDate(this.currentDate);
+    } else if (v === 'week') {
+      // Week view: center on currentDate (already uses currentDate)
+    }
+    this._notify();
+  }
   selectDate(d) { this.selectedDate = d; this._notify(); }
+  navigateDay(delta) {
+    if (!this.selectedDate) this.selectedDate = this._formatDate(new Date());
+    const d = this.selectedDate instanceof Date ? new Date(this.selectedDate) : new Date(this.selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    this.selectedDate = this._formatDate(d);
+    this.currentDate = new Date(d.getFullYear(), d.getMonth(), 1);
+    this._notify();
+  }
   selectEvent(e) { this.selectedEvent = e; this._notify(); }
   onChange(cb) { this.listeners.push(cb); }
   _notify() { this.listeners.forEach(cb => cb(this)); }
@@ -243,9 +263,9 @@ class CalendarRenderer {
 
   _renderDayView() {
     const s = this.state;
-    // Use a dayNavigator to track the currently viewed day independently
-    if (!s._dayNavDate) s._dayNavDate = s.selectedDate ? new Date(s.selectedDate) : new Date();
-    const day = s._dayNavDate;
+    // Day view always uses currentDate — synced with month/week views
+    if (!s.selectedDate) s.selectedDate = s._formatDate(s.currentDate);
+    const day = s.selectedDate instanceof Date ? s.selectedDate : new Date(s.selectedDate + 'T12:00:00');
     const dayStr = s._formatDate(day);
     const dayEvents = s.events.filter(e => e.date === dayStr);
     const todayStr = s._formatDate(new Date());
@@ -254,9 +274,9 @@ class CalendarRenderer {
     let html = '<div class="cal-day-view">';
     // Navigation header
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
-    html += '<button class="cal-nav-btn" onclick="window.calState._dayNavDate.setDate(window.calState._dayNavDate.getDate() - 1);window.calRenderer.render()">‹</button>';
+    html += '<button class="cal-nav-btn" onclick="window.calState.navigateDay(-1)">‹</button>';
     html += `<h3 class="cal-day-title" style="margin:0;font-size:15px;">${dayLabel}${isToday ? ' <span style="color:#6395ff;font-size:11px;font-weight:600;">— Today</span>' : ''}</h3>`;
-    html += '<button class="cal-nav-btn" onclick="window.calState._dayNavDate.setDate(window.calState._dayNavDate.getDate() + 1);window.calRenderer.render()">›</button>';
+    html += '<button class="cal-nav-btn" onclick="window.calState.navigateDay(1)">›</button>';
     html += '</div>';
     // Hours 7AM-7PM
     const hours = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM'];

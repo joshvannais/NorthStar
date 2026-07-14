@@ -23,6 +23,7 @@ const estimation = require('./estimation');
 const learning = require('./learning');
 const recommendations = require('./recommendations');
 const duration = require('./duration');
+const travel = require('./travel');
 
 /**
  * Initialize Polaris — load all data stores.
@@ -135,6 +136,24 @@ function getServiceBaselines() {
 
 function getFactorMultipliers() {
   return duration.getFactorMultipliers();
+}
+
+// ── Travel Intelligence ──
+
+function estimateTravel(config) {
+  return travel.estimateTravel(config);
+}
+
+function getTravelForService(serviceType, location, options) {
+  return travel.getTravelForService(serviceType, location, options);
+}
+
+function getProviderInterface(provider) {
+  return travel.getProviderInterface(provider);
+}
+
+function getSupportedProviders() {
+  return travel.getSupportedProviders();
 }
 
 // ── Analytics Queries ──
@@ -368,6 +387,11 @@ module.exports = {
   estimateDuration,
   getServiceBaselines,
   getFactorMultipliers,
+  // Travel Intelligence
+  estimateTravel,
+  getTravelForService,
+  getProviderInterface,
+  getSupportedProviders,
   // Analytics
   analyzePipeline,
   analyzeSchedule,

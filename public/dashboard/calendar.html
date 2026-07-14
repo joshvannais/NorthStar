@@ -61,10 +61,10 @@ body { background: #02050b; }
 .cal-view-tab.active { background: #1a1f28; color: #e8eaed; }
 .cal-view-tab:hover:not(.active) { color: #9aa0a6; }
 
-/* KPI Bar — 4 equal-width pills, left-aligned */
+/* KPI Bar — 2x2 grid, compact, left-aligned */
 .cal-kpi-bar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
 }
 .cal-kpi-pill {
@@ -80,23 +80,29 @@ body { background: #02050b; }
   color: #9aa0a6;
   white-space: nowrap;
   line-height: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 .cal-kpi-pill .cal-kpi-icon {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
   flex-shrink: 0;
 }
 .cal-kpi-pill .cal-kpi-num {
   font-weight: 700;
   color: #e8eaed;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
+  flex-shrink: 0;
 }
 .cal-kpi-pill .cal-kpi-label {
   color: #6c7278;
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Calendar Grid */
@@ -210,21 +216,10 @@ body { background: #02050b; }
 .cal-event-list-time { font-size: 10px; color: #9aa0a6; }
 .cal-event-list-value { font-size: 11px; font-weight: 600; color: #e8eaed; white-space: nowrap; }
 
-/* New Event Button */
-.cal-new-event-area { display: flex; justify-content: flex-end; margin-top: 8px; }
-.cal-new-event-btn {
-  padding: 6px 14px;
-  background: #6395ff;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.cal-new-event-btn:hover { background: #7ba7ff; }
+/* New Event Button — full-width, centered */
+.cal-new-event-area { margin-top: 8px; }
 
-/* Polaris — uses shared polaris-card component from Dashboard */
+/* Polaris — Calendar-specific executive intelligence */
 .cal-polaris-section {
   width: 100%;
   background: #11151b;
@@ -233,6 +228,25 @@ body { background: #02050b; }
   padding: 18px 20px;
   box-sizing: border-box;
 }
+.cal-polaris-badge {
+  display: inline-block;
+  background: #a67c00;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+.cal-polaris-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+.cal-polaris-row + .cal-polaris-row { border-top: 1px solid rgba(255,255,255,0.04); }
+.cal-polaris-label { font-size: 11px; font-weight: 500; color: #9aa0a6; flex-shrink: 0; }
+.cal-polaris-value { font-size: 12px; font-weight: 600; color: #e8eaed; text-align: right; margin-left: 12px; }
 
 /* Modal */
 .cal-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }

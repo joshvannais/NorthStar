@@ -193,7 +193,7 @@ class CalendarRenderer {
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
     const todayStr = s._formatDate(new Date());
     const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const hours = Array.from({length:12}, (_,i) => (i+7)+':00');
+    const hours = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM'];
     const eventsByDay = {};
     s.events.forEach(e => { if (e.date) { eventsByDay[e.date] = eventsByDay[e.date] || []; eventsByDay[e.date].push(e); } });
     let html = '<div class="cal-week-view"><div class="cal-week-grid">';
@@ -208,8 +208,14 @@ class CalendarRenderer {
       html += `<div class="${cls}">${dayNames[i]} ${d.getDate()}</div>`;
     }
     html += '</div>';
-    // Time rows
+    // Time rows — only show events at their actual scheduled hour
     hours.forEach(h => {
+      // Extract hour number for matching
+      const hourMatch = h.match(/(\d+)/);
+      const hourNum = hourMatch ? parseInt(hourMatch[1]) : -1;
+      const isPM = h.includes('PM');
+      const hour24 = isPM && hourNum !== 12 ? hourNum + 12 : (!isPM && hourNum === 12 ? 0 : hourNum);
+      const hourStr = String(hour24).padStart(2, '0');
       html += '<div class="cal-week-row">';
       html += `<div class="cal-week-time">${h}</div>`;
       for (let i = 0; i < 7; i++) {
@@ -217,7 +223,14 @@ class CalendarRenderer {
         const ds = s._formatDate(d);
         html += '<div class="cal-week-cell">';
         const dayEvts = eventsByDay[ds] || [];
-        dayEvts.forEach(e => {
+        // Only show events that start at this hour
+        const hourEvents = dayEvts.filter(e => {
+          if (!e.time) return false;
+          const et = e.time.replace(/^0/, '').split(':')[0];
+          const eHour = parseInt(et);
+          return eHour === hour24 || (hour24 === 0 && eHour === 0) || (Math.abs(eHour - hour24) === 0);
+        });
+        hourEvents.forEach(e => {
           html += `<div class="cal-week-event" style="background:${e.color || '#6395ff'}" onclick="event.stopPropagation();window.calState.selectEvent(window.calState.events.find(ev => ev.id==='${e.id}'))">${e.title || ''}</div>`;
         });
         html += '</div>';
@@ -230,22 +243,41 @@ class CalendarRenderer {
 
   _renderDayView() {
     const s = this.state;
-    const day = s.selectedDate ? new Date(s.selectedDate) : new Date();
+    // Use a dayNavigator to track the currently viewed day independently
+    if (!s._dayNavDate) s._dayNavDate = s.selectedDate ? new Date(s.selectedDate) : new Date();
+    const day = s._dayNavDate;
     const dayStr = s._formatDate(day);
     const dayEvents = s.events.filter(e => e.date === dayStr);
+    const todayStr = s._formatDate(new Date());
+    const isToday = dayStr === todayStr;
     const dayLabel = day.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
     let html = '<div class="cal-day-view">';
-    html += `<h3 class="cal-day-title">${dayLabel}</h3>`;
-    const hours = Array.from({length:12}, (_,i) => (i+7)+':00');
+    // Navigation header
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
+    html += '<button class="cal-nav-btn" onclick="window.calState._dayNavDate.setDate(window.calState._dayNavDate.getDate() - 1);window.calRenderer.render()">‹</button>';
+    html += `<h3 class="cal-day-title" style="margin:0;font-size:15px;">${dayLabel}${isToday ? ' <span style="color:#6395ff;font-size:11px;font-weight:600;">— Today</span>' : ''}</h3>`;
+    html += '<button class="cal-nav-btn" onclick="window.calState._dayNavDate.setDate(window.calState._dayNavDate.getDate() + 1);window.calRenderer.render()">›</button>';
+    html += '</div>';
+    // Hours 7AM-7PM
+    const hours = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM'];
     hours.forEach(h => {
+      const hourMatch = h.match(/(\d+)/);
+      const hourNum = hourMatch ? parseInt(hourMatch[1]) : -1;
+      const isPM = h.includes('PM');
+      const hour24 = isPM && hourNum !== 12 ? hourNum + 12 : (!isPM && hourNum === 12 ? 0 : hourNum);
       html += '<div class="cal-day-row">';
       html += `<div class="cal-day-time">${h}</div>`;
       html += '<div class="cal-day-content">';
-      dayEvents.filter(e => (e.time||'').startsWith(h.replace(':00',''))).forEach(e => {
+      dayEvents.filter(e => {
+        if (!e.time) return false;
+        const et = e.time.replace(/^0/, '').split(':')[0];
+        const eHour = parseInt(et);
+        return eHour === hour24;
+      }).forEach(e => {
         html += `<div class="cal-day-event-card" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id==='${e.id}'))">`;
         if (e.time) html += `<div class="cal-day-event-time">${e.time}</div>`;
         html += `<div class="cal-day-event-title">${e.title || 'Event'}</div>`;
-        if (e.description) html += `<div class="cal-day-event-desc">${e.description}</div>`;
+        if (e.estimatedPrice) html += `<div class="cal-day-event-desc">\$${parseFloat(e.estimatedPrice).toLocaleString()}</div>`;
         html += '</div>';
       });
       html += '</div></div>';
@@ -319,7 +351,7 @@ class CalendarRenderer {
   // ═══════════════════════════════════════════════════════════════
   renderNewEventArea() {
     if (!this.newEventArea) return;
-    this.newEventArea.innerHTML = `<button class="cal-new-event-btn" onclick="window.openEventModal()">+ New Event</button>`;
+    this.newEventArea.innerHTML = `<button class="cal-new-event-btn" onclick="window.openEventModal()" style="width:100%;padding:7px 14px;background:#6395ff;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:block;text-align:center;">+ New Event</button>`;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -327,40 +359,61 @@ class CalendarRenderer {
   // ═══════════════════════════════════════════════════════════════
   renderPolaris() {
     if (!this.polarisSection) return;
-    // Insert the shared polaris-card HTML (same structure as Dashboard)
-    this.polarisSection.innerHTML = `
-      <div class="polaris-card">
-        <div class="polaris-header">
-          <h2>POLARIS<sup>™</sup> Intelligence</h2>
-          <span class="polaris-badge">LIVE</span>
-        </div>
-        <div class="polaris-grid" id="polarisCardGrid">
-          <div class="polaris-item">
-            <div class="polaris-item-label">Top Opportunity</div>
-            <div class="polaris-item-value" id="polarisTopOpp">—</div>
-            <div class="polaris-item-desc" id="polarisTopOppDesc">—</div>
-            <div class="polaris-confidence" id="polarisTopConf">—</div>
-          </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Pipeline Value</div>
-            <div class="polaris-item-value" id="polarisPipeline">$0</div>
-            <div class="polaris-item-desc" id="polarisPipelineDesc">Total qualified pipeline</div>
-            <div class="polaris-confidence" id="polarisPipeConf">—</div>
-          </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Recommended Focus</div>
-            <div class="polaris-item-value" id="polarisFocus">—</div>
-            <div class="polaris-item-desc" id="polarisFocusDesc">—</div>
-            <div class="polaris-confidence" id="polarisFocusConf">—</div>
-          </div>
-        </div>
-      </div>`;
-    // Let the shared PolarisEngine populate it (same as Dashboard)
-    try {
-      if (typeof window.PolarisEngine !== 'undefined' && window.PolarisEngine.renderPolarisCard) {
-        window.PolarisEngine.renderPolarisCard(this.state.getLiveLeads());
-      }
-    } catch(e) { console.warn('[Calendar] PolarisEngine:', e.message); }
+    const s = this.state;
+    const allLeads = s.getLiveLeads();
+    const qualifiedLeads = allLeads.filter(l => l.status === 'new' || l.status === 'contacted' || l.status === 'qualified');
+    const totalPipeline = qualifiedLeads.reduce((sum, l) => sum + (parseFloat(l.avgPrice || l.estimated_price) || 0), 0);
+    const topLead = qualifiedLeads.length > 0 ? qualifiedLeads.sort((a,b) => (parseFloat(b.avgPrice || b.estimated_price)||0) - (parseFloat(a.avgPrice || a.estimated_price)||0))[0] : null;
+    const today = new Date();
+    const todayStr = s._formatDate(today);
+    const todayEvents = s.events.filter(e => e.date === todayStr);
+    const todayAppts = todayEvents.filter(e => e.type === 'lead');
+    const todayRevenue = todayAppts.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
+    const totalEvents = s.events.length;
+    const totalLeads = allLeads.length;
+    const scheduleEfficiency = totalEvents > 0 ? Math.round((todayAppts.length / Math.max(totalEvents, 1)) * 100) : 0;
+    const capacityPct = Math.min(100, Math.round((todayAppts.length / 8) * 100));
+
+    // Calendar-specific Polaris intelligence
+    let html = '<div class="polaris-card">';
+    // Header
+    html += '<div class="polaris-header">';
+    html += '<h2 style="font-size:15px;font-weight:700;color:#e8eaed;display:flex;align-items:center;gap:6px;margin:0;letter-spacing:0.01em;">POLARIS<span style="font-size:9px;color:#9aa0a6;font-weight:400;vertical-align:super;">&#8482;</span> <span style="font-weight:400;font-size:13px;color:#9aa0a6;">Intelligence</span></h2>';
+    html += '<span class="cal-polaris-badge" style="background:#a67c00;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;letter-spacing:0.05em;">&#10022; DAY ANALYSIS</span>';
+    html += '</div>';
+    // Body — vertically stacked rows
+    html += '<div class="polaris-grid" style="display:flex;flex-direction:column;gap:0;">';
+    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Executive Summary</span><span class="cal-polaris-value">' + todayAppts.length + ' appointment' + (todayAppts.length !== 1 ? 's' : '') + ' today</span></div>';
+    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Today’s Revenue</span><span class="cal-polaris-value">$' + todayRevenue.toLocaleString() + '</span></div>';
+    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Today’s Appointments</span><span class="cal-polaris-value">' + todayAppts.length + '</span></div>';
+    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Schedule Efficiency</span><span class="cal-polaris-value">' + scheduleEfficiency + '%</span></div>';
+    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">$' + totalPipeline.toLocaleString() + '</span></div>';
+    // Highest Value Appointment
+    const highestValue = todayAppts.length > 0 ? todayAppts.sort((a,b) => (parseFloat(b.estimatedPrice)||0) - (parseFloat(a.estimatedPrice)||0))[0] : null;
+    if (highestValue) {
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Highest Value</span><span class="cal-polaris-value">' + (highestValue.title||'') + ' — $' + parseFloat(highestValue.estimatedPrice).toLocaleString() + '</span></div>';
+    }
+    // Capacity Utilization
+    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Capacity Utilization</span><span class="cal-polaris-value">' + capacityPct + '%</span></div>';
+    // Scheduling Conflicts
+    const timeCounts = {};
+    todayEvents.forEach(e => { if (e.time) { timeCounts[e.time] = (timeCounts[e.time] || 0) + 1; } });
+    const conflicts = Object.keys(timeCounts).filter(t => timeCounts[t] > 1).length;
+    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Scheduling Conflicts</span><span class="cal-polaris-value" style="color:' + (conflicts > 0 ? '#ef4444' : '#22c55e') + ';">' + (conflicts > 0 ? conflicts + ' conflict' + (conflicts > 1 ? 's' : '') : 'None') + '</span></div>';
+    // AI Recommendation
+    if (topLead) {
+      const name = topLead.caller_name || topLead.caller || 'top lead';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">Follow up with ' + name + ' today</span></div>';
+    } else if (totalLeads > 0) {
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">Set appointments for ' + totalLeads + ' active leads</span></div>';
+    } else {
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">Generate leads to build your pipeline</span></div>';
+    }
+    // Follow-up Opportunities
+    const followUp = allLeads.filter(l => l.status === 'contacted' || l.status === 'new').length;
+    html += '<div class="cal-polaris-row" style="border-bottom:none;"><span class="cal-polaris-label">Follow-up Opportunities</span><span class="cal-polaris-value">' + followUp + ' lead' + (followUp !== 1 ? 's' : '') + '</span></div>';
+    html += '</div></div>';
+    this.polarisSection.innerHTML = html;
   }
 }
 

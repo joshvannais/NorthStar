@@ -225,7 +225,7 @@ class CalendarRenderer {
     const firstDay = this.state.getFirstDayOfMonth();
     const monthEvents = this.state.getEventsForMonth();
 
-    let html = '<div class="cal-month-grid">';
+    let html = '<div class="cal-month-grid" style="margin: 16px 16px 0;">';
     // Day headers
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     dayNames.forEach(d => {
@@ -272,6 +272,51 @@ class CalendarRenderer {
     }
 
     html += '</div>';
+
+    // Spacious event list section below the grid
+    const selectedDate = this.state.selectedDate || new Date();
+    const selectedStr2 = this.state._formatDate(selectedDate);
+    const dayEvents = this.state.events.filter(e => e.date === selectedStr2);
+    const dateLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const isSelectedToday = this.state._formatDate(new Date()) === selectedStr2;
+
+    html += '<div class="cal-event-section">';
+    html += `<div class="cal-event-section-header">`;
+    html += `<h2 class="cal-event-section-title">${dateLabel}${isSelectedToday ? ' — Today' : ''}</h2>`;
+    html += `<span class="cal-event-section-count">${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}</span>`;
+    html += `</div>`;
+    html += '<div class="cal-event-list">';
+
+    if (dayEvents.length === 0) {
+      const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
+      html += '<div class="cal-event-card-empty">';
+      html += '<div class="cal-event-card-empty-icon">📅</div>';
+      if (allLeads.length > 0) {
+        html += '<div>No events on this day. Click a day with events to see them here.</div>';
+      } else {
+        html += '<div>No events scheduled. Click a day to create an event, or receive calls to auto-schedule appointments.</div>';
+        if (typeof window.genCall === 'function') {
+          html += '<button onclick="window.genCall();setTimeout(()=>window.refreshCalendar(),1500)" style="margin-top:12px;padding:8px 20px;background:var(--brand-500);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">📞 Simulate a lead</button>';
+        }
+      }
+      html += '</div>';
+    } else {
+      dayEvents.forEach(e => {
+        html += `<div class="cal-event-card" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id === '${e.id}'))">`;
+        html += `<div class="cal-event-card-color" style="background:${e.color || '#3b82f6'}"></div>`;
+        html += `<div class="cal-event-card-body">`;
+        html += `<div class="cal-event-card-title">${e.title}</div>`;
+        html += `<div class="cal-event-card-meta">`;
+        if (e.time) html += `<span class="cal-event-card-meta-item">🕐 ${e.time}</span>`;
+        if (e.type === 'lead') html += `<span class="cal-event-card-meta-item">📞 Lead</span>`;
+        if (e.description) html += `<span class="cal-event-card-meta-item">${e.description}</span>`;
+        if (e.caller) html += `<span class="cal-event-card-meta-item">👤 ${e.caller}</span>`;
+        if (e.price) html += `<span class="cal-event-card-meta-item">💰 ${parseFloat(e.price).toLocaleString()}</span>`;
+        html += `</div></div></div>`;
+      });
+    }
+    html += '</div></div>';
+
     this.container.innerHTML = html;
   }
 
@@ -280,7 +325,7 @@ class CalendarRenderer {
     const days = this.state.getWeekDays();
     const weekEvents = this.state.getEventsForWeek();
 
-    let html = '<div class="cal-week-view">';
+    let html = '<div class="cal-week-view" style="margin: 16px 16px 0;">';
     // Time column + day columns
     html += '<div class="cal-week-grid">';
     // Header row
@@ -314,6 +359,43 @@ class CalendarRenderer {
       html += '</div>';
     }
     html += '</div></div>';
+
+    // Event list for selected day
+    const selectedDate = this.state.selectedDate || new Date();
+    const selectedStr = this.state._formatDate(selectedDate);
+    const dayEvents = this.state.events.filter(e => e.date === selectedStr);
+    const dateLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const isSelectedToday = this.state._formatDate(new Date()) === selectedStr;
+
+    html += '<div class="cal-event-section">';
+    html += `<div class="cal-event-section-header">`;
+    html += `<h2 class="cal-event-section-title">${dateLabel}${isSelectedToday ? ' — Today' : ''}</h2>`;
+    html += `<span class="cal-event-section-count">${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}</span>`;
+    html += `</div>`;
+    html += '<div class="cal-event-list">';
+
+    if (dayEvents.length === 0) {
+      html += '<div class="cal-event-card-empty">';
+      html += '<div class="cal-event-card-empty-icon">📅</div>';
+      html += '<div>No events on this day. Click a day with events to see them here.</div>';
+      html += '</div>';
+    } else {
+      dayEvents.forEach(e => {
+        html += `<div class="cal-event-card" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id === '${e.id}'))">`;
+        html += `<div class="cal-event-card-color" style="background:${e.color || '#3b82f6'}"></div>`;
+        html += `<div class="cal-event-card-body">`;
+        html += `<div class="cal-event-card-title">${e.title}</div>`;
+        html += `<div class="cal-event-card-meta">`;
+        if (e.time) html += `<span class="cal-event-card-meta-item">🕐 ${e.time}</span>`;
+        if (e.type === 'lead') html += `<span class="cal-event-card-meta-item">📞 Lead</span>`;
+        if (e.description) html += `<span class="cal-event-card-meta-item">${e.description}</span>`;
+        if (e.caller) html += `<span class="cal-event-card-meta-item">👤 ${e.caller}</span>`;
+        if (e.price) html += `<span class="cal-event-card-meta-item">💰 ${parseFloat(e.price).toLocaleString()}</span>`;
+        html += `</div></div></div>`;
+      });
+    }
+    html += '</div></div>';
+
     this.container.innerHTML = html;
   }
 
@@ -323,7 +405,7 @@ class CalendarRenderer {
     const dateStr = this.state._formatDate(date);
     const dayEvents = this.state.events.filter(e => e.date === dateStr);
 
-    let html = '<div class="cal-day-view">';
+    let html = '<div class="cal-day-view" style="margin: 16px 16px 0;">';
     html += `<h2 class="cal-day-title">${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h2>`;
 
     // Time slots (6 AM - 10 PM)
@@ -343,6 +425,40 @@ class CalendarRenderer {
       html += '</div></div>';
     }
     html += '</div>';
+
+    // Event list for this day
+    const dateLabel = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const isToday = this.state._formatDate(new Date()) === dateStr;
+
+    html += '<div class="cal-event-section">';
+    html += `<div class="cal-event-section-header">`;
+    html += `<h2 class="cal-event-section-title">${dateLabel}${isToday ? ' — Today' : ''}</h2>`;
+    html += `<span class="cal-event-section-count">${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}</span>`;
+    html += `</div>`;
+    html += '<div class="cal-event-list">';
+
+    if (dayEvents.length === 0) {
+      html += '<div class="cal-event-card-empty">';
+      html += '<div class="cal-event-card-empty-icon">📅</div>';
+      html += '<div>No events on this day. Click a day with events to see them here.</div>';
+      html += '</div>';
+    } else {
+      dayEvents.forEach(e => {
+        html += `<div class="cal-event-card" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id === '${e.id}'))">`;
+        html += `<div class="cal-event-card-color" style="background:${e.color || '#3b82f6'}"></div>`;
+        html += `<div class="cal-event-card-body">`;
+        html += `<div class="cal-event-card-title">${e.title}</div>`;
+        html += `<div class="cal-event-card-meta">`;
+        if (e.time) html += `<span class="cal-event-card-meta-item">🕐 ${e.time}</span>`;
+        if (e.type === 'lead') html += `<span class="cal-event-card-meta-item">📞 Lead</span>`;
+        if (e.description) html += `<span class="cal-event-card-meta-item">${e.description}</span>`;
+        if (e.caller) html += `<span class="cal-event-card-meta-item">👤 ${e.caller}</span>`;
+        if (e.price) html += `<span class="cal-event-card-meta-item">💰 ${parseFloat(e.price).toLocaleString()}</span>`;
+        html += `</div></div></div>`;
+      });
+    }
+    html += '</div></div>';
+
     this.container.innerHTML = html;
   }
 

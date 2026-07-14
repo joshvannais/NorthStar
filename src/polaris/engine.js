@@ -25,6 +25,7 @@ const recommendations = require('./recommendations');
 const duration = require('./duration');
 const travel = require('./travel');
 const crew = require('./crew');
+const capacity = require('./capacity');
 
 /**
  * Initialize Polaris — load all data stores.
@@ -169,6 +170,40 @@ function getCrewForService(serviceType, options) {
 
 function getCrewEquipment(serviceType, crewSize) {
   return crew.getCrewEquipment(serviceType, crewSize);
+}
+
+// ── Capacity Forecasting (Consumer of Polaris, not a standalone engine) ──
+
+function getCapacityForecast(config) {
+  return capacity.getCapacityForecast(config);
+}
+
+function canFitInSchedule(job, schedule, crews) {
+  return capacity.canFitInSchedule(job, schedule, crews);
+}
+
+function getEarliestAppointment(job, schedule, crews) {
+  return capacity.getEarliestAppointment(job, schedule, crews);
+}
+
+function getBestCrewForJob(job, crews) {
+  return capacity.getBestCrewForJob(job, crews);
+}
+
+function checkProfitabilityImpact(job, schedule) {
+  return capacity.checkProfitabilityImpact(job, schedule);
+}
+
+function checkSchedulingConflicts(job, schedule) {
+  return capacity.checkSchedulingConflicts(job, schedule);
+}
+
+function getUnusedCapacity(schedule, startDate, endDate, crews) {
+  return capacity.getUnusedCapacity(schedule, startDate, endDate, crews);
+}
+
+function getRemainingRevenueCapacity(schedule, dateRange, crews) {
+  return capacity.getRemainingRevenueCapacity(schedule, dateRange, crews);
 }
 
 // ── Analytics Queries ──
@@ -411,6 +446,15 @@ module.exports = {
   getCrewIntelligence,
   getCrewForService,
   getCrewEquipment,
+  // Capacity Forecasting (Consumer of Polaris)
+  getCapacityForecast,
+  canFitInSchedule,
+  getEarliestAppointment,
+  getBestCrewForJob,
+  checkProfitabilityImpact,
+  checkSchedulingConflicts,
+  getUnusedCapacity,
+  getRemainingRevenueCapacity,
   // Analytics
   analyzePipeline,
   analyzeSchedule,

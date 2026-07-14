@@ -111,19 +111,36 @@ class CalendarRenderer {
     if (!this.kpiBar) return;
     const monthEvents = this.state.getEventsForMonth();
     const today = new Date();
-    const todayEvents = this.state.events.filter(e => e.date === this.state._formatDate(today));
+    const todayStr = this.state._formatDate(today);
+    const todayEvents = this.state.events.filter(e => e.date === todayStr);
     const total = this.state.events.length;
 
-    // Pipeline: same as Dashboard — new/contacted/qualified leads
+    // Pipeline: single source of truth — same AppStore selectors as Dashboard
     const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : (window.__leads || []);
     const qualifiedLeads = allLeads.filter(l => l.status === 'new' || l.status === 'contacted' || l.status === 'qualified');
     const pipelineValue = qualifiedLeads.reduce((sum, l) => sum + (parseFloat(l.avgPrice || l.estimated_price) || 0), 0);
 
     this.kpiBar.innerHTML = `
-      <div class="ds-kpi-card"><div class="ds-kpi-icon" style="background:var(--kpi-1-bg,var(--neutral-50));color:var(--kpi-1-color,var(--neutral-500));"><span style="font-size:20px;">📅</span></div><div class="ds-kpi-value">${monthEvents.length}</div><div class="ds-kpi-label">Appointments This Month</div></div>
-      <div class="ds-kpi-card"><div class="ds-kpi-icon" style="background:var(--kpi-2-bg,var(--neutral-50));color:var(--kpi-2-color,var(--neutral-500));"><span style="font-size:20px;">📞</span></div><div class="ds-kpi-value">${todayEvents.length}</div><div class="ds-kpi-label">Today</div></div>
-      <div class="ds-kpi-card"><div class="ds-kpi-icon" style="background:var(--kpi-3-bg,var(--neutral-50));color:var(--kpi-3-color,var(--neutral-500));"><span style="font-size:20px;">📊</span></div><div class="ds-kpi-value">${total}</div><div class="ds-kpi-label">Total Events</div></div>
-      <div class="ds-kpi-card"><div class="ds-kpi-icon" style="background:var(--kpi-4-bg,var(--neutral-50));color:var(--kpi-4-color,var(--neutral-500));"><span style="font-size:20px;">💰</span></div><div class="ds-kpi-value">$${pipelineValue.toLocaleString()}</div><div class="ds-kpi-label">Pipeline</div></div>`;
+      <span class="cal-kpi-pill" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:var(--neutral-800);border:1px solid rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:#9aa0a6;white-space:nowrap;">
+        <span style="font-size:14px;">📅</span>
+        <strong style="color:#e8eaed;font-weight:600;">${monthEvents.length}</strong>
+        <span style="color:#6c7278;">appointments</span>
+      </span>
+      <span class="cal-kpi-pill" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:var(--neutral-800);border:1px solid rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:#9aa0a6;white-space:nowrap;">
+        <span style="font-size:14px;">📞</span>
+        <strong style="color:#e8eaed;font-weight:600;">${todayEvents.length}</strong>
+        <span style="color:#6c7278;">today</span>
+      </span>
+      <span class="cal-kpi-pill" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:var(--neutral-800);border:1px solid rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:#9aa0a6;white-space:nowrap;">
+        <span style="font-size:14px;">📊</span>
+        <strong style="color:#e8eaed;font-weight:600;">${total}</strong>
+        <span style="color:#6c7278;">events</span>
+      </span>
+      <span class="cal-kpi-pill" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:var(--neutral-800);border:1px solid rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:#9aa0a6;white-space:nowrap;">
+        <span style="font-size:14px;">💰</span>
+        <strong style="color:#e8eaed;font-weight:600;">$${pipelineValue.toLocaleString()}</strong>
+        <span style="color:#6c7278;">pipeline</span>
+      </span>`;
   }
 
   renderMonth() {
@@ -544,7 +561,7 @@ class CalendarModal {
 }
 
 // ================================================================
-// Initialize
+// Initialize — Single source of truth: AppStore
 // ================================================================
 const calState = new CalendarState();
 const calRenderer = new CalendarRenderer(calState);
@@ -558,9 +575,40 @@ window.calModal = calModal;
 
 window.openEventModal = function() { calModal.openCreateEvent(calState.selectedDate || new Date()); };
 
+// Build events from AppStore leads + API events
+function syncCalendarFromAppStore() {
+  const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : (window.__leads || []);
+  const leadEvents = allLeads
+    .filter(l => l.status === 'booked' || l.status === 'appointment-set' || l.outcome === 'appointment-set')
+    .map(l => ({
+      id: 'lead-' + l.id,
+      title: l.caller_name || l.caller || 'Appointment',
+      date: l.appointment_date || l.date || l.createdAt ? (l.createdAt || '').split('T')[0] : '',
+      time: l.appointment_time || l.time || '09:00',
+      type: 'lead',
+      leadId: l.id,
+      phone: l.phone || '',
+      address: l.address || '',
+      serviceType: l.service_type || l.service || '',
+      estimatedPrice: parseFloat(l.avgPrice || l.estimated_price) || 0,
+      color: '#6395ff'
+    }));
+  return leadEvents;
+}
+
 window.refreshCalendar = async function() {
-  const events = await calData.fetchEvents();
-  calState.events = events;
+  try {
+    const [apiEvents, leadEvents] = await Promise.all([
+      calData.fetchEvents().catch(() => []),
+      Promise.resolve(syncCalendarFromAppStore())
+    ]);
+    // Merge: API events + lead events from AppStore (no duplicates)
+    const existingIds = new Set(apiEvents.map(e => e.id));
+    const newLeadEvents = leadEvents.filter(e => !existingIds.has(e.id));
+    calState.events = [...apiEvents, ...newLeadEvents];
+  } catch(e) {
+    calState.events = syncCalendarFromAppStore();
+  }
   calRenderer.render();
 };
 

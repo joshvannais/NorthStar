@@ -1089,6 +1089,19 @@ function clearAllCalls() {
 try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){renderCalls()})}catch(e){}
 // Initialize
 function loadCalls() { renderCalls(); }
+
+// Seed demo data if no leads exist
+try {
+  if (typeof AppStore !== 'undefined' && AppStore.getLeads().length === 0 && typeof genCall === 'function') {
+    for (var i = 0; i < 3; i++) {
+      var lead = genCall();
+      if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
+        PolarisEngine.analyzeLead(lead);
+      }
+    }
+  }
+} catch(e) { console.warn('seed error:', e.message); }
+
 loadCalls();
 </script>
 <script src="/js/tooltip-service.js"></script>

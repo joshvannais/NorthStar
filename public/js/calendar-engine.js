@@ -203,9 +203,12 @@ class CalendarRenderer {
     const today = new Date();
     const todayStr = this.state._formatDate(today);
     const todayEvents = this.state.events.filter(e => e.date === todayStr);
-    const leadEvents = this.state.events.filter(e => e.type === 'lead');
     const total = this.state.events.length;
-    const pipelineValue = leadEvents.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
+
+    // Pipeline: sum of avgPrice for qualified leads (matches Dashboard)
+    const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
+    const qualifiedLeads = allLeads.filter(c => c.status === 'new' || c.status === 'contacted' || c.status === 'qualified');
+    const pipelineValue = qualifiedLeads.reduce((s, c) => s + (parseFloat(c.avgPrice) || 0), 0);
 
     this.kpiBar.innerHTML = `
       <span class="cal-kpi-pill">📅 <strong>${monthEvents.length}</strong> appointments this month</span>
@@ -214,7 +217,7 @@ class CalendarRenderer {
       <span class="cal-kpi-divider"></span>
       <span class="cal-kpi-pill">📊 <strong>${total}</strong> total events</span>
       <span class="cal-kpi-divider"></span>
-      <span class="cal-kpi-pill">💰 <strong>${pipelineValue.toLocaleString()}</strong> pipeline</span>
+      <span class="cal-kpi-pill">💰 <strong>$${pipelineValue.toLocaleString()}</strong> pipeline</span>
     `;
   }
 
@@ -440,7 +443,7 @@ class CalendarRenderer {
         if (e.type === 'lead') html += `<span class="cal-schedule-card-meta-item">📞 Lead</span>`;
         if (e.description) html += `<span class="cal-schedule-card-meta-item">${e.description}</span>`;
         if (e.caller) html += `<span class="cal-schedule-card-meta-item">👤 ${e.caller}</span>`;
-        if (e.price) html += `<span class="cal-schedule-card-meta-item">💰 ${parseFloat(e.price).toLocaleString()}</span>`;
+        if (e.price) html += `<span class="cal-schedule-card-meta-item">💰 $${parseFloat(e.price).toLocaleString()}</span>`;
         html += `</div></div></div>`;
       });
     }
@@ -455,8 +458,9 @@ class CalendarRenderer {
     const leadEvents = this.state.events.filter(e => e.type === 'lead' && e.date === selectedStr);
     const allLeads = (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
     const unscheduledLeads = allLeads.filter(l => l.outcome !== 'appointment-set' && l.status !== 'booked' && l.status !== 'estimate-scheduled');
-    const totalPipeline = allLeads.reduce((sum, l) => sum + (parseFloat(l.estimated_price) || 0), 0);
-    const topLead = allLeads.length > 0 ? allLeads.sort((a,b) => (parseFloat(b.estimated_price)||0) - (parseFloat(a.estimated_price)||0))[0] : null;
+    const qualifiedLeads = allLeads.filter(c => c.status === 'new' || c.status === 'contacted' || c.status === 'qualified');
+    const totalPipeline = qualifiedLeads.reduce((s, c) => s + (parseFloat(c.avgPrice) || 0), 0);
+    const topLead = allLeads.length > 0 ? allLeads.sort((a,b) => (parseFloat(b.avgPrice)||0) - (parseFloat(a.avgPrice)||0))[0] : null;
     const dayPipeline = leadEvents.reduce((sum, e) => sum + (parseFloat(e.price) || 0), 0);
 
     let html = '<div class="cal-polaris-section">';
@@ -469,16 +473,16 @@ class CalendarRenderer {
       html += '<div class="cal-polaris-grid">';
       const topOpp = leadEvents.length > 0 ? leadEvents[0].title : dayEvents[0].title;
       html += `<div class="cal-polaris-item"><span class="cal-polaris-label">📊 Appointments</span><span class="cal-polaris-value">${dayEvents.length}</span></div>`;
-      if (dayPipeline > 0) html += `<div class="cal-polaris-item"><span class="cal-polaris-label">💰 Day Revenue</span><span class="cal-polaris-value">${dayPipeline.toLocaleString()}</span></div>`;
+      if (dayPipeline > 0) html += `<div class="cal-polaris-item"><span class="cal-polaris-label">💰 Day Revenue</span><span class="cal-polaris-value">$${dayPipeline.toLocaleString()}</span></div>`;
       html += `<div class="cal-polaris-item"><span class="cal-polaris-label">🎯 Top Priority</span><span class="cal-polaris-value" style="font-size:var(--font-xs);">${topOpp}</span></div>`;
-      if (totalPipeline > 0) html += `<div class="cal-polaris-item"><span class="cal-polaris-label">📈 Pipeline</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      if (totalPipeline > 0) html += `<div class="cal-polaris-item"><span class="cal-polaris-label">📈 Pipeline</span><span class="cal-polaris-value">$${totalPipeline.toLocaleString()}</span></div>`;
       html += '</div>';
     } else if (unscheduledLeads.length > 0) {
       html += '<div class="cal-polaris-grid">';
       html += `<div class="cal-polaris-item"><span class="cal-polaris-label">📋 Unscheduled</span><span class="cal-polaris-value">${unscheduledLeads.length}</span></div>`;
-      if (totalPipeline > 0) html += `<div class="cal-polaris-item"><span class="cal-polaris-label">💰 Est. Pipeline</span><span class="cal-polaris-value">${totalPipeline.toLocaleString()}</span></div>`;
+      if (totalPipeline > 0) html += `<div class="cal-polaris-item"><span class="cal-polaris-label">💰 Est. Pipeline</span><span class="cal-polaris-value">$${totalPipeline.toLocaleString()}</span></div>`;
       if (topLead) {
-        const topOpp = `${topLead.caller_name || 'Lead'} — ${(parseFloat(topLead.estimated_price)||0).toLocaleString()}`;
+        const topOpp = `${topLead.caller_name || 'Lead'} — $${(parseFloat(topLead.avgPrice)||0).toLocaleString()}`;
         html += `<div class="cal-polaris-item"><span class="cal-polaris-label">👤 Top Opportunity</span><span class="cal-polaris-value" style="font-size:var(--font-xs);">${topOpp}</span></div>`;
       }
       html += `<div class="cal-polaris-item"><span class="cal-polaris-label">📅 Action</span><span class="cal-polaris-value" style="font-size:var(--font-xs);">Schedule pending leads</span></div>`;

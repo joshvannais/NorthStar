@@ -510,6 +510,9 @@ async function start() {
   // Initialize Polaris Customer Lifecycle Engine
   const customerEngine = require('./polaris/customer-engine');
   customerEngine.init();
+  // Initialize Polaris Communications Intelligence Engine
+  const commsEngine = require('./polaris/communications-engine');
+  commsEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

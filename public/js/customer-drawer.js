@@ -123,8 +123,18 @@ window.CustomerDrawer = (function() {
       polarisEl.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">' + generatePolarisInsight(lead) + '</p>';
     }
 
-    // Generate Polaris estimate
-    if (typeof PolarisEngine !== 'undefined' && PolarisEngine.generateEstimate && lead && lead.id) {
+    // Generate Polaris estimate via M13 bridge
+    if (typeof PolarisM13Bridge !== 'undefined' && PolarisM13Bridge.augmentLead && lead && lead.id) {
+      if (!lead.polarisEstimate) {
+        PolarisM13Bridge.augmentLead(lead).then(function() {
+          if (lead.polarisEstimate) {
+            renderDrawerEstimate(lead.polarisEstimate);
+          }
+        });
+      } else {
+        renderDrawerEstimate(lead.polarisEstimate);
+      }
+    } else if (typeof PolarisEngine !== 'undefined' && PolarisEngine.generateEstimate && lead && lead.id) {
       if (!lead.polarisEstimate) {
         try { PolarisEngine.generateEstimate(lead); } catch(e) {}
       }

@@ -59,6 +59,7 @@
   <script src="/js/status-pill.js"></script>
   <script src="/js/customer-card.js"></script>
   <script src="/js/polaris-engine.js"></script>
+  <script src="/js/polaris-m13-bridge.js"></script>
   <script src="/js/analytics-engine.js"></script>
   <script src="/js/app-store.js"></script>
   <script src="/js/theme.js"></script>
@@ -120,6 +121,33 @@
             (pa.difficulty ? '<div><span style="font-size:12px;color:var(--neutral-500);">Difficulty</span><div class="value" style="text-transform:capitalize;">' + pa.difficulty + '</div></div>' : '') +
             '</div>' +
             '</div>';
+          // M13 Intelligence - Customer Insights
+          if (pa.m13Intelligence && pa.m13Intelligence.customer) {
+            var c = pa.m13Intelligence.customer;
+            polarisHtml += '<div class="lead-detail-card" style="margin-top:8px;">' +
+              '<h3 style="font-size:13px;">Customer Intelligence</h3>' +
+              '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+              (c.healthScore ? '<div><span style="font-size:11px;color:var(--neutral-500);">Health</span><div class="value" style="font-size:14px;">' + c.healthScore + '/100</div></div>' : '') +
+              (c.lifecycleStage ? '<div><span style="font-size:11px;color:var(--neutral-500);">Lifecycle</span><div class="value" style="font-size:14px;text-transform:capitalize;">' + c.lifecycleStage + '</div></div>' : '') +
+              (c.retentionScore ? '<div><span style="font-size:11px;color:var(--neutral-500);">Retention</span><div class="value" style="font-size:14px;">' + c.retentionScore + '%</div></div>' : '') +
+              (c.totalJobs ? '<div><span style="font-size:11px;color:var(--neutral-500);">Jobs</span><div class="value" style="font-size:14px;">' + c.totalJobs + '</div></div>' : '') +
+              (c.lifetimeValue ? '<div><span style="font-size:11px;color:var(--neutral-500);">Lifetime Value</span><div class="value" style="font-size:14px;color:var(--brand-600);">$' + c.lifetimeValue.toLocaleString() + '</div></div>' : '') +
+              (c.averageInvoice ? '<div><span style="font-size:11px;color:var(--neutral-500);">Avg Invoice</span><div class="value" style="font-size:14px;">$' + c.averageInvoice.toFixed(2) + '</div></div>' : '') +
+              (c.segment ? '<div><span style="font-size:11px;color:var(--neutral-500);">Segment</span><div class="value" style="font-size:14px;text-transform:capitalize;">' + c.segment + '</div></div>' : '') +
+              (c.riskLevel ? '<div><span style="font-size:11px;color:var(--neutral-500);">Risk</span><div class="value" style="font-size:14px;text-transform:capitalize;">' + c.riskLevel + '</div></div>' : '') +
+              '</div></div>';
+          }
+          // M13 Intelligence - Communications Insights
+          if (pa.m13Intelligence && pa.m13Intelligence.communications) {
+            var cm = pa.m13Intelligence.communications;
+            polarisHtml += '<div class="lead-detail-card" style="margin-top:8px;">' +
+              '<h3 style="font-size:13px;">Communications Intelligence</h3>' +
+              '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+              (cm.lastContact ? '<div><span style="font-size:11px;color:var(--neutral-500);">Last Contact</span><div class="value" style="font-size:14px;">' + cm.lastContact + '</div></div>' : '') +
+              (cm.engagementScore ? '<div><span style="font-size:11px;color:var(--neutral-500);">Engagement</span><div class="value" style="font-size:14px;">' + cm.engagementScore + '/100</div></div>' : '') +
+              (cm.pendingFollowUps && cm.pendingFollowUps.length > 0 ? '<div><span style="font-size:11px;color:var(--neutral-500);">Follow-ups</span><div class="value" style="font-size:14px;">' + cm.pendingFollowUps.length + ' pending</div></div>' : '') +
+              '</div></div>';
+          }
         } else {
           polarisHtml = '<div class="lead-detail-card"><h3>POLARIS™ Revenue Intelligence</h3><div class="value-secondary">Run analysis to see estimated pricing and recommendations.</div></div>';
         }
@@ -129,8 +157,17 @@
           if (!lead.polarisEstimate && typeof PolarisEngine !== 'undefined') {
             if (PolarisEngine.fetchM13Intelligence) {
               PolarisEngine.fetchM13Intelligence(lead).then(function(est) {
-                if (est && document.getElementById('leadDetailContainer')) {
-                  renderLeadDetail(lead);
+                // Also fetch M13 bridge intelligence (customer + comms)
+                if (typeof PolarisM13Bridge !== 'undefined' && PolarisM13Bridge.augmentLead) {
+                  PolarisM13Bridge.augmentLead(lead).then(function() {
+                    if (document.getElementById('leadDetailContainer')) {
+                      renderLeadDetail(lead);
+                    }
+                  });
+                } else {
+                  if (est && document.getElementById('leadDetailContainer')) {
+                    renderLeadDetail(lead);
+                  }
                 }
               });
             } else if (PolarisEngine.generateEstimate) {

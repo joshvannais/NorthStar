@@ -525,6 +525,9 @@ async function start() {
   // Initialize Polaris Asset & Equipment Intelligence Engine
   const astEngine = require('./polaris/asset-engine');
   astEngine.init();
+  // Initialize Polaris Crew & Resource Intelligence Engine
+  const crewEngine = require('./polaris/crew-engine');
+  crewEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

@@ -296,6 +296,8 @@ window.PolarisEngine = (function() {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/v1/polaris/intelligence', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
+      var token = localStorage.getItem('token');
+      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {

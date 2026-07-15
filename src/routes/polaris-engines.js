@@ -1334,6 +1334,172 @@ router.post('/polaris/intelligence', (req, res) => {
 });
 
 // ══════════════════════════════════════════════
+// POLARIS EXECUTIVE SUMMARY
+// ══════════════════════════════════════════════
+
+/**
+ * POST /api/v1/polaris/executive-summary
+ * Generate a unified executive summary from all available intelligence.
+ * Aggregates data from all M13 engines into a single cohesive view.
+ */
+router.post("/polaris/executive-summary", (req, res) => {
+  try {
+    var data = req.body || {};
+    var summary = {
+      generatedAt: new Date().toISOString(),
+      overview: {},
+      financial: {},
+      customer: {},
+      operations: {},
+      risks: [],
+      recommendations: [],
+      nextActions: [],
+    };
+
+    // Financial overview
+    try {
+      var bi = _getEngines().bi;
+      if (bi) {
+        var kpis = bi.generateKPIs();
+        if (kpis && kpis.kpis) {
+          summary.financial.revenue = kpis.kpis.totalRevenue || 0;
+          summary.financial.outstanding = kpis.kpis.outstandingRevenue || 0;
+          summary.financial.profitMargin = kpis.kpis.profitMargin || 0;
+        }
+        var alerts = bi.generateAlerts();
+        if (alerts && alerts.alerts) {
+          summary.risks = alerts.alerts.filter(function(a) { return a.severity === "critical" || a.severity === "warning"; }).map(function(a) { return { type: a.type, message: a.message, severity: a.severity }; });
+        }
+      }
+    } catch (e) {}
+
+    // Customer overview
+    try {
+      var custEng = _getEngines().customers;
+      if (custEng && data.customerId) {
+        var health = custEng.calculateCustomerHealth(data.customerId);
+        if (health && !health.error) {
+          summary.customer.health = health.score || 0;
+          summary.customer.lifecycle = health.lifecycleStage || health.stage || "unknown";
+          summary.customer.lifetimeValue = health.lifetimeValue || 0;
+          summary.customer.totalJobs = health.totalJobs || 0;
+        }
+      }
+    } catch (e) {}
+
+    // Communications overview
+    try {
+      var commsEng = _getEngines().comms;
+      if (commsEng && data.customerId) {
+        var engagement = commsEng.getEngagementScore(data.customerId);
+        var followUps = commsEng.getFollowUpRecommendations(data.customerId);
+        summary.customer.engagement = (typeof engagement === "number") ? engagement : (engagement && engagement.score) || 0;
+        summary.customer.pendingFollowUps = (followUps || []).length;
+        if (summary.customer.pendingFollowUps > 0) {
+          summary.recommendations.push("Contact customer: " + summary.customer.pendingFollowUps + " follow-up(s) pending");
+          summary.nextActions.push("Reach out to customer regarding pending follow-ups");
+        }
+      }
+    } catch (e) {}
+
+    // Job overview
+    try {
+      var jobEng = _getEngines().job;
+      if (jobEng) {
+        var metrics = jobEng.getJobMetrics();
+        if (metrics) {
+          summary.operations.activeJobs = metrics.activeJobs || 0;
+          summary.operations.completedJobs = metrics.completedJobs || 0;
+          summary.operations.openIssues = metrics.openIssues || 0;
+          summary.operations.atRisk = metrics.atRisk || 0;
+        }
+      }
+    } catch (e) {}
+
+    // Workflow overview
+    try {
+      var wfEng = _getEngines().wf;
+      if (wfEng) {
+        var wfMetrics = wfEng.getWorkflowMetrics();
+        if (wfMetrics) {
+          summary.operations.pendingTasks = wfMetrics.pendingTasks || 0;
+          summary.operations.overdueTasks = wfMetrics.overdueTasks || 0;
+          summary.operations.completionRate = wfMetrics.completionRate || 0;
+          if (summary.operations.overdueTasks > 0) {
+            summary.risks.push({ type: "workflow", message: summary.operations.overdueTasks + " overdue task(s)", severity: "warning" });
+            summary.recommendations.push("Address " + summary.operations.overdueTasks + " overdue task(s)");
+            summary.nextActions.push("Review and resolve overdue tasks");
+          }
+        }
+      }
+    } catch (e) {}
+
+    // Crew overview
+    try {
+      var crewEng = _getEngines().crew;
+      if (crewEng) {
+        var crewMetrics = crewEng.getCrewMetrics();
+        if (crewMetrics) {
+          summary.operations.activeCrews = crewMetrics.activeCrews || 0;
+          summary.operations.crewUtilization = crewMetrics.utilization || 0;
+        }
+      }
+    } catch (e) {}
+
+    // Asset overview
+    try {
+      var astEng = _getEngines().ast;
+      if (astEng) {
+        var astMetrics = astEng.getAssetMetrics();
+        if (astMetrics) {
+          summary.operations.totalAssets = astMetrics.totalAssets || 0;
+          summary.operations.maintenanceDue = astMetrics.maintenanceDue || 0;
+          if (summary.operations.maintenanceDue > 0) {
+            summary.risks.push({ type: "asset", message: summary.operations.maintenanceDue + " asset(s) due for maintenance", severity: "info" });
+          }
+        }
+      }
+    } catch (e) {}
+
+    // Build overview
+    var overviewParts = [];
+    var financialHealth = "stable";
+    if (summary.financial.revenue > 0) {
+      overviewParts.push("Revenue: $" + Math.round(summary.financial.revenue).toLocaleString());
+    }
+    if (summary.operations.activeJobs > 0) {
+      overviewParts.push(summary.operations.activeJobs + " active job(s)");
+    }
+    if (summary.customer.health > 0) {
+      overviewParts.push("Customer health: " + summary.customer.health + "/100");
+      if (summary.customer.health < 50) financialHealth = "at-risk";
+    }
+    if (summary.operations.overdueTasks > 0) {
+      overviewParts.push(summary.operations.overdueTasks + " overdue task(s)");
+    }
+    if (summary.operations.crewUtilization > 0) {
+      overviewParts.push("Crew utilization: " + Math.round(summary.operations.crewUtilization) + "%");
+    }
+    summary.overview = {
+      summary: overviewParts.length > 0 ? overviewParts.join(" | ") : "No operational data available.",
+      health: financialHealth,
+      riskCount: summary.risks.length,
+      recommendationCount: summary.recommendations.length,
+    };
+
+    // Add default recommendations if none exist
+    if (summary.recommendations.length === 0) {
+      summary.recommendations.push("All systems operational");
+    }
+    if (summary.nextActions.length === 0) {
+      summary.nextActions.push("Review dashboard for current status");
+    }
+
+    res.json(summary);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════
 // META — Engine Status
 // ══════════════════════════════════════════════
 

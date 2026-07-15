@@ -104,6 +104,7 @@ window.PolarisM13Bridge = (function() {
         // Build enhanced analysis from intelligence data
         var analysis = lead.polarisAnalysis || {};
         analysis.m13Intelligence = {};
+        analysis.m13Intelligence.executiveSummary = estimate.executiveSummary || null;
 
         // Customer insights
         if (estimate.customerIntelligence) {

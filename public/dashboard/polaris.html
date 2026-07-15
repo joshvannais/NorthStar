@@ -116,14 +116,14 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      align-items: flex-start;
     }
 
     /* Welcome state */
     .polaris-welcome {
       text-align: center;
       max-width: 480px;
+      align-self: center;
     }
     .polaris-welcome-icon {
       font-size: 48px;
@@ -463,8 +463,8 @@
         <!-- Bottom Prompt Bar -->
         <div class="polaris-prompt-bar">
           <div class="polaris-prompt-input-wrapper">
-            <input type="text" class="polaris-prompt-input" placeholder="Ask Polaris anything..." disabled>
-            <button class="polaris-prompt-send" disabled>Send</button>
+            <input type="text" class="polaris-prompt-input" id="polarisPromptInput" placeholder="Ask Polaris anything...">
+            <button class="polaris-prompt-send" id="polarisSendBtn">Send</button>
           </div>
         </div>
       </div>
@@ -472,5 +472,143 @@
   </div>
 
   <script src="/js/theme.js"></script>
+  <script>
+    (function() {
+      var input = document.getElementById('polarisPromptInput');
+      var sendBtn = document.getElementById('polarisSendBtn');
+      var conversationBody = document.querySelector('.polaris-conversation-body');
+      var welcomeState = document.querySelector('.polaris-welcome');
+
+      // State
+      var isLoading = false;
+
+      function addMessage(role, text) {
+        // Hide welcome state on first message
+        if (welcomeState) {
+          welcomeState.style.display = 'none';
+          welcomeState = null;
+        }
+
+        var card = document.createElement('div');
+        card.className = 'polaris-chat-message polaris-chat-' + role;
+        card.style.cssText = 'display:flex;gap:10px;padding:12px 16px;margin-bottom:8px;border-radius:8px;max-width:85%;' +
+          (role === 'user'
+            ? 'align-self:flex-end;background:var(--brand-600,#a67c00);color:#fff;'
+            : 'align-self:flex-start;background:var(--neutral-100,#f3f4f6);color:var(--neutral-800,#1f2937);');
+
+        var avatar = document.createElement('div');
+        avatar.style.cssText = 'width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;' +
+          (role === 'user'
+            ? 'background:rgba(255,255,255,0.2);'
+            : 'background:var(--brand-500,#a67c00);color:#fff;');
+        avatar.textContent = role === 'user' ? '👤' : '✦';
+
+        var content = document.createElement('div');
+        content.style.cssText = 'font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word;';
+        content.textContent = text;
+
+        card.appendChild(avatar);
+        card.appendChild(content);
+        conversationBody.appendChild(card);
+        conversationBody.scrollTop = conversationBody.scrollHeight;
+      }
+
+      function addLoading() {
+        var loader = document.createElement('div');
+        loader.id = 'polarisLoader';
+        loader.style.cssText = 'display:flex;gap:10px;padding:12px 16px;margin-bottom:8px;border-radius:8px;align-self:flex-start;max-width:85%;background:var(--neutral-100,#f3f4f6);color:var(--neutral-500);font-size:14px;';
+        loader.innerHTML = '<div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--brand-500,#a67c00);color:#fff;font-size:13px;">✦</div>' +
+          '<div style="display:flex;gap:4px;align-items:center;"><span style="animation:polarisPulse 1.4s infinite;font-size:20px;">.</span><span style="animation:polarisPulse 1.4s 0.2s infinite;font-size:20px;">.</span><span style="animation:polarisPulse 1.4s 0.4s infinite;font-size:20px;">.</span></div>';
+        conversationBody.appendChild(loader);
+        conversationBody.scrollTop = conversationBody.scrollHeight;
+      }
+
+      function removeLoading() {
+        var loader = document.getElementById('polarisLoader');
+        if (loader) loader.remove();
+      }
+
+      function sendMessage() {
+        var message = input.value.trim();
+        if (!message || isLoading) return;
+
+        isLoading = true;
+        sendBtn.disabled = true;
+        sendBtn.textContent = '...';
+        input.disabled = true;
+
+        // Show user message
+        addMessage('user', message);
+        input.value = '';
+        input.style.height = 'auto';
+
+        // Show loading
+        addLoading();
+
+        // Send to backend
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/v1/polaris/chat', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        var token = localStorage.getItem('token');
+        if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+
+        xhr.onload = function() {
+          removeLoading();
+          isLoading = false;
+          sendBtn.disabled = false;
+          sendBtn.textContent = 'Send';
+          input.disabled = false;
+          input.focus();
+
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              var data = JSON.parse(xhr.responseText);
+              if (data.success && data.response) {
+                addMessage('assistant', data.response);
+              } else {
+                addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.');
+              }
+            } catch(e) {
+              addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.');
+            }
+          } else {
+            addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.');
+          }
+        };
+
+        xhr.onerror = function() {
+          removeLoading();
+          isLoading = false;
+          sendBtn.disabled = false;
+          sendBtn.textContent = 'Send';
+          input.disabled = false;
+          addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.');
+        };
+
+        xhr.send(JSON.stringify({ message: message }));
+      }
+
+      // Event listeners
+      sendBtn.addEventListener('click', sendMessage);
+
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      // Auto-resize textarea-style input
+      input.addEventListener('input', function() {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      });
+
+      // Add pulse animation keyframes
+      var style = document.createElement('style');
+      style.textContent = '@keyframes polarisPulse { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }';
+      document.head.appendChild(style);
+    })();
+  </script>
 </body>
 </html>

@@ -10,6 +10,7 @@
 const express = require('express');
 const router = express.Router();
 const polaris = require('../polaris/engine');
+const https = require('https');
 
 // ── Middleware ──
 router.use((req, res, next) => {
@@ -242,6 +243,93 @@ router.post('/config', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+/**
+ * POST /api/v1/polaris/chat
+ * Send a message to the Polaris AI assistant (OpenAI).
+ * Body: { message: "..." }
+ * Response: { success: true, response: "..." }
+ */
+router.post('/chat', (req, res) => {
+  const message = req.body && req.body.message;
+  if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    return res.status(400).json({ success: false, error: 'Message is required.' });
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.error('[Polaris Chat] OPENAI_API_KEY not configured');
+    return res.status(500).json({ success: false, error: 'Polaris is not configured for chat yet.' });
+  }
+
+  const payload = JSON.stringify({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: 'You are POLARIS, the AI intelligence assistant for NorthStar Solutions, a home services contractor platform. You help contractors run their business better: analyze leads, check schedules, estimate jobs, track crews, and recommend actions. Keep responses concise, practical, and actionable. If you don\'t know something, say so — never make up data.'
+      },
+      { role: 'user', content: message.trim() }
+    ],
+    max_tokens: 800,
+    temperature: 0.7,
+  });
+
+  const options = {
+    hostname: 'api.openai.com',
+    path: '/v1/chat/completions',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey,
+      'Content-Length': Buffer.byteLength(payload),
+    },
+    timeout: 30000,
+  };
+
+  const reqOut = https.request(options, (resIn) => {
+    let body = '';
+    resIn.on('data', (chunk) => { body += chunk; });
+    resIn.on('end', () => {
+      try {
+        const parsed = JSON.parse(body);
+        if (resIn.statusCode === 200 && parsed.choices && parsed.choices[0]) {
+          const reply = parsed.choices[0].message.content;
+          res.json({ success: true, response: reply });
+        } else {
+          const errMsg = parsed.error ? parsed.error.message : 'Unknown error';
+          console.error('[Polaris Chat] OpenAI error:', resIn.statusCode, errMsg);
+          if (resIn.statusCode === 401) {
+            return res.status(500).json({ success: false, error: 'Polaris chat is not properly configured.' });
+          }
+          if (resIn.statusCode === 429) {
+            return res.status(429).json({ success: false, error: 'Polaris is rate-limited. Please wait a moment and try again.' });
+          }
+          res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
+        }
+      } catch (e) {
+        console.error('[Polaris Chat] Parse error:', e.message);
+        res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
+      }
+    });
+  });
+
+  reqOut.on('error', (e) => {
+    console.error('[Polaris Chat] Request error:', e.message);
+    if (e.code === 'ETIMEDOUT' || e.code === 'ECONNRESET') {
+      return res.status(504).json({ success: false, error: 'Polaris took too long to respond. Please try again.' });
+    }
+    res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
+  });
+
+  reqOut.on('timeout', () => {
+    reqOut.destroy();
+    res.status(504).json({ success: false, error: 'Polaris took too long to respond. Please try again.' });
+  });
+
+  reqOut.write(payload);
+  reqOut.end();
 });
 
 module.exports = router;

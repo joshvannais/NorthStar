@@ -352,6 +352,13 @@
       '</div></div>';
   }
 
+      // renderLeadDetail — re-renders the lead after M13 intelligence is augmented
+      function renderLeadDetail(lead) {
+        if (lead && document.getElementById('leadDetailContainer')) {
+          renderLead(lead);
+        }
+      }
+
       // Load on DOM ready
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', loadLead);

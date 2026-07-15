@@ -284,7 +284,47 @@ window.PolarisEngine = (function() {
   }
 
   /**
+   * Fetch Polaris Intelligence Report from M13 backend API.
+   * Falls back to client-side generateEstimate if API unavailable.
+   * @param {object} lead - Lead object
+   * @param {object} options - Options overrides
+   * @returns {Promise<object>} Polaris estimate
+   */
+  function fetchM13Intelligence(lead, options) {
+    return new Promise(function(resolve) {
+      if (!lead) { resolve(null); return; }
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/v1/polaris/intelligence', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            var estimate = JSON.parse(xhr.responseText);
+            if (estimate && estimate.total) {
+              // Persist to AppStore
+              if (store && typeof store.updateLead === 'function' && lead.id) {
+                try { store.updateLead(lead.id, { polarisEstimate: estimate }); } catch(e) {}
+              }
+              bus.emit('polaris:estimate-generated', { leadId: lead.id, estimate: estimate });
+              resolve(estimate);
+              return;
+            }
+          } catch(e) {}
+        }
+        // Fallback: use client-side estimate
+        resolve(generateEstimate(lead, options));
+      };
+      xhr.onerror = function() {
+        resolve(generateEstimate(lead, options));
+      };
+      xhr.send(JSON.stringify(lead));
+    });
+  }
+
+  /**
    * Generate a complete line-item estimate for a lead.
+   * If M13 backend is available, uses server-side intelligence.
+   * Otherwise falls back to client-side calculation.
    * @param {object} lead - Lead object from AppStore
    * @param {object} options - { region, profitMargin, taxRate } overrides
    * @returns {object} Standardized estimate
@@ -468,6 +508,6 @@ window.PolarisEngine = (function() {
     return estimate;
   }
 
-  return { analyzeLead, capitalizeFirst, ensurePolarisAnalysis, renderPolarisCard, generateEstimate, loadEstimationConfig, assessDifficulty };
+  return { analyzeLead, capitalizeFirst, ensurePolarisAnalysis, renderPolarisCard, generateEstimate, loadEstimationConfig, assessDifficulty, fetchM13Intelligence };
 
 })();

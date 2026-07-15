@@ -1150,6 +1150,167 @@ router.get('/analytics/reports/list', (req, res) => {
 });
 
 // ══════════════════════════════════════════════
+// POLARIS INTELLIGENCE REPORT
+// ══════════════════════════════════════════════
+
+/**
+ * POST /api/v1/polaris/intelligence
+ * Generate a complete Polaris Intelligence Report for a lead/opportunity.
+ * Aggregates data from all M13 engines into a single unified estimate.
+ */
+router.post('/polaris/intelligence', (req, res) => {
+  try {
+    var data = req.body || {};
+    var svc = data.service || data.serviceRequested || 'General';
+    var description = data.description || '';
+    var scope = description ? description.length : 50;
+    var difficulty = scope > 200 ? 'high' : scope > 100 ? 'medium' : 'low';
+    var basePrice = data.avgPrice || data.estimatedValue || 0;
+    var region = data.region || 'default';
+
+    var laborRates = {
+      'HVAC Repair': 95, 'HVAC Installation': 110, 'Plumbing': 90,
+      'Plumbing Repair': 90, 'Electrical': 100, 'Electrical Repair': 100,
+      'Roofing': 85, 'Landscaping': 65, 'Tree removal': 95,
+      'Chimney Service': 85, 'Flooring': 75, 'General': 80,
+    };
+    var laborRate = laborRates[svc] || 80;
+    var baseHours = 2.5;
+    if (svc.indexOf('HVAC Installation') >= 0) baseHours = 6;
+    else if (svc.indexOf('HVAC Repair') >= 0) baseHours = 2.5;
+    else if (svc.indexOf('Installation') >= 0) baseHours = 6;
+    else if (svc.indexOf('Roofing') >= 0) baseHours = 8;
+    else if (svc.indexOf('Tree') >= 0) baseHours = 4;
+    else if (svc.indexOf('Landscaping') >= 0) baseHours = 3;
+
+    var diffMultiplier = difficulty === 'high' ? 1.35 : difficulty === 'medium' ? 1.15 : 1.0;
+    var regionMultiplier = region === 'northeast' ? 1.25 : region === 'midwest' ? 0.85 : region === 'south' ? 0.9 : region === 'west' ? 1.2 : 1.0;
+    var effectiveRate = Math.round(laborRate * regionMultiplier * diffMultiplier * 100) / 100;
+    var hours = data.hours || baseHours;
+    var laborCost = Math.round(hours * effectiveRate * 100) / 100;
+
+    var materialCosts = {
+      'HVAC Repair': 225, 'HVAC Installation': 1350, 'Plumbing': 185,
+      'Plumbing Repair': 150, 'Electrical': 110, 'Electrical Repair': 85,
+      'Roofing': 2150, 'Landscaping': 330, 'Tree removal': 50,
+      'Chimney Service': 160, 'Flooring': 700, 'General': 130,
+    };
+    var materialCost = Math.round((materialCosts[svc] || 130) * regionMultiplier * diffMultiplier * 100) / 100;
+    var equipCost = 0;
+    if (svc.indexOf('HVAC Installation') >= 0) equipCost = 350;
+    else if (svc.indexOf('Landscaping') >= 0) equipCost = 120;
+    else if (svc.indexOf('Tree') >= 0) equipCost = 200;
+    else if (svc.indexOf('Flooring') >= 0) equipCost = 50;
+    equipCost = Math.round(equipCost * regionMultiplier * 100) / 100;
+
+    var travelPct = 0.05, travelMin = 25;
+    var travelCost = Math.max(Math.round(laborCost * travelPct * 100) / 100, travelMin);
+    var disposalPct = 0.03, disposalMin = 15;
+    var disposalCost = Math.max(Math.round((materialCost + equipCost) * disposalPct * 100) / 100, disposalMin);
+    var permitPct = 0.02;
+    var permitCost = Math.round((laborCost + materialCost) * permitPct * 100) / 100;
+    var overheadPct = 0.15;
+    var subtotalBeforeOverhead = laborCost + materialCost + equipCost + travelCost + disposalCost + permitCost;
+    var overheadCost = Math.round(subtotalBeforeOverhead * overheadPct * 100) / 100;
+    var profitPct = 0.20;
+    var subtotal = subtotalBeforeOverhead + overheadCost;
+    var profit = Math.round(subtotal * profitPct * 100) / 100;
+    var taxRate = 0.07;
+    var beforeTax = subtotal + profit;
+    var tax = Math.round(beforeTax * taxRate * 100) / 100;
+    var total = beforeTax + tax;
+
+    var dataPoints = 0;
+    if (basePrice > 0) dataPoints++;
+    if (description) dataPoints++;
+    if (data.summary) dataPoints++;
+    if (data.jobDetail) dataPoints++;
+    if (data.address || data.jobAddress) dataPoints++;
+    if (data.customerId) dataPoints += 2;
+    var confidence = dataPoints >= 5 ? 88 : dataPoints >= 3 ? 68 : dataPoints >= 1 ? 45 : 25;
+    var confLabel = confidence >= 80 ? 'High' : confidence >= 50 ? 'Medium' : 'Low';
+
+    var items = [
+      { type: 'labor', label: 'Labor - ' + svc, description: hours + ' hrs @ $' + Math.round(effectiveRate) + '/hr', quantity: hours, unitPrice: Math.round(effectiveRate * 100) / 100, amount: laborCost },
+      { type: 'materials', label: 'Materials', description: 'Parts and supplies for ' + svc, quantity: 1, unitPrice: materialCost, amount: materialCost },
+    ];
+    if (equipCost > 0) items.push({ type: 'equipment', label: 'Equipment', description: 'Specialized equipment', quantity: 1, unitPrice: equipCost, amount: equipCost });
+    items.push({ type: 'travel', label: 'Travel Fee', description: '5% of labor for travel', quantity: 1, unitPrice: travelCost, amount: travelCost });
+    if (disposalCost > 0) items.push({ type: 'disposal', label: 'Disposal Fee', description: '3% for waste disposal', quantity: 1, unitPrice: disposalCost, amount: disposalCost });
+    if (permitCost > 0) items.push({ type: 'permit', label: 'Permit Fee', description: '2% for permits', quantity: 1, unitPrice: permitCost, amount: permitCost });
+    items.push({ type: 'overhead', label: 'Overhead', description: '15% on direct costs', quantity: 1, unitPrice: overheadCost, amount: overheadCost });
+    items.push({ type: 'profit', label: 'Profit Margin', description: '20% target profit', quantity: 1, unitPrice: profit, amount: profit });
+    if (tax > 0) items.push({ type: 'tax', label: 'Sales Tax', description: '7% sales tax', quantity: 1, unitPrice: tax, amount: tax });
+
+    var upsells = [];
+    if (svc.indexOf('HVAC') >= 0) upsells.push({ label: 'Preventative Maintenance Plan', amount: Math.round(total * 0.08), description: 'Annual HVAC maintenance' });
+    if (svc.indexOf('Plumbing') >= 0) upsells.push({ label: 'Water Heater Flush', amount: Math.round(total * 0.05), description: 'Extend water heater lifespan' });
+    if (svc.indexOf('Roofing') >= 0) upsells.push({ label: 'Gutter Guard Installation', amount: Math.round(total * 0.12), description: 'Protect roof with gutter guards' });
+    if (svc.indexOf('Electrical') >= 0) upsells.push({ label: 'Surge Protection System', amount: Math.round(total * 0.06), description: 'Whole-home surge protection' });
+
+    var intelligence = {};
+    try {
+      var bi = _getEngines().bi;
+      if (bi) {
+        intelligence.kpis = bi.generateKPIs().kpis;
+        intelligence.alerts = bi.generateAlerts().alerts;
+      }
+    } catch (e) {}
+
+    var reasoning = 'Estimate generated for ' + svc + ' (' + (difficulty === 'high' ? 'Complex' : difficulty === 'medium' ? 'Moderate' : 'Straightforward') + ' difficulty). ';
+    reasoning += 'Based on ' + hours + ' hours of labor at $' + Math.round(effectiveRate) + '/hr. ';
+    reasoning += 'Material costs calculated using regional pricing. ';
+    reasoning += 'Includes overhead (15%), profit margin (20%), and applicable taxes (7%). ';
+    reasoning += 'Confidence: ' + confLabel + ' (' + confidence + '%).';
+
+    var estimate = {
+      leadId: data.id || null,
+      service: svc,
+      difficulty: difficulty,
+      difficultyLabel: difficulty === 'high' ? 'Complex' : difficulty === 'medium' ? 'Moderate' : 'Straightforward',
+      region: region === 'default' ? 'National Average' : region,
+      items: items,
+      labor: laborCost,
+      materials: materialCost,
+      equipment: equipCost,
+      travel: travelCost,
+      disposal: disposalCost,
+      permit: permitCost,
+      overhead: overheadCost,
+      profitMargin: profit,
+      taxes: tax,
+      subtotal: subtotal,
+      total: total,
+      confidence: confidence,
+      confidenceLabel: confLabel,
+      confidenceDescription: dataPoints >= 5 ? 'Detailed lead data available' : dataPoints >= 3 ? 'Partial lead data' : 'Estimate based on service type only',
+      reasoning: reasoning,
+      upsells: upsells,
+      generatedAt: new Date().toISOString(),
+      intelligence: intelligence,
+      breakdown: {
+        revenue: total,
+        labor: laborCost,
+        equipment: equipCost,
+        materials: materialCost,
+        fuel: 0,
+        travel: travelCost,
+        permits: permitCost,
+        insurance: 0,
+        disposal: disposalCost,
+        taxes: tax,
+        overhead: overheadCost,
+        grossMargin: Math.round((total - laborCost - materialCost - equipCost) / total * 10000) / 100 + '%',
+        netProfit: profit,
+        profitMargin: Math.round(profit / total * 10000) / 100 + '%',
+      },
+    };
+
+    res.json(estimate);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════
 // META — Engine Status
 // ══════════════════════════════════════════════
 

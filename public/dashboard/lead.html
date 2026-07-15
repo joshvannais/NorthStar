@@ -124,10 +124,21 @@
           polarisHtml = '<div class="lead-detail-card"><h3>POLARIS™ Revenue Intelligence</h3><div class="value-secondary">Run analysis to see estimated pricing and recommendations.</div></div>';
         }
 
-        // Generate estimate if not already present
-        if (!lead.polarisEstimate && typeof PolarisEngine !== 'undefined' && PolarisEngine.generateEstimate) {
-          try { PolarisEngine.generateEstimate(lead); } catch(e) {}
+        // Generate estimate using M13 intelligence (async), fall back to client-side
+        function runPolarisEstimate() {
+          if (!lead.polarisEstimate && typeof PolarisEngine !== 'undefined') {
+            if (PolarisEngine.fetchM13Intelligence) {
+              PolarisEngine.fetchM13Intelligence(lead).then(function(est) {
+                if (est && document.getElementById('leadDetailContainer')) {
+                  renderLeadDetail(lead);
+                }
+              });
+            } else if (PolarisEngine.generateEstimate) {
+              try { PolarisEngine.generateEstimate(lead); } catch(e) {}
+            }
+          }
         }
+        runPolarisEstimate();
 
         container.innerHTML = '' +
           '<div class="lead-detail-header">' +

@@ -531,6 +531,9 @@ async function start() {
   // Initialize Polaris Job Execution Intelligence Engine
   const jobEngine = require('./polaris/job-engine');
   jobEngine.init();
+  // Initialize Polaris Business Intelligence & Analytics Engine
+  const analyticsEngine = require('./polaris/analytics-engine');
+  analyticsEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

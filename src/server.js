@@ -519,6 +519,9 @@ async function start() {
   // Initialize Polaris Workflow & Scheduling Intelligence Engine
   const wfEngine = require('./polaris/workflow-engine');
   wfEngine.init();
+  // Initialize Polaris Financial Intelligence Engine
+  const finEngine = require('./polaris/financial-engine');
+  finEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POLARIS™ — NorthStar Solutions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* ── Polaris Intelligence Workspace Layout ── */
+    .polaris-workspace {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: calc(100vh - 60px);
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0;
+    }
+
+    /* Top Status Bar */
+    .polaris-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--neutral-200, #e5e7eb);
+      background: var(--neutral-50, #fff);
+    }
+    [data-theme="dark"] .polaris-topbar {
+      background: var(--neutral-900, #111827);
+      border-color: var(--neutral-700, #374151);
+    }
+    .polaris-topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .polaris-topbar-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #a67c00, #d4af37);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: #fff;
+      font-weight: 700;
+    }
+    .polaris-topbar-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--neutral-900, #111827);
+    }
+    [data-theme="dark"] .polaris-topbar-title {
+      color: var(--neutral-200, #e5e7eb);
+    }
+    .polaris-topbar-subtitle {
+      font-size: 12px;
+      color: var(--neutral-500, #6b7280);
+      font-weight: 400;
+    }
+    .polaris-topbar-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #fef3c7;
+      color: #92400e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    [data-theme="dark"] .polaris-topbar-badge {
+      background: rgba(212, 175, 55, 0.2);
+      color: #d4af37;
+    }
+
+    /* Main Content Area */
+    .polaris-main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Left: Conversation Panel */
+    .polaris-conversation {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      border-right: 1px solid var(--neutral-200, #e5e7eb);
+    }
+    [data-theme="dark"] .polaris-conversation {
+      border-color: var(--neutral-700, #374151);
+    }
+
+    .polaris-conversation-header {
+      padding: 16px 24px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--neutral-500, #6b7280);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--neutral-100, #f3f4f6);
+    }
+    [data-theme="dark"] .polaris-conversation-header {
+      border-color: var(--neutral-800, #1f2937);
+    }
+
+    .polaris-conversation-body {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Welcome state */
+    .polaris-welcome {
+      text-align: center;
+      max-width: 480px;
+    }
+    .polaris-welcome-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .polaris-welcome-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--neutral-900, #111827);
+      margin-bottom: 8px;
+    }
+    [data-theme="dark"] .polaris-welcome-title {
+      color: var(--neutral-200, #e5e7eb);
+    }
+    .polaris-welcome-text {
+      font-size: 14px;
+      color: var(--neutral-500, #6b7280);
+      line-height: 1.6;
+    }
+
+    /* Suggested questions grid */
+    .polaris-suggested-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 24px;
+      max-width: 480px;
+      width: 100%;
+    }
+    .polaris-suggested-chip {
+      padding: 10px 14px;
+      background: var(--neutral-100, #f3f4f6);
+      border: 1px solid var(--neutral-200, #e5e7eb);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--neutral-700, #374151);
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s ease;
+    }
+    .polaris-suggested-chip:hover {
+      background: var(--neutral-200, #e5e7eb);
+      border-color: var(--brand-500, #a67c00);
+    }
+    [data-theme="dark"] .polaris-suggested-chip {
+      background: var(--neutral-800, #1f2937);
+      border-color: var(--neutral-700, #374151);
+      color: var(--neutral-300, #d1d5db);
+    }
+    [data-theme="dark"] .polaris-suggested-chip:hover {
+      background: var(--neutral-750, #2d3748);
+      border-color: #d4af37;
+    }
+
+    /* Right: Intelligence Sidebar */
+    .polaris-sidebar {
+      width: 320px;
+      flex-shrink: 0;
+      overflow-y: auto;
+      background: var(--neutral-50, #fafafa);
+    }
+    [data-theme="dark"] .polaris-sidebar {
+      background: var(--neutral-900, #111827);
+    }
+
+    .polaris-sidebar-section {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--neutral-100, #f3f4f6);
+    }
+    [data-theme="dark"] .polaris-sidebar-section {
+      border-color: var(--neutral-800, #1f2937);
+    }
+    .polaris-sidebar-section:last-child {
+      border-bottom: none;
+    }
+
+    .polaris-sidebar-heading {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--neutral-500, #6b7280);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .polaris-sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      font-size: 13px;
+      color: var(--neutral-700, #374151);
+    }
+    [data-theme="dark"] .polaris-sidebar-item {
+      color: var(--neutral-300, #d1d5db);
+    }
+    .polaris-sidebar-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .polaris-sidebar-status-label {
+      font-size: 12px;
+      color: var(--neutral-500, #6b7280);
+    }
+
+    /* Placeholder card */
+    .polaris-placeholder-card {
+      padding: 12px;
+      background: var(--neutral-100, #f3f4f6);
+      border: 1px dashed var(--neutral-300, #d1d5db);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--neutral-400, #9ca3af);
+      text-align: center;
+    }
+    [data-theme="dark"] .polaris-placeholder-card {
+      background: var(--neutral-800, #1f2937);
+      border-color: var(--neutral-700, #374151);
+      color: var(--neutral-500, #6b7280);
+    }
+
+    /* Bottom Prompt Bar */
+    .polaris-prompt-bar {
+      padding: 16px 24px;
+      border-top: 1px solid var(--neutral-200, #e5e7eb);
+      background: var(--neutral-50, #fff);
+    }
+    [data-theme="dark"] .polaris-prompt-bar {
+      background: var(--neutral-900, #111827);
+      border-color: var(--neutral-700, #374151);
+    }
+    .polaris-prompt-input-wrapper {
+      display: flex;
+      gap: 8px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .polaris-prompt-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid var(--neutral-300, #d1d5db);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      background: var(--neutral-50, #fff);
+      color: var(--neutral-900, #111827);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .polaris-prompt-input::placeholder {
+      color: var(--neutral-400, #9ca3af);
+    }
+    .polaris-prompt-input:focus {
+      border-color: var(--brand-500, #a67c00);
+      box-shadow: 0 0 0 2px rgba(166, 124, 0, 0.1);
+    }
+    [data-theme="dark"] .polaris-prompt-input {
+      background: var(--neutral-800, #1f2937);
+      border-color: var(--neutral-700, #374151);
+      color: var(--neutral-200, #e5e7eb);
+    }
+    [data-theme="dark"] .polaris-prompt-input:focus {
+      border-color: #d4af37;
+      box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.15);
+    }
+
+    .polaris-prompt-send {
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #a67c00, #d4af37);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+    .polaris-prompt-send:hover {
+      opacity: 0.9;
+    }
+    .polaris-prompt-send:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .polaris-sidebar {
+        display: none;
+      }
+      .polaris-conversation {
+        border-right: none;
+      }
+    }
+    @media (max-width: 640px) {
+      .polaris-topbar {
+        padding: 10px 16px;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .polaris-conversation-body {
+        padding: 16px;
+      }
+      .polaris-prompt-bar {
+        padding: 12px 16px;
+      }
+      .polaris-suggested-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <a href="/dashboard" class="sidebar-logo">
+        <img src="/assets/logo.png" alt="NorthStar" class="logo-img">
+        NorthStar
+      </a>
+      <nav class="sidebar-nav">
+        <a href="/dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="/dashboard/leads">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Leads</span>
+        </a>
+        <a href="/dashboard/communications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span>Communications</span>
+        </a>
+        <a href="/dashboard/calendar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+          <span>Calendar</span>
+        </a>
+        <a href="/dashboard/polaris" class="active" aria-current="page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <span>POLARIS</span>
+        </a>
+        <a href="/dashboard/settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
+          <span>Settings</span>
+        </a>
+      </nav>
+    </aside>
+    <main class="main-content" id="mainContent">
+      <div class="polaris-workspace">
+        <!-- Top Bar -->
+        <div class="polaris-topbar">
+          <div class="polaris-topbar-brand">
+            <div class="polaris-topbar-icon">✦</div>
+            <div>
+              <div class="polaris-topbar-title">POLARIS™</div>
+              <div class="polaris-topbar-subtitle">NorthStar Intelligence Platform</div>
+            </div>
+          </div>
+          <span class="polaris-topbar-badge">Workspace</span>
+        </div>
+
+        <!-- Main Content -->
+        <div class="polaris-main">
+          <!-- Left: Conversation Panel -->
+          <div class="polaris-conversation">
+            <div class="polaris-conversation-header">Conversation</div>
+            <div class="polaris-conversation-body">
+              <div class="polaris-welcome">
+                <div class="polaris-welcome-icon">✦</div>
+                <div class="polaris-welcome-title">Welcome to POLARIS™</div>
+                <div class="polaris-welcome-text">
+                  Your AI-powered intelligence workspace. Ask questions about your business,
+                  analyze data, and get actionable recommendations — all in one place.
+                </div>
+
+                <!-- Suggested Questions -->
+                <div class="polaris-suggested-grid">
+                  <div class="polaris-suggested-chip">What's my pipeline health?</div>
+                  <div class="polaris-suggested-chip">Which leads need follow-up?</div>
+                  <div class="polaris-suggested-chip">How is crew productivity trending?</div>
+                  <div class="polaris-suggested-chip">What jobs are at risk of delay?</div>
+                </div>
+
+                <!-- Placeholder sections for future missions -->
+                <div style="margin-top:32px;width:100%;">
+                  <div class="polaris-placeholder-card">Conversation History — will appear here</div>
+                  <div class="polaris-placeholder-card">AI Responses — will appear here</div>
+                  <div class="polaris-placeholder-card">Executive Insights — will appear here</div>
+                  <div class="polaris-placeholder-card">Context Sources — will appear here</div>
+                  <div class="polaris-placeholder-card">Recommended Actions — will appear here</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Intelligence Sidebar -->
+          <div class="polaris-sidebar">
+            <div class="polaris-sidebar-section">
+              <div class="polaris-sidebar-heading">System Status</div>
+              <div class="polaris-sidebar-item">
+                <span class="polaris-sidebar-dot" style="background:#16a34a;"></span>
+                <span>All systems operational</span>
+              </div>
+              <div class="polaris-sidebar-item">
+                <span class="polaris-sidebar-dot" style="background:#16a34a;"></span>
+                <span>Polaris Engine</span>
+                <span class="polaris-sidebar-status-label">Online</span>
+              </div>
+              <div class="polaris-sidebar-item">
+                <span class="polaris-sidebar-dot" style="background:#16a34a;"></span>
+                <span>Intelligence API</span>
+                <span class="polaris-sidebar-status-label">Connected</span>
+              </div>
+            </div>
+
+            <div class="polaris-sidebar-section">
+              <div class="polaris-sidebar-heading">Recent Activity</div>
+              <div class="polaris-placeholder-card">Activity feed will appear here</div>
+            </div>
+
+            <div class="polaris-sidebar-section">
+              <div class="polaris-sidebar-heading">Pinned Insights</div>
+              <div class="polaris-placeholder-card">Pinned insights will appear here</div>
+            </div>
+
+            <div class="polaris-sidebar-section">
+              <div class="polaris-sidebar-heading">Suggested Questions</div>
+              <div class="polaris-placeholder-card">Dynamic suggestions will appear here</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Prompt Bar -->
+        <div class="polaris-prompt-bar">
+          <div class="polaris-prompt-input-wrapper">
+            <input type="text" class="polaris-prompt-input" placeholder="Ask Polaris anything..." disabled>
+            <button class="polaris-prompt-send" disabled>Send</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/theme.js"></script>
+</body>
+</html>

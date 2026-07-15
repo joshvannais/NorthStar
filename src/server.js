@@ -63,6 +63,7 @@ const pages = {
   '/dashboard/settings': 'public/dashboard/settings.html',
   '/dashboard/integrations': 'public/dashboard/integrations.html',
   '/dashboard/lead': 'public/dashboard/lead.html',
+  '/dashboard/polaris': 'public/dashboard/polaris.html',
   '/contact': 'public/contact.html',
   '/privacy': 'public/privacy.html',
   '/terms': 'public/terms.html',

@@ -516,6 +516,9 @@ async function start() {
   // Initialize Polaris Opportunity & Pipeline Intelligence Engine
   const oppEngine = require('./polaris/opportunity-engine');
   oppEngine.init();
+  // Initialize Polaris Workflow & Scheduling Intelligence Engine
+  const wfEngine = require('./polaris/workflow-engine');
+  wfEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

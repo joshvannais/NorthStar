@@ -513,6 +513,9 @@ async function start() {
   // Initialize Polaris Communications Intelligence Engine
   const commsEngine = require('./polaris/communications-engine');
   commsEngine.init();
+  // Initialize Polaris Opportunity & Pipeline Intelligence Engine
+  const oppEngine = require('./polaris/opportunity-engine');
+  oppEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

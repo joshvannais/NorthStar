@@ -522,6 +522,9 @@ async function start() {
   // Initialize Polaris Financial Intelligence Engine
   const finEngine = require('./polaris/financial-engine');
   finEngine.init();
+  // Initialize Polaris Asset & Equipment Intelligence Engine
+  const astEngine = require('./polaris/asset-engine');
+  astEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

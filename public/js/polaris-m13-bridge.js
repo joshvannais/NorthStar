@@ -16,6 +16,8 @@ window.PolarisM13Bridge = (function() {
       if (!customerId) { resolve(null); return; }
       var xhr = new XMLHttpRequest();
       xhr.open('GET', '/api/v1/customers/' + encodeURIComponent(customerId) + '/health', true);
+      var token = localStorage.getItem('token');
+      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
           try { resolve(JSON.parse(xhr.responseText)); }
@@ -37,6 +39,8 @@ window.PolarisM13Bridge = (function() {
       if (!customerId) { resolve(null); return; }
       var xhr = new XMLHttpRequest();
       xhr.open('GET', '/api/v1/communications/intelligence/' + encodeURIComponent(customerId), true);
+      var token = localStorage.getItem('token');
+      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
           try { resolve(JSON.parse(xhr.responseText)); }
@@ -73,6 +77,8 @@ window.PolarisM13Bridge = (function() {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/v1/polaris/intelligence', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
+      var token = localStorage.getItem('token');
+      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {

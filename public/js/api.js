@@ -6,7 +6,8 @@
 // Detect backend URL — same origin in production, port 3001 in dev
 const API_BASE = (function() {
   // If running on port 3000 (static server), use port 3001 for API
-  if (window.location.port === '3000' || window.location.port === '') {
+  // On Railway, port is empty (HTTPS 443) — use same-origin '/api'
+  if (window.location.port === '3000') {
     return 'http://localhost:3001/api';
   }
   return '/api';

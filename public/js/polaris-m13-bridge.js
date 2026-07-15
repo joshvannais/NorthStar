@@ -65,6 +65,10 @@ window.PolarisM13Bridge = (function() {
       // Include customerId from customer reference
       if (lead.customerId) body.customerId = lead.customerId;
       if (lead.id) body.id = lead.id;
+      if (lead.jobId) body.jobId = lead.jobId;
+      if (lead.crewId) body.crewId = lead.crewId;
+      if (lead.opportunityId) body.opportunityId = lead.opportunityId;
+      if (lead.assetIds && Array.isArray(lead.assetIds)) body.assetIds = lead.assetIds;
 
       var xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/v1/polaris/intelligence', true);
@@ -120,7 +124,30 @@ window.PolarisM13Bridge = (function() {
           }
         }
 
-        // Update confidence with customer data richness
+        // Job intelligence
+        if (estimate.jobIntelligence) {
+          analysis.m13Intelligence.job = estimate.jobIntelligence;
+          analysis.m13Insight = (analysis.m13Insight || '') + 'Job: ' + (estimate.jobIntelligence.status || 'unknown') + ' - ' + Math.round(estimate.jobIntelligence.progress || 0) + '% complete. ';
+        }
+
+        // Crew intelligence
+        if (estimate.crewIntelligence) {
+          analysis.m13Intelligence.crew = estimate.crewIntelligence;
+          analysis.m13Insight = (analysis.m13Insight || '') + 'Crew: ' + (estimate.crewIntelligence.name || 'N/A') + '. ';
+        }
+
+        // Workflow intelligence
+        if (estimate.workflowIntelligence) {
+          analysis.m13Intelligence.workflow = estimate.workflowIntelligence;
+          analysis.m13Insight = (analysis.m13Insight || '') + estimate.workflowIntelligence.totalTasks + ' tasks (' + estimate.workflowIntelligence.completionRate + '% complete). ';
+        }
+
+        // Asset intelligence
+        if (estimate.assetsIntelligence) {
+          analysis.m13Intelligence.assets = estimate.assetsIntelligence;
+        }
+
+        // Update confidence with data richness
         if (estimate.customerIntelligence && estimate.confidence < 85) {
           estimate.confidence = Math.min(88, estimate.confidence + 10);
           estimate.confidenceLabel = estimate.confidence >= 80 ? 'High' : estimate.confidence >= 50 ? 'Medium' : 'Low';

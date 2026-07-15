@@ -148,6 +148,62 @@
               (cm.pendingFollowUps && cm.pendingFollowUps.length > 0 ? '<div><span style="font-size:11px;color:var(--neutral-500);">Follow-ups</span><div class="value" style="font-size:14px;">' + cm.pendingFollowUps.length + ' pending</div></div>' : '') +
               '</div></div>';
           }
+          // M13 Intelligence - Job Execution Insights
+          if (pa.m13Intelligence && pa.m13Intelligence.job) {
+            var j = pa.m13Intelligence.job;
+            var progressBar = '<div style="margin-top:4px;height:4px;background:var(--neutral-100);border-radius:2px;overflow:hidden;"><div style="height:100%;width:' + j.progress + '%;background:var(--brand-500);border-radius:2px;"></div></div>';
+            var statusStyle = j.status === 'completed' ? 'color:#166534;' : j.status === 'inProgress' ? 'color:#92400e;' : 'color:var(--neutral-500);';
+            polarisHtml += '<div class="lead-detail-card" style="margin-top:8px;">' +
+              '<h3 style="font-size:13px;">Job Execution Intelligence</h3>' +
+              '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+              '<div><span style="font-size:11px;color:var(--neutral-500);">Status</span><div class="value" style="font-size:14px;text-transform:capitalize;' + statusStyle + '">' + j.status + '</div></div>' +
+              '<div><span style="font-size:11px;color:var(--neutral-500);">Progress</span><div class="value" style="font-size:14px;">' + Math.round(j.progress) + '%' + progressBar + '</div></div>' +
+              (j.phase && j.phase !== 'unknown' ? '<div><span style="font-size:11px;color:var(--neutral-500);">Phase</span><div class="value" style="font-size:14px;text-transform:capitalize;">' + j.phase + '</div></div>' : '') +
+              (j.openIssues > 0 ? '<div><span style="font-size:11px;color:var(--neutral-500);">Open Issues</span><div class="value" style="font-size:14px;color:#991b1b;">' + j.openIssues + '</div></div>' : '') +
+              (j.scheduleVariance && j.scheduleVariance.varianceDays !== undefined ? '<div><span style="font-size:11px;color:var(--neutral-500);">Schedule</span><div class="value" style="font-size:14px;' + (j.scheduleVariance.varianceDays > 0 ? 'color:#991b1b;' : 'color:#166534;') + '">' + (j.scheduleVariance.varianceDays > 0 ? '+' : '') + j.scheduleVariance.varianceDays + ' days</div></div>' : '') +
+              (j.delayCount > 0 ? '<div><span style="font-size:11px;color:var(--neutral-500);">Delays</span><div class="value" style="font-size:14px;">' + j.delayCount + '</div></div>' : '') +
+              '</div></div>';
+          }
+          // M13 Intelligence - Crew Operations Insights
+          if (pa.m13Intelligence && pa.m13Intelligence.crew) {
+            var cr = pa.m13Intelligence.crew;
+            polarisHtml += '<div class="lead-detail-card" style="margin-top:8px;">' +
+              '<h3 style="font-size:13px;">Crew Operations Intelligence</h3>' +
+              '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+              (cr.name ? '<div><span style="font-size:11px;color:var(--neutral-500);">Crew</span><div class="value" style="font-size:14px;">' + cr.name + '</div></div>' : '') +
+              (cr.status ? '<div><span style="font-size:11px;color:var(--neutral-500);">Status</span><div class="value" style="font-size:14px;text-transform:capitalize;">' + cr.status + '</div></div>' : '') +
+              (cr.memberCount ? '<div><span style="font-size:11px;color:var(--neutral-500);">Members</span><div class="value" style="font-size:14px;">' + cr.memberCount + '</div></div>' : '') +
+              (cr.efficiency ? '<div><span style="font-size:11px;color:var(--neutral-500);">Efficiency</span><div class="value" style="font-size:14px;">' + cr.efficiency + '%</div></div>' : '') +
+              '</div></div>';
+          }
+          // M13 Intelligence - Workflow & Tasks Insights
+          if (pa.m13Intelligence && pa.m13Intelligence.workflow) {
+            var w = pa.m13Intelligence.workflow;
+            var wfWarnStyle = w.overdueTasks > 0 ? 'color:#991b1b;' : '';
+            polarisHtml += '<div class="lead-detail-card" style="margin-top:8px;">' +
+              '<h3 style="font-size:13px;">Workflow & Task Intelligence</h3>' +
+              '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+              (w.totalTasks >= 0 ? '<div><span style="font-size:11px;color:var(--neutral-500);">Tasks</span><div class="value" style="font-size:14px;">' + w.totalTasks + '</div></div>' : '') +
+              (w.completedTasks >= 0 ? '<div><span style="font-size:11px;color:var(--neutral-500);">Completed</span><div class="value" style="font-size:14px;color:#166534;">' + w.completedTasks + '</div></div>' : '') +
+              (w.pendingTasks >= 0 ? '<div><span style="font-size:11px;color:var(--neutral-500);">Pending</span><div class="value" style="font-size:14px;">' + w.pendingTasks + '</div></div>' : '') +
+              (w.overdueTasks > 0 ? '<div><span style="font-size:11px;color:var(--neutral-500);">Overdue</span><div class="value" style="font-size:14px;color:#991b1b;">' + w.overdueTasks + '</div></div>' : '') +
+              (w.completionRate >= 0 ? '<div><span style="font-size:11px;color:var(--neutral-500);">Completion</span><div class="value" style="font-size:14px;' + wfWarnStyle + '">' + w.completionRate + '%</div></div>' : '') +
+              '</div></div>';
+          }
+          // M13 Intelligence - Asset Intelligence
+          if (pa.m13Intelligence && pa.m13Intelligence.assets && pa.m13Intelligence.assets.length > 0) {
+            var astRows = '';
+            for (var ai = 0; ai < pa.m13Intelligence.assets.length; ai++) {
+              var a = pa.m13Intelligence.assets[ai];
+              astRows += '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;border-bottom:1px solid var(--neutral-100);">' +
+                '<span>' + a.name + '</span>' +
+                '<span style="text-transform:capitalize;">' + a.status + ' (' + Math.round(a.utilization) + '%)</span></div>';
+            }
+            polarisHtml += '<div class="lead-detail-card" style="margin-top:8px;">' +
+              '<h3 style="font-size:13px;">Asset Intelligence</h3>' +
+              astRows +
+              '</div>';
+          }
         } else {
           polarisHtml = '<div class="lead-detail-card"><h3>POLARIS™ Revenue Intelligence</h3><div class="value-secondary">Run analysis to see estimated pricing and recommendations.</div></div>';
         }

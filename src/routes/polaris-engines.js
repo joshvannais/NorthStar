@@ -1249,6 +1249,12 @@ router.post('/polaris/intelligence', (req, res) => {
     if (svc.indexOf('Electrical') >= 0) upsells.push({ label: 'Surge Protection System', amount: Math.round(total * 0.06), description: 'Whole-home surge protection' });
 
     var intelligence = {};
+    var customerIntel = null;
+    var commsIntel = null;
+    var jobIntel = null;
+    var crewIntel = null;
+    var wfIntel = null;
+    var assetsIntel = null;
     try {
       var bi = _getEngines().bi;
       if (bi) {
@@ -1257,6 +1263,17 @@ router.post('/polaris/intelligence', (req, res) => {
       }
     } catch (e) {}
 
+    if (data.customerId) {
+      try {
+        var custEng = _getEngines().customers;
+        if (custEng) {
+          var health = custEng.calculateCustomerHealth(data.customerId);
+          if (health && !health.error) {
+            customerIntel = { healthScore: health.score || 0, lifecycleStage: health.lifecycleStage || health.stage || 'unknown' };
+          }
+        }
+      } catch (e) {}
+    }
     var reasoning = 'Estimate generated for ' + svc + ' (' + (difficulty === 'high' ? 'Complex' : difficulty === 'medium' ? 'Moderate' : 'Straightforward') + ' difficulty). ';
     reasoning += 'Based on ' + hours + ' hours of labor at $' + Math.round(effectiveRate) + '/hr. ';
     reasoning += 'Material costs calculated using regional pricing. ';
@@ -1288,6 +1305,12 @@ router.post('/polaris/intelligence', (req, res) => {
       upsells: upsells,
       generatedAt: new Date().toISOString(),
       intelligence: intelligence,
+      customerIntelligence: customerIntel,
+      communicationsIntelligence: commsIntel,
+      jobIntelligence: jobIntel,
+      crewIntelligence: crewIntel,
+      workflowIntelligence: wfIntel,
+      assetsIntelligence: assetsIntel,
       breakdown: {
         revenue: total,
         labor: laborCost,

@@ -528,6 +528,9 @@ async function start() {
   // Initialize Polaris Crew & Resource Intelligence Engine
   const crewEngine = require('./polaris/crew-engine');
   crewEngine.init();
+  // Initialize Polaris Job Execution Intelligence Engine
+  const jobEngine = require('./polaris/job-engine');
+  jobEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

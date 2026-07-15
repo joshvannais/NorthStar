@@ -3136,4 +3136,3 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
   from { transform: translateX(0); opacity: 1; }
   to { transform: translateX(100%); opacity: 0; }
 }
-/* Redeploy trigger Wed Jul 15 18:31:45 UTC 2026 */

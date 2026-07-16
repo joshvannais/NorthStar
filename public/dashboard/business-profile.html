@@ -1,114 +1,769 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Business Profile — NorthStar AI</title>
+  <title>Business Profile — NorthStar Solutions</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
-<style>
-.coming-soon-page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: calc(100vh - 180px);
-  text-align: center;
-  padding: 40px 20px;
-}
-.coming-soon-icon { font-size: 64px; margin-bottom: 24px; opacity: 0.6; }
-.coming-soon-title { font-size: 28px; font-weight: 700; color: var(--neutral-900); margin-bottom: 12px; }
-.coming-soon-desc { font-size: 16px; color: var(--neutral-500); max-width: 480px; line-height: 1.6; }
-.coming-soon-badge {
-  display: inline-block; margin-top: 24px; padding: 6px 20px;
-  background: linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.08));
-  border: 1px solid rgba(212,175,55,0.3); border-radius: 100px;
-  color: #b8960f; font-size: 13px; font-weight: 600; letter-spacing: 0.03em;
-}
-[data-theme="dark"] .coming-soon-title { color: var(--neutral-100); }
-[data-theme="dark"] .coming-soon-desc { color: var(--neutral-400); }
-[data-theme="dark"] .coming-soon-badge { background: linear-gradient(135deg, rgba(212,175,55,0.12), rgba(212,175,55,0.06)); color: var(--brand-400); }
-</style>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); color: var(--neutral-800); background: var(--neutral-50); }
+    .app-layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 240px; background: var(--neutral-900); color: #fff; display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 20px; font-size: 18px; font-weight: 700; color: #fff; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .sidebar-nav { padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+    .sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--neutral-300); text-decoration: none; font-size: 14px; font-weight: 500; transition: all 0.15s; }
+    .sidebar-nav a svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .sidebar-nav a:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sidebar-nav a.active { background: var(--brand-600); color: #fff; }
+    .main-content { flex: 1; min-width: 0; }
+    .bp-container { max-width: 960px; margin: 0 auto; padding: 24px; }
+    .bp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .bp-title { font-size: 24px; font-weight: 700; color: var(--neutral-900); }
+    .bp-subtitle { font-size: 14px; color: var(--neutral-500); margin-top: 4px; }
+    .bp-nav { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 24px; padding: 4px; background: var(--neutral-100); border-radius: var(--radius); }
+    .bp-nav-btn { padding: 8px 14px; border-radius: var(--radius-sm); border: none; background: transparent; color: var(--neutral-600); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    .bp-nav-btn:hover { background: var(--neutral-200); color: var(--neutral-800); }
+    .bp-nav-btn.active { background: var(--neutral-50); color: var(--neutral-900); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .bp-section { display: none; }
+    .bp-section.active { display: block; }
+    .bp-card { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+    .bp-card h3 { font-size: 13px; font-weight: 600; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+    .bp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 640px) { .bp-grid { grid-template-columns: 1fr; } }
+    .bp-field { display: flex; flex-direction: column; gap: 4px; }
+    .bp-field label { font-size: 12px; font-weight: 600; color: var(--neutral-600); text-transform: uppercase; letter-spacing: 0.5px; }
+    .bp-field input, .bp-field select, .bp-field textarea { padding: 8px 12px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); font-size: 14px; font-family: var(--font-sans); color: var(--neutral-800); background: var(--neutral-50); transition: border-color 0.15s; }
+    .bp-field input:focus, .bp-field select:focus, .bp-field textarea:focus { outline: none; border-color: var(--brand-500); box-shadow: 0 0 0 3px rgba(196,155,44,0.15); }
+    .bp-field input::placeholder, .bp-field textarea::placeholder { color: var(--neutral-400); }
+    .bp-field .help-text { font-size: 11px; color: var(--neutral-400); }
+    .bp-field .bp-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+    .bp-field .bp-toggle input { display: none; }
+    .bp-field .bp-toggle .slider { width: 36px; height: 20px; background: var(--neutral-300); border-radius: 10px; position: relative; transition: background 0.2s; }
+    .bp-field .bp-toggle .slider::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: transform 0.2s; }
+    .bp-field .bp-toggle input:checked + .slider { background: var(--brand-500); }
+    .bp-field .bp-toggle input:checked + .slider::after { transform: translateX(16px); }
+    .bp-save-btn { padding: 10px 24px; background: var(--brand-600); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .bp-save-btn:hover { background: var(--brand-700); }
+    .bp-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .bp-toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; z-index: 999; opacity: 0; transform: translateY(20px); transition: all 0.3s; }
+    .bp-toast.show { opacity: 1; transform: translateY(0); }
+    .bp-toast.success { background: #065f46; color: #fff; }
+    .bp-toast.error { background: #991b1b; color: #fff; }
+    .bp-hours-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--neutral-100); font-size: 13px; }
+    .bp-hours-row:last-child { border-bottom: none; }
+    .bp-hours-row .day { font-weight: 600; color: var(--neutral-700); }
+    .bp-hours-row input { padding: 4px 8px; border: 1px solid var(--neutral-200); border-radius: 4px; font-size: 13px; width: 100%; }
+    .bp-hours-row input[type="time"] { min-width: 80px; }
+    .bp-service-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 2fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--neutral-100); font-size: 13px; }
+    .bp-service-row:last-child { border-bottom: none; }
+    .bp-service-row input { padding: 4px 8px; border: 1px solid var(--neutral-200); border-radius: 4px; font-size: 13px; width: 100%; }
+    .bp-service-row .svc-name { font-weight: 600; }
+    @media (max-width: 768px) { .bp-container { padding: 16px; } .bp-grid { grid-template-columns: 1fr; } .bp-hours-row { grid-template-columns: 1fr; } .bp-service-row { grid-template-columns: 1fr; } }
+    .bp-full { grid-column: 1 / -1; }
+    .bp-half { grid-column: span 1; }
+    .bp-section-desc { font-size: 13px; color: var(--neutral-500); margin-bottom: 16px; line-height: 1.5; }
+  </style>
 </head>
 <body>
-<a href="#mainContent" class="skip-link">Skip to main content</a>
-<div class="mobile-header">
-  <button class="hamburger-btn" onclick="toggleMobileMenu()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    NorthStar
-  </button>
-  <img src="/assets/northstar-logo.png" alt="NorthStar" class="mobile-logo">
-</div>
-<div class="mobile-overlay" id="mobileOverlay" onclick="toggleMobileMenu()"></div>
-<div class="mobile-menu" id="mobileMenu">
-  <div class="mobile-menu-header">
-    <a href="/dashboard" style="font-size:17px;font-weight:700;color:var(--brand-600);text-decoration:none;display:flex;align-items:center;gap:8px;"><img src="/assets/logo.png" alt="NorthStar" style="height:22px;"> NorthStar</a>
-    <button class="mobile-menu-close" onclick="toggleMobileMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <a href="/dashboard" class="sidebar-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a>
+      <nav class="sidebar-nav">
+        <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+        <a href="/dashboard/polaris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>POLARIS</a>
+        <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
+        <a href="/dashboard/communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Communications</a>
+        <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Calendar</a>
+        <a href="/dashboard/business-profile" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Business Profile</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <div class="bp-container">
+        <div class="bp-header">
+          <div>
+            <div class="bp-title">⚙️ Business Profile</div>
+            <div class="bp-subtitle">Configure how your business operates — this is the DNA of your NorthStar platform.</div>
+          </div>
+          <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()">💾 Save Profile</button>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="bp-nav" id="bpNav">
+          <button class="bp-nav-btn active" data-section="company" onclick="switchSection('company')">🏢 Company</button>
+          <button class="bp-nav-btn" data-section="headquarters" onclick="switchSection('headquarters')">📍 HQ</button>
+          <button class="bp-nav-btn" data-section="serviceArea" onclick="switchSection('serviceArea')">🗺️ Service Area</button>
+          <button class="bp-nav-btn" data-section="routing" onclick="switchSection('routing')">🧭 Routing</button>
+          <button class="bp-nav-btn" data-section="hours" onclick="switchSection('hours')">🕐 Hours</button>
+          <button class="bp-nav-btn" data-section="crew" onclick="switchSection('crew')">👥 Crews</button>
+          <button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Vehicles</button>
+          <button class="bp-nav-btn" data-section="services" onclick="switchSection('services')">📋 Services</button>
+          <button class="bp-nav-btn" data-section="financial" onclick="switchSection('financial')">💰 Financial</button>
+          <button class="bp-nav-btn" data-section="scheduling" onclick="switchSection('scheduling')">📅 Scheduling</button>
+          <button class="bp-nav-btn" data-section="polaris" onclick="switchSection('polaris')">🤖 Polaris</button>
+          <button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">📞 Retell</button>
+          <button class="bp-nav-btn" data-section="notifications" onclick="switchSection('notifications')">🔔 Notifications</button>
+          <button class="bp-nav-btn" data-section="integrations" onclick="switchSection('integrations')">🔗 Integrations</button>
+        </div>
+
+        <!-- Section: Company -->
+        <div class="bp-section active" id="section-company">
+          <div class="bp-card">
+            <h3>Company Profile</h3>
+            <div class="bp-section-desc">Your company identity — used across estimates, invoices, communications, and Polaris responses.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label>Company Name</label><input id="company-name" placeholder="NorthStar Solutions"></div>
+              <div class="bp-field"><label>DBA (Doing Business As)</label><input id="company-dba" placeholder="Optional"></div>
+              <div class="bp-field"><label>Business Email</label><input id="company-email" type="email" placeholder="contact@example.com"></div>
+              <div class="bp-field"><label>Business Phone</label><input id="company-phone" type="tel" placeholder="(555) 000-0000"></div>
+              <div class="bp-field"><label>Website</label><input id="company-website" type="url" placeholder="https://"></div>
+              <div class="bp-field"><label>Tax ID (EIN)</label><input id="company-taxId" placeholder="XX-XXXXXXX"></div>
+              <div class="bp-field"><label>Time Zone</label>
+                <select id="company-timeZone"><option value="America/New_York">Eastern (ET)</option><option value="America/Chicago">Central (CT)</option><option value="America/Denver">Mountain (MT)</option><option value="America/Phoenix">Arizona (MST)</option><option value="America/Los_Angeles">Pacific (PT)</option><option value="America/Anchorage">Alaska (AKT)</option><option value="Pacific/Honolulu">Hawaii (HT)</option></select></div>
+              <div class="bp-field"><label>Currency</label>
+                <select id="company-currency"><option value="USD">USD ($)</option><option value="CAD">CAD (C$)</option><option value="EUR">EUR (€)</option></select></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Headquarters -->
+        <div class="bp-section" id="section-headquarters">
+          <div class="bp-card">
+            <h3>Headquarters Location</h3>
+            <div class="bp-section-desc">Your primary business address. Used as the default origin for routing and travel calculations.</div>
+            <div class="bp-grid">
+              <div class="bp-field bp-full"><label>Street Address</label><input id="hq-street" placeholder="123 Main Street"></div>
+              <div class="bp-field"><label>City</label><input id="hq-city" placeholder="City"></div>
+              <div class="bp-field"><label>State</label><input id="hq-state" placeholder="State"></div>
+              <div class="bp-field"><label>ZIP Code</label><input id="hq-zip" placeholder="12345"></div>
+              <div class="bp-field"><label>Country</label><select id="hq-country"><option value="US">United States</option><option value="CA">Canada</option></select></div>
+              <div class="bp-field"><label>Latitude</label><input id="hq-latitude" type="number" step="any" placeholder="40.7128"></div>
+              <div class="bp-field"><label>Longitude</label><input id="hq-longitude" type="number" step="any" placeholder="-74.0060"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Service Area -->
+        <div class="bp-section" id="section-serviceArea">
+          <div class="bp-card">
+            <h3>Service Area</h3>
+            <div class="bp-section-desc">Define where you operate. Used by routing, scheduling, and travel cost calculations.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label>Max Service Radius (miles)</label><input id="sa-maxRadiusMiles" type="number" min="1" max="500" placeholder="50"></div>
+              <div class="bp-field"><label>Max Travel Time (minutes)</label><input id="sa-maxTravelMinutes" type="number" min="1" max="240" placeholder="60"></div>
+              <div class="bp-field bp-full"><label>Primary Territory</label><textarea id="sa-primaryTerritory" rows="2" placeholder="e.g., Greater Phoenix Metropolitan Area"></textarea></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Routing -->
+        <div class="bp-section" id="section-routing">
+          <div class="bp-card">
+            <h3>Routing Preferences</h3>
+            <div class="bp-section-desc">Configure how your crews navigate. These settings are consumed by the routing engine.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label>Preferred Provider</label>
+                <select id="routing-preferredProvider"><option value="google-maps">Google Maps</option><option value="apple-maps">Apple Maps</option><option value="waze">Waze</option></select></div>
+              <div class="bp-field"><label>Dispatch From</label>
+                <select id="routing-dispatchFrom"><option value="headquarters">Headquarters</option><option value="nearest-office">Nearest Office</option><option value="assigned-crew">Assigned Crew</option></select></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-trafficEnabled" type="checkbox"><span class="slider"></span> Traffic Enabled</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-useLiveTraffic" type="checkbox"><span class="slider"></span> Use Live Traffic</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-avoidTolls" type="checkbox"><span class="slider"></span> Avoid Tolls</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-avoidHighways" type="checkbox"><span class="slider"></span> Avoid Highways</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-avoidFerries" type="checkbox"><span class="slider"></span> Avoid Ferries</label></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Hours -->
+        <div class="bp-section" id="section-hours">
+          <div class="bp-card">
+            <h3>Business Hours</h3>
+            <div class="bp-section-desc">Set operating hours for each day. Used by scheduling and Retell call routing.</div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;padding:8px 0;font-size:11px;font-weight:600;color:var(--neutral-500);text-transform:uppercase;border-bottom:2px solid var(--neutral-200);">
+              <div>Day</div><div>Open</div><div>Close</div><div>Emergency</div>
+            </div>
+            <div id="hoursContainer"></div>
+          </div>
+        </div>
+
+        <!-- Section: Crew -->
+        <div class="bp-section" id="section-crew">
+          <div class="bp-card">
+            <h3>Crew Defaults</h3>
+            <div class="bp-section-desc">Default crew settings used by the Business Intelligence Engine for labor cost calculations.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label>Default Crew Size</label><input id="crew-defaultCrewSize" type="number" min="1" max="10"></div>
+              <div class="bp-field"><label>Maximum Crew Size</label><input id="crew-maxCrewSize" type="number" min="1" max="20"></div>
+              <div class="bp-field"><label>Average Hourly Rate ($/hr)</label><input id="crew-averageHourlyRate" type="number" step="0.5" min="15" max="200"></div>
+              <div class="bp-field"><label>Overtime Multiplier</label><input id="crew-overtimeMultiplier" type="number" step="0.1" min="1" max="3"></div>
+              <div class="bp-field"><label>Travel Pay ($/trip)</label><input id="crew-travelPay" type="number" step="0.5" min="0"></div>
+              <div class="bp-field"><label>Shop Time (hours)</label><input id="crew-shopTime" type="number" step="0.25" min="0"></div>
+              <div class="bp-field"><label>Minimum Billable Hours</label><input id="crew-minimumBillableHours" type="number" step="0.5" min="0.5"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Vehicles -->
+        <div class="bp-section" id="section-vehicles">
+          <div class="bp-card">
+            <h3>Fleet & Vehicles</h3>
+            <div class="bp-section-desc">Vehicle configuration used by production and travel cost calculations.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label>Truck Count</label><input id="veh-truckCount" type="number" min="0"></div>
+              <div class="bp-field"><label>Trailer Count</label><input id="veh-trailerCount" type="number" min="0"></div>
+              <div class="bp-field"><label>Average MPG</label><input id="veh-averageMpg" type="number" step="0.5" min="5"></div>
+              <div class="bp-field"><label>Average Fuel Cost ($/gal)</label><input id="veh-averageFuelCost" type="number" step="0.1" min="0"></div>
+              <div class="bp-field"><label>Hourly Vehicle Cost ($/hr)</label><input id="veh-hourlyVehicleCost" type="number" step="0.5" min="0"></div>
+              <div class="bp-field"><label>Maintenance Reserve (%)</label><input id="veh-maintenanceReserve" type="number" step="0.01" min="0"></div>
+              <div class="bp-field"><label>Equipment Transport Capacity</label><input id="veh-equipmentTransportCapacity" type="number" min="0"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Services -->
+        <div class="bp-section" id="section-services">
+          <div class="bp-card">
+            <h3>Service Catalog</h3>
+            <div class="bp-section-desc">Define your services with default crew sizes, durations, and equipment. These become defaults for the Intelligence Engine.</div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 2fr;gap:8px;padding:8px 0;font-size:11px;font-weight:600;color:var(--neutral-500);text-transform:uppercase;border-bottom:2px solid var(--neutral-200);">
+              <div>Service</div><div>Crew</div><div>Hours</div><div>Confidence</div><div>Equipment</div>
+            </div>
+            <div id="servicesContainer"></div>
+          </div>
+        </div>
+
+        <!-- Section: Financial -->
+        <div class="bp-section" id="section-financial">
+          <div class="bp-card">
+            <h3>Financial Settings</h3>
+            <div class="bp-section-desc">Financial defaults consumed by the Estimating Engine, Intelligence Engine, and profit calculations.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label>Desired Gross Margin (%)</label><input id="fin-desiredGrossMargin" type="number" step="0.5" min="0" max="100"></div>
+              <div class="bp-field"><label>Desired Net Margin (%)</label><input id="fin-desiredNetMargin" type="number" step="0.5" min="0" max="100"></div>
+              <div class="bp-field"><label>Markup Multiplier</label><input id="fin-markup" type="number" step="0.1" min="1"></div>
+              <div class="bp-field"><label>Tax Rate (%)</label><input id="fin-taxRate" type="number" step="0.5" min="0" max="20"></div>
+              <div class="bp-field"><label>Emergency Markup</label><input id="fin-emergencyMarkup" type="number" step="0.1" min="1"></div>
+              <div class="bp-field"><label>Travel Charge ($/mile)</label><input id="fin-travelCharge" type="number" step="0.01" min="0"></div>
+              <div class="bp-field"><label>Minimum Job Price ($)</label><input id="fin-minimumJobPrice" type="number" step="5" min="0"></div>
+              <div class="bp-field"><label>Maximum Discount (%)</label><input id="fin-maximumDiscount" type="number" step="1" min="0" max="100"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Scheduling -->
+        <div class="bp-section" id="section-scheduling">
+          <div class="bp-card">
+            <h3>Scheduling Defaults</h3>
+            <div class="bp-section-desc">Defaults consumed by the Scheduling Engine for daily planning.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label>Max Jobs Per Day</label><input id="sched-maxJobsPerDay" type="number" min="1"></div>
+              <div class="bp-field"><label>Travel Buffer (minutes)</label><input id="sched-travelBuffer" type="number" min="0"></div>
+              <div class="bp-field"><label>Appointment Buffer (minutes)</label><input id="sched-appointmentBuffer" type="number" min="0"></div>
+              <div class="bp-field"><label>Work Day Length (hours)</label><input id="sched-workDayLength" type="number" step="0.5" min="1"></div>
+              <div class="bp-field"><label>Max Daily Travel (minutes)</label><input id="sched-maxDailyTravel" type="number" min="0"></div>
+              <div class="bp-field"><label>Dispatch Strategy</label>
+                <select id="sched-preferredDispatchStrategy"><option value="efficiency">Efficiency (shortest route)</option><option value="priority">Priority (highest value first)</option><option value="balanced">Balanced</option></select></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Polaris -->
+        <div class="bp-section" id="section-polaris">
+          <div class="bp-card">
+            <h3>Polaris AI Preferences</h3>
+            <div class="bp-section-desc">Configure how Polaris responds to your questions. These preferences shape every interaction.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label>Response Style</label>
+                <select id="pol-responseStyle"><option value="executive">Executive (operations manager)</option><option value="analytical">Analytical (data-focused)</option><option value="conversational">Conversational (friendly)</option></select></div>
+              <div class="bp-field"><label>Detail Level</label>
+                <select id="pol-detailLevel"><option value="brief">Brief</option><option value="standard">Standard</option><option value="detailed">Detailed</option></select></div>
+              <div class="bp-field"><label>Recommendation Style</label>
+                <select id="pol-recommendationStyle"><option value="prioritized">Prioritized (ranked)</option><option value="narrative">Narrative (explained)</option><option value="actionable">Actionable (next steps)</option></select></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="pol-showCalculations" type="checkbox"><span class="slider"></span> Show Calculations</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="pol-showConfidence" type="checkbox"><span class="slider"></span> Show Confidence</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="pol-showExecutiveReasoning" type="checkbox"><span class="slider"></span> Show Executive Reasoning</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="pol-conciseMode" type="checkbox"><span class="slider"></span> Concise Mode</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="pol-executiveMode" type="checkbox"><span class="slider"></span> Executive Mode</label></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Retell -->
+        <div class="bp-section" id="section-retell">
+          <div class="bp-card">
+            <h3>Retell AI Preferences</h3>
+            <div class="bp-section-desc">Configure how your AI phone agent communicates. These settings will be consumed by Retell Intelligence in Mission 17.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label>Voice Personality</label>
+                <select id="ret-voicePersonality"><option value="professional">Professional</option><option value="friendly">Friendly</option><option value="consultative">Consultative</option><option value="efficient">Efficient</option></select></div>
+              <div class="bp-field"><label>Conversation Style</label>
+                <select id="ret-conversationStyle"><option value="consultative">Consultative</option><option value="direct">Direct</option><option value="warm">Warm</option></select></div>
+              <div class="bp-field"><label>Max Conversation Length (min)</label><input id="ret-maxConversationLength" type="number" min="5" max="60"></div>
+              <div class="bp-field"><label>Question Strategy</label>
+                <select id="ret-questionStrategy"><option value="discovery">Discovery (open-ended)</option><option value="structured">Structured (guided)</option><option value="efficient">Efficient (minimal)</option></select></div>
+              <div class="bp-field"><label>Confirmation Style</label>
+                <select id="ret-confirmationStyle"><option value="explicit">Explicit (repeat details)</option><option value="implicit">Implicit (implied agreement)</option><option value="summary">Summary (end recap)</option></select></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="ret-emergencyWorkflow" type="checkbox"><span class="slider"></span> Emergency Workflow</label></div>
+            </div>
+            <div style="margin-top:12px;padding:12px;background:var(--neutral-100);border-radius:var(--radius-sm);font-size:12px;color:var(--neutral-500);">⚠️ Full Retell configuration will be available in Mission 17. These are placeholder preferences.</div>
+          </div>
+        </div>
+
+        <!-- Section: Notifications -->
+        <div class="bp-section" id="section-notifications">
+          <div class="bp-card">
+            <h3>Notification Preferences</h3>
+            <div class="bp-section-desc">Control which notifications you receive and how.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label class="bp-toggle"><input id="notif-email" type="checkbox"><span class="slider"></span> Email Notifications</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="notif-sms" type="checkbox"><span class="slider"></span> SMS Notifications</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="notif-push" type="checkbox"><span class="slider"></span> Push Notifications</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="notif-dailyExecutiveBriefing" type="checkbox"><span class="slider"></span> Daily Executive Briefing</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="notif-revenueAlerts" type="checkbox"><span class="slider"></span> Revenue Alerts</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="notif-crewAlerts" type="checkbox"><span class="slider"></span> Crew Alerts</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="notif-criticalAlerts" type="checkbox"><span class="slider"></span> Critical Alerts</label></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Integrations -->
+        <div class="bp-section" id="section-integrations">
+          <div class="bp-card">
+            <h3>Integrations</h3>
+            <div class="bp-section-desc">Configure third-party integrations. These are configuration placeholders — no logic is implemented yet.</div>
+            <div class="bp-grid">
+              <div class="bp-field"><label class="bp-toggle"><input id="int-openai" type="checkbox"><span class="slider"></span> OpenAI</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-retell" type="checkbox"><span class="slider"></span> Retell AI</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-googleCalendar" type="checkbox"><span class="slider"></span> Google Calendar</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-microsoftCalendar" type="checkbox"><span class="slider"></span> Microsoft Calendar</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-googleMaps" type="checkbox"><span class="slider"></span> Google Maps</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-appleMaps" type="checkbox"><span class="slider"></span> Apple Maps</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-waze" type="checkbox"><span class="slider"></span> Waze</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-quickbooks" type="checkbox"><span class="slider"></span> QuickBooks</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-stripe" type="checkbox"><span class="slider"></span> Stripe</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-square" type="checkbox"><span class="slider"></span> Square</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-twilio" type="checkbox"><span class="slider"></span> Twilio</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-weather" type="checkbox"><span class="slider"></span> Weather</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-fleetTracking" type="checkbox"><span class="slider"></span> Fleet Tracking</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-payroll" type="checkbox"><span class="slider"></span> Payroll</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="int-inventory" type="checkbox"><span class="slider"></span> Inventory</label></div>
+            </div>
+            <div style="margin-top:12px;padding:12px;background:var(--neutral-100);border-radius:var(--radius-sm);font-size:12px;color:var(--neutral-500);">🔌 Integration configuration only. No API keys or logic stored here. Each integration will be implemented in its own mission.</div>
+          </div>
+        </div>
+
+        <div style="text-align:center;padding:20px 0;color:var(--neutral-400);font-size:12px;">
+          Business Profile v1.0 — Single source of truth for NorthStar operations
+        </div>
+      </div>
+    </main>
   </div>
-  <nav class="mobile-menu-nav">
-    <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
-    <a href="/dashboard/polaris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>POLARIS</a>
-    <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
-    <a href="/dashboard/communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Communications</a>
-    <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>My Number</a>
-    <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Calendar</a>
-    <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>AI Settings</a>
-    <a href="/dashboard/business-profile" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Business Profile</a>
-<a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
-  </nav>
-  <div class="mobile-menu-footer">
-    <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>
-    <button onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--neutral-500);width:100%;text-align:left;">🌙 Toggle Theme</button>
-  </div>
-</div>
-<script>
-function toggleMobileMenu() {
-  document.getElementById('mobileOverlay').style.display = document.getElementById('mobileOverlay').style.display === 'block' ? 'none' : 'block';
-  document.getElementById('mobileMenu').classList.toggle('open');
-}
-</script>
-<div class="dashboard-layout">
-  <aside class="sidebar">
-    <a href="/dashboard" class="sidebar-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a>
-    <nav class="sidebar-nav">
-      <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
-        <a href="/dashboard/polaris">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-          <span>POLARIS</span>
-        </a>
-      <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
-      <a href="/dashboard/communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Communications</span></a>
-      <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
-      <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg><span>Calendar</span></a>
-      <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg><span>AI Settings</span></a>
-      <a href="/dashboard/business-profile" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Business Profile</span></a>
-      <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></a>
-    </nav>
-    <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
-    <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button>
-  </aside>
-  <main class="main-content" id="mainContent">
-    <div class="page-header">
-      <div><h1>Business Profile</h1><p>Manage your business information and branding.</p></div>
-    </div>
-    <div class="coming-soon-page">
-      <div class="coming-soon-icon">🏢</div>
-      <div class="coming-soon-title">Business Profile Coming Soon</div>
-      <div class="coming-soon-desc">Add your business name, address, logo, service areas, hours, and branding. Your AI Office Manager will use this information when speaking with customers.</div>
-      <div class="coming-soon-badge">POLARIS™ — Coming in Next Release</div>
-    </div>
-  </main>
-</div>
-<div id="toast" class="toast"></div>
-<script src="/js/simulator.js"></script>
-<script src="/js/api.js"></script>
-<script src="/js/event-bus.js"></script>
-<script src="/js/business-models.js"></script>
-<script src="/js/app-store.js"></script>
-<script src="/js/polaris-engine.js"></script>
-<script src="/js/notification-service.js"></script>
-<script src="/js/theme.js"></script>
+  <div id="toast" class="bp-toast"></div>
+
+  <script>
+    // ====================================================================
+    // Data model
+    // ====================================================================
+    var profileData = null;
+
+    // ====================================================================
+    // Section navigation
+    // ====================================================================
+    function switchSection(section) {
+      document.querySelectorAll('.bp-section').forEach(function(el) { el.classList.remove('active'); });
+      document.querySelectorAll('.bp-nav-btn').forEach(function(el) { el.classList.remove('active'); });
+      document.getElementById('section-' + section).classList.add('active');
+      document.querySelector('[data-section="' + section + '"]').classList.add('active');
+    }
+
+    // ====================================================================
+    // Load profile
+    // ====================================================================
+    function loadProfile() {
+      fetch('/api/v1/business-profile')
+        .then(function(r) { return r.json(); })
+        .then(function(resp) {
+          if (resp.success && resp.data) {
+            profileData = resp.data;
+            renderProfile(profileData);
+          } else {
+            showToast('Failed to load profile', 'error');
+          }
+        })
+        .catch(function() {
+          showToast('Could not connect to server', 'error');
+        });
+    }
+
+    // ====================================================================
+    // Render profile to form
+    // ====================================================================
+    function renderProfile(p) {
+      // Company
+      setVal('company-name', p.company.name);
+      setVal('company-dba', p.company.dba);
+      setVal('company-email', p.company.email);
+      setVal('company-phone', p.company.phone);
+      setVal('company-website', p.company.website);
+      setVal('company-taxId', p.company.taxId);
+      setSelect('company-timeZone', p.company.timeZone);
+      setSelect('company-currency', p.company.currency);
+
+      // HQ
+      setVal('hq-street', p.headquarters.street);
+      setVal('hq-city', p.headquarters.city);
+      setVal('hq-state', p.headquarters.state);
+      setVal('hq-zip', p.headquarters.zip);
+      setSelect('hq-country', p.headquarters.country);
+      setVal('hq-latitude', p.headquarters.latitude);
+      setVal('hq-longitude', p.headquarters.longitude);
+
+      // Service Area
+      setVal('sa-maxRadiusMiles', p.serviceArea.maxRadiusMiles);
+      setVal('sa-maxTravelMinutes', p.serviceArea.maxTravelMinutes);
+      setVal('sa-primaryTerritory', p.serviceArea.primaryTerritory);
+
+      // Routing
+      setSelect('routing-preferredProvider', p.routing.preferredProvider);
+      setSelect('routing-dispatchFrom', p.routing.dispatchFrom);
+      setCheck('routing-trafficEnabled', p.routing.trafficEnabled);
+      setCheck('routing-useLiveTraffic', p.routing.useLiveTraffic);
+      setCheck('routing-avoidTolls', p.routing.avoidTolls);
+      setCheck('routing-avoidHighways', p.routing.avoidHighways);
+      setCheck('routing-avoidFerries', p.routing.avoidFerries);
+
+      // Hours
+      renderHours(p.hours);
+
+      // Crew
+      setVal('crew-defaultCrewSize', p.crew.defaultCrewSize);
+      setVal('crew-maxCrewSize', p.crew.maxCrewSize);
+      setVal('crew-averageHourlyRate', p.crew.averageHourlyRate);
+      setVal('crew-overtimeMultiplier', p.crew.overtimeMultiplier);
+      setVal('crew-travelPay', p.crew.travelPay);
+      setVal('crew-shopTime', p.crew.shopTime);
+      setVal('crew-minimumBillableHours', p.crew.minimumBillableHours);
+
+      // Vehicles
+      setVal('veh-truckCount', p.vehicles.truckCount);
+      setVal('veh-trailerCount', p.vehicles.trailerCount);
+      setVal('veh-averageMpg', p.vehicles.averageMpg);
+      setVal('veh-averageFuelCost', p.vehicles.averageFuelCost);
+      setVal('veh-hourlyVehicleCost', p.vehicles.hourlyVehicleCost);
+      setVal('veh-maintenanceReserve', p.vehicles.maintenanceReserve);
+      setVal('veh-equipmentTransportCapacity', p.vehicles.equipmentTransportCapacity);
+
+      // Services
+      renderServices(p.services);
+
+      // Financial
+      setVal('fin-desiredGrossMargin', p.financial.desiredGrossMargin);
+      setVal('fin-desiredNetMargin', p.financial.desiredNetMargin);
+      setVal('fin-markup', p.financial.markup);
+      setVal('fin-taxRate', p.financial.taxRate);
+      setVal('fin-emergencyMarkup', p.financial.emergencyMarkup);
+      setVal('fin-travelCharge', p.financial.travelCharge);
+      setVal('fin-minimumJobPrice', p.financial.minimumJobPrice);
+      setVal('fin-maximumDiscount', p.financial.maximumDiscount);
+
+      // Scheduling
+      setVal('sched-maxJobsPerDay', p.scheduling.maxJobsPerDay);
+      setVal('sched-travelBuffer', p.scheduling.travelBuffer);
+      setVal('sched-appointmentBuffer', p.scheduling.appointmentBuffer);
+      setVal('sched-workDayLength', p.scheduling.workDayLength);
+      setVal('sched-maxDailyTravel', p.scheduling.maxDailyTravel);
+      setSelect('sched-preferredDispatchStrategy', p.scheduling.preferredDispatchStrategy);
+
+      // Polaris
+      setSelect('pol-responseStyle', p.polaris.responseStyle);
+      setSelect('pol-detailLevel', p.polaris.detailLevel);
+      setSelect('pol-recommendationStyle', p.polaris.recommendationStyle);
+      setCheck('pol-showCalculations', p.polaris.showCalculations);
+      setCheck('pol-showConfidence', p.polaris.showConfidence);
+      setCheck('pol-showExecutiveReasoning', p.polaris.showExecutiveReasoning);
+      setCheck('pol-conciseMode', p.polaris.conciseMode);
+      setCheck('pol-executiveMode', p.polaris.executiveMode);
+
+      // Retell
+      setSelect('ret-voicePersonality', p.retell.voicePersonality);
+      setSelect('ret-conversationStyle', p.retell.conversationStyle);
+      setVal('ret-maxConversationLength', p.retell.maxConversationLength);
+      setSelect('ret-questionStrategy', p.retell.questionStrategy);
+      setSelect('ret-confirmationStyle', p.retell.confirmationStyle);
+      setCheck('ret-emergencyWorkflow', p.retell.emergencyWorkflow);
+
+      // Notifications
+      setCheck('notif-email', p.notifications.email);
+      setCheck('notif-sms', p.notifications.sms);
+      setCheck('notif-push', p.notifications.push);
+      setCheck('notif-dailyExecutiveBriefing', p.notifications.dailyExecutiveBriefing);
+      setCheck('notif-revenueAlerts', p.notifications.revenueAlerts);
+      setCheck('notif-crewAlerts', p.notifications.crewAlerts);
+      setCheck('notif-criticalAlerts', p.notifications.criticalAlerts);
+
+      // Integrations
+      setCheck('int-openai', p.integrations.openai.enabled);
+      setCheck('int-retell', p.integrations.retell.enabled);
+      setCheck('int-googleCalendar', p.integrations.googleCalendar.enabled);
+      setCheck('int-microsoftCalendar', p.integrations.microsoftCalendar.enabled);
+      setCheck('int-googleMaps', p.integrations.googleMaps.enabled);
+      setCheck('int-appleMaps', p.integrations.appleMaps.enabled);
+      setCheck('int-waze', p.integrations.waze.enabled);
+      setCheck('int-quickbooks', p.integrations.quickbooks.enabled);
+      setCheck('int-stripe', p.integrations.stripe.enabled);
+      setCheck('int-square', p.integrations.square.enabled);
+      setCheck('int-twilio', p.integrations.twilio.enabled);
+      setCheck('int-weather', p.integrations.weather.enabled);
+      setCheck('int-fleetTracking', p.integrations.fleetTracking.enabled);
+      setCheck('int-payroll', p.integrations.payroll.enabled);
+      setCheck('int-inventory', p.integrations.inventory.enabled);
+    }
+
+    function setVal(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.value = (val !== null && val !== undefined) ? val : '';
+    }
+    function setSelect(id, val) {
+      var el = document.getElementById(id);
+      if (el && val) el.value = val;
+    }
+    function setCheck(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.checked = !!val;
+    }
+
+    function renderHours(hours) {
+      var container = document.getElementById('hoursContainer');
+      if (!container) return;
+      var days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+      var html = '';
+      days.forEach(function(d) {
+        var h = hours[d] || {};
+        var dayLabel = d.charAt(0).toUpperCase() + d.slice(1);
+        var tpl = '<div class="bp-hours-row">' +
+          '<div class="day">' + dayLabel + '</div>' +
+          '<div><input type="time" class="hours-open" data-day="' + d + '" value="' + (h.open || '') + '"></div>' +
+          '<div><input type="time" class="hours-close" data-day="' + d + '" value="' + (h.close || '') + '"></div>' +
+          '<div><label class="bp-toggle" style="justify-content:center;"><input type="checkbox" class="hours-emergency" data-day="' + d + '" ' + (h.emergency ? 'checked' : '') + '><span class="slider"></span></label></div>' +
+          '</div>';
+        html += tpl;
+      });
+      container.innerHTML = html;
+    }
+
+    function renderServices(services) {
+      var container = document.getElementById('servicesContainer');
+      if (!container) return;
+      if (!services || services.length === 0) {
+        container.innerHTML = '<div style="padding:16px;text-align:center;color:var(--neutral-400);font-size:13px;">No services configured. Add services to your catalog.</div>';
+        return;
+      }
+      var html = '';
+      services.forEach(function(s, i) {
+        html += '<div class="bp-service-row">' +
+          '<div class="svc-name">' + s.name + '</div>' +
+          '<div><input type="number" class="svc-crew" data-idx="' + i + '" value="' + (s.crewSize || 2) + '" min="1" style="width:50px;"></div>' +
+          '<div><input type="number" class="svc-hours" data-idx="' + i + '" value="' + (s.avgHours || 3) + '" step="0.5" min="0.5" style="width:60px;"></div>' +
+          '<div><input type="number" class="svc-confidence" data-idx="' + i + '" value="' + (s.confidence || 85) + '" min="0" max="100" style="width:50px;"></div>' +
+          '<div><input type="text" class="svc-equipment" data-idx="' + i + '" value="' + (s.equipment || '') + '" placeholder="Equipment"></div>' +
+          '</div>';
+      });
+      container.innerHTML = html;
+    }
+
+    // ====================================================================
+    // Collect form data
+    // ====================================================================
+    function collectProfile() {
+      var p = JSON.parse(JSON.stringify(profileData || {}));
+
+      p.company.name = getVal('company-name');
+      p.company.dba = getVal('company-dba');
+      p.company.email = getVal('company-email');
+      p.company.phone = getVal('company-phone');
+      p.company.website = getVal('company-website');
+      p.company.taxId = getVal('company-taxId');
+      p.company.timeZone = getSelect('company-timeZone');
+      p.company.currency = getSelect('company-currency');
+
+      p.headquarters.street = getVal('hq-street');
+      p.headquarters.city = getVal('hq-city');
+      p.headquarters.state = getVal('hq-state');
+      p.headquarters.zip = getVal('hq-zip');
+      p.headquarters.country = getSelect('hq-country');
+      p.headquarters.latitude = parseFloat(getVal('hq-latitude')) || null;
+      p.headquarters.longitude = parseFloat(getVal('hq-longitude')) || null;
+
+      p.serviceArea.maxRadiusMiles = parseInt(getVal('sa-maxRadiusMiles')) || 50;
+      p.serviceArea.maxTravelMinutes = parseInt(getVal('sa-maxTravelMinutes')) || 60;
+      p.serviceArea.primaryTerritory = getVal('sa-primaryTerritory');
+
+      p.routing.preferredProvider = getSelect('routing-preferredProvider');
+      p.routing.dispatchFrom = getSelect('routing-dispatchFrom');
+      p.routing.trafficEnabled = getCheck('routing-trafficEnabled');
+      p.routing.useLiveTraffic = getCheck('routing-useLiveTraffic');
+      p.routing.avoidTolls = getCheck('routing-avoidTolls');
+      p.routing.avoidHighways = getCheck('routing-avoidHighways');
+      p.routing.avoidFerries = getCheck('routing-avoidFerries');
+
+      // Hours
+      var days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+      days.forEach(function(d) {
+        if (!p.hours[d]) p.hours[d] = {};
+        var openEl = document.querySelector('.hours-open[data-day="' + d + '"]');
+        var closeEl = document.querySelector('.hours-close[data-day="' + d + '"]');
+        var emergEl = document.querySelector('.hours-emergency[data-day="' + d + '"]');
+        p.hours[d].open = openEl ? openEl.value : '';
+        p.hours[d].close = closeEl ? closeEl.value : '';
+        p.hours[d].emergency = emergEl ? emergEl.checked : false;
+      });
+
+      p.crew.defaultCrewSize = parseInt(getVal('crew-defaultCrewSize')) || 2;
+      p.crew.maxCrewSize = parseInt(getVal('crew-maxCrewSize')) || 6;
+      p.crew.averageHourlyRate = parseFloat(getVal('crew-averageHourlyRate')) || 42;
+      p.crew.overtimeMultiplier = parseFloat(getVal('crew-overtimeMultiplier')) || 1.5;
+      p.crew.travelPay = parseFloat(getVal('crew-travelPay')) || 0;
+      p.crew.shopTime = parseFloat(getVal('crew-shopTime')) || 0;
+      p.crew.minimumBillableHours = parseFloat(getVal('crew-minimumBillableHours')) || 1;
+
+      p.vehicles.truckCount = parseInt(getVal('veh-truckCount')) || 0;
+      p.vehicles.trailerCount = parseInt(getVal('veh-trailerCount')) || 0;
+      p.vehicles.averageMpg = parseFloat(getVal('veh-averageMpg')) || 14;
+      p.vehicles.averageFuelCost = parseFloat(getVal('veh-averageFuelCost')) || 3.5;
+      p.vehicles.hourlyVehicleCost = parseFloat(getVal('veh-hourlyVehicleCost')) || 0;
+      p.vehicles.maintenanceReserve = parseFloat(getVal('veh-maintenanceReserve')) || 0;
+      p.vehicles.equipmentTransportCapacity = parseInt(getVal('veh-equipmentTransportCapacity')) || 0;
+
+      // Services
+      var svcInputs = document.querySelectorAll('.svc-crew');
+      if (p.services && svcInputs.length > 0) {
+        p.services.forEach(function(s, i) {
+          var crewEl = document.querySelector('.svc-crew[data-idx="' + i + '"]');
+          var hoursEl = document.querySelector('.svc-hours[data-idx="' + i + '"]');
+          var confEl = document.querySelector('.svc-confidence[data-idx="' + i + '"]');
+          var equipEl = document.querySelector('.svc-equipment[data-idx="' + i + '"]');
+          if (crewEl) s.crewSize = parseInt(crewEl.value) || 2;
+          if (hoursEl) s.avgHours = parseFloat(hoursEl.value) || 3;
+          if (confEl) s.confidence = parseInt(confEl.value) || 85;
+          if (equipEl) s.equipment = equipEl.value;
+        });
+      }
+
+      p.financial.desiredGrossMargin = parseFloat(getVal('fin-desiredGrossMargin')) || 40;
+      p.financial.desiredNetMargin = parseFloat(getVal('fin-desiredNetMargin')) || 20;
+      p.financial.markup = parseFloat(getVal('fin-markup')) || 1.3;
+      p.financial.taxRate = parseFloat(getVal('fin-taxRate')) || 0;
+      p.financial.emergencyMarkup = parseFloat(getVal('fin-emergencyMarkup')) || 1.5;
+      p.financial.travelCharge = parseFloat(getVal('fin-travelCharge')) || 0.58;
+      p.financial.minimumJobPrice = parseFloat(getVal('fin-minimumJobPrice')) || 0;
+      p.financial.maximumDiscount = parseFloat(getVal('fin-maximumDiscount')) || 0;
+
+      p.scheduling.maxJobsPerDay = parseInt(getVal('sched-maxJobsPerDay')) || 4;
+      p.scheduling.travelBuffer = parseInt(getVal('sched-travelBuffer')) || 0;
+      p.scheduling.appointmentBuffer = parseInt(getVal('sched-appointmentBuffer')) || 0;
+      p.scheduling.workDayLength = parseFloat(getVal('sched-workDayLength')) || 8;
+      p.scheduling.maxDailyTravel = parseInt(getVal('sched-maxDailyTravel')) || 0;
+      p.scheduling.preferredDispatchStrategy = getSelect('sched-preferredDispatchStrategy');
+
+      p.polaris.responseStyle = getSelect('pol-responseStyle');
+      p.polaris.detailLevel = getSelect('pol-detailLevel');
+      p.polaris.recommendationStyle = getSelect('pol-recommendationStyle');
+      p.polaris.showCalculations = getCheck('pol-showCalculations');
+      p.polaris.showConfidence = getCheck('pol-showConfidence');
+      p.polaris.showExecutiveReasoning = getCheck('pol-showExecutiveReasoning');
+      p.polaris.conciseMode = getCheck('pol-conciseMode');
+      p.polaris.executiveMode = getCheck('pol-executiveMode');
+
+      p.retell.voicePersonality = getSelect('ret-voicePersonality');
+      p.retell.conversationStyle = getSelect('ret-conversationStyle');
+      p.retell.maxConversationLength = parseInt(getVal('ret-maxConversationLength')) || 15;
+      p.retell.questionStrategy = getSelect('ret-questionStrategy');
+      p.retell.confirmationStyle = getSelect('ret-confirmationStyle');
+      p.retell.emergencyWorkflow = getCheck('ret-emergencyWorkflow');
+
+      p.notifications.email = getCheck('notif-email');
+      p.notifications.sms = getCheck('notif-sms');
+      p.notifications.push = getCheck('notif-push');
+      p.notifications.dailyExecutiveBriefing = getCheck('notif-dailyExecutiveBriefing');
+      p.notifications.revenueAlerts = getCheck('notif-revenueAlerts');
+      p.notifications.crewAlerts = getCheck('notif-crewAlerts');
+      p.notifications.criticalAlerts = getCheck('notif-criticalAlerts');
+
+      p.integrations.openai.enabled = getCheck('int-openai');
+      p.integrations.retell.enabled = getCheck('int-retell');
+      p.integrations.googleCalendar.enabled = getCheck('int-googleCalendar');
+      p.integrations.microsoftCalendar.enabled = getCheck('int-microsoftCalendar');
+      p.integrations.googleMaps.enabled = getCheck('int-googleMaps');
+      p.integrations.appleMaps.enabled = getCheck('int-appleMaps');
+      p.integrations.waze.enabled = getCheck('int-waze');
+      p.integrations.quickbooks.enabled = getCheck('int-quickbooks');
+      p.integrations.stripe.enabled = getCheck('int-stripe');
+      p.integrations.square.enabled = getCheck('int-square');
+      p.integrations.twilio.enabled = getCheck('int-twilio');
+      p.integrations.weather.enabled = getCheck('int-weather');
+      p.integrations.fleetTracking.enabled = getCheck('int-fleetTracking');
+      p.integrations.payroll.enabled = getCheck('int-payroll');
+      p.integrations.inventory.enabled = getCheck('int-inventory');
+
+      return p;
+    }
+
+    function getVal(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+    function getSelect(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+    function getCheck(id) { var el = document.getElementById(id); return el ? el.checked : false; }
+
+    // ====================================================================
+    // Save profile
+    // ====================================================================
+    function saveProfile() {
+      var btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Saving...';
+
+      var data = collectProfile();
+
+      fetch('/api/v1/business-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(resp) {
+          if (resp.success) {
+            profileData = resp.data;
+            showToast('✅ Profile saved successfully', 'success');
+          } else {
+            var msg = resp.errors ? resp.errors.join('; ') : 'Validation failed';
+            showToast('❌ ' + msg, 'error');
+          }
+        })
+        .catch(function() {
+          showToast('❌ Could not connect to server', 'error');
+        })
+        .finally(function() {
+          btn.disabled = false;
+          btn.textContent = '💾 Save Profile';
+        });
+    }
+
+    // ====================================================================
+    // Toast
+    // ====================================================================
+    function showToast(msg, type) {
+      var toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.className = 'bp-toast ' + type + ' show';
+      setTimeout(function() { toast.classList.remove('show'); }, 3000);
+    }
+
+    // ====================================================================
+    // Init
+    // ====================================================================
+    document.addEventListener('DOMContentLoaded', loadProfile);
+  </script>
 </body>
 </html>

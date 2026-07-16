@@ -1010,7 +1010,7 @@
         if (messages.length === 0) return;
 
         // Remove all message elements
-        var messageEls = conversationBody.querySelectorAll('.polaris-chat-message, .polaris-typing');
+        var messageEls = conversationBody.querySelectorAll('.polaris-chat-message, .polaris-typing, .polaris-empty-state');
         messageEls.forEach(function(el) { el.remove(); });
 
         hideTyping();
@@ -1018,19 +1018,26 @@
         msgCounter = 0;
         setLoading(false);
 
-        // Show empty state
-        var empty = document.createElement('div');
-        empty.className = 'polaris-empty-state';
-        empty.innerHTML =
-          '<div class="polaris-empty-state-icon">✦</div>' +
-          '<div class="polaris-empty-state-text">Conversation cleared. Start a new one by typing below.</div>';
-        conversationBody.appendChild(empty);
+        // Restore welcome state if it exists in DOM
+        if (welcomeState) {
+          welcomeState.style.display = '';
+        } else {
+          // Re-fetch welcome state (it was hidden, so element is still in DOM)
+          var ws = document.querySelector('.polaris-welcome');
+          if (ws) {
+            ws.style.display = '';
+            welcomeState = ws;
+          } else {
+            // Show empty state as fallback
+            var empty = document.createElement('div');
+            empty.className = 'polaris-empty-state';
+            empty.innerHTML =
+              '<div class="polaris-empty-state-icon">✦</div>' +
+              '<div class="polaris-empty-state-text">Conversation cleared. Start a new one by typing below.</div>';
+            conversationBody.appendChild(empty);
+          }
+        }
 
-        // Stop loading if stuck
-        isLoading = false;
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Send';
-        input.disabled = false;
         input.focus();
       }
 

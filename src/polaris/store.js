@@ -115,6 +115,94 @@ function updateJob(id, updates) {
   return store[idx];
 }
 
+// ── Rich Job Query Methods ──
+
+/**
+ * Get jobs by date range (based on createdAt).
+ * @param {string} start ISO date string
+ * @param {string} end ISO date string
+ * @returns {object[]} Filtered jobs
+ */
+function getJobsByDateRange(start, end) {
+  const jobs = _load('jobs');
+  const startDate = start ? new Date(start) : new Date(0);
+  const endDate = end ? new Date(end) : new Date('2100-01-01');
+  return jobs.filter(j => {
+    const created = new Date(j.createdAt);
+    return created >= startDate && created <= endDate;
+  });
+}
+
+/**
+ * Get jobs by service type.
+ * @param {string} serviceType
+ * @returns {object[]} Filtered jobs
+ */
+function getJobsByServiceType(serviceType) {
+  if (!serviceType) return [];
+  return _load('jobs').filter(j => j.serviceType === serviceType);
+}
+
+/**
+ * Get jobs by crew ID.
+ * @param {string} crewId
+ * @returns {object[]} Filtered jobs
+ */
+function getJobsByCrew(crewId) {
+  if (!crewId) return [];
+  return _load('jobs').filter(j => j.crewId === crewId);
+}
+
+/**
+ * Get jobs by season.
+ * @param {string} season - 'spring', 'summer', 'fall', 'winter'
+ * @returns {object[]} Filtered jobs
+ */
+function getJobsBySeason(season) {
+  if (!season) return [];
+  return _load('jobs').filter(j => j.season === season);
+}
+
+/**
+ * Get jobs by customer outcome.
+ * @param {string} outcome - 'won', 'lost', 'cancelled', 'rescheduled'
+ * @returns {object[]} Filtered jobs
+ */
+function getJobsByCustomerOutcome(outcome) {
+  if (!outcome) return [];
+  return _load('jobs').filter(j => j.customerOutcome === outcome);
+}
+
+/**
+ * Get jobs by property size.
+ * @param {string} propertySize - e.g., 'small', 'medium', 'large'
+ * @returns {object[]} Filtered jobs
+ */
+function getJobsByPropertySize(propertySize) {
+  if (!propertySize) return [];
+  return _load('jobs').filter(j => j.propertySize === propertySize);
+}
+
+/**
+ * Get jobs by city.
+ * @param {string} city
+ * @returns {object[]} Filtered jobs
+ */
+function getJobsByCity(city) {
+  if (!city) return [];
+  return _load('jobs').filter(j => j.city && j.city.toLowerCase() === city.toLowerCase());
+}
+
+/**
+ * Get the most recent completed jobs.
+ * @param {number} count - Max number to return
+ * @returns {object[]} Recent jobs
+ */
+function getRecentJobs(count) {
+  const jobs = _load('jobs');
+  return jobs.slice(-(count || 10)).reverse();
+}
+
 // ── Estimates ──
 
 function getAllEstimates() {
@@ -226,6 +314,15 @@ module.exports = {
   getJob,
   addJob,
   updateJob,
+  // Rich Job Queries
+  getJobsByDateRange,
+  getJobsByServiceType,
+  getJobsByCrew,
+  getJobsBySeason,
+  getJobsByCustomerOutcome,
+  getJobsByPropertySize,
+  getJobsByCity,
+  getRecentJobs,
   // Estimates
   getAllEstimates,
   addEstimate,

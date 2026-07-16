@@ -17,6 +17,8 @@
 
 const store = require('./store');
 
+const PREDICTION_VERSION = 'v2';
+
 // ── Base Configuration ──
 // These are seeded defaults. Companies can override via loadEstimationConfig().
 
@@ -230,6 +232,7 @@ function generateEstimate(data) {
     profit: profit,
     tax: tax,
     total: total,
+    predictionVersion: PREDICTION_VERSION,
     confidence: confidence,
     confidenceLabel: confidence >= 80 ? 'High' : confidence >= 55 ? 'Medium' : 'Low',
     variables: {

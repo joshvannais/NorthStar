@@ -57,6 +57,9 @@ Polaris is a dedicated backend application service — not a dashboard component
 | **Company-specific** | Learning is per-business. Company A's 2-hour water heater installs don't get averaged with Company B's 3.5-hour ones. |
 | **Pluggable storage** | Currently file-backed (JSON). PostgreSQL-ready schemas are defined. Swap storage by implementing the same interface. |
 | **AI-ready** | ChatGPT and Retell AI interfaces are prepared. They query Polaris as the source of truth. |
+| **Explainable AI** | Every prediction includes human-readable reasoning. Polaris never behaves as a black box. |
+| **Human override** | Contractors remain in control. Overridden values are retained as learning data. |
+| **Prediction versioning** | All predictions are versioned internally. Historical records remain reproducible as the engine evolves. |
 
 ---
 
@@ -442,3 +445,169 @@ The data model supports:
 ✓ Multi-crew architecture — data model supports crew tracking
 ✓ Calendar intelligence architecture — data model supports scheduling optimization
 ✓ Operations intelligence roadmap — 6 phases to full autonomy
+
+---
+
+## 14. Architectural Considerations
+
+### 14.1 Prediction Confidence
+
+**Status: Implemented** (estimation.js, lines 193-234)
+
+Every estimate includes a confidence score (0-100) derived from:
+
+| Data Point | Weight |
+|------------|--------|
+| Description provided | +1 |
+| Square footage known | +2 |
+| Crew size specified | +1 |
+| Equipment requirements | +1 |
+| Estimated hours provided | +1 |
+| Travel distance > 0 | +1 |
+| Prior job data available | +3 |
+
+Confidence thresholds:
+- **90%**: 5+ data points (detailed lead data)
+- **70%**: 3-4 data points (partial lead data)
+- **55%**: 1-2 data points (minimal data)
+- **40%**: Service type only (default)
+
+Future confidence will incorporate:
+- Historical learning accuracy per service type
+- Sample size of similar completed jobs
+- Seasonality variance
+- Crew-specific efficiency data
+- Data freshness (how recent are the training jobs)
+
+### 14.2 Explainable AI
+
+**Status: Implemented** (estimation.js, lines 276-282)
+
+Every estimate includes a `reasoning` field containing human-readable explanation:
+
+```
+"Estimate generated for HVAC Repair (Moderate complexity).
+Labor: 4.6 hours at $95/hr.
+Property size: Medium (1,000-2,500 sqft).
+Seasonality adjustment: 120%.
+Confidence: Medium (70%)."
+```
+
+The `variables` field stores all inputs used in the calculation, making every prediction fully auditable:
+
+```json
+{
+  "variables": {
+    "serviceType": "HVAC Repair",
+    "complexity": "medium",
+    "propertyTier": "Medium (1,000-2,500 sqft)",
+    "seasonality": 1.2,
+    "baseHours": 2.5,
+    "adjustedHours": 4.6,
+    "hourlyRate": 95,
+    "travelDistance": 15,
+    "dataPoints": 4
+  }
+}
+```
+
+Future explainability will include:
+- References to specific similar completed jobs
+- Crew efficiency history
+- Historical variance for the same service type
+- Seasonal pattern comparisons
+- Direct links to the training data that influenced the prediction
+
+### 14.3 Learning Priority
+
+**Status: Documented architecture**
+
+Polaris prioritizes learning sources in this order:
+
+```
+Priority 1: Company's own completed jobs
+    └── Most accurate signal — specific to this business's operations
+    └── Example: Company A always takes 2.0 hrs for water heater installs
+
+Priority 2: Company's historical estimates
+    └── Second-best signal — reflects pricing and scope patterns
+    └── Includes both machine predictions and human overrides
+
+Priority 3: Similar businesses (future, optional)
+    └── Network learning — anonymized, opt-in
+    └── Only when own data is insufficient (< 5 completed jobs)
+
+Priority 4: Industry averages
+    └── Published benchmarks by service type and region
+    └── Used when company has no completion history
+
+Priority 5: Generic defaults
+    └── Base hours, labor rates, material costs
+    └── Only used when no other data is available
+```
+
+The longer a company uses NorthStar, the less Polaris relies on lower-priority sources. After 50+ completed jobs, predictions are driven almost entirely by Priority 1 data.
+
+### 14.4 Prediction Versioning
+
+**Status: Implemented** (estimation.js: `PREDICTION_VERSION = 'v2'`)
+
+Every estimate carries a `predictionVersion` field:
+
+```json
+{
+  "predictionVersion": "v2",
+  "totalEstimated": 1245.50,
+  "confidence": 70,
+  "generatedAt": "2026-07-14T12:00:00Z"
+}
+```
+
+Version history:
+- **v1** (legacy): Frontend-only PolarisEngine (client-side analysis)
+- **v2** (current): Backend Polaris engine with multi-variable estimation
+- **v3** (future): Learning-augmented predictions with historical adjustment
+- **v4** (future): Full AI-powered estimation with crew-specific learning
+
+Versioning ensures:
+- Historical predictions remain reproducible after engine upgrades
+- A/B comparisons between engine versions
+- Graceful migration of existing estimates
+- Audit trail of which engine version generated each prediction
+
+### 14.5 Human Override Support
+
+**Status: Implemented** (data-model.js: Estimate schema)
+
+The data model retains both machine predictions and human adjustments:
+
+```json
+{
+  "estimatedHours": 7.5,          // Polaris prediction
+  "userScheduledDuration": 4.0,   // Contractor override
+  "actualDuration": 4.2,          // Actual completion time
+  "userOverrideReason": "Customer requested expedited service — smaller job than estimated"
+}
+```
+
+This creates three data points for every completed job:
+
+| Value | Source | Purpose |
+|-------|--------|---------|
+| Predicted Duration | Polaris engine | Baseline prediction |
+| User Scheduled | Contractor adjustment | Human judgment signal |
+| Actual Duration | Job completion | Ground truth |
+
+The learning pipeline can compare all three:
+
+```
+Predicted:     7.5 hrs
+User Scheduled: 4.0 hrs  (variance: -3.5 from prediction)
+Actual:         4.2 hrs  (variance: +0.2 from user, -3.3 from prediction)
+```
+
+This teaches Polaris two things:
+1. How accurate was the prediction? (7.5 vs 4.2)
+2. When do humans override and why? (4.0 vs 7.5 — pattern detection)
+
+Over time, Polaris learns to predict when contractors will override, and adjusts its default estimates accordingly. The override reason field enables categorical analysis (e.g., "expedited" jobs always run shorter than estimated).

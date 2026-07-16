@@ -661,6 +661,15 @@ function toggleMobileMenu() {
       var msgCounter = 0;
       var MAX_MESSAGES = 100; // safety limit
 
+      // ── Page Context ──
+      function getPageContext() {
+        var ctx = { page: 'polaris' };
+        // Check URL for lead/customer context
+        var match = window.location.search.match(/[?&]leadId=([^&]+)/);
+        if (match) ctx.leadId = decodeURIComponent(match[1]);
+        return ctx;
+      }
+
       // ── Utilities ──
 
       function getTimestamp() {
@@ -858,7 +867,7 @@ function toggleMobileMenu() {
           addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
         };
 
-        xhr.send(JSON.stringify({ message: message }));
+        xhr.send(JSON.stringify({ message: message, context: getPageContext() }));
       }
 
       function retryLastMessage(text) {
@@ -911,7 +920,7 @@ function toggleMobileMenu() {
           addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
         };
 
-        xhr.send(JSON.stringify({ message: text }));
+        xhr.send(JSON.stringify({ message: text, context: getPageContext() }));
       }
 
       function setLoading(loading) {

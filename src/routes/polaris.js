@@ -246,9 +246,28 @@ router.post('/config', (req, res) => {
 });
 
 /**
+ * GET /api/v1/polaris/business-context
+ * Returns the current business context (read-only).
+ * Query params: ?page=dashboard&leadId=xxx
+ */
+router.get('/business-context', (req, res) => {
+  try {
+    const ctx = require('../context/business');
+    const pageContext = {
+      page: req.query.page || 'dashboard',
+      leadId: req.query.leadId || null,
+    };
+    const context = ctx.buildCompactContext(pageContext);
+    res.json({ success: true, context });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /api/v1/polaris/chat
- * Send a message to the Polaris AI assistant (OpenAI).
- * Body: { message: "..." }
+ * Send a message to the Polaris AI assistant (OpenAI) with live business context.
+ * Body: { message: "...", context: { page: "dashboard", leadId: "..." } }
  * Response: { success: true, response: "..." }
  */
 router.post('/chat', (req, res) => {
@@ -263,16 +282,36 @@ router.post('/chat', (req, res) => {
     return res.status(500).json({ success: false, error: 'Polaris is not configured for chat yet.' });
   }
 
+  // Load live business context
+  const businessContext = require('../context/business');
+  const pageContext = (req.body && req.body.context) || {};
+  const contextText = businessContext.buildBusinessContext(pageContext);
+
+  const systemPrompt = `You are POLARIS, the AI intelligence assistant for NorthStar Solutions, a home services contractor platform. You help contractors run their business better: analyze leads, check schedules, estimate jobs, track crews, and recommend actions.
+
+GROUNDED RESPONSE POLICY:
+Your responses must clearly distinguish between three types of information:
+
+1. OBSERVED FACTS — Information directly loaded from NorthStar's business data. These are facts you can see in the context below.
+2. CALCULATED METRICS — Business calculations derived from observed facts (e.g., pipeline value, close rate, averages).
+3. AI RECOMMENDATIONS — Suggestions or recommendations generated from the data. Always label these clearly as recommendations.
+
+Never present recommendations as facts. If you don't have the data to answer a question, say so honestly — never make up or fabricate business data.
+
+Keep responses concise, practical, and actionable. Use the live business context below to answer questions accurately.
+
+${contextText}`;
+
   const payload = JSON.stringify({
     model: 'gpt-4o-mini',
     messages: [
       {
         role: 'system',
-        content: 'You are POLARIS, the AI intelligence assistant for NorthStar Solutions, a home services contractor platform. You help contractors run their business better: analyze leads, check schedules, estimate jobs, track crews, and recommend actions. Keep responses concise, practical, and actionable. If you don\'t know something, say so — never make up data.'
+        content: systemPrompt
       },
       { role: 'user', content: message.trim() }
     ],
-    max_tokens: 800,
+    max_tokens: 1000,
     temperature: 0.7,
   });
 

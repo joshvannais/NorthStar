@@ -9,6 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const intelligence = require('../services/intelligence');
+const decisionEngine = require('../services/decisionEngine');
 
 const DATA_DIR = path.resolve(__dirname, '../../data');
 
@@ -223,6 +224,43 @@ function buildBusinessContext(pageContext) {
     }
   }
 
+  // ── Executive Decisions (from Decision Engine) ──
+  if (data.leads.length > 0) {
+    const briefing = decisionEngine.generateExecutiveBriefing(data.leads);
+    const alerts = briefing.alerts;
+
+    parts.push(`\n── Executive Decisions ──`);
+    parts.push(`Top priority: ${briefing.topRecommendation?.caller || 'None'} (Priority Score: ${briefing.topRecommendation?.priorityScore || 'N/A'}/100)`);
+    parts.push(`Action: ${briefing.topRecommendation?.nextAction?.action || 'N/A'}`);
+    parts.push(`Business impact: ${briefing.topRecommendation?.businessImpact || 'Unknown'}`);
+
+    // Alerts
+    const criticalAlerts = alerts.filter(a => a.severity === 'critical');
+    if (criticalAlerts.length > 0) {
+      parts.push(`\nCritical alerts:`);
+      criticalAlerts.forEach(a => parts.push(`  ⚠ ${a.title}`));
+    }
+    const warningAlerts = alerts.filter(a => a.severity === 'warning');
+    if (warningAlerts.length > 0) {
+      parts.push(`\nWarnings:`);
+      warningAlerts.forEach(a => parts.push(`  • ${a.title}`));
+    }
+
+    // Top 3 ranked leads with explanations
+    const { ranked } = decisionEngine.rankAllOpportunities(data.leads);
+    if (ranked.length > 0) {
+      parts.push(`\nPriority ranking (top 5):`);
+      ranked.slice(0, 5).forEach(r => {
+        const lead = data.leads.find(l => l.id === r.leadId);
+        const intel = lead ? intelligence.calculateJobIntelligence(lead, { leadCount: data.leads.length }) : null;
+        const exp = decisionEngine.generateExecutiveExplanation(lead, r, intel);
+        parts.push(`  ${r.priorityScore}/100 [${r.priorityLabel}] ${r.caller} — ${r.service}`);
+        parts.push(`    Next: ${decisionEngine.getNextBestAction(lead, r).action}`);
+        parts.push(`    Impact: ${exp.businessImpact} | ${exp.recommendationStrength}`);
+      });
+    }
+  }
+
   parts.push('\n=== END CONTEXT ===\n');
   return parts.join('\n');
 }
@@ -309,8 +347,48 @@ function buildCompactContext(pageContext) {
         context.activeLead,
         { leadCount: data.leads.length }
       );
+      // Add executive decision for active lead
+      context.activeLeadDecision = decisionEngine.rankOpportunity(
+        context.activeLead,
+        context.activeLeadIntelligence,
+        { totalLeads: data.leads.length }
+      );
+      context.activeLeadNextAction = decisionEngine.getNextBestAction(
+        context.activeLead,
+        context.activeLeadDecision
+      );
     }
   }
+
+  // Add executive decisions from Decision Engine
+  const briefing = decisionEngine.generateExecutiveBriefing(data.leads);
+  context.executiveDecisions = {
+    topPriority: briefing.topRecommendation ? {
+      caller: briefing.topRecommendation.caller,
+      service: briefing.topRecommendation.service,
+      priorityScore: briefing.topRecommendation.priorityScore,
+      estimatedRevenue: briefing.topRecommendation.estimatedRevenue,
+      estimatedProfit: briefing.topRecommendation.estimatedProfit,
+      nextAction: briefing.topRecommendation.nextAction?.action,
+      businessImpact: briefing.topRecommendation.businessImpact,
+    } : null,
+    alerts: briefing.alerts.map(a => ({
+      id: a.id,
+      category: a.category,
+      severity: a.severity,
+      title: a.title,
+      impact: a.impact,
+    })),
+    topFollowUps: briefing.priorities.topFollowUps.map(f => ({
+      caller: f.caller,
+      service: f.service,
+      priorityScore: f.priorityScore,
+      nextAction: f.nextAction,
+      daysWaiting: f.daysWaiting,
+    })),
+    revenueAtRisk: briefing.summary.revenueAtRisk,
+    followUpsOverdue: briefing.summary.followUpsOverdue,
+  };
 
   return context;
 }

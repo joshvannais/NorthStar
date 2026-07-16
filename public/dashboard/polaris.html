@@ -19,61 +19,46 @@
       padding: 0;
     }
 
-    /* Top Status Bar */
-    .polaris-topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    /* ── Polaris Inline Header (inherits app shell) ── */
+    .polaris-inline-header {
       padding: 12px 24px;
       border-bottom: 1px solid var(--neutral-200, #e5e7eb);
       background: var(--neutral-50, #fff);
     }
-    [data-theme="dark"] .polaris-topbar {
+    [data-theme="dark"] .polaris-inline-header {
       background: var(--neutral-900, #111827);
       border-color: var(--neutral-700, #374151);
     }
-    .polaris-topbar-brand {
+    .polaris-inline-brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
-    .polaris-topbar-icon {
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, #a67c00, #d4af37);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      color: #fff;
-      font-weight: 700;
-    }
-    .polaris-topbar-title {
+    .polaris-inline-star {
       font-size: 18px;
+      color: var(--brand-500, #a67c00);
+    }
+    [data-theme="dark"] .polaris-inline-star {
+      color: #d4af37;
+    }
+    .polaris-inline-name {
+      font-size: 16px;
       font-weight: 700;
       color: var(--neutral-900, #111827);
     }
-    [data-theme="dark"] .polaris-topbar-title {
+    [data-theme="dark"] .polaris-inline-name {
       color: var(--neutral-200, #e5e7eb);
     }
-    .polaris-topbar-subtitle {
-      font-size: 12px;
-      color: var(--neutral-500, #6b7280);
-      font-weight: 400;
-    }
-    .polaris-topbar-badge {
-      display: inline-block;
+    .polaris-inline-badge {
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       padding: 2px 8px;
       border-radius: 4px;
       background: #fef3c7;
       color: #92400e;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      margin-left: 4px;
     }
-    [data-theme="dark"] .polaris-topbar-badge {
+    [data-theme="dark"] .polaris-inline-badge {
       background: rgba(212, 175, 55, 0.2);
       color: #d4af37;
     }
@@ -147,38 +132,59 @@
       line-height: 1.6;
     }
 
-    /* Suggested questions grid */
-    .polaris-suggested-grid {
+    /* ── Executive Quick Prompts ── */
+    .polaris-quick-prompts {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 24px;
-      max-width: 480px;
+      gap: 10px;
+      margin-top: 28px;
+      max-width: 560px;
       width: 100%;
     }
-    .polaris-suggested-chip {
-      padding: 10px 14px;
+    .polaris-quick-prompt {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
       background: var(--neutral-100, #f3f4f6);
       border: 1px solid var(--neutral-200, #e5e7eb);
-      border-radius: 8px;
+      border-radius: 10px;
       font-size: 13px;
       color: var(--neutral-700, #374151);
       cursor: pointer;
       text-align: left;
       transition: all 0.2s ease;
+      line-height: 1.4;
     }
-    .polaris-suggested-chip:hover {
+    .polaris-quick-prompt:hover {
       background: var(--neutral-200, #e5e7eb);
       border-color: var(--brand-500, #a67c00);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }
-    [data-theme="dark"] .polaris-suggested-chip {
+    .polaris-quick-prompt:focus-visible {
+      outline: 2px solid var(--brand-500, #a67c00);
+      outline-offset: 2px;
+    }
+    [data-theme="dark"] .polaris-quick-prompt {
       background: var(--neutral-800, #1f2937);
       border-color: var(--neutral-700, #374151);
       color: var(--neutral-300, #d1d5db);
     }
-    [data-theme="dark"] .polaris-suggested-chip:hover {
+    [data-theme="dark"] .polaris-quick-prompt:hover {
       background: var(--neutral-750, #2d3748);
       border-color: #d4af37;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .polaris-quick-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .polaris-quick-label {
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.4;
     }
 
     /* Right: Intelligence Sidebar */
@@ -512,35 +518,6 @@
       line-height: 1.6;
     }
 
-    /* ── Keyboard Shortcuts Hint ── */
-    .polaris-shortcut-hint {
-      font-size: 11px;
-      color: var(--neutral-400, #9ca3af);
-      text-align: center;
-      padding: 4px 0 0;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    [data-theme="dark"] .polaris-shortcut-hint {
-      color: var(--neutral-600, #6b7280);
-    }
-    .polaris-shortcut-key {
-      display: inline-block;
-      padding: 1px 5px;
-      font-size: 10px;
-      font-weight: 600;
-      border: 1px solid var(--neutral-300, #d1d5db);
-      border-radius: 3px;
-      background: var(--neutral-100, #f3f4f6);
-      color: var(--neutral-600, #6b7280);
-      margin: 0 2px;
-    }
-    [data-theme="dark"] .polaris-shortcut-key {
-      border-color: var(--neutral-700, #374151);
-      background: var(--neutral-800, #1f2937);
-      color: var(--neutral-400, #9ca3af);
-    }
-
     /* Responsive */
     @media (max-width: 900px) {
       .polaris-sidebar {
@@ -551,10 +528,8 @@
       }
     }
     @media (max-width: 640px) {
-      .polaris-topbar {
+      .polaris-inline-header {
         padding: 10px 16px;
-        flex-wrap: wrap;
-        gap: 4px;
       }
       .polaris-conversation-body {
         padding: 16px;
@@ -562,13 +537,45 @@
       .polaris-prompt-bar {
         padding: 12px 16px;
       }
-      .polaris-suggested-grid {
+      .polaris-quick-prompts {
         grid-template-columns: 1fr;
+      }
+      .polaris-conversation-header {
+        padding: 12px 16px 10px;
       }
     }
   </style>
 </head>
 <body>
+  <div class="mobile-header">
+    <button class="hamburger-btn" onclick="toggleMobileMenu()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      NorthStar
+    </button>
+    <img src="/assets/northstar-logo.png" alt="NorthStar" class="mobile-logo">
+  </div>
+  <div class="mobile-overlay" id="mobileOverlay" onclick="toggleMobileMenu()"></div>
+  <div class="mobile-menu" id="mobileMenu">
+    <div class="mobile-menu-header">
+      <a href="/dashboard" style="font-size:17px;font-weight:700;color:var(--brand-600);text-decoration:none;display:flex;align-items:center;gap:8px;"><img src="/assets/logo.png" alt="NorthStar" style="height:22px;"> NorthStar</a>
+      <button class="mobile-menu-close" onclick="toggleMobileMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <nav class="mobile-menu-nav">
+      <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a href="/dashboard/polaris" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>POLARIS</a>
+      <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
+      <a href="/dashboard/communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Communications</a>
+      <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>My Number</a>
+      <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Calendar</a>
+      <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>AI Settings</a>
+      <a href="/dashboard/business-profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Business Profile</a>
+      <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
+    </nav>
+    <div class="mobile-menu-footer">
+      <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>
+      <button onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--neutral-500);width:100%;text-align:left;">&#127769; Toggle Theme</button>
+    </div>
+  </div>
   <div class="app-layout">
     <aside class="sidebar">
       <a href="/dashboard" class="sidebar-logo">
@@ -604,16 +611,13 @@
     </aside>
     <main class="main-content" id="mainContent">
       <div class="polaris-workspace">
-        <!-- Top Bar -->
-        <div class="polaris-topbar">
-          <div class="polaris-topbar-brand">
-            <div class="polaris-topbar-icon">✦</div>
-            <div>
-              <div class="polaris-topbar-title">POLARIS™</div>
-              <div class="polaris-topbar-subtitle">NorthStar Intelligence Platform</div>
-            </div>
+        <!-- Inline Polaris brand header (minimal, inherits shell) -->
+        <div class="polaris-inline-header">
+          <div class="polaris-inline-brand">
+            <span class="polaris-inline-star">✦</span>
+            <span class="polaris-inline-name">POLARIS™</span>
+            <span class="polaris-inline-badge">Intelligence Workspace</span>
           </div>
-          <span class="polaris-topbar-badge">Workspace</span>
         </div>
 
         <!-- Main Content -->
@@ -636,21 +640,40 @@
                   analyze data, and get actionable recommendations — all in one place.
                 </div>
 
-                <!-- Suggested Questions -->
-                <div class="polaris-suggested-grid">
-                  <div class="polaris-suggested-chip">What's my pipeline health?</div>
-                  <div class="polaris-suggested-chip">Which leads need follow-up?</div>
-                  <div class="polaris-suggested-chip">How is crew productivity trending?</div>
-                  <div class="polaris-suggested-chip">What jobs are at risk of delay?</div>
-                </div>
-
-                <!-- Placeholder sections for future missions -->
-                <div style="margin-top:32px;width:100%;">
-                  <div class="polaris-placeholder-card">Conversation History — will appear here</div>
-                  <div class="polaris-placeholder-card">AI Responses — will appear here</div>
-                  <div class="polaris-placeholder-card">Executive Insights — will appear here</div>
-                  <div class="polaris-placeholder-card">Context Sources — will appear here</div>
-                  <div class="polaris-placeholder-card">Recommended Actions — will appear here</div>
+                <!-- Executive Quick Prompts -->
+                <div class="polaris-quick-prompts">
+                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: What's my pipeline health?">
+                    <span class="polaris-quick-icon">📈</span>
+                    <span class="polaris-quick-label">What's my pipeline health?</span>
+                  </div>
+                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Which leads need immediate attention?">
+                    <span class="polaris-quick-icon">🔥</span>
+                    <span class="polaris-quick-label">Which leads need immediate attention?</span>
+                  </div>
+                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: What revenue is at risk this week?">
+                    <span class="polaris-quick-icon">💰</span>
+                    <span class="polaris-quick-label">What revenue is at risk this week?</span>
+                  </div>
+                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: What's on today's schedule?">
+                    <span class="polaris-quick-icon">📅</span>
+                    <span class="polaris-quick-label">What's on today's schedule?</span>
+                  </div>
+                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Which jobs are falling behind?">
+                    <span class="polaris-quick-icon">🚧</span>
+                    <span class="polaris-quick-label">Which jobs are falling behind?</span>
+                  </div>
+                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Which customers haven't been contacted recently?">
+                    <span class="polaris-quick-icon">👥</span>
+                    <span class="polaris-quick-label">Which customers haven't been contacted recently?</span>
+                  </div>
+                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Where can I increase profit today?">
+                    <span class="polaris-quick-icon">💵</span>
+                    <span class="polaris-quick-label">Where can I increase profit today?</span>
+                  </div>
+                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Summarize my business in 60 seconds">
+                    <span class="polaris-quick-icon">📊</span>
+                    <span class="polaris-quick-label">Summarize my business in 60 seconds</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -699,15 +722,20 @@
             <textarea class="polaris-prompt-input" id="polarisPromptInput" placeholder="Ask Polaris anything..." rows="1" aria-label="Ask Polaris a question" enterkeyhint="send"></textarea>
             <button class="polaris-prompt-send" id="polarisSendBtn" aria-label="Send message">Send</button>
           </div>
-          <div class="polaris-shortcut-hint">
-            Press <span class="polaris-shortcut-key">Enter</span> to send &middot; <span class="polaris-shortcut-key">Shift+Enter</span> for new line &middot; <span class="polaris-shortcut-key">Ctrl+L</span> to clear
-          </div>
         </div>
       </div>
     </main>
   </div>
 
   <script src="/js/theme.js"></script>
+  <script>
+function toggleMobileMenu() {
+  var overlay = document.getElementById('mobileOverlay');
+  var menu = document.getElementById('mobileMenu');
+  if (overlay) overlay.style.display = overlay.style.display === 'block' ? 'none' : 'block';
+  if (menu) menu.classList.toggle('open');
+}
+  </script>
   <script>
     (function() {
       'use strict';
@@ -734,20 +762,6 @@
         var ampm = h >= 12 ? 'PM' : 'AM';
         h = h % 12 || 12;
         return h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
-      }
-
-      function formatTimestamp(date) {
-        var h = date.getHours();
-        var m = date.getMinutes();
-        var ampm = h >= 12 ? 'PM' : 'AM';
-        h = h % 12 || 12;
-        return h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
-      }
-
-      function escapeHtml(str) {
-        var div = document.createElement('div');
-        div.appendChild(document.createTextNode(str));
-        return div.innerHTML;
       }
 
       // ── Rendering ──
@@ -1041,20 +1055,19 @@
         input.focus();
       }
 
-      // ── Suggested Questions Click ──
+      // ── Quick Prompts Click ──
 
-      function setupSuggestedChips() {
-        var chips = document.querySelectorAll('.polaris-suggested-chip');
-        chips.forEach(function(chip) {
-          chip.addEventListener('click', function() {
-            var text = this.textContent;
-            input.value = text;
-            resetInputHeight();
-            sendMessage();
+      function setupQuickPrompts() {
+        var prompts = document.querySelectorAll('.polaris-quick-prompt');
+        prompts.forEach(function(prompt) {
+          prompt.addEventListener('click', function() {
+            var label = this.querySelector('.polaris-quick-label');
+            if (label) {
+              input.value = label.textContent;
+              resetInputHeight();
+              sendMessage();
+            }
           });
-          chip.setAttribute('role', 'button');
-          chip.setAttribute('tabindex', '0');
-          chip.setAttribute('aria-label', 'Ask: ' + chip.textContent);
         });
       }
 
@@ -1073,10 +1086,9 @@
           e.preventDefault();
           clearConversation();
         }
-        // Ctrl+Enter as alternative submit
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          sendMessage();
+        // Escape to blur
+        if (e.key === 'Escape') {
+          input.blur();
         }
       });
 
@@ -1087,21 +1099,11 @@
 
       clearBtn.addEventListener('click', clearConversation);
 
-      // ── Keydown on Escape to blur input ──
-      input.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-          input.blur();
-        }
-      });
-
-      // ── Suggested chips ──
-      setupSuggestedChips();
+      // ── Quick prompts ──
+      setupQuickPrompts();
 
       // ── Scroll to bottom on resize ──
       window.addEventListener('resize', smoothScrollToBottom);
-
-      // ── Make retry available globally for dynamically created buttons ──
-      // (retryLastMessage is defined in closure, but buttons are created inside closure too)
 
       // ── Log ready state ──
       console.log('[Polaris] Conversation engine initialized. Ready for OpenAI activation.');

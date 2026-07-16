@@ -266,9 +266,10 @@ router.get('/business-context', (req, res) => {
 
 /**
  * POST /api/v1/polaris/chat
- * Send a message to the Polaris AI assistant (OpenAI) with live business context.
+ * Send a message to the Polaris AI assistant with unified intelligence context.
+ * Uses the PolarisContextBuilder and PolarisResponseBuilder for all intelligence.
  * Body: { message: "...", context: { page: "dashboard", leadId: "..." } }
- * Response: { success: true, response: "..." }
+ * Response: { success: true, response: "...", meta: { ... } }
  */
 router.post('/chat', (req, res) => {
   try {
@@ -283,134 +284,109 @@ router.post('/chat', (req, res) => {
       return res.status(500).json({ success: false, error: 'Polaris is not configured for chat yet.' });
     }
 
-    // Load live business context
-    const businessContext = require('../context/business');
+    // Load the unified context builder
+    const contextBuilder = require('../services/polarisContextBuilder');
+    const responseBuilder = require('../services/polarisResponseBuilder');
+
+    // Build unified context from all intelligence engines
     const pageContext = (req.body && req.body.context) || {};
-    const contextText = businessContext.buildBusinessContext(pageContext);
+    const unifiedContext = contextBuilder.buildPolarisContext({
+      page: pageContext.page || 'dashboard',
+      leadId: pageContext.leadId || null,
+      userMessage: message,
+    });
 
-  const systemPrompt = `You are POLARIS, the AI intelligence assistant for NorthStar Solutions, a home services contractor platform. You help contractors run their business better: analyze leads, check schedules, estimate jobs, track crews, and recommend actions.
+    // Build system prompt from unified context
+    const systemPrompt = responseBuilder.buildSystemPrompt(unifiedContext);
 
-GROUNDED RESPONSE POLICY:
-Your responses must clearly distinguish between three types of information:
+    const payload = JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: message.trim() }
+      ],
+      max_tokens: 1000,
+      temperature: 0.7,
+    });
 
-1. OBSERVED FACTS — Information directly loaded from NorthStar's business data. These are facts you can see in the context below.
-2. CALCULATED METRICS — Business calculations derived from observed facts by the Business Intelligence Engine (e.g., labor cost, profit, confidence scores, travel time, production duration).
-3. AI RECOMMENDATIONS — Suggestions or recommendations generated from the data. Always label these clearly as recommendations.
-
-When answering questions about profitability, efficiency, crew sizing, or job priority, USE the calculated intelligence from the "Calculated Intelligence" section below. These are derived from the Business Intelligence Engine which applies standard formulas:
-- Labor Cost = Crew Size × Hours × Hourly Rate
-- Profit = Revenue - Labor - Materials - Travel - Overhead
-- Profit Margin = Profit / Revenue
-- Confidence Score based on service familiarity, pricing data, and lead volume
-
-DECISION ENGINE:
-When asked for recommendations, priorities, or what to do next, USE the "Executive Decisions" section below. It contains:
-- Top priority lead with a priority score (0-100) and recommended action
-- Critical alerts and warnings that need attention
-- Priority ranking of all leads with next best actions
-- Revenue at risk and follow-ups overdue
-
-Your responses must read like an experienced operations manager, NOT an AI chatbot:
-- Always include a specific action recommendation with reasoning
-- Explain WHY a lead is prioritized (profit, confidence, urgency, travel efficiency)
-- Highlight business impact (revenue at risk, profit opportunity, aging estimates)
-- Never give generic responses — use the actual names, dollar amounts, and scores from the context
-- When asked "what should I work on today", reference the Executive Decisions section
-
-Grounding rules for the Executive Decision context:
-- Priority scores are calculated by the Executive Decision Engine using weighted factors: profit (30%), close probability (25%), confidence (15%), lead age urgency (10%), travel efficiency (10%), production time (5%), customer history (5%)
-- Next best actions come from the Decision Engine based on lead outcome
-- Alerts are generated automatically from business intelligence — they are calculated, not manual
-
-CUSTOMER INTELLIGENCE:
-When a customer card is opened or a specific lead is referenced (leadId is provided), the context includes a "Customer Intelligence" object with per-customer intelligence. Use this instead of raw CRM data:
-- Executive Summary: One-paragraph overview of who the customer is, current stage, opportunity, risk, and next action
-- Opportunity Score (0-100): Calculated from profit, close probability, confidence, lead age, travel efficiency, and production time
-- Risk Level (Low/Medium/High/Critical): Based on aging, confidence, appointment status, and value
-- Recommended Actions: Ranked list of specific actions with reasons
-- Timeline: Chronological events (lead capture, status changes, outcomes, estimates)
-- Snapshot: Revenue, profit, labor, crew, production hours, travel time, confidence score
-
-When answering "what should I do about this customer" or "tell me about this customer", USE the Customer Intelligence section and provide a response like:
-"William Lee has a high opportunity score of 53. Estimated profit is $1,825. Recommended crew is two. Estimated production time is 5.8 hours. There is a moderate risk of losing this lead if not contacted today — the recommendation is to call today to follow up."
-
-Never present recommendations as facts. If you don't have the data to answer a question, say so honestly — never make up or fabricate business data.
-
-Keep responses concise, practical, and actionable. Use the live business context below to answer questions accurately.
-
-${contextText}`;
-
-  const payload = JSON.stringify({
-    model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'system',
-        content: systemPrompt
+    const options = {
+      hostname: 'api.openai.com',
+      path: '/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Length': Buffer.byteLength(payload),
       },
-      { role: 'user', content: message.trim() }
-    ],
-    max_tokens: 1000,
-    temperature: 0.7,
-  });
+      timeout: 30000,
+    };
 
-  const options = {
-    hostname: 'api.openai.com',
-    path: '/v1/chat/completions',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + apiKey,
-      'Content-Length': Buffer.byteLength(payload),
-    },
-    timeout: 30000,
-  };
-
-  const reqOut = https.request(options, (resIn) => {
-    let body = '';
-    resIn.on('data', (chunk) => { body += chunk; });
-    resIn.on('end', () => {
-      try {
-        const parsed = JSON.parse(body);
-        if (resIn.statusCode === 200 && parsed.choices && parsed.choices[0]) {
-          const reply = parsed.choices[0].message.content;
-          res.json({ success: true, response: reply });
-        } else {
-          const errMsg = parsed.error ? parsed.error.message : 'Unknown error';
-          console.error('[Polaris Chat] OpenAI error:', resIn.statusCode, errMsg);
-          if (resIn.statusCode === 401) {
-            return res.status(500).json({ success: false, error: 'Polaris chat is not properly configured.' });
+    const reqOut = https.request(options, (resIn) => {
+      let body = '';
+      resIn.on('data', (chunk) => { body += chunk; });
+      resIn.on('end', () => {
+        try {
+          const parsed = JSON.parse(body);
+          if (resIn.statusCode === 200 && parsed.choices && parsed.choices[0]) {
+            const reply = parsed.choices[0].message.content;
+            const structured = responseBuilder.generatePolarisResponse(reply, unifiedContext);
+            res.json(structured);
+          } else {
+            const errMsg = parsed.error ? parsed.error.message : 'Unknown error';
+            console.error('[Polaris Chat] OpenAI error:', resIn.statusCode, errMsg);
+            if (resIn.statusCode === 401) {
+              return res.status(500).json({ success: false, error: 'Polaris chat is not properly configured.' });
+            }
+            if (resIn.statusCode === 429) {
+              return res.status(429).json({ success: false, error: 'Polaris is rate-limited. Please wait a moment and try again.' });
+            }
+            res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
           }
-          if (resIn.statusCode === 429) {
-            return res.status(429).json({ success: false, error: 'Polaris is rate-limited. Please wait a moment and try again.' });
-          }
+        } catch (e) {
+          console.error('[Polaris Chat] Parse error:', e.message);
           res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
         }
-      } catch (e) {
-        console.error('[Polaris Chat] Parse error:', e.message);
-        res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
-      }
+      });
     });
-  });
 
-  reqOut.on('error', (e) => {
-    console.error('[Polaris Chat] Request error:', e.message);
-    if (e.code === 'ETIMEDOUT' || e.code === 'ECONNRESET') {
-      return res.status(504).json({ success: false, error: 'Polaris took too long to respond. Please try again.' });
-    }
-    res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
-  });
+    reqOut.on('error', (e) => {
+      console.error('[Polaris Chat] Request error:', e.message);
+      if (e.code === 'ETIMEDOUT' || e.code === 'ECONNRESET') {
+        return res.status(504).json({ success: false, error: 'Polaris took too long to respond. Please try again.' });
+      }
+      res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
+    });
 
-  reqOut.on('timeout', () => {
-    reqOut.destroy();
-    res.status(504).json({ success: false, error: 'Polaris took too long to respond. Please try again.' });
-  });
+    reqOut.on('timeout', () => {
+      reqOut.destroy();
+      res.status(504).json({ success: false, error: 'Polaris took too long to respond. Please try again.' });
+    });
 
-  reqOut.write(payload);
-  reqOut.end();
+    reqOut.write(payload);
+    reqOut.end();
   } catch (err) {
     console.error('[Polaris Chat] Handler error:', err.message);
     console.error('[Polaris Chat] Stack:', err.stack);
     res.status(500).json({ success: false, error: 'Polaris chat encountered an error. Please try again.' });
+  }
+});
+
+/**
+ * GET /api/v1/polaris/unified-context
+ * Returns the complete unified intelligence context (read-only).
+ * Query params: ?page=dashboard&leadId=xxx
+ * This replaces the old /business-context endpoint.
+ */
+router.get('/unified-context', (req, res) => {
+  try {
+    const contextBuilder = require('../services/polarisContextBuilder');
+    const context = contextBuilder.buildPolarisContext({
+      page: req.query.page || 'dashboard',
+      leadId: req.query.leadId || null,
+    });
+    res.json({ success: true, context });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

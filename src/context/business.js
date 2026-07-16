@@ -8,6 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const intelligence = require('../services/intelligence');
 
 const DATA_DIR = path.resolve(__dirname, '../../data');
 
@@ -201,12 +202,34 @@ function buildBusinessContext(pageContext) {
     }
   }
 
+  // ── Calculated Intelligence ──
+  if (data.leads.length > 0) {
+    const agg = intelligence.calculateAggregateIntelligence(data.leads);
+    parts.push(`\n── Calculated Intelligence ──`);
+    parts.push(`Total estimated labor cost: ${agg.totalEstimatedLabor.toLocaleString()}`);
+    parts.push(`Total estimated profit: ${agg.totalEstimatedProfit.toLocaleString()}`);
+    parts.push(`Average profit margin: ${agg.averageProfitMargin}`);
+    parts.push(`Average confidence score: ${agg.averageConfidence}%`);
+    parts.push(`Total travel time: ${agg.totalTravelMinutes} minutes`);
+    parts.push(`Total production hours: ${agg.totalProductionHours} hours`);
+    if (agg.highestValueJob) {
+      parts.push(`Highest value job: ${agg.highestValueJob.caller} | ${agg.highestValueJob.revenue}`);
+    }
+    if (agg.highestProfitJob) {
+      parts.push(`Highest profit job: ${agg.highestProfitJob.caller} | ${agg.highestProfitJob.profit.estimated}`);
+    }
+    if (agg.mostEfficientJob) {
+      parts.push(`Most efficient job: ${agg.mostEfficientJob.caller} | ${agg.mostEfficientJob.profitPerLaborHour}/hr`);
+    }
+  }
+
   parts.push('\n=== END CONTEXT ===\n');
   return parts.join('\n');
 }
 
 /**
  * Build a compact JSON context object for embedding in prompts.
+ * Includes calculated intelligence from the Business Intelligence Engine.
  */
 function buildCompactContext(pageContext) {
   const data = loadData();
@@ -250,9 +273,43 @@ function buildCompactContext(pageContext) {
     avgLeadValue: data.leads.length > 0 ? Math.round(pipelineValue / data.leads.length) : 0,
   };
 
-  // Active lead context
+  // Add calculated intelligence from Business Intelligence Engine
+  const agg = intelligence.calculateAggregateIntelligence(data.leads);
+  context.calculatedIntelligence = {
+    totalEstimatedLabor: agg.totalEstimatedLabor,
+    totalEstimatedProfit: agg.totalEstimatedProfit,
+    averageProfitMargin: agg.averageProfitMargin,
+    averageConfidence: agg.averageConfidence,
+    totalTravelMinutes: agg.totalTravelMinutes,
+    totalProductionHours: agg.totalProductionHours,
+    highestValueJob: agg.highestValueJob ? {
+      caller: agg.highestValueJob.caller,
+      service: agg.highestValueJob.service,
+      revenue: agg.highestValueJob.revenue,
+      estimatedProfit: agg.highestValueJob.profit.estimated,
+      profitMargin: agg.highestValueJob.profit.margin,
+      confidence: agg.highestValueJob.confidence.score,
+    } : null,
+    highestProfitJob: agg.highestProfitJob ? {
+      caller: agg.highestProfitJob.caller,
+      profit: agg.highestProfitJob.profit.estimated,
+      margin: agg.highestProfitJob.profit.margin,
+    } : null,
+    mostEfficientJob: agg.mostEfficientJob ? {
+      caller: agg.mostEfficientJob.caller,
+      profitPerHour: agg.mostEfficientJob.profitPerLaborHour,
+    } : null,
+  };
+
+  // Add per-lead intelligence for the active lead
   if (pageContext && pageContext.leadId) {
     context.activeLead = data.leads.find(l => l.id === pageContext.leadId) || null;
+    if (context.activeLead) {
+      context.activeLeadIntelligence = intelligence.calculateJobIntelligence(
+        context.activeLead,
+        { leadCount: data.leads.length }
+      );
+    }
   }
 
   return context;

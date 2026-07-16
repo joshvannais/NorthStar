@@ -271,21 +271,22 @@ router.get('/business-context', (req, res) => {
  * Response: { success: true, response: "..." }
  */
 router.post('/chat', (req, res) => {
-  const message = req.body && req.body.message;
-  if (!message || typeof message !== 'string' || message.trim().length === 0) {
-    return res.status(400).json({ success: false, error: 'Message is required.' });
-  }
+  try {
+    const message = req.body && req.body.message;
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'Message is required.' });
+    }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.error('[Polaris Chat] OPENAI_API_KEY not configured');
-    return res.status(500).json({ success: false, error: 'Polaris is not configured for chat yet.' });
-  }
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      console.error('[Polaris Chat] OPENAI_API_KEY not configured');
+      return res.status(500).json({ success: false, error: 'Polaris is not configured for chat yet.' });
+    }
 
-  // Load live business context
-  const businessContext = require('../context/business');
-  const pageContext = (req.body && req.body.context) || {};
-  const contextText = businessContext.buildBusinessContext(pageContext);
+    // Load live business context
+    const businessContext = require('../context/business');
+    const pageContext = (req.body && req.body.context) || {};
+    const contextText = businessContext.buildBusinessContext(pageContext);
 
   const systemPrompt = `You are POLARIS, the AI intelligence assistant for NorthStar Solutions, a home services contractor platform. You help contractors run their business better: analyze leads, check schedules, estimate jobs, track crews, and recommend actions.
 
@@ -369,6 +370,11 @@ ${contextText}`;
 
   reqOut.write(payload);
   reqOut.end();
+  } catch (err) {
+    console.error('[Polaris Chat] Handler error:', err.message);
+    console.error('[Polaris Chat] Stack:', err.stack);
+    res.status(500).json({ success: false, error: 'Polaris chat encountered an error. Please try again.' });
+  }
 });
 
 module.exports = router;

@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const intelligence = require('../services/intelligence');
 const decisionEngine = require('../services/decisionEngine');
+const customerIntelligence = require('../services/customerIntelligence');
 
 const DATA_DIR = path.resolve(__dirname, '../../data');
 
@@ -357,6 +358,11 @@ function buildCompactContext(pageContext) {
         context.activeLead,
         context.activeLeadDecision
       );
+      // Add customer intelligence for the active lead
+      context.activeLeadCustomerIntelligence = customerIntelligence.generateCustomerSnapshot(
+        context.activeLead,
+        { totalLeads: data.leads.length }
+      );
     }
   }
 
@@ -389,6 +395,9 @@ function buildCompactContext(pageContext) {
     revenueAtRisk: briefing.summary.revenueAtRisk,
     followUpsOverdue: briefing.summary.followUpsOverdue,
   };
+
+  // Add dashboard customer intelligence
+  context.dashboardCustomerIntelligence = customerIntelligence.generateDashboardCustomerIntelligence(data.leads);
 
   return context;
 }

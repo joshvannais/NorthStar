@@ -26,6 +26,24 @@
     .lead-timeline .event { color: var(--neutral-700); }
     .lead-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     @media (max-width: 768px) { .lead-detail-container { padding: 16px; } }
+    /* Customer Intelligence styles */
+    .ci-summary { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: var(--radius); padding: 16px; line-height: 1.6; }
+    .ci-score-bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .ci-score-bar-fill { height: 8px; border-radius: 4px; flex: 1; }
+    .ci-score-value { font-size: 18px; font-weight: 700; min-width: 36px; }
+    .ci-score-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .ci-score-exceptional { color: var(--success); } .ci-score-high { color: var(--brand-600); } .ci-score-moderate { color: var(--warning); } .ci-score-low { color: var(--danger); }
+    .ci-risk-critical { color: #991b1b; } .ci-risk-high { color: #c2410c; } .ci-risk-medium { color: #b45309; } .ci-risk-low { color: var(--success); }
+    .ci-action-item { padding: 8px 0; border-bottom: 1px solid var(--neutral-100); }
+    .ci-action-item:last-child { border-bottom: none; }
+    .ci-action-rank { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 700; color: #fff; margin-right: 8px; }
+    .ci-action-rank-1 { background: var(--brand-600); } .ci-action-rank-2 { background: var(--brand-500); }
+    .ci-action-rank-3 { background: var(--brand-400); } .ci-action-rank-4 { background: var(--neutral-400); }
+    .ci-action-rank-5 { background: var(--neutral-300); color: var(--neutral-600); }
+    .ci-timeline-item { padding: 6px 0; border-bottom: 1px solid var(--neutral-100); display: flex; gap: 8px; font-size: 13px; }
+    .ci-timeline-item:last-child { border-bottom: none; }
+    .ci-timeline-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+    .ci-placeholder { background: var(--neutral-50); border: 1px dashed var(--neutral-300); border-radius: var(--radius); padding: 16px; text-align: center; color: var(--neutral-400); font-size: 13px; }
   </style>
 </head>
 <body>
@@ -181,6 +199,23 @@
                 (lead.updatedAt ? '<li><span class="time">' + updatedAt + '</span><span class="event">Lead updated</span></li>' : '') +
               '</ul>' +
             '</div>' +
+          '</div>' +
+
+          '<div class="lead-detail-section">' +
+            '<h2>🧠 AI Customer Intelligence</h2>' +
+            '<div id="customerIntelligenceContainer">' +
+              '<div class="ci-placeholder">Loading customer intelligence...</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<div class="lead-detail-section">' +
+            '<h2>📋 Future Intelligence</h2>' +
+            '<div class="lead-detail-grid" style="grid-template-columns:1fr 1fr;">' +
+              '<div class="ci-placeholder" style="padding:20px;">📞 Retell Transcript Intelligence<br><span style="font-size:11px;">Coming in Mission 17</span></div>' +
+              '<div class="ci-placeholder" style="padding:20px;">💰 Estimate Intelligence<br><span style="font-size:11px;">Coming in Mission 18</span></div>' +
+              '<div class="ci-placeholder" style="padding:20px;">📅 Scheduling Intelligence<br><span style="font-size:11px;">Coming in Mission 19</span></div>' +
+              '<div class="ci-placeholder" style="padding:20px;">📊 Production Intelligence<br><span style="font-size:11px;">Coming in Mission 20</span></div>' +
+            '</div>' +
           '</div>';
 
         // Render PolarisUI after DOM is built (polarisContainer div now exists)
@@ -188,6 +223,560 @@
           var pc = document.getElementById('polarisContainer');
           if (pc) PolarisUI.render(pc, polarisData, { context: 'lead' });
         }
+
+        // Fetch and render customer intelligence
+        fetchCustomerIntelligence(lead.id || '');
+      }
+
+      function fetchCustomerIntelligence(leadId) {
+        if (!leadId) return;
+        var ciContainer = document.getElementById('customerIntelligenceContainer');
+        if (!ciContainer) return;
+
+        fetch('/api/v1/leads/' + encodeURIComponent(leadId) + '/intelligence')
+          .then(function(r) { return r.json(); })
+          .then(function(resp) {
+            if (resp.success && resp.data) {
+              renderCustomerIntelligence(ciContainer, resp.data);
+            } else {
+              ciContainer.innerHTML = '<div class="ci-placeholder">Customer intelligence unavailable.</div>';
+            }
+          })
+          .catch(function() {
+            ciContainer.innerHTML = '<div class="ci-placeholder">Could not load customer intelligence.</div>';
+          });
+      }
+
+      function renderCustomerIntelligence(container, ci) {
+        if (!container || !ci) return;
+
+        // Score colors
+        var oppClass = ci.opportunityLevel === 'Exceptional' ? 'ci-score-exceptional' :
+          ci.opportunityLevel === 'High' ? 'ci-score-high' :
+          ci.opportunityLevel === 'Moderate' ? 'ci-score-moderate' : 'ci-score-low';
+        var riskClass = ci.riskLevel === 'Critical' ? 'ci-risk-critical' :
+          ci.riskLevel === 'High' ? 'ci-risk-high' :
+          ci.riskLevel === 'Medium' ? 'ci-risk-medium' : 'ci-risk-low';
+
+        // Opportunity bar color
+        var oppBarColor = ci.opportunityScore >= 70 ? 'var(--success)' :
+          ci.opportunityScore >= 50 ? 'var(--brand-500)' :
+          ci.opportunityScore >= 30 ? 'var(--warning)' : 'var(--danger)';
+
+        // Risk bar color
+        var riskBarColor = ci.riskLevel === 'Critical' ? '#991b1b' :
+          ci.riskLevel === 'High' ? '#c2410c' :
+          ci.riskLevel === 'Medium' ? '#b45309' : 'var(--success)';
+
+        // Timeline
+        var timelineHtml = '';
+        if (ci.timeline && ci.timeline.length > 0) {
+          var dotColors = { 'lead-captured': 'var(--brand-500)', 'status-change': 'var(--warning)', 'outcome': 'var(--success)', 'estimate': 'var(--info)' };
+          ci.timeline.forEach(function(t) {
+            var dotColor = dotColors[t.type] || 'var(--neutral-400)';
+            timelineHtml += '<div class="ci-timeline-item">' +
+              '<div class="ci-timeline-dot" style="background:' + dotColor + ';"></div>' +
+              '<div><div style="font-weight:500;">' + t.event + '</div>' +
+              '<div style="font-size:11px;color:var(--neutral-400);">' + new Date(t.date).toLocaleString() + '</div></div></div>';
+          });
+        } else {
+          timelineHtml = '<div style="color:var(--neutral-400);font-size:13px;padding:8px 0;">No timeline events available.</div>';
+        }
+
+        // Recommended actions
+        var actionsHtml = '';
+        if (ci.recommendedActions && ci.recommendedActions.length > 0) {
+          ci.recommendedActions.forEach(function(a) {
+            var rankClass = 'ci-action-rank-' + Math.min(a.rank, 5);
+            actionsHtml += '<div class="ci-action-item">' +
+              '<span class="ci-action-rank ' + rankClass + '">' + a.rank + '</span>' +
+              '<strong>' + a.action + '</strong>' +
+              '<div style="font-size:12px;color:var(--neutral-500);margin-top:2px;">' + a.reason.slice(0, 120) + (a.reason.length > 120 ? '...' : '') + '</div></div>';
+          });
+        } else {
+          actionsHtml = '<div style="color:var(--neutral-400);font-size:13px;padding:8px 0;">No recommendations available.</div>';
+        }
+
+        // Opportunity reasoning
+        var oppReasoningHtml = '';
+        if (ci.opportunityReasoning && ci.opportunityReasoning.length > 0) {
+          oppReasoningHtml = '<div style="margin-top:8px;">';
+          ci.opportunityReasoning.forEach(function(r) {
+            oppReasoningHtml += '<div style="font-size:12px;color:var(--neutral-600);padding:2px 0;">• ' + r + '</div>';
+          });
+          oppReasoningHtml += '</div>';
+        }
+
+        // Risk reasons
+        var riskReasonsHtml = '';
+        if (ci.riskReasons && ci.riskReasons.length > 0) {
+          riskReasonsHtml = '<div style="margin-top:8px;">';
+          ci.riskReasons.forEach(function(r) {
+            riskReasonsHtml += '<div style="font-size:12px;color:var(--neutral-600);padding:2px 0;">⚠ ' + r + '</div>';
+          });
+          riskReasonsHtml += '</div>';
+        }
+
+        container.innerHTML = '' +
+          // Executive Summary
+          '<div class="lead-detail-card" style="margin-bottom:16px;">' +
+            '<h3>AI Executive Summary</h3>' +
+            '<div class="ci-summary">' + (ci.executiveSummary || 'No summary available.') + '</div>' +
+          '</div>' +
+
+          // Score Row
+          '<div class="lead-detail-grid">' +
+            '<div class="lead-detail-card">' +
+              '<h3>Opportunity Score</h3>' +
+              '<div class="ci-score-bar">' +
+                '<span class="ci-score-value ' + oppClass + '">' + ci.opportunityScore + '</span>' +
+                '<div class="ci-score-bar-fill" style="background:var(--neutral-200);">' +
+                  '<div class="ci-score-bar-fill" style="width:' + ci.opportunityScore + '%;background:' + oppBarColor + ';height:100%;"></div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="ci-score-label ' + oppClass + '">' + (ci.opportunityLevel || 'Unknown') + '</div>' +
+              oppReasoningHtml +
+            '</div>' +
+            '<div class="lead-detail-card">' +
+              '<h3>Risk Score</h3>' +
+              '<div class="ci-score-bar">' +
+                '<span class="ci-score-value ' + riskClass + '">' + ci.riskScore + '</span>' +
+                '<div class="ci-score-bar-fill" style="background:var(--neutral-200);">' +
+                  '<div class="ci-score-bar-fill" style="width:' + ci.riskScore + '%;background:' + riskBarColor + ';height:100%;"></div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="ci-score-label ' + riskClass + '">' + (ci.riskLevel || 'Unknown') + '</div>' +
+              riskReasonsHtml +
+            '</div>' +
+          '</div>' +
+
+          // Snapshot Grid
+          '<div class="lead-detail-grid">' +
+            '<div class="lead-detail-card"><h3>Revenue</h3><div class="value" style="color:var(--brand-600);">
+
+
+  function renderEstimatePanel(estimate) {
+    if (!estimate || !estimate.items) {
+      return '<div class="lead-detail-section" id="estimateSection">' +
+        '<h2>Line-Item Estimate</h2>' +
+        '<div class="lead-detail-card">' +
+        '<div style="text-align:center;padding:20px;color:var(--neutral-400);">' +
+        'Not enough data for a detailed estimate. Add service type, description, and address.' +
+        '</div></div></div>';
+    }
+
+    var itemRows = estimate.items.map(function(item) {
+      var typeLabel = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--neutral-100);font-size:13px;">' +
+        '<div><span style="font-weight:500;">' + typeLabel + '</span>' +
+        (item.description ? '<div style="font-size:11px;color:var(--neutral-500);">' + item.description + '</div>' : '') +
+        '</div>' +
+        '<div style="font-weight:500;white-space:nowrap;">$' + item.amount.toFixed(2) + '</div>' +
+        '</div>';
+    }).join('');
+
+    var upsellRows = '';
+    if (estimate.upsells && estimate.upsells.length > 0) {
+      upsellRows = '<div style="margin-top:12px;padding-top:8px;border-top:2px solid var(--brand-100);">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--brand-600);margin-bottom:6px;">Recommended Add-ons</div>';
+      estimate.upsells.forEach(function(u) {
+        upsellRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;">' +
+          '<div><span>' + u.label + '</span><div style="font-size:11px;color:var(--neutral-500);">' + u.description + '</div></div>' +
+          '<span style="font-weight:500;">$' + u.amount.toFixed(2) + '</span></div>';
+      });
+      upsellRows += '</div>';
+    }
+
+    var totalRow = '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--neutral-300);font-size:16px;font-weight:700;">' +
+      '<span>Total</span><span style="color:var(--brand-600);">$' + estimate.total.toFixed(2) + '</span></div>';
+
+    var confClass = estimate.confidenceLabel ? estimate.confidenceLabel.toLowerCase() : 'low';
+    var badgeStyle = confClass === 'high' ? 'background:#dcfce7;color:#166534;' : 
+                     confClass === 'medium' ? 'background:#fef3c7;color:#92400e;' :
+                     'background:#fee2e2;color:#991b1b;';
+
+    return '<div class="lead-detail-section" id="estimateSection">' +
+      '<h2>Line-Item Estimate</h2>' +
+      '<div class="lead-detail-card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+      '<div><span style="font-size:13px;font-weight:500;">' + estimate.service + '</span>' +
+      '<span style="font-size:11px;color:var(--neutral-500);margin-left:8px;">' + estimate.difficultyLabel + '</span></div>' +
+      '<span style="font-size:11px;padding:2px 8px;border-radius:4px;' + badgeStyle + '">' +
+      estimate.confidenceLabel + ' (' + estimate.confidence + '%)' +
+      '</span></div>' +
+      itemRows +
+      totalRow +
+      upsellRows +
+      '<div style="margin-top:10px;padding:8px;background:var(--neutral-50);border-radius:4px;font-size:11px;color:var(--neutral-600);line-height:1.5;">' +
+      '<strong>AI Reasoning:</strong> ' + estimate.reasoning +
+      '</div>' +
+      '</div></div>';
+  }
+
+      // renderLeadDetail — re-renders the lead after M13 intelligence is augmented
+      function renderLeadDetail(lead) {
+        if (lead && document.getElementById('leadDetailContainer')) {
+          renderLead(lead);
+        }
+      }
+
+      // Load on DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadLead);
+      } else {
+        loadLead();
+      }
+    })();
+  </script>
+</body>
+</html>
+ + (ci.snapshot.estimatedRevenue || 0).toLocaleString() + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Profit</h3><div class="value" style="color:var(--success);">
+
+
+  function renderEstimatePanel(estimate) {
+    if (!estimate || !estimate.items) {
+      return '<div class="lead-detail-section" id="estimateSection">' +
+        '<h2>Line-Item Estimate</h2>' +
+        '<div class="lead-detail-card">' +
+        '<div style="text-align:center;padding:20px;color:var(--neutral-400);">' +
+        'Not enough data for a detailed estimate. Add service type, description, and address.' +
+        '</div></div></div>';
+    }
+
+    var itemRows = estimate.items.map(function(item) {
+      var typeLabel = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--neutral-100);font-size:13px;">' +
+        '<div><span style="font-weight:500;">' + typeLabel + '</span>' +
+        (item.description ? '<div style="font-size:11px;color:var(--neutral-500);">' + item.description + '</div>' : '') +
+        '</div>' +
+        '<div style="font-weight:500;white-space:nowrap;">$' + item.amount.toFixed(2) + '</div>' +
+        '</div>';
+    }).join('');
+
+    var upsellRows = '';
+    if (estimate.upsells && estimate.upsells.length > 0) {
+      upsellRows = '<div style="margin-top:12px;padding-top:8px;border-top:2px solid var(--brand-100);">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--brand-600);margin-bottom:6px;">Recommended Add-ons</div>';
+      estimate.upsells.forEach(function(u) {
+        upsellRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;">' +
+          '<div><span>' + u.label + '</span><div style="font-size:11px;color:var(--neutral-500);">' + u.description + '</div></div>' +
+          '<span style="font-weight:500;">$' + u.amount.toFixed(2) + '</span></div>';
+      });
+      upsellRows += '</div>';
+    }
+
+    var totalRow = '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--neutral-300);font-size:16px;font-weight:700;">' +
+      '<span>Total</span><span style="color:var(--brand-600);">$' + estimate.total.toFixed(2) + '</span></div>';
+
+    var confClass = estimate.confidenceLabel ? estimate.confidenceLabel.toLowerCase() : 'low';
+    var badgeStyle = confClass === 'high' ? 'background:#dcfce7;color:#166534;' : 
+                     confClass === 'medium' ? 'background:#fef3c7;color:#92400e;' :
+                     'background:#fee2e2;color:#991b1b;';
+
+    return '<div class="lead-detail-section" id="estimateSection">' +
+      '<h2>Line-Item Estimate</h2>' +
+      '<div class="lead-detail-card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+      '<div><span style="font-size:13px;font-weight:500;">' + estimate.service + '</span>' +
+      '<span style="font-size:11px;color:var(--neutral-500);margin-left:8px;">' + estimate.difficultyLabel + '</span></div>' +
+      '<span style="font-size:11px;padding:2px 8px;border-radius:4px;' + badgeStyle + '">' +
+      estimate.confidenceLabel + ' (' + estimate.confidence + '%)' +
+      '</span></div>' +
+      itemRows +
+      totalRow +
+      upsellRows +
+      '<div style="margin-top:10px;padding:8px;background:var(--neutral-50);border-radius:4px;font-size:11px;color:var(--neutral-600);line-height:1.5;">' +
+      '<strong>AI Reasoning:</strong> ' + estimate.reasoning +
+      '</div>' +
+      '</div></div>';
+  }
+
+      // renderLeadDetail — re-renders the lead after M13 intelligence is augmented
+      function renderLeadDetail(lead) {
+        if (lead && document.getElementById('leadDetailContainer')) {
+          renderLead(lead);
+        }
+      }
+
+      // Load on DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadLead);
+      } else {
+        loadLead();
+      }
+    })();
+  </script>
+</body>
+</html>
+ + (ci.snapshot.estimatedProfit || 0).toLocaleString() + ' (' + (ci.snapshot.profitMargin || '0%') + ')</div></div>' +
+            '<div class="lead-detail-card"><h3>Labor Cost</h3><div class="value">
+
+
+  function renderEstimatePanel(estimate) {
+    if (!estimate || !estimate.items) {
+      return '<div class="lead-detail-section" id="estimateSection">' +
+        '<h2>Line-Item Estimate</h2>' +
+        '<div class="lead-detail-card">' +
+        '<div style="text-align:center;padding:20px;color:var(--neutral-400);">' +
+        'Not enough data for a detailed estimate. Add service type, description, and address.' +
+        '</div></div></div>';
+    }
+
+    var itemRows = estimate.items.map(function(item) {
+      var typeLabel = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--neutral-100);font-size:13px;">' +
+        '<div><span style="font-weight:500;">' + typeLabel + '</span>' +
+        (item.description ? '<div style="font-size:11px;color:var(--neutral-500);">' + item.description + '</div>' : '') +
+        '</div>' +
+        '<div style="font-weight:500;white-space:nowrap;">$' + item.amount.toFixed(2) + '</div>' +
+        '</div>';
+    }).join('');
+
+    var upsellRows = '';
+    if (estimate.upsells && estimate.upsells.length > 0) {
+      upsellRows = '<div style="margin-top:12px;padding-top:8px;border-top:2px solid var(--brand-100);">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--brand-600);margin-bottom:6px;">Recommended Add-ons</div>';
+      estimate.upsells.forEach(function(u) {
+        upsellRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;">' +
+          '<div><span>' + u.label + '</span><div style="font-size:11px;color:var(--neutral-500);">' + u.description + '</div></div>' +
+          '<span style="font-weight:500;">$' + u.amount.toFixed(2) + '</span></div>';
+      });
+      upsellRows += '</div>';
+    }
+
+    var totalRow = '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--neutral-300);font-size:16px;font-weight:700;">' +
+      '<span>Total</span><span style="color:var(--brand-600);">$' + estimate.total.toFixed(2) + '</span></div>';
+
+    var confClass = estimate.confidenceLabel ? estimate.confidenceLabel.toLowerCase() : 'low';
+    var badgeStyle = confClass === 'high' ? 'background:#dcfce7;color:#166534;' : 
+                     confClass === 'medium' ? 'background:#fef3c7;color:#92400e;' :
+                     'background:#fee2e2;color:#991b1b;';
+
+    return '<div class="lead-detail-section" id="estimateSection">' +
+      '<h2>Line-Item Estimate</h2>' +
+      '<div class="lead-detail-card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+      '<div><span style="font-size:13px;font-weight:500;">' + estimate.service + '</span>' +
+      '<span style="font-size:11px;color:var(--neutral-500);margin-left:8px;">' + estimate.difficultyLabel + '</span></div>' +
+      '<span style="font-size:11px;padding:2px 8px;border-radius:4px;' + badgeStyle + '">' +
+      estimate.confidenceLabel + ' (' + estimate.confidence + '%)' +
+      '</span></div>' +
+      itemRows +
+      totalRow +
+      upsellRows +
+      '<div style="margin-top:10px;padding:8px;background:var(--neutral-50);border-radius:4px;font-size:11px;color:var(--neutral-600);line-height:1.5;">' +
+      '<strong>AI Reasoning:</strong> ' + estimate.reasoning +
+      '</div>' +
+      '</div></div>';
+  }
+
+      // renderLeadDetail — re-renders the lead after M13 intelligence is augmented
+      function renderLeadDetail(lead) {
+        if (lead && document.getElementById('leadDetailContainer')) {
+          renderLead(lead);
+        }
+      }
+
+      // Load on DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadLead);
+      } else {
+        loadLead();
+      }
+    })();
+  </script>
+</body>
+</html>
+ + (ci.snapshot.estimatedLabor || 0).toLocaleString() + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Crew Needed</h3><div class="value">' + (ci.snapshot.recommendedCrew || '—') + ' technicians</div></div>' +
+            '<div class="lead-detail-card"><h3>Production Hours</h3><div class="value">' + (ci.snapshot.estimatedProductionHours || '—') + ' hrs</div></div>' +
+            '<div class="lead-detail-card"><h3>Travel</h3><div class="value">' + (ci.snapshot.travelMinutes || '—') + ' min (
+
+
+  function renderEstimatePanel(estimate) {
+    if (!estimate || !estimate.items) {
+      return '<div class="lead-detail-section" id="estimateSection">' +
+        '<h2>Line-Item Estimate</h2>' +
+        '<div class="lead-detail-card">' +
+        '<div style="text-align:center;padding:20px;color:var(--neutral-400);">' +
+        'Not enough data for a detailed estimate. Add service type, description, and address.' +
+        '</div></div></div>';
+    }
+
+    var itemRows = estimate.items.map(function(item) {
+      var typeLabel = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--neutral-100);font-size:13px;">' +
+        '<div><span style="font-weight:500;">' + typeLabel + '</span>' +
+        (item.description ? '<div style="font-size:11px;color:var(--neutral-500);">' + item.description + '</div>' : '') +
+        '</div>' +
+        '<div style="font-weight:500;white-space:nowrap;">$' + item.amount.toFixed(2) + '</div>' +
+        '</div>';
+    }).join('');
+
+    var upsellRows = '';
+    if (estimate.upsells && estimate.upsells.length > 0) {
+      upsellRows = '<div style="margin-top:12px;padding-top:8px;border-top:2px solid var(--brand-100);">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--brand-600);margin-bottom:6px;">Recommended Add-ons</div>';
+      estimate.upsells.forEach(function(u) {
+        upsellRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;">' +
+          '<div><span>' + u.label + '</span><div style="font-size:11px;color:var(--neutral-500);">' + u.description + '</div></div>' +
+          '<span style="font-weight:500;">$' + u.amount.toFixed(2) + '</span></div>';
+      });
+      upsellRows += '</div>';
+    }
+
+    var totalRow = '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--neutral-300);font-size:16px;font-weight:700;">' +
+      '<span>Total</span><span style="color:var(--brand-600);">$' + estimate.total.toFixed(2) + '</span></div>';
+
+    var confClass = estimate.confidenceLabel ? estimate.confidenceLabel.toLowerCase() : 'low';
+    var badgeStyle = confClass === 'high' ? 'background:#dcfce7;color:#166534;' : 
+                     confClass === 'medium' ? 'background:#fef3c7;color:#92400e;' :
+                     'background:#fee2e2;color:#991b1b;';
+
+    return '<div class="lead-detail-section" id="estimateSection">' +
+      '<h2>Line-Item Estimate</h2>' +
+      '<div class="lead-detail-card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+      '<div><span style="font-size:13px;font-weight:500;">' + estimate.service + '</span>' +
+      '<span style="font-size:11px;color:var(--neutral-500);margin-left:8px;">' + estimate.difficultyLabel + '</span></div>' +
+      '<span style="font-size:11px;padding:2px 8px;border-radius:4px;' + badgeStyle + '">' +
+      estimate.confidenceLabel + ' (' + estimate.confidence + '%)' +
+      '</span></div>' +
+      itemRows +
+      totalRow +
+      upsellRows +
+      '<div style="margin-top:10px;padding:8px;background:var(--neutral-50);border-radius:4px;font-size:11px;color:var(--neutral-600);line-height:1.5;">' +
+      '<strong>AI Reasoning:</strong> ' + estimate.reasoning +
+      '</div>' +
+      '</div></div>';
+  }
+
+      // renderLeadDetail — re-renders the lead after M13 intelligence is augmented
+      function renderLeadDetail(lead) {
+        if (lead && document.getElementById('leadDetailContainer')) {
+          renderLead(lead);
+        }
+      }
+
+      // Load on DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadLead);
+      } else {
+        loadLead();
+      }
+    })();
+  </script>
+</body>
+</html>
+ + (ci.snapshot.travelCost || 0).toFixed(2) + ')</div></div>' +
+            '<div class="lead-detail-card"><h3>Confidence</h3><div class="value">' + (ci.snapshot.confidenceScore || '—') + '%</div><div class="value-secondary">' + (ci.snapshot.confidenceLabel || '') + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Profit per Hour</h3><div class="value" style="color:var(--brand-600);">
+
+
+  function renderEstimatePanel(estimate) {
+    if (!estimate || !estimate.items) {
+      return '<div class="lead-detail-section" id="estimateSection">' +
+        '<h2>Line-Item Estimate</h2>' +
+        '<div class="lead-detail-card">' +
+        '<div style="text-align:center;padding:20px;color:var(--neutral-400);">' +
+        'Not enough data for a detailed estimate. Add service type, description, and address.' +
+        '</div></div></div>';
+    }
+
+    var itemRows = estimate.items.map(function(item) {
+      var typeLabel = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--neutral-100);font-size:13px;">' +
+        '<div><span style="font-weight:500;">' + typeLabel + '</span>' +
+        (item.description ? '<div style="font-size:11px;color:var(--neutral-500);">' + item.description + '</div>' : '') +
+        '</div>' +
+        '<div style="font-weight:500;white-space:nowrap;">$' + item.amount.toFixed(2) + '</div>' +
+        '</div>';
+    }).join('');
+
+    var upsellRows = '';
+    if (estimate.upsells && estimate.upsells.length > 0) {
+      upsellRows = '<div style="margin-top:12px;padding-top:8px;border-top:2px solid var(--brand-100);">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--brand-600);margin-bottom:6px;">Recommended Add-ons</div>';
+      estimate.upsells.forEach(function(u) {
+        upsellRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;">' +
+          '<div><span>' + u.label + '</span><div style="font-size:11px;color:var(--neutral-500);">' + u.description + '</div></div>' +
+          '<span style="font-weight:500;">$' + u.amount.toFixed(2) + '</span></div>';
+      });
+      upsellRows += '</div>';
+    }
+
+    var totalRow = '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--neutral-300);font-size:16px;font-weight:700;">' +
+      '<span>Total</span><span style="color:var(--brand-600);">$' + estimate.total.toFixed(2) + '</span></div>';
+
+    var confClass = estimate.confidenceLabel ? estimate.confidenceLabel.toLowerCase() : 'low';
+    var badgeStyle = confClass === 'high' ? 'background:#dcfce7;color:#166534;' : 
+                     confClass === 'medium' ? 'background:#fef3c7;color:#92400e;' :
+                     'background:#fee2e2;color:#991b1b;';
+
+    return '<div class="lead-detail-section" id="estimateSection">' +
+      '<h2>Line-Item Estimate</h2>' +
+      '<div class="lead-detail-card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+      '<div><span style="font-size:13px;font-weight:500;">' + estimate.service + '</span>' +
+      '<span style="font-size:11px;color:var(--neutral-500);margin-left:8px;">' + estimate.difficultyLabel + '</span></div>' +
+      '<span style="font-size:11px;padding:2px 8px;border-radius:4px;' + badgeStyle + '">' +
+      estimate.confidenceLabel + ' (' + estimate.confidence + '%)' +
+      '</span></div>' +
+      itemRows +
+      totalRow +
+      upsellRows +
+      '<div style="margin-top:10px;padding:8px;background:var(--neutral-50);border-radius:4px;font-size:11px;color:var(--neutral-600);line-height:1.5;">' +
+      '<strong>AI Reasoning:</strong> ' + estimate.reasoning +
+      '</div>' +
+      '</div></div>';
+  }
+
+      // renderLeadDetail — re-renders the lead after M13 intelligence is augmented
+      function renderLeadDetail(lead) {
+        if (lead && document.getElementById('leadDetailContainer')) {
+          renderLead(lead);
+        }
+      }
+
+      // Load on DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadLead);
+      } else {
+        loadLead();
+      }
+    })();
+  </script>
+</body>
+</html>
+ + (ci.snapshot.profitPerLaborHour || 0).toFixed(2) + '/hr</div></div>' +
+          '</div>' +
+
+          // Next Best Action
+          '<div class="lead-detail-card" style="margin-bottom:16px;">' +
+            '<h3>Next Best Action</h3>' +
+            '<div class="value" style="font-size:16px;margin-bottom:4px;">' + (ci.nextBestAction || 'Review') + '</div>' +
+            '<div class="value-secondary">Priority: ' + ci.priorityLabel + ' (' + ci.priorityScore + '/100) · Escalation: ' + (ci.escalationLevel || 'this-week') + '</div>' +
+            '<div class="value-secondary" style="margin-top:4px;">Business Impact: ' + (ci.businessImpact || 'Unknown') + ' · ' + (ci.recommendationStrength || '') + '</div>' +
+          '</div>' +
+
+          // Recommended Actions
+          '<div class="lead-detail-card" style="margin-bottom:16px;">' +
+            '<h3>Recommended Actions</h3>' +
+            actionsHtml +
+          '</div>' +
+
+          // Timeline
+          '<div class="lead-detail-card" style="margin-bottom:16px;">' +
+            '<h3>Customer Timeline</h3>' +
+            timelineHtml +
+          '</div>' +
+
+          // Confidence Reason
+          (ci.snapshot.confidenceReason ? '<div class="lead-detail-card" style="margin-bottom:16px;">' +
+            '<h3>Confidence Reasoning</h3>' +
+            '<div class="value-secondary">' + ci.snapshot.confidenceReason + '</div>' +
+          '</div>' : '');
       }
 
 

@@ -19,6 +19,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const publicApiRoutes = require('./routes/publicApi');
 const polarisRoutes = require('./routes/polaris');
 const polarisEnginesRoutes = require('./routes/polaris-engines');
+const customerIntelligenceRoutes = require('./routes/customerIntelligence');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -495,6 +496,7 @@ app.use('/api/v1', dashboardRoutes);
 app.use('/api/v1', publicApiRoutes);
 app.use('/api/v1/polaris', polarisRoutes);
 app.use('/api/v1', polarisEnginesRoutes);
+app.use('/api/v1/leads', customerIntelligenceRoutes);
 
 // 404 + error handler (single instances)
 app.use(notFound);

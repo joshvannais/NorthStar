@@ -474,6 +474,8 @@
         <!-- Filled by JS from the live view -->
       </div>
     </div>
+    <!-- Post-call Executive Summary -->
+    <div id="demoPostExecutiveSummary" style="display:none;max-width:1100px;margin:0 auto;padding:0 24px 24px;text-align:left;"></div>
     <div class="demo-post-actions">
       <button class="btn btn-secondary" onclick="resetDemo()">🔄 Try Another Scenario</button>
       <a href="/login" class="btn btn-primary">🚀 Continue to Dashboard</a>
@@ -1236,6 +1238,10 @@
         if (backendState === 'completed' || backendState === 'polaris_summary') {
           dot.className = 'demo-status-ended';
           label.textContent = 'Call Ended';
+          // Store executive summary for post-call view
+          if (data.executiveSummary) {
+            demoState.executiveSummary = data.executiveSummary;
+          }
           transitionToPostCall();
         } else if (backendState === 'failed') {
           dot.className = 'demo-status-ended';
@@ -1296,8 +1302,66 @@
         postInsights.innerHTML = insights.innerHTML;
       }
 
+      // Render Executive Summary if available
+      renderPostCallExecutiveSummary();
+
       document.getElementById('demoLiveView').style.display = 'none';
       document.getElementById('demoPostCallView').style.display = 'block';
+    }
+
+    function renderPostCallExecutiveSummary() {
+      var es = demoState.executiveSummary;
+      var container = document.getElementById('demoPostExecutiveSummary');
+      if (!container) return;
+      if (!es) { container.style.display = 'none'; return; }
+
+      var sentimentColor = es.sentiment === 'positive' ? '#16a34a' : es.sentiment === 'negative' || es.sentiment === 'frustrated' ? '#dc2626' : '#d97706';
+      var polarisBadge = '';
+      if (es.polarisOpportunityScore) {
+        var ps = es.polarisOpportunityScore;
+        polarisBadge = '<span style="display:inline-block;padding:4px 10px;border-radius:100px;font-size:12px;font-weight:600;background:' + (ps.placeholder ? '#fef3c7' : '#dcfce7') + ';color:' + (ps.placeholder ? '#92400e' : '#166534') + ';">⭐ POLARIS Score: ' + ps.score + (ps.placeholder ? ' (pending)' : '') + '</span>';
+      }
+      var keyTopicsHtml = '';
+      if (es.keyTopics && es.keyTopics.length > 0) {
+        keyTopicsHtml = '<div style="margin-bottom:8px;"><strong>Key Topics:</strong> ' + es.keyTopics.map(function(t){return '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#f3f4f6;border-radius:100px;font-size:12px;">' + t + '</span>';}).join('') + '</div>';
+      }
+      var actionItemsHtml = '';
+      if (es.actionItems && es.actionItems.length > 0) {
+        actionItemsHtml = '<div style="margin-top:12px;"><strong>Action Items:</strong><ul style="list-style:none;padding:0;margin:4px 0;">';
+        es.actionItems.forEach(function(a) {
+          var prioColor = a.priority === 'high' ? '#dc2626' : a.priority === 'medium' ? '#d97706' : '#9ca3af';
+          actionItemsHtml += '<li style="padding:3px 0;font-size:13px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + prioColor + ';margin-right:8px;"></span>' + a.description + '</li>';
+        });
+        actionItemsHtml += '</ul></div>';
+      }
+      var recsHtml = '';
+      if (es.recommendations && es.recommendations.length > 0) {
+        recsHtml = '<div style="margin-top:8px;"><strong>Recommendations:</strong>';
+        es.recommendations.forEach(function(r) {
+          recsHtml += '<div style="font-size:13px;padding:2px 0;">📌 ' + r.description + '</div>';
+        });
+        recsHtml += '</div>';
+      }
+
+      container.innerHTML = '' +
+        '<div style="background:#fff;border:1px solid var(--neutral-200);border-radius:12px;padding:20px;margin-bottom:12px;">' +
+          '<h3 style="margin:0 0 8px;font-size:16px;">📋 Executive Summary</h3>' +
+          '<div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+            '<span style="font-weight:600;">' + (es.callOutcome || 'Call completed') + '</span>' +
+            (polarisBadge || '') +
+          '</div>' +
+          '<div style="font-size:14px;color:#6b7280;margin-bottom:8px;">' +
+            '<strong>Sentiment:</strong> <span style="color:' + sentimentColor + ';text-transform:capitalize;">' + (es.sentiment || 'neutral') + '</span>' +
+            (es.customerName ? ' · <strong>Customer:</strong> ' + es.customerName : '') +
+            (es.serviceRequested ? ' · <strong>Service:</strong> ' + es.serviceRequested : '') +
+            (es.durationFormatted ? ' · <strong>Duration:</strong> ' + es.durationFormatted : '') +
+          '</div>' +
+          keyTopicsHtml +
+          actionItemsHtml +
+          recsHtml +
+          '<div style="font-size:11px;color:#9ca3af;margin-top:8px;">Generated: ' + new Date(es.generatedAt).toLocaleString() + '</div>' +
+        '</div>';
+      container.style.display = 'block';
     }
 
     // ── Reset demo ──

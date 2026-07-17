@@ -191,6 +191,59 @@
 
           (transcript ? '<div class="lead-detail-section"><h2>Transcript</h2><div class="lead-detail-card"><div class="value-secondary" style="white-space:pre-wrap;max-height:300px;overflow-y:auto;font-size:13px;line-height:1.6;">' + transcript + '</div></div></div>' : '') +
 
+          // Executive Summary (from Retell webhook post-call pipeline)
+          (function() {
+            var es = lead.executiveSummary;
+            if (!es) return '';
+            var sentimentColor = es.sentiment === 'positive' ? 'var(--success)' : es.sentiment === 'negative' || es.sentiment === 'frustrated' ? 'var(--danger)' : 'var(--warning)';
+            var polarisBadge = '';
+            if (es.polarisOpportunityScore) {
+              var ps = es.polarisOpportunityScore;
+              polarisBadge = '<span style="display:inline-block;padding:4px 10px;border-radius:100px;font-size:12px;font-weight:600;background:' + (ps.placeholder ? '#fef3c7' : '#dcfce7') + ';color:' + (ps.placeholder ? '#92400e' : '#166534') + ';">⭐ POLARIS Score: ' + ps.score + (ps.placeholder ? ' (pending)' : '') + '</span>';
+            }
+            var keyTopicChips = '';
+            if (es.keyTopics && es.keyTopics.length > 0) {
+              keyTopicChips = '<div style="margin-bottom:8px;"><strong>Key Topics:</strong> ' + es.keyTopics.map(function(t){return '<span style="display:inline-block;padding:2px 8px;margin:2px;background:var(--neutral-100);border-radius:100px;font-size:12px;">' + t + '</span>';}).join('') + '</div>';
+            }
+            var actionItemsHtml = '';
+            if (es.actionItems && es.actionItems.length > 0) {
+              actionItemsHtml = '<div class="lead-detail-section"><h2>✅ Action Items</h2><div class="lead-detail-card"><ul style="list-style:none;padding:0;margin:0;">';
+              es.actionItems.forEach(function(a) {
+                var prioColor = a.priority === 'high' ? 'var(--danger)' : a.priority === 'medium' ? 'var(--warning)' : 'var(--neutral-400)';
+                actionItemsHtml += '<li style="padding:4px 0;font-size:13px;border-bottom:1px solid var(--neutral-100);"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + prioColor + ';margin-right:8px;"></span>' + a.description + '</li>';
+              });
+              actionItemsHtml += '</ul></div></div>';
+            }
+            var recsHtml = '';
+            if (es.recommendations && es.recommendations.length > 0) {
+              recsHtml = '<div class="lead-detail-section"><h2>💡 Recommendations</h2><div class="lead-detail-card">';
+              es.recommendations.forEach(function(r) {
+                recsHtml += '<div style="font-size:13px;padding:3px 0;">📌 <strong>' + r.action + '</strong>: ' + r.description + '</div>';
+              });
+              recsHtml += '</div></div>';
+            }
+            return '<div class="lead-detail-section">' +
+              '<h2>📋 Executive Summary</h2>' +
+              '<div class="lead-detail-card">' +
+                '<div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+                  '<span style="font-weight:600;">' + (es.callOutcome || es.outcome || 'Call completed') + '</span>' +
+                  (polarisBadge || '') +
+                '</div>' +
+                '<div style="font-size:14px;color:var(--neutral-600);margin-bottom:8px;">' +
+                  '<strong>Sentiment:</strong> <span style="color:' + sentimentColor + ';text-transform:capitalize;">' + (es.sentiment || 'neutral') + '</span>' +
+                  (es.customerName ? ' · <strong>Customer:</strong> ' + es.customerName : '') +
+                  (es.serviceRequested ? ' · <strong>Service:</strong> ' + es.serviceRequested : '') +
+                  (es.durationFormatted ? ' · <strong>Duration:</strong> ' + es.durationFormatted : '') +
+                '</div>' +
+                keyTopicChips +
+                (es.appointmentRequested ? '<div style="font-size:14px;color:var(--brand-600);margin-bottom:4px;">📅 Appointment requested for: ' + (es.preferredTime || 'customer-preferred time') + '</div>' : '') +
+                '<div style="font-size:13px;color:var(--neutral-500);margin-top:4px;">' +
+                  '<em>Generated: ' + new Date(es.generatedAt).toLocaleString() + '</em>' +
+                '</div>' +
+              '</div>' +
+            '</div>' + actionItemsHtml + recsHtml;
+          })() +
+
           '<div class="lead-detail-section">' +
             '<h2>Activity</h2>' +
             '<div class="lead-detail-card">' +

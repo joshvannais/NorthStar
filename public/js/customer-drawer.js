@@ -163,6 +163,9 @@ window.CustomerDrawer = (function() {
     transcriptEl.innerHTML = formatTranscript(lead.transcript, lead.caller || lead.customerName);
     transcriptEl.scrollTop = 0;
 
+    // Call Lifecycle Timeline (from liveTimeline via API)
+    fetchTimeline(lead);
+
     // Open the drawer
     el('drawerOverlay').classList.add('open');
     el('customerDrawer').classList.add('open');
@@ -226,6 +229,83 @@ window.CustomerDrawer = (function() {
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') close();
   });
+
+  /**
+   * Fetch call lifecycle timeline for a lead that has a demoSessionId.
+   * Appends a timeline section to the drawer body after successful fetch.
+   */
+  function fetchTimeline(lead) {
+    var sessionId = lead.demoSessionId;
+    if (!sessionId) {
+      // No demo session — clear any stale timeline section
+      var oldTimeline = document.getElementById('drawerTimelineSection');
+      if (oldTimeline) oldTimeline.style.display = 'none';
+      return;
+    }
+
+    var url = '/api/demo/' + encodeURIComponent(sessionId) + '/timeline';
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.success || !data.entries || data.entries.length === 0) {
+          var oldTimeline = document.getElementById('drawerTimelineSection');
+          if (oldTimeline) oldTimeline.style.display = 'none';
+          return;
+        }
+        renderTimeline(data.entries);
+      })
+      .catch(function() {
+        var oldTimeline = document.getElementById('drawerTimelineSection');
+        if (oldTimeline) oldTimeline.style.display = 'none';
+      });
+  }
+
+  function renderTimeline(entries) {
+    // Find or create the timeline section in the drawer body
+    var section = document.getElementById('drawerTimelineSection');
+    if (!section) {
+      var body = document.getElementById('drawerBody');
+      if (!body) return;
+      section = document.createElement('div');
+      section.className = 'drawer-section';
+      section.id = 'drawerTimelineSection';
+      body.appendChild(section);
+    }
+    section.style.display = '';
+
+    var eventLabels = {
+      'call_creating': '📞 Creating call...',
+      'call_created': '📞 Call created',
+      'call_started': '📞 Call started',
+      'simulation_started': '🔬 Simulation started',
+      'conversation_started': '💬 Conversation started',
+      'state_dialing': '📞 Dialing',
+      'state_ringing': '🔔 Ringing',
+      'state_answered': '✅ Answered',
+      'state_media_connected': '🔊 Media connected',
+      'state_live': '🎙️ Live conversation',
+      'state_completed': '🏁 Call completed',
+      'state_polaris_summary': '⭐ Polaris summary generated',
+      'call_completed': '🏁 Call completed',
+    };
+
+    var html = '<h3>📋 Call Lifecycle Timeline</h3>';
+    html += '<div style="max-height:300px;overflow-y:auto;">';
+    entries.forEach(function(entry) {
+      var time = new Date(entry.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+      var label = eventLabels[entry.event] || entry.event;
+      var dotColor = entry.event === 'call_completed' || entry.event === 'state_completed' ? 'var(--success)' :
+                     entry.event === 'state_polaris_summary' ? 'var(--brand-600)' :
+                     entry.event && entry.event.indexOf('fail') >= 0 ? 'var(--danger)' : 'var(--brand-500)';
+      html += '<div style="display:flex;gap:8px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--neutral-100);">' +
+        '<span style="color:var(--neutral-400);font-size:11px;white-space:nowrap;min-width:70px;">' + time + '</span>' +
+        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + dotColor + ';margin-top:4px;flex-shrink:0;"></span>' +
+        '<span>' + label + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+    section.innerHTML = html;
+  }
 
   return {
     open: open,

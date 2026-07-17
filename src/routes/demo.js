@@ -697,10 +697,27 @@ router.get('/:id/status', (req, res) => {
       conversationState: isPreLive ? 'waiting' : (session.callStatus === 'live' ? 'live' : session.callStatus),
       polairsEstimate: estimate,
       polairsState: isPreLive ? 'waiting' : 'analyzing',
+      executiveSummary: session.executiveSummary || null,
       timestamp: now,
     });
   } catch (err) {
     console.error('[Demo] Status error:', err.message, err.stack);
+    res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
+  }
+});
+
+/**
+ * GET /:id/timeline
+ * Get call lifecycle timeline entries for a demo session.
+ * Exposes the liveTimeline data used by demo.js so the
+ * communications dashboard can display call event history.
+ */
+router.get('/:id/timeline', (req, res) => {
+  try {
+    const entries = liveTimeline.getTimeline(req.params.id);
+    res.json({ success: true, sessionId: req.params.id, entries, count: entries.length });
+  } catch (err) {
+    console.error('[Demo] Timeline error:', err.message, err.stack);
     res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
   }
 });

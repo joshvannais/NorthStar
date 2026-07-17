@@ -11,10 +11,11 @@
  * - transcript: Live transcript update during a call (requires Retell streaming)
  */
 
-const { addLead } = require('../leads/store');
+const { addLead, updateLead } = require('../leads/store');
 const { appendLead } = require('../sheets/client');
 const { sendLeadNotification: sendSms } = require('../notifications/sms');
 const { sendLeadNotification: sendEmail } = require('../notifications/email');
+const { generateExecutiveSummary, generateActionItems, generateFollowUpRecommendations, extractKeyTopics, estimateSentiment } = require('../voice/callCompletion');
 
 /**
  * Get the demo sessions module dynamically to avoid circular deps.
@@ -124,6 +125,85 @@ function detectUrgency(text) {
 }
 
 /**
+ * Generate an Executive Summary from call data and attach it to a lead.
+ *
+ * Includes: call outcome summary, key discussion points, sentiment assessment,
+ * action items, follow-up recommendations, and a Polaris opportunity score placeholder.
+ *
+ * @param {string} leadId - The lead ID to update
+ * @param {object} payload - The Retell webhook payload
+ */
+function generateAndAttachSummary(leadId, payload) {
+  try {
+    const transcript = payload.transcript || '';
+    const analysis = payload.call_analysis || {};
+    const callData = {
+      callId: payload.call_id,
+      transcript,
+      duration: payload.duration_ms || 0,
+      analysis,
+      fromNumber: payload.from_number || '',
+    };
+
+    const summary = generateExecutiveSummary(callData, {});
+    const actionItems = generateActionItems(callData, summary);
+    const recommendations = generateFollowUpRecommendations(summary, {});
+
+    const topics = extractKeyTopics(transcript);
+    const sentiment = estimateSentiment(transcript);
+
+    const executiveSummary = {
+      outcome: summary.summary || (transcript ? transcript.substring(0, 300) : 'Call completed'),
+      callOutcome: summary.appointmentRequested ? 'Appointment requested' : 'Call completed',
+      keyTopics: summary.keyTopics || topics,
+      sentiment: summary.sentiment || sentiment,
+      customerName: summary.customerName || '',
+      serviceRequested: summary.serviceRequested || '',
+      estimatedAmount: summary.estimatedAmount || 0,
+      appointmentRequested: summary.appointmentRequested || false,
+      preferredTime: summary.preferredTime || '',
+      durationFormatted: summary.durationFormatted || '—',
+      actionItems: (actionItems || []).map(a => ({
+        type: a.type,
+        priority: a.priority,
+        description: a.description,
+      })),
+      recommendations: (recommendations || []).map(r => ({
+        action: r.action,
+        description: r.description,
+        priority: r.priority,
+      })),
+      polarisOpportunityScore: {
+        score: 'PENDING',
+        placeholder: true,
+        note: 'Full Polaris analysis will be generated when call_analyzed event fires',
+      },
+      generatedAt: new Date().toISOString(),
+    };
+
+    const updated = updateLead(leadId, { executiveSummary });
+    if (updated) {
+      console.log(`[Webhook] Executive summary attached to lead: ${leadId}`);
+    }
+
+    // Also store on the demo session if available for the post-call view
+    try {
+      const demoSession = getDemoSession(callId);
+      if (demoSession) {
+        demoSession.executiveSummary = executiveSummary;
+      }
+    } catch (e) {
+      // Non-critical — just means the demo post-call view won't show summary
+    }
+
+    return executiveSummary;
+  } catch (e) {
+    console.warn(`[Webhook] Executive summary generation failed for lead ${leadId}: ${e.message}`);
+    return null;
+  }
+}
+
+/**
  * Main webhook handler for Retell AI call events.
  */
 async function handleWebhook(payload) {
@@ -188,7 +268,20 @@ async function handleWebhook(payload) {
     // Parse lead from transcript
     const lead = parseLeadFromTranscript(payload.transcript || '');
     if (lead) {
+      // Store transcript on the lead for display
+      lead.transcript = payload.transcript || '';
+
+      // Store demo session ID if this call matches a demo session
+      const demoSession = getDemoSession(callId);
+      if (demoSession && demoSession.id) {
+        lead.demoSessionId = demoSession.id;
+      }
+
       const savedLead = addLead(lead);
+
+      // Generate executive summary from call data
+      generateAndAttachSummary(savedLead.id, payload);
+
       await appendLead(savedLead);
       await Promise.allSettled([
         sendSms(savedLead),
@@ -206,7 +299,45 @@ async function handleWebhook(payload) {
 
     const lead = parseLeadFromAnalysis(payload);
     if (lead) {
+      // Store transcript on the lead for display
+      lead.transcript = payload.transcript || payload.call_analysis?.transcript || '';
+
+      // Store demo session ID if this call matches a demo session
+      const demoSession2 = getDemoSession(callId);
+      if (demoSession2 && demoSession2.id) {
+        lead.demoSessionId = demoSession2.id;
+      }
+
       const savedLead = addLead(lead);
+
+      // Generate executive summary from analysis + transcript
+      const summary = generateAndAttachSummary(savedLead.id, payload);
+
+      // Update the Polaris score placeholder if we got real analysis data
+      if (summary && payload.call_analysis) {
+        try {
+          const analysisScore = {
+            score: payload.call_analysis.call_success_probability
+              ? `${Math.round(payload.call_analysis.call_success_probability * 100)}%`
+              : 'GENERATED',
+            confidence: payload.call_analysis.call_success_probability
+              ? Math.round(payload.call_analysis.call_success_probability * 100)
+              : 50,
+            placeholder: false,
+            source: 'Retell call_analyzed',
+          };
+          updateLead(savedLead.id, {
+            polarisOpportunityScore: analysisScore,
+            executiveSummary: {
+              ...summary,
+              polarisOpportunityScore: analysisScore,
+            },
+          });
+        } catch (e) {
+          console.warn(`[Webhook] Polaris score update failed: ${e.message}`);
+        }
+      }
+
       await appendLead(savedLead);
       await Promise.allSettled([
         sendSms(savedLead),

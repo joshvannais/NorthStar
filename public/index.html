@@ -61,11 +61,74 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .demo-error { text-align: center; padding: 24px; color: var(--brand-600); }
     .demo-post-actions { display: flex; gap: 12px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
+    /* ── Part 9: Pre-Call Modal ── */
+    .demo-modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.65); z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .demo-modal-overlay.active { opacity: 1; pointer-events: all; }
+    .demo-modal-card {
+      background: var(--neutral-50, #fafafa);
+      border-radius: 20px; padding: 40px 36px;
+      max-width: 560px; width: 90vw; max-height: 90vh; overflow-y: auto;
+      text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      transform: translateY(12px);
+      transition: transform 0.3s ease;
+    }
+    .demo-modal-overlay.active .demo-modal-card { transform: translateY(0); }
+    .demo-modal-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); }
+    .demo-modal-card .modal-subtitle { font-size: 15px; color: var(--neutral-600); line-height: 1.6; margin-bottom: 10px; }
+    .demo-modal-card .modal-tip-list { text-align: left; display: inline-block; margin: 12px 0 20px; }
+    .demo-modal-card .modal-tip-list li { font-size: 14px; color: var(--neutral-500); padding: 4px 0; line-height: 1.5; }
+    .demo-modal-card .modal-divider { font-size: 12px; font-weight: 600; color: var(--neutral-400); text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 14px; }
+    .demo-modal-scenarios { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 24px; }
+    .demo-modal-chip {
+      padding: 8px 14px; border: 1px solid var(--neutral-300); border-radius: 100px;
+      font-size: 13px; font-weight: 500; cursor: pointer; background: #fff;
+      color: var(--neutral-600); transition: all 0.15s;
+    }
+    .demo-modal-chip:hover, .demo-modal-chip.active {
+      border-color: var(--brand-600); color: var(--brand-600); background: rgba(212,175,55,0.08);
+    }
+    .btn-modal-call {
+      display: block; width: 100%; padding: 14px;
+      background: var(--brand-600); color: #fff; border: none; border-radius: 8px;
+      font-size: 16px; font-weight: 600; cursor: pointer; font-family: Inter, sans-serif;
+      transition: all 0.2s;
+    }
+    .btn-modal-call:hover { background: var(--brand-700); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.3); }
+
+    /* ── Part 10: Multi-Scenario Cards ── */
+    .demo-scenario-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px; margin-top: 12px;
+    }
+    .demo-scenario-card {
+      background: #fff; border: 1px solid var(--neutral-200); border-radius: 12px;
+      padding: 16px 12px; text-align: center; cursor: pointer;
+      transition: all 0.2s; font-size: 13px; font-weight: 600;
+      color: var(--neutral-700);
+    }
+    .demo-scenario-card:hover {
+      border-color: var(--brand-600); color: var(--brand-600);
+      background: rgba(212,175,55,0.05); transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+    }
+    .demo-scenario-card .scenario-emoji { font-size: 24px; display: block; margin-bottom: 6px; }
+    .demo-scenario-section { margin-top: 28px; padding: 24px 0 0; border-top: 1px solid var(--neutral-200); text-align: center; }
+    .demo-scenario-section h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; color: var(--text-primary); }
+    .demo-scenario-section p { font-size: 14px; color: var(--neutral-500); margin-bottom: 16px; }
+
     /* ── Responsive ── */
     @media (max-width: 768px) {
       .demo-live-view { flex-direction: column; padding: 0 12px; }
       .demo-insights-panel { width: 100%; }
       .demo-hero { padding: 40px 16px 32px; }
+      .demo-modal-card { padding: 28px 20px; }
+      .demo-scenario-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
     }
   </style>
 </head>

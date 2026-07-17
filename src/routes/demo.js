@@ -266,6 +266,19 @@ router.get('/industries', (req, res) => {
 });
 
 /**
+ * Format a phone number to E.164 format (+1XXXXXXXXXX).
+ */
+function formatE164(phone) {
+  if (!phone) return '';
+  // If already E.164, return as-is
+  if (/^\+[1-9]\d{6,14}$/.test(phone)) return phone;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) return '+1' + digits;
+  if (digits.length === 11 && digits[0] === '1') return '+' + digits;
+  return '+' + digits; // best effort
+}
+
+/**
  * POST /call
  *
  * Instrumented call pipeline with stage-by-stage diagnostics.
@@ -354,13 +367,15 @@ router.post('/call', async (req, res) => {
     log('6. agent_loaded', 'OK', `agentId=${config.retell.agentId}`);
 
     // ── Stage 7: Call request sent to Retell ──
-    log('7. call_requested', 'SENDING', `phone=${phoneNumber} service=${ec.service}`);
+    const e164Phone = formatE164(phoneNumber);
+    log('7. call_requested', 'SENDING', `phone=${phoneNumber} e164=${e164Phone} service=${ec.service}`);
     liveTimeline.addEntry(demoSessionId, 'call_creating', 'Requesting call via Retell', 'system');
 
     let callResult;
     try {
-      callResult = await retell.createCall(phoneNumber, config.retell.agentId, {
+      callResult = await retell.createCall(e164Phone, config.retell.agentId, {
         service: ec.service, caller: `Demo: ${businessName}`,
+        fromNumber: config.retell?.phoneNumber || '',
       });
     } catch (callErr) {
       // Classify the error

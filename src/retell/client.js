@@ -10,6 +10,7 @@
 const config = require('../config');
 
 const RETELL_BASE = 'https://api.retellai.com';
+const RETELL_V2 = 'https://api.retellai.com/v2';
 
 /**
  * Custom error that carries the exact failure stage and diagnostic details.
@@ -349,7 +350,7 @@ async function createCall(phoneNumber, agentId, options) {
   console.log('[Retell] Creating call with', Object.keys(dynamicVariables).length, 'dynamic variables',
     opts.toolDefinitions ? `and ${opts.toolDefinitions.length} tools` : '');
 
-  return request('POST', '/create-phone-call', body);
+  return request('POST', '/v2/create-phone-call', body);
 }
 
 /**

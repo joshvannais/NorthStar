@@ -7,6 +7,7 @@ const config = {
   retell: {
     apiKey: process.env.RETELL_API_KEY,
     agentId: process.env.RETELL_AGENT_ID,
+    phoneNumber: process.env.RETELL_PHONE_NUMBER,
   },
 
   // Twilio

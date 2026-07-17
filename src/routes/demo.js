@@ -1,8 +1,11 @@
 /**
- * Demo Routes — Part 8: M17 Phase 3
+ * Demo Routes — M17 Phase 3 (Remediated)
  *
  * PUBLIC endpoints for the "Try NorthStar" interactive homepage demo.
  * Creates temporary demo sessions with in-memory storage and 1hr TTL.
+ *
+ * Call lifecycle: idle → dialing → ringing → answered → connected → completed
+ * In simulation mode, the frontend shows a warning BEFORE the user starts.
  */
 
 const express = require('express');
@@ -16,6 +19,20 @@ const liveTimeline = require('../voice/liveTimeline');
 const demoSessions = new Map();
 const TTL_MS = 60 * 60 * 1000; // 1 hour
 
+const ALL_INDUSTRIES = [
+  'Roofing', 'Siding', 'Windows', 'Doors', 'HVAC',
+  'Plumbing', 'Electrical', 'General Contracting', 'Painting', 'Landscaping',
+  'Tree Service', 'Excavation', 'Masonry', 'Concrete', 'Flooring',
+  'Carpet Cleaning', 'Pressure Washing', 'Junk Removal', 'Moving', 'Pool Service',
+  'Pest Control', 'Cleaning Services', 'Locksmith', 'Garage Door', 'Handyman',
+  'Kitchen Remodeling', 'Bathroom Remodeling', 'Deck Builders', 'Fence Contractors', 'Solar',
+  'Home Security', 'Alarm Systems', 'Fire Protection', 'Drywall', 'Insulation',
+  'Foundation Repair', 'Waterproofing', 'Restoration', 'Disaster Recovery', 'Mold Remediation',
+  'Asbestos Removal', 'Chimney Service', 'Septic Service', 'Well Service', 'Snow Removal',
+  'Irrigation', 'Window Tinting', 'Glass Repair', 'Appliance Repair', 'Property Management',
+  'Commercial Maintenance',
+];
+
 /**
  * Clean expired demo sessions every 10 minutes.
  */
@@ -25,40 +42,86 @@ setInterval(() => {
     if (now - session.createdAt > TTL_MS) {
       liveTimeline.clearSession(id);
       demoSessions.delete(id);
-      console.log(`[Demo] Cleaned expired session: ${id}`);
     }
   }
 }, 10 * 60 * 1000);
 
 /**
- * Generate mock Executive Context for demo purposes.
- * Uses submitted business info + industry-specific defaults.
+ * Industry-specific defaults for generating demo context + Polaris estimates.
+ */
+const INDUSTRY_DEFAULTS = {
+  'Roofing':               { service: 'Roof inspection and repair',           avgJobValue: 4500, emergencyLikelihood: 0.3, revenueRangeMin: 3500, revenueRangeMax: 5200 },
+  'Siding':                { service: 'Siding installation and repair',       avgJobValue: 3800, emergencyLikelihood: 0.1, revenueRangeMin: 2800, revenueRangeMax: 4800 },
+  'Windows':               { service: 'Window replacement and repair',        avgJobValue: 3200, emergencyLikelihood: 0.1, revenueRangeMin: 2200, revenueRangeMax: 4200 },
+  'Doors':                 { service: 'Door installation and repair',         avgJobValue: 1800, emergencyLikelihood: 0.1, revenueRangeMin: 1200, revenueRangeMax: 2500 },
+  'HVAC':                  { service: 'HVAC system repair',                   avgJobValue: 3200, emergencyLikelihood: 0.2, revenueRangeMin: 1200, revenueRangeMax: 2800 },
+  'Plumbing':              { service: 'Plumbing repair',                      avgJobValue: 1800, emergencyLikelihood: 0.4, revenueRangeMin: 450,  revenueRangeMax: 850 },
+  'Electrical':            { service: 'Electrical work',                      avgJobValue: 2200, emergencyLikelihood: 0.15, revenueRangeMin: 800, revenueRangeMax: 1800 },
+  'General Contracting':   { service: 'General contracting',                  avgJobValue: 5000, emergencyLikelihood: 0.15, revenueRangeMin: 3000, revenueRangeMax: 8000 },
+  'Painting':              { service: 'Interior and exterior painting',       avgJobValue: 2500, emergencyLikelihood: 0.05, revenueRangeMin: 1500, revenueRangeMax: 3500 },
+  'Landscaping':           { service: 'Landscaping services',                 avgJobValue: 1500, emergencyLikelihood: 0.05, revenueRangeMin: 800, revenueRangeMax: 2200 },
+  'Tree Service':          { service: 'Tree removal and trimming',            avgJobValue: 2800, emergencyLikelihood: 0.25, revenueRangeMin: 1800, revenueRangeMax: 3800 },
+  'Excavation':            { service: 'Excavation and grading',               avgJobValue: 6000, emergencyLikelihood: 0.1,  revenueRangeMin: 4000, revenueRangeMax: 9000 },
+  'Masonry':               { service: 'Brick and stone work',                 avgJobValue: 3500, emergencyLikelihood: 0.1,  revenueRangeMin: 2000, revenueRangeMax: 5000 },
+  'Concrete':              { service: 'Concrete pouring and repair',          avgJobValue: 4000, emergencyLikelihood: 0.1,  revenueRangeMin: 2500, revenueRangeMax: 6000 },
+  'Flooring':              { service: 'Flooring installation',                avgJobValue: 2800, emergencyLikelihood: 0.05, revenueRangeMin: 1800, revenueRangeMax: 4000 },
+  'Carpet Cleaning':       { service: 'Carpet and upholstery cleaning',       avgJobValue: 300,  emergencyLikelihood: 0.05, revenueRangeMin: 150, revenueRangeMax: 500 },
+  'Pressure Washing':      { service: 'Pressure washing services',            avgJobValue: 400,  emergencyLikelihood: 0.05, revenueRangeMin: 200, revenueRangeMax: 700 },
+  'Junk Removal':          { service: 'Junk and debris removal',              avgJobValue: 500,  emergencyLikelihood: 0.05, revenueRangeMin: 250, revenueRangeMax: 800 },
+  'Moving':                { service: 'Moving and relocation services',       avgJobValue: 1200, emergencyLikelihood: 0.05, revenueRangeMin: 600, revenueRangeMax: 2000 },
+  'Pool Service':          { service: 'Pool cleaning and maintenance',        avgJobValue: 400,  emergencyLikelihood: 0.1,  revenueRangeMin: 200, revenueRangeMax: 600 },
+  'Pest Control':          { service: 'Pest inspection and treatment',        avgJobValue: 350,  emergencyLikelihood: 0.2,  revenueRangeMin: 200, revenueRangeMax: 600 },
+  'Cleaning Services':     { service: 'Home and office cleaning',             avgJobValue: 250,  emergencyLikelihood: 0.05, revenueRangeMin: 150, revenueRangeMax: 400 },
+  'Locksmith':             { service: 'Lock installation and emergency',       avgJobValue: 250,  emergencyLikelihood: 0.4,  revenueRangeMin: 150, revenueRangeMax: 450 },
+  'Garage Door':           { service: 'Garage door repair and installation',  avgJobValue: 600,  emergencyLikelihood: 0.15, revenueRangeMin: 300, revenueRangeMax: 1000 },
+  'Handyman':              { service: 'General handyman services',            avgJobValue: 400,  emergencyLikelihood: 0.1,  revenueRangeMin: 200, revenueRangeMax: 700 },
+  'Kitchen Remodeling':    { service: 'Kitchen remodeling',                   avgJobValue: 15000, emergencyLikelihood: 0.05, revenueRangeMin: 10000, revenueRangeMax: 25000 },
+  'Bathroom Remodeling':   { service: 'Bathroom remodeling',                  avgJobValue: 8000, emergencyLikelihood: 0.05, revenueRangeMin: 5000, revenueRangeMax: 12000 },
+  'Deck Builders':         { service: 'Deck construction and repair',         avgJobValue: 6000, emergencyLikelihood: 0.05, revenueRangeMin: 4000, revenueRangeMax: 9000 },
+  'Fence Contractors':     { service: 'Fence installation and repair',        avgJobValue: 2500, emergencyLikelihood: 0.1,  revenueRangeMin: 1500, revenueRangeMax: 4000 },
+  'Solar':                 { service: 'Solar panel installation',             avgJobValue: 12000, emergencyLikelihood: 0.05, revenueRangeMin: 8000, revenueRangeMax: 18000 },
+  'Home Security':         { service: 'Security system installation',         avgJobValue: 2800, emergencyLikelihood: 0.1,  revenueRangeMin: 1800, revenueRangeMax: 3800 },
+  'Alarm Systems':         { service: 'Alarm system installation',            avgJobValue: 2200, emergencyLikelihood: 0.1,  revenueRangeMin: 1200, revenueRangeMax: 3200 },
+  'Fire Protection':       { service: 'Fire protection systems',              avgJobValue: 3500, emergencyLikelihood: 0.3,  revenueRangeMin: 2000, revenueRangeMax: 5000 },
+  'Drywall':               { service: 'Drywall installation and repair',      avgJobValue: 1800, emergencyLikelihood: 0.1,  revenueRangeMin: 1000, revenueRangeMax: 2800 },
+  'Insulation':            { service: 'Insulation installation',              avgJobValue: 2200, emergencyLikelihood: 0.05, revenueRangeMin: 1200, revenueRangeMax: 3500 },
+  'Foundation Repair':     { service: 'Foundation inspection and repair',     avgJobValue: 8000, emergencyLikelihood: 0.3,  revenueRangeMin: 5000, revenueRangeMax: 12000 },
+  'Waterproofing':         { service: 'Waterproofing services',               avgJobValue: 5000, emergencyLikelihood: 0.25, revenueRangeMin: 3000, revenueRangeMax: 8000 },
+  'Restoration':           { service: 'Water and fire restoration',           avgJobValue: 6000, emergencyLikelihood: 0.4,  revenueRangeMin: 3500, revenueRangeMax: 10000 },
+  'Disaster Recovery':     { service: 'Disaster cleanup and recovery',        avgJobValue: 7000, emergencyLikelihood: 0.5,  revenueRangeMin: 4000, revenueRangeMax: 12000 },
+  'Mold Remediation':      { service: 'Mold inspection and remediation',      avgJobValue: 3500, emergencyLikelihood: 0.3,  revenueRangeMin: 2000, revenueRangeMax: 5500 },
+  'Asbestos Removal':      { service: 'Asbestos testing and removal',         avgJobValue: 4500, emergencyLikelihood: 0.2,  revenueRangeMin: 2500, revenueRangeMax: 7000 },
+  'Chimney Service':       { service: 'Chimney cleaning and repair',          avgJobValue: 400,  emergencyLikelihood: 0.1,  revenueRangeMin: 200, revenueRangeMax: 700 },
+  'Septic Service':        { service: 'Septic system service',                avgJobValue: 600,  emergencyLikelihood: 0.3,  revenueRangeMin: 350, revenueRangeMax: 1000 },
+  'Well Service':          { service: 'Well pump and water system',           avgJobValue: 1500, emergencyLikelihood: 0.25, revenueRangeMin: 800, revenueRangeMax: 2500 },
+  'Snow Removal':          { service: 'Snow plowing and removal',             avgJobValue: 300,  emergencyLikelihood: 0.15, revenueRangeMin: 150, revenueRangeMax: 600 },
+  'Irrigation':            { service: 'Irrigation system installation',       avgJobValue: 2500, emergencyLikelihood: 0.05, revenueRangeMin: 1500, revenueRangeMax: 4000 },
+  'Window Tinting':        { service: 'Window tinting and film',              avgJobValue: 800,  emergencyLikelihood: 0.05, revenueRangeMin: 400, revenueRangeMax: 1400 },
+  'Glass Repair':          { service: 'Glass replacement and repair',         avgJobValue: 500,  emergencyLikelihood: 0.25, revenueRangeMin: 250, revenueRangeMax: 900 },
+  'Appliance Repair':      { service: 'Appliance repair services',            avgJobValue: 300,  emergencyLikelihood: 0.2,  revenueRangeMin: 150, revenueRangeMax: 550 },
+  'Property Management':   { service: 'Property management services',         avgJobValue: 2000, emergencyLikelihood: 0.1,  revenueRangeMin: 1000, revenueRangeMax: 3500 },
+  'Commercial Maintenance':{ service: 'Commercial property maintenance',      avgJobValue: 3000, emergencyLikelihood: 0.1,  revenueRangeMin: 1500, revenueRangeMax: 5000 },
+};
+
+/**
+ * Generate demo Executive Context with industry defaults.
  */
 function generateDemoExecutiveContext(businessName, industry) {
-  const industryDefaults = {
-    'Roofing': { service: 'Roof inspection and repair', avgJobValue: 4500, emergencyLikelihood: 0.3 },
-    'HVAC': { service: 'HVAC system repair', avgJobValue: 3200, emergencyLikelihood: 0.2 },
-    'Plumbing': { service: 'Plumbing repair', avgJobValue: 1800, emergencyLikelihood: 0.4 },
-    'Electrical': { service: 'Electrical work', avgJobValue: 2200, emergencyLikelihood: 0.15 },
-    'Landscaping': { service: 'Landscaping services', avgJobValue: 1500, emergencyLikelihood: 0.05 },
-    'Home Security': { service: 'Security system installation', avgJobValue: 2800, emergencyLikelihood: 0.1 },
-    'General Contracting': { service: 'General contracting', avgJobValue: 5000, emergencyLikelihood: 0.15 },
-  };
-
-  const defaults = industryDefaults[industry] || industryDefaults['General Contracting'];
-
+  const defaults = INDUSTRY_DEFAULTS[industry] || INDUSTRY_DEFAULTS['General Contracting'];
   return {
     businessName,
     industry,
     service: defaults.service,
     avgJobValue: defaults.avgJobValue,
     emergencyLikelihood: defaults.emergencyLikelihood,
+    revenueRangeMin: defaults.revenueRangeMin,
+    revenueRangeMax: defaults.revenueRangeMax,
     generatedAt: new Date().toISOString(),
   };
 }
 
 /**
- * Generate mock transcript lines for demo sessions.
+ * Generate mock transcript lines for simulation mode.
  */
 function generateMockTranscriptLines(industry, lineCount) {
   const scripts = {
@@ -109,81 +172,70 @@ function generateMockTranscriptLines(industry, lineCount) {
 }
 
 /**
- * Generate mock guidance for demo sessions.
+ * Generate Polaris-style mock guidance with estimated opportunity.
  */
-function generateMockGuidance(industry, transcriptLines) {
-  const guidanceByIndustry = {
-    'Roofing': {
-      customerIntent: 'Storm damage inspection',
-      estimatedJobValue: '$3,500 - $5,200',
-      leadQualification: 'Hot',
-      bookingProbability: 0.85,
-      recommendedActions: [
-        'Prioritize this lead — storm damage with visible damage',
-        'Send estimator with insurance documentation',
-        'Follow up within 24 hours with written estimate',
-      ],
-      executiveSummary: 'Customer has storm-related roof damage with 15-20 missing shingles and dented gutters. High urgency due to weather exposure risk. Customer is motivated and ready to book immediately.',
-    },
-    'Plumbing': {
-      customerIntent: 'Emergency pipe repair',
-      estimatedJobValue: '$450 - $850',
-      leadQualification: 'Hot',
-      bookingProbability: 0.95,
-      recommendedActions: [
-        'EMERGENCY — dispatch immediately',
-        'Send plumber with pipe repair equipment',
-        'Quote on-site, emergency surcharge applies',
-      ],
-      executiveSummary: 'Active water leak from burst kitchen pipe. Customer unable to locate main shutoff. Emergency dispatch required within 45 minutes. High conversion probability due to urgency.',
-    },
-    'HVAC': {
-      customerIntent: 'HVAC repair — no cooling',
-      estimatedJobValue: '$1,200 - $2,800',
-      leadQualification: 'Warm',
-      bookingProbability: 0.65,
-      recommendedActions: [
-        'Dispatch AC technician same-day',
-        'Prepare for potential system replacement quote (unit is 10 years old)',
-        'Offer maintenance plan during visit',
-      ],
-      executiveSummary: 'Customer has non-functional central AC in summer heat. Unit is 10 years old — may need repair or replacement. Customer is uncomfortable and motivated but may shop around.',
-    },
-  };
-
-  const guidance = guidanceByIndustry[industry] || guidanceByIndustry['Roofing'];
-
-  // Simulate increasing intelligence as more transcript lines arrive
+function generatePolarisEstimate(businessName, industry, transcriptLines) {
+  const defs = INDUSTRY_DEFAULTS[industry] || INDUSTRY_DEFAULTS['General Contracting'];
   const lines = transcriptLines || [];
-  if (lines.length < 3) {
-    return {
-      customerIntent: 'Analyzing...',
-      estimatedJobValue: 'Analyzing...',
-      leadQualification: 'Analyzing...',
-      bookingProbability: 0.3,
-      recommendedActions: ['Waiting for more conversation data...'],
-      executiveSummary: 'Call in progress. Gathering data for analysis.',
-    };
-  }
+  const linesCount = lines.length;
 
-  if (lines.length < 6) {
-    return {
-      customerIntent: guidance.customerIntent,
-      estimatedJobValue: 'Analyzing...',
-      leadQualification: 'Warm',
-      bookingProbability: 0.5,
-      recommendedActions: guidance.recommendedActions.slice(0, 1),
-      executiveSummary: 'Early analysis in progress. Customer intent detected.',
-    };
-  }
+  // Increase confidence as more conversation data arrives
+  let confidence = 0.3;
+  let revenueMin = defs.revenueRangeMin;
+  let revenueMax = defs.revenueRangeMax;
 
-  return guidance;
+  if (linesCount >= 3) confidence = Math.min(0.65, 0.3 + (linesCount * 0.05));
+  if (linesCount >= 6) confidence = Math.min(0.88, 0.3 + (linesCount * 0.06));
+
+  return {
+    opportunityLabel: 'POLARIS™ ESTIMATED OPPORTUNITY',
+    confidence: Math.round(confidence * 100),
+    revenueRange: `$${revenueMin.toLocaleString()} - $${revenueMax.toLocaleString()}`,
+    reasoning: [
+      { factor: 'Service Requested',        detail: defs.service },
+      { factor: 'Industry',                 detail: industry },
+      { factor: 'Urgency Level',            detail: defs.emergencyLikelihood > 0.3 ? 'High — customer needs immediate attention' : defs.emergencyLikelihood > 0.15 ? 'Moderate — routine concern with some urgency' : 'Standard — no immediate urgency detected' },
+      { factor: 'Property Characteristics',  detail: 'Typical residential property based on conversation context' },
+      { factor: 'Customer Intent',          detail: linesCount > 2 ? 'Customer is actively seeking service and ready to engage' : 'Customer is in information-gathering phase' },
+      { factor: 'Historical Pricing',       detail: `Industry average: $${defs.avgJobValue.toLocaleString()} for ${industry.toLowerCase()}` },
+      { factor: 'Business Pricing Profile', detail: `${businessName} operates in the ${industry.toLowerCase()} industry with standard market positioning` },
+      { factor: 'Confidence Level',         detail: `${Math.round(confidence * 100)}% — ${confidence > 0.7 ? 'High confidence based on sufficient conversation data' : confidence > 0.4 ? 'Moderate confidence, improving as conversation progresses' : 'Initial estimate, will refine as more information is gathered'}` },
+      { factor: 'Assumptions',              detail: 'Estimate based on typical job scopes for this industry. Final pricing may vary based on on-site inspection and specific material choices.' },
+    ],
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 /**
+ * GET /status
+ * Returns the system status — used by the frontend to check mode before user starts.
+ * PUBLIC.
+ */
+router.get('/status', (req, res) => {
+  const retellConfigured = Boolean(config.retell && config.retell.apiKey && config.retell.agentId);
+  res.json({
+    mode: retellConfigured ? 'live' : 'simulation',
+    retellConfigured,
+    message: retellConfigured
+      ? 'Retell AI is configured. Real outbound calls will be placed.'
+      : '🔬 DEMO SIMULATION MODE — Calls are simulated. Configure Retell API credentials for live calls.',
+  });
+});
+
+/**
+ * GET /industries
+ * Returns the full list of supported industries.
+ * PUBLIC.
+ */
+router.get('/industries', (req, res) => {
+  res.json({ industries: ALL_INDUSTRIES });
+});
+
+/**
  * POST /call
- * Create a demo session and place an outbound call.
- * PUBLIC — no auth required.
+ * Create a demo session. If Retell is configured, place a real call.
+ * If not, returns 'simulation-mode-required' — the frontend handles it.
+ * PUBLIC.
  */
 router.post('/call', async (req, res) => {
   try {
@@ -195,63 +247,101 @@ router.post('/call', async (req, res) => {
       });
     }
 
-    const validIndustries = ['Roofing', 'HVAC', 'Plumbing', 'Electrical', 'Landscaping', 'Home Security', 'General Contracting'];
-    if (!validIndustries.includes(industry)) {
+    const normalizedIndustry = ALL_INDUSTRIES.find(i => i.toLowerCase() === industry.toLowerCase());
+    if (!normalizedIndustry) {
       return res.status(400).json({
-        error: { code: 'VALIDATION', message: `Invalid industry. Must be one of: ${validIndustries.join(', ')}` },
+        error: { code: 'VALIDATION', message: `Invalid industry. Please select from the list.` },
       });
     }
 
     const demoSessionId = uuidv4();
-    const ec = generateDemoExecutiveContext(businessName, industry);
+    const ec = generateDemoExecutiveContext(businessName, normalizedIndustry);
 
     // Record timeline entry
     liveTimeline.addEntry(demoSessionId, 'call_started', `Outbound demo call for ${businessName}`, 'system');
 
     let callResult = null;
     let callStatus = 'queued';
+    let callId = null;
 
-    // Try to place a real outbound call via Retell
-    try {
-      if (config.retell.apiKey && config.retell.agentId) {
-        callResult = await retell.createCall(phoneNumber, config.retell.agentId, {
-          service: ec.service,
-          caller: `Demo: ${businessName}`,
-        });
-        callStatus = callResult?.call_status || 'in-progress';
-      } else {
-        console.log('[Demo] Retell not configured — using simulated call mode');
-        callStatus = 'simulated';
-      }
-    } catch (callErr) {
-      console.warn('[Demo] Call placement warning:', callErr.message);
-      callStatus = 'simulated';
+    const retellConfigured = Boolean(config.retell && config.retell.apiKey && config.retell.agentId);
+
+    if (!retellConfigured) {
+      // Return simulation-mode-required — frontend shows banner and handles transition
+      const session = {
+        id: demoSessionId,
+        businessName,
+        industry: normalizedIndustry,
+        phoneNumber,
+        executiveContext: ec,
+        callId: `sim-${demoSessionId.slice(0, 8)}`,
+        callStatus: 'simulation-mode-required',
+        createdAt: Date.now(),
+        transcriptLines: [],
+        transcriptIndex: 0,
+        startedAt: null,
+      };
+      demoSessions.set(demoSessionId, session);
+      return res.json({ demoSessionId, callId: session.callId, status: 'simulation-mode-required' });
     }
 
-    // Store demo session
+    // Retell is configured — place a real call
+    try {
+      liveTimeline.addEntry(demoSessionId, 'dialing_started', `Dialing ${phoneNumber}`, 'system');
+      callResult = await retell.createCall(phoneNumber, config.retell.agentId, {
+        service: ec.service,
+        caller: `Demo: ${businessName}`,
+      });
+      callStatus = 'dialing';
+      callId = callResult?.call_id || null;
+
+      // Simulate lifecycle transitions (in production, Retell webhook updates these)
+      setTimeout(() => {
+        const s = demoSessions.get(demoSessionId);
+        if (s && s.callStatus === 'dialing') {
+          s.callStatus = 'ringing';
+          liveTimeline.addEntry(demoSessionId, 'ringing', 'Phone is ringing', 'system');
+        }
+      }, 3000);
+
+      setTimeout(() => {
+        const s = demoSessions.get(demoSessionId);
+        if (s && (s.callStatus === 'dialing' || s.callStatus === 'ringing')) {
+          s.callStatus = 'answered';
+          liveTimeline.addEntry(demoSessionId, 'call_answered', 'Call was answered', 'system');
+        }
+      }, 8000);
+
+      setTimeout(() => {
+        const s = demoSessions.get(demoSessionId);
+        if (s && s.callStatus === 'answered') {
+          s.callStatus = 'connected';
+          s.startedAt = new Date().toISOString();
+          liveTimeline.addEntry(demoSessionId, 'call_connected', 'Conversation started', 'system');
+        }
+      }, 12000);
+    } catch (callErr) {
+      console.warn('[Demo] Retell call failed:', callErr.message);
+      callStatus = 'failed';
+      liveTimeline.addEntry(demoSessionId, 'call_failed', `Call failed: ${callErr.message}`, 'system');
+    }
+
     const session = {
       id: demoSessionId,
       businessName,
-      industry,
+      industry: normalizedIndustry,
       phoneNumber,
       executiveContext: ec,
-      callId: callResult?.call_id || `sim-${demoSessionId.slice(0, 8)}`,
+      callId: callId || `sim-${demoSessionId.slice(0, 8)}`,
       callStatus,
       createdAt: Date.now(),
-      transcriptLines: generateMockTranscriptLines(industry, 1),
+      transcriptLines: [],
       transcriptIndex: 0,
-      startedAt: new Date().toISOString(),
+      startedAt: null,
     };
-
     demoSessions.set(demoSessionId, session);
 
-    console.log(`[Demo] Session created: ${demoSessionId} for ${businessName} (${industry}) — status: ${callStatus}`);
-
-    res.json({
-      demoSessionId,
-      callId: session.callId,
-      status: callStatus,
-    });
+    res.json({ demoSessionId, callId: session.callId, status: callStatus });
   } catch (err) {
     console.error('[Demo] Call creation error:', err.message);
     res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to create demo call' } });
@@ -259,9 +349,33 @@ router.post('/call', async (req, res) => {
 });
 
 /**
+ * POST /:id/simulate
+ * Transition a simulation-mode-required session into simulation mode.
+ * Called by the frontend when user acknowledges simulation mode.
+ * PUBLIC.
+ */
+router.post('/:id/simulate', (req, res) => {
+  try {
+    const session = demoSessions.get(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Demo session not found or expired' } });
+    }
+    session.callStatus = 'simulated';
+    session.startedAt = new Date().toISOString();
+    session.transcriptLines = generateMockTranscriptLines(session.industry, 1);
+    liveTimeline.addEntry(session.id, 'call_simulated', 'Simulated call started', 'system');
+    res.json({ demoSessionId: session.id, status: 'simulated' });
+  } catch (err) {
+    console.error('[Demo] Simulate error:', err.message);
+    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to start simulation' } });
+  }
+});
+
+/**
  * GET /:id/transcript
  * Returns the live transcript for a demo session.
- * PUBLIC — no auth required.
+ * In live mode, returns real transcript data. In simulation, generates mock.
+ * PUBLIC.
  */
 router.get('/:id/transcript', (req, res) => {
   try {
@@ -270,11 +384,25 @@ router.get('/:id/transcript', (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Demo session not found or expired' } });
     }
 
-    // Progress through transcript lines to simulate real conversation
+    const { since } = req.query;
+
+    // In live mode (Retell), transcript would come from transcriptStream.
+    // For now, if live and connected, return what we have (Retell webhook fills this).
+    if (session.callStatus === 'connected' || session.callStatus === 'in-progress') {
+      // Live mode — real transcript from Retell webhook would be in transcriptLines
+      const lines = since ? session.transcriptLines.filter((_, i) => i >= parseInt(since)) : session.transcriptLines;
+      return res.json({
+        sessionId: session.id,
+        callStatus: session.callStatus,
+        lines,
+        count: lines.length,
+      });
+    }
+
+    // Simulation mode — generate mock transcript
     if (session.callStatus === 'simulated' || session.callStatus === 'in-progress') {
       const fullScript = generateMockTranscriptLines(session.industry, 12);
       const elapsed = (Date.now() - session.createdAt) / 1000;
-      // One new line every ~4 seconds
       const visibleCount = Math.min(Math.floor(elapsed / 4) + 1, fullScript.length);
       session.transcriptLines = fullScript.slice(0, visibleCount);
     }
@@ -284,6 +412,7 @@ router.get('/:id/transcript', (req, res) => {
       callStatus: session.callStatus,
       lines: session.transcriptLines,
       count: session.transcriptLines.length,
+      mode: session.callStatus === 'simulated' ? 'simulation' : 'live',
     });
   } catch (err) {
     console.error('[Demo] Transcript error:', err.message);
@@ -293,8 +422,8 @@ router.get('/:id/transcript', (req, res) => {
 
 /**
  * GET /:id/guidance
- * Returns live guidance for a demo session.
- * PUBLIC — no auth required.
+ * Returns live Polaris guidance for a demo session.
+ * PUBLIC.
  */
 router.get('/:id/guidance', (req, res) => {
   try {
@@ -303,11 +432,11 @@ router.get('/:id/guidance', (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Demo session not found or expired' } });
     }
 
-    const guidance = generateMockGuidance(session.industry, session.transcriptLines);
+    const estimate = generatePolarisEstimate(session.businessName, session.industry, session.transcriptLines);
 
     res.json({
       sessionId: session.id,
-      ...guidance,
+      polairsEstimate: estimate,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
@@ -317,9 +446,28 @@ router.get('/:id/guidance', (req, res) => {
 });
 
 /**
+ * GET /:id/polaris-estimate
+ * Dedicated endpoint for the Polaris Estimated Opportunity card.
+ * PUBLIC.
+ */
+router.get('/:id/polaris-estimate', (req, res) => {
+  try {
+    const session = demoSessions.get(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Demo session not found or expired' } });
+    }
+    const estimate = generatePolarisEstimate(session.businessName, session.industry, session.transcriptLines);
+    res.json(estimate);
+  } catch (err) {
+    console.error('[Demo] Polaris estimate error:', err.message);
+    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to generate estimate' } });
+  }
+});
+
+/**
  * GET /:id/status
  * Returns full demo session status with KPIs.
- * PUBLIC — no auth required.
+ * PUBLIC.
  */
 router.get('/:id/status', (req, res) => {
   try {
@@ -329,29 +477,25 @@ router.get('/:id/status', (req, res) => {
     }
 
     const now = Date.now();
-    const durationSec = Math.floor((now - session.createdAt) / 1000);
+    const durationSec = session.startedAt ? Math.floor((now - new Date(session.startedAt).getTime()) / 1000) : 0;
 
     // Auto-complete simulated calls after 45 seconds
-    if ((session.callStatus === 'simulated' || session.callStatus === 'in-progress') && durationSec > 45) {
+    if (session.callStatus === 'simulated' && durationSec > 45) {
       session.callStatus = 'completed';
       liveTimeline.addEntry(session.id, 'call_completed', `Duration: ${durationSec}s`, 'system');
     }
 
-    const guidance = generateMockGuidance(session.industry, session.transcriptLines);
+    const estimate = generatePolarisEstimate(session.businessName, session.industry, session.transcriptLines);
 
     res.json({
       sessionId: session.id,
       callId: session.callId,
       callStatus: session.callStatus,
+      callState: session.callStatus, // lifecycle state for frontend
       duration: durationSec,
       businessName: session.businessName,
       industry: session.industry,
-      customerIntent: guidance.customerIntent,
-      estimatedJobValue: guidance.estimatedJobValue,
-      leadQualification: guidance.leadQualification,
-      bookingProbability: guidance.bookingProbability,
-      recommendedActions: guidance.recommendedActions,
-      executiveSummary: guidance.executiveSummary,
+      polairsEstimate: estimate,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

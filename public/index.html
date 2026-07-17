@@ -55,6 +55,54 @@
     .demo-actions-list { list-style: none; padding: 0; margin: 8px 0 0; }
     .demo-actions-list li { font-size: 13px; padding: 4px 0; color: var(--neutral-600); border-bottom: 1px solid var(--neutral-100); }
     .demo-actions-list li:last-child { border-bottom: none; }
+
+    /* ── Polaris Estimation Card ── */
+    .demo-insight-card.polaris-card { background: linear-gradient(135deg, #1e1e2e 0%, #2d1b69 100%); border: 1px solid #4c1d95; }
+    .demo-insight-card.polaris-card .insight-label { color: #a78bfa; }
+    .polaris-confidence-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+    .polaris-confidence-label { font-size: 11px; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; }
+    .polaris-reasoning-toggle { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 8px 0; cursor: pointer; font-size: 12px; font-weight: 600; color: #a78bfa; border-top: 1px solid rgba(167,139,250,0.2); transition: color 0.2s; }
+    .polaris-reasoning-toggle:hover { color: #c4b5fd; }
+    .polaris-arrow { transition: transform 0.25s; font-size: 10px; }
+    .polaris-arrow.open { transform: rotate(180deg); }
+    .polaris-reasoning-body { display: none; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(167,139,250,0.1); }
+    .polaris-reasoning-body.open { display: block; }
+    .polaris-reasoning-loader { font-size: 12px; color: #a78bfa; padding: 8px 0; }
+    .polaris-reasoning-factor { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; border-bottom: 1px solid rgba(167,139,250,0.08); }
+    .polaris-reasoning-factor:last-child { border-bottom: none; }
+    .polaris-reasoning-factor .factor-label { font-weight: 600; color: #c4b5fd; flex-shrink: 0; width: 120px; }
+    .polaris-reasoning-factor .factor-detail { color: #e0d7ff; text-align: right; flex: 1; line-height: 1.4; }
+
+    /* ── Call Lifecycle States ── */
+    .demo-call-state { display: none; text-align: center; padding: 24px 24px 12px; }
+    .demo-call-state.active { display: block; }
+    .demo-call-state .state-icon { font-size: 36px; margin-bottom: 8px; }
+    .demo-call-state .state-label { font-size: 16px; font-weight: 600; }
+    .demo-call-state .state-sub { font-size: 13px; color: var(--neutral-500); margin-top: 4px; }
+    .demo-state-dialing .state-icon { animation: pulse-icon 1s infinite; }
+    .demo-state-ringing .state-icon { animation: ring-anim 0.5s infinite alternate; }
+    @keyframes pulse-icon { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.1);opacity:0.7;} }
+    @keyframes ring-anim { 0%{transform:rotate(-10deg);} 100%{transform:rotate(10deg);} }
+
+    /* ── Dark Mode Design System for Insight Cards ── */
+    .demo-insight-card { background: var(--card-bg, #fff); border: 1px solid var(--card-border, var(--neutral-200)); }
+    [data-theme="dark"] .demo-insight-card { background: #1e1e2e; border-color: #2d2d3f; }
+    [data-theme="dark"] .demo-insight-card .insight-label { color: #9ca3af; }
+    [data-theme="dark"] .demo-insight-card .insight-value { color: #e5e7eb; }
+    [data-theme="dark"] .demo-insight-card .insight-value.hot { color: #f87171; }
+    [data-theme="dark"] .demo-insight-card .insight-value.warm { color: #fbbf24; }
+    [data-theme="dark"] .demo-insight-card .insight-value.cold { color: #818cf8; }
+    [data-theme="dark"] .demo-transcript-panel { background: #16162a; border-color: #2d2d3f; }
+    [data-theme="dark"] .demo-transcript-header { background: #1e1e2e; border-color: #2d2d3f; }
+    [data-theme="dark"] .demo-transcript-body { background: #16162a; }
+    [data-theme="dark"] .demo-msg.ai { background: rgba(124,58,237,0.15); }
+    [data-theme="dark"] .demo-msg.customer { background: #2d2d3f; }
+    [data-theme="dark"] .demo-msg.system { background: #2d2d3f; color: #9ca3af; }
+    [data-theme="dark"] .demo-form-card { background: #1e1e2e; border-color: #2d2d3f; }
+    [data-theme="dark"] .demo-form-card input, [data-theme="dark"] .demo-form-card select { background: #16162a; border-color: #2d2d3f; color: #e5e7eb; }
+    [data-theme="dark"] .demo-modal-card { background: #1e1e2e; }
+    [data-theme="dark"] .demo-modal-chip { background: #16162a; border-color: #2d2d3f; color: #9ca3af; }
+    [data-theme="dark"] .demo-scenario-card { background: #1e1e2e; border-color: #2d2d3f; color: #e5e7eb; }
     /* ── Loading ── */
     .demo-loading { text-align: center; padding: 40px 24px; }
     .demo-spinner { width: 36px; height: 36px; border: 3px solid var(--neutral-200); border-top-color: var(--brand-600); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
@@ -203,6 +251,12 @@
         <span class="demo-scenario-chip custom" data-scenario="custom">🎭 I'll Make My Own Scenario</span>
       </div>
 
+      <!-- Simulation Mode Banner (shown when Retell not configured) -->
+      <div id="simulationModeBanner" style="display:none; background:#fff3cd; border:1px solid #ffc107; border-radius:10px; padding:14px 18px; margin:0 auto 20px; max-width:520px; text-align:center; font-size:13px; color:#856404;">
+        <strong>🔬 Demo Simulation Mode</strong><br>
+        Calls are simulated for this demo. Every conversation shown is generated by NorthStar to demonstrate the experience.
+      </div>
+
       <div class="demo-form-card" id="demoFormCard">
         <label for="demoBusinessName">Business Name</label>
         <input type="text" id="demoBusinessName" placeholder="e.g., Acme Roofing">
@@ -211,12 +265,56 @@
         <select id="demoIndustry">
           <option value="">Select your industry...</option>
           <option value="Roofing">Roofing</option>
+          <option value="Siding">Siding</option>
+          <option value="Windows">Windows</option>
+          <option value="Doors">Doors</option>
           <option value="HVAC">HVAC</option>
           <option value="Plumbing">Plumbing</option>
           <option value="Electrical">Electrical</option>
-          <option value="Landscaping">Landscaping</option>
-          <option value="Home Security">Home Security</option>
           <option value="General Contracting">General Contracting</option>
+          <option value="Painting">Painting</option>
+          <option value="Landscaping">Landscaping</option>
+          <option value="Tree Service">Tree Service</option>
+          <option value="Excavation">Excavation</option>
+          <option value="Masonry">Masonry</option>
+          <option value="Concrete">Concrete</option>
+          <option value="Flooring">Flooring</option>
+          <option value="Carpet Cleaning">Carpet Cleaning</option>
+          <option value="Pressure Washing">Pressure Washing</option>
+          <option value="Junk Removal">Junk Removal</option>
+          <option value="Moving">Moving</option>
+          <option value="Pool Service">Pool Service</option>
+          <option value="Pest Control">Pest Control</option>
+          <option value="Cleaning Services">Cleaning Services</option>
+          <option value="Locksmith">Locksmith</option>
+          <option value="Garage Door">Garage Door</option>
+          <option value="Handyman">Handyman</option>
+          <option value="Kitchen Remodeling">Kitchen Remodeling</option>
+          <option value="Bathroom Remodeling">Bathroom Remodeling</option>
+          <option value="Deck Builders">Deck Builders</option>
+          <option value="Fence Contractors">Fence Contractors</option>
+          <option value="Solar">Solar</option>
+          <option value="Home Security">Home Security</option>
+          <option value="Alarm Systems">Alarm Systems</option>
+          <option value="Fire Protection">Fire Protection</option>
+          <option value="Drywall">Drywall</option>
+          <option value="Insulation">Insulation</option>
+          <option value="Foundation Repair">Foundation Repair</option>
+          <option value="Waterproofing">Waterproofing</option>
+          <option value="Restoration">Restoration</option>
+          <option value="Disaster Recovery">Disaster Recovery</option>
+          <option value="Mold Remediation">Mold Remediation</option>
+          <option value="Asbestos Removal">Asbestos Removal</option>
+          <option value="Chimney Service">Chimney Service</option>
+          <option value="Septic Service">Septic Service</option>
+          <option value="Well Service">Well Service</option>
+          <option value="Snow Removal">Snow Removal</option>
+          <option value="Irrigation">Irrigation</option>
+          <option value="Window Tinting">Window Tinting</option>
+          <option value="Glass Repair">Glass Repair</option>
+          <option value="Appliance Repair">Appliance Repair</option>
+          <option value="Commercial Maintenance">Commercial Maintenance</option>
+          <option value="Property Management">Property Management</option>
         </select>
 
         <label for="demoPhoneNumber">Your Phone Number</label>
@@ -274,7 +372,23 @@
        VIEW 2: During-Call — Live Demo Experience
        ══════════════════════════════════════════════════ -->
   <section class="demo-container" id="demoLiveView" style="display:none;">
-    <div style="text-align:center;padding:20px 24px 12px;">
+    <!-- Call Lifecycle States -->
+    <div class="demo-call-state demo-state-dialing" id="callStateDialing">
+      <div class="state-icon">📞</div>
+      <div class="state-label">Calling your phone...</div>
+      <div class="state-sub">Please answer when it rings</div>
+    </div>
+    <div class="demo-call-state demo-state-ringing" id="callStateRinging">
+      <div class="state-icon">🔔</div>
+      <div class="state-label">Ringing...</div>
+      <div class="state-sub">Waiting for you to pick up</div>
+    </div>
+    <div class="demo-call-state" id="callStateAnswered">
+      <div class="state-icon" style="font-size:28px;">✅</div>
+      <div class="state-label">Call connected!</div>
+      <div class="state-sub">Conversation starting...</div>
+    </div>
+    <div style="text-align:center;padding:20px 24px 12px;" id="demoLiveHeader">        
       <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
         <span class="demo-status-connecting" id="demoStatusDot"></span>
         <span style="font-weight:600;font-size:15px;" id="demoStatusLabel">Connecting...</span>
@@ -301,9 +415,20 @@
           <div class="insight-label">🎯 Customer Intent</div>
           <div class="insight-value" id="demoIntent">Analyzing...</div>
         </div>
-        <div class="demo-insight-card">
-          <div class="insight-label">💰 Estimated Job Value</div>
-          <div class="insight-value" id="demoJobValue">Analyzing...</div>
+        <div class="demo-insight-card polaris-card">
+          <div class="insight-label">POLARIS™ ESTIMATED OPPORTUNITY</div>
+          <div class="polaris-confidence-row">
+            <span class="insight-value" id="demoPolarisConfidence" style="font-size:20px;">—</span>
+            <span class="polaris-confidence-label">Confidence</span>
+          </div>
+          <div class="insight-value" id="demoPolarisRevenue" style="font-size:15px;margin-top:2px;">Analyzing...</div>
+          <div class="polaris-reasoning-toggle" id="polarisReasoningToggle" onclick="togglePolarisReasoning()">
+            <span>🔍 Show reasoning</span>
+            <span class="polaris-arrow">▾</span>
+          </div>
+          <div class="polaris-reasoning-body" id="polarisReasoningBody">
+            <div class="polaris-reasoning-loader">Loading reasoning factors...</div>
+          </div>
         </div>
         <div class="demo-insight-card">
           <div class="insight-label">🔥 Lead Qualification</div>
@@ -713,7 +838,46 @@
       modal.classList.add('active');
     }
 
-    // ── Part 9: Execute the actual demo call (called from modal) ──
+    // ── Check pre-call status on load ──
+    async function checkDemoStatus() {
+      try {
+        var resp = await fetch(DEMO_API + '/status');
+        if (resp.ok) {
+          var data = await resp.json();
+          if (data.mode === 'simulation') {
+            document.getElementById('simulationModeBanner').style.display = 'block';
+          }
+        }
+      } catch(e) {}
+    }
+    checkDemoStatus();
+
+    // ── Toggle Polaris reasoning panel ──
+    function togglePolarisReasoning() {
+      var body = document.getElementById('polarisReasoningBody');
+      var toggle = document.getElementById('polarisReasoningToggle');
+      var arrow = toggle.querySelector('.polaris-arrow');
+      body.classList.toggle('open');
+      arrow.classList.toggle('open');
+      var span = toggle.querySelector('span:first-child');
+      span.textContent = body.classList.contains('open') ? '🔍 Hide reasoning' : '🔍 Show reasoning';
+    }
+
+    // ── Render Polaris estimate into the card ──
+    function renderPolarisEstimate(estimate) {
+      if (!estimate) return;
+      document.getElementById('demoPolarisConfidence').textContent = estimate.confidence + '%';
+      document.getElementById('demoPolarisRevenue').textContent = estimate.revenueRange || 'Analyzing...';
+      var body = document.getElementById('polarisReasoningBody');
+      if (estimate.reasoning && estimate.reasoning.length > 0) {
+        var html = '';
+        for (var i = 0; i < estimate.reasoning.length; i++) {
+          var f = estimate.reasoning[i];
+          html += '<div class="polaris-reasoning-factor"><span class="factor-label">' + f.factor + '</span><span class="factor-detail">' + f.detail + '</span></div>';
+        }
+        body.innerHTML = html;
+      }
+    }
     async function executeDemoCall() {
       var modal = document.getElementById('preCallModal');
       modal.classList.remove('active');
@@ -743,7 +907,15 @@
         var data = await resp.json();
         demoState.sessionId = data.demoSessionId;
         demoState.callStatus = data.status;
-        transitionToLiveView();
+
+        // If Retell is not configured, transition to simulation mode
+        if (data.status === 'simulation-mode-required') {
+          // Start simulation immediately
+          startSimulation(businessName, industry);
+        } else {
+          // Live call — show dialing state
+          transitionToLiveView(data.status);
+        }
         btn.disabled = false;
         btn.textContent = '📞 Call Me Now';
       } catch (err) {
@@ -755,8 +927,20 @@
       }
     }
 
+    // ── Start simulation (called when Retell returns simulation-mode-required) ──
+    async function startSimulation(businessName, industry) {
+      demoState.callStatus = 'simulated';
+      try {
+        var resp = await fetch(DEMO_API + '/' + demoState.sessionId + '/simulate', { method: 'POST' });
+        if (resp.ok) {
+          var data = await resp.json();
+        }
+      } catch(e) {}
+      transitionToLiveView('simulated');
+    }
+
     // ── Transition to live view (reusable for replays) ──
-    function transitionToLiveView() {
+    function transitionToLiveView(callStatus) {
       if (demoState.timerInterval) clearInterval(demoState.timerInterval);
       if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
       if (demoState.statusInterval) clearInterval(demoState.statusInterval);
@@ -768,21 +952,42 @@
       document.getElementById('demoLiveView').style.display = 'block';
       document.getElementById('demoPostCallView').style.display = 'none';
 
+      // Hide all call state overlays
+      document.getElementById('callStateDialing').classList.remove('active');
+      document.getElementById('callStateRinging').classList.remove('active');
+      document.getElementById('callStateAnswered').classList.remove('active');
+
+      // Hide live header until connected
+      document.getElementById('demoLiveHeader').style.display = 'none';
+
       document.getElementById('demoTranscriptBody').innerHTML = '<div class="demo-loading" id="demoTranscriptLoading"><div class="demo-spinner"></div><p style="font-size:14px;color:var(--neutral-500);">Waiting for conversation to begin...</p></div>';
       document.getElementById('demoTranscriptCount').textContent = '0 messages';
       document.getElementById('demoStatusDot').className = 'demo-status-connecting';
       document.getElementById('demoStatusLabel').textContent = 'Connecting...';
       document.getElementById('demoLiveTimer').textContent = '0:00';
 
+      // Reset Polaris card
+      document.getElementById('demoPolarisConfidence').textContent = '—';
+      document.getElementById('demoPolarisRevenue').textContent = 'Analyzing...';
+      document.getElementById('polarisReasoningBody').innerHTML = '<div class="polaris-reasoning-loader">Loading reasoning factors...</div>';
+
       document.getElementById('demoIntent').textContent = 'Analyzing...';
-      document.getElementById('demoJobValue').textContent = 'Analyzing...';
-      var qual = document.getElementById('demoQualification');
-      qual.textContent = 'Analyzing...';
-      qual.className = 'insight-value';
+      document.getElementById('demoQualification').textContent = 'Analyzing...';
       document.getElementById('demoBookingProb').textContent = '\u2014';
       document.getElementById('demoProbBar').style.width = '0%';
       document.getElementById('demoActions').innerHTML = '<li>Waiting for data...</li>';
       document.getElementById('demoSummary').textContent = 'Call in progress. Analysis will update as the conversation develops.';
+
+      // Show appropriate lifecycle state
+      if (callStatus === 'dialing') {
+        document.getElementById('callStateDialing').classList.add('active');
+      } else if (callStatus === 'ringing') {
+        document.getElementById('callStateRinging').classList.add('active');
+      } else if (callStatus === 'answered') {
+        document.getElementById('callStateAnswered').classList.add('active');
+      } else if (callStatus === 'simulated' || callStatus === 'connected' || callStatus === 'in-progress') {
+        document.getElementById('demoLiveHeader').style.display = 'block';
+      }
 
       startDemoTimer();
       startTranscriptPolling();
@@ -905,22 +1110,56 @@
         if (!resp.ok) return;
         var data = await resp.json();
 
+        // Track call lifecycle for frontend state management
+        var prevStatus = demoState.callStatus;
+        demoState.callStatus = data.callStatus;
+
+        // Handle call lifecycle transitions
+        if (data.callState === 'dialing') {
+          document.getElementById('callStateDialing').classList.add('active');
+          document.getElementById('callStateRinging').classList.remove('active');
+          document.getElementById('callStateAnswered').classList.remove('active');
+          document.getElementById('demoLiveHeader').style.display = 'none';
+        } else if (data.callState === 'ringing') {
+          document.getElementById('callStateDialing').classList.remove('active');
+          document.getElementById('callStateRinging').classList.add('active');
+          document.getElementById('callStateAnswered').classList.remove('active');
+          document.getElementById('demoLiveHeader').style.display = 'none';
+        } else if (data.callState === 'answered') {
+          document.getElementById('callStateDialing').classList.remove('active');
+          document.getElementById('callStateRinging').classList.remove('active');
+          document.getElementById('callStateAnswered').classList.add('active');
+          setTimeout(function() {
+            var el = document.getElementById('callStateAnswered');
+            if (el) el.classList.remove('active');
+            var hdr = document.getElementById('demoLiveHeader');
+            if (hdr) hdr.style.display = 'block';
+          }, 2000);
+        } else if (data.callState === 'connected' || data.callState === 'simulated') {
+          document.getElementById('callStateDialing').classList.remove('active');
+          document.getElementById('callStateRinging').classList.remove('active');
+          document.getElementById('callStateAnswered').classList.remove('active');
+          document.getElementById('demoLiveHeader').style.display = 'block';
+        }
+
         // Update status dot/label
         var dot = document.getElementById('demoStatusDot');
         var label = document.getElementById('demoStatusLabel');
         if (data.callStatus === 'completed') {
           dot.className = 'demo-status-ended';
           label.textContent = 'Call Ended';
-          // Switch to post-call view
           transitionToPostCall();
-        } else if (data.callStatus === 'in-progress' || data.callStatus === 'simulated') {
+        } else if (data.callStatus === 'connected' || data.callStatus === 'in-progress' || data.callStatus === 'simulated') {
           dot.className = 'demo-status-connected';
-          label.textContent = 'Connected';
+          label.textContent = 'Live Conversation';
         }
 
-        // Update insights
-        document.getElementById('demoIntent').textContent = data.customerIntent || 'Analyzing...';
-        document.getElementById('demoJobValue').textContent = data.estimatedJobValue || 'Analyzing...';
+        // Update Polaris estimate card
+        var estimate = data.polarisEstimate || data.polarisEstimate;
+        if (estimate) renderPolarisEstimate(estimate);
+
+        // Update remaining insights
+        document.getElementById('demoIntent').textContent = 'Analyzing...'; // Intent from guidance
 
         var qual = document.getElementById('demoQualification');
         qual.textContent = data.leadQualification || 'Analyzing...';
@@ -939,7 +1178,7 @@
           document.getElementById('demoActions').innerHTML = data.recommendedActions.map(function(a) { return '<li>→ ' + a + '</li>'; }).join('');
         }
 
-        document.getElementById('demoSummary').textContent = data.executiveSummary || 'Call in progress...';
+        document.getElementById('demoSummary').textContent = data.executiveSummary || 'Call in progress. Analysis will update as the conversation develops.';
       } catch(e) {
         console.warn('[Demo] Status poll error:', e.message);
       }

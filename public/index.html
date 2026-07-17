@@ -5,11 +5,69 @@
   <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>NorthStar AI — AI Office Manager for Contractors</title>
-  <meta name="description" content="Never miss another customer call. NorthStar AI answers every call, captures every lead, 24/7 — for home service contractors.">
+  <meta name="description" content="Meet your future AI receptionist. NorthStar answers every call, captures every lead, 24/7 — for home service contractors.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/assets/logo.png">
+  <style>
+    /* ── Demo-specific styles ── */
+    .demo-container { max-width: 1100px; margin: 0 auto; }
+    .demo-hero { text-align: center; padding: 64px 24px 48px; }
+    .demo-hero h1 { font-size: clamp(32px, 5vw, 48px); font-weight: 800; line-height: 1.15; margin-bottom: 16px; }
+    .demo-hero h1 span { color: var(--brand-600, #D4AF37); }
+    .demo-hero p { font-size: clamp(16px, 2.5vw, 20px); color: var(--neutral-500); max-width: 640px; margin: 0 auto 32px; }
+    .demo-form-card { background: var(--neutral-100); border: 1px solid var(--neutral-200); border-radius: 16px; padding: 32px; max-width: 520px; margin: 0 auto; text-align: left; }
+    .demo-form-card label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--neutral-700); }
+    .demo-form-card input, .demo-form-card select { width: 100%; padding: 12px 14px; border: 1px solid var(--neutral-300); border-radius: 8px; font-size: 15px; font-family: Inter, sans-serif; margin-bottom: 16px; box-sizing: border-box; background: #fff; }
+    .demo-form-card input:focus, .demo-form-card select:focus { outline: none; border-color: var(--brand-600); box-shadow: 0 0 0 3px rgba(212,175,55,0.15); }
+    .demo-scenarios { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; justify-content: center; }
+    .demo-scenario-chip { padding: 8px 14px; border: 1px solid var(--neutral-300); border-radius: 100px; font-size: 13px; font-weight: 500; cursor: pointer; background: #fff; color: var(--neutral-600); transition: all 0.15s; }
+    .demo-scenario-chip:hover, .demo-scenario-chip.active { border-color: var(--brand-600); color: var(--brand-600); background: rgba(212,175,55,0.08); }
+    .demo-scenario-chip.custom { border-style: dashed; }
+    .demo-btn-call { width: 100%; padding: 14px; background: var(--brand-600); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: Inter, sans-serif; transition: all 0.2s; }
+    .demo-btn-call:hover { background: var(--brand-700); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.3); }
+    .demo-btn-call:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    /* ── During-call view ── */
+    .demo-live-view { display: flex; gap: 24px; padding: 0 24px; align-items: flex-start; }
+    .demo-transcript-panel { flex: 1; min-width: 0; background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: 12px; overflow: hidden; }
+    .demo-transcript-header { padding: 12px 16px; background: var(--neutral-100); border-bottom: 1px solid var(--neutral-200); display: flex; align-items: center; gap: 10px; }
+    .demo-status-connected { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #16a34a; animation: pulse-dot 1.5s infinite; }
+    .demo-status-connecting { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; animation: pulse-dot 0.8s infinite; }
+    .demo-status-ended { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--neutral-400); }
+    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.5;transform:scale(0.7);} }
+    .demo-transcript-body { padding: 16px; max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; min-height: 200px; }
+    .demo-msg { padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.5; max-width: 85%; }
+    .demo-msg.ai { background: var(--brand-50, #fdf8e8); align-self: flex-start; border-bottom-left-radius: 2px; }
+    .demo-msg.customer { background: var(--neutral-100); align-self: flex-end; border-bottom-right-radius: 2px; text-align: right; }
+    .demo-msg.system { background: var(--neutral-200); align-self: center; font-size: 12px; color: var(--neutral-500); padding: 6px 12px; border-radius: 100px; }
+    .demo-msg-label { font-size: 11px; font-weight: 600; margin-bottom: 2px; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.5px; }
+    /* ── Right panel cards ── */
+    .demo-insights-panel { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+    .demo-insight-card { background: #fff; border: 1px solid var(--neutral-200); border-radius: 10px; padding: 16px; }
+    .demo-insight-card .insight-label { font-size: 11px; font-weight: 600; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .demo-insight-card .insight-value { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .demo-insight-card .insight-value.hot { color: #ef4444; }
+    .demo-insight-card .insight-value.warm { color: #f59e0b; }
+    .demo-insight-card .insight-value.cold { color: #6366f1; }
+    .demo-prob-bar { height: 8px; background: var(--neutral-200); border-radius: 4px; margin-top: 6px; overflow: hidden; }
+    .demo-prob-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .demo-actions-list { list-style: none; padding: 0; margin: 8px 0 0; }
+    .demo-actions-list li { font-size: 13px; padding: 4px 0; color: var(--neutral-600); border-bottom: 1px solid var(--neutral-100); }
+    .demo-actions-list li:last-child { border-bottom: none; }
+    /* ── Loading ── */
+    .demo-loading { text-align: center; padding: 40px 24px; }
+    .demo-spinner { width: 36px; height: 36px; border: 3px solid var(--neutral-200); border-top-color: var(--brand-600); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .demo-error { text-align: center; padding: 24px; color: var(--brand-600); }
+    .demo-post-actions { display: flex; gap: 12px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .demo-live-view { flex-direction: column; padding: 0 12px; }
+      .demo-insights-panel { width: 100%; }
+      .demo-hero { padding: 40px 16px 32px; }
+    }
+  </style>
 </head>
 <body>
 
@@ -41,30 +99,147 @@
     <img src="/assets/logo.png" alt="" aria-hidden="true" class="hero-star">
   </div>
 
-  <!-- Hero -->
-  <section class="hero fade-in">
-    <h1>Never Miss Another Call. <span>Never Lose Another Job.</span></h1>
-    <p>While you're working, NorthStar is answering calls, qualifying customers, and booking your next job.</p>
-    <div style="display:flex;justify-content:center;gap:32px;flex-wrap:wrap;margin:24px 0 8px;">
-      <div style="text-align:center;">
-        <div style="font-size:24px;font-weight:700;color:var(--brand-700);">$247,000+</div>
-        <div style="font-size:13px;color:var(--neutral-500);">Revenue Generated</div>
+  <!-- ══════════════════════════════════════════════════
+       VIEW 1: Pre-Call — Hero + Form
+       ══════════════════════════════════════════════════ -->
+  <section class="demo-container" id="demoPreCallView">
+    <div class="demo-hero fade-in">
+      <h1>Meet Your Future <span>AI Receptionist</span></h1>
+      <p>Experience NorthStar live. Fill out the form, and we'll call you — so you can hear exactly what your customers hear. Just pretend you're one of your own customers.</p>
+      
+      <div class="demo-scenarios" id="scenarioChips">
+        <span class="demo-scenario-chip" data-scenario="storm">🌪️ Storm Damage</span>
+        <span class="demo-scenario-chip" data-scenario="emergency">🚨 Emergency Service</span>
+        <span class="demo-scenario-chip" data-scenario="estimate">📋 Request an Estimate</span>
+        <span class="demo-scenario-chip" data-scenario="scheduling">📅 Scheduling Question</span>
+        <span class="demo-scenario-chip" data-scenario="billing">💰 Billing Question</span>
+        <span class="demo-scenario-chip custom" data-scenario="custom">🎭 I'll Make My Own Scenario</span>
       </div>
-      <div style="width:1px;background:var(--neutral-300);"></div>
-      <div style="text-align:center;">
-        <div style="font-size:24px;font-weight:700;color:var(--brand-700);">18,400+</div>
-        <div style="font-size:13px;color:var(--neutral-500);">Calls Answered</div>
+
+      <div class="demo-form-card" id="demoFormCard">
+        <label for="demoBusinessName">Business Name</label>
+        <input type="text" id="demoBusinessName" placeholder="e.g., Acme Roofing">
+
+        <label for="demoIndustry">Industry</label>
+        <select id="demoIndustry">
+          <option value="">Select your industry...</option>
+          <option value="Roofing">Roofing</option>
+          <option value="HVAC">HVAC</option>
+          <option value="Plumbing">Plumbing</option>
+          <option value="Electrical">Electrical</option>
+          <option value="Landscaping">Landscaping</option>
+          <option value="Home Security">Home Security</option>
+          <option value="General Contracting">General Contracting</option>
+        </select>
+
+        <label for="demoPhoneNumber">Your Phone Number</label>
+        <input type="tel" id="demoPhoneNumber" placeholder="(555) 123-4567">
+
+        <button class="demo-btn-call" id="demoCallBtn" onclick="startDemoCall()">📞 Call Me Now</button>
+        <p style="text-align:center;font-size:12px;color:var(--neutral-400);margin-top:12px;">
+          NorthStar will call your phone. For the best experience, pretend you're a customer looking for service.
+        </p>
+      </div>
+
+      <div style="display:flex;justify-content:center;gap:32px;flex-wrap:wrap;margin:32px 0 8px;">
+        <div style="text-align:center;">
+          <div style="font-size:24px;font-weight:700;color:var(--brand-700);">$247,000+</div>
+          <div style="font-size:13px;color:var(--neutral-500);">Revenue Generated</div>
+        </div>
+        <div style="width:1px;background:var(--neutral-300);"></div>
+        <div style="text-align:center;">
+          <div style="font-size:24px;font-weight:700;color:var(--brand-700);">18,400+</div>
+          <div style="font-size:13px;color:var(--neutral-500);">Calls Answered</div>
+        </div>
       </div>
     </div>
-    <div class="hero-actions">
-      <a href="/signup" class="btn btn-primary">Start 14-Day Free Trial</a>
-      <a href="#how-it-works" class="btn btn-secondary">How It Works</a>
-      <a href="/demo-login" class="btn btn-demo">Try the Live Demo →</a>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════
+       VIEW 2: During-Call — Live Demo Experience
+       ══════════════════════════════════════════════════ -->
+  <section class="demo-container" id="demoLiveView" style="display:none;">
+    <div style="text-align:center;padding:20px 24px 12px;">
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
+        <span class="demo-status-connecting" id="demoStatusDot"></span>
+        <span style="font-weight:600;font-size:15px;" id="demoStatusLabel">Connecting...</span>
+        <span style="font-size:13px;color:var(--neutral-500);" id="demoLiveTimer">0:00</span>
+      </div>
+    </div>
+    <div class="demo-live-view">
+      <!-- Left: Transcript -->
+      <div class="demo-transcript-panel">
+        <div class="demo-transcript-header">
+          <span style="font-weight:600;font-size:14px;">📝 Live Transcript</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--neutral-400);" id="demoTranscriptCount">0 messages</span>
+        </div>
+        <div class="demo-transcript-body" id="demoTranscriptBody">
+          <div class="demo-loading" id="demoTranscriptLoading">
+            <div class="demo-spinner"></div>
+            <p style="font-size:14px;color:var(--neutral-500);">Waiting for conversation to begin...</p>
+          </div>
+        </div>
+      </div>
+      <!-- Right: Insights -->
+      <div class="demo-insights-panel" id="demoInsights">
+        <div class="demo-insight-card">
+          <div class="insight-label">🎯 Customer Intent</div>
+          <div class="insight-value" id="demoIntent">Analyzing...</div>
+        </div>
+        <div class="demo-insight-card">
+          <div class="insight-label">💰 Estimated Job Value</div>
+          <div class="insight-value" id="demoJobValue">Analyzing...</div>
+        </div>
+        <div class="demo-insight-card">
+          <div class="insight-label">🔥 Lead Qualification</div>
+          <div class="insight-value" id="demoQualification">Analyzing...</div>
+        </div>
+        <div class="demo-insight-card">
+          <div class="insight-label">📊 Booking Probability</div>
+          <div class="insight-value" id="demoBookingProb" style="font-size:24px;">—</div>
+          <div class="demo-prob-bar"><div class="demo-prob-fill" id="demoProbBar" style="width:0%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="demo-insight-card">
+          <div class="insight-label">✅ Recommended Actions</div>
+          <ul class="demo-actions-list" id="demoActions"><li>Waiting for data...</li></ul>
+        </div>
+        <div class="demo-insight-card">
+          <div class="insight-label">📋 Executive Summary</div>
+          <div class="insight-value" style="font-size:13px;font-weight:400;line-height:1.5;color:var(--neutral-600);" id="demoSummary">Call in progress. Analysis will update as the conversation develops.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════
+       VIEW 3: Post-Call — Results
+       ══════════════════════════════════════════════════ -->
+  <section class="demo-container" id="demoPostCallView" style="display:none;">
+    <div style="text-align:center;padding:32px 24px;">
+      <div style="font-size:48px;margin-bottom:12px;">✅</div>
+      <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Call Completed</h2>
+      <p style="color:var(--neutral-500);margin-bottom:8px;">Here's what NorthStar captured from this call — all in real time.</p>
+      <p style="font-size:13px;color:var(--neutral-400);" id="demoCallDuration">Duration: —</p>
+    </div>
+    <div class="demo-live-view" style="padding-bottom:24px;">
+      <div class="demo-transcript-panel">
+        <div class="demo-transcript-header">
+          <span style="font-weight:600;font-size:14px;">📝 Call Transcript</span>
+        </div>
+        <div class="demo-transcript-body" id="demoPostTranscriptBody"></div>
+      </div>
+      <div class="demo-insights-panel" id="demoPostInsights">
+        <!-- Filled by JS from the live view -->
+      </div>
+    </div>
+    <div class="demo-post-actions">
+      <button class="btn btn-secondary" onclick="resetDemo()">🔄 Try Another Scenario</button>
+      <a href="/login" class="btn btn-primary">🚀 Continue to Dashboard</a>
     </div>
   </section>
 
   <!-- Features -->
-  <section class="section">
+  <section class="section" id="features">
     <div class="section-header">
       <h2>Built for Home Service Businesses</h2>
       <p>Tree companies, roofers, plumbers, electricians, landscapers — anyone who misses calls while on the job.</p>
@@ -136,82 +311,6 @@
         <div class="step-number">3</div>
         <h3>You Get Notified</h3>
         <p>You receive an instant text and email with the full lead summary. It's saved to Google Sheets and your calendar. Ready to follow up.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Try the AI Office Manager (Demo) -->
-  <section class="section" id="demo">
-    <div class="section-header">
-      <h2>Try the AI Office Manager</h2>
-      <p>See how NorthStar answers calls, captures leads, and books jobs — no signup needed.</p>
-    </div>
-    <div id="demoStep1" style="text-align:center;">
-      <p style="margin-bottom:20px;color:var(--neutral-500);font-size:15px;">Choose a scenario to simulate:</p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;max-width:700px;margin:0 auto;">
-        <div class="demo-scenario" onclick="startDemo('tree')">
-          <div style="font-size:40px;margin-bottom:8px;">🌳</div>
-          <h4>Tree Service</h4>
-          <p style="font-size:13px;color:var(--neutral-500);">Customer needs an estimate for tree removal</p>
-        </div>
-        <div class="demo-scenario" onclick="startDemo('plumbing')">
-          <div style="font-size:40px;margin-bottom:8px;">🔧</div>
-          <h4>Plumbing Emergency</h4>
-          <p style="font-size:13px;color:var(--neutral-500);">Burst pipe needs immediate repair</p>
-        </div>
-        <div class="demo-scenario" onclick="startDemo('roofing')">
-          <div style="font-size:40px;margin-bottom:8px;">🏠</div>
-          <h4>Roofing Estimate</h4>
-          <p style="font-size:13px;color:var(--neutral-500);">Storm damage needs inspection and quote</p>
-        </div>
-      </div>
-    </div>
-    <div id="demoStep2" style="display:none;">
-      <div style="max-width:560px;margin:0 auto;background:var(--neutral-100);border-radius:var(--radius);border:1px solid var(--neutral-200);overflow:hidden;">
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--neutral-200);border-bottom:1px solid var(--neutral-300);">
-          <span class="demo-active">●</span>
-          <span style="font-size:13px;font-weight:600;" id="demoStatus">Active Call</span>
-          <span style="margin-left:auto;font-size:12px;color:var(--neutral-500);" id="demoTimer">0:00</span>
-        </div>
-        <div id="demoChat" style="padding:16px;max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;"></div>
-        <div style="padding:8px 16px;border-top:1px solid var(--neutral-200);display:flex;align-items:center;gap:8px;">
-          <span class="demo-typing" id="demoTyping" style="display:none;"><span></span><span></span><span></span></span>
-          <button class="btn btn-ghost btn-sm" onclick="resetDemo()" style="margin-left:auto;">← Back to scenarios</button>
-        </div>
-      </div>
-    </div>
-    <div id="demoStep3" style="display:none;max-width:560px;margin:0 auto;">
-      <div style="background:var(--neutral-100);border-radius:var(--radius);border:1px solid var(--neutral-200);padding:24px;">
-        <div style="text-align:center;margin-bottom:20px;">
-          <div style="font-size:32px;">✅</div>
-          <h3 style="margin-top:8px;">Call Complete</h3>
-          <p style="font-size:14px;color:var(--neutral-500);">Here's what the AI captured</p>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
-          <div><strong>Customer</strong><br><span style="color:var(--neutral-500);" id="demoResultName">—</span></div>
-          <div><strong>Phone</strong><br><span style="color:var(--neutral-500);" id="demoResultPhone">—</span></div>
-          <div><strong>Address</strong><br><span style="color:var(--neutral-500);" id="demoResultAddress">—</span></div>
-          <div><strong>Service</strong><br><span style="color:var(--neutral-500);" id="demoResultService">—</span></div>
-          <div style="grid-column:1/-1;"><strong>Preferred Time</strong><br><span style="color:var(--neutral-500);" id="demoResultTime">—</span></div>
-          <div style="grid-column:1/-1;padding:12px;margin-top:4px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2);border-radius:var(--radius-sm);text-align:center;">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--neutral-500);margin-bottom:2px;">Estimated Job Value</div>
-            <div style="font-size:22px;font-weight:700;color:var(--brand-700);" id="demoResultPrice">—</div>
-            <div style="font-size:11px;color:var(--neutral-500);margin-top:2px;" id="demoResultPriceBreakdown">—</div>
-          </div>
-        </div>
-        <div style="margin-top:16px;padding:12px;background:var(--neutral-200);border-radius:var(--radius-sm);">
-          <strong style="font-size:13px;">AI Summary</strong>
-          <p style="font-size:13px;color:var(--neutral-600);margin-top:4px;" id="demoResultSummary"></p>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;justify-content:center;">
-          <span class="badge-completed">📨 SMS Sent ✓</span>
-          <span class="badge-completed">📧 Email Sent ✓</span>
-          <span class="badge-completed">💾 Lead Saved ✓</span>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:20px;">
-          <button class="btn btn-secondary" onclick="resetDemo()" style="width:100%;">Try Another Scenario</button>
-          <a href="/login" class="btn btn-primary" style="width:100%;">Explore Full Dashboard →</a>
-        </div>
       </div>
     </div>
   </section>
@@ -341,173 +440,314 @@
     </div>
     <p>© 2026 NorthStar Solutions. All rights reserved.</p>
   </footer>
-<script>
-// Demo scenarios data
-const demoScenarios = {
-  tree: {
-    name: 'Maria Garcia',
-    phone: '(860) 555-0142',
-    address: '42 Maple Drive',
-    price: '$2,400 - $3,800',
-    priceBreakdown: '50ft oak tree, near house, stump grinding + emergency risk factor',
-    service: 'Tree removal estimate',
-    time: 'Thursday morning',
-    summary: 'Customer has a large oak tree with a cracked trunk near the house. Needs an estimate for removal and stump grinding. Preferred time is Thursday before noon.',
-    messages: [
-      { from: 'ai', text: 'Thank you for calling NorthStar. My name is Alex. How can I help you today?' },
-      { from: 'customer', text: 'Hi, I have a large oak tree in my backyard that needs to be removed. Can you give me an estimate?' },
-      { from: 'ai', text: "I'd be happy to help with that. First, could I get your name?" },
-      { from: 'customer', text: 'Maria Garcia.' },
-      { from: 'ai', text: "Thank you, Maria. And what's the best phone number to reach you?" },
-      { from: 'customer', text: '(860) 555-0142.' },
-      { from: 'ai', text: 'Great. And where is the property located?' },
-      { from: 'customer', text: '42 Maple Drive.' },
-      { from: 'ai', text: 'Can you tell me a bit about the tree? About how tall is it and is it near any structures?' },
-      { from: 'customer', text: "It's probably 50 feet tall and about 30 feet from the house. The trunk has a big crack in it." },
-      { from: 'ai', text: 'That sounds like it needs attention soon. I can schedule an estimator to come out Thursday morning. Would that work for you?' },
-      { from: 'customer', text: 'Thursday morning sounds perfect.' },
-      { from: 'ai', text: "Perfect! I've scheduled your estimate for Thursday morning. You'll receive a confirmation text shortly. Is there anything else I can help with?" }
-    ]
-  },
-  plumbing: {
-    name: 'Tom Anderson',
-    phone: '(860) 555-0198',
-    address: '187 Cedar Lane',
-    price: '$450 - $850',
-    priceBreakdown: 'Emergency burst pipe repair, basement location, priority dispatch fee',
-    service: 'Emergency plumbing - burst pipe',
-    time: 'ASAP (emergency)',
-    summary: 'Emergency call - burst pipe in the basement, water leaking. Customer needs immediate plumbing repair. Dispatched as emergency priority.',
-    messages: [
-      { from: 'ai', text: 'Thank you for calling NorthStar. This is Alex. How can I help you?' },
-      { from: 'customer', text: 'I have a burst pipe in my basement! Water is everywhere! I need help right now!' },
-      { from: 'ai', text: "I understand this is urgent. Let me get your information right away. What's your name?" },
-      { from: 'customer', text: 'Tom Anderson. Please hurry.' },
-      { from: 'ai', text: "Tom, I'm noting this as an emergency. What's your phone number?" },
-      { from: 'customer', text: '(860) 555-0198.' },
-      { from: 'ai', text: 'And the address where you need service?' },
-      { from: 'customer', text: "187 Cedar Lane. It's the basement water pipe that burst." },
-      { from: 'ai', text: "I've flagged this as an emergency. I'm sending a plumber right away. They should be there within the hour. In the meantime, can you locate the main water shutoff?" },
-      { from: 'customer', text: "I think it's in the basement near the water heater." },
-      { from: 'ai', text: "Turn it clockwise to shut off the water to the house. I've dispatched the emergency team and you'll get a text with their ETA. Is there anything else you need?" }
-    ]
-  },
-  roofing: {
-    name: 'Sarah Wilson',
-    phone: '(860) 555-0273',
-    address: '55 Oak Street',
-    price: '$2,800 - $5,500',
-    priceBreakdown: 'Hail damage roof inspection, shingle replacement, gutter repair, insurance paperwork',
-    service: 'Storm damage roofing inspection',
-    time: 'Wednesday afternoon',
-    summary: "Customer had storm damage from last night's hailstorm. Needs roof inspection and insurance estimate. Several shingles missing and gutter damage.",
-    messages: [
-      { from: 'ai', text: "Thank you for calling NorthStar. You're speaking with Alex. How can I help you today?" },
-      { from: 'customer', text: 'Hi, we had a bad hailstorm last night and I think my roof is damaged.' },
-      { from: 'ai', text: "I'm sorry to hear that. I can help get that inspected. What's your name?" },
-      { from: 'customer', text: 'Sarah Wilson.' },
-      { from: 'ai', text: 'Thanks Sarah. And your phone number?' },
-      { from: 'customer', text: '(860) 555-0273.' },
-      { from: 'ai', text: "What's the property address?" },
-      { from: 'customer', text: '55 Oak Street.' },
-      { from: 'ai', text: "Can you describe what you're seeing? Any visible damage?" },
-      { from: 'customer', text: 'I can see several shingles loose and some are completely missing. The gutters are dented too.' },
-      { from: 'ai', text: 'That sounds like it needs a professional assessment. We can do a free inspection and provide an insurance-ready estimate. Would Wednesday afternoon work for you?' },
-      { from: 'customer', text: 'Yes, Wednesday afternoon is great.' },
-      { from: 'ai', text: "Perfect! I've scheduled a roof inspection for Wednesday afternoon. You'll receive a confirmation via text and email. We'll handle the insurance paperwork too. Anything else I can help with?" }
-    ]
-  }
-};
 
-let demoInterval;
-let demoSeconds = 0;
-let msgIndex = 0;
-let currentScenario = null;
+  <!-- ══════════════════════════════════════════════════
+       DEMO JAVASCRIPT
+       ══════════════════════════════════════════════════ -->
+  <script>
+    // ── Demo State ──
+    var demoState = {
+      sessionId: null,
+      callStatus: null,
+      timerSec: 0,
+      timerInterval: null,
+      transcriptInterval: null,
+      statusInterval: null,
+      transcriptSeq: 0,
+    };
 
-function startDemo(scenario) {
-  currentScenario = demoScenarios[scenario];
-  if (!currentScenario) return;
-  msgIndex = 0;
-  demoSeconds = 0;
-  document.getElementById('demoStep1').style.display = 'none';
-  document.getElementById('demoStep2').style.display = 'block';
-  document.getElementById('demoStep3').style.display = 'none';
-  document.getElementById('demoChat').innerHTML = '';
-  document.getElementById('demoTimer').textContent = '0:00';
-  document.getElementById('demoTyping').style.display = 'none';
-  if (demoInterval) clearInterval(demoInterval);
-  demoInterval = setInterval(() => {
-    demoSeconds++;
-    const m = Math.floor(demoSeconds / 60);
-    const s = demoSeconds % 60;
-    document.getElementById('demoTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
-  }, 1000);
-  showNextMsg();
-}
+    var DEMO_API = '/api/demo';
 
-function showNextMsg() {
-  if (msgIndex >= currentScenario.messages.length) {
-    setTimeout(showResults, 1000);
-    return;
-  }
-  const msg = currentScenario.messages[msgIndex];
-  const chat = document.getElementById('demoChat');
-  const typing = document.getElementById('demoTyping');
-  typing.style.display = 'flex';
-  setTimeout(() => {
-    typing.style.display = 'none';
-    const div = document.createElement('div');
-    div.className = 'demo-msg demo-' + msg.from;
-    div.textContent = msg.text;
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
-    msgIndex++;
-    setTimeout(showNextMsg, msg.from === 'ai' ? 1800 : 1200);
-  }, msg.from === 'ai' ? 1500 : 1000);
-}
+    // ── Scenario shortcuts ──
+    document.querySelectorAll('.demo-scenario-chip').forEach(function(chip) {
+      chip.addEventListener('click', function() {
+        document.querySelectorAll('.demo-scenario-chip').forEach(function(c) { c.classList.remove('active'); });
+        this.classList.add('active');
+        var scenario = this.dataset.scenario;
+        if (scenario === 'storm') {
+          document.getElementById('demoIndustry').value = 'Roofing';
+          document.getElementById('demoBusinessName').value = 'StormShield Roofing';
+        } else if (scenario === 'emergency') {
+          document.getElementById('demoIndustry').value = 'Plumbing';
+          document.getElementById('demoBusinessName').value = 'RapidResponse Plumbing';
+        } else if (scenario === 'estimate') {
+          document.getElementById('demoIndustry').value = 'HVAC';
+          document.getElementById('demoBusinessName').value = 'ComfortAir HVAC';
+        } else if (scenario === 'scheduling') {
+          document.getElementById('demoIndustry').value = 'Electrical';
+          document.getElementById('demoBusinessName').value = 'BrightWire Electric';
+        } else if (scenario === 'billing') {
+          document.getElementById('demoIndustry').value = 'Landscaping';
+          document.getElementById('demoBusinessName').value = 'GreenScape Landscaping';
+        }
+        // Scroll to form
+        document.getElementById('demoFormCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
 
-function showResults() {
-      if (demoInterval) clearInterval(demoInterval);
-      document.getElementById('demoStep2').style.display = 'none';
-      document.getElementById('demoStep3').style.display = 'block';
-      const s = currentScenario;
-      document.getElementById('demoResultName').textContent = s.name;
-      document.getElementById('demoResultPhone').textContent = s.phone;
-      document.getElementById('demoResultAddress').textContent = s.address;
-      document.getElementById('demoResultService').textContent = s.service;
-      document.getElementById('demoResultTime').textContent = s.time;
-      document.getElementById('demoResultSummary').textContent = s.summary;
-      document.getElementById('demoResultPrice').textContent = s.price || '—';
-      document.getElementById('demoResultPriceBreakdown').textContent = s.priceBreakdown || '';
+    // ── Start Demo Call ──
+    async function startDemoCall() {
+      var businessName = document.getElementById('demoBusinessName').value.trim();
+      var industry = document.getElementById('demoIndustry').value;
+      var phoneNumber = document.getElementById('demoPhoneNumber').value.trim();
+
+      if (!businessName) { alert('Please enter a business name.'); return; }
+      if (!industry) { alert('Please select an industry.'); return; }
+      if (!phoneNumber) { alert('Please enter a phone number.'); return; }
+
+      var btn = document.getElementById('demoCallBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Connecting...';
+
+      try {
+        var resp = await fetch(DEMO_API + '/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ businessName: businessName, industry: industry, phoneNumber: phoneNumber })
+        });
+
+        if (!resp.ok) {
+          var errData = await resp.json().catch(function() { return {}; });
+          throw new Error(errData.error ? errData.error.message : 'Demo call request failed');
+        }
+
+        var data = await resp.json();
+        demoState.sessionId = data.demoSessionId;
+        demoState.callStatus = data.status;
+
+        // Switch to live view
+        document.getElementById('demoPreCallView').style.display = 'none';
+        document.getElementById('demoLiveView').style.display = 'block';
+        document.getElementById('demoPostCallView').style.display = 'none';
+
+        // Start polling
+        startDemoTimer();
+        startTranscriptPolling();
+        startStatusPolling();
+
+        btn.disabled = false;
+        btn.textContent = '📞 Call Me Now';
+      } catch (err) {
+        console.error('[Demo] Call error:', err.message);
+        alert('Unable to place demo call. The demo will run in simulation mode.\n\n' + err.message);
+        // Fallback: run simulated demo
+        runSimulatedDemo(businessName, industry);
+        btn.disabled = false;
+        btn.textContent = '📞 Call Me Now';
+      }
     }
 
-function resetDemo() {
-  if (demoInterval) clearInterval(demoInterval);
-  demoInterval = null;
-  demoSeconds = 0;
-  msgIndex = 0;
-  currentScenario = null;
-  document.getElementById('demoStep1').style.display = 'block';
-  document.getElementById('demoStep2').style.display = 'none';
-  document.getElementById('demoStep3').style.display = 'none';
-  document.getElementById('demoChat').innerHTML = '';
-  document.getElementById('demoTimer').textContent = '0:00';
-  document.getElementById('demoTyping').style.display = 'none';
-}
-</script>
+    // ── Simulated demo (when Retell isn't available) ──
+    async function runSimulatedDemo(businessName, industry) {
+      try {
+        var resp = await fetch(DEMO_API + '/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ businessName: businessName, industry: industry, phoneNumber: '(555) 000-0000' })
+        });
+        if (!resp.ok) throw new Error('Simulated call request failed');
+        var data = await resp.json();
+        demoState.sessionId = data.demoSessionId;
+        demoState.callStatus = 'simulated';
+      } catch(e) {
+        // Generate a fake session ID for fully offline demo
+        demoState.sessionId = 'demo-' + Date.now().toString(36);
+        demoState.callStatus = 'simulated';
+      }
 
-<script>
-async function loadStats() {
-  try {
-    const r = await fetch('/api/stats');
-    const d = await r.json();
-    // Stats are now static on the page — no dynamic update needed
-  } catch(e) {}
-}
-loadStats();
-</script>
+      document.getElementById('demoPreCallView').style.display = 'none';
+      document.getElementById('demoLiveView').style.display = 'block';
+      document.getElementById('demoPostCallView').style.display = 'none';
 
-<script src="/js/theme.js"></script>
-<div class="footer-theme-btn"><button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button></div>
+      startDemoTimer();
+      startTranscriptPolling();
+      startStatusPolling();
+    }
+
+    // ── Timer ──
+    function startDemoTimer() {
+      demoState.timerSec = 0;
+      if (demoState.timerInterval) clearInterval(demoState.timerInterval);
+      demoState.timerInterval = setInterval(function() {
+        demoState.timerSec++;
+        var m = Math.floor(demoState.timerSec / 60);
+        var s = demoState.timerSec % 60;
+        document.getElementById('demoLiveTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      }, 1000);
+    }
+
+    // ── Transcript Polling ──
+    function startTranscriptPolling() {
+      if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
+      // Initial fetch
+      pollTranscript();
+      // Poll every 2s
+      demoState.transcriptInterval = setInterval(pollTranscript, 2000);
+    }
+
+    async function pollTranscript() {
+      if (!demoState.sessionId) return;
+      try {
+        var resp = await fetch(DEMO_API + '/' + demoState.sessionId + '/transcript');
+        if (!resp.ok) return;
+        var data = await resp.json();
+
+        if (data.lines && data.lines.length > demoState.transcriptSeq) {
+          demoState.transcriptSeq = data.lines.length;
+          renderTranscript(data.lines);
+          document.getElementById('demoTranscriptCount').textContent = data.lines.length + ' messages';
+        }
+
+        // Hide loading once we have data
+        var loading = document.getElementById('demoTranscriptLoading');
+        if (loading && data.lines && data.lines.length > 0) {
+          loading.style.display = 'none';
+        }
+      } catch(e) {
+        console.warn('[Demo] Transcript poll error:', e.message);
+      }
+    }
+
+    function renderTranscript(lines) {
+      var body = document.getElementById('demoTranscriptBody');
+      var html = '';
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        var cls = line.speaker === 'ai' ? 'ai' : (line.speaker === 'customer' ? 'customer' : 'system');
+        var label = cls === 'ai' ? 'NorthStar AI' : (cls === 'customer' ? 'Customer' : '');
+        html += '<div class="demo-msg ' + cls + '">';
+        if (label && cls !== 'system') html += '<div class="demo-msg-label">' + label + '</div>';
+        html += line.text + '</div>';
+      }
+      body.innerHTML = html;
+      body.scrollTop = body.scrollHeight;
+    }
+
+    // ── Status Polling ──
+    function startStatusPolling() {
+      if (demoState.statusInterval) clearInterval(demoState.statusInterval);
+      pollStatus();
+      demoState.statusInterval = setInterval(pollStatus, 2000);
+    }
+
+    async function pollStatus() {
+      if (!demoState.sessionId) return;
+      try {
+        var resp = await fetch(DEMO_API + '/' + demoState.sessionId + '/status');
+        if (!resp.ok) return;
+        var data = await resp.json();
+
+        // Update status dot/label
+        var dot = document.getElementById('demoStatusDot');
+        var label = document.getElementById('demoStatusLabel');
+        if (data.callStatus === 'completed') {
+          dot.className = 'demo-status-ended';
+          label.textContent = 'Call Ended';
+          // Switch to post-call view
+          transitionToPostCall();
+        } else if (data.callStatus === 'in-progress' || data.callStatus === 'simulated') {
+          dot.className = 'demo-status-connected';
+          label.textContent = 'Connected';
+        }
+
+        // Update insights
+        document.getElementById('demoIntent').textContent = data.customerIntent || 'Analyzing...';
+        document.getElementById('demoJobValue').textContent = data.estimatedJobValue || 'Analyzing...';
+
+        var qual = document.getElementById('demoQualification');
+        qual.textContent = data.leadQualification || 'Analyzing...';
+        qual.className = 'insight-value';
+        if (data.leadQualification === 'Hot') qual.classList.add('hot');
+        else if (data.leadQualification === 'Warm') qual.classList.add('warm');
+        else if (data.leadQualification === 'Cold') qual.classList.add('cold');
+
+        var bp = data.bookingProbability || 0;
+        document.getElementById('demoBookingProb').textContent = Math.round(bp * 100) + '%';
+        var bar = document.getElementById('demoProbBar');
+        bar.style.width = Math.round(bp * 100) + '%';
+        bar.style.background = bp >= 0.7 ? '#16a34a' : bp >= 0.4 ? '#f59e0b' : '#ef4444';
+
+        if (data.recommendedActions && data.recommendedActions.length > 0) {
+          document.getElementById('demoActions').innerHTML = data.recommendedActions.map(function(a) { return '<li>→ ' + a + '</li>'; }).join('');
+        }
+
+        document.getElementById('demoSummary').textContent = data.executiveSummary || 'Call in progress...';
+      } catch(e) {
+        console.warn('[Demo] Status poll error:', e.message);
+      }
+    }
+
+    // ── Transition to post-call ──
+    function transitionToPostCall() {
+      if (demoState.timerInterval) clearInterval(demoState.timerInterval);
+      if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
+      if (demoState.statusInterval) clearInterval(demoState.statusInterval);
+
+      document.getElementById('demoCallDuration').textContent = 'Duration: ' + document.getElementById('demoLiveTimer').textContent;
+
+      // Copy transcript
+      var liveBody = document.getElementById('demoTranscriptBody');
+      var postBody = document.getElementById('demoPostTranscriptBody');
+      postBody.innerHTML = liveBody.innerHTML;
+
+      // Copy insights
+      var insights = document.getElementById('demoInsights');
+      var postInsights = document.getElementById('demoPostInsights');
+      if (insights && postInsights) {
+        postInsights.innerHTML = insights.innerHTML;
+      }
+
+      document.getElementById('demoLiveView').style.display = 'none';
+      document.getElementById('demoPostCallView').style.display = 'block';
+    }
+
+    // ── Reset demo ──
+    function resetDemo() {
+      if (demoState.timerInterval) clearInterval(demoState.timerInterval);
+      if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
+      if (demoState.statusInterval) clearInterval(demoState.statusInterval);
+
+      demoState = {
+        sessionId: null,
+        callStatus: null,
+        timerSec: 0,
+        timerInterval: null,
+        transcriptInterval: null,
+        statusInterval: null,
+        transcriptSeq: 0,
+      };
+
+      document.getElementById('demoLiveView').style.display = 'none';
+      document.getElementById('demoPostCallView').style.display = 'none';
+      document.getElementById('demoPreCallView').style.display = 'block';
+
+      // Reset form
+      document.getElementById('demoBusinessName').value = '';
+      document.getElementById('demoIndustry').value = '';
+      document.getElementById('demoPhoneNumber').value = '';
+      document.getElementById('demoCallBtn').disabled = false;
+      document.getElementById('demoCallBtn').textContent = '📞 Call Me Now';
+      document.querySelectorAll('.demo-scenario-chip').forEach(function(c) { c.classList.remove('active'); });
+
+      // Reset transcript
+      document.getElementById('demoTranscriptBody').innerHTML = '<div class="demo-loading" id="demoTranscriptLoading"><div class="demo-spinner"></div><p style="font-size:14px;color:var(--neutral-500);">Waiting for conversation to begin...</p></div>';
+      document.getElementById('demoTranscriptCount').textContent = '0 messages';
+      document.getElementById('demoStatusDot').className = 'demo-status-connecting';
+      document.getElementById('demoStatusLabel').textContent = 'Connecting...';
+      document.getElementById('demoLiveTimer').textContent = '0:00';
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  </script>
+
+  <script async>
+    try {
+      var r = await fetch('/api/stats');
+      var d = await r.json();
+    } catch(e) {}
+  </script>
+
+  <script src="/js/theme.js"></script>
+  <div class="footer-theme-btn"><button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button></div>
 </body>
 </html>

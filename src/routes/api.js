@@ -6,7 +6,10 @@ const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
 const { handleWebhook } = require('../retell/webhook');
 const customersRouter = require('./customers');
+feature/m17-p3-timeline-dashboard-demo
+const demoRouter = require('./demo');
 const voiceRouter = require('./voice');
+master
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
 const jobber = require('../integrations/jobber');
@@ -118,8 +121,12 @@ router.post('/contact', async (req, res) => {
   }
 });
 
+feature/m17-p3-timeline-dashboard-demo
+// Demo routes — public interactive demo
+router.use('/demo', demoRouter);
 // Mount voice routes (handles its own auth: webhook is public, everything else protected)
 router.use('/v1/voice', voiceRouter);
+master
 
 // ══════════════════════════════════════════════
 // PROTECTED ROUTES — authentication required

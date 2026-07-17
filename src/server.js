@@ -21,6 +21,7 @@ const polarisRoutes = require('./routes/polaris');
 const polarisEnginesRoutes = require('./routes/polaris-engines');
 const customerIntelligenceRoutes = require('./routes/customerIntelligence');
 const businessProfileRoutes = require('./routes/businessProfile');
+const voiceRoutes = require('./routes/voice');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -499,6 +500,7 @@ app.use('/api/v1/polaris', polarisRoutes);
 app.use('/api/v1', polarisEnginesRoutes);
 app.use('/api/v1/leads', customerIntelligenceRoutes);
 app.use('/api/v1/business-profile', businessProfileRoutes);
+app.use('/api/v1/voice', voiceRoutes);
 
 // 404 + error handler (single instances)
 app.use(notFound);

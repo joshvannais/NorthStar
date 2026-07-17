@@ -112,23 +112,202 @@ async function getCall(callId) {
 
 
 /**
+ * Map Executive Context to Retell dynamic variables.
+ * Extracts key fields from the frozen EC for injection into the LLM prompt.
+ *
+ * @param {Object} ec - Executive Context from buildExecutiveContext / buildPolarisContext
+ * @param {Object} [opts] - Additional options
+ * @returns {Object} Retell-compatible retell_llm_dynamic_variables
+ */
+function mapExecutiveContextToVariables(ec, opts) {
+  const vars = {};
+
+  if (!ec) return vars;
+
+  // Business Profile
+  const bp = ec.businessProfile || {};
+  if (bp.company) {
+    vars.company_name = bp.company.name || '';
+    vars.company_dba = bp.company.dba || '';
+    vars.company_email = bp.company.email || '';
+    vars.company_phone = bp.company.phone || '';
+    vars.company_website = bp.company.website || '';
+    vars.company_timezone = bp.company.timeZone || '';
+  }
+
+  // Services
+  if (bp.services && Array.isArray(bp.services)) {
+    vars.services = JSON.stringify(bp.services.slice(0, 10));
+    vars.service_count = bp.services.length;
+  } else {
+    vars.services = '[]';
+    vars.service_count = 0;
+  }
+
+  // Hours
+  if (bp.hours) {
+    vars.business_hours = JSON.stringify(bp.hours);
+  }
+
+  // Scheduling preferences
+  if (bp.scheduling) {
+    vars.scheduling_preferences = JSON.stringify(bp.scheduling);
+    vars.max_jobs_per_day = bp.scheduling.maxJobsPerDay || 4;
+    vars.work_day_length = bp.scheduling.workDayLength || 8;
+  }
+
+  // Financial settings
+  if (bp.financial) {
+    vars.minimum_job_price = bp.financial.minimumJobPrice || 150;
+    vars.emergency_markup = bp.financial.emergencyMarkup || 1.5;
+    vars.travel_charge = bp.financial.travelCharge || 0.58;
+    vars.tax_rate = bp.financial.taxRate || 7;
+  }
+
+  // Polaris preferences
+  if (bp.polaris) {
+    vars.response_style = bp.polaris.responseStyle || 'executive';
+  }
+
+  // Retell preferences
+  if (bp.retell) {
+    vars.retell_preferences = JSON.stringify(bp.retell);
+    vars.conversation_style = bp.retell.conversationStyle || 'consultative';
+    vars.max_conversation_length = bp.retell.maxConversationLength || 15;
+  }
+
+  // Emergency policies (derived from hours)
+  if (bp.hours) {
+    const hasEmergency = Object.values(bp.hours).some(h => h && h.emergency);
+    vars.emergency_available = hasEmergency ? 'true' : 'false';
+  }
+
+  // Customer data (if available)
+  const customer = ec.customer || {};
+  if (customer.lead) {
+    const lead = customer.lead;
+    vars.customer_name = lead.customerName || lead.name || lead.caller || '';
+    vars.customer_phone = lead.phone || lead.phoneNumber || '';
+    vars.customer_address = lead.address || lead.propertyAddress || '';
+    vars.customer_status = lead.status || '';
+    vars.customer_service = lead.service || '';
+    vars.customer_id = lead.id || '';
+  } else if (customer.customerRecord) {
+    const rec = customer.customerRecord;
+    vars.customer_name = rec.name || rec.companyName || '';
+    vars.customer_phone = rec.phone || '';
+    vars.customer_address = rec.address || '';
+  }
+
+  // Customer history
+  if (customer.recentEstimate) {
+    vars.customer_history = `Recent estimate: ${customer.recentEstimate.total || customer.recentEstimate.amount || 0} for ${customer.recentEstimate.service || 'unknown service'}`;
+  }
+
+  // Decision intelligence
+  const decisions = ec.decisions || ec.executiveDecisions || {};
+  if (decisions.nextBestAction) {
+    vars.next_best_action = typeof decisions.nextBestAction === 'string'
+      ? decisions.nextBestAction
+      : JSON.stringify(decisions.nextBestAction);
+  }
+  if (decisions.rank) {
+    vars.lead_priority = decisions.rank.priority || decisions.rank.rank || '';
+    vars.lead_score = decisions.rank.score || 0;
+  }
+
+  // Job intelligence
+  const intel = ec.intelligence || ec.businessIntelligence || {};
+  if (intel.jobIntelligence) {
+    vars.job_intelligence = JSON.stringify(intel.jobIntelligence);
+  }
+
+  // Override with explicit service/caller from options
+  if (opts && opts.service) vars.service = opts.service;
+  if (opts && opts.caller) vars.customer_name_override = opts.caller;
+
+  return vars;
+}
+
+/**
  * Create an outbound call via Retell AI.
  * https://docs.retellai.com/api-reference/create-phone-call
+ *
+ * @param {string} phoneNumber - Destination phone number
+ * @param {string} agentId - Retell agent ID
+ * @param {Object} [options]
+ * @param {string} [options.service] - Service type
+ * @param {string} [options.caller] - Caller name
+ * @param {string} [options.fromNumber] - Originating phone number
+ * @param {Object} [options.executiveContext] - Frozen Executive Context for dynamic variables
+ * @param {Array} [options.toolDefinitions] - Retell tool definitions for dynamic function calling
  */
 async function createCall(phoneNumber, agentId, options) {
   if (!agentId) {
     console.log('[Retell] No agent ID configured - cannot create call.');
     return null;
   }
-  return request('POST', '/create-phone-call', {
+
+  const opts = options || {};
+  const ec = opts.executiveContext || null;
+  const dynamicVariables = mapExecutiveContextToVariables(ec, opts);
+
+  // Also include explicit overrides
+  if (!dynamicVariables.service) {
+    dynamicVariables.service = opts.service || 'home services';
+  }
+  if (!dynamicVariables.customer_name) {
+    dynamicVariables.customer_name = opts.caller || '';
+  }
+
+  const body = {
     agent_id: agentId,
-    from_number: options.fromNumber || (config.twilio ? config.twilio.phoneNumber : '') || '',
+    from_number: opts.fromNumber || (config.twilio ? config.twilio.phoneNumber : '') || '',
     to_number: phoneNumber,
-    retell_llm_dynamic_variables: {
-      service: options.service || 'home services',
-      customer_name: options.caller || '',
+    retell_llm_dynamic_variables: dynamicVariables,
+  };
+
+  // Include tool definitions if provided
+  if (opts.toolDefinitions && Array.isArray(opts.toolDefinitions)) {
+    body.retell_llm_tools = opts.toolDefinitions;
+  }
+
+  console.log('[Retell] Creating call with', Object.keys(dynamicVariables).length, 'dynamic variables',
+    opts.toolDefinitions ? `and ${opts.toolDefinitions.length} tools` : '');
+
+  return request('POST', '/create-phone-call', body);
+}
+
+/**
+ * Build agent configuration with tool definitions.
+ *
+ * @param {Object} params
+ * @param {string} params.name - Agent name
+ * @param {string} params.companyName - Company name
+ * @param {string} params.services - Service description
+ * @param {string} [params.scheduleUrl] - Optional scheduling URL
+ * @param {string} [params.language] - Language code
+ * @param {Array} [params.toolDefinitions] - Retell tool definitions
+ * @returns {Promise<Object>}
+ */
+async function createAgentWithTools({ name, companyName, services, scheduleUrl, language = 'en-US', toolDefinitions }) {
+  const body = {
+    agent_name: name,
+    voice_id: '11labs-Rachel',
+    language,
+    response_engine: {
+      type: 'retell-llm',
+      llm_id: config.retell.agentId,
+      llm_instructions: buildPrompt({ companyName, services }),
     },
-  });
+    scheduling: scheduleUrl ? { url: scheduleUrl } : undefined,
+  };
+
+  if (toolDefinitions && Array.isArray(toolDefinitions)) {
+    body.retell_llm_tools = toolDefinitions;
+  }
+
+  return request('POST', '/create-agent', body);
 }
 
 /**
@@ -148,4 +327,14 @@ async function sendSMS(phoneNumber, message) {
   return { success: false, message: 'SMS not yet supported via Retell. Consider using Twilio.' };
 }
 
-module.exports = { createAgent, buildPrompt, registerWebhook, getCall, createCall, verifyApiKey, sendSMS };
+module.exports = {
+  createAgent,
+  createAgentWithTools,
+  buildPrompt,
+  registerWebhook,
+  getCall,
+  createCall,
+  verifyApiKey,
+  sendSMS,
+  mapExecutiveContextToVariables,
+};

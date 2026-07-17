@@ -150,8 +150,12 @@ const { requireAuth } = require('../auth/middleware');
 const { handleWebhook, rawBodyCapture } = require('../voice/webhook');
 const { eventBus, createEvent, EVENT_TYPES } = require('../voice/businessEvents');
 const { executeCallCompletion } = require('../voice/callCompletion');
-const { updateContext, registerIntelligenceHandlers } = require('../voice/eventIntelligence');
+const { updateContext, registerIntelligenceHandlers, getSessionGuidance, clearSessionGuidance } = require('../voice/eventIntelligence');
 const { buildPolarisContext } = require('../services/polarisContextBuilder');
+const { buildExecutiveContext } = require('../voice/executiveContext');
+const transcriptStream = require('../voice/transcriptStream');
+const humanHandoff = require('../voice/humanHandoff');
+const { toolDefinitions, toolHandlers } = require('../voice/toolRegistry');
 const db = require('../db');
 const config = require('../config');
 
@@ -384,21 +388,37 @@ router.get('/sessions/:id', (req, res) => {
  * - phoneNumber: Destination phone number (required)
  * - service: Service type (optional)
  * - caller: Caller/lead name (optional)
+ * - customerId: Optional customer/lead ID for targeted intelligence (optional)
  */
 router.post('/call', async (req, res) => {
   try {
-    const { phoneNumber, service, caller } = req.body;
+    const { phoneNumber, service, caller, customerId } = req.body;
 
     if (!phoneNumber) {
       return res.status(400).json({ error: { code: 'MISSING_PHONE', message: 'phoneNumber is required' } });
     }
 
-    // Initiate outbound call via Retell
+    // Build Executive Context for this call
+    let executiveContext = null;
+    try {
+      executiveContext = buildExecutiveContext({
+        customerId: customerId || null,
+        sessionId: null,
+        voiceSession: { direction: 'outbound', phoneNumber, service, caller },
+      });
+    } catch (err) {
+      console.error('[Voice:Routes] Failed to build executive context:', err.message);
+      // Continue without EC — graceful degradation
+    }
+
+    // Initiate outbound call via Retell with EC and tool definitions
     const { createCall } = require('../retell/client');
     const result = await createCall(phoneNumber, config.retell.agentId, {
       service: service || 'General',
       caller: caller || 'Outbound Call',
       fromNumber: config.twilio ? config.twilio.phoneNumber : undefined,
+      executiveContext,
+      toolDefinitions,
     });
 
     if (!result) {
@@ -410,7 +430,7 @@ router.post('/call', async (req, res) => {
       fromNumber: config.twilio?.phoneNumber || '',
       toNumber: phoneNumber,
       direction: 'outbound',
-      metadata: { service, caller },
+      metadata: { service, caller, executiveContextGenerated: !!executiveContext },
     });
 
     // Record lead from outbound call
@@ -443,6 +463,8 @@ router.post('/call', async (req, res) => {
       success: true,
       callId: result.call_id,
       status: result.call_status,
+      executiveContextGenerated: !!executiveContext,
+      toolsConfigured: toolDefinitions.length,
       session: {
         id: session.id,
         status: session.status,
@@ -486,6 +508,134 @@ router.get('/events/history', (req, res) => {
   } catch (err) {
     console.error('[Voice:Routes] Event history error:', err.message);
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get event history' } });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════
+// M17 P3: Transcript, Guidance, Handoff, Escalation endpoints
+// ═════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/v1/voice/sessions/:id/transcript
+ * Get transcript segments for a voice session.
+ * Query params: ?since=N  — only return segments with segmentIndex >= N
+ */
+router.get('/sessions/:id/transcript', (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    const since = req.query.since ? parseInt(req.query.since, 10) : undefined;
+
+    const segments = transcriptStream.getTranscript(sessionId, since);
+    const count = transcriptStream.getSegmentCount(sessionId);
+
+    res.json({
+      sessionId,
+      segments,
+      count: segments.length,
+      totalSegments: count,
+      since: since || 0,
+    });
+  } catch (err) {
+    console.error('[Voice:Routes] Transcript error:', err.message);
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get transcript' } });
+  }
+});
+
+/**
+ * GET /api/v1/voice/sessions/:id/guidance
+ * Get live intelligence guidance events for a voice session.
+ */
+router.get('/sessions/:id/guidance', (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    const guidance = getSessionGuidance(sessionId);
+
+    res.json({
+      sessionId,
+      guidance,
+      count: guidance.length,
+    });
+  } catch (err) {
+    console.error('[Voice:Routes] Guidance error:', err.message);
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get guidance' } });
+  }
+});
+
+/**
+ * POST /api/v1/voice/sessions/:id/handoff
+ * Manually trigger human handoff for a session.
+ *
+ * Body:
+ * - reason: Reason for handoff (optional)
+ * - triggeredBy: Who triggered it (optional, default: 'api')
+ */
+router.post('/sessions/:id/handoff', (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    const { reason, triggeredBy } = req.body;
+
+    // Get current session
+    const session = getSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    }
+
+    // Get transcript segments for escalation check
+    const segments = transcriptStream.getTranscript(sessionId);
+
+    // Get escalation status
+    const existingEscalation = humanHandoff.getEscalationStatus(sessionId);
+    if (existingEscalation && existingEscalation.status === 'escalating') {
+      return res.json({
+        sessionId,
+        alreadyEscalating: true,
+        escalation: existingEscalation,
+      });
+    }
+
+    // Initiate escalation
+    const escalation = humanHandoff.initiateEscalation(sessionId, {
+      trigger: reason || 'manual',
+      detail: reason || 'Manual handoff triggered via API',
+      severity: 'medium',
+    }, null);
+
+    // Update session status
+    updateSession(sessionId, { status: 'escalating' });
+
+    // Tag the call
+    const { tagCall } = require('../voice/toolRegistry');
+    tagCall({ callId: sessionId, tags: ['escalated', 'human-handoff'] });
+
+    res.json({
+      sessionId,
+      escalated: true,
+      escalation,
+      transcriptSegments: segments.length,
+    });
+  } catch (err) {
+    console.error('[Voice:Routes] Handoff error:', err.message);
+    res.status(500).json({ error: { code: 'HANDOFF_FAILED', message: err.message } });
+  }
+});
+
+/**
+ * GET /api/v1/voice/sessions/:id/escalation
+ * Get escalation status for a session.
+ */
+router.get('/sessions/:id/escalation', (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    const escalation = humanHandoff.getEscalationStatus(sessionId);
+
+    res.json({
+      sessionId,
+      escalation,
+      isEscalating: escalation ? escalation.status === 'escalating' : false,
+    });
+  } catch (err) {
+    console.error('[Voice:Routes] Escalation status error:', err.message);
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get escalation status' } });
   }
 });
 

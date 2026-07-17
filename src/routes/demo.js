@@ -120,6 +120,105 @@ function getDefaults(industry) {
   return INDUSTRY_DEFAULTS[industry] || INDUSTRY_DEFAULTS['General Contracting'];
 }
 
+/**
+ * Build a full Executive Context with the structure that
+ * mapExecutiveContextToVariables() expects to populate retell_llm_dynamic_variables.
+ *
+ * This is NorthStar's complete business context — passed into every call.
+ * The conversation flow in Retell references these variables for
+ * dynamic greetings, brand voice, and business-aware responses.
+ */
+function buildExecutiveContext(businessName, industry, phoneNumber, demoSessionId) {
+  const d = getDefaults(industry);
+  const now = new Date().toISOString();
+
+  return {
+    // Flat fields for simple access
+    businessName,
+    industry,
+    service: d.service,
+    avgJobValue: d.avgJobValue,
+    revenueRangeMin: d.revenueRangeMin,
+    revenueRangeMax: d.revenueRangeMax,
+    generatedAt: now,
+    polarisSessionId: demoSessionId,
+
+    // Structured Business Profile — consumed by mapExecutiveContextToVariables()
+    businessProfile: {
+      company: {
+        name: businessName,
+        dba: businessName,
+        email: '',
+        phone: phoneNumber || '',
+        website: '',
+        timeZone: 'America/New_York',
+      },
+      services: [
+        { name: d.service, description: `${d.service} for ${industry.toLowerCase()}`, avgPrice: d.avgJobValue },
+      ],
+      hours: {
+        monday:    { open: '08:00', close: '17:00', emergency: true },
+        tuesday:   { open: '08:00', close: '17:00', emergency: true },
+        wednesday: { open: '08:00', close: '17:00', emergency: true },
+        thursday:  { open: '08:00', close: '17:00', emergency: true },
+        friday:    { open: '08:00', close: '17:00', emergency: true },
+        saturday:  { open: '09:00', close: '14:00', emergency: d.emergencyLikelihood > 0.3 },
+        sunday:    { open: null, close: null, emergency: d.emergencyLikelihood > 0.4 },
+      },
+      scheduling: {
+        maxJobsPerDay: 4,
+        workDayLength: 8,
+        leadTimeHours: 4,
+        emergencyLeadTimeMinutes: 60,
+      },
+      financial: {
+        minimumJobPrice: 150,
+        emergencyMarkup: d.emergencyLikelihood > 0.3 ? 1.5 : 1.0,
+        travelCharge: 0.58,
+        taxRate: 7,
+      },
+      polaris: {
+        responseStyle: 'consultative',
+        confidenceThreshold: 0.6,
+      },
+      retell: {
+        conversationStyle: 'consultative',
+        maxConversationLength: 15,
+        greetingTemplate: `Thanks for calling ${businessName}. This is NorthStar, your AI receptionist. How can I help you today?`,
+        brandName: 'NorthStar',
+        brandVoice: 'professional and warm, like a seasoned office manager who knows the business inside out',
+      },
+    },
+
+    // Customer info (empty for outbound demo; populated by webhook later)
+    customer: {
+      lead: null,
+      customerRecord: null,
+    },
+
+    // Decision intelligence (preliminary — refined during/after call)
+    decisions: {
+      nextBestAction: 'Qualify lead and book estimate',
+      rank: {
+        priority: 'medium',
+        score: 0.5,
+      },
+    },
+
+    // Business intelligence
+    intelligence: {
+      jobIntelligence: {
+        industry,
+        avgJobValue: d.avgJobValue,
+        emergencyLikelihood: d.emergencyLikelihood,
+        revenueRange: { min: d.revenueRangeMin, max: d.revenueRangeMax },
+      },
+    },
+  };
+}", "oldString" string="true">function getDefaults(industry) {
+  return INDUSTRY_DEFAULTS[industry] || INDUSTRY_DEFAULTS['General Contracting'];
+}
+
 function generateDemoEC(businessName, industry) {
   const d = getDefaults(industry);
   return { businessName, industry, service: d.service, avgJobValue: d.avgJobValue, emergencyLikelihood: d.emergencyLikelihood, revenueRangeMin: d.revenueRangeMin, revenueRangeMax: d.revenueRangeMax, generatedAt: new Date().toISOString() };
@@ -129,7 +228,7 @@ function generateDemoEC(businessName, industry) {
 function mockTranscript(industry, count) {
   const scripts = {
     'Roofing': [
-      { speaker: 'ai', text: "Thank you for calling. This is NorthStar's virtual receptionist. How can I help you today?" },
+      { speaker: 'ai', text: "Thanks for calling. This is NorthStar, your AI receptionist. How can I help you today?" },
       { speaker: 'customer', text: "Hi, I've got some shingles missing after that storm last night. Can someone come take a look?" },
       { speaker: 'ai', text: "I'm sorry to hear about the storm damage. Let me get your information so we can help. What's your name?" },
       { speaker: 'customer', text: "Mike Thompson." },
@@ -143,7 +242,7 @@ function mockTranscript(industry, count) {
       { speaker: 'customer', text: "Yes, tomorrow morning works great." },
     ],
     'Plumbing': [
-      { speaker: 'ai', text: "Thank you for calling. This is NorthStar's virtual receptionist. How can I help?" },
+      { speaker: 'ai', text: "Thanks for calling. This is NorthStar, your AI receptionist. How can I help?" },
       { speaker: 'customer', text: "Help! Water is pouring from under my kitchen sink — I think a pipe burst!" },
       { speaker: 'ai', text: "That sounds urgent. Let me get your details right away. What's your name?" },
       { speaker: 'customer', text: "Sarah Williams. Please hurry!" },
@@ -156,7 +255,7 @@ function mockTranscript(industry, count) {
       { speaker: 'ai', text: "It's usually near the water meter or where the main line enters your unit. The plumber can help when they arrive. You'll get a text with their ETA." },
     ],
     'HVAC': [
-      { speaker: 'ai', text: "Thank you for calling. This is NorthStar's virtual receptionist. How can I help you today?" },
+      { speaker: 'ai', text: "Thanks for calling. This is NorthStar, your AI receptionist. How can I help you today?" },
       { speaker: 'customer', text: "Hi, my AC stopped working and it's 85 degrees in here. Can you send someone?" },
       { speaker: 'ai', text: "I understand how uncomfortable that must be. Let me get your information. What's your name?" },
       { speaker: 'customer', text: "David Chen." },
@@ -339,7 +438,7 @@ router.post('/call', async (req, res) => {
     log('4. phone_validated', 'OK', `phone="${phoneNumber}" (${digits.length} digits)`);
 
     const demoSessionId = uuidv4();
-    const ec = generateDemoEC(businessName, normalizedIndustry);
+    const ec = buildExecutiveContext(businessName, normalizedIndustry, phoneNumber, demoSessionId);
     const configured = Boolean(config.retell && config.retell.apiKey && config.retell.agentId);
 
     // ── Stage 5: Retell credentials verified ──
@@ -374,8 +473,10 @@ router.post('/call', async (req, res) => {
     let callResult;
     try {
       callResult = await retell.createCall(e164Phone, config.retell.agentId, {
-        service: ec.service, caller: `Demo: ${businessName}`,
+        service: ec.service,
+        caller: `Demo: ${businessName}`,
         fromNumber: config.retell?.phoneNumber || '',
+        executiveContext: ec,  // Full NorthStar Executive Context → retell_llm_dynamic_variables
       });
     } catch (callErr) {
       // Classify the error

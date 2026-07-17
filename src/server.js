@@ -577,6 +577,11 @@ async function start() {
   });
 }
 
-start().catch(err => {
-  console.error('[Server] Failed to start:', err);
-});
+// Only auto-start when run directly (not when required via require() for testing)
+if (require.main === module) {
+  start().catch(err => {
+    console.error('[Server] Failed to start:', err);
+  });
+}
+
+module.exports = { app, start };

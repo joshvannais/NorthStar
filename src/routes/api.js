@@ -20,11 +20,46 @@ const router = express.Router();
 
 /**
  * GET /api/health
- * Health check endpoint.
+ * Health check endpoint with actual component status.
  */
 router.get('/health', (req, res) => {
-      res.json({ status: 'ok', service: 'northstar-solutions', version: '1.0.0' });
-    });
+  const fs = require('fs');
+  const path = require('path');
+  const dataDir = path.resolve(__dirname, '..', '..', 'data');
+  const now = new Date().toISOString();
+
+  // Check data directory
+  const dataDirOk = fs.existsSync(dataDir);
+  const leadsOk = dataDirOk && fs.existsSync(path.join(dataDir, 'leads.json'));
+
+  // Check database
+  const dbOk = db.isAvailable();
+
+  // Check config
+  const retellOk = !!(process.env.RETELL_API_KEY || config.retell.apiKey);
+  const twilioOk = !!(process.env.TWILIO_ACCOUNT_SID || config.twilio.accountSid);
+
+  // Overall status
+  const components = {
+    dataDirectory: dataDirOk ? 'healthy' : 'degraded',
+    leadsFile: leadsOk ? 'healthy' : 'degraded',
+    database: dbOk ? 'healthy' : 'unavailable',
+    retellAI: retellOk ? 'healthy' : 'unconfigured',
+    twilio: twilioOk ? 'healthy' : 'unconfigured',
+  };
+
+  const allHealthy = Object.values(components).every(s => s === 'healthy' || s === 'unconfigured');
+  const status = allHealthy ? 'ok' : 'degraded';
+
+  res.json({
+    status,
+    service: 'northstar-solutions',
+    version: '1.0.0',
+    timestamp: now,
+    uptime: process.uptime(),
+    components,
+  });
+});
 
 /**
  * POST /api/retell/webhook

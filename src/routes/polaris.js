@@ -298,6 +298,7 @@ router.post('/chat', (req, res) => {
       page: pageContext.page || 'dashboard',
       leadId: pageContext.leadId || null,
       userMessage: message,
+      correlationId: req.correlationId || 'unknown',
     });
 
     // Build system prompt from unified context

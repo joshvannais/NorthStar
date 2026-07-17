@@ -34,10 +34,11 @@
  * @returns {{ laborCost: number, breakdown: { crewSize: number, hours: number, hourlyRate: number, effectiveRate: number } }}
  */
 function calculateLaborCost(opts) {
-  const crewSize = opts.crewSize || 1;
-  const hours = opts.hours || 0;
-  const hourlyRate = opts.hourlyRate || 42;
-  const overtimeMultiplier = opts.overtimeMultiplier || 1.0;
+  // NaN guards — sanitize all numeric inputs
+  const crewSize = Number.isFinite(opts.crewSize) ? opts.crewSize : 1;
+  const hours = Number.isFinite(opts.hours) ? opts.hours : 0;
+  const hourlyRate = Number.isFinite(opts.hourlyRate) ? opts.hourlyRate : 42;
+  const overtimeMultiplier = Number.isFinite(opts.overtimeMultiplier) ? opts.overtimeMultiplier : 1.0;
 
   // Standard hours (40hr/week assumed as base)
   const standardHours = Math.min(hours, 40);
@@ -46,7 +47,8 @@ function calculateLaborCost(opts) {
   const standardCost = crewSize * standardHours * hourlyRate;
   const overtimeCost = crewSize * overtimeHours * hourlyRate * overtimeMultiplier;
 
-  const laborCost = Math.round((standardCost + overtimeCost) * 100) / 100;
+  let laborCost = Math.round((standardCost + overtimeCost) * 100) / 100;
+  if (!Number.isFinite(laborCost)) laborCost = 0;
 
   return {
     laborCost,
@@ -54,11 +56,12 @@ function calculateLaborCost(opts) {
       crewSize,
       hours,
       hourlyRate,
-      effectiveRate: Math.round(hourlyRate * overtimeMultiplier * 100) / 100,
+      effectiveRate: Number.isFinite(hourlyRate * overtimeMultiplier)
+        ? Math.round(hourlyRate * overtimeMultiplier * 100) / 100 : hourlyRate,
       standardHours,
       overtimeHours,
-      standardCost: Math.round(standardCost * 100) / 100,
-      overtimeCost: Math.round(overtimeCost * 100) / 100,
+      standardCost: Number.isFinite(standardCost) ? Math.round(standardCost * 100) / 100 : 0,
+      overtimeCost: Number.isFinite(overtimeCost) ? Math.round(overtimeCost * 100) / 100 : 0,
     },
   };
 }
@@ -147,7 +150,7 @@ function getRecommendedCrewSize(serviceType) {
  * @returns {{ travelMinutes: number, travelCost: number, travelCostPerMinute: number }}
  */
 function calculateTravel(opts) {
-  const serviceType = opts.serviceType || 'General';
+  const serviceType = (opts && typeof opts.serviceType === 'string') ? opts.serviceType : 'General';
 
   // Simulated travel times based on service type
   // In Mission 18, these will be replaced with actual GPS routing
@@ -192,7 +195,11 @@ function calculateTravel(opts) {
   // Travel cost: $0.58/mile (IRS standard), assuming ~35mph average in service area
   // = ~$0.34 per minute of travel
   const travelCostPerMinute = 0.34;
-  const travelCost = Math.round(travelMinutes * travelCostPerMinute * 100) / 100;
+  let travelCost = Math.round(travelMinutes * travelCostPerMinute * 100) / 100;
+
+  // NaN guard — ensure outputs are finite
+  if (!Number.isFinite(travelCost)) travelCost = 0;
+  if (!Number.isFinite(travelMinutes)) travelMinutes = 18;
 
   return {
     travelMinutes,
@@ -222,9 +229,9 @@ function calculateTravel(opts) {
  */
 function estimateProductionDuration(opts) {
   const serviceType = opts.serviceType || 'General';
-  const crewSize = opts.crewSize || getRecommendedCrewSize(serviceType);
+  const crewSize = Number.isFinite(opts.crewSize) ? opts.crewSize : getRecommendedCrewSize(serviceType);
   const complexity = opts.complexity || 'standard';
-  const avgPrice = opts.avgPrice || 0;
+  const avgPrice = Number.isFinite(opts.avgPrice) ? opts.avgPrice : 0;
 
   // Base hours by service type
   const BASE_HOURS_MAP = {
@@ -258,13 +265,17 @@ function estimateProductionDuration(opts) {
       break;
     }
   }
+  // NaN guard — ensure baseHours is finite
+  if (!Number.isFinite(baseHours)) baseHours = 3.0;
 
   // Complexity multiplier
   const COMPLEXITY_MAP = { simple: 0.7, standard: 1.0, complex: 1.5 };
   const complexityMultiplier = COMPLEXITY_MAP[complexity] || 1.0;
 
   // Crew size adjustment: more crew = less time, but diminishing returns
-  const crewEfficiencyFactor = 1 + (crewSize - 1) * 0.65;
+  let crewEfficiencyFactor = 1 + (crewSize - 1) * 0.65;
+  // Protect against NaN and divide-by-zero: efficiency factor must be > 0
+  if (!Number.isFinite(crewEfficiencyFactor) || crewEfficiencyFactor <= 0) crewEfficiencyFactor = 1;
   const crewAdjustedHours = baseHours / crewEfficiencyFactor;
 
   // Price-based scope adjustment
@@ -311,9 +322,13 @@ function estimateProductionDuration(opts) {
 
   const confidenceLabel = confidenceScore >= 90 ? 'High' : confidenceScore >= 70 ? 'Medium' : 'Low';
 
+  // NaN guard — ensure outputs are finite
+  const safeEstimatedHours = Number.isFinite(estimatedHours) ? estimatedHours : 3.0;
+  const safeConfidenceScore = Number.isFinite(confidenceScore) ? confidenceScore : 75;
+
   return {
-    estimatedHours,
-    confidenceScore,
+    estimatedHours: safeEstimatedHours,
+    confidenceScore: safeConfidenceScore,
     confidenceLabel,
     breakdown: {
       baseHours,
@@ -321,7 +336,7 @@ function estimateProductionDuration(opts) {
       complexityMultiplier,
       crewEfficiencyFactor,
       priceFactor,
-      totalHours: estimatedHours,
+      totalHours: safeEstimatedHours,
     },
     confidenceReasons,
   };
@@ -345,11 +360,16 @@ function estimateProductionDuration(opts) {
  * @returns {{ estimatedProfit: number, profitMargin: string, breakdown: Object }}
  */
 function calculateEstimatedProfit(opts) {
-  const revenue = opts.revenue || 0;
-  const laborCost = opts.laborResult ? opts.laborResult.laborCost : 0;
-  const materialCost = opts.materialCost || Math.round(revenue * 0.25 * 100) / 100; // 25% placeholder
-  const travelCost = opts.travelResult ? opts.travelResult.travelCost : 0;
-  const overheadPercent = opts.overheadPercent || 15;
+  // NaN guards — sanitize all numeric inputs
+  const revenue = Number.isFinite(opts.revenue) ? opts.revenue : 0;
+  const laborCost = (opts.laborResult && Number.isFinite(opts.laborResult.laborCost))
+    ? opts.laborResult.laborCost : 0;
+  const materialCost = Number.isFinite(opts.materialCost)
+    ? opts.materialCost
+    : Math.round(revenue * 0.25 * 100) / 100; // 25% placeholder
+  const travelCost = (opts.travelResult && Number.isFinite(opts.travelResult.travelCost))
+    ? opts.travelResult.travelCost : 0;
+  const overheadPercent = Number.isFinite(opts.overheadPercent) ? opts.overheadPercent : 15;
 
   // Calculate overhead
   const overhead = Math.round((revenue * overheadPercent / 100) * 100) / 100;
@@ -358,10 +378,17 @@ function calculateEstimatedProfit(opts) {
   const totalCosts = Math.round((laborCost + materialCost + travelCost + overhead) * 100) / 100;
 
   // Profit
-  const estimatedProfit = Math.round((revenue - totalCosts) * 100) / 100;
+  let estimatedProfit = Math.round((revenue - totalCosts) * 100) / 100;
+  // NaN guard
+  if (!Number.isFinite(estimatedProfit)) estimatedProfit = 0;
 
-  // Profit margin
-  const profitMargin = revenue > 0 ? ((estimatedProfit / revenue) * 100).toFixed(1) + '%' : '0.0%';
+  // Profit margin — guard against NaN/Infinity and divide-by-zero
+  let profitMargin;
+  if (Number.isFinite(revenue) && revenue > 0 && Number.isFinite(estimatedProfit)) {
+    profitMargin = ((estimatedProfit / revenue) * 100).toFixed(1) + '%';
+  } else {
+    profitMargin = '0.0%';
+  }
 
   return {
     estimatedProfit,
@@ -395,8 +422,8 @@ function calculateEstimatedProfit(opts) {
  */
 function calculateConfidence(opts) {
   const serviceType = opts.serviceType || 'General';
-  const avgPrice = opts.avgPrice || 0;
-  const leadCount = opts.leadCount || 0;
+  const avgPrice = Number.isFinite(opts.avgPrice) ? opts.avgPrice : 0;
+  const leadCount = Number.isFinite(opts.leadCount) ? opts.leadCount : 0;
   const hasCustomerHistory = opts.hasCustomerHistory || false;
   const hasKnownPricing = opts.hasKnownPricing || false;
 
@@ -447,6 +474,9 @@ function calculateConfidence(opts) {
   // Cap at 99
   score = Math.max(10, Math.min(99, score));
 
+  // NaN guard
+  if (!Number.isFinite(score)) score = 60;
+
   const label = score >= 90 ? 'High' : score >= 70 ? 'Medium' : 'Low';
 
   return {
@@ -474,11 +504,11 @@ function calculateJobIntelligence(lead, options) {
   if (!lead) return null;
 
   const opts = options || {};
-  const hourlyRate = opts.hourlyRate || 42;
-  const leadCount = opts.leadCount || 0;
+  const hourlyRate = Number.isFinite(opts.hourlyRate) ? opts.hourlyRate : 42;
+  const leadCount = Number.isFinite(opts.leadCount) ? opts.leadCount : 0;
 
   const serviceType = lead.service || 'General';
-  const avgPrice = lead.avgPrice || 0;
+  const avgPrice = Number.isFinite(lead.avgPrice) ? lead.avgPrice : 0;
   const crewSize = getRecommendedCrewSize(serviceType);
 
   // 1. Production duration
@@ -519,41 +549,54 @@ function calculateJobIntelligence(lead, options) {
   });
 
   // 6. Profit per labor hour
-  const profitPerHour = duration.estimatedHours > 0
-    ? Math.round((profit.estimatedProfit / duration.estimatedHours) * 100) / 100
-    : 0;
+  let profitPerHour = 0;
+  if (Number.isFinite(duration.estimatedHours) && duration.estimatedHours > 0) {
+    profitPerHour = Math.round((profit.estimatedProfit / duration.estimatedHours) * 100) / 100;
+  }
+  if (!Number.isFinite(profitPerHour)) profitPerHour = 0;
+
+  // NaN guard — ensure all return values are finite
+  const safeRevenue = Number.isFinite(avgPrice) ? avgPrice : 0;
+  const safeDurationHours = Number.isFinite(duration.estimatedHours) ? duration.estimatedHours : 0;
+  const safeDurationConfidence = Number.isFinite(duration.confidenceScore) ? duration.confidenceScore : 75;
+  const safeLaborTotal = Number.isFinite(labor.laborCost) ? labor.laborCost : 0;
+  const safeTravelMinutes = Number.isFinite(travel.travelMinutes) ? travel.travelMinutes : 18;
+  const safeTravelCost = Number.isFinite(travel.travelCost) ? travel.travelCost : 0;
+  const safeProfitEstimated = Number.isFinite(profit.estimatedProfit) ? profit.estimatedProfit : 0;
+  const safeConfidenceScore = Number.isFinite(confidence.confidenceScore) ? confidence.confidenceScore : 60;
+  const safeRoiScore = Number.isFinite(profitPerHour * 10) ? Math.round((profitPerHour * 10) * 100) / 100 : 0;
 
   return {
     leadId: lead.id,
     caller: lead.caller,
     service: serviceType,
-    revenue: avgPrice,
+    revenue: safeRevenue,
     recommendedCrewSize: crewSize,
     estimatedDuration: {
-      hours: duration.estimatedHours,
-      confidenceScore: duration.confidenceScore,
-      confidenceLabel: duration.confidenceLabel,
+      hours: safeDurationHours,
+      confidenceScore: safeDurationConfidence,
+      confidenceLabel: duration.confidenceLabel || 'Low',
     },
     laborCost: {
-      total: labor.laborCost,
+      total: safeLaborTotal,
       breakdown: labor.breakdown,
     },
     travel: {
-      minutes: travel.travelMinutes,
-      cost: travel.travelCost,
+      minutes: safeTravelMinutes,
+      cost: safeTravelCost,
     },
     profit: {
-      estimated: profit.estimatedProfit,
-      margin: profit.profitMargin,
+      estimated: safeProfitEstimated,
+      margin: profit.profitMargin || '0.0%',
       breakdown: profit.breakdown,
     },
     confidence: {
-      score: confidence.confidenceScore,
-      label: confidence.confidenceLabel,
-      reason: confidence.confidenceReason,
+      score: safeConfidenceScore,
+      label: confidence.confidenceLabel || 'Low',
+      reason: confidence.confidenceReason || 'Standard estimate',
     },
     profitPerLaborHour: profitPerHour,
-    roiScore: Math.round((profitPerHour * 10) * 100) / 100,
+    roiScore: safeRoiScore,
   };
 }
 
@@ -602,18 +645,43 @@ function calculateAggregateIntelligence(leads) {
 
   const results = calculateAllJobIntelligence(leads);
 
-  const totalPipelineValue = leads.reduce((s, l) => s + (l.avgPrice || 0), 0);
-  const totalEstimatedLabor = results.reduce((s, r) => s + r.laborCost.total, 0);
-  const totalEstimatedProfit = results.reduce((s, r) => s + r.profit.estimated, 0);
-  const totalTravelMinutes = results.reduce((s, r) => s + r.travel.minutes, 0);
-  const totalProductionHours = results.reduce((s, r) => s + r.estimatedDuration.hours, 0);
-  const avgConfidence = results.length > 0
-    ? Math.round(results.reduce((s, r) => s + r.confidence.score, 0) / results.length)
-    : 0;
+  const totalPipelineValue = leads.reduce((s, l) => {
+    const price = Number.isFinite(l.avgPrice) ? l.avgPrice : 0;
+    return s + price;
+  }, 0);
+  const totalEstimatedLabor = results.reduce((s, r) => {
+    const labor = Number.isFinite(r.laborCost.total) ? r.laborCost.total : 0;
+    return s + labor;
+  }, 0);
+  const totalEstimatedProfit = results.reduce((s, r) => {
+    const profit = Number.isFinite(r.profit.estimated) ? r.profit.estimated : 0;
+    return s + profit;
+  }, 0);
+  const totalTravelMinutes = results.reduce((s, r) => {
+    const mins = Number.isFinite(r.travel.minutes) ? r.travel.minutes : 0;
+    return s + mins;
+  }, 0);
+  const totalProductionHours = results.reduce((s, r) => {
+    const hours = Number.isFinite(r.estimatedDuration.hours) ? r.estimatedDuration.hours : 0;
+    return s + hours;
+  }, 0);
+  let avgConfidence = 0;
+  if (results.length > 0) {
+    const sumConfidence = results.reduce((s, r) => {
+      const score = Number.isFinite(r.confidence.score) ? r.confidence.score : 0;
+      return s + score;
+    }, 0);
+    avgConfidence = Math.round(sumConfidence / results.length);
+    if (!Number.isFinite(avgConfidence)) avgConfidence = 0;
+  }
 
-  const avgProfitMargin = totalPipelineValue > 0
-    ? ((totalEstimatedProfit / totalPipelineValue) * 100).toFixed(1) + '%'
-    : '0.0%';
+  let avgProfitMargin = '0.0%';
+  if (Number.isFinite(totalPipelineValue) && totalPipelineValue > 0) {
+    const margin = (totalEstimatedProfit / totalPipelineValue) * 100;
+    if (Number.isFinite(margin)) {
+      avgProfitMargin = margin.toFixed(1) + '%';
+    }
+  }
 
   // Sort for top jobs
   const byRevenue = [...results].sort((a, b) => b.revenue - a.revenue);
@@ -622,13 +690,13 @@ function calculateAggregateIntelligence(leads) {
 
   return {
     totalLeads: leads.length,
-    totalPipelineValue,
-    totalEstimatedLabor: Math.round(totalEstimatedLabor * 100) / 100,
-    totalEstimatedProfit: Math.round(totalEstimatedProfit * 100) / 100,
+    totalPipelineValue: Number.isFinite(totalPipelineValue) ? totalPipelineValue : 0,
+    totalEstimatedLabor: Number.isFinite(totalEstimatedLabor) ? Math.round(totalEstimatedLabor * 100) / 100 : 0,
+    totalEstimatedProfit: Number.isFinite(totalEstimatedProfit) ? Math.round(totalEstimatedProfit * 100) / 100 : 0,
     averageProfitMargin: avgProfitMargin,
     averageConfidence: avgConfidence,
-    totalTravelMinutes: Math.round(totalTravelMinutes),
-    totalProductionHours: Math.round(totalProductionHours * 10) / 10,
+    totalTravelMinutes: Number.isFinite(totalTravelMinutes) ? Math.round(totalTravelMinutes) : 0,
+    totalProductionHours: Number.isFinite(totalProductionHours) ? Math.round(totalProductionHours * 10) / 10 : 0,
     highestValueJob: byRevenue[0] || null,
     highestProfitJob: byProfit[0] || null,
     mostEfficientJob: byEfficiency[0] || null,

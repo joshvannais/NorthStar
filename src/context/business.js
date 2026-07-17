@@ -230,9 +230,21 @@ function buildCompactContext(pageContext, computed) {
       status: l.status,
       outcome: l.outcome || 'pending',
       receivedAt: l.receivedAt,
+
+      // Fields consumed by intelligence.js (calculateJobIntelligence)
       jobDetail: l.jobDetail,
-      summary: l.summary,
+      // Fields consumed by customerIntelligence.js
       icon: l.icon,
+      summary: l.summary,
+      polarisEstimate: l.polarisEstimate,
+      // Additional fields for future engine compatibility
+      duration: l.duration,
+      time: l.time,
+      priceBreakdown: l.priceBreakdown,
+      pricingBreakdown: l.pricingBreakdown,
+      transcript: l.transcript,
+      polarisAnalysis: l.polarisAnalysis,
+      updatedAt: l.updatedAt,
     })),
     recommendations: data.recommendations.filter(r => !r.resolved).map(r => ({
       id: r.id,

@@ -6,6 +6,7 @@ const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
 const { handleWebhook } = require('../retell/webhook');
 const customersRouter = require('./customers');
+const voiceRouter = require('./voice');
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
 const jobber = require('../integrations/jobber');
@@ -116,6 +117,9 @@ router.post('/contact', async (req, res) => {
     res.status(500).json({ error: 'Failed to submit message' });
   }
 });
+
+// Mount voice routes (handles its own auth: webhook is public, everything else protected)
+router.use('/v1/voice', voiceRouter);
 
 // ══════════════════════════════════════════════
 // PROTECTED ROUTES — authentication required

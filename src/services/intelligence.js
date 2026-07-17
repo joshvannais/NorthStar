@@ -20,6 +20,45 @@
  */
 'use strict';
 
+const businessProfile = require('./businessProfile');
+
+/**
+ * Get operational defaults from the Business Profile.
+ * Falls back to hardcoded defaults if BP field is missing.
+ * Called once per pipeline run — cached in module scope.
+ * @returns {Object} BP-driven defaults
+ */
+let _bpCache = null;
+let _bpCacheTime = 0;
+const BP_CACHE_TTL = 5000;
+
+function getBPDefaults() {
+  const now = Date.now();
+  if (_bpCache && now - _bpCacheTime < BP_CACHE_TTL) return _bpCache;
+  try {
+    const bp = businessProfile.getProfile();
+    _bpCache = {
+      averageHourlyRate: (bp.crew && Number.isFinite(bp.crew.averageHourlyRate)) ? bp.crew.averageHourlyRate : 42,
+      defaultCrewSize: (bp.crew && Number.isFinite(bp.crew.defaultCrewSize)) ? bp.crew.defaultCrewSize : 2,
+      overtimeMultiplier: (bp.crew && Number.isFinite(bp.crew.overtimeMultiplier)) ? bp.crew.overtimeMultiplier : 1.0,
+      materialCostPercent: (bp.financial && Number.isFinite(bp.financial.materialCostPercent)) ? bp.financial.materialCostPercent : 25,
+      overheadPercent: (bp.financial && Number.isFinite(bp.financial.overheadPercent)) ? bp.financial.overheadPercent : 15,
+      costPerMile: (bp.financial && Number.isFinite(bp.financial.travelCharge)) ? bp.financial.travelCharge : 0.58,
+    };
+    _bpCacheTime = now;
+    return _bpCache;
+  } catch (e) {
+    return {
+      averageHourlyRate: 42,
+      defaultCrewSize: 2,
+      overtimeMultiplier: 1.0,
+      materialCostPercent: 25,
+      overheadPercent: 15,
+      costPerMile: 0.58,
+    };
+  }
+}
+
 // ====================================================================
 // Module 1: Labor Cost Engine
 // ====================================================================
@@ -73,8 +112,11 @@ function calculateLaborCost(opts) {
 /**
  * Centralized service-to-crew-size mapping.
  * Easily extendable — add new services here.
+ * Default sourced from Business Profile (falls back to 2).
  */
-const DEFAULT_CREW_SIZE = 2;
+function getDefaultCrewSize() {
+  return getBPDefaults().defaultCrewSize;
+}
 
 const CREW_SIZE_MAP = {
   'Window replacement': 2,
@@ -119,7 +161,7 @@ const CREW_SIZE_MAP = {
  * @returns {number} Recommended crew size
  */
 function getRecommendedCrewSize(serviceType) {
-  if (!serviceType) return DEFAULT_CREW_SIZE;
+  if (!serviceType) return getDefaultCrewSize();
   // Try exact match first, then partial match
   if (CREW_SIZE_MAP[serviceType]) return CREW_SIZE_MAP[serviceType];
   const lower = serviceType.toLowerCase();
@@ -128,7 +170,7 @@ function getRecommendedCrewSize(serviceType) {
       return size;
     }
   }
-  return DEFAULT_CREW_SIZE;
+  return getDefaultCrewSize();
 }
 
 // ====================================================================
@@ -147,6 +189,7 @@ function getRecommendedCrewSize(serviceType) {
  * @param {string} opts.serviceType - Type of service (affects travel time estimate)
  * @param {string} [opts.address] - Customer address (for future GPS routing)
  * @param {string} [opts.hqAddress] - Headquarters address (for future GPS routing)
+ * @param {number} [opts.costPerMile] - Cost per mile from Business Profile (default: 0.58)
  * @returns {{ travelMinutes: number, travelCost: number, travelCostPerMinute: number }}
  */
 function calculateTravel(opts) {
@@ -192,9 +235,11 @@ function calculateTravel(opts) {
     }
   }
 
-  // Travel cost: $0.58/mile (IRS standard), assuming ~35mph average in service area
-  // = ~$0.34 per minute of travel
-  const travelCostPerMinute = 0.34;
+  // Travel cost: sourced from Business Profile (IRS standard default $0.58/mile)
+  // Convert to per-minute: costPerMile * (miles per minute) ≈ costPerMile * (35/60)
+  // Simplified: ~costPerMile * 0.583 per minute
+  const costPerMile = (opts && Number.isFinite(opts.costPerMile)) ? opts.costPerMile : 0.58;
+  const travelCostPerMinute = Math.round(costPerMile * 0.583 * 100) / 100;
   let travelCost = Math.round(travelMinutes * travelCostPerMinute * 100) / 100;
 
   // NaN guard — ensure outputs are finite
@@ -504,7 +549,8 @@ function calculateJobIntelligence(lead, options) {
   if (!lead) return null;
 
   const opts = options || {};
-  const hourlyRate = Number.isFinite(opts.hourlyRate) ? opts.hourlyRate : 42;
+  const bp = getBPDefaults();
+  const hourlyRate = Number.isFinite(opts.hourlyRate) ? opts.hourlyRate : bp.averageHourlyRate;
   const leadCount = Number.isFinite(opts.leadCount) ? opts.leadCount : 0;
 
   const serviceType = lead.service || 'General';
@@ -524,19 +570,24 @@ function calculateJobIntelligence(lead, options) {
     crewSize,
     hours: duration.estimatedHours,
     hourlyRate,
+    overtimeMultiplier: bp.overtimeMultiplier,
   });
 
-  // 3. Travel
+  // 3. Travel (with BP cost per mile)
   const travel = calculateTravel({
     serviceType,
     address: lead.address,
+    costPerMile: bp.costPerMile,
   });
 
-  // 4. Profit
+  // 4. Profit (with BP financial defaults)
+  const bpMaterialCost = Math.round(avgPrice * bp.materialCostPercent / 100 * 100) / 100;
   const profit = calculateEstimatedProfit({
     revenue: avgPrice,
     laborResult: labor,
     travelResult: travel,
+    materialCost: bpMaterialCost,
+    overheadPercent: bp.overheadPercent,
   });
 
   // 5. Confidence

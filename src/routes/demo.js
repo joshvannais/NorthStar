@@ -215,13 +215,6 @@ function buildExecutiveContext(businessName, industry, phoneNumber, demoSessionI
       },
     },
   };
-}", "oldString" string="true">function getDefaults(industry) {
-  return INDUSTRY_DEFAULTS[industry] || INDUSTRY_DEFAULTS['General Contracting'];
-}
-
-function generateDemoEC(businessName, industry) {
-  const d = getDefaults(industry);
-  return { businessName, industry, service: d.service, avgJobValue: d.avgJobValue, emergencyLikelihood: d.emergencyLikelihood, revenueRangeMin: d.revenueRangeMin, revenueRangeMax: d.revenueRangeMax, generatedAt: new Date().toISOString() };
 }
 
 // ── Mock transcript (simulation only) ──

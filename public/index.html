@@ -22,8 +22,10 @@
     .demo-form-card input, .demo-form-card select { width: 100%; padding: 12px 14px; border: 1px solid var(--neutral-300); border-radius: 8px; font-size: 15px; font-family: Inter, sans-serif; margin-bottom: 16px; box-sizing: border-box; background: #fff; }
     .demo-form-card input:focus, .demo-form-card select:focus { outline: none; border-color: var(--brand-600); box-shadow: 0 0 0 3px rgba(212,175,55,0.15); }
     .demo-scenarios { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; justify-content: center; }
-    .demo-scenario-chip { padding: 8px 14px; border: 1px solid var(--neutral-300); border-radius: 100px; font-size: 13px; font-weight: 500; cursor: pointer; background: #fff; color: var(--neutral-600); transition: all 0.15s; }
+    .demo-scenario-chip { padding: 8px 14px; border: 1px solid var(--neutral-300); border-radius: 100px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--card-bg, #fff); color: var(--neutral-600); transition: all 0.15s; }
     .demo-scenario-chip:hover, .demo-scenario-chip.active { border-color: var(--brand-600); color: var(--brand-600); background: rgba(212,175,55,0.08); }
+    [data-theme="dark"] .demo-scenario-chip { background: #1e1e2e; border-color: #2d2d3f; color: #e5e7eb; }
+    [data-theme="dark"] .demo-scenario-chip:hover, [data-theme="dark"] .demo-scenario-chip.active { border-color: var(--brand-600); color: var(--brand-600); background: rgba(212,175,55,0.15); }
     .demo-scenario-chip.custom { border-style: dashed; }
     .demo-btn-call { width: 100%; padding: 14px; background: var(--brand-600); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: Inter, sans-serif; transition: all 0.2s; }
     .demo-btn-call:hover { background: var(--brand-700); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.3); }
@@ -888,11 +890,11 @@
 
       var btn = document.getElementById('demoCallBtn');
       btn.disabled = true;
-      btn.textContent = '⏳ Connecting...';
+      btn.textContent = '⏳ Preparing call...';
 
       try {
         var controller = new AbortController();
-        var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
+        var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
         var resp = await fetch(DEMO_API + '/call', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -900,46 +902,73 @@
           signal: controller.signal
         });
         clearTimeout(timeoutId);
+
         if (!resp.ok) {
           var errData = await resp.json().catch(function() { return {}; });
-          throw new Error(errData.error ? errData.error.message : 'Demo call request failed');
+          var errMsg = errData?.error?.message || 'Unable to place call. Please try again.';
+          showNotification(errMsg, 'error');
+          btn.disabled = false;
+          btn.textContent = '\uD83D\uDCDE Call Me Now';
+          return;
         }
+
         var data = await resp.json();
+        if (!data.demoSessionId || !data.callId) {
+          showNotification('Unable to place call. Please try again.', 'error');
+          btn.disabled = false;
+          btn.textContent = '\uD83D\uDCDE Call Me Now';
+          return;
+        }
+
         demoState.sessionId = data.demoSessionId;
         demoState.callStatus = data.status;
 
-        // If Retell is not configured, transition to simulation mode
-        if (data.status === 'simulation-mode-required') {
-          // Start simulation immediately
-          startSimulation(businessName, industry);
+        if (data.status === 'idle') {
+          // Simulation path — call /simulate to start
+          var simResp = await fetch(DEMO_API + '/' + data.demoSessionId + '/simulate', { method: 'POST' });
+          if (!simResp.ok) {
+            showNotification('Unable to start simulation. Please try again.', 'error');
+            btn.disabled = false;
+            btn.textContent = '\uD83D\uDCDE Call Me Now';
+            return;
+          }
+          var simData = await simResp.json();
+          demoState.callStatus = simData.status;
+          transitionToLiveView('simulation');
+        } else if (data.status === 'call_created') {
+          // Live call — show preparing state
+          transitionToLiveView('call_created');
         } else {
-          // Live call — show dialing state
           transitionToLiveView(data.status);
         }
+
         btn.disabled = false;
-        btn.textContent = '📞 Call Me Now';
+        btn.textContent = '\uD83D\uDCDE Call Me Now';
       } catch (err) {
         console.error('[Demo] Call error:', err.message);
-        showNotification('📋 Switching to Interactive Simulation Mode — experiencing NorthStar with simulated conversations', 'success');
-        setTimeout(function() { runSimulatedDemo(businessName, industry); }, 600);
+        var notificationMsg = err.name === 'AbortError' ? 'Request timed out. Please try again.' : 'Unable to place call. Please try again.';
+        showNotification(notificationMsg, 'error');
         btn.disabled = false;
-        btn.textContent = '📞 Call Me Now';
+        btn.textContent = '\uD83D\uDCDE Call Me Now';
       }
     }
 
-    // ── Start simulation (called when Retell returns simulation-mode-required) ──
+    // ── Start simulation (called when Retell is not configured) ──
     async function startSimulation(businessName, industry) {
-      demoState.callStatus = 'simulated';
+      demoState.callStatus = 'simulation';
       try {
         var resp = await fetch(DEMO_API + '/' + demoState.sessionId + '/simulate', { method: 'POST' });
         if (resp.ok) {
           var data = await resp.json();
+          demoState.callStatus = data.status;
         }
       } catch(e) {}
-      transitionToLiveView('simulated');
+      transitionToLiveView(demoState.callStatus);
     }
 
-    // ── Transition to live view (reusable for replays) ──
+    // ── Transition to live view ──
+    // The frontend ONLY reflects what the backend tells us.
+    // We NEVER invent or predict state.
     function transitionToLiveView(callStatus) {
       if (demoState.timerInterval) clearInterval(demoState.timerInterval);
       if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
@@ -956,43 +985,59 @@
       document.getElementById('callStateDialing').classList.remove('active');
       document.getElementById('callStateRinging').classList.remove('active');
       document.getElementById('callStateAnswered').classList.remove('active');
-
-      // Hide live header until connected
       document.getElementById('demoLiveHeader').style.display = 'none';
 
-      document.getElementById('demoTranscriptBody').innerHTML = '<div class="demo-loading" id="demoTranscriptLoading"><div class="demo-spinner"></div><p style="font-size:14px;color:var(--neutral-500);">Waiting for conversation to begin...</p></div>';
+      document.getElementById('demoTranscriptBody').innerHTML = '<div class="demo-loading" id="demoTranscriptLoading"><div class="demo-spinner"></div><p style="font-size:14px;color:var(--neutral-500);">Waiting for call to connect...</p></div>';
       document.getElementById('demoTranscriptCount').textContent = '0 messages';
       document.getElementById('demoStatusDot').className = 'demo-status-connecting';
-      document.getElementById('demoStatusLabel').textContent = 'Connecting...';
+      document.getElementById('demoStatusLabel').textContent = getStatusLabel(callStatus);
       document.getElementById('demoLiveTimer').textContent = '0:00';
 
       // Reset Polaris card
       document.getElementById('demoPolarisConfidence').textContent = '—';
-      document.getElementById('demoPolarisRevenue').textContent = 'Analyzing...';
-      document.getElementById('polarisReasoningBody').innerHTML = '<div class="polaris-reasoning-loader">Loading reasoning factors...</div>';
+      document.getElementById('demoPolarisRevenue').textContent = 'Waiting...';
+      document.getElementById('polarisReasoningBody').innerHTML = '<div class="polaris-reasoning-loader">Waiting for conversation...</div>';
 
-      document.getElementById('demoIntent').textContent = 'Analyzing...';
-      document.getElementById('demoQualification').textContent = 'Analyzing...';
-      document.getElementById('demoBookingProb').textContent = '\u2014';
+      document.getElementById('demoIntent').textContent = 'Waiting...';
+      document.getElementById('demoQualification').textContent = 'Waiting...';
+      document.getElementById('demoBookingProb').textContent = '—';
       document.getElementById('demoProbBar').style.width = '0%';
-      document.getElementById('demoActions').innerHTML = '<li>Waiting for data...</li>';
-      document.getElementById('demoSummary').textContent = 'Call in progress. Analysis will update as the conversation develops.';
+      document.getElementById('demoActions').innerHTML = '<li>Waiting for conversation...</li>';
+      document.getElementById('demoSummary').textContent = 'Waiting for call to connect...';
 
-      // Show appropriate lifecycle state
-      if (callStatus === 'dialing') {
+      // Show appropriate pre-live state based on EXACT backend state
+      if (callStatus === 'call_created' || callStatus === 'dialing') {
         document.getElementById('callStateDialing').classList.add('active');
       } else if (callStatus === 'ringing') {
         document.getElementById('callStateRinging').classList.add('active');
-      } else if (callStatus === 'answered') {
+      } else if (callStatus === 'answered' || callStatus === 'media_connected') {
         document.getElementById('callStateAnswered').classList.add('active');
-      } else if (callStatus === 'simulated' || callStatus === 'connected' || callStatus === 'in-progress') {
+      } else if (callStatus === 'simulation' || callStatus === 'live') {
         document.getElementById('demoLiveHeader').style.display = 'block';
       }
 
-      startDemoTimer();
+      // Only start timer if backend confirms talk time
+      startDemoTimer(callStatus);
       startTranscriptPolling();
       startStatusPolling();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── Map backend state to human-readable label ──
+    function getStatusLabel(state) {
+      var labels = {
+        'call_created':    'Preparing your call...',
+        'dialing':         'Calling your phone...',
+        'ringing':         'Ringing...',
+        'answered':        'Connected!',
+        'media_connected': 'Connected!',
+        'live':            'Listening...',
+        'simulation':      'Preparing simulation...',
+        'completed':       'Call Ended',
+        'polaris_summary': 'Generating Summary...',
+        'failed':          'Call Failed',
+      };
+      return labels[state] || 'Connecting...';
     }
 
     // ── Part 10: Launch new scenario from post-demo view ──
@@ -1038,9 +1083,19 @@
     }
 
     // ── Timer ──
-    function startDemoTimer() {
+    // Timer ONLY starts when backend confirms call has been answered.
+    // Before that, timer stays at 0:00.
+    function startDemoTimer(callStatus) {
       demoState.timerSec = 0;
       if (demoState.timerInterval) clearInterval(demoState.timerInterval);
+
+      // Only start counting for answered/live/completed states
+      var talkStates = ['answered', 'media_connected', 'live', 'completed'];
+      if (talkStates.indexOf(callStatus) === -1) {
+        // Not yet answered — don't start timer
+        return;
+      }
+
       demoState.timerInterval = setInterval(function() {
         demoState.timerSec++;
         var m = Math.floor(demoState.timerSec / 60);
@@ -1097,6 +1152,7 @@
     }
 
     // ── Status Polling ──
+    // The frontend NEVER advances state. It ONLY reflects what the backend returns.
     function startStatusPolling() {
       if (demoState.statusInterval) clearInterval(demoState.statusInterval);
       pollStatus();
@@ -1110,75 +1166,78 @@
         if (!resp.ok) return;
         var data = await resp.json();
 
-        // Track call lifecycle for frontend state management
-        var prevStatus = demoState.callStatus;
-        demoState.callStatus = data.callStatus;
+        // Backend is the SINGLE source of truth for all state
+        var backendState = data.callStatus;
+        demoState.callStatus = backendState;
 
-        // Handle call lifecycle transitions
-        if (data.callState === 'dialing') {
+        // ── Call lifecycle overlays ──
+        // Only update overlays if state has changed since last poll
+        var preLiveOverlayStates = ['call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation', 'live'];
+        var isPreLive = preLiveOverlayStates.indexOf(backendState) >= 0;
+
+        // Hide all overlays first
+        document.getElementById('callStateDialing').classList.remove('active');
+        document.getElementById('callStateRinging').classList.remove('active');
+        document.getElementById('callStateAnswered').classList.remove('active');
+
+        if (backendState === 'call_created' || backendState === 'dialing') {
           document.getElementById('callStateDialing').classList.add('active');
-          document.getElementById('callStateRinging').classList.remove('active');
-          document.getElementById('callStateAnswered').classList.remove('active');
           document.getElementById('demoLiveHeader').style.display = 'none';
-        } else if (data.callState === 'ringing') {
-          document.getElementById('callStateDialing').classList.remove('active');
+        } else if (backendState === 'ringing') {
           document.getElementById('callStateRinging').classList.add('active');
-          document.getElementById('callStateAnswered').classList.remove('active');
           document.getElementById('demoLiveHeader').style.display = 'none';
-        } else if (data.callState === 'answered') {
-          document.getElementById('callStateDialing').classList.remove('active');
-          document.getElementById('callStateRinging').classList.remove('active');
+        } else if (backendState === 'answered' || backendState === 'media_connected') {
           document.getElementById('callStateAnswered').classList.add('active');
-          setTimeout(function() {
-            var el = document.getElementById('callStateAnswered');
-            if (el) el.classList.remove('active');
-            var hdr = document.getElementById('demoLiveHeader');
-            if (hdr) hdr.style.display = 'block';
-          }, 2000);
-        } else if (data.callState === 'connected' || data.callState === 'simulated') {
-          document.getElementById('callStateDialing').classList.remove('active');
-          document.getElementById('callStateRinging').classList.remove('active');
-          document.getElementById('callStateAnswered').classList.remove('active');
+          document.getElementById('demoLiveHeader').style.display = 'none';
+        } else if (backendState === 'live') {
           document.getElementById('demoLiveHeader').style.display = 'block';
+          document.getElementById('demoStatusLabel').textContent = 'Live Conversation';
+        } else if (backendState === 'simulation') {
+          // Simulation shows loading state, backend advances to 'live' after 3s
+          document.getElementById('demoLiveHeader').style.display = 'none';
         }
 
-        // Update status dot/label
+        // ── Status dot ──
         var dot = document.getElementById('demoStatusDot');
         var label = document.getElementById('demoStatusLabel');
-        if (data.callStatus === 'completed') {
+        if (backendState === 'completed' || backendState === 'polaris_summary') {
           dot.className = 'demo-status-ended';
           label.textContent = 'Call Ended';
           transitionToPostCall();
-        } else if (data.callStatus === 'connected' || data.callStatus === 'in-progress' || data.callStatus === 'simulated') {
+        } else if (backendState === 'failed') {
+          dot.className = 'demo-status-ended';
+          label.textContent = 'Call Failed';
+        } else if (backendState === 'live') {
           dot.className = 'demo-status-connected';
           label.textContent = 'Live Conversation';
+        } else {
+          dot.className = 'demo-status-connecting';
+          label.textContent = getStatusLabel(backendState);
         }
 
-        // Update Polaris estimate card
-        var estimate = data.polarisEstimate || data.polarisEstimate;
-        if (estimate) renderPolarisEstimate(estimate);
-
-        // Update remaining insights
-        document.getElementById('demoIntent').textContent = 'Analyzing...'; // Intent from guidance
-
-        var qual = document.getElementById('demoQualification');
-        qual.textContent = data.leadQualification || 'Analyzing...';
-        qual.className = 'insight-value';
-        if (data.leadQualification === 'Hot') qual.classList.add('hot');
-        else if (data.leadQualification === 'Warm') qual.classList.add('warm');
-        else if (data.leadQualification === 'Cold') qual.classList.add('cold');
-
-        var bp = data.bookingProbability || 0;
-        document.getElementById('demoBookingProb').textContent = Math.round(bp * 100) + '%';
-        var bar = document.getElementById('demoProbBar');
-        bar.style.width = Math.round(bp * 100) + '%';
-        bar.style.background = bp >= 0.7 ? '#16a34a' : bp >= 0.4 ? '#f59e0b' : '#ef4444';
-
-        if (data.recommendedActions && data.recommendedActions.length > 0) {
-          document.getElementById('demoActions').innerHTML = data.recommendedActions.map(function(a) { return '<li>→ ' + a + '</li>'; }).join('');
+        // ── Timer ──
+        // Only update from backend's actual duration
+        if (data.talkTimeStarted && data.duration) {
+          var m = Math.floor(data.duration / 60);
+          var s = data.duration % 60;
+          document.getElementById('demoLiveTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+        } else {
+          document.getElementById('demoLiveTimer').textContent = '0:00';
         }
 
-        document.getElementById('demoSummary').textContent = data.executiveSummary || 'Call in progress. Analysis will update as the conversation develops.';
+        // ── Polaris card ──
+        // Only populate when backend says analyzing
+        if (data.polarisState === 'analyzing' && data.polarisEstimate) {
+          renderPolarisEstimate(data.polarisEstimate);
+        } else if (data.polarisState === 'waiting') {
+          // Keep showing "Waiting for conversation..."
+        }
+
+        // ── Transcript polling ──
+        // Only enable transcript polling when state is 'live' or later
+        if (backendState === 'live' || backendState === 'completed' || backendState === 'polaris_summary') {
+          // Transcript polling is already running
+        }
       } catch(e) {
         console.warn('[Demo] Status poll error:', e.message);
       }

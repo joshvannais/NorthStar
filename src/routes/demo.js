@@ -1,11 +1,17 @@
 /**
- * Demo Routes — M17 Phase 3 (Remediated)
+ * Demo Routes — M17.1 State Machine
  *
- * PUBLIC endpoints for the "Try NorthStar" interactive homepage demo.
- * Creates temporary demo sessions with in-memory storage and 1hr TTL.
+ * PUBLIC endpoints for the "Try NorthStar" homepage demo.
+ * Backend is the SINGLE source of truth for all call states.
+ * Frontend never invents or predicts state — it only reflects backend status.
  *
- * Call lifecycle: idle → dialing → ringing → answered → connected → completed
- * In simulation mode, the frontend shows a warning BEFORE the user starts.
+ * State Machine:
+ *   IDLE → REQUESTING_CALL → CALL_CREATED → DIALING → RINGING →
+ *   ANSWERED → MEDIA_CONNECTED → LIVE → COMPLETED → POLARIS_SUMMARY
+ *
+ * No state may be skipped.
+ * Timer starts ONLY at ANSWERED.
+ * Transcript/Polaris start ONLY at LIVE.
  */
 
 const express = require('express');
@@ -15,9 +21,32 @@ const config = require('../config');
 const retell = require('../retell/client');
 const liveTimeline = require('../voice/liveTimeline');
 
-// In-memory demo session store with 1hr TTL
 const demoSessions = new Map();
 const TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// ── Allowed state transitions ──
+const VALID_TRANSITIONS = {
+  'idle':                  ['requesting_call'],
+  'requesting_call':       ['call_created', 'failed'],
+  'call_created':          ['dialing', 'failed'],
+  'dialing':               ['ringing', 'failed'],
+  'ringing':               ['answered', 'failed'],
+  'answered':              ['media_connected', 'failed'],
+  'media_connected':       ['live', 'failed'],
+  'live':                  ['completed'],
+  'completed':             ['polaris_summary'],
+  'polaris_summary':       [],
+  'simulation':            ['live', 'completed'],
+  'failed':                [],
+};
+
+// Simulated modes
+const SIM_STATES = ['simulation'];
+
+function isValidTransition(from, to) {
+  const allowed = VALID_TRANSITIONS[from];
+  return allowed && allowed.includes(to);
+}
 
 const ALL_INDUSTRIES = [
   'Roofing', 'Siding', 'Windows', 'Doors', 'HVAC',
@@ -33,22 +62,6 @@ const ALL_INDUSTRIES = [
   'Commercial Maintenance',
 ];
 
-/**
- * Clean expired demo sessions every 10 minutes.
- */
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, session] of demoSessions) {
-    if (now - session.createdAt > TTL_MS) {
-      liveTimeline.clearSession(id);
-      demoSessions.delete(id);
-    }
-  }
-}, 10 * 60 * 1000);
-
-/**
- * Industry-specific defaults for generating demo context + Polaris estimates.
- */
 const INDUSTRY_DEFAULTS = {
   'Roofing':               { service: 'Roof inspection and repair',           avgJobValue: 4500, emergencyLikelihood: 0.3, revenueRangeMin: 3500, revenueRangeMax: 5200 },
   'Siding':                { service: 'Siding installation and repair',       avgJobValue: 3800, emergencyLikelihood: 0.1, revenueRangeMin: 2800, revenueRangeMax: 4800 },
@@ -103,27 +116,17 @@ const INDUSTRY_DEFAULTS = {
   'Commercial Maintenance':{ service: 'Commercial property maintenance',      avgJobValue: 3000, emergencyLikelihood: 0.1,  revenueRangeMin: 1500, revenueRangeMax: 5000 },
 };
 
-/**
- * Generate demo Executive Context with industry defaults.
- */
-function generateDemoExecutiveContext(businessName, industry) {
-  const defaults = INDUSTRY_DEFAULTS[industry] || INDUSTRY_DEFAULTS['General Contracting'];
-  return {
-    businessName,
-    industry,
-    service: defaults.service,
-    avgJobValue: defaults.avgJobValue,
-    emergencyLikelihood: defaults.emergencyLikelihood,
-    revenueRangeMin: defaults.revenueRangeMin,
-    revenueRangeMax: defaults.revenueRangeMax,
-    generatedAt: new Date().toISOString(),
-  };
+function getDefaults(industry) {
+  return INDUSTRY_DEFAULTS[industry] || INDUSTRY_DEFAULTS['General Contracting'];
 }
 
-/**
- * Generate mock transcript lines for simulation mode.
- */
-function generateMockTranscriptLines(industry, lineCount) {
+function generateDemoEC(businessName, industry) {
+  const d = getDefaults(industry);
+  return { businessName, industry, service: d.service, avgJobValue: d.avgJobValue, emergencyLikelihood: d.emergencyLikelihood, revenueRangeMin: d.revenueRangeMin, revenueRangeMax: d.revenueRangeMax, generatedAt: new Date().toISOString() };
+}
+
+// ── Mock transcript (simulation only) ──
+function mockTranscript(industry, count) {
   const scripts = {
     'Roofing': [
       { speaker: 'ai', text: "Thank you for calling. This is NorthStar's virtual receptionist. How can I help you today?" },
@@ -166,66 +169,97 @@ function generateMockTranscriptLines(industry, lineCount) {
       { speaker: 'ai', text: "Thank you. A technician can be there this afternoon between 2pm and 4pm. You'll receive a confirmation text. Is there anything else?" },
     ],
   };
-
   const script = scripts[industry] || scripts['Roofing'];
-  return script.slice(0, Math.min(lineCount || script.length, script.length));
+  return script.slice(0, Math.min(count || script.length, script.length));
 }
 
-/**
- * Generate Polaris-style mock guidance with estimated opportunity.
- */
-function generatePolarisEstimate(businessName, industry, transcriptLines) {
-  const defs = INDUSTRY_DEFAULTS[industry] || INDUSTRY_DEFAULTS['General Contracting'];
+function polarisEstimate(businessName, industry, transcriptLines) {
+  const d = getDefaults(industry);
   const lines = transcriptLines || [];
-  const linesCount = lines.length;
-
-  // Increase confidence as more conversation data arrives
-  let confidence = 0.3;
-  let revenueMin = defs.revenueRangeMin;
-  let revenueMax = defs.revenueRangeMax;
-
-  if (linesCount >= 3) confidence = Math.min(0.65, 0.3 + (linesCount * 0.05));
-  if (linesCount >= 6) confidence = Math.min(0.88, 0.3 + (linesCount * 0.06));
+  const n = lines.length;
+  let confidence = 0;
+  if (n === 0) confidence = 0;
+  else if (n < 3) confidence = 30;
+  else if (n < 6) confidence = 55;
+  else confidence = Math.min(85, 55 + (n - 5) * 5);
 
   return {
     opportunityLabel: 'POLARIS™ ESTIMATED OPPORTUNITY',
-    confidence: Math.round(confidence * 100),
-    revenueRange: `$${revenueMin.toLocaleString()} - $${revenueMax.toLocaleString()}`,
-    reasoning: [
-      { factor: 'Service Requested',        detail: defs.service },
+    confidence,
+    revenueRange: `$${d.revenueRangeMin.toLocaleString()} - $${d.revenueRangeMax.toLocaleString()}`,
+    reasoning: n === 0 ? [] : [
+      { factor: 'Service Requested',        detail: d.service },
       { factor: 'Industry',                 detail: industry },
-      { factor: 'Urgency Level',            detail: defs.emergencyLikelihood > 0.3 ? 'High — customer needs immediate attention' : defs.emergencyLikelihood > 0.15 ? 'Moderate — routine concern with some urgency' : 'Standard — no immediate urgency detected' },
-      { factor: 'Property Characteristics',  detail: 'Typical residential property based on conversation context' },
-      { factor: 'Customer Intent',          detail: linesCount > 2 ? 'Customer is actively seeking service and ready to engage' : 'Customer is in information-gathering phase' },
-      { factor: 'Historical Pricing',       detail: `Industry average: $${defs.avgJobValue.toLocaleString()} for ${industry.toLowerCase()}` },
-      { factor: 'Business Pricing Profile', detail: `${businessName} operates in the ${industry.toLowerCase()} industry with standard market positioning` },
-      { factor: 'Confidence Level',         detail: `${Math.round(confidence * 100)}% — ${confidence > 0.7 ? 'High confidence based on sufficient conversation data' : confidence > 0.4 ? 'Moderate confidence, improving as conversation progresses' : 'Initial estimate, will refine as more information is gathered'}` },
-      { factor: 'Assumptions',              detail: 'Estimate based on typical job scopes for this industry. Final pricing may vary based on on-site inspection and specific material choices.' },
+      { factor: 'Urgency Level',            detail: d.emergencyLikelihood > 0.3 ? 'High' : d.emergencyLikelihood > 0.15 ? 'Moderate' : 'Standard' },
+      { factor: 'Property Characteristics',  detail: 'Typical residential property' },
+      { factor: 'Customer Intent',          detail: n > 2 ? 'Actively seeking service' : 'Information gathering' },
+      { factor: 'Historical Pricing',       detail: `$${d.avgJobValue.toLocaleString()} avg for ${industry.toLowerCase()}` },
+      { factor: 'Business Pricing Profile', detail: `${businessName} — standard market positioning` },
+      { factor: 'Confidence Level',         detail: `${confidence}%` },
+      { factor: 'Assumptions',              detail: 'Based on typical scope. Final may vary.' },
     ],
     generatedAt: new Date().toISOString(),
   };
 }
 
+// ── Helpers to advance simulation state from backend ──
+function scheduleSimAdvance(sessionId) {
+  // The backend drives simulation state on a timer, not the frontend
+  const s = demoSessions.get(sessionId);
+  if (!s || s.callStatus !== 'simulation') return;
+
+  // After 3s: advance to live
+  setTimeout(() => {
+    const sess = demoSessions.get(sessionId);
+    if (!sess || sess.callStatus !== 'simulation') return;
+    sess.callStatus = 'live';
+    sess.startedAt = new Date().toISOString();
+    sess.transcriptLines = mockTranscript(sess.industry, 1);
+    liveTimeline.addEntry(sessionId, 'conversation_started', 'Simulated conversation started', 'system');
+  }, 3000);
+
+  // After 45s: completed
+  setTimeout(() => {
+    const sess = demoSessions.get(sessionId);
+    if (!sess || sess.callStatus !== 'live') return;
+    sess.callStatus = 'completed';
+    liveTimeline.addEntry(sessionId, 'call_completed', 'Simulated call completed', 'system');
+  }, 48000);
+}
+
+// ── Helpers to advance live state via retell webhook (to be called externally) ──
+function advanceCallState(sessionId, newState) {
+  const session = demoSessions.get(sessionId);
+  if (!session) return false;
+  if (!isValidTransition(session.callStatus, newState)) return false;
+  session.callStatus = newState;
+  if (newState === 'answered' || newState === 'media_connected') {
+    session.startedAt = new Date().toISOString();
+  }
+  if (newState === 'live') {
+    session.transcriptLines = session.transcriptLines || [];
+  }
+  return true;
+}
+
+// ── Routes ──
+
 /**
- * GET /status
- * Returns the system status — used by the frontend to check mode before user starts.
- * PUBLIC.
+ * GET /status — pre-call check for Retell config
  */
 router.get('/status', (req, res) => {
-  const retellConfigured = Boolean(config.retell && config.retell.apiKey && config.retell.agentId);
+  const configured = Boolean(config.retell && config.retell.apiKey && config.retell.agentId);
   res.json({
-    mode: retellConfigured ? 'live' : 'simulation',
-    retellConfigured,
-    message: retellConfigured
-      ? 'Retell AI is configured. Real outbound calls will be placed.'
-      : '🔬 DEMO SIMULATION MODE — Calls are simulated. Configure Retell API credentials for live calls.',
+    mode: configured ? 'live' : 'simulation',
+    retellConfigured: configured,
+    message: configured
+      ? 'Retell AI is configured.'
+      : '🔬 DEMO SIMULATION MODE — Calls are simulated.',
   });
 });
 
 /**
  * GET /industries
- * Returns the full list of supported industries.
- * PUBLIC.
  */
 router.get('/industries', (req, res) => {
   res.json({ industries: ALL_INDUSTRIES });
@@ -233,274 +267,265 @@ router.get('/industries', (req, res) => {
 
 /**
  * POST /call
- * Create a demo session. If Retell is configured, place a real call.
- * If not, returns 'simulation-mode-required' — the frontend handles it.
- * PUBLIC.
+ *
+ * Validates: businessName, industry, phoneNumber
+ * In live mode: calls Retell API. Only returns CALL_CREATED on success.
+ * In sim mode: returns simulation — frontend calls /:id/simulate to start.
  */
 router.post('/call', async (req, res) => {
   try {
     const { businessName, industry, phoneNumber } = req.body;
 
     if (!businessName || !industry || !phoneNumber) {
-      return res.status(400).json({
-        error: { code: 'VALIDATION', message: 'businessName, industry, and phoneNumber are required' },
-      });
+      return res.status(400).json({ error: { code: 'VALIDATION', message: 'businessName, industry, and phoneNumber are required' } });
     }
 
     const normalizedIndustry = ALL_INDUSTRIES.find(i => i.toLowerCase() === industry.toLowerCase());
     if (!normalizedIndustry) {
-      return res.status(400).json({
-        error: { code: 'VALIDATION', message: `Invalid industry. Please select from the list.` },
-      });
+      return res.status(400).json({ error: { code: 'VALIDATION', message: 'Invalid industry.' } });
+    }
+
+    // Basic phone validation
+    const digits = phoneNumber.replace(/\D/g, '');
+    if (digits.length < 10) {
+      return res.status(400).json({ error: { code: 'INVALID_PHONE', message: 'Please enter a valid phone number with area code.' } });
     }
 
     const demoSessionId = uuidv4();
-    const ec = generateDemoExecutiveContext(businessName, normalizedIndustry);
+    const ec = generateDemoEC(businessName, normalizedIndustry);
+    const configured = Boolean(config.retell && config.retell.apiKey && config.retell.agentId);
 
-    // Record timeline entry
-    liveTimeline.addEntry(demoSessionId, 'call_started', `Outbound demo call for ${businessName}`, 'system');
-
-    let callResult = null;
-    let callStatus = 'queued';
-    let callId = null;
-
-    const retellConfigured = Boolean(config.retell && config.retell.apiKey && config.retell.agentId);
-
-    if (!retellConfigured) {
-      // Return simulation-mode-required — frontend shows banner and handles transition
+    if (!configured) {
+      // Simulation path — create session at IDLE, frontend calls /simulate
       const session = {
-        id: demoSessionId,
-        businessName,
-        industry: normalizedIndustry,
-        phoneNumber,
-        executiveContext: ec,
-        callId: `sim-${demoSessionId.slice(0, 8)}`,
-        callStatus: 'simulation-mode-required',
-        createdAt: Date.now(),
-        transcriptLines: [],
-        transcriptIndex: 0,
-        startedAt: null,
+        id: demoSessionId, businessName, industry: normalizedIndustry, phoneNumber,
+        executiveContext: ec, callId: `sim-${demoSessionId.slice(0, 8)}`,
+        callStatus: 'idle', createdAt: Date.now(), transcriptLines: [],
+        transcriptIndex: 0, startedAt: null, stateSeq: 1,
+        error: null,
       };
       demoSessions.set(demoSessionId, session);
-      return res.json({ demoSessionId, callId: session.callId, status: 'simulation-mode-required' });
-    }
-
-    // Retell is configured — place a real call
-    try {
-      liveTimeline.addEntry(demoSessionId, 'dialing_started', `Dialing ${phoneNumber}`, 'system');
-      callResult = await retell.createCall(phoneNumber, config.retell.agentId, {
-        service: ec.service,
-        caller: `Demo: ${businessName}`,
+      return res.json({
+        demoSessionId, callId: session.callId,
+        status: 'idle', mode: 'simulation',
+        message: 'Demo simulation ready. Call /simulate to start.',
       });
-      callStatus = 'dialing';
-      callId = callResult?.call_id || null;
-
-      // Simulate lifecycle transitions (in production, Retell webhook updates these)
-      setTimeout(() => {
-        const s = demoSessions.get(demoSessionId);
-        if (s && s.callStatus === 'dialing') {
-          s.callStatus = 'ringing';
-          liveTimeline.addEntry(demoSessionId, 'ringing', 'Phone is ringing', 'system');
-        }
-      }, 3000);
-
-      setTimeout(() => {
-        const s = demoSessions.get(demoSessionId);
-        if (s && (s.callStatus === 'dialing' || s.callStatus === 'ringing')) {
-          s.callStatus = 'answered';
-          liveTimeline.addEntry(demoSessionId, 'call_answered', 'Call was answered', 'system');
-        }
-      }, 8000);
-
-      setTimeout(() => {
-        const s = demoSessions.get(demoSessionId);
-        if (s && s.callStatus === 'answered') {
-          s.callStatus = 'connected';
-          s.startedAt = new Date().toISOString();
-          liveTimeline.addEntry(demoSessionId, 'call_connected', 'Conversation started', 'system');
-        }
-      }, 12000);
-    } catch (callErr) {
-      console.warn('[Demo] Retell call failed:', callErr.message);
-      callStatus = 'failed';
-      liveTimeline.addEntry(demoSessionId, 'call_failed', `Call failed: ${callErr.message}`, 'system');
     }
 
-    const session = {
-      id: demoSessionId,
-      businessName,
-      industry: normalizedIndustry,
-      phoneNumber,
-      executiveContext: ec,
-      callId: callId || `sim-${demoSessionId.slice(0, 8)}`,
-      callStatus,
-      createdAt: Date.now(),
-      transcriptLines: [],
-      transcriptIndex: 0,
-      startedAt: null,
-    };
-    demoSessions.set(demoSessionId, session);
+    // Live path — call Retell
+    try {
+      liveTimeline.addEntry(demoSessionId, 'call_creating', 'Requesting call via Retell', 'system');
 
-    res.json({ demoSessionId, callId: session.callId, status: callStatus });
+      const callResult = await retell.createCall(phoneNumber, config.retell.agentId, {
+        service: ec.service, caller: `Demo: ${businessName}`,
+      });
+
+      const retellCallId = callResult?.call_id;
+      if (!retellCallId) {
+        throw new Error('Retell did not return a call_id');
+      }
+
+      // Success — advance to call_created
+      const session = {
+        id: demoSessionId, businessName, industry: normalizedIndustry, phoneNumber,
+        executiveContext: ec, callId: retellCallId,
+        callStatus: 'call_created', createdAt: Date.now(), transcriptLines: [],
+        transcriptIndex: 0, startedAt: null, stateSeq: 1,
+        error: null,
+      };
+      demoSessions.set(demoSessionId, session);
+      liveTimeline.addEntry(demoSessionId, 'call_created', `Retell call ${retellCallId} created`, 'system');
+
+      return res.json({
+        demoSessionId, callId: retellCallId,
+        status: 'call_created', mode: 'live',
+      });
+    } catch (callErr) {
+      console.error('[Demo] Retell call failed:', callErr.message);
+      return res.status(502).json({
+        error: { code: 'RETELL_UNAVAILABLE', message: 'Unable to reach voice service. Please try again.' },
+      });
+    }
   } catch (err) {
     console.error('[Demo] Call creation error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to create demo call' } });
+    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to create demo call.' } });
   }
 });
 
 /**
  * POST /:id/simulate
- * Transition a simulation-mode-required session into simulation mode.
- * Called by the frontend when user acknowledges simulation mode.
- * PUBLIC.
+ * Start simulation for a session. Only valid from 'idle' state.
  */
 router.post('/:id/simulate', (req, res) => {
   try {
     const session = demoSessions.get(req.params.id);
-    if (!session) {
-      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Demo session not found or expired' } });
-    }
-    session.callStatus = 'simulated';
-    session.startedAt = new Date().toISOString();
-    session.transcriptLines = generateMockTranscriptLines(session.industry, 1);
-    liveTimeline.addEntry(session.id, 'call_simulated', 'Simulated call started', 'system');
-    res.json({ demoSessionId: session.id, status: 'simulated' });
+    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
+    if (session.callStatus !== 'idle') return res.status(400).json({ error: { code: 'INVALID_STATE', message: `Cannot simulate from state: ${session.callStatus}` } });
+
+    session.callStatus = 'simulation';
+    session.transcriptLines = [];
+    liveTimeline.addEntry(session.id, 'simulation_started', 'Simulation mode activated', 'system');
+    scheduleSimAdvance(session.id);
+
+    res.json({ demoSessionId: session.id, status: 'simulation' });
   } catch (err) {
     console.error('[Demo] Simulate error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to start simulation' } });
+    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to start simulation.' } });
+  }
+});
+
+/**
+ * POST /:id/advance
+ * Advance a live call's state (called by Retell webhook or internal).
+ * Validates transitions against the state machine.
+ */
+router.post('/:id/advance', (req, res) => {
+  try {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ error: { code: 'VALIDATION', message: 'Target state (to) is required.' } });
+
+    const session = demoSessions.get(req.params.id);
+    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
+
+    if (!isValidTransition(session.callStatus, to)) {
+      return res.status(400).json({
+        error: { code: 'INVALID_TRANSITION', message: `Cannot transition from ${session.callStatus} to ${to}.` },
+      });
+    }
+
+    const prev = session.callStatus;
+    session.callStatus = to;
+    session.stateSeq = (session.stateSeq || 0) + 1;
+
+    if (to === 'answered' || to === 'media_connected') {
+      session.startedAt = new Date().toISOString();
+    }
+    if (to === 'live') {
+      session.transcriptLines = session.transcriptLines || [];
+    }
+
+    liveTimeline.addEntry(session.id, `state_${to}`, `State: ${prev} → ${to}`, 'system');
+
+    res.json({ demoSessionId: session.id, status: to, previousStatus: prev });
+  } catch (err) {
+    console.error('[Demo] Advance error:', err.message);
+    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to advance state.' } });
   }
 });
 
 /**
  * GET /:id/transcript
- * Returns the live transcript for a demo session.
- * In live mode, returns real transcript data. In simulation, generates mock.
- * PUBLIC.
+ * Returns transcript. Only returns data in 'live' or later states.
+ * Before 'live', returns empty array with appropriate message.
  */
 router.get('/:id/transcript', (req, res) => {
   try {
     const session = demoSessions.get(req.params.id);
-    if (!session) {
-      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Demo session not found or expired' } });
-    }
+    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
 
-    const { since } = req.query;
-
-    // In live mode (Retell), transcript would come from transcriptStream.
-    // For now, if live and connected, return what we have (Retell webhook fills this).
-    if (session.callStatus === 'connected' || session.callStatus === 'in-progress') {
-      // Live mode — real transcript from Retell webhook would be in transcriptLines
-      const lines = since ? session.transcriptLines.filter((_, i) => i >= parseInt(since)) : session.transcriptLines;
+    const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
+    if (preLive.includes(session.callStatus)) {
       return res.json({
-        sessionId: session.id,
-        callStatus: session.callStatus,
-        lines,
-        count: lines.length,
+        sessionId: session.id, callStatus: session.callStatus,
+        lines: [], count: 0,
+        conversationState: 'waiting',
+        message: 'Waiting for call to connect...',
       });
     }
 
-    // Simulation mode — generate mock transcript
-    if (session.callStatus === 'simulated' || session.callStatus === 'in-progress') {
-      const fullScript = generateMockTranscriptLines(session.industry, 12);
-      const elapsed = (Date.now() - session.createdAt) / 1000;
-      const visibleCount = Math.min(Math.floor(elapsed / 4) + 1, fullScript.length);
-      session.transcriptLines = fullScript.slice(0, visibleCount);
+    // Simulation mode — generate mock transcript progressively
+    if (session.callStatus === 'live' || session.callStatus === 'completed') {
+      const elapsed = session.startedAt ? Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000) : 0;
+      const full = mockTranscript(session.industry, 12);
+      const visible = Math.min(Math.floor(elapsed / 4) + 1, full.length);
+      session.transcriptLines = full.slice(0, visible);
     }
 
     res.json({
-      sessionId: session.id,
-      callStatus: session.callStatus,
-      lines: session.transcriptLines,
-      count: session.transcriptLines.length,
-      mode: session.callStatus === 'simulated' ? 'simulation' : 'live',
+      sessionId: session.id, callStatus: session.callStatus,
+      lines: session.transcriptLines, count: session.transcriptLines.length,
+      conversationState: 'live',
     });
   } catch (err) {
     console.error('[Demo] Transcript error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to retrieve transcript' } });
-  }
-});
-
-/**
- * GET /:id/guidance
- * Returns live Polaris guidance for a demo session.
- * PUBLIC.
- */
-router.get('/:id/guidance', (req, res) => {
-  try {
-    const session = demoSessions.get(req.params.id);
-    if (!session) {
-      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Demo session not found or expired' } });
-    }
-
-    const estimate = generatePolarisEstimate(session.businessName, session.industry, session.transcriptLines);
-
-    res.json({
-      sessionId: session.id,
-      polairsEstimate: estimate,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('[Demo] Guidance error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to retrieve guidance' } });
+    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to retrieve transcript.' } });
   }
 });
 
 /**
  * GET /:id/polaris-estimate
- * Dedicated endpoint for the Polaris Estimated Opportunity card.
- * PUBLIC.
+ * Only returns data after 'live' state. Before that, returns empty.
  */
 router.get('/:id/polaris-estimate', (req, res) => {
   try {
     const session = demoSessions.get(req.params.id);
-    if (!session) {
-      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Demo session not found or expired' } });
+    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
+
+    const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
+    if (preLive.includes(session.callStatus)) {
+      return res.json({
+        opportunityLabel: 'POLARIS™ ESTIMATED OPPORTUNITY',
+        confidence: 0, revenueRange: '—',
+        reasoning: [],
+        polairsState: 'waiting',
+        message: 'Waiting for conversation...',
+      });
     }
-    const estimate = generatePolarisEstimate(session.businessName, session.industry, session.transcriptLines);
-    res.json(estimate);
+
+    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines);
+    res.json({ ...estimate, polairsState: 'analyzing' });
   } catch (err) {
     console.error('[Demo] Polaris estimate error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to generate estimate' } });
+    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to generate estimate.' } });
   }
 });
 
 /**
  * GET /:id/status
- * Returns full demo session status with KPIs.
- * PUBLIC.
+ * Returns current state. Timer only counts after 'answered' or 'media_connected'.
  */
 router.get('/:id/status', (req, res) => {
   try {
     const session = demoSessions.get(req.params.id);
-    if (!session) {
-      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Demo session not found or expired' } });
-    }
+    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
 
     const now = Date.now();
-    const durationSec = session.startedAt ? Math.floor((now - new Date(session.startedAt).getTime()) / 1000) : 0;
+    const talkTimeStarted = session.startedAt ? new Date(session.startedAt).getTime() : null;
+    const durationSec = talkTimeStarted ? Math.floor((now - talkTimeStarted) / 1000) : 0;
 
-    // Auto-complete simulated calls after 45 seconds
-    if (session.callStatus === 'simulated' && durationSec > 45) {
+    // Auto-complete simulation after 45s of talk time
+    if (session.callStatus === 'live' && durationSec > 45 && !session.callId?.startsWith('sim')) {
+      // Only auto-complete simulated calls
+    }
+    if (session.callStatus === 'live' && durationSec > 48 && session.callId?.startsWith('sim')) {
       session.callStatus = 'completed';
-      liveTimeline.addEntry(session.id, 'call_completed', `Duration: ${durationSec}s`, 'system');
+      liveTimeline.addEntry(session.id, 'call_completed', 'Simulated call ended', 'system');
     }
 
-    const estimate = generatePolarisEstimate(session.businessName, session.industry, session.transcriptLines);
+    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines);
+
+    const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
+    const isPreLive = preLive.includes(session.callStatus);
+    const isAnswered = ['answered', 'media_connected', 'live', 'completed', 'polaris_summary'].includes(session.callStatus);
 
     res.json({
       sessionId: session.id,
       callId: session.callId,
       callStatus: session.callStatus,
-      callState: session.callStatus, // lifecycle state for frontend
-      duration: durationSec,
+      stateSeq: session.stateSeq || 0,
+      duration: isAnswered ? durationSec : 0,
+      talkTimeStarted: !!session.startedAt,
       businessName: session.businessName,
       industry: session.industry,
+      mode: session.callId?.startsWith('sim') ? 'simulation' : 'live',
+      conversationState: isPreLive ? 'waiting' : (session.callStatus === 'live' ? 'live' : session.callStatus),
       polairsEstimate: estimate,
-      timestamp: new Date().toISOString(),
+      polairsState: isPreLive ? 'waiting' : 'analyzing',
+      timestamp: now,
     });
   } catch (err) {
     console.error('[Demo] Status error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to retrieve status' } });
+    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to retrieve status.' } });
   }
 });
 

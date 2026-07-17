@@ -37,15 +37,71 @@ const CACHE_TTL = 5000; // 5 seconds
 // Internal helpers
 // ====================================================================
 
+/**
+ * Validate critical fields and log warnings for missing values.
+ * Uses defaults — never crashes — but warns so operators can fix.
+ */
+function validateAndWarn(profile, source) {
+  const warnings = [];
+
+  // Crew defaults
+  if (!profile.crew || !profile.crew.defaultCrewSize) {
+    warnings.push('crew.defaultCrewSize missing — using default 2');
+  }
+  if (!profile.crew || !profile.crew.averageHourlyRate) {
+    warnings.push('crew.averageHourlyRate missing — using default $42/hr');
+  }
+  if (!profile.crew || !profile.crew.overtimeMultiplier) {
+    warnings.push('crew.overtimeMultiplier missing — using default 1.5x');
+  }
+
+  // Financial defaults
+  if (!profile.financial || !profile.financial.desiredGrossMargin) {
+    warnings.push('financial.desiredGrossMargin missing — using default 40%');
+  }
+  if (!profile.financial || !profile.financial.markup) {
+    warnings.push('financial.markup missing — using default 1.3x');
+  }
+  if (!profile.financial || !profile.financial.taxRate && profile.financial && profile.financial.taxRate !== 0) {
+    warnings.push('financial.taxRate missing — using default 7%');
+  }
+
+  // Scheduling defaults
+  if (!profile.scheduling || !profile.scheduling.maxJobsPerDay) {
+    warnings.push('scheduling.maxJobsPerDay missing — using default 4');
+  }
+  if (!profile.scheduling || !profile.scheduling.workDayLength) {
+    warnings.push('scheduling.workDayLength missing — using default 8 hours');
+  }
+
+  // Service area
+  if (!profile.serviceArea || !profile.serviceArea.maxRadiusMiles) {
+    warnings.push('serviceArea.maxRadiusMiles missing — using default 50 miles');
+  }
+
+  // Company info
+  if (!profile.company || !profile.company.name) {
+    warnings.push('company.name missing — using default "NorthStar Solutions"');
+  }
+
+  if (warnings.length > 0) {
+    console.warn(`[BusinessProfile] Warnings from ${source}:`);
+    warnings.forEach(w => console.warn(`  ⚠ ${w}`));
+  }
+}
+
 function loadProfile() {
   const now = Date.now();
   if (_profile && now - _lastLoad < CACHE_TTL) return _profile;
   try {
     _profile = JSON.parse(fs.readFileSync(PROFILE_PATH, 'utf8'));
     _lastLoad = now;
+    validateAndWarn(_profile, 'business-profile.json');
     return _profile;
   } catch (e) {
+    console.warn('[BusinessProfile] Could not load business-profile.json — using defaults:', e.message);
     _profile = getDefaultProfile();
+    validateAndWarn(_profile, 'defaults (file missing/unreadable)');
     return _profile;
   }
 }

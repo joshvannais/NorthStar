@@ -3,95 +3,28 @@
  *
  * Provides structured, read-only access to NorthStar's live business data.
  * All operations are informational only — no edits, no mutations.
+ *
+ * REFACTORED (M16.5): Pure text/JSON formatters. All intelligence computation
+ * happens in polarisContextBuilder.js. Data loading via dataLoader.js.
  */
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-const intelligence = require('../services/intelligence');
-const decisionEngine = require('../services/decisionEngine');
-const customerIntelligence = require('../services/customerIntelligence');
-
-const DATA_DIR = path.resolve(__dirname, '../../data');
-
-// Cache loaded data to avoid re-reading on every request
-let _cache = null;
-let _cacheTime = 0;
-const CACHE_TTL_MS = 30000; // 30 seconds
-
-function loadData() {
-  const now = Date.now();
-  if (_cache && now - _cacheTime < CACHE_TTL_MS) return _cache;
-
-  const data = {};
-
-  // Leads
-  try {
-    data.leads = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'leads.json'), 'utf8'));
-  } catch (e) {
-    data.leads = [];
-  }
-
-  // Customers
-  try {
-    data.customers = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'customers.json'), 'utf8'));
-  } catch (e) {
-    data.customers = [];
-  }
-
-  // Events
-  try {
-    data.events = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'events.json'), 'utf8'));
-  } catch (e) {
-    data.events = [];
-  }
-
-  // Estimates
-  try {
-    data.estimates = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'polaris-estimates.json'), 'utf8'));
-  } catch (e) {
-    data.estimates = [];
-  }
-
-  // Jobs
-  try {
-    data.jobs = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'polaris-jobs.json'), 'utf8'));
-  } catch (e) {
-    data.jobs = [];
-  }
-
-  // Metrics
-  try {
-    data.metrics = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'polaris-metrics.json'), 'utf8'));
-  } catch (e) {
-    data.metrics = {};
-  }
-
-  // Recommendations
-  try {
-    data.recommendations = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'polaris-recommendations.json'), 'utf8'));
-  } catch (e) {
-    data.recommendations = [];
-  }
-
-  // Crews
-  try {
-    data.crews = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'polaris-crews.json'), 'utf8'));
-  } catch (e) {
-    data.crews = [];
-  }
-
-  _cache = data;
-  _cacheTime = now;
-  return data;
-}
+const dataLoader = require('../services/dataLoader');
 
 /**
  * Build a structured business context summary for Polaris.
  * Returns a plain-text summary that can be injected into the system prompt.
+ *
+ * @param {Object} pageContext - { page, leadId }
+ * @param {Object} [computed] - Pre-computed intelligence
+ * @param {Object} [computed.aggregateIntel] - From intelligence.calculateAggregateIntelligence()
+ * @param {Object} [computed.briefing] - From decisionEngine.generateExecutiveBriefing()
+ * @param {Array}  [computed.ranked] - From decisionEngine.rankAllOpportunities().ranked
+ * @param {Object} [computed.leadIntelMap] - Map of leadId → intelligence result
+ * @returns {string} Formatted business context text
  */
-function buildBusinessContext(pageContext) {
-  const data = loadData();
+function buildBusinessContext(pageContext, computed) {
+  const data = dataLoader.loadData();
   const parts = [];
 
   // ── Business Overview ──
@@ -204,9 +137,9 @@ function buildBusinessContext(pageContext) {
     }
   }
 
-  // ── Calculated Intelligence ──
-  if (data.leads.length > 0) {
-    const agg = intelligence.calculateAggregateIntelligence(data.leads);
+  // ── Calculated Intelligence (from pre-computed data) ──
+  const agg = computed && computed.aggregateIntel;
+  if (agg && agg.totalLeads > 0) {
     parts.push(`\n── Calculated Intelligence ──`);
     parts.push(`Total estimated labor cost: ${agg.totalEstimatedLabor.toLocaleString()}`);
     parts.push(`Total estimated profit: ${agg.totalEstimatedProfit.toLocaleString()}`);
@@ -225,10 +158,10 @@ function buildBusinessContext(pageContext) {
     }
   }
 
-  // ── Executive Decisions (from Decision Engine) ──
-  if (data.leads.length > 0) {
-    const briefing = decisionEngine.generateExecutiveBriefing(data.leads);
-    const alerts = briefing.alerts;
+  // ── Executive Decisions (from pre-computed data) ──
+  const briefing = computed && computed.briefing;
+  if (briefing && briefing.summary && briefing.summary.totalLeads > 0) {
+    const alerts = briefing.alerts || [];
 
     parts.push(`\n── Executive Decisions ──`);
     parts.push(`Top priority: ${briefing.topRecommendation?.caller || 'None'} (Priority Score: ${briefing.topRecommendation?.priorityScore || 'N/A'}/100)`);
@@ -247,17 +180,12 @@ function buildBusinessContext(pageContext) {
       warningAlerts.forEach(a => parts.push(`  • ${a.title}`));
     }
 
-    // Top 3 ranked leads with explanations
-    const { ranked } = decisionEngine.rankAllOpportunities(data.leads);
-    if (ranked.length > 0) {
+    // Top 5 ranked leads
+    const ranked = computed && computed.ranked;
+    if (ranked && ranked.length > 0) {
       parts.push(`\nPriority ranking (top 5):`);
       ranked.slice(0, 5).forEach(r => {
-        const lead = data.leads.find(l => l.id === r.leadId);
-        const intel = lead ? intelligence.calculateJobIntelligence(lead, { leadCount: data.leads.length }) : null;
-        const exp = decisionEngine.generateExecutiveExplanation(lead, r, intel);
         parts.push(`  ${r.priorityScore}/100 [${r.priorityLabel}] ${r.caller} — ${r.service}`);
-        parts.push(`    Next: ${decisionEngine.getNextBestAction(lead, r).action}`);
-        parts.push(`    Impact: ${exp.businessImpact} | ${exp.recommendationStrength}`);
       });
     }
   }
@@ -268,10 +196,23 @@ function buildBusinessContext(pageContext) {
 
 /**
  * Build a compact JSON context object for embedding in prompts.
- * Includes calculated intelligence from the Business Intelligence Engine.
+ * Pure data formatter — all intelligence comes from computed parameter.
+ *
+ * @param {Object} pageContext - { page, leadId }
+ * @param {Object} [computed] - Pre-computed intelligence
+ * @param {Object} [computed.aggregateIntel] - Aggregate intelligence
+ * @param {Object} [computed.briefing] - Executive briefing
+ * @param {Array}  [computed.ranked] - Ranked opportunities
+ * @param {Object} [computed.leadIntelMap] - Map of leadId → intelligence
+ * @param {Object} [computed.activeLeadIntel] - Active lead intelligence
+ * @param {Object} [computed.activeLeadDecision] - Active lead decision ranking
+ * @param {Object} [computed.activeLeadAction] - Active lead next action
+ * @param {Object} [computed.activeLeadCustomerIntel] - Active lead customer snapshot
+ * @param {Object} [computed.dashboardIntel] - Dashboard customer intelligence
+ * @returns {Object} Compact context JSON
  */
-function buildCompactContext(pageContext) {
-  const data = loadData();
+function buildCompactContext(pageContext, computed) {
+  const data = dataLoader.loadData();
   const context = {
     overview: {
       totalLeads: data.leads.length,
@@ -289,6 +230,7 @@ function buildCompactContext(pageContext) {
       status: l.status,
       outcome: l.outcome || 'pending',
       receivedAt: l.receivedAt,
+
       // Fields consumed by intelligence.js (calculateJobIntelligence)
       jobDetail: l.jobDetail,
       // Fields consumed by customerIntelligence.js
@@ -326,98 +268,84 @@ function buildCompactContext(pageContext) {
     avgLeadValue: data.leads.length > 0 ? Math.round(pipelineValue / data.leads.length) : 0,
   };
 
-  // Add calculated intelligence from Business Intelligence Engine
-  const agg = intelligence.calculateAggregateIntelligence(data.leads);
-  context.calculatedIntelligence = {
-    totalEstimatedLabor: agg.totalEstimatedLabor,
-    totalEstimatedProfit: agg.totalEstimatedProfit,
-    averageProfitMargin: agg.averageProfitMargin,
-    averageConfidence: agg.averageConfidence,
-    totalTravelMinutes: agg.totalTravelMinutes,
-    totalProductionHours: agg.totalProductionHours,
-    highestValueJob: agg.highestValueJob ? {
-      caller: agg.highestValueJob.caller,
-      service: agg.highestValueJob.service,
-      revenue: agg.highestValueJob.revenue,
-      estimatedProfit: agg.highestValueJob.profit.estimated,
-      profitMargin: agg.highestValueJob.profit.margin,
-      confidence: agg.highestValueJob.confidence.score,
-    } : null,
-    highestProfitJob: agg.highestProfitJob ? {
-      caller: agg.highestProfitJob.caller,
-      profit: agg.highestProfitJob.profit.estimated,
-      margin: agg.highestProfitJob.profit.margin,
-    } : null,
-    mostEfficientJob: agg.mostEfficientJob ? {
-      caller: agg.mostEfficientJob.caller,
-      profitPerHour: agg.mostEfficientJob.profitPerLaborHour,
-    } : null,
-  };
-
-  // Add per-lead intelligence for the active lead
-  if (pageContext && pageContext.leadId) {
-    context.activeLead = data.leads.find(l => l.id === pageContext.leadId) || null;
-    if (context.activeLead) {
-      context.activeLeadIntelligence = intelligence.calculateJobIntelligence(
-        context.activeLead,
-        { leadCount: data.leads.length }
-      );
-      // Add executive decision for active lead
-      context.activeLeadDecision = decisionEngine.rankOpportunity(
-        context.activeLead,
-        context.activeLeadIntelligence,
-        { totalLeads: data.leads.length }
-      );
-      context.activeLeadNextAction = decisionEngine.getNextBestAction(
-        context.activeLead,
-        context.activeLeadDecision
-      );
-      // Add customer intelligence for the active lead
-      context.activeLeadCustomerIntelligence = customerIntelligence.generateCustomerSnapshot(
-        context.activeLead,
-        { totalLeads: data.leads.length }
-      );
-    }
+  // ── Calculated Intelligence (from pre-computed data) ──
+  const agg = computed && computed.aggregateIntel;
+  if (agg && agg.totalLeads > 0) {
+    context.calculatedIntelligence = {
+      totalEstimatedLabor: agg.totalEstimatedLabor,
+      totalEstimatedProfit: agg.totalEstimatedProfit,
+      averageProfitMargin: agg.averageProfitMargin,
+      averageConfidence: agg.averageConfidence,
+      totalTravelMinutes: agg.totalTravelMinutes,
+      totalProductionHours: agg.totalProductionHours,
+      highestValueJob: agg.highestValueJob ? {
+        caller: agg.highestValueJob.caller,
+        service: agg.highestValueJob.service,
+        revenue: agg.highestValueJob.revenue,
+        estimatedProfit: agg.highestValueJob.profit.estimated,
+        profitMargin: agg.highestValueJob.profit.margin,
+        confidence: agg.highestValueJob.confidence.score,
+      } : null,
+      highestProfitJob: agg.highestProfitJob ? {
+        caller: agg.highestProfitJob.caller,
+        profit: agg.highestProfitJob.profit.estimated,
+        margin: agg.highestProfitJob.profit.margin,
+      } : null,
+      mostEfficientJob: agg.mostEfficientJob ? {
+        caller: agg.mostEfficientJob.caller,
+        profitPerHour: agg.mostEfficientJob.profitPerLaborHour,
+      } : null,
+    };
   }
 
-  // Add executive decisions from Decision Engine
-  const briefing = decisionEngine.generateExecutiveBriefing(data.leads);
-  context.executiveDecisions = {
-    topPriority: briefing.topRecommendation ? {
-      caller: briefing.topRecommendation.caller,
-      service: briefing.topRecommendation.service,
-      priorityScore: briefing.topRecommendation.priorityScore,
-      estimatedRevenue: briefing.topRecommendation.estimatedRevenue,
-      estimatedProfit: briefing.topRecommendation.estimatedProfit,
-      nextAction: briefing.topRecommendation.nextAction?.action,
-      businessImpact: briefing.topRecommendation.businessImpact,
-    } : null,
-    alerts: briefing.alerts.map(a => ({
-      id: a.id,
-      category: a.category,
-      severity: a.severity,
-      title: a.title,
-      impact: a.impact,
-    })),
-    topFollowUps: briefing.priorities.topFollowUps.map(f => ({
-      caller: f.caller,
-      service: f.service,
-      priorityScore: f.priorityScore,
-      nextAction: f.nextAction,
-      daysWaiting: f.daysWaiting,
-    })),
-    revenueAtRisk: briefing.summary.revenueAtRisk,
-    followUpsOverdue: briefing.summary.followUpsOverdue,
-  };
+  // ── Active Lead Intelligence (from pre-computed data) ──
+  if (pageContext && pageContext.leadId) {
+    context.activeLead = data.leads.find(l => l.id === pageContext.leadId) || null;
+    context.activeLeadIntelligence = computed && computed.activeLeadIntel || null;
+    context.activeLeadDecision = computed && computed.activeLeadDecision || null;
+    context.activeLeadNextAction = computed && computed.activeLeadAction || null;
+    context.activeLeadCustomerIntelligence = computed && computed.activeLeadCustomerIntel || null;
+  }
 
-  // Add dashboard customer intelligence
-  context.dashboardCustomerIntelligence = customerIntelligence.generateDashboardCustomerIntelligence(data.leads);
+  // ── Executive Decisions (from pre-computed data) ──
+  const briefing = computed && computed.briefing;
+  if (briefing && briefing.summary && briefing.summary.totalLeads > 0) {
+    context.executiveDecisions = {
+      topPriority: briefing.topRecommendation ? {
+        caller: briefing.topRecommendation.caller,
+        service: briefing.topRecommendation.service,
+        priorityScore: briefing.topRecommendation.priorityScore,
+        estimatedRevenue: briefing.topRecommendation.estimatedRevenue,
+        estimatedProfit: briefing.topRecommendation.estimatedProfit,
+        nextAction: briefing.topRecommendation.nextAction?.action,
+        businessImpact: briefing.topRecommendation.businessImpact,
+      } : null,
+      alerts: (briefing.alerts || []).map(a => ({
+        id: a.id,
+        category: a.category,
+        severity: a.severity,
+        title: a.title,
+        impact: a.impact,
+      })),
+      topFollowUps: (briefing.priorities?.topFollowUps || []).map(f => ({
+        caller: f.caller,
+        service: f.service,
+        priorityScore: f.priorityScore,
+        nextAction: f.nextAction,
+        daysWaiting: f.daysWaiting,
+      })),
+      revenueAtRisk: briefing.summary?.revenueAtRisk || 0,
+      followUpsOverdue: briefing.summary?.followUpsOverdue || 0,
+    };
+  }
+
+  // ── Dashboard Customer Intelligence (from pre-computed data) ──
+  context.dashboardCustomerIntelligence = computed && computed.dashboardIntel || null;
 
   return context;
 }
 
 module.exports = {
-  loadData,
   buildBusinessContext,
   buildCompactContext,
 };

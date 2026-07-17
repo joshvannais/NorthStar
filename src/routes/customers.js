@@ -7,6 +7,10 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const router = express.Router();
+const { requireAuth } = require('../auth/middleware');
+
+// All customer routes require authentication
+router.use(requireAuth);
 
 const DATA_FILE = path.join(__dirname, '..', '..', 'data', 'customers.json');
 

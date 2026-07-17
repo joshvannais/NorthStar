@@ -11,6 +11,7 @@ const express = require('express');
 const router = express.Router();
 const polaris = require('../polaris/engine');
 const https = require('https');
+const { requireAuth } = require('../auth/middleware');
 
 // ── Middleware ──
 router.use((req, res, next) => {
@@ -20,7 +21,7 @@ router.use((req, res, next) => {
 
 /**
  * GET /api/v1/polaris/status
- * Health check and engine status.
+ * Health check and engine status. PUBLIC — no auth required.
  */
 router.get('/status', (req, res) => {
   res.json({
@@ -34,6 +35,9 @@ router.get('/status', (req, res) => {
     ],
   });
 });
+
+// ── All routes below this point require authentication ──
+router.use(requireAuth);
 
 /**
  * GET /api/v1/polaris/intelligence
@@ -49,7 +53,7 @@ router.get('/intelligence', (req, res) => {
     const intelligence = polaris.getDashboardIntelligence(leads, events, jobs);
     res.json(intelligence);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -62,11 +66,11 @@ router.post('/estimate', (req, res) => {
   try {
     const estimate = polaris.generateEstimate(req.body);
     if (!estimate) {
-      return res.status(400).json({ error: 'Could not generate estimate. serviceType is required.' });
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Could not generate estimate. serviceType is required.' } });
     }
     res.json(estimate);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -80,7 +84,7 @@ router.post('/complete', (req, res) => {
     const result = polaris.recordCompletion(req.body);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -99,7 +103,7 @@ router.get('/learning', (req, res) => {
     const summary = polaris.getLearningSummary();
     res.json(summary);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -113,7 +117,7 @@ router.post('/recommendations/generate', (req, res) => {
     const recs = polaris.generateRecommendations(req.body);
     res.json({ generated: recs.length, recommendations: recs });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -128,7 +132,7 @@ router.get('/recommendations', (req, res) => {
     const recs = polaris.getRecommendations(resolved);
     res.json({ count: recs.length, recommendations: recs });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -139,10 +143,10 @@ router.get('/recommendations', (req, res) => {
 router.put('/recommendations/:id/resolve', (req, res) => {
   try {
     const result = polaris.resolveRecommendation(req.params.id);
-    if (!result) return res.status(404).json({ error: 'Recommendation not found' });
+    if (!result) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Recommendation not found' } });
     res.json({ resolved: true, recommendation: result });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -155,7 +159,7 @@ router.get('/jobs', (req, res) => {
     const jobs = polaris.getCompletedJobs();
     res.json({ count: jobs.length, jobs });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -168,7 +172,7 @@ router.get('/estimates', (req, res) => {
     const estimates = polaris.getHistoricalEstimates();
     res.json({ count: estimates.length, estimates });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -180,11 +184,11 @@ router.get('/estimates', (req, res) => {
 router.post('/query', (req, res) => {
   try {
     const { query, context } = req.body;
-    if (!query) return res.status(400).json({ error: 'query is required' });
+    if (!query) return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'query is required' } });
     const result = polaris.prepareQueryContext(query, context || {});
     res.json({ query, result });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -199,7 +203,7 @@ router.get('/retell-context', (req, res) => {
     const context = polaris.prepareRetellContext(events);
     res.json(context);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -213,7 +217,7 @@ router.get('/pipeline', (req, res) => {
     const analysis = polaris.analyzePipeline([]);
     res.json(analysis);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -227,7 +231,7 @@ router.post('/pipeline', (req, res) => {
     const analysis = polaris.analyzePipeline(req.body.leads || []);
     res.json(analysis);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -241,7 +245,7 @@ router.post('/config', (req, res) => {
     polaris.loadEstimationConfig(req.body);
     res.json({ status: 'configuration updated' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -260,7 +264,7 @@ router.get('/business-context', (req, res) => {
     const context = ctx.buildCompactContext(pageContext);
     res.json({ success: true, context });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 
@@ -275,13 +279,13 @@ router.post('/chat', (req, res) => {
   try {
     const message = req.body && req.body.message;
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return res.status(400).json({ success: false, error: 'Message is required.' });
+      return res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'Message is required.' } });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       console.error('[Polaris Chat] OPENAI_API_KEY not configured');
-      return res.status(500).json({ success: false, error: 'Polaris is not configured for chat yet.' });
+      return res.status(500).json({ success: false, error: { code: 'CONFIGURATION_ERROR', message: 'Polaris is not configured for chat yet.' } });
     }
 
     // Load the unified context builder
@@ -294,6 +298,7 @@ router.post('/chat', (req, res) => {
       page: pageContext.page || 'dashboard',
       leadId: pageContext.leadId || null,
       userMessage: message,
+      correlationId: req.correlationId || 'unknown',
     });
 
     // Build system prompt from unified context
@@ -335,16 +340,16 @@ router.post('/chat', (req, res) => {
             const errMsg = parsed.error ? parsed.error.message : 'Unknown error';
             console.error('[Polaris Chat] OpenAI error:', resIn.statusCode, errMsg);
             if (resIn.statusCode === 401) {
-              return res.status(500).json({ success: false, error: 'Polaris chat is not properly configured.' });
+              return res.status(500).json({ success: false, error: { code: 'CONFIGURATION_ERROR', message: 'Polaris chat is not properly configured.' } });
             }
             if (resIn.statusCode === 429) {
-              return res.status(429).json({ success: false, error: 'Polaris is rate-limited. Please wait a moment and try again.' });
+              return res.status(429).json({ success: false, error: { code: 'RATE_LIMITED', message: 'Polaris is rate-limited. Please wait a moment and try again.' } });
             }
-            res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
+            res.status(500).json({ success: false, error: { code: 'AI_SERVICE_ERROR', message: 'Polaris couldn\'t complete that request. Please try again.' } });
           }
         } catch (e) {
           console.error('[Polaris Chat] Parse error:', e.message);
-          res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
+          res.status(500).json({ success: false, error: { code: 'AI_SERVICE_ERROR', message: 'Polaris couldn\'t complete that request. Please try again.' } });
         }
       });
     });
@@ -352,14 +357,14 @@ router.post('/chat', (req, res) => {
     reqOut.on('error', (e) => {
       console.error('[Polaris Chat] Request error:', e.message);
       if (e.code === 'ETIMEDOUT' || e.code === 'ECONNRESET') {
-        return res.status(504).json({ success: false, error: 'Polaris took too long to respond. Please try again.' });
+        return res.status(504).json({ success: false, error: { code: 'TIMEOUT', message: 'Polaris took too long to respond. Please try again.' } });
       }
-      res.status(500).json({ success: false, error: 'Polaris couldn\'t complete that request. Please try again.' });
+      res.status(500).json({ success: false, error: { code: 'AI_SERVICE_ERROR', message: 'Polaris couldn\'t complete that request. Please try again.' } });
     });
 
     reqOut.on('timeout', () => {
       reqOut.destroy();
-      res.status(504).json({ success: false, error: 'Polaris took too long to respond. Please try again.' });
+      res.status(504).json({ success: false, error: { code: 'TIMEOUT', message: 'Polaris took too long to respond. Please try again.' } });
     });
 
     reqOut.write(payload);
@@ -367,7 +372,7 @@ router.post('/chat', (req, res) => {
   } catch (err) {
     console.error('[Polaris Chat] Handler error:', err.message);
     console.error('[Polaris Chat] Stack:', err.stack);
-    res.status(500).json({ success: false, error: 'Polaris chat encountered an error. Please try again.' });
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Polaris chat encountered an error. Please try again.' } });
   }
 });
 
@@ -386,7 +391,7 @@ router.get('/unified-context', (req, res) => {
     });
     res.json({ success: true, context });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: err.message } });
   }
 });
 

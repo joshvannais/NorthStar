@@ -572,10 +572,30 @@ router.get('/dashboard/revenue-trends', requireAuth, async (req, res, next) => {
 
 /**
  * GET /api/v1/health
- * API health check.
+ * API health check with component status.
  */
 router.get('/health', function(req, res) {
-  res.json({ data: { status: 'ok', version: '1.0.0', service: 'northstar-solutions-api', time: new Date().toISOString() } });
+  const fs = require('fs');
+  const path = require('path');
+  const dataDir = path.resolve(__dirname, '..', '..', 'data');
+  const now = new Date().toISOString();
+
+  const dataDirOk = fs.existsSync(dataDir);
+  const leadsOk = dataDirOk && fs.existsSync(path.join(dataDir, 'leads.json'));
+
+  res.json({
+    data: {
+      status: leadsOk ? 'ok' : 'degraded',
+      version: '1.0.0',
+      service: 'northstar-solutions-api',
+      time: now,
+      uptime: process.uptime(),
+      components: {
+        dataDirectory: dataDirOk ? 'healthy' : 'degraded',
+        leadsFile: leadsOk ? 'healthy' : 'degraded',
+      },
+    },
+  });
 });
 
 module.exports = router;

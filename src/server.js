@@ -38,6 +38,58 @@ const { correlationId, auditLogger } = require('./middleware/auditLog');
 const app = express();
 const PORT = config.port || 3000;
 
+// ── Deployment Readiness: Unhandled rejection handler ──
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// ── Deployment Readiness: Startup validation ──
+(function validateStartup() {
+  const fs = require('fs');
+  const path = require('path');
+  const dataDir = path.resolve(__dirname, '..', 'data');
+
+  // Ensure data/ directory exists
+  if (!fs.existsSync(dataDir)) {
+    console.warn('[Startup] Creating data/ directory...');
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  // Check required data files exist (warn only, don't crash)
+  const requiredFiles = [
+    'leads.json', 'customers.json', 'events.json',
+    'polaris-estimates.json', 'polaris-jobs.json',
+    'polaris-metrics.json', 'polaris-recommendations.json', 'polaris-crews.json',
+  ];
+  requiredFiles.forEach(file => {
+    const filePath = path.join(dataDir, file);
+    if (!fs.existsSync(filePath)) {
+      console.warn(`[Startup] Missing data file: ${file} (will default to empty)`);
+    }
+  });
+
+  // Env var validation (warn only)
+  const criticalEnvVars = ['PORT'];
+  const optionalEnvVars = [
+    'RETELL_API_KEY', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN',
+    'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS',
+    'GOOGLE_SHEETS_CLIENT_EMAIL', 'GOOGLE_SHEETS_PRIVATE_KEY',
+    'ADMIN_USERNAME', 'ADMIN_PASSWORD',
+  ];
+  criticalEnvVars.forEach(v => {
+    if (!process.env[v]) {
+      console.warn(`[Startup] Missing env var: ${v} (using default)`);
+    }
+  });
+  optionalEnvVars.forEach(v => {
+    if (!process.env[v]) {
+      console.log(`[Startup] Optional env var not set: ${v}`);
+    }
+  });
+
+  console.log('[Startup] Validation complete.');
+})();
+
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
@@ -437,7 +489,11 @@ app.get('/demo-login', (req, res) => {
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
   const adminUser = process.env.ADMIN_USERNAME || 'admin';
-  const adminPass = process.env.ADMIN_PASSWORD || 'northstar2024';
+  const adminPass = process.env.ADMIN_PASSWORD;
+  if (!adminPass) {
+    console.warn('[Admin] ADMIN_PASSWORD environment variable is not set. Admin login will not work.');
+    return res.status(503).json({ error: 'Admin authentication is not configured.' });
+  }
 
   if (username === adminUser && password === adminPass) {
     const token = generateAdminToken();
@@ -575,8 +631,27 @@ async function start() {
     console.log(`  GET  ${baseUrl}/api/admin/users          → All contractors`);
     console.log('');
   });
+
+  // ── Deployment Readiness: Graceful shutdown ──
+  function gracefulShutdown(signal) {
+    console.log(`[Server] ${signal} received, shutting down gracefully...`);
+    server.close(() => {
+      console.log('[Server] HTTP server closed.');
+      process.exit(0);
+    });
+    // Force shutdown after 10s if graceful fails
+    setTimeout(() => {
+      console.error('[Server] Forced shutdown after timeout.');
+      process.exit(1);
+    }, 10000);
+  }
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+  return server;
 }
 
 start().catch(err => {
   console.error('[Server] Failed to start:', err);
+  process.exit(1);
 });

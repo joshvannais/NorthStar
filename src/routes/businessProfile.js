@@ -7,6 +7,10 @@
 const express = require('express');
 const router = express.Router();
 const bp = require('../services/businessProfile');
+const { requireAuth } = require('../auth/middleware');
+
+// All business profile routes require authentication
+router.use(requireAuth);
 
 // GET /api/v1/business-profile — full profile
 router.get('/', (req, res) => {

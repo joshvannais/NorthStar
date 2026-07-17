@@ -6,6 +6,7 @@ const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
 const { handleWebhook } = require('../retell/webhook');
 const customersRouter = require('./customers');
+const demoRouter = require('./demo');
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
 const jobber = require('../integrations/jobber');
@@ -116,6 +117,9 @@ router.post('/contact', async (req, res) => {
     res.status(500).json({ error: 'Failed to submit message' });
   }
 });
+
+// Demo routes — public interactive demo
+router.use('/demo', demoRouter);
 
 // ══════════════════════════════════════════════
 // PROTECTED ROUTES — authentication required

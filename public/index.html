@@ -198,10 +198,38 @@
         <label for="demoPhoneNumber">Your Phone Number</label>
         <input type="tel" id="demoPhoneNumber" placeholder="(555) 123-4567">
 
-        <button class="demo-btn-call" id="demoCallBtn" onclick="startDemoCall()">📞 Call Me Now</button>
+        <button class="demo-btn-call" id="demoCallBtn" onclick="showPreCallModal()">📞 Call Me Now</button>
         <p style="text-align:center;font-size:12px;color:var(--neutral-400);margin-top:12px;">
           NorthStar will call your phone. For the best experience, pretend you're a customer looking for service.
         </p>
+      </div>
+
+      <!-- Part 9: Pre-Call Modal -->
+      <div class="demo-modal-overlay" id="preCallModal">
+        <div class="demo-modal-card">
+          <h2>One Quick Tip Before We Call</h2>
+          <p class="modal-subtitle">For the best experience, <strong>pretend you're one of your own customers.</strong></p>
+          <p class="modal-subtitle">When your phone rings, imagine you're calling your business for the very first time.</p>
+          <ul class="modal-tip-list">
+            <li>✅ Describe a real situation.</li>
+            <li>✅ Ask questions naturally.</li>
+            <li>✅ Interrupt if you want.</li>
+            <li>✅ Challenge the receptionist.</li>
+          </ul>
+          <p class="modal-subtitle">NorthStar is designed to handle conversations exactly like the ones your business receives every day.</p>
+          <p class="modal-subtitle" style="font-size:14px;">The more realistic your scenario, the better you'll experience what NorthStar can do.</p>
+          <div class="modal-divider">── Need Inspiration? ──</div>
+          <div class="demo-modal-scenarios" id="modalScenarioChips">
+            <span class="demo-modal-chip" data-scenario="storm">🌳 Storm Damage</span>
+            <span class="demo-modal-chip" data-scenario="emergency">🚨 Emergency Service</span>
+            <span class="demo-modal-chip" data-scenario="estimate">💰 Request an Estimate</span>
+            <span class="demo-modal-chip" data-scenario="scheduling">📅 Scheduling Question</span>
+            <span class="demo-modal-chip" data-scenario="billing">🧾 Billing Question</span>
+            <span class="demo-modal-chip" data-scenario="returning">👷 Returning Customer</span>
+            <span class="demo-modal-chip" data-scenario="custom">💬 I'll Make Up My Own Scenario</span>
+          </div>
+          <button class="btn-modal-call" id="modalCallBtn" onclick="executeDemoCall()">📞 Call Me</button>
+        </div>
       </div>
 
       <div style="display:flex;justify-content:center;gap:32px;flex-wrap:wrap;margin:32px 0 8px;">
@@ -298,6 +326,41 @@
     <div class="demo-post-actions">
       <button class="btn btn-secondary" onclick="resetDemo()">🔄 Try Another Scenario</button>
       <a href="/login" class="btn btn-primary">🚀 Continue to Dashboard</a>
+    </div>
+
+    <!-- Part 10: Continue Exploring NorthStar -->
+    <div class="demo-scenario-section">
+      <h3>🔍 Continue Exploring NorthStar</h3>
+      <p>Try another demo scenario — same business, different conversation.</p>
+      <div class="demo-scenario-grid" id="postDemoScenarioGrid">
+        <div class="demo-scenario-card" data-post-scenario="emergency" onclick="launchNewScenario('emergency')">
+          <span class="scenario-emoji">🚨</span> Emergency Call
+        </div>
+        <div class="demo-scenario-card" data-post-scenario="estimate" onclick="launchNewScenario('estimate')">
+          <span class="scenario-emoji">📋</span> Request an Estimate
+        </div>
+        <div class="demo-scenario-card" data-post-scenario="price-shopper" onclick="launchNewScenario('price-shopper')">
+          <span class="scenario-emoji">💰</span> Price Shopper
+        </div>
+        <div class="demo-scenario-card" data-post-scenario="returning" onclick="launchNewScenario('returning')">
+          <span class="scenario-emoji">👷</span> Returning Customer
+        </div>
+        <div class="demo-scenario-card" data-post-scenario="insurance-claim" onclick="launchNewScenario('insurance-claim')">
+          <span class="scenario-emoji">📄</span> Insurance Claim
+        </div>
+        <div class="demo-scenario-card" data-post-scenario="difficult" onclick="launchNewScenario('difficult')">
+          <span class="scenario-emoji">😤</span> Difficult Customer
+        </div>
+        <div class="demo-scenario-card" data-post-scenario="scheduling-conflict" onclick="launchNewScenario('scheduling-conflict')">
+          <span class="scenario-emoji">📅</span> Scheduling Conflict
+        </div>
+        <div class="demo-scenario-card" data-post-scenario="post-billing" onclick="launchNewScenario('post-billing')">
+          <span class="scenario-emoji">💬</span> Billing Question
+        </div>
+        <div class="demo-scenario-card" data-post-scenario="custom" onclick="launchNewScenario('custom')">
+          <span class="scenario-emoji">🎭</span> I'll Make My Own Scenario
+        </div>
+      </div>
     </div>
   </section>
 
@@ -519,6 +582,14 @@
       transcriptSeq: 0,
     };
 
+    // Store business info for multi-scenario replay
+    var demoBusinessInfo = {
+      businessName: '',
+      industry: '',
+      phoneNumber: '',
+      currentScenario: null
+    };
+
     var DEMO_API = '/api/demo';
 
     // ── Scenario shortcuts ──
@@ -548,8 +619,42 @@
       });
     });
 
-    // ── Start Demo Call ──
-    async function startDemoCall() {
+    // ── Modal scenario chip handlers ──
+    document.querySelectorAll('#modalScenarioChips .demo-modal-chip').forEach(function(chip) {
+      chip.addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.querySelectorAll('#modalScenarioChips .demo-modal-chip').forEach(function(c) { c.classList.remove('active'); });
+        this.classList.add('active');
+        var scenario = this.dataset.scenario;
+        if (scenario === 'storm') {
+          document.getElementById('demoIndustry').value = 'Roofing';
+          document.getElementById('demoBusinessName').value = 'StormShield Roofing';
+        } else if (scenario === 'emergency') {
+          document.getElementById('demoIndustry').value = 'Plumbing';
+          document.getElementById('demoBusinessName').value = 'RapidResponse Plumbing';
+        } else if (scenario === 'estimate') {
+          document.getElementById('demoIndustry').value = 'HVAC';
+          document.getElementById('demoBusinessName').value = 'ComfortAir HVAC';
+        } else if (scenario === 'scheduling') {
+          document.getElementById('demoIndustry').value = 'Electrical';
+          document.getElementById('demoBusinessName').value = 'BrightWire Electric';
+        } else if (scenario === 'billing') {
+          document.getElementById('demoIndustry').value = 'Landscaping';
+          document.getElementById('demoBusinessName').value = 'GreenScape Landscaping';
+        } else if (scenario === 'returning') {
+          document.getElementById('demoIndustry').value = 'Roofing';
+          document.getElementById('demoBusinessName').value = 'Heritage Roofing Co';
+        }
+      });
+    });
+
+    // ── Start Demo Call (backwards compat) ──
+    function startDemoCall() {
+      showPreCallModal();
+    }
+
+    // ── Part 9: Show Pre-Call Modal ──
+    function showPreCallModal() {
       var businessName = document.getElementById('demoBusinessName').value.trim();
       var industry = document.getElementById('demoIndustry').value;
       var phoneNumber = document.getElementById('demoPhoneNumber').value.trim();
@@ -557,6 +662,25 @@
       if (!businessName) { alert('Please enter a business name.'); return; }
       if (!industry) { alert('Please select an industry.'); return; }
       if (!phoneNumber) { alert('Please enter a phone number.'); return; }
+
+      // Save business info for replay
+      demoBusinessInfo.businessName = businessName;
+      demoBusinessInfo.industry = industry;
+      demoBusinessInfo.phoneNumber = phoneNumber;
+
+      // Show the modal with fade-in
+      var modal = document.getElementById('preCallModal');
+      modal.classList.add('active');
+    }
+
+    // ── Part 9: Execute the actual demo call (called from modal) ──
+    async function executeDemoCall() {
+      var modal = document.getElementById('preCallModal');
+      modal.classList.remove('active');
+
+      var businessName = demoBusinessInfo.businessName;
+      var industry = demoBusinessInfo.industry;
+      var phoneNumber = demoBusinessInfo.phoneNumber;
 
       var btn = document.getElementById('demoCallBtn');
       btn.disabled = true;
@@ -568,36 +692,81 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ businessName: businessName, industry: industry, phoneNumber: phoneNumber })
         });
-
         if (!resp.ok) {
           var errData = await resp.json().catch(function() { return {}; });
           throw new Error(errData.error ? errData.error.message : 'Demo call request failed');
         }
-
         var data = await resp.json();
         demoState.sessionId = data.demoSessionId;
         demoState.callStatus = data.status;
-
-        // Switch to live view
-        document.getElementById('demoPreCallView').style.display = 'none';
-        document.getElementById('demoLiveView').style.display = 'block';
-        document.getElementById('demoPostCallView').style.display = 'none';
-
-        // Start polling
-        startDemoTimer();
-        startTranscriptPolling();
-        startStatusPolling();
-
+        transitionToLiveView();
         btn.disabled = false;
         btn.textContent = '📞 Call Me Now';
       } catch (err) {
         console.error('[Demo] Call error:', err.message);
         alert('Unable to place demo call. The demo will run in simulation mode.\n\n' + err.message);
-        // Fallback: run simulated demo
         runSimulatedDemo(businessName, industry);
         btn.disabled = false;
         btn.textContent = '📞 Call Me Now';
       }
+    }
+
+    // ── Transition to live view (reusable for replays) ──
+    function transitionToLiveView() {
+      if (demoState.timerInterval) clearInterval(demoState.timerInterval);
+      if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
+      if (demoState.statusInterval) clearInterval(demoState.statusInterval);
+
+      demoState.timerSec = 0;
+      demoState.transcriptSeq = 0;
+
+      document.getElementById('demoPreCallView').style.display = 'none';
+      document.getElementById('demoLiveView').style.display = 'block';
+      document.getElementById('demoPostCallView').style.display = 'none';
+
+      document.getElementById('demoTranscriptBody').innerHTML = '<div class="demo-loading" id="demoTranscriptLoading"><div class="demo-spinner"></div><p style="font-size:14px;color:var(--neutral-500);">Waiting for conversation to begin...</p></div>';
+      document.getElementById('demoTranscriptCount').textContent = '0 messages';
+      document.getElementById('demoStatusDot').className = 'demo-status-connecting';
+      document.getElementById('demoStatusLabel').textContent = 'Connecting...';
+      document.getElementById('demoLiveTimer').textContent = '0:00';
+
+      document.getElementById('demoIntent').textContent = 'Analyzing...';
+      document.getElementById('demoJobValue').textContent = 'Analyzing...';
+      var qual = document.getElementById('demoQualification');
+      qual.textContent = 'Analyzing...';
+      qual.className = 'insight-value';
+      document.getElementById('demoBookingProb').textContent = '\u2014';
+      document.getElementById('demoProbBar').style.width = '0%';
+      document.getElementById('demoActions').innerHTML = '<li>Waiting for data...</li>';
+      document.getElementById('demoSummary').textContent = 'Call in progress. Analysis will update as the conversation develops.';
+
+      startDemoTimer();
+      startTranscriptPolling();
+      startStatusPolling();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── Part 10: Launch new scenario from post-demo view ──
+    function launchNewScenario(scenarioType) {
+      if (!demoBusinessInfo.businessName || !demoBusinessInfo.phoneNumber) {
+        demoBusinessInfo.businessName = document.getElementById('demoBusinessName').value.trim();
+        demoBusinessInfo.industry = document.getElementById('demoIndustry').value;
+        demoBusinessInfo.phoneNumber = document.getElementById('demoPhoneNumber').value.trim();
+      }
+      if (!demoBusinessInfo.businessName) { alert('Business info not available. Please try again from the form.'); resetDemo(); return; }
+      if (!demoBusinessInfo.phoneNumber) { alert('Phone number not available. Please try again from the form.'); resetDemo(); return; }
+
+      demoBusinessInfo.currentScenario = scenarioType;
+
+      var modal = document.getElementById('preCallModal');
+      modal.classList.add('active');
+
+      document.querySelectorAll('#modalScenarioChips .demo-modal-chip').forEach(function(c) {
+        c.classList.remove('active');
+        if (c.dataset.scenario === scenarioType) c.classList.add('active');
+      });
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     // ── Simulated demo (when Retell isn't available) ──
@@ -613,18 +782,10 @@
         demoState.sessionId = data.demoSessionId;
         demoState.callStatus = 'simulated';
       } catch(e) {
-        // Generate a fake session ID for fully offline demo
         demoState.sessionId = 'demo-' + Date.now().toString(36);
         demoState.callStatus = 'simulated';
       }
-
-      document.getElementById('demoPreCallView').style.display = 'none';
-      document.getElementById('demoLiveView').style.display = 'block';
-      document.getElementById('demoPostCallView').style.display = 'none';
-
-      startDemoTimer();
-      startTranscriptPolling();
-      startStatusPolling();
+      transitionToLiveView();
     }
 
     // ── Timer ──
@@ -779,6 +940,23 @@
         statusInterval: null,
         transcriptSeq: 0,
       };
+
+      // Reset business info
+      demoBusinessInfo = {
+        businessName: '',
+        industry: '',
+        phoneNumber: '',
+        currentScenario: null
+      };
+
+      // Hide modal if open
+      var modal = document.getElementById('preCallModal');
+      if (modal) modal.classList.remove('active');
+
+      // Reset modal chips
+      document.querySelectorAll('#modalScenarioChips .demo-modal-chip').forEach(function(c) {
+        c.classList.remove('active');
+      });
 
       document.getElementById('demoLiveView').style.display = 'none';
       document.getElementById('demoPostCallView').style.display = 'none';

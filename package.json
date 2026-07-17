@@ -5,7 +5,11 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "jest --config jest.config.js",
+    "test:integration": "jest --config jest.config.js tests/integration/",
+    "test:api": "jest --config jest.config.js tests/api/",
+    "test:regression": "jest --config jest.config.js tests/regression/"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -21,5 +25,9 @@
     "pg": "^8.22.0",
     "twilio": "^4.19.0",
     "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2"
   }
 }

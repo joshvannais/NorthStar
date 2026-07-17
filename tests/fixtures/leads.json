@@ -1,0 +1,362 @@
+[
+  {
+    "id": "mrk123jsklz6yk",
+    "caller": "Elizabeth Garcia",
+    "phone": "(607) 555-5303",
+    "address": "3342 Maple Rd",
+    "service": "Mold Remediation",
+    "icon": "🦠",
+    "avgPrice": 500,
+    "jobDetail": "bathroom 50sqft +water-source visible",
+    "duration": "1:03",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "Yesterday, 8:14 AM",
+    "receivedAt": "2026-07-14T02:23:54.174Z",
+    "summary": "Mold Remediation: Bathroom mold. bathroom 50sqft +water-source visible. Estimated $500.",
+    "priceBreakdown": "bathroom remediation 50sqft x $4, Water source remediation",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I have mold in my  bathroom.\nAI: How many square feet are affected?\nCustomer: About 50 sqft.\nAI: Can you see visible mold growth?\nCustomer: Yes, it's visible.\nAI: Is there an active water source causing the mold?\nCustomer: Yes, there's a moisture issue.\nAI: Great! Let me get some details. What is your name?\nCustomer: Elizabeth Garcia.\nAI: Thanks Elizabeth! And a phone number I can reach you at?\nCustomer: (607) 555-5303.\nAI: Perfect. And what's the address for the service?\nCustomer: 3342 Maple Rd.\nAI: Thanks Elizabeth. We'll have a mold remediation specialist reach out to assess the 50sqft area. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "bathroom remediation 50sqft x $4",
+        "a": 200
+      },
+      {
+        "l": "Water source remediation",
+        "a": 300
+      }
+    ]
+  },
+  {
+    "id": "mrk123k23isjlg",
+    "caller": "Thomas Williams",
+    "phone": "(518) 555-7610",
+    "address": "2704 Chestnut Dr",
+    "service": "Appliance Repair",
+    "icon": "🔌",
+    "avgPrice": 350,
+    "jobDetail": "oven ge no heat",
+    "duration": "1:55",
+    "status": "answered",
+    "outcome": "follow-up",
+    "time": "Today, 10:33 AM",
+    "receivedAt": "2026-07-14T02:23:54.216Z",
+    "summary": "Appliance Repair: Oven not heating. oven ge no heat. Estimated $350.",
+    "priceBreakdown": "Oven repair",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: My oven is having issues.\nAI: What brand is it?\nCustomer: It's a ge.\nAI: What symptoms are you experiencing?\nCustomer: It's no heat.\nAI: Is it still under warranty?\nCustomer: No, it's out of warranty.\nAI: Great! Let me get some details. What is your name?\nCustomer: Thomas Williams.\nAI: Thanks Thomas! And a phone number I can reach you at?\nCustomer: (518) 555-7610.\nAI: Perfect. And what's the address for the service?\nCustomer: 2704 Chestnut Dr.\nAI: Thanks Thomas. We'll send an appliance tech to look at your ge oven. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Oven repair",
+        "a": 350
+      }
+    ]
+  },
+  {
+    "id": "mrk123k88pxjmh",
+    "caller": "Christopher Jackson",
+    "phone": "(401) 555-3167",
+    "address": "4385 Juniper Pl",
+    "service": "Electrical panel upgrade",
+    "icon": "⚡",
+    "avgPrice": 180,
+    "jobDetail": "Fixture install",
+    "duration": "1:00",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "Today, 16:50 PM",
+    "receivedAt": "2026-07-14T02:23:54.222Z",
+    "summary": "Electrical panel upgrade: Lighting fixture install 6. Fixture install. Estimated $180.",
+    "priceBreakdown": "Fixture installation",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need some light fixtures installed.\nAI: Got it. How many fixtures are you looking to install?\nCustomer: About 6 fixtures.\nAI: Great! Let me get some details. What is your name?\nCustomer: Christopher Jackson.\nAI: Thanks Christopher! And a phone number I can reach you at?\nCustomer: (401) 555-3167.\nAI: Perfect. And what's the address for the service?\nCustomer: 4385 Juniper Pl.\nAI: Thanks Christopher. We'll have someone reach out to schedule the install. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Fixture installation",
+        "a": 180
+      }
+    ]
+  },
+  {
+    "id": "mrk12dgbh2e9r1",
+    "caller": "Jennifer Jackson",
+    "phone": "(959) 555-1482",
+    "address": "697 Magnolia Ln",
+    "service": "Concrete driveway",
+    "icon": "🏗️",
+    "avgPrice": 2800,
+    "jobDetail": "350sqft broom finish",
+    "duration": "1:44",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "Today, 10:36 AM",
+    "receivedAt": "2026-07-14T02:24:06.991Z",
+    "summary": "Concrete driveway: Walkway patio. 350sqft broom finish. Estimated $2,800.",
+    "priceBreakdown": "350sqft x $8 concrete",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I want to pour a new concrete walkway.\nAI: Great! What's the total square footage?\nCustomer: About 350 square feet.\nAI: A nice walkway. Do you want it reinforced with rebar or wire mesh?\nCustomer: No, standard concrete is fine.\nAI: And what type of finish are you looking for — broom, smooth, or stamped?\nCustomer: We'd like a broom finish.\nAI: New pour, 350 sqft, broom finish. Sounds good!\nAI: Great! Let me get some details. What is your name?\nCustomer: Jennifer Jackson.\nAI: Thanks Jennifer! And a phone number I can reach you at?\nCustomer: (959) 555-1482.\nAI: Perfect. And what's the address for the service?\nCustomer: 697 Magnolia Ln.\nAI: Thanks Jennifer. We'll have a concrete crew reach out for the pour. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "350sqft x $8 concrete",
+        "a": 2800
+      }
+    ]
+  },
+  {
+    "id": "mrk12dgfjam0hx",
+    "caller": "John Miller",
+    "phone": "(860) 555-8813",
+    "address": "1599 Sycamore Rd",
+    "service": "Drywall Repair/Installation",
+    "icon": "🧱",
+    "avgPrice": 900,
+    "jobDetail": "full wall textured water-damage 200sqft",
+    "duration": "1:31",
+    "status": "answered",
+    "outcome": "follow-up",
+    "time": "Today, 18:26 PM",
+    "receivedAt": "2026-07-14T02:24:07.057Z",
+    "summary": "Drywall Repair/Installation: Water damage restoration. full wall textured water-damage 200sqft. Estimated $900.",
+    "priceBreakdown": "Water damage repair, 200sqft x $2.50 drywall",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need water damage drywall repair.\nAI: What's the total square footage?\nCustomer: About 200 square feet.\nAI: Was there water damage involved?\nCustomer: Yes, we had a leak that damaged the drywall.\nAI: Do you need the texture matched to the existing wall?\nCustomer: Yes, we want it to match the rest of the wall.\nAI: Great! Let me get some details. What is your name?\nCustomer: John Miller.\nAI: Thanks John! And a phone number I can reach you at?\nCustomer: (860) 555-8813.\nAI: Perfect. And what's the address for the service?\nCustomer: 1599 Sycamore Rd.\nAI: Thanks John. 200sqft wall textured water-damage. We'll have a drywall pro reach out. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Water damage repair",
+        "a": 400
+      },
+      {
+        "l": "200sqft x $2.50 drywall",
+        "a": 500
+      }
+    ]
+  },
+  {
+    "id": "mrk12dgte0nusm",
+    "caller": "Linda Miller",
+    "phone": "(845) 555-3997",
+    "address": "1047 Cedar Cir",
+    "service": "Chimney Service",
+    "icon": "🔥",
+    "avgPrice": 250,
+    "jobDetail": "cleaning",
+    "duration": "1:41",
+    "status": "answered",
+    "outcome": "no-interest",
+    "time": "Today, 13:35 PM",
+    "receivedAt": "2026-07-14T02:24:07.066Z",
+    "summary": "Chimney Service: Annual cleaning. cleaning. Estimated $250.",
+    "priceBreakdown": "Standard cleaning",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need my chimney cleaned.\nAI: Great! How many stories is your home?\nCustomer: Single story.\nAI: Great! Let me get some details. What is your name?\nCustomer: Linda Miller.\nAI: Thanks Linda! And a phone number I can reach you at?\nCustomer: (845) 555-3997.\nAI: Perfect. And what's the address for the service?\nCustomer: 1047 Cedar Cir.",
+    "pricingBreakdown": [
+      {
+        "l": "Standard cleaning",
+        "a": 250
+      }
+    ]
+  },
+  {
+    "id": "mrklgm2e4j7txr",
+    "caller": "David Martinez",
+    "phone": "(914) 555-4003",
+    "address": "6760 Magnolia Ct",
+    "service": "Concrete driveway",
+    "icon": "🏗️",
+    "avgPrice": 11700,
+    "jobDetail": "1000sqft +demo rebar smooth finish",
+    "duration": "1:56",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "Yesterday, 8:30 AM",
+    "receivedAt": "2026-07-14T11:55:03.716Z",
+    "summary": "Concrete driveway: Commercial slab. 1000sqft +demo rebar smooth finish. Estimated $11,700.",
+    "priceBreakdown": "1000sqft x $8 concrete, Rebar reinforcement x $2.50/sqft, Demolition & removal",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need my old driveway removed and a new one poured.\nAI: Sure! What's the square footage of the driveway?\nCustomer: About 1000 square feet.\nAI: So demolition of the existing slab, and pour new. Are you looking at reinforced concrete with rebar?\nCustomer: Yes, I want it reinforced.\nAI: And what type of finish are you looking for — broom, smooth, or stamped?\nCustomer: We'd like a smooth finish.\nAI: So that's a demo and repour, 1000 sqft, reinforced, smooth finish. Sounds good!\nAI: Great! Let me get some details. What is your name?\nCustomer: David Martinez.\nAI: Thanks David! And a phone number I can reach you at?\nCustomer: (914) 555-4003.\nAI: Perfect. And what's the address for the service?\nCustomer: 6760 Magnolia Ct.\nAI: Thanks David. We'll schedule a demo and pour. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "1000sqft x $8 concrete",
+        "a": 8000
+      },
+      {
+        "l": "Rebar reinforcement x $2.50/sqft",
+        "a": 2500
+      },
+      {
+        "l": "Demolition & removal",
+        "a": 1200
+      }
+    ]
+  },
+  {
+    "id": "mrklgm2so3nyh1",
+    "caller": "Matthew Johnson",
+    "phone": "(475) 555-8229",
+    "address": "2611 Spruce Ct",
+    "service": "Foundation Repair",
+    "icon": "🏗️",
+    "avgPrice": 4000,
+    "jobDetail": "exterior 1/8in crack loam soil",
+    "duration": "1:17",
+    "status": "answered",
+    "outcome": "lead-captured",
+    "time": "Yesterday, 9:40 AM",
+    "receivedAt": "2026-07-14T11:55:03.734Z",
+    "summary": "Foundation Repair: Full waterproofing. exterior 1/8in crack loam soil. Estimated $4,000.",
+    "priceBreakdown": "Exterior waterproofing",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I have water in my basement and need drainage fixed.\nAI: We can help with exterior drainage. What type of soil do you have?\nCustomer: It's loam soil.\nAI: Great! Let me get some details. What is your name?\nCustomer: Matthew Johnson.\nAI: Thanks Matthew! And a phone number I can reach you at?\nCustomer: (475) 555-8229.\nAI: Perfect. And what's the address for the service?\nCustomer: 2611 Spruce Ct.\nAI: Thanks Matthew. We'll have a foundation specialist contact you. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Exterior waterproofing",
+        "a": 4000
+      }
+    ]
+  },
+  {
+    "id": "mrklgm2z2ydwmq",
+    "caller": "Susan Wilson",
+    "phone": "(860) 555-3940",
+    "address": "829 Hickory Ct",
+    "service": "Window replacement",
+    "icon": "",
+    "avgPrice": 3000,
+    "jobDetail": "6 windows double pane",
+    "duration": "1:09",
+    "status": "answered",
+    "outcome": "lead-captured",
+    "time": "2 days ago, 13:14 PM",
+    "receivedAt": "2026-07-14T11:55:03.737Z",
+    "summary": "Window replacement: Double hung 6 windows. 6 windows double pane. Estimated $3,000.",
+    "priceBreakdown": "6 x double-pane windows @ $500 each",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I'm looking to replace some windows.\nAI: How many windows are you looking to replace?\nCustomer: 6 windows.\nAI: Are you looking at double-pane or triple-pane windows?\nCustomer: We want double-pane windows.\nAI: What floor are the windows on?\nCustomer: They're on the first floor.\nAI: First floor is straightforward. \nAI: Great! Let me get some details. What is your name?\nCustomer: Susan Wilson.\nAI: Thanks Susan! And a phone number I can reach you at?\nCustomer: (860) 555-3940.\nAI: Perfect. And what's the address for the service?\nCustomer: 829 Hickory Ct.\nAI: Thanks Susan. I have 6 double-pane windows on the first floor. An installer will reach out to schedule. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "6 x double-pane windows @ $500 each",
+        "a": 3000
+      }
+    ]
+  },
+  {
+    "id": "mrkmoidd7y86p7",
+    "caller": "William Lee",
+    "phone": "(518) 555-6546",
+    "address": "6280 Locust Pl",
+    "service": "Window replacement",
+    "icon": "",
+    "avgPrice": 3400,
+    "jobDetail": "4 windows triple pane",
+    "duration": "1:02",
+    "status": "answered",
+    "outcome": "follow-up",
+    "time": "Yesterday, 11:04 AM",
+    "receivedAt": "2026-07-14T12:29:11.788Z",
+    "summary": "Window replacement: Triple pane energy eff 4 windows. 4 windows triple pane. Estimated $3,400.",
+    "priceBreakdown": "4 x triple-pane windows @ $850 each",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I'm looking to replace some windows.\nAI: How many windows are you looking to replace?\nCustomer: 4 windows.\nAI: Are you looking at double-pane or triple-pane windows?\nCustomer: We want triple-pane windows.\nAI: What floor are the windows on?\nCustomer: They're on the first floor.\nAI: First floor is straightforward. \nAI: Great! Let me get some details. What is your name?\nCustomer: William Lee.\nAI: Thanks William! And a phone number I can reach you at?\nCustomer: (518) 555-6546.\nAI: Perfect. And what's the address for the service?\nCustomer: 6280 Locust Pl.\nAI: Thanks William. I have 4 triple-pane windows on the first floor. An installer will reach out to schedule. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "4 x triple-pane windows @ $850 each",
+        "a": 3400
+      }
+    ]
+  },
+  {
+    "id": "mrkmoidik5i1t5",
+    "caller": "Susan Wilson",
+    "phone": "(845) 555-5882",
+    "address": "4888 Locust Ln",
+    "service": "Flooring Installation",
+    "icon": "🏠",
+    "avgPrice": 2125,
+    "jobDetail": "250sqft tile underlayment",
+    "duration": "1:02",
+    "status": "answered",
+    "outcome": "appointment-set",
+    "time": "Today, 8:01 AM",
+    "receivedAt": "2026-07-14T12:29:11.800Z",
+    "summary": "Flooring Installation: Kitchen tile. 250sqft tile underlayment. Estimated $2,125.",
+    "priceBreakdown": "250sqft tile x $8, Underlayment x $0.50/sqft",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need new flooring installed.\nAI: What type of flooring are you looking at — hardwood, laminate, tile, or vinyl?\nCustomer: We want tile.\nAI: What's the total square footage?\nCustomer: About 250 square feet.\nAI: Great! Let me get some details. What is your name?\nCustomer: Susan Wilson.\nAI: Thanks Susan! And a phone number I can reach you at?\nCustomer: (845) 555-5882.\nAI: Perfect. And what's the address for the service?\nCustomer: 4888 Locust Ln.",
+    "pricingBreakdown": [
+      {
+        "l": "250sqft tile x $8",
+        "a": 2000
+      },
+      {
+        "l": "Underlayment x $0.50/sqft",
+        "a": 125
+      }
+    ]
+  },
+  {
+    "id": "mrkmoidx4ft1xc",
+    "caller": "Jessica Martin",
+    "phone": "(518) 555-9574",
+    "address": "3331 Ash St",
+    "service": "Well Pump Service",
+    "icon": "💧",
+    "avgPrice": 400,
+    "jobDetail": "250ft submersible chlorination 12yr",
+    "duration": "1:59",
+    "status": "answered",
+    "outcome": "lead-captured",
+    "time": "3 days ago, 17:14 PM",
+    "receivedAt": "2026-07-14T12:29:11.804Z",
+    "summary": "Well Pump Service: Well chlorination. 250ft submersible chlorination 12yr. Estimated $400.",
+    "priceBreakdown": "Well chlorination treatment",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: My well water tested positive for bacteria.\nAI: We can do a well chlorination. How deep is the well?\nCustomer: About 250 feet.\nAI: Great! Let me get some details. What is your name?\nCustomer: Jessica Martin.\nAI: Thanks Jessica! And a phone number I can reach you at?\nCustomer: (518) 555-9574.\nAI: Perfect. And what's the address for the service?\nCustomer: 3331 Ash St.\nAI: Thanks Jessica. We'll send a well service technician to address your chlorination. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "Well chlorination treatment",
+        "a": 400
+      }
+    ]
+  },
+  {
+    "id": "mrkn3cy6qs3ego",
+    "caller": "Christopher Johnson",
+    "phone": "(607) 555-4888",
+    "address": "690 Dogwood Ct",
+    "service": "Siding Installation/Repair",
+    "icon": "🏘️",
+    "avgPrice": 500,
+    "jobDetail": "0sqft vinyl repair +trim 1 story",
+    "duration": "1:49",
+    "status": "answered",
+    "outcome": "follow-up",
+    "time": "4 days ago, 13:55 PM",
+    "receivedAt": "2026-07-14T12:40:44.605Z",
+    "summary": "Siding Installation/Repair: Trim and fascia replacement. 0sqft vinyl repair +trim 1 story. Estimated $500.",
+    "priceBreakdown": "0sqft vinyl repair x $6, Trim installation",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need my trim and fascia replaced.\nAI: What material are you looking at — vinyl, fiber cement, or wood?\nCustomer: We want vinyl.\nAI: How many stories is the home?\nCustomer: Single story.\nAI: Single story is straightforward. Let me get your info. Your name?\nCustomer: Christopher Johnson.\nAI: Thanks Christopher! And a phone number I can reach you at?\nCustomer: (607) 555-4888.\nAI: Perfect. And what's the address for the service?\nCustomer: 690 Dogwood Ct.",
+    "pricingBreakdown": [
+      {
+        "l": "0sqft vinyl repair x $6",
+        "a": 0
+      },
+      {
+        "l": "Trim installation",
+        "a": 500
+      }
+    ]
+  },
+  {
+    "id": "mrkn3vvqezmdtl",
+    "caller": "Susan Wilson",
+    "phone": "(845) 555-9113",
+    "address": "6954 Hemlock Ave",
+    "service": "Septic System Service",
+    "icon": "🫧",
+    "avgPrice": 400,
+    "jobDetail": "1000gal  pumping 3br",
+    "duration": "1:56",
+    "status": "answered",
+    "outcome": "follow-up",
+    "time": "Today, 14:50 PM",
+    "receivedAt": "2026-07-14T12:41:09.149Z",
+    "summary": "Septic System Service: Routine pumping. 1000gal  pumping 3br. Estimated $400.",
+    "priceBreakdown": "1000gal tank pumping",
+    "transcript": "AI: Thank you for calling NorthStar. My name is Alex. How can I help you today?\nCustomer: I need my septic tank pumped.\nAI: What size tank do you have?\nCustomer: It's a 1000 gallon tank.\nAI: How many bedrooms in the home?\nCustomer: 3 bedrooms.\nAI: When was it last pumped?\nCustomer: About 3 years ago.\nAI: Great! Let me get some details. What is your name?\nCustomer: Susan Wilson.\nAI: Thanks Susan! And a phone number I can reach you at?\nCustomer: (845) 555-9113.\nAI: Perfect. And what's the address for the service?\nCustomer: 6954 Hemlock Ave.\nAI: Thanks Susan. We'll have a septic service contact you. Thank you!",
+    "pricingBreakdown": [
+      {
+        "l": "1000gal tank pumping",
+        "a": 400
+      }
+    ]
+  }
+]

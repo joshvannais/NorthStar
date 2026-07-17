@@ -202,6 +202,54 @@ function mapExecutiveContextToVariables(ec, opts) {
     vars.northstar_greeting = bp.retell.greetingTemplate || `Thanks for calling ${bp.company?.name || 'us'}. This is NorthStar, your AI receptionist. How can I help you today?`;
     vars.brand_name = bp.retell.brandName || 'NorthStar';
     vars.brand_voice = bp.retell.brandVoice || 'professional and warm';
+    vars.assistant_name = bp.retell.assistantName || bp.retell.brandName || 'NorthStar';
+    vars.voice_style = bp.retell.voiceStyle || bp.retell.brandVoice || 'professional and warm';
+  }
+
+  // Aliases for common variable names used in conversation flow prompts
+  vars.website = vars.company_website || '';
+  vars.business_email = vars.company_email || '';
+  vars.business_phone = vars.company_phone || '';
+
+  // Industry from flat EC field
+  if (ec.industry) vars.industry = ec.industry;
+
+  // Emergency policy (derived from hours)
+  if (bp.hours) {
+    const hasEmergency = Object.values(bp.hours).some(h => h && h.emergency);
+    vars.emergency_available = hasEmergency ? 'true' : 'false';
+    vars.emergency_policy = hasEmergency
+      ? 'Emergency service is available. Additional charges may apply for after-hours emergency calls.'
+      : 'Standard business hours apply. Emergency calls are not currently available.';
+  }
+
+  // Service area
+  vars.service_area = bp.serviceArea || (ec.serviceArea || '');
+  vars.business_description = bp.businessDescription || (ec.businessDescription || `${ec.industry || ''} services`);
+  vars.owner_name = bp.ownerName || (ec.ownerName || '');
+  vars.company_values = bp.companyValues || (ec.companyValues || 'Quality work, customer satisfaction, and professional service.');
+  vars.policies = bp.policies || (ec.policies || '');
+  vars.faq = bp.faq || (ec.faq || '');
+  vars.custom_prompt = bp.customPrompt || (ec.customPrompt || '');
+
+  // Pricing rules (combined from financial settings)
+  if (bp.financial) {
+    const minPrice = bp.financial.minimumJobPrice || 150;
+    const markup = bp.financial.emergencyMarkup || 1.0;
+    const travel = bp.financial.travelCharge || 0;
+    vars.pricing_rules = `Minimum job price: ${minPrice}. Emergency markup: ${markup}x. Travel charge: ${travel}/mile. No pricing promises without written estimate.`;
+  } else {
+    vars.pricing_rules = 'No pricing promises without written estimate. Free estimates available.';
+  }
+
+  // Scheduling rules (combined from scheduling settings)
+  if (bp.scheduling) {
+    const maxJobs = bp.scheduling.maxJobsPerDay || 4;
+    const leadHrs = bp.scheduling.leadTimeHours || 4;
+    const emergLead = bp.scheduling.emergencyLeadTimeMinutes || 60;
+    vars.scheduling_rules = `Maximum ${maxJobs} jobs per day. ${leadHrs} hour lead time for standard calls. ${emergLead} minute lead time for emergency calls. No appointment promises without confirmation.`;
+  } else {
+    vars.scheduling_rules = 'Standard business hours. Lead time varies by job type. No appointment promises without confirmation.';
   }
 
   // Services
@@ -243,12 +291,6 @@ function mapExecutiveContextToVariables(ec, opts) {
     vars.retell_preferences = JSON.stringify(bp.retell);
     vars.conversation_style = bp.retell.conversationStyle || 'consultative';
     vars.max_conversation_length = bp.retell.maxConversationLength || 15;
-  }
-
-  // Emergency policies (derived from hours)
-  if (bp.hours) {
-    const hasEmergency = Object.values(bp.hours).some(h => h && h.emergency);
-    vars.emergency_available = hasEmergency ? 'true' : 'false';
   }
 
   // Customer data (if available)

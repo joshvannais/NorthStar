@@ -142,6 +142,9 @@ function buildExecutiveContext(businessName, industry, phoneNumber, demoSessionI
     revenueRangeMax: d.revenueRangeMax,
     generatedAt: now,
     polarisSessionId: demoSessionId,
+    ownerName: '',
+    businessDescription: `${industry} services`,
+    serviceArea: 'Local service area',
 
     // Structured Business Profile — consumed by mapExecutiveContextToVariables()
     businessProfile: {
@@ -153,6 +156,13 @@ function buildExecutiveContext(businessName, industry, phoneNumber, demoSessionI
         website: '',
         timeZone: 'America/New_York',
       },
+      ownerName: '',
+      businessDescription: `${industry} services`,
+      serviceArea: 'Local service area',
+      companyValues: 'Quality work, customer satisfaction, and professional service.',
+      policies: 'Free estimates available. Fully licensed and insured.',
+      faq: '',
+      customPrompt: '',
       services: [
         { name: d.service, description: `${d.service} for ${industry.toLowerCase()}`, avgPrice: d.avgJobValue },
       ],
@@ -187,6 +197,8 @@ function buildExecutiveContext(businessName, industry, phoneNumber, demoSessionI
         greetingTemplate: `Thanks for calling ${businessName}. This is NorthStar, your AI receptionist. How can I help you today?`,
         brandName: 'NorthStar',
         brandVoice: 'professional and warm, like a seasoned office manager who knows the business inside out',
+        assistantName: 'NorthStar',
+        voiceStyle: 'professional and warm',
       },
     },
 

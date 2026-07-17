@@ -197,6 +197,13 @@ function mapExecutiveContextToVariables(ec, opts) {
     vars.company_timezone = bp.company.timeZone || '';
   }
 
+  // NorthStar branding — top-level for easy reference in conversation flow
+  if (bp.retell) {
+    vars.northstar_greeting = bp.retell.greetingTemplate || `Thanks for calling ${bp.company?.name || 'us'}. This is NorthStar, your AI receptionist. How can I help you today?`;
+    vars.brand_name = bp.retell.brandName || 'NorthStar';
+    vars.brand_voice = bp.retell.brandVoice || 'professional and warm';
+  }
+
   // Services
   if (bp.services && Array.isArray(bp.services)) {
     vars.services = JSON.stringify(bp.services.slice(0, 10));

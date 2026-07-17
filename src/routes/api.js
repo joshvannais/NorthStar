@@ -10,8 +10,13 @@ const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
 const jobber = require('../integrations/jobber');
 const config = require('../config');
+const { requireAuth } = require('../auth/middleware');
 
 const router = express.Router();
+
+// ══════════════════════════════════════════════
+// PUBLIC ROUTES — no authentication required
+// ══════════════════════════════════════════════
 
 /**
  * GET /api/health
@@ -20,6 +25,67 @@ const router = express.Router();
 router.get('/health', (req, res) => {
       res.json({ status: 'ok', service: 'northstar-solutions', version: '1.0.0' });
     });
+
+/**
+ * POST /api/retell/webhook
+ * Receive call events from Retell AI. PUBLIC — external webhook.
+ */
+router.post('/retell/webhook', async (req, res) => {
+  try {
+    const result = await handleWebhook(req.body);
+    res.json(result);
+  } catch (err) {
+    console.error('[API] Webhook error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/contact
+ * Submit a contact form message. PUBLIC — contact form.
+ */
+router.post('/contact', async (req, res) => {
+  try {
+    const { name, email, subject, message } = req.body;
+    if (!name || !email || !subject || !message) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    
+    const fs = require('fs');
+    const path = require('path');
+    const contactsDir = path.join(__dirname, '..', '..', 'data');
+    if (!fs.existsSync(contactsDir)) fs.mkdirSync(contactsDir, { recursive: true });
+    
+    const entry = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name,
+      email,
+      subject,
+      message,
+      createdAt: new Date().toISOString(),
+      status: 'new'
+    };
+    
+    const filePath = path.join(contactsDir, 'contact-messages.json');
+    let messages = [];
+    if (fs.existsSync(filePath)) {
+      messages = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    }
+    messages.push(entry);
+    fs.writeFileSync(filePath, JSON.stringify(messages, null, 2));
+    
+    console.log(`[Contact] New message from ${name} (${email}): ${subject}`);
+    res.json({ success: true, message: 'Message received. We\'ll get back to you soon.' });
+  } catch (err) {
+    console.error('[Contact] Error:', err.message);
+    res.status(500).json({ error: 'Failed to submit message' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// PROTECTED ROUTES — authentication required
+// ══════════════════════════════════════════════
+router.use(requireAuth);
 
     /**
      * GET /api/stats
@@ -195,20 +261,6 @@ router.post('/leads/import', upload.single('file'), (req, res) => {
     res.json({ success: true, imported: imported, skipped: skipped, errors: errors.length > 0 ? errors : undefined });
   } catch (err) {
     res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * POST /api/retell/webhook
- * Receive call events from Retell AI.
- */
-router.post('/retell/webhook', async (req, res) => {
-  try {
-    const result = await handleWebhook(req.body);
-    res.json(result);
-  } catch (err) {
-    console.error('[API] Webhook error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -400,48 +452,6 @@ router.post('/integrations/jobber/disconnect', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'Missing userId' });
   await jobber.disconnect(userId);
   res.json({ success: true });
-});
-
-/**
- * POST /api/contact
- * Submit a contact form message.
- */
-router.post('/contact', async (req, res) => {
-  try {
-    const { name, email, subject, message } = req.body;
-    if (!name || !email || !subject || !message) {
-      return res.status(400).json({ error: 'All fields are required' });
-    }
-    
-    const fs = require('fs');
-    const path = require('path');
-    const contactsDir = path.join(__dirname, '..', '..', 'data');
-    if (!fs.existsSync(contactsDir)) fs.mkdirSync(contactsDir, { recursive: true });
-    
-    const entry = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      name,
-      email,
-      subject,
-      message,
-      createdAt: new Date().toISOString(),
-      status: 'new'
-    };
-    
-    const filePath = path.join(contactsDir, 'contact-messages.json');
-    let messages = [];
-    if (fs.existsSync(filePath)) {
-      messages = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    }
-    messages.push(entry);
-    fs.writeFileSync(filePath, JSON.stringify(messages, null, 2));
-    
-    console.log(`[Contact] New message from ${name} (${email}): ${subject}`);
-    res.json({ success: true, message: 'Message received. We\'ll get back to you soon.' });
-  } catch (err) {
-    console.error('[Contact] Error:', err.message);
-    res.status(500).json({ error: 'Failed to submit message' });
-  }
 });
 
 /**

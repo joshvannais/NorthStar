@@ -10,6 +10,10 @@ const router = express.Router();
 const customerIntelligence = require('../services/customerIntelligence');
 const fs = require('fs');
 const path = require('path');
+const { requireAuth } = require('../auth/middleware');
+
+// All customer intelligence routes require authentication
+router.use(requireAuth);
 
 const DATA_DIR = path.resolve(__dirname, '../../data');
 

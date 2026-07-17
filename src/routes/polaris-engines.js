@@ -18,6 +18,7 @@
 
 const express = require('express');
 const router = express.Router();
+const { requireAuth } = require('../auth/middleware');
 
 // ── Engine References ──
 let engines = {};
@@ -58,6 +59,9 @@ router.use((req, res, next) => {
   res.setHeader('X-Polaris-Engines-Version', '13.0');
   next();
 });
+
+// All engine routes require authentication
+router.use(requireAuth);
 
 // ══════════════════════════════════════════════
 // CUSTOMER ENGINE

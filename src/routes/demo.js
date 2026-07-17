@@ -703,3 +703,5 @@ router.get('/:id/status', (req, res) => {
 });
 
 module.exports = router;
+module.exports.advanceCallState = advanceCallState;
+module.exports.demoSessions = demoSessions;

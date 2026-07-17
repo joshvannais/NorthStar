@@ -1,17 +1,55 @@
 /**
  * Retell AI webhook handler.
  * Receives call events from Retell AI and processes them.
- * 
+ *
+ * Also advances the demo session state machine for active demo calls.
+ *
  * Events:
  * - call_started: A new call has started
  * - call_ended: A call has ended (includes transcript)
  * - call_analyzed: Retell has analyzed the call and extracted structured data
+ * - transcript: Live transcript update during a call (requires Retell streaming)
  */
 
 const { addLead } = require('../leads/store');
 const { appendLead } = require('../sheets/client');
 const { sendLeadNotification: sendSms } = require('../notifications/sms');
 const { sendLeadNotification: sendEmail } = require('../notifications/email');
+
+/**
+ * Get the demo sessions module dynamically to avoid circular deps.
+ * Demo sessions are looked up by Retell call_id.
+ */
+function getDemoSession(callId) {
+  try {
+    const demo = require('../routes/demo');
+    if (demo.demoSessions) {
+      for (const [, session] of demo.demoSessions) {
+        if (session.callId === callId) return session;
+      }
+    }
+  } catch (e) {
+    // Demo module not available — non-demo call
+  }
+  return null;
+}
+
+function advanceDemoSession(callId, toState) {
+  try {
+    const demo = require('../routes/demo');
+    if (demo.advanceCallState) {
+      for (const [sessionId, session] of demo.demoSessions) {
+        if (session.callId === callId) {
+          demo.advanceCallState(sessionId, toState);
+          return sessionId;
+        }
+      }
+    }
+  } catch (e) {
+    // Not a demo call
+  }
+  return null;
+}
 
 /**
  * Parse structured lead info from Retell's call analysis.
@@ -91,36 +129,97 @@ function detectUrgency(text) {
 async function handleWebhook(payload) {
   console.log(`[Webhook] Received event: ${payload.event} (call: ${payload.call_id})`);
 
-  let lead = null;
+  const callId = payload.call_id;
 
-  if (payload.event === 'call_analyzed') {
-    // Best case: Retell has structured analysis
-    lead = parseLeadFromAnalysis(payload);
-  } else if (payload.event === 'call_ended') {
-    // Fallback: parse from transcript
-    lead = parseLeadFromTranscript(payload.transcript || '');
+  // ── Demo session state management ──
+  if (payload.event === 'call_started') {
+    advanceDemoSession(callId, 'dialing');
+    return { received: true, processed: true };
   }
 
-  if (!lead) {
-    console.log('[Webhook] No lead data extracted — skipping.');
+  if (payload.event === 'call_ringing') {
+    advanceDemoSession(callId, 'ringing');
+    return { received: true, processed: true };
+  }
+
+  if (payload.event === 'call_answered') {
+    advanceDemoSession(callId, 'answered');
+    return { received: true, processed: true };
+  }
+
+  if (payload.event === 'call_media_connected') {
+    advanceDemoSession(callId, 'media_connected');
+    return { received: true, processed: true };
+  }
+
+  // ── Live transcript streaming ──
+  if (payload.event === 'transcript') {
+    const session = getDemoSession(callId);
+    if (session) {
+      // Store the transcript line
+      const line = {
+        speaker: payload.role || 'customer',
+        text: payload.transcript || payload.text || '',
+        timestamp: new Date().toISOString(),
+      };
+      if (!session.transcriptLines) session.transcriptLines = [];
+      session.transcriptLines.push(line);
+
+      // If not yet in live state, advance
+      if (session.callStatus === 'media_connected' || session.callStatus === 'answered') {
+        const demo = require('../routes/demo');
+        if (demo.advanceCallState) {
+          for (const [sid] of demo.demoSessions) {
+            if (demo.demoSessions.get(sid)?.callId === callId) {
+              demo.advanceCallState(sid, 'live');
+              break;
+            }
+          }
+        }
+      }
+    }
+    return { received: true, processed: true };
+  }
+
+  // ── Call ended ──
+  if (payload.event === 'call_ended') {
+    advanceDemoSession(callId, 'completed');
+
+    // Parse lead from transcript
+    const lead = parseLeadFromTranscript(payload.transcript || '');
+    if (lead) {
+      const savedLead = addLead(lead);
+      await appendLead(savedLead);
+      await Promise.allSettled([
+        sendSms(savedLead),
+        sendEmail(savedLead),
+      ]);
+      console.log(`[Webhook] Lead processed: ${savedLead.id} — ${savedLead.customerName}`);
+      return { received: true, processed: true, leadId: savedLead.id };
+    }
     return { received: true, processed: false };
   }
 
-  // Store lead in memory
-  const savedLead = addLead(lead);
+  // ── Call analyzed ──
+  if (payload.event === 'call_analyzed') {
+    advanceDemoSession(callId, 'polaris_summary');
 
-  // Save to Google Sheets
-  await appendLead(savedLead);
+    const lead = parseLeadFromAnalysis(payload);
+    if (lead) {
+      const savedLead = addLead(lead);
+      await appendLead(savedLead);
+      await Promise.allSettled([
+        sendSms(savedLead),
+        sendEmail(savedLead),
+      ]);
+      console.log(`[Webhook] Lead processed (analysis): ${savedLead.id} — ${savedLead.customerName}`);
+      return { received: true, processed: true, leadId: savedLead.id };
+    }
+    return { received: true, processed: false };
+  }
 
-  // Send notifications
-  await Promise.allSettled([
-    sendSms(savedLead),
-    sendEmail(savedLead),
-  ]);
-
-  console.log(`[Webhook] Lead processed: ${savedLead.id} — ${savedLead.customerName}`);
-
-  return { received: true, processed: true, leadId: savedLead.id };
+  console.log(`[Webhook] Unknown event type: ${payload.event} — skipping.`);
+  return { received: true, processed: false };
 }
 
 module.exports = { handleWebhook };

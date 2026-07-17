@@ -908,38 +908,35 @@
         try {
           data = await resp.json();
         } catch (parseErr) {
-          var httpCode = resp.status;
-          showStructuredError('response_parsing', 'INVALID_RESPONSE',
-            'Backend returned HTTP ' + httpCode + ' with unparseable body.');
+          showCustomerError("We couldn\u2019t place your call right now. Please try again in a few moments.");
           btn.disabled = false;
-          btn.textContent = '\uD83D\uDCDE Call Me Now';
+          btn.textContent = "\uD83D\uDCDE Call Me Now";
           return;
         }
 
-        // ── Handle structured error (new format: success=false) ──
+        // ── Handle standard error: success === false ──
         if (data && data.success === false) {
-          showStructuredError(data.stage || 'unknown', data.error || 'UNKNOWN', data.details || 'No details provided.');
+          var customerMsg = data?.error?.message || "Unable to place call.";
+          showCustomerError(customerMsg);
           btn.disabled = false;
-          btn.textContent = '\uD83D\uDCDE Call Me Now';
+          btn.textContent = "\uD83D\uDCDE Call Me Now";
           return;
         }
 
-        // ── Handle legacy error format ──
+        // ── Handle HTTP error without success=false ──
         if (!resp.ok) {
-          var errStage = data?.error?.code || 'request_failed';
-          var errMsg = data?.error?.message || 'Request failed with status ' + resp.status;
-          showStructuredError('api_error', errStage, errMsg);
+          var errMsg = data?.error?.message || "Unable to place call.";
+          showCustomerError(errMsg);
           btn.disabled = false;
-          btn.textContent = '\uD83D\uDCDE Call Me Now';
+          btn.textContent = "\uD83D\uDCDE Call Me Now";
           return;
         }
 
         // ── Validate response has required fields ──
         if (!data.demoSessionId || !data.callId) {
-          showStructuredError('response_validation', 'MISSING_FIELDS',
-            'Backend response missing session ID or call identifier. Try again.');
+          showCustomerError("Unable to place call.");
           btn.disabled = false;
-          btn.textContent = '\uD83D\uDCDE Call Me Now';
+          btn.textContent = "\uD83D\uDCDE Call Me Now";
           return;
         }
 
@@ -952,11 +949,7 @@
           if (!simResp.ok) {
             var simData;
             try { simData = await simResp.json(); } catch(e) { simData = {}; }
-            showStructuredError(
-              simData?.stage || 'simulation_start',
-              simData?.error || 'SIMULATION_FAILED',
-              simData?.details || 'Unable to start simulation. Try again.'
-            );
+            showCustomerError(simData?.error?.message || 'Unable to start simulation.');
             btn.disabled = false;
             btn.textContent = '\uD83D\uDCDE Call Me Now';
             return;
@@ -976,31 +969,21 @@
       } catch (err) {
         console.error('[Demo] Call error:', err.message);
         if (err.name === 'AbortError') {
-          showStructuredError('request_timeout', 'TIMEOUT',
-            'Request timed out after 15 seconds. Backend may be unreachable. Try again.');
+          showCustomerError('The request took too long. Please try again.');
         } else {
-          showStructuredError('fetch_error', 'NETWORK_ERROR',
-            'Could not reach backend: ' + err.message);
+          showCustomerError('Something went wrong. Please try again.');
         }
         btn.disabled = false;
         btn.textContent = '\uD83D\uDCDE Call Me Now';
       }
     }
 
-    // ── Structured error display ──
-    function showStructuredError(stage, errorCode, details) {
-      // Build a detailed notification
-      var html = '<div style="text-align:left;line-height:1.5">' +
-        '<strong style="color:#ef4444;font-size:15px">Unable to place call</strong><br>' +
-        '<span style="color:#9ca3af;font-size:12px">Stage: ' + escHtml(stage) + ' / ' + escHtml(errorCode) + '</span><br>' +
-        '<span style="font-size:13px">' + escHtml(details) + '</span>' +
-        '</div>';
-      showNotification(html, 'error');
-    }
-
-    function escHtml(s) {
-      if (!s) return '';
-      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    // ── Customer-friendly error display ──
+    // Never shows HTML, HTTP codes, stage names, or internal diagnostics.
+    // Only clean, friendly messages.
+    function showCustomerError(message) {
+      var safe = (message || 'Something went wrong. Please try again.');
+      showNotification(safe, 'error');
     }
 
     // ── Start simulation (called when Retell is not configured) ──

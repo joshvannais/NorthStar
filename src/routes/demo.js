@@ -382,22 +382,41 @@ function formatE164(phone) {
   return '+' + digits; // best effort
 }
 
+// ── Customer-safe error mapping ──
+// Internal errors → customer-safe messages. All diagnostics logged server-side only.
+const CUSTOMER_ERRORS = {
+  'VALIDATION_MISSING_FIELD':    'Please fill in all required fields.',
+  'VALIDATION_INVALID_INDUSTRY': 'Please select a valid industry.',
+  'INVALID_PHONE_NUMBER':        'Please enter a valid phone number.',
+  'RETELL_API_KEY_MISSING':      'Unable to place call.',
+  'RETELL_AGENT_ID_MISSING':     'Unable to place call.',
+  'RETELL_AUTH_FAILED':          'Voice service temporarily unavailable.',
+  'RETELL_AGENT_NOT_FOUND':      'Unable to place call.',
+  'RETELL_OUTBOUND_DISABLED':    'Outbound calling is not available.',
+  'RETELL_PHONE_REJECTED':       'The phone number could not be reached.',
+  'RETELL_NETWORK_ERROR':        'Temporary connection issue. Please try again.',
+  'RETELL_INVALID_RESPONSE':     'Unable to place call.',
+  'RETELL_MISSING_CALL_ID':      'Unable to place call.',
+  'RETELL_UNKNOWN_ERROR':        'Unable to place call. Please try again.',
+  'RETELL_API_ERROR_400':        'Unable to place call.',
+  'RETELL_API_ERROR_429':        'Please wait a moment before trying again.',
+  'FETCH_ERROR':                 'Could not reach service. Check your connection.',
+  'TIMEOUT':                     'The request took too long. Please try again.',
+  'INTERNAL_SERVER_ERROR':       'Something went wrong. Please try again.',
+};
+
+function customerError(internalCode, internalDetails) {
+  // Log everything server-side
+  console.error(`[CustomerError] ${internalCode}: ${internalDetails}`);
+  const message = CUSTOMER_ERRORS[internalCode] || 'Something went wrong. Please try again.';
+  return { success: false, error: { code: internalCode, message } };
+}
+
 /**
  * POST /call
  *
- * Instrumented call pipeline with stage-by-stage diagnostics.
- * Every failure returns: { success, stage, error, details }
- *
- * Pipeline stages:
- *   1. request_received
- *   2. business_profile
- *   3. credentials_verified
- *   4. agent_loaded
- *   5. phone_validated
- *   6. call_requested
- *   7. call_created
- *   8. webhook_registered
- *   9. returning_success
+ * Instrumented call pipeline with full server-side diagnostics.
+ * Customer-facing responses are always clean: { success, error: { code, message } }
  */
 router.post('/call', async (req, res) => {
   const pipelineId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
@@ -413,10 +432,7 @@ router.post('/call', async (req, res) => {
     // ── Stage 2: Business profile loaded ──
     if (!businessName) {
       log('2. business_profile', 'FAIL', 'Missing businessName');
-      return res.status(400).json({
-        success: false, stage: 'business_profile',
-        error: 'VALIDATION_MISSING_FIELD', details: 'Business name is required.',
-      });
+      return res.status(400).json(customerError('VALIDATION_MISSING_FIELD', `Missing businessName`));
     }
     log('2. business_profile', 'OK', `businessName="${businessName}"`);
 
@@ -424,10 +440,7 @@ router.post('/call', async (req, res) => {
     const normalizedIndustry = ALL_INDUSTRIES.find(i => i.toLowerCase() === (industry || '').toLowerCase());
     if (!normalizedIndustry) {
       log('3. credentials_verified', 'FAIL', `Invalid industry: ${industry}`);
-      return res.status(400).json({
-        success: false, stage: 'credentials_verified',
-        error: 'VALIDATION_INVALID_INDUSTRY', details: `"${industry}" is not a supported industry.`,
-      });
+      return res.status(400).json(customerError('VALIDATION_INVALID_INDUSTRY', `Invalid industry: ${industry}`));
     }
     log('3. credentials_verified', 'OK', `industry="${normalizedIndustry}"`);
 
@@ -435,10 +448,7 @@ router.post('/call', async (req, res) => {
     const digits = (phoneNumber || '').replace(/\D/g, '');
     if (digits.length < 10) {
       log('4. phone_validated', 'FAIL', `Invalid phone: "${phoneNumber}"`);
-      return res.status(400).json({
-        success: false, stage: 'phone_validated',
-        error: 'INVALID_PHONE_NUMBER', details: 'Please enter a valid phone number with area code (at least 10 digits).',
-      });
+      return res.status(400).json(customerError('INVALID_PHONE_NUMBER', `Invalid phone: ${phoneNumber}`));
     }
     log('4. phone_validated', 'OK', `phone="${phoneNumber}" (${digits.length} digits)`);
 
@@ -484,29 +494,20 @@ router.post('/call', async (req, res) => {
         executiveContext: ec,  // Full NorthStar Executive Context → retell_llm_dynamic_variables
       });
     } catch (callErr) {
-      // Classify the error
+      // Classify the error — log full details server-side, return clean customer message
       if (callErr instanceof retell.DiagnosticError) {
         log('7. call_requested', 'FAIL', `[${callErr.stage}] ${callErr.code}: ${callErr.details}`);
-        return res.status(callErr.httpStatus || 502).json({
-          success: false, stage: callErr.stage,
-          error: callErr.code, details: callErr.details,
-        });
+        return res.status(callErr.httpStatus || 502).json(customerError(callErr.code, callErr.details));
       }
       log('7. call_requested', 'FAIL', `Unknown error: ${callErr.message}`);
-      return res.status(502).json({
-        success: false, stage: 'retell_api',
-        error: 'RETELL_UNKNOWN_ERROR', details: `Retell request failed: ${callErr.message}`,
-      });
+      return res.status(502).json(customerError('RETELL_UNKNOWN_ERROR', callErr.message));
     }
 
     // ── Stage 8: call_id created ──
     const retellCallId = callResult?.call_id;
     if (!retellCallId) {
       log('8. call_created', 'FAIL', 'Retell did not return a call_id');
-      return res.status(502).json({
-        success: false, stage: 'retell_response',
-        error: 'RETELL_MISSING_CALL_ID', details: 'Retell returned a response but did not include a call identifier.',
-      });
+      return res.status(502).json(customerError('RETELL_MISSING_CALL_ID', 'Retell did not return a call_id'));
     }
     log('8. call_created', 'OK', `call_id=${retellCallId}`);
 
@@ -529,11 +530,8 @@ router.post('/call', async (req, res) => {
     });
 
   } catch (err) {
-    console.error(`[Demo/Pipeline:${pipelineId}] Uncaught error:`, err.message);
-    res.status(500).json({
-      success: false, stage: 'internal',
-      error: 'INTERNAL_SERVER_ERROR', details: `Backend error: ${err.message}`,
-    });
+    console.error(`[Demo/Pipeline:${pipelineId}] Uncaught error:`, err.message, err.stack);
+    res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
   }
 });
 
@@ -544,8 +542,8 @@ router.post('/call', async (req, res) => {
 router.post('/:id/simulate', (req, res) => {
   try {
     const session = demoSessions.get(req.params.id);
-    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
-    if (session.callStatus !== 'idle') return res.status(400).json({ error: { code: 'INVALID_STATE', message: `Cannot simulate from state: ${session.callStatus}` } });
+    if (!session) return res.status(404).json(customerError('NOT_FOUND', 'Session not found'));
+    if (session.callStatus !== 'idle') return res.status(400).json(customerError('INVALID_STATE', `Cannot simulate from state: ${session.callStatus}`));
 
     session.callStatus = 'simulation';
     session.transcriptLines = [];
@@ -554,8 +552,8 @@ router.post('/:id/simulate', (req, res) => {
 
     res.json({ demoSessionId: session.id, status: 'simulation' });
   } catch (err) {
-    console.error('[Demo] Simulate error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to start simulation.' } });
+    console.error('[Demo] Simulate error:', err.message, err.stack);
+    res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
   }
 });
 
@@ -567,15 +565,13 @@ router.post('/:id/simulate', (req, res) => {
 router.post('/:id/advance', (req, res) => {
   try {
     const { to } = req.body;
-    if (!to) return res.status(400).json({ error: { code: 'VALIDATION', message: 'Target state (to) is required.' } });
+    if (!to) return res.status(400).json(customerError('VALIDATION_MISSING_FIELD', 'Target state required'));
 
     const session = demoSessions.get(req.params.id);
-    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
+    if (!session) return res.status(404).json(customerError('NOT_FOUND', 'Session not found'));
 
     if (!isValidTransition(session.callStatus, to)) {
-      return res.status(400).json({
-        error: { code: 'INVALID_TRANSITION', message: `Cannot transition from ${session.callStatus} to ${to}.` },
-      });
+      return res.status(400).json(customerError('INVALID_STATE', `Cannot transition from ${session.callStatus} to ${to}`));
     }
 
     const prev = session.callStatus;
@@ -593,20 +589,18 @@ router.post('/:id/advance', (req, res) => {
 
     res.json({ demoSessionId: session.id, status: to, previousStatus: prev });
   } catch (err) {
-    console.error('[Demo] Advance error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to advance state.' } });
+    console.error('[Demo] Advance error:', err.message, err.stack);
+    res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
   }
 });
 
 /**
  * GET /:id/transcript
- * Returns transcript. Only returns data in 'live' or later states.
- * Before 'live', returns empty array with appropriate message.
  */
 router.get('/:id/transcript', (req, res) => {
   try {
     const session = demoSessions.get(req.params.id);
-    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
+    if (!session) return res.status(404).json(customerError('NOT_FOUND', 'Session not found'));
 
     const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
     if (preLive.includes(session.callStatus)) {
@@ -618,7 +612,6 @@ router.get('/:id/transcript', (req, res) => {
       });
     }
 
-    // Simulation mode — generate mock transcript progressively
     if (session.callStatus === 'live' || session.callStatus === 'completed') {
       const elapsed = session.startedAt ? Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000) : 0;
       const full = mockTranscript(session.industry, 12);
@@ -632,19 +625,18 @@ router.get('/:id/transcript', (req, res) => {
       conversationState: 'live',
     });
   } catch (err) {
-    console.error('[Demo] Transcript error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to retrieve transcript.' } });
+    console.error('[Demo] Transcript error:', err.message, err.stack);
+    res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
   }
 });
 
 /**
  * GET /:id/polaris-estimate
- * Only returns data after 'live' state. Before that, returns empty.
  */
 router.get('/:id/polaris-estimate', (req, res) => {
   try {
     const session = demoSessions.get(req.params.id);
-    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
+    if (!session) return res.status(404).json(customerError('NOT_FOUND', 'Session not found'));
 
     const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
     if (preLive.includes(session.callStatus)) {
@@ -660,19 +652,18 @@ router.get('/:id/polaris-estimate', (req, res) => {
     const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines);
     res.json({ ...estimate, polairsState: 'analyzing' });
   } catch (err) {
-    console.error('[Demo] Polaris estimate error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to generate estimate.' } });
+    console.error('[Demo] Polaris estimate error:', err.message, err.stack);
+    res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
   }
 });
 
 /**
  * GET /:id/status
- * Returns current state. Timer only counts after 'answered' or 'media_connected'.
  */
 router.get('/:id/status', (req, res) => {
   try {
     const session = demoSessions.get(req.params.id);
-    if (!session) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found.' } });
+    if (!session) return res.status(404).json(customerError('NOT_FOUND', 'Session not found'));
 
     const now = Date.now();
     const talkTimeStarted = session.startedAt ? new Date(session.startedAt).getTime() : null;
@@ -709,8 +700,8 @@ router.get('/:id/status', (req, res) => {
       timestamp: now,
     });
   } catch (err) {
-    console.error('[Demo] Status error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to retrieve status.' } });
+    console.error('[Demo] Status error:', err.message, err.stack);
+    res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
   }
 });
 

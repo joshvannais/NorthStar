@@ -15,6 +15,7 @@
 
 const crypto = require('crypto');
 const businessEvents = require('./businessEvents');
+const transcriptStream = require('./transcriptStream');
 
 // ── Configuration ──────────────────────────────────────────────
 const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
@@ -130,7 +131,7 @@ function validateTimestamp(timestamp) {
 // ── Event Routing ──────────────────────────────────────────────
 
 /** Supported event types */
-const SUPPORTED_EVENTS = ['call_started', 'call_ended', 'call_analyzed', 'ping'];
+const SUPPORTED_EVENTS = ['call_started', 'call_ended', 'call_analyzed', 'transcript_ready', 'transcript', 'ping'];
 
 /**
  * Map Retell raw event names to our standardized business event types.
@@ -139,7 +140,9 @@ const EVENT_TYPE_MAP = {
   call_started: 'call_started',
   call_ended: 'call_completed',
   call_analyzed: 'call_completed',
-  ping: null, // No business event for ping
+  transcript_ready: null,  // Handled separately via transcriptStream
+  transcript: null,        // Handled separately via transcriptStream
+  ping: null,              // No business event for ping
 };
 
 /**
@@ -159,6 +162,42 @@ async function routeEvent(payload) {
   }
 
   console.log(`[Voice:Webhook] Routing event: ${event} (id: ${eventId})`);
+
+  // ── Handle transcript events (streamed during call) ──
+  if (event === 'transcript_ready' || event === 'transcript') {
+    try {
+      const sessionId = payload.call_id || eventId;
+      const segments = payload.transcript || payload.transcript_segments || [];
+
+      if (event === 'transcript_ready' && Array.isArray(segments)) {
+        // Batch of transcript segments from Retell
+        for (const seg of segments) {
+          transcriptStream.addSegment(sessionId, {
+            text: seg.text || seg.content || '',
+            speaker: seg.speaker || seg.role || 'unknown',
+            timestamp: seg.timestamp || new Date().toISOString(),
+          });
+        }
+        console.log(`[Voice:Webhook] Processed ${segments.length} transcript segments for session ${sessionId}`);
+      } else if (event === 'transcript') {
+        // Full/partial transcript update — update last segment
+        const text = payload.transcript || payload.text || '';
+        const speaker = payload.speaker || payload.role || 'unknown';
+        if (text) {
+          transcriptStream.updateLastSegment(sessionId, {
+            text,
+            speaker,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`[Voice:Webhook] Transcript handling error for ${event}:`, err.message);
+    }
+
+    // Transcript events are acked immediately — no business event needed
+    return { received: true, routed: true, event, eventId, handler: 'transcript' };
+  }
 
   // Emit business event for supported types
   const businessEventType = EVENT_TYPE_MAP[event];

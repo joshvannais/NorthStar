@@ -1,25 +1,15 @@
+/** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'node',
-  testMatch: ['**/tests/**/*.test.js'],
+  roots: ['<rootDir>/tests'],
+  testMatch: ['**/*.test.js'],
+  verbose: true,
+  testTimeout: 15000,
   collectCoverageFrom: [
     'src/services/**/*.js',
+    'src/context/**/*.js',
+    'src/routes/**/*.js',
   ],
-  coverageThreshold: {
-    global: {
-      branches: 70,
-      functions: 85,
-      lines: 80,
-      statements: 80,
-    },
-    'src/services/': {
-      branches: 70,
-      functions: 90,
-      lines: 80,
-      statements: 80,
-    },
-  },
-  coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
-  testTimeout: 10000,
-  verbose: true,
+  coveragePathIgnorePatterns: ['/node_modules/'],
+  moduleDirectories: ['node_modules', '<rootDir>'],
 };

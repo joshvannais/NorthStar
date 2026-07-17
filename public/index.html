@@ -903,18 +903,41 @@
         });
         clearTimeout(timeoutId);
 
-        if (!resp.ok) {
-          var errData = await resp.json().catch(function() { return {}; });
-          var errMsg = errData?.error?.message || 'Unable to place call. Please try again.';
-          showNotification(errMsg, 'error');
+        // ── Parse response ──
+        var data;
+        try {
+          data = await resp.json();
+        } catch (parseErr) {
+          var httpCode = resp.status;
+          showStructuredError('response_parsing', 'INVALID_RESPONSE',
+            'Backend returned HTTP ' + httpCode + ' with unparseable body.');
           btn.disabled = false;
           btn.textContent = '\uD83D\uDCDE Call Me Now';
           return;
         }
 
-        var data = await resp.json();
+        // ── Handle structured error (new format: success=false) ──
+        if (data && data.success === false) {
+          showStructuredError(data.stage || 'unknown', data.error || 'UNKNOWN', data.details || 'No details provided.');
+          btn.disabled = false;
+          btn.textContent = '\uD83D\uDCDE Call Me Now';
+          return;
+        }
+
+        // ── Handle legacy error format ──
+        if (!resp.ok) {
+          var errStage = data?.error?.code || 'request_failed';
+          var errMsg = data?.error?.message || 'Request failed with status ' + resp.status;
+          showStructuredError('api_error', errStage, errMsg);
+          btn.disabled = false;
+          btn.textContent = '\uD83D\uDCDE Call Me Now';
+          return;
+        }
+
+        // ── Validate response has required fields ──
         if (!data.demoSessionId || !data.callId) {
-          showNotification('Unable to place call. Please try again.', 'error');
+          showStructuredError('response_validation', 'MISSING_FIELDS',
+            'Backend response missing session ID or call identifier. Try again.');
           btn.disabled = false;
           btn.textContent = '\uD83D\uDCDE Call Me Now';
           return;
@@ -927,7 +950,13 @@
           // Simulation path — call /simulate to start
           var simResp = await fetch(DEMO_API + '/' + data.demoSessionId + '/simulate', { method: 'POST' });
           if (!simResp.ok) {
-            showNotification('Unable to start simulation. Please try again.', 'error');
+            var simData;
+            try { simData = await simResp.json(); } catch(e) { simData = {}; }
+            showStructuredError(
+              simData?.stage || 'simulation_start',
+              simData?.error || 'SIMULATION_FAILED',
+              simData?.details || 'Unable to start simulation. Try again.'
+            );
             btn.disabled = false;
             btn.textContent = '\uD83D\uDCDE Call Me Now';
             return;
@@ -946,11 +975,32 @@
         btn.textContent = '\uD83D\uDCDE Call Me Now';
       } catch (err) {
         console.error('[Demo] Call error:', err.message);
-        var notificationMsg = err.name === 'AbortError' ? 'Request timed out. Please try again.' : 'Unable to place call. Please try again.';
-        showNotification(notificationMsg, 'error');
+        if (err.name === 'AbortError') {
+          showStructuredError('request_timeout', 'TIMEOUT',
+            'Request timed out after 15 seconds. Backend may be unreachable. Try again.');
+        } else {
+          showStructuredError('fetch_error', 'NETWORK_ERROR',
+            'Could not reach backend: ' + err.message);
+        }
         btn.disabled = false;
         btn.textContent = '\uD83D\uDCDE Call Me Now';
       }
+    }
+
+    // ── Structured error display ──
+    function showStructuredError(stage, errorCode, details) {
+      // Build a detailed notification
+      var html = '<div style="text-align:left;line-height:1.5">' +
+        '<strong style="color:#ef4444;font-size:15px">Unable to place call</strong><br>' +
+        '<span style="color:#9ca3af;font-size:12px">Stage: ' + escHtml(stage) + ' / ' + escHtml(errorCode) + '</span><br>' +
+        '<span style="font-size:13px">' + escHtml(details) + '</span>' +
+        '</div>';
+      showNotification(html, 'error');
+    }
+
+    function escHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     // ── Start simulation (called when Retell is not configured) ──

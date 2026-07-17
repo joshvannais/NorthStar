@@ -2,17 +2,38 @@
  * Retell AI API client.
  * Used to create/manage agents and phone numbers via Retell's REST API.
  * https://docs.retellai.com/
+ *
+ * All API errors are thrown as structured DiagnosticError objects with
+ * stage, code, and details so callers can surface the exact failure.
  */
 
 const config = require('../config');
 
 const RETELL_BASE = 'https://api.retellai.com';
 
+/**
+ * Custom error that carries the exact failure stage and diagnostic details.
+ */
+class DiagnosticError extends Error {
+  constructor(stage, code, details, httpStatus) {
+    super(details);
+    this.name = 'DiagnosticError';
+    this.stage = stage;
+    this.code = code;
+    this.details = details;
+    this.httpStatus = httpStatus;
+  }
+}
+
 async function request(method, path, body) {
-  const apiKey = config.retell.apiKey;
+  const apiKey = config.retell && config.retell.apiKey;
   if (!apiKey) {
-    console.log('[Retell] No API key configured — skipping API call.');
-    return null;
+    throw new DiagnosticError(
+      'retell_config',
+      'RETELL_API_KEY_MISSING',
+      'RETELL_API_KEY is not configured in environment.',
+      500
+    );
   }
 
   const url = `${RETELL_BASE}${path}`;
@@ -28,18 +49,58 @@ async function request(method, path, body) {
     options.body = JSON.stringify(body);
   }
 
+  let res;
   try {
-    const res = await fetch(url, options);
-    const data = await res.json();
-    if (!res.ok) {
-      console.error(`[Retell] API error (${res.status}):`, data);
-      return null;
-    }
-    return data;
+    res = await fetch(url, options);
   } catch (err) {
-    console.error('[Retell] Request error:', err.message);
-    return null;
+    throw new DiagnosticError(
+      'retell_network',
+      'RETELL_NETWORK_ERROR',
+      `Backend timeout or network error contacting Retell: ${err.message}`,
+      502
+    );
   }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (parseErr) {
+    throw new DiagnosticError(
+      'retell_response',
+      'RETELL_INVALID_RESPONSE',
+      `Retell returned HTTP ${res.status} with unparseable body: ${parseErr.message}`,
+      502
+    );
+  }
+
+  if (!res.ok) {
+    // Surface Retell's own error message
+    const errDetail = data?.message || data?.error || JSON.stringify(data);
+    const statusCode = data?.status_code || res.status;
+
+    // Classify common Retell error codes
+    if (res.status === 401) {
+      throw new DiagnosticError('retell_auth', 'RETELL_AUTH_FAILED',
+        `Retell authentication failed — check RETELL_API_KEY. ${errDetail}`, 502);
+    }
+    if (res.status === 404 || (data?.error_type && data.error_type.includes('agent'))) {
+      throw new DiagnosticError('retell_agent', 'RETELL_AGENT_NOT_FOUND',
+        `Agent ID not found. Check RETELL_AGENT_ID. ${errDetail}`, 502);
+    }
+    if (data?.error_type === 'outbound_calling_disabled' || (errDetail && errDetail.toLowerCase().includes('outbound'))) {
+      throw new DiagnosticError('retell_outbound', 'RETELL_OUTBOUND_DISABLED',
+        `Outbound calling is disabled or not provisioned for this account. ${errDetail}`, 502);
+    }
+    if (data?.error_type === 'phone_number_invalid' || (errDetail && errDetail.toLowerCase().includes('phone'))) {
+      throw new DiagnosticError('retell_phone', 'RETELL_PHONE_REJECTED',
+        `Phone number rejected by carrier. ${errDetail}`, 400);
+    }
+
+    throw new DiagnosticError('retell_api', `RETELL_API_ERROR_${statusCode}`,
+      `Retell API error (${statusCode}): ${errDetail}`, 502);
+  }
+
+  return data;
 }
 
 /**
@@ -244,8 +305,21 @@ function mapExecutiveContextToVariables(ec, opts) {
  */
 async function createCall(phoneNumber, agentId, options) {
   if (!agentId) {
-    console.log('[Retell] No agent ID configured - cannot create call.');
-    return null;
+    throw new DiagnosticError(
+      'retell_config',
+      'RETELL_AGENT_ID_MISSING',
+      'RETELL_AGENT_ID is not configured in environment.',
+      500
+    );
+  }
+
+  if (!phoneNumber || phoneNumber.replace(/\D/g, '').length < 10) {
+    throw new DiagnosticError(
+      'validation',
+      'INVALID_PHONE',
+      `Phone number rejected: "${phoneNumber}" is not a valid number with area code.`,
+      400
+    );
   }
 
   const opts = options || {};
@@ -314,8 +388,15 @@ async function createAgentWithTools({ name, companyName, services, scheduleUrl, 
  * Verify the Retell API key is valid by fetching account info.
  */
 async function verifyApiKey() {
-  const result = await request('GET', '/get-agent/' + (config.retell.agentId || ''));
-  return { success: !!result, agent: result };
+  try {
+    const result = await request('GET', '/get-agent/' + (config.retell.agentId || ''));
+    return { success: true, agent: result };
+  } catch (err) {
+    if (err instanceof DiagnosticError) {
+      return { success: false, stage: err.stage, error: err.code, details: err.details, agent: null };
+    }
+    return { success: false, stage: 'retell_unknown', error: 'UNKNOWN', details: err.message, agent: null };
+  }
 }
 
 /**
@@ -337,4 +418,5 @@ module.exports = {
   verifyApiKey,
   sendSMS,
   mapExecutiveContextToVariables,
+  DiagnosticError,
 };

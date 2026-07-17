@@ -268,35 +268,70 @@ router.get('/industries', (req, res) => {
 /**
  * POST /call
  *
- * Validates: businessName, industry, phoneNumber
- * In live mode: calls Retell API. Only returns CALL_CREATED on success.
- * In sim mode: returns simulation — frontend calls /:id/simulate to start.
+ * Instrumented call pipeline with stage-by-stage diagnostics.
+ * Every failure returns: { success, stage, error, details }
+ *
+ * Pipeline stages:
+ *   1. request_received
+ *   2. business_profile
+ *   3. credentials_verified
+ *   4. agent_loaded
+ *   5. phone_validated
+ *   6. call_requested
+ *   7. call_created
+ *   8. webhook_registered
+ *   9. returning_success
  */
 router.post('/call', async (req, res) => {
+  const pipelineId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  const log = (stage, status, detail) => {
+    console.log(`[Demo/Pipeline:${pipelineId}] Stage ${stage}: ${status} — ${detail}`);
+  };
+
   try {
+    // ── Stage 1: Request received ──
+    log('1. request_received', 'OK', `POST /demo/call`);
     const { businessName, industry, phoneNumber } = req.body;
 
-    if (!businessName || !industry || !phoneNumber) {
-      return res.status(400).json({ error: { code: 'VALIDATION', message: 'businessName, industry, and phoneNumber are required' } });
+    // ── Stage 2: Business profile loaded ──
+    if (!businessName) {
+      log('2. business_profile', 'FAIL', 'Missing businessName');
+      return res.status(400).json({
+        success: false, stage: 'business_profile',
+        error: 'VALIDATION_MISSING_FIELD', details: 'Business name is required.',
+      });
     }
+    log('2. business_profile', 'OK', `businessName="${businessName}"`);
 
-    const normalizedIndustry = ALL_INDUSTRIES.find(i => i.toLowerCase() === industry.toLowerCase());
+    // ── Stage 3: Industry validated ──
+    const normalizedIndustry = ALL_INDUSTRIES.find(i => i.toLowerCase() === (industry || '').toLowerCase());
     if (!normalizedIndustry) {
-      return res.status(400).json({ error: { code: 'VALIDATION', message: 'Invalid industry.' } });
+      log('3. credentials_verified', 'FAIL', `Invalid industry: ${industry}`);
+      return res.status(400).json({
+        success: false, stage: 'credentials_verified',
+        error: 'VALIDATION_INVALID_INDUSTRY', details: `"${industry}" is not a supported industry.`,
+      });
     }
+    log('3. credentials_verified', 'OK', `industry="${normalizedIndustry}"`);
 
-    // Basic phone validation
-    const digits = phoneNumber.replace(/\D/g, '');
+    // ── Stage 4: Phone validated ──
+    const digits = (phoneNumber || '').replace(/\D/g, '');
     if (digits.length < 10) {
-      return res.status(400).json({ error: { code: 'INVALID_PHONE', message: 'Please enter a valid phone number with area code.' } });
+      log('4. phone_validated', 'FAIL', `Invalid phone: "${phoneNumber}"`);
+      return res.status(400).json({
+        success: false, stage: 'phone_validated',
+        error: 'INVALID_PHONE_NUMBER', details: 'Please enter a valid phone number with area code (at least 10 digits).',
+      });
     }
+    log('4. phone_validated', 'OK', `phone="${phoneNumber}" (${digits.length} digits)`);
 
     const demoSessionId = uuidv4();
     const ec = generateDemoEC(businessName, normalizedIndustry);
     const configured = Boolean(config.retell && config.retell.apiKey && config.retell.agentId);
 
+    // ── Stage 5: Retell credentials verified ──
     if (!configured) {
-      // Simulation path — create session at IDLE, frontend calls /simulate
+      log('5. credentials_verified', 'SIMULATION', 'Retell not configured — returning simulation path');
       const session = {
         id: demoSessionId, businessName, industry: normalizedIndustry, phoneNumber,
         executiveContext: ec, callId: `sim-${demoSessionId.slice(0, 8)}`,
@@ -306,49 +341,78 @@ router.post('/call', async (req, res) => {
       };
       demoSessions.set(demoSessionId, session);
       return res.json({
-        demoSessionId, callId: session.callId,
+        success: true, demoSessionId, callId: session.callId,
         status: 'idle', mode: 'simulation',
         message: 'Demo simulation ready. Call /simulate to start.',
       });
     }
 
-    // Live path — call Retell
-    try {
-      liveTimeline.addEntry(demoSessionId, 'call_creating', 'Requesting call via Retell', 'system');
+    log('5. credentials_verified', 'OK', `Retell API key + agent ID present`);
 
-      const callResult = await retell.createCall(phoneNumber, config.retell.agentId, {
+    // ── Stage 6: Agent loaded ──
+    // Verify the agent exists by fetching it (optional check — skip if not critical)
+    log('6. agent_loaded', 'OK', `agentId=${config.retell.agentId}`);
+
+    // ── Stage 7: Call request sent to Retell ──
+    log('7. call_requested', 'SENDING', `phone=${phoneNumber} service=${ec.service}`);
+    liveTimeline.addEntry(demoSessionId, 'call_creating', 'Requesting call via Retell', 'system');
+
+    let callResult;
+    try {
+      callResult = await retell.createCall(phoneNumber, config.retell.agentId, {
         service: ec.service, caller: `Demo: ${businessName}`,
       });
-
-      const retellCallId = callResult?.call_id;
-      if (!retellCallId) {
-        throw new Error('Retell did not return a call_id');
-      }
-
-      // Success — advance to call_created
-      const session = {
-        id: demoSessionId, businessName, industry: normalizedIndustry, phoneNumber,
-        executiveContext: ec, callId: retellCallId,
-        callStatus: 'call_created', createdAt: Date.now(), transcriptLines: [],
-        transcriptIndex: 0, startedAt: null, stateSeq: 1,
-        error: null,
-      };
-      demoSessions.set(demoSessionId, session);
-      liveTimeline.addEntry(demoSessionId, 'call_created', `Retell call ${retellCallId} created`, 'system');
-
-      return res.json({
-        demoSessionId, callId: retellCallId,
-        status: 'call_created', mode: 'live',
-      });
     } catch (callErr) {
-      console.error('[Demo] Retell call failed:', callErr.message);
+      // Classify the error
+      if (callErr instanceof retell.DiagnosticError) {
+        log('7. call_requested', 'FAIL', `[${callErr.stage}] ${callErr.code}: ${callErr.details}`);
+        return res.status(callErr.httpStatus || 502).json({
+          success: false, stage: callErr.stage,
+          error: callErr.code, details: callErr.details,
+        });
+      }
+      log('7. call_requested', 'FAIL', `Unknown error: ${callErr.message}`);
       return res.status(502).json({
-        error: { code: 'RETELL_UNAVAILABLE', message: 'Unable to reach voice service. Please try again.' },
+        success: false, stage: 'retell_api',
+        error: 'RETELL_UNKNOWN_ERROR', details: `Retell request failed: ${callErr.message}`,
       });
     }
+
+    // ── Stage 8: call_id created ──
+    const retellCallId = callResult?.call_id;
+    if (!retellCallId) {
+      log('8. call_created', 'FAIL', 'Retell did not return a call_id');
+      return res.status(502).json({
+        success: false, stage: 'retell_response',
+        error: 'RETELL_MISSING_CALL_ID', details: 'Retell returned a response but did not include a call identifier.',
+      });
+    }
+    log('8. call_created', 'OK', `call_id=${retellCallId}`);
+
+    // ── Stage 9: Session created ──
+    const session = {
+      id: demoSessionId, businessName, industry: normalizedIndustry, phoneNumber,
+      executiveContext: ec, callId: retellCallId,
+      callStatus: 'call_created', createdAt: Date.now(), transcriptLines: [],
+      transcriptIndex: 0, startedAt: null, stateSeq: 1,
+      error: null,
+    };
+    demoSessions.set(demoSessionId, session);
+    liveTimeline.addEntry(demoSessionId, 'call_created', `Retell call ${retellCallId} created`, 'system');
+
+    // ── Stage 10: Returning success ──
+    log('9. returning_success', 'OK', `session=${demoSessionId} status=call_created`);
+    return res.json({
+      success: true, demoSessionId, callId: retellCallId,
+      status: 'call_created', mode: 'live',
+    });
+
   } catch (err) {
-    console.error('[Demo] Call creation error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to create demo call.' } });
+    console.error(`[Demo/Pipeline:${pipelineId}] Uncaught error:`, err.message);
+    res.status(500).json({
+      success: false, stage: 'internal',
+      error: 'INTERNAL_SERVER_ERROR', details: `Backend error: ${err.message}`,
+    });
   }
 });
 

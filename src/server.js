@@ -437,7 +437,11 @@ app.get('/demo-login', (req, res) => {
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
   const adminUser = process.env.ADMIN_USERNAME || 'admin';
-  const adminPass = process.env.ADMIN_PASSWORD || 'northstar2024';
+  const adminPass = process.env.ADMIN_PASSWORD;
+  if (!adminPass) {
+    console.warn('[Admin] ADMIN_PASSWORD environment variable is not set. Admin login will not work.');
+    return res.status(503).json({ error: 'Admin authentication is not configured.' });
+  }
 
   if (username === adminUser && password === adminPass) {
     const token = generateAdminToken();

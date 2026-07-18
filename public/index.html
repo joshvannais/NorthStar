@@ -1009,6 +1009,12 @@
       if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
       if (demoState.statusInterval) clearInterval(demoState.statusInterval);
 
+      // Close any existing SSE connection
+      if (demoState.sseSource) {
+        demoState.sseSource.close();
+        demoState.sseSource = null;
+      }
+
       demoState.timerSec = 0;
       demoState.transcriptSeq = 0;
 
@@ -1055,6 +1061,7 @@
       startDemoTimer(callStatus);
       startTranscriptPolling();
       startStatusPolling();
+      startSSEConnection();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -1282,11 +1289,146 @@
       }
     }
 
+    // ── SSE Connection for real-time updates ──
+    // Connects to the SSE endpoint for live status changes, transcript
+    // updates, and executive summary delivery. Falls back to polling
+    // if EventSource is unavailable or the connection fails.
+    function startSSEConnection() {
+      if (!demoState.sessionId) return;
+      if (typeof EventSource === 'undefined') {
+        console.log('[Demo:SSE] EventSource not available — using polling only');
+        return;
+      }
+
+      // Close any existing connection
+      if (demoState.sseSource) {
+        demoState.sseSource.close();
+      }
+
+      var url = DEMO_API + '/' + demoState.sessionId + '/events';
+      console.log('[Demo:SSE] Connecting to ' + url);
+
+      try {
+        var source = new EventSource(url);
+        demoState.sseSource = source;
+
+        source.addEventListener('connected', function(e) {
+          try {
+            var data = JSON.parse(e.data);
+            console.log('[Demo:SSE] Connected — session=' + data.sessionId + ' status=' + data.callStatus);
+          } catch(err) {}
+        });
+
+        source.addEventListener('status', function(e) {
+          try {
+            var data = JSON.parse(e.data);
+            console.log('[Demo:SSE] State change: ' + (data.previousStatus || '?') + ' → ' + data.callStatus);
+
+            // Update overlays based on new state
+            var newState = data.callStatus;
+            demoState.callStatus = newState;
+
+            document.getElementById('callStateDialing').classList.remove('active');
+            document.getElementById('callStateRinging').classList.remove('active');
+            document.getElementById('callStateAnswered').classList.remove('active');
+
+            if (newState === 'call_created' || newState === 'dialing') {
+              document.getElementById('callStateDialing').classList.add('active');
+              document.getElementById('demoLiveHeader').style.display = 'none';
+            } else if (newState === 'ringing') {
+              document.getElementById('callStateRinging').classList.add('active');
+              document.getElementById('demoLiveHeader').style.display = 'none';
+            } else if (newState === 'answered' || newState === 'media_connected') {
+              document.getElementById('callStateAnswered').classList.add('active');
+              document.getElementById('demoLiveHeader').style.display = 'none';
+            } else if (newState === 'live') {
+              document.getElementById('demoLiveHeader').style.display = 'block';
+              document.getElementById('demoStatusLabel').textContent = 'Live Conversation';
+            }
+
+            var dot = document.getElementById('demoStatusDot');
+            var label = document.getElementById('demoStatusLabel');
+            if (newState === 'completed' || newState === 'polaris_summary') {
+              dot.className = 'demo-status-ended';
+              label.textContent = 'Call Ended';
+            } else if (newState === 'failed') {
+              dot.className = 'demo-status-ended';
+              label.textContent = 'Call Failed';
+            } else if (newState === 'live') {
+              dot.className = 'demo-status-connected';
+            } else {
+              dot.className = 'demo-status-connecting';
+              label.textContent = getStatusLabel(newState);
+            }
+          } catch(err) {
+            console.warn('[Demo:SSE] Status parse error:', err.message);
+          }
+        });
+
+        source.addEventListener('transcript', function(e) {
+          try {
+            var data = JSON.parse(e.data);
+            if (data.line) {
+              var lines = [data.line];
+              if (demoState.transcriptSeq === 0) {
+                demoState.transcriptLinesCache = [];
+              }
+              demoState.transcriptLinesCache.push(data.line);
+              renderTranscript(demoState.transcriptLinesCache);
+              document.getElementById('demoTranscriptCount').textContent = (data.totalLines || demoState.transcriptLinesCache.length) + ' messages';
+              // Hide loading
+              var loading = document.getElementById('demoTranscriptLoading');
+              if (loading) loading.style.display = 'none';
+            }
+          } catch(err) {
+            console.warn('[Demo:SSE] Transcript parse error:', err.message);
+          }
+        });
+
+        source.addEventListener('executiveSummary', function(e) {
+          try {
+            var data = JSON.parse(e.data);
+            console.log('[Demo:SSE] Executive summary received');
+            demoState.executiveSummary = data;
+          } catch(err) {
+            console.warn('[Demo:SSE] Executive summary parse error:', err.message);
+          }
+        });
+
+        source.addEventListener('polarisSummary', function(e) {
+          try {
+            var data = JSON.parse(e.data);
+            console.log('[Demo:SSE] Polaris summary received — lead=' + data.leadId);
+          } catch(err) {
+            console.warn('[Demo:SSE] Polaris summary parse error:', err.message);
+          }
+        });
+
+        source.addEventListener('heartbeat', function(e) {
+          // Keep-alive — no action needed
+        });
+
+        source.onerror = function(err) {
+          console.warn('[Demo:SSE] Connection error — falling back to polling');
+          if (demoState.sseSource) {
+            demoState.sseSource.close();
+            demoState.sseSource = null;
+          }
+        };
+      } catch(err) {
+        console.warn('[Demo:SSE] Failed to create EventSource:', err.message);
+      }
+    }
+
     // ── Transition to post-call ──
     function transitionToPostCall() {
       if (demoState.timerInterval) clearInterval(demoState.timerInterval);
       if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
       if (demoState.statusInterval) clearInterval(demoState.statusInterval);
+      if (demoState.sseSource) {
+        demoState.sseSource.close();
+        demoState.sseSource = null;
+      }
 
       document.getElementById('demoCallDuration').textContent = 'Duration: ' + document.getElementById('demoLiveTimer').textContent;
 

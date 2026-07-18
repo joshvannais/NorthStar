@@ -661,15 +661,16 @@ router.post('/call', async (req, res) => {
     liveTimeline.addEntry(demoSessionId, 'call_creating', 'Requesting call via Retell', 'system');
 
     let callResult;
-    try {
-      callResult = await retell.createCall(e164Phone, config.retell.agentId, {
-        service: ec.service,
-        caller: `Demo: ${businessName}`,
-        // Pass the webhook URL matching this server instance.
-        // This ensures Retell sends events back to THIS server, not just the agent default.
-        webhookUrl: `${req.protocol}://${req.get('host')}/api/retell/webhook`,
-        executiveContext: ec,  // Full NorthStar Executive Context → retell_llm_dynamic_variables
-      });
+            try {
+              callResult = await retell.createCall(e164Phone, config.retell.agentId, {
+                service: ec.service,
+                caller: `Demo: ${businessName}`,
+                // webhook_url is NOT sent per-call — the agent itself has
+                // webhook_url configured with all webhook_events.
+                // Passing webhook_url per-call overrides the agent's webhook_events
+                // config and causes custom events (transcript_updated) to be dropped.
+                executiveContext: ec,
+              });
     } catch (callErr) {
       // Classify the error — log full details server-side, return clean customer message
       if (callErr instanceof retell.DiagnosticError) {

@@ -406,15 +406,19 @@ async function createCall(phoneNumber, agentId, options) {
 
   const body = {
     agent_id: agentId,
+    from_number: config.retell.phoneNumber || '',
     to_number: phoneNumber,
     retell_llm_dynamic_variables: dynamicVariables,
   };
 
-  // Only include from_number if a valid Retell-provisioned number is provided.
-  // If omitted, Retell uses the agent's default outbound number.
-  const fromNum = opts.fromNumber || (config.twilio ? config.twilio.phoneNumber : '');
-  if (fromNum && fromNum !== phoneNumber) {
-    body.from_number = fromNum;
+  // Validate from_number is a real Retell-provisioned number
+  if (!body.from_number || body.from_number === phoneNumber) {
+    throw new DiagnosticError(
+      'retell_config',
+      'RETELL_FROM_NUMBER_INVALID',
+      `from_number (${body.from_number}) is missing or matches to_number (${phoneNumber}). Retell requires a distinct outbound number.`,
+      400
+    );
   }
 
   // Include tool definitions if provided
@@ -442,6 +446,7 @@ async function createCall(phoneNumber, agentId, options) {
     'RETELL_AGENT_NOT_FOUND',
     'RETELL_OUTBOUND_DISABLED',
     'RETELL_PHONE_REJECTED',
+    'RETELL_FROM_NUMBER_INVALID',
     'INVALID_PHONE',
   ];
 

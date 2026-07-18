@@ -491,7 +491,9 @@ router.post('/call', async (req, res) => {
       callResult = await retell.createCall(e164Phone, config.retell.agentId, {
         service: ec.service,
         caller: `Demo: ${businessName}`,
-        // fromNumber intentionally omitted — Retell uses the agent's default outbound number
+        // Pass the webhook URL matching this server instance.
+        // This ensures Retell sends events back to THIS server, not just the agent default.
+        webhookUrl: `${req.protocol}://${req.get('host')}/api/retell/webhook`,
         executiveContext: ec,  // Full NorthStar Executive Context → retell_llm_dynamic_variables
       });
     } catch (callErr) {

@@ -411,6 +411,14 @@ async function createCall(phoneNumber, agentId, options) {
     retell_llm_dynamic_variables: dynamicVariables,
   };
 
+  // Per-call webhook URL override.
+  // If provided, Retell sends events to this URL instead of the agent's default.
+  // This is critical: the dev server and prod server have different webhook URLs,
+  // and the call must send events back to the server that placed it.
+  if (opts.webhookUrl) {
+    body.webhook_url = opts.webhookUrl;
+  }
+
   // Validate from_number is a real Retell-provisioned number
   if (!body.from_number || body.from_number === phoneNumber) {
     throw new DiagnosticError(

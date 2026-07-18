@@ -389,8 +389,9 @@ function startCallPoller(sessionId, callId) {
       }
 
       // Map Retell call status to our state machine
-      // Retell statuses: 'queued', 'in_progress', 'ringing', 'ongoing', 'ended'
-      if (callStatus === 'queued' || callStatus === 'in_progress') {
+      // Retell statuses: 'registered', 'queued', 'in_progress', 'ringing',
+      // 'ongoing', 'ended', 'not_connected'
+      if (callStatus === 'registered' || callStatus === 'queued' || callStatus === 'in_progress') {
         if (session.callStatus === 'call_created') {
           advanceCallState(sessionId, 'dialing');
         }
@@ -433,8 +434,8 @@ function startCallPoller(sessionId, callId) {
         }
       }
 
-      // Call ended
-      if (callStatus === 'ended') {
+      // Call ended or failed to connect
+      if (callStatus === 'ended' || callStatus === 'not_connected' || callStatus === 'completed') {
         if (!['completed', 'polaris_summary', 'failed'].includes(session.callStatus)) {
           advanceCallState(sessionId, 'completed');
           console.log('poller.call_ended', 'OK', `Call ${callId} ended. Reason: ${callData.disconnection_reason || 'unknown'}`);

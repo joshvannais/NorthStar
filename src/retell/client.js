@@ -52,7 +52,7 @@ async function request(method, path, body, attemptNum = 1) {
 
   // Log the outgoing request (server-side only)
   console.log(`[Retell:Request] #${attemptNum} ${method} ${path}`);
-  console.log(`[Retell:Request] Payload (truncated): ${JSON.stringify(body).substring(0, 500)}`);
+  console.log(`[Retell:Request] Payload (truncated): ${body ? JSON.stringify(body).substring(0, 500) : 'N/A'}`);
 
   let res;
   try {

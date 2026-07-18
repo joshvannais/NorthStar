@@ -377,11 +377,19 @@ function startCallPoller(sessionId, callId) {
       const callData = await retell.getCall(callId);
       if (!callData) return;
 
-      const callStatus = callData.call?.status || callData.status || '';
-      const transcript = callData.call?.transcript || callData.transcript || '';
-      const analysis = callData.call?.analysis || callData.analysis || null;
+      const callStatus = callData.call_status || '';
+      const transcript = callData.transcript || '';
+      const transcriptObject = callData.transcript_object || [];
+      const callAnalysis = callData.call_analysis || null;
+      const durationMs = callData.duration_ms || 0;
+
+      // Log the raw data once for diagnostics
+      if (attempts === 1) {
+        log('poller.api_response', 'OK', `status=${callStatus} transcript_len=${transcript.length} analysis=${callAnalysis ? 'yes' : 'no'}`);
+      }
 
       // Map Retell call status to our state machine
+      // Retell statuses: 'queued', 'in_progress', 'ringing', 'ongoing', 'ended'
       if (callStatus === 'queued' || callStatus === 'in_progress') {
         if (session.callStatus === 'call_created') {
           advanceCallState(sessionId, 'dialing');
@@ -402,64 +410,104 @@ function startCallPoller(sessionId, callId) {
         }
       }
 
-      // Store transcript if available
-      if (transcript && transcript.length > 0) {
-        const lines = typeof transcript === 'string' ? transcript.split('\n') : transcript;
-        if (lines.length > (session.transcriptLines?.length || 0)) {
-          session.transcriptLines = lines.map((line, i) => ({
-            speaker: line.includes(':') ? line.split(':')[0].trim() : 'agent',
-            text: line.includes(':') ? line.split(':').slice(1).join(':').trim() : line,
+      // Store transcript from transcript_object (structured) or transcript (string)
+      if (transcriptObject.length > 0) {
+        const newLines = transcriptObject.map((entry, i) => ({
+          speaker: entry.role === 'agent' ? 'Agent' : 'Customer',
+          text: entry.content || '',
+          timestamp: new Date().toISOString(),
+        }));
+        if (newLines.length > (session.transcriptLines?.length || 0)) {
+          session.transcriptLines = newLines;
+          log('poller.transcript', 'OK', `${newLines.length} lines (structured)`);
+        }
+      } else if (transcript && transcript.length > 0) {
+        const rawLines = transcript.split('\n').filter(Boolean);
+        if (rawLines.length > (session.transcriptLines?.length || 0)) {
+          session.transcriptLines = rawLines.map(line => ({
+            speaker: line.startsWith('Agent:') ? 'Agent' : (line.startsWith('User:') ? 'Customer' : 'Unknown'),
+            text: line.replace(/^(Agent:|User:)\s*/, ''),
             timestamp: new Date().toISOString(),
           }));
-          log('poller.transcript', 'OK', `${session.transcriptLines.length} lines`);
+          log('poller.transcript', 'OK', `${rawLines.length} lines (string)`);
         }
       }
 
       // Call ended
-      if (callStatus === 'ended' || callStatus === 'completed') {
-        if (session.callStatus !== 'completed' && session.callStatus !== 'polaris_summary') {
+      if (callStatus === 'ended') {
+        if (!['completed', 'polaris_summary', 'failed'].includes(session.callStatus)) {
           advanceCallState(sessionId, 'completed');
-          log('poller.call_ended', 'OK', `Call ${callId} ended`);
+          log('poller.call_ended', 'OK', `Call ${callId} ended. Reason: ${callData.disconnection_reason || 'unknown'}`);
 
-          // Generate lead from transcript
-          if (session.transcriptLines && session.transcriptLines.length > 0) {
-            try {
-              const { addLead } = require('../leads/store');
-              const lead = {
-                customerName: '',
-                phoneNumber: session.phoneNumber || '',
-                serviceRequested: session.industry || '',
-                callOutcome: 'Call completed',
-                notes: session.transcriptLines.map(l => `${l.speaker}: ${l.text}`).join('\n'),
-                demoSessionId: sessionId,
-                transcript: session.transcriptLines,
-                receivedAt: new Date().toISOString(),
-                status: 'new',
-              };
-              const savedLead = addLead(lead);
-              log('poller.lead_created', 'OK', `Lead ${savedLead.id} created`);
-            } catch (leadErr) {
-              log('poller.lead_created', 'FAIL', leadErr.message);
-            }
+          let executiveSummary;
+          const customData = callAnalysis?.custom_analysis_data || {};
+
+          // Generate executive summary from call_analysis if available
+          if (callAnalysis) {
+            const summary = callAnalysis.call_summary || 'Call completed.';
+            const sentiment = (callAnalysis.user_sentiment || 'Neutral').toLowerCase();
+
+            executiveSummary = {
+              outcome: summary,
+              sentiment: sentiment,
+              keyTopics: [],
+              actionItems: [],
+              recommendations: [],
+              polarisOpportunityScore: {
+                score: 'Pending',
+                placeholder: true,
+              },
+              generatedAt: new Date().toISOString(),
+            };
+            log('poller.executive_summary', 'OK', `Generated from call_analysis (sentiment: ${sentiment})`);
+          } else {
+            // Generate a basic executive summary without analysis
+            executiveSummary = {
+              outcome: 'Call completed. Lead captured.',
+              sentiment: 'neutral',
+              keyTopics: [],
+              actionItems: [{ description: 'Review call transcript', priority: 'medium' }],
+              recommendations: [{ description: 'Follow up with customer' }],
+              polarisOpportunityScore: {
+                score: 'Pending',
+                placeholder: true,
+              },
+              generatedAt: new Date().toISOString(),
+            };
+            log('poller.executive_summary', 'OK', 'Generated basic summary (no analysis available)');
           }
+          session.executiveSummary = executiveSummary;
+
+          // Create lead from transcript
+          try {
+            const { addLead } = require('../leads/store');
+            const lead = {
+              customerName: customData.customer_name || '',
+              phoneNumber: session.phoneNumber || '',
+              serviceRequested: customData.service_requested || session.industry || '',
+              callOutcome: 'Call completed',
+              notes: session.transcriptLines ? session.transcriptLines.map(l => `${l.speaker}: ${l.text}`).join('\n') : '',
+              demoSessionId: sessionId,
+              transcript: session.transcriptLines,
+              executiveSummary: executiveSummary,
+              receivedAt: new Date().toISOString(),
+              status: 'new',
+            };
+            const savedLead = addLead(lead);
+            log('poller.lead_created', 'OK', `Lead ${savedLead.id} created with executive summary`);
+          } catch (leadErr) {
+            log('poller.lead_created', 'FAIL', leadErr.message);
+          }
+
+          // Clear the poller since call is done
+          clearInterval(interval);
+          activePollers.delete(sessionId);
         }
       }
 
-      // Store analysis if available
-      if (analysis) {
-        log('poller.analysis', 'OK', `Analysis available for call ${callId}`);
-        try {
-          const { updateLead } = require('../leads/store');
-          // Find the lead and update it
-          const { getAllLeads } = require('../leads/store');
-          const leads = getAllLeads();
-          const lead = leads.find(l => l.demoSessionId === sessionId);
-          if (lead) {
-            updateLead(lead.id, { analysis, status: 'analyzed' });
-          }
-        } catch (e) {
-          // Lead store not available
-        }
+      // Store analysis if available during live call (for transcript enrichment)
+      if (callAnalysis && session.callStatus === 'live') {
+        log('poller.analysis_live', 'OK', `Analysis available on poll attempt ${attempts}`);
       }
     } catch (err) {
       // Log poll errors but don't crash

@@ -354,6 +354,21 @@ async function handleWebhook(payload) {
   if (payload.event === 'transcript' || payload.event === 'transcript_updated') {
     const session = getDemoSession(callId);
     if (session) {
+      // Log the full payload for debugging
+      const payloadLog = {
+        event: payload.event,
+        call_id: payload.call_id,
+        role: payload.role,
+        transcript: (payload.transcript || '').substring(0, 100),
+        text: (payload.text || '').substring(0, 100),
+        transcript_length: typeof payload.transcript,
+        has_transcript_object: Array.isArray(payload.transcript_object),
+        has_words: Array.isArray(payload.words),
+        content: (payload.content || '').substring(0, 100),
+        other_keys: Object.keys(payload).filter(k => !['event','call_id','transcript','text','transcript_object','words','content','role','timestamp'].includes(k)),
+      };
+      console.log(`[Webhook:TranscriptPayload] ${JSON.stringify(payloadLog)}`);
+
       // Store the transcript line
       const line = {
         speaker: payload.role || 'customer',

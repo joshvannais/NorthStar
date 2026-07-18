@@ -26,7 +26,7 @@ class DiagnosticError extends Error {
   }
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, attemptNum = 1) {
   const apiKey = config.retell && config.retell.apiKey;
   if (!apiKey) {
     throw new DiagnosticError(
@@ -50,10 +50,15 @@ async function request(method, path, body) {
     options.body = JSON.stringify(body);
   }
 
+  // Log the outgoing request (server-side only)
+  console.log(`[Retell:Request] #${attemptNum} ${method} ${path}`);
+  console.log(`[Retell:Request] Payload (truncated): ${JSON.stringify(body).substring(0, 500)}`);
+
   let res;
   try {
     res = await fetch(url, options);
   } catch (err) {
+    console.error(`[Retell:Request] #${attemptNum} NETWORK ERROR: ${err.message}`);
     throw new DiagnosticError(
       'retell_network',
       'RETELL_NETWORK_ERROR',
@@ -62,10 +67,16 @@ async function request(method, path, body) {
     );
   }
 
+  // Log raw response before any parsing (server-side only)
+  const rawBody = await res.text();
+  console.log(`[Retell:Response] #${attemptNum} HTTP ${res.status}`);
+  console.log(`[Retell:Response] Body (truncated): ${rawBody.substring(0, 500)}`);
+
   let data;
   try {
-    data = await res.json();
+    data = JSON.parse(rawBody);
   } catch (parseErr) {
+    console.error(`[Retell:Response] #${attemptNum} PARSE ERROR: ${parseErr.message}`);
     throw new DiagnosticError(
       'retell_response',
       'RETELL_INVALID_RESPONSE',
@@ -337,6 +348,15 @@ function mapExecutiveContextToVariables(ec, opts) {
   if (opts && opts.service) vars.service = opts.service;
   if (opts && opts.caller) vars.customer_name_override = opts.caller;
 
+  // ── String coercion: Retell expects all dynamic variable values to be strings ──
+  // Convert any non-string values (numbers, booleans, objects) to strings.
+  // This prevents silent failures like "service_count must be string".
+  for (const key of Object.keys(vars)) {
+    if (typeof vars[key] !== 'string') {
+      vars[key] = String(vars[key]);
+    }
+  }
+
   return vars;
 }
 
@@ -396,10 +416,56 @@ async function createCall(phoneNumber, agentId, options) {
     body.retell_llm_tools = opts.toolDefinitions;
   }
 
-  console.log('[Retell] Creating call with', Object.keys(dynamicVariables).length, 'dynamic variables',
-    opts.toolDefinitions ? `and ${opts.toolDefinitions.length} tools` : '');
+  // Log the full payload for debugging (server-side only)
+  console.log('[Retell:createCall] Payload verification:');
+  console.log(`  agent_id: ${body.agent_id}`);
+  console.log(`  from_number: ${body.from_number}`);
+  console.log(`  to_number: ${body.to_number}`);
+  console.log(`  dynamic_variables: ${Object.keys(dynamicVariables).length} keys`);
+  console.log(`  tools: ${body.retell_llm_tools ? body.retell_llm_tools.length : 0}`);
 
-  return request('POST', '/v2/create-phone-call', body);
+  // ── Retry loop with exponential backoff ──
+  // Transient failures (network, 5xx, 429) are retried up to 2 additional times.
+  // Non-transient failures (auth, validation, not found) are thrown immediately.
+  const MAX_RETRIES = 2;
+  const RETRYABLE_STATUSES = [429, 500, 502, 503, 504];
+  const NON_RETRYABLE_CODES = [
+    'RETELL_AUTH_FAILED',
+    'RETELL_AGENT_ID_MISSING',
+    'RETELL_API_KEY_MISSING',
+    'RETELL_AGENT_NOT_FOUND',
+    'RETELL_OUTBOUND_DISABLED',
+    'RETELL_PHONE_REJECTED',
+    'INVALID_PHONE',
+  ];
+
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 1 + MAX_RETRIES; attempt++) {
+    try {
+      const result = await request('POST', '/v2/create-phone-call', body, attempt);
+      console.log(`[Retell:createCall] Call created successfully on attempt ${attempt}`);
+      return result;
+    } catch (err) {
+      lastError = err;
+
+      // If this is a non-retryable error, throw immediately
+      if (err instanceof DiagnosticError && NON_RETRYABLE_CODES.includes(err.code)) {
+        console.log(`[Retell:createCall] Non-retryable error (${err.code}) — not retrying`);
+        throw err;
+      }
+
+      // If this is a retryable error and we have attempts left, back off and retry
+      if (attempt < 1 + MAX_RETRIES) {
+        const backoffMs = Math.min(500 * Math.pow(2, attempt - 1), 4000);
+        console.log(`[Retell:createCall] Retryable error (${err.code || err.message}) — retrying in ${backoffMs}ms (attempt ${attempt}/${1 + MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      } else {
+        console.log(`[Retell:createCall] All ${MAX_RETRIES + 1} attempts exhausted — last error: ${err.code || err.message}`);
+        throw err;
+      }
+    }
+  }
 }
 
 /**

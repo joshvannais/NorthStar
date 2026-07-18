@@ -490,7 +490,7 @@ router.post('/call', async (req, res) => {
       callResult = await retell.createCall(e164Phone, config.retell.agentId, {
         service: ec.service,
         caller: `Demo: ${businessName}`,
-        fromNumber: config.retell?.phoneNumber || '',
+        // fromNumber intentionally omitted — Retell uses the agent's default outbound number
         executiveContext: ec,  // Full NorthStar Executive Context → retell_llm_dynamic_variables
       });
     } catch (callErr) {

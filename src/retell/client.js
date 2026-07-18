@@ -406,10 +406,16 @@ async function createCall(phoneNumber, agentId, options) {
 
   const body = {
     agent_id: agentId,
-    from_number: opts.fromNumber || (config.twilio ? config.twilio.phoneNumber : '') || '',
     to_number: phoneNumber,
     retell_llm_dynamic_variables: dynamicVariables,
   };
+
+  // Only include from_number if a valid Retell-provisioned number is provided.
+  // If omitted, Retell uses the agent's default outbound number.
+  const fromNum = opts.fromNumber || (config.twilio ? config.twilio.phoneNumber : '');
+  if (fromNum && fromNum !== phoneNumber) {
+    body.from_number = fromNum;
+  }
 
   // Include tool definitions if provided
   if (opts.toolDefinitions && Array.isArray(opts.toolDefinitions)) {

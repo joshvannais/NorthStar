@@ -385,7 +385,7 @@ function startCallPoller(sessionId, callId) {
 
       // Log the raw data once for diagnostics
       if (attempts === 1) {
-        log('poller.api_response', 'OK', `status=${callStatus} transcript_len=${transcript.length} analysis=${callAnalysis ? 'yes' : 'no'}`);
+        console.log('poller.api_response', 'OK', `status=${callStatus} transcript_len=${transcript.length} analysis=${callAnalysis ? 'yes' : 'no'}`);
       }
 
       // Map Retell call status to our state machine
@@ -419,7 +419,7 @@ function startCallPoller(sessionId, callId) {
         }));
         if (newLines.length > (session.transcriptLines?.length || 0)) {
           session.transcriptLines = newLines;
-          log('poller.transcript', 'OK', `${newLines.length} lines (structured)`);
+          console.log('poller.transcript', 'OK', `${newLines.length} lines (structured)`);
         }
       } else if (transcript && transcript.length > 0) {
         const rawLines = transcript.split('\n').filter(Boolean);
@@ -429,7 +429,7 @@ function startCallPoller(sessionId, callId) {
             text: line.replace(/^(Agent:|User:)\s*/, ''),
             timestamp: new Date().toISOString(),
           }));
-          log('poller.transcript', 'OK', `${rawLines.length} lines (string)`);
+          console.log('poller.transcript', 'OK', `${rawLines.length} lines (string)`);
         }
       }
 
@@ -437,7 +437,7 @@ function startCallPoller(sessionId, callId) {
       if (callStatus === 'ended') {
         if (!['completed', 'polaris_summary', 'failed'].includes(session.callStatus)) {
           advanceCallState(sessionId, 'completed');
-          log('poller.call_ended', 'OK', `Call ${callId} ended. Reason: ${callData.disconnection_reason || 'unknown'}`);
+          console.log('poller.call_ended', 'OK', `Call ${callId} ended. Reason: ${callData.disconnection_reason || 'unknown'}`);
 
           let executiveSummary;
           const customData = callAnalysis?.custom_analysis_data || {};
@@ -459,7 +459,7 @@ function startCallPoller(sessionId, callId) {
               },
               generatedAt: new Date().toISOString(),
             };
-            log('poller.executive_summary', 'OK', `Generated from call_analysis (sentiment: ${sentiment})`);
+            console.log('poller.executive_summary', 'OK', `Generated from call_analysis (sentiment: ${sentiment})`);
           } else {
             // Generate a basic executive summary without analysis
             executiveSummary = {
@@ -474,7 +474,7 @@ function startCallPoller(sessionId, callId) {
               },
               generatedAt: new Date().toISOString(),
             };
-            log('poller.executive_summary', 'OK', 'Generated basic summary (no analysis available)');
+            console.log('poller.executive_summary', 'OK', 'Generated basic summary (no analysis available)');
           }
           session.executiveSummary = executiveSummary;
 
@@ -494,9 +494,9 @@ function startCallPoller(sessionId, callId) {
               status: 'new',
             };
             const savedLead = addLead(lead);
-            log('poller.lead_created', 'OK', `Lead ${savedLead.id} created with executive summary`);
+            console.log('poller.lead_created', 'OK', `Lead ${savedLead.id} created with executive summary`);
           } catch (leadErr) {
-            log('poller.lead_created', 'FAIL', leadErr.message);
+            console.log('poller.lead_created', 'FAIL', leadErr.message);
           }
 
           // Clear the poller since call is done
@@ -507,16 +507,16 @@ function startCallPoller(sessionId, callId) {
 
       // Store analysis if available during live call (for transcript enrichment)
       if (callAnalysis && session.callStatus === 'live') {
-        log('poller.analysis_live', 'OK', `Analysis available on poll attempt ${attempts}`);
+        console.log('poller.analysis_live', 'OK', `Analysis available on poll attempt ${attempts}`);
       }
     } catch (err) {
       // Log poll errors but don't crash
-      log('poller.error', 'WARN', `Poll attempt ${attempts}: ${err.message}`);
+      console.log('poller.error', 'WARN', `Poll attempt ${attempts}: ${err.message}`);
     }
   }, 1000);
 
   activePollers.set(sessionId, interval);
-  log('poller.started', 'OK', `Polling call ${callId} every 1s`);
+  console.log('poller.started', 'OK', `Polling call ${callId} every 1s`);
 }
 
 // ── Routes ──
@@ -600,31 +600,31 @@ router.post('/call', async (req, res) => {
 
   try {
     // ── Stage 1: Request received ──
-    log('1. request_received', 'OK', `POST /demo/call`);
+    console.log('1. request_received', 'OK', `POST /demo/call`);
     const { businessName, industry, phoneNumber } = req.body;
 
     // ── Stage 2: Business profile loaded ──
     if (!businessName) {
-      log('2. business_profile', 'FAIL', 'Missing businessName');
+      console.log('2. business_profile', 'FAIL', 'Missing businessName');
       return res.status(400).json(customerError('VALIDATION_MISSING_FIELD', `Missing businessName`));
     }
-    log('2. business_profile', 'OK', `businessName="${businessName}"`);
+    console.log('2. business_profile', 'OK', `businessName="${businessName}"`);
 
     // ── Stage 3: Industry validated ──
     const normalizedIndustry = ALL_INDUSTRIES.find(i => i.toLowerCase() === (industry || '').toLowerCase());
     if (!normalizedIndustry) {
-      log('3. credentials_verified', 'FAIL', `Invalid industry: ${industry}`);
+      console.log('3. credentials_verified', 'FAIL', `Invalid industry: ${industry}`);
       return res.status(400).json(customerError('VALIDATION_INVALID_INDUSTRY', `Invalid industry: ${industry}`));
     }
-    log('3. credentials_verified', 'OK', `industry="${normalizedIndustry}"`);
+    console.log('3. credentials_verified', 'OK', `industry="${normalizedIndustry}"`);
 
     // ── Stage 4: Phone validated ──
     const digits = (phoneNumber || '').replace(/\D/g, '');
     if (digits.length < 10) {
-      log('4. phone_validated', 'FAIL', `Invalid phone: "${phoneNumber}"`);
+      console.log('4. phone_validated', 'FAIL', `Invalid phone: "${phoneNumber}"`);
       return res.status(400).json(customerError('INVALID_PHONE_NUMBER', `Invalid phone: ${phoneNumber}`));
     }
-    log('4. phone_validated', 'OK', `phone="${phoneNumber}" (${digits.length} digits)`);
+    console.log('4. phone_validated', 'OK', `phone="${phoneNumber}" (${digits.length} digits)`);
 
     const demoSessionId = uuidv4();
     const ec = buildExecutiveContext(businessName, normalizedIndustry, phoneNumber, demoSessionId);
@@ -632,7 +632,7 @@ router.post('/call', async (req, res) => {
 
     // ── Stage 5: Retell credentials verified ──
     if (!configured) {
-      log('5. credentials_verified', 'SIMULATION', 'Retell not configured — returning simulation path');
+      console.log('5. credentials_verified', 'SIMULATION', 'Retell not configured — returning simulation path');
       const session = {
         id: demoSessionId, businessName, industry: normalizedIndustry, phoneNumber,
         executiveContext: ec, callId: `sim-${demoSessionId.slice(0, 8)}`,
@@ -648,15 +648,15 @@ router.post('/call', async (req, res) => {
       });
     }
 
-    log('5. credentials_verified', 'OK', `Retell API key + agent ID present`);
+    console.log('5. credentials_verified', 'OK', `Retell API key + agent ID present`);
 
     // ── Stage 6: Agent loaded ──
     // Verify the agent exists by fetching it (optional check — skip if not critical)
-    log('6. agent_loaded', 'OK', `agentId=${config.retell.agentId}`);
+    console.log('6. agent_loaded', 'OK', `agentId=${config.retell.agentId}`);
 
     // ── Stage 7: Call request sent to Retell ──
     const e164Phone = formatE164(phoneNumber);
-    log('7. call_requested', 'SENDING', `phone=${phoneNumber} e164=${e164Phone} service=${ec.service}`);
+    console.log('7. call_requested', 'SENDING', `phone=${phoneNumber} e164=${e164Phone} service=${ec.service}`);
     liveTimeline.addEntry(demoSessionId, 'call_creating', 'Requesting call via Retell', 'system');
 
     let callResult;
@@ -672,20 +672,20 @@ router.post('/call', async (req, res) => {
     } catch (callErr) {
       // Classify the error — log full details server-side, return clean customer message
       if (callErr instanceof retell.DiagnosticError) {
-        log('7. call_requested', 'FAIL', `[${callErr.stage}] ${callErr.code}: ${callErr.details}`);
+        console.log('7. call_requested', 'FAIL', `[${callErr.stage}] ${callErr.code}: ${callErr.details}`);
         return res.status(callErr.httpStatus || 502).json(customerError(callErr.code, callErr.details));
       }
-      log('7. call_requested', 'FAIL', `Unknown error: ${callErr.message}`);
+      console.log('7. call_requested', 'FAIL', `Unknown error: ${callErr.message}`);
       return res.status(502).json(customerError('RETELL_UNKNOWN_ERROR', callErr.message));
     }
 
     // ── Stage 8: call_id created ──
     const retellCallId = callResult?.call_id;
     if (!retellCallId) {
-      log('8. call_created', 'FAIL', 'Retell did not return a call_id');
+      console.log('8. call_created', 'FAIL', 'Retell did not return a call_id');
       return res.status(502).json(customerError('RETELL_MISSING_CALL_ID', 'Retell did not return a call_id'));
     }
-    log('8. call_created', 'OK', `call_id=${retellCallId}`);
+    console.log('8. call_created', 'OK', `call_id=${retellCallId}`);
 
     // ── Stage 9: Session created ──
     const session = {
@@ -703,7 +703,7 @@ router.post('/call', async (req, res) => {
     startCallPoller(demoSessionId, retellCallId);
 
     // ── Stage 10: Returning success ──
-    log('9. returning_success', 'OK', `session=${demoSessionId} status=call_created`);
+    console.log('9. returning_success', 'OK', `session=${demoSessionId} status=call_created`);
     return res.json({
       success: true, demoSessionId, callId: retellCallId,
       status: 'call_created', mode: 'live',

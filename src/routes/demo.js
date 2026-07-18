@@ -346,6 +346,131 @@ function advanceCallState(sessionId, newState) {
   return true;
 }
 
+// ── Retell API Poller ──
+// Polls the Retell API for call status when webhooks aren't available.
+// This is a fallback for when the agent can't be published.
+const activePollers = new Map();
+
+function startCallPoller(sessionId, callId) {
+  if (activePollers.has(sessionId)) return; // Already polling
+
+  let attempts = 0;
+  const MAX_POLLS = 600; // 10 minutes at 1s intervals
+
+  const interval = setInterval(async () => {
+    attempts++;
+    const session = demoSessions.get(sessionId);
+    if (!session || attempts > MAX_POLLS) {
+      clearInterval(interval);
+      activePollers.delete(sessionId);
+      return;
+    }
+
+    // Don't poll if call is already completed
+    if (['completed', 'polaris_summary', 'failed'].includes(session.callStatus)) {
+      clearInterval(interval);
+      activePollers.delete(sessionId);
+      return;
+    }
+
+    try {
+      const callData = await retell.getCall(callId);
+      if (!callData) return;
+
+      const callStatus = callData.call?.status || callData.status || '';
+      const transcript = callData.call?.transcript || callData.transcript || '';
+      const analysis = callData.call?.analysis || callData.analysis || null;
+
+      // Map Retell call status to our state machine
+      if (callStatus === 'queued' || callStatus === 'in_progress') {
+        if (session.callStatus === 'call_created') {
+          advanceCallState(sessionId, 'dialing');
+        }
+      }
+
+      if (callStatus === 'ringing') {
+        if (['call_created', 'dialing'].includes(session.callStatus)) {
+          advanceCallState(sessionId, 'ringing');
+        }
+      }
+
+      if (callStatus === 'in_progress' || callStatus === 'ongoing') {
+        if (session.callStatus === 'ringing') {
+          advanceCallState(sessionId, 'answered');
+          advanceCallState(sessionId, 'media_connected');
+          advanceCallState(sessionId, 'live');
+        }
+      }
+
+      // Store transcript if available
+      if (transcript && transcript.length > 0) {
+        const lines = typeof transcript === 'string' ? transcript.split('\n') : transcript;
+        if (lines.length > (session.transcriptLines?.length || 0)) {
+          session.transcriptLines = lines.map((line, i) => ({
+            speaker: line.includes(':') ? line.split(':')[0].trim() : 'agent',
+            text: line.includes(':') ? line.split(':').slice(1).join(':').trim() : line,
+            timestamp: new Date().toISOString(),
+          }));
+          log('poller.transcript', 'OK', `${session.transcriptLines.length} lines`);
+        }
+      }
+
+      // Call ended
+      if (callStatus === 'ended' || callStatus === 'completed') {
+        if (session.callStatus !== 'completed' && session.callStatus !== 'polaris_summary') {
+          advanceCallState(sessionId, 'completed');
+          log('poller.call_ended', 'OK', `Call ${callId} ended`);
+
+          // Generate lead from transcript
+          if (session.transcriptLines && session.transcriptLines.length > 0) {
+            try {
+              const { addLead } = require('../leads/store');
+              const lead = {
+                customerName: '',
+                phoneNumber: session.phoneNumber || '',
+                serviceRequested: session.industry || '',
+                callOutcome: 'Call completed',
+                notes: session.transcriptLines.map(l => `${l.speaker}: ${l.text}`).join('\n'),
+                demoSessionId: sessionId,
+                transcript: session.transcriptLines,
+                receivedAt: new Date().toISOString(),
+                status: 'new',
+              };
+              const savedLead = addLead(lead);
+              log('poller.lead_created', 'OK', `Lead ${savedLead.id} created`);
+            } catch (leadErr) {
+              log('poller.lead_created', 'FAIL', leadErr.message);
+            }
+          }
+        }
+      }
+
+      // Store analysis if available
+      if (analysis) {
+        log('poller.analysis', 'OK', `Analysis available for call ${callId}`);
+        try {
+          const { updateLead } = require('../leads/store');
+          // Find the lead and update it
+          const { getAllLeads } = require('../leads/store');
+          const leads = getAllLeads();
+          const lead = leads.find(l => l.demoSessionId === sessionId);
+          if (lead) {
+            updateLead(lead.id, { analysis, status: 'analyzed' });
+          }
+        } catch (e) {
+          // Lead store not available
+        }
+      }
+    } catch (err) {
+      // Log poll errors but don't crash
+      log('poller.error', 'WARN', `Poll attempt ${attempts}: ${err.message}`);
+    }
+  }, 1000);
+
+  activePollers.set(sessionId, interval);
+  log('poller.started', 'OK', `Polling call ${callId} every 1s`);
+}
+
 // ── Routes ──
 
 /**
@@ -524,6 +649,10 @@ router.post('/call', async (req, res) => {
     };
     demoSessions.set(demoSessionId, session);
     liveTimeline.addEntry(demoSessionId, 'call_created', `Retell call ${retellCallId} created`, 'system');
+
+    // Start polling the Retell API for call status updates
+    // (Fallback when webhooks aren't available — e.g. agent not published)
+    startCallPoller(demoSessionId, retellCallId);
 
     // ── Stage 10: Returning success ──
     log('9. returning_success', 'OK', `session=${demoSessionId} status=call_created`);

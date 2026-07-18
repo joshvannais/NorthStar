@@ -369,19 +369,42 @@ async function handleWebhook(payload) {
         totalLines: session.transcriptLines.length,
       });
 
-      // If not yet in live state, advance
-      if (session.callStatus === 'media_connected' || session.callStatus === 'answered') {
-        const demo = require('../routes/demo');
-        if (demo.advanceCallState) {
-          for (const [sid] of demo.demoSessions) {
-            if (demo.demoSessions.get(sid)?.callId === callId) {
-              demo.advanceCallState(sid, 'live');
-              broadcastSSE(sid, 'status', {
-                callStatus: 'live',
-                previousStatus: session.callStatus,
-                timestamp: new Date().toISOString(),
-              });
-              break;
+      // Advance through state machine to reach 'live'
+      // Retell only sends call_started, transcript, call_ended, call_analyzed
+      // So we must chain-advance through intermediate states when transcript arrives
+      const demo = require('../routes/demo');
+      if (demo.advanceCallState && demo.isValidTransition) {
+        // Find the session id for this call
+        let sid = null;
+        for (const [id, s] of demo.demoSessions) {
+          if (s.callId === callId) { sid = id; break; }
+        }
+        if (sid) {
+          // Chain advance: dialing → ringing → answered → media_connected → live
+          const chain = ['dialing', 'ringing', 'answered', 'media_connected', 'live'];
+          const currentIdx = chain.indexOf(session.callStatus);
+          if (currentIdx >= 0) {
+            for (let i = currentIdx; i < chain.length - 1; i++) {
+              const from = chain[i];
+              const to = chain[i + 1];
+              if (demo.isValidTransition(from, to)) {
+                const result = demo.advanceCallState(sid, to);
+                if (result) {
+                  broadcastSSE(sid, 'status', {
+                    callStatus: to,
+                    previousStatus: from,
+                    timestamp: new Date().toISOString(),
+                  });
+                  console.log(`[Webhook:Transcript] Advanced ${sid}: ${from} → ${to}`);
+                }
+              }
+            }
+          }
+
+          // Update timer start once we hit 'answered' or beyond
+          if (session.callStatus === 'answered' || session.callStatus === 'media_connected' || session.callStatus === 'live') {
+            if (!session.startedAt) {
+              session.startedAt = new Date().toISOString();
             }
           }
         }

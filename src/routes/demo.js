@@ -965,3 +965,4 @@ router.get('/:id/events', (req, res) => {
 module.exports = router;
 module.exports.advanceCallState = advanceCallState;
 module.exports.demoSessions = demoSessions;
+module.exports.isValidTransition = isValidTransition;

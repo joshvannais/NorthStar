@@ -358,5 +358,38 @@
         "a": 400
       }
     ]
+  },
+  {
+    "id": "mrptr3cu8e5urr",
+    "customerName": "",
+    "phoneNumber": "+18605551234",
+    "serviceRequested": "Roofing",
+    "callOutcome": "Call completed",
+    "notes": "",
+    "demoSessionId": "36a1abe6-11c6-4379-a08b-7c7a6964c499",
+    "transcript": [],
+    "executiveSummary": {
+      "outcome": "Call completed. Lead captured.",
+      "sentiment": "neutral",
+      "keyTopics": [],
+      "actionItems": [
+        {
+          "description": "Review call transcript",
+          "priority": "medium"
+        }
+      ],
+      "recommendations": [
+        {
+          "description": "Follow up with customer"
+        }
+      ],
+      "polarisOpportunityScore": {
+        "score": "Pending",
+        "placeholder": true
+      },
+      "generatedAt": "2026-07-18T03:46:00.510Z"
+    },
+    "receivedAt": "2026-07-18T03:46:00.510Z",
+    "status": "new"
   }
 ]

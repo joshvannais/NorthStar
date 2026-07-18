@@ -400,6 +400,7 @@ const CUSTOMER_ERRORS = {
   'RETELL_UNKNOWN_ERROR':        'Unable to place call. Please try again.',
   'RETELL_API_ERROR_400':        'Unable to place call.',
   'RETELL_API_ERROR_429':        'Please wait a moment before trying again.',
+  'RETELL_FROM_NUMBER_INVALID':  'Unable to place call. The outbound number is not configured correctly.',
   'FETCH_ERROR':                 'Could not reach service. Check your connection.',
   'TIMEOUT':                     'The request took too long. Please try again.',
   'INTERNAL_SERVER_ERROR':       'Something went wrong. Please try again.',

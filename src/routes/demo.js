@@ -723,6 +723,65 @@ router.get('/:id/timeline', (req, res) => {
   }
 });
 
+/**
+ * GET /:id/events
+ * Server-Sent Events (SSE) endpoint for real-time call event streaming.
+ * The client connects with EventSource and receives:
+ *   - event: status  → { callStatus, previousStatus, timestamp }
+ *   - event: transcript → { line, totalLines }
+ *   - event: executiveSummary → { outcome, sentiment, ... }
+ *   - event: polarisSummary → { leadId, polarisScore }
+ *   - event: heartbeat → { timestamp } (every 15s)
+ *
+ * Falls back gracefully — polling continues on the frontend if SSE is unavailable.
+ */
+router.get('/:id/events', (req, res) => {
+  const sessionId = req.params.id;
+  const session = demoSessions.get(sessionId);
+
+  if (!session) {
+    return res.status(404).json(customerError('NOT_FOUND', 'Session not found'));
+  }
+
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'X-Accel-Buffering': 'no',
+  });
+
+  // Send initial connection event
+  res.write(`event: connected\ndata: ${JSON.stringify({
+    sessionId,
+    callStatus: session.callStatus,
+    timestamp: new Date().toISOString(),
+  })}\n\n`);
+
+  // Register this connection for broadcasts
+  const webhook = require('../retell/webhook');
+  webhook.addSSEConnection(sessionId, res);
+
+  // Heartbeat every 15 seconds to keep connection alive
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+    } catch (e) {
+      clearInterval(heartbeat);
+    }
+  }, 15000);
+
+  // Clean up on disconnect
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    webhook.removeSSEConnection(sessionId, res);
+    console.log(`[Demo:SSE] Client disconnected from session ${sessionId}`);
+  });
+
+  console.log(`[Demo:SSE] Client connected to session ${sessionId}`);
+});
+
 module.exports = router;
 module.exports.advanceCallState = advanceCallState;
 module.exports.demoSessions = demoSessions;

@@ -17,6 +17,97 @@ const { sendLeadNotification: sendSms } = require('../notifications/sms');
 const { sendLeadNotification: sendEmail } = require('../notifications/email');
 const { generateExecutiveSummary, generateActionItems, generateFollowUpRecommendations, extractKeyTopics, estimateSentiment } = require('../voice/callCompletion');
 
+// ── Webhook Diagnostics ──
+// Global counters and event log for diagnostics endpoint
+let webhookEventCounter = 0;
+const webhookEventLog = []; // Last 50 events
+const MAX_LOG_ENTRIES = 50;
+let webhookStartedAt = new Date().toISOString();
+let lastWebhookAt = null;
+
+function logWebhookEvent(type, callId, detail) {
+  const entry = {
+    type,
+    callId: callId || null,
+    timestamp: new Date().toISOString(),
+    detail: detail || null,
+  };
+  webhookEventLog.unshift(entry);
+  if (webhookEventLog.length > MAX_LOG_ENTRIES) {
+    webhookEventLog.pop();
+  }
+}
+
+function getDiagnostics() {
+  try {
+    const demo = require('../routes/demo');
+    const sessions = [];
+    if (demo.demoSessions) {
+      for (const [id, s] of demo.demoSessions) {
+        sessions.push({
+          sessionId: id,
+          callId: s.callId || null,
+          callStatus: s.callStatus || 'unknown',
+          businessName: s.businessName || '—',
+          createdAt: s.createdAt || null,
+        });
+      }
+    }
+    const config = require('../config');
+    return {
+      status: 'ok',
+      webhookStartedAt,
+      lastWebhookAt,
+      totalEventsReceived: webhookEventCounter,
+      recentEvents: webhookEventLog.slice(0, 10),
+      activeSessions: sessions,
+      retellPhoneNumbers: config.retell?.fromNumbers || config.retell?.phoneNumbers || [],
+      retellAgentId: config.retell?.agentId || null,
+      retellConfigured: !!(config.retell && config.retell.apiKey),
+    };
+  } catch (e) {
+    return {
+      status: 'error',
+      error: e.message,
+      totalEventsReceived: webhookEventCounter,
+      recentEvents: webhookEventLog.slice(0, 10),
+    };
+  }
+}
+
+// ── SSE broadcast ──
+// A list of active SSE connections keyed by demo session id
+const sseConnections = new Map();
+
+function addSSEConnection(sessionId, res) {
+  if (!sseConnections.has(sessionId)) {
+    sseConnections.set(sessionId, []);
+  }
+  sseConnections.get(sessionId).push(res);
+}
+
+function removeSSEConnection(sessionId, res) {
+  const conns = sseConnections.get(sessionId);
+  if (conns) {
+    const idx = conns.indexOf(res);
+    if (idx >= 0) conns.splice(idx, 1);
+    if (conns.length === 0) sseConnections.delete(sessionId);
+  }
+}
+
+function broadcastSSE(sessionId, event, data) {
+  const conns = sseConnections.get(sessionId);
+  if (!conns || conns.length === 0) return;
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of conns) {
+    try {
+      res.write(payload);
+    } catch (e) {
+      // Client disconnected — will be cleaned up on next connection attempt
+    }
+  }
+}
+
 /**
  * Get the demo sessions module dynamically to avoid circular deps.
  * Demo sessions are looked up by Retell call_id.
@@ -25,12 +116,19 @@ function getDemoSession(callId) {
   try {
     const demo = require('../routes/demo');
     if (demo.demoSessions) {
-      for (const [, session] of demo.demoSessions) {
-        if (session.callId === callId) return session;
+      const sessionCount = demo.demoSessions.size;
+      for (const [sessionId, session] of demo.demoSessions) {
+        if (session.callId === callId) {
+          console.log(`[Webhook:Lookup] FOUND session for call_id=${callId} → sessionId=${sessionId} (of ${sessionCount} sessions)`);
+          return session;
+        }
       }
+      console.log(`[Webhook:Lookup] NOT FOUND: call_id=${callId} not matched in ${sessionCount} active sessions`);
+    } else {
+      console.log('[Webhook:Lookup] No demo sessions map available');
     }
   } catch (e) {
-    // Demo module not available — non-demo call
+    console.log(`[Webhook:Lookup] Error looking up demo session: ${e.message}`);
   }
   return null;
 }
@@ -41,13 +139,22 @@ function advanceDemoSession(callId, toState) {
     if (demo.advanceCallState) {
       for (const [sessionId, session] of demo.demoSessions) {
         if (session.callId === callId) {
-          demo.advanceCallState(sessionId, toState);
+          const prevState = session.callStatus;
+          const result = demo.advanceCallState(sessionId, toState);
+          console.log(`[Webhook:State] Session ${sessionId}: ${prevState} → ${toState} (result: ${result})`);
+          // Broadcast state change via SSE
+          broadcastSSE(sessionId, 'status', {
+            callStatus: toState,
+            previousStatus: prevState,
+            timestamp: new Date().toISOString(),
+          });
           return sessionId;
         }
       }
+      console.log(`[Webhook:State] No session found for call_id=${callId} to advance to ${toState}`);
     }
   } catch (e) {
-    // Not a demo call
+    console.log(`[Webhook:State] Error advancing state: ${e.message}`);
   }
   return null;
 }
@@ -207,28 +314,39 @@ function generateAndAttachSummary(leadId, payload) {
  * Main webhook handler for Retell AI call events.
  */
 async function handleWebhook(payload) {
-  console.log(`[Webhook] Received event: ${payload.event} (call: ${payload.call_id})`);
-
   const callId = payload.call_id;
+  const eventType = payload.event || 'unknown';
+
+  // Increment global counter
+  webhookEventCounter++;
+  lastWebhookAt = new Date().toISOString();
+
+  // Log EVERY incoming webhook
+  console.log(`[Webhook:Incoming] #${webhookEventCounter} — event=${eventType} call_id=${callId} timestamp=${lastWebhookAt}`);
+  logWebhookEvent(eventType, callId, `Received ${eventType} event`);
 
   // ── Demo session state management ──
   if (payload.event === 'call_started') {
     advanceDemoSession(callId, 'dialing');
+    logWebhookEvent(eventType, callId, 'Advanced to dialing');
     return { received: true, processed: true };
   }
 
   if (payload.event === 'call_ringing') {
     advanceDemoSession(callId, 'ringing');
+    logWebhookEvent(eventType, callId, 'Advanced to ringing');
     return { received: true, processed: true };
   }
 
   if (payload.event === 'call_answered') {
     advanceDemoSession(callId, 'answered');
+    logWebhookEvent(eventType, callId, 'Advanced to answered');
     return { received: true, processed: true };
   }
 
   if (payload.event === 'call_media_connected') {
     advanceDemoSession(callId, 'media_connected');
+    logWebhookEvent(eventType, callId, 'Advanced to media_connected');
     return { received: true, processed: true };
   }
 
@@ -245,6 +363,12 @@ async function handleWebhook(payload) {
       if (!session.transcriptLines) session.transcriptLines = [];
       session.transcriptLines.push(line);
 
+      // Broadcast transcript via SSE
+      broadcastSSE(session.id, 'transcript', {
+        line,
+        totalLines: session.transcriptLines.length,
+      });
+
       // If not yet in live state, advance
       if (session.callStatus === 'media_connected' || session.callStatus === 'answered') {
         const demo = require('../routes/demo');
@@ -252,18 +376,27 @@ async function handleWebhook(payload) {
           for (const [sid] of demo.demoSessions) {
             if (demo.demoSessions.get(sid)?.callId === callId) {
               demo.advanceCallState(sid, 'live');
+              broadcastSSE(sid, 'status', {
+                callStatus: 'live',
+                previousStatus: session.callStatus,
+                timestamp: new Date().toISOString(),
+              });
               break;
             }
           }
         }
       }
+    } else {
+      console.log(`[Webhook:Transcript] No demo session found for call_id=${callId} — transcript not stored`);
     }
+    logWebhookEvent(eventType, callId, `Transcript: ${(payload.transcript || payload.text || '').substring(0, 80)}`);
     return { received: true, processed: true };
   }
 
   // ── Call ended ──
   if (payload.event === 'call_ended') {
     advanceDemoSession(callId, 'completed');
+    logWebhookEvent(eventType, callId, 'Advanced to completed');
 
     // Parse lead from transcript
     const lead = parseLeadFromTranscript(payload.transcript || '');
@@ -280,7 +413,12 @@ async function handleWebhook(payload) {
       const savedLead = addLead(lead);
 
       // Generate executive summary from call data
-      generateAndAttachSummary(savedLead.id, payload);
+      const es = generateAndAttachSummary(savedLead.id, payload);
+
+      // Broadcast executive summary via SSE
+      if (demoSession && demoSession.id && es) {
+        broadcastSSE(demoSession.id, 'executiveSummary', es);
+      }
 
       await appendLead(savedLead);
       await Promise.allSettled([
@@ -288,14 +426,17 @@ async function handleWebhook(payload) {
         sendEmail(savedLead),
       ]);
       console.log(`[Webhook] Lead processed: ${savedLead.id} — ${savedLead.customerName}`);
+      logWebhookEvent(eventType, callId, `Lead saved: ${savedLead.id}`);
       return { received: true, processed: true, leadId: savedLead.id };
     }
+    logWebhookEvent(eventType, callId, 'No lead data extracted from transcript');
     return { received: true, processed: false };
   }
 
   // ── Call analyzed ──
   if (payload.event === 'call_analyzed') {
     advanceDemoSession(callId, 'polaris_summary');
+    logWebhookEvent(eventType, callId, 'Advanced to polaris_summary');
 
     const lead = parseLeadFromAnalysis(payload);
     if (lead) {
@@ -338,19 +479,36 @@ async function handleWebhook(payload) {
         }
       }
 
+      // Broadcast via SSE
+      if (demoSession2 && demoSession2.id) {
+        broadcastSSE(demoSession2.id, 'polarisSummary', {
+          leadId: savedLead.id,
+          polarisScore: summary?.polarisOpportunityScore || null,
+        });
+      }
+
       await appendLead(savedLead);
       await Promise.allSettled([
         sendSms(savedLead),
         sendEmail(savedLead),
       ]);
       console.log(`[Webhook] Lead processed (analysis): ${savedLead.id} — ${savedLead.customerName}`);
+      logWebhookEvent(eventType, callId, `Lead saved (analysis): ${savedLead.id}`);
       return { received: true, processed: true, leadId: savedLead.id };
     }
+    logWebhookEvent(eventType, callId, 'No lead data extracted from analysis');
     return { received: true, processed: false };
   }
 
   console.log(`[Webhook] Unknown event type: ${payload.event} — skipping.`);
+  logWebhookEvent(eventType, callId, `Unknown event type — skipped`);
   return { received: true, processed: false };
 }
 
-module.exports = { handleWebhook };
+module.exports = {
+  handleWebhook,
+  getDiagnostics,
+  addSSEConnection,
+  removeSSEConnection,
+  broadcastSSE,
+};

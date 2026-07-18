@@ -4,7 +4,7 @@
 
 const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
-const { handleWebhook } = require('../retell/webhook');
+const { handleWebhook, getDiagnostics } = require('../retell/webhook');
 const customersRouter = require('./customers');
 const demoRouter = require('./demo');
 const voiceRouter = require('./voice');
@@ -74,6 +74,44 @@ router.post('/retell/webhook', async (req, res) => {
   } catch (err) {
     console.error('[API] Webhook error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/retell/webhook/diagnostics
+ * Returns webhook pipeline diagnostics: event count, recent events,
+ * active demo sessions, and Retell configuration status.
+ * PUBLIC — used for debugging the webhook pipeline.
+ */
+router.get('/retell/webhook/diagnostics', (req, res) => {
+  try {
+    const diagnostics = getDiagnostics();
+    res.json(diagnostics);
+  } catch (err) {
+    console.error('[API] Webhook diagnostics error:', err.message);
+    res.status(500).json({ error: 'Failed to gather diagnostics' });
+  }
+});
+
+/**
+ * GET /api/retell/webhook/config
+ * Returns the configured webhook URL and Retell setup info.
+ * PUBLIC — used to verify webhook registration.
+ */
+router.get('/retell/webhook/config', (req, res) => {
+  try {
+    const config = require('../config');
+    res.json({
+      webhookUrl: `https://northstar-os.ai/api/retell/webhook`,
+      retellConfigured: !!(config.retell && config.retell.apiKey),
+      retellAgentId: config.retell?.agentId || null,
+      retellAgentName: config.retell?.agentName || null,
+      phoneNumbers: config.retell?.fromNumbers || config.retell?.phoneNumbers || [],
+      note: 'Configure this URL in your Retell dashboard → Agent settings → Webhook URL',
+    });
+  } catch (err) {
+    console.error('[API] Webhook config error:', err.message);
+    res.status(500).json({ error: 'Failed to load config' });
   }
 });
 

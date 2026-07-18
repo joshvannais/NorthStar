@@ -29,7 +29,7 @@ const VALID_TRANSITIONS = {
   'idle':                  ['requesting_call'],
   'requesting_call':       ['call_created', 'failed'],
   'call_created':          ['dialing', 'failed'],
-  'dialing':               ['ringing', 'failed'],
+  'dialing':               ['ringing', 'failed', 'completed'],
   'ringing':               ['answered', 'failed'],
   'answered':              ['media_connected', 'failed'],
   'media_connected':       ['live', 'failed'],

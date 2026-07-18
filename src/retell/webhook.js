@@ -418,7 +418,48 @@ async function handleWebhook(payload) {
 
   // ── Call ended ──
   if (payload.event === 'call_ended') {
-    advanceDemoSession(callId, 'completed');
+    // Chain-advance from current state through to completed.
+    // This handles the case where Retell doesn't send intermediate webhook
+    // events (call_started, transcript_updated) for conversation-flow agents.
+    // If transcript data exists, the call connected — advance through live states.
+    const demo = require('../routes/demo');
+    if (demo.isValidTransition) {
+      for (const [sid, s] of demo.demoSessions) {
+        if (s.callId === callId) {
+          const hasTranscript = payload.transcript || (Array.isArray(payload.transcript_object) && payload.transcript_object.length > 0);
+          if (hasTranscript && s.callStatus !== 'live' && s.callStatus !== 'completed') {
+            // Call actually connected — advance through live states
+            const toStates = ['ringing', 'answered', 'media_connected', 'live', 'completed'];
+            const startIdx = toStates.indexOf(s.callStatus === 'dialing' ? 'ringing' : s.callStatus);
+            if (startIdx < 0) {
+              // Unknown state, jump to completed
+              advanceDemoSession(callId, 'completed');
+            } else {
+              for (let i = startIdx; i < toStates.length; i++) {
+                const next = toStates[i];
+                if (demo.isValidTransition(s.callStatus, next)) {
+                  const result = demo.advanceCallState(sid, next);
+                  if (result) {
+                    broadcastSSE(sid, 'status', {
+                      callStatus: next,
+                      previousStatus: toStates[i-1] || s.callStatus,
+                      timestamp: new Date().toISOString(),
+                    });
+                    console.log(`[Webhook:CallEnded] Advanced ${sid}: → ${next}`);
+                  }
+                }
+              }
+            }
+          } else {
+            // Call didn't connect — advance directly to completed
+            advanceDemoSession(callId, 'completed');
+          }
+          break;
+        }
+      }
+    } else {
+      advanceDemoSession(callId, 'completed');
+    }
     logWebhookEvent(eventType, callId, 'Advanced to completed');
 
     // Parse lead from transcript

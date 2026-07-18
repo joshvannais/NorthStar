@@ -180,7 +180,7 @@ async function registerWebhook(webhookUrl) {
  * Get call details including transcript and analysis.
  */
 async function getCall(callId) {
-  return request('GET', `/get-call/${callId}`);
+  return request('GET', `/v2/get-call/${callId}`);
 }
 
 

@@ -351,7 +351,7 @@ async function handleWebhook(payload) {
   }
 
   // ── Live transcript streaming ──
-  if (payload.event === 'transcript') {
+  if (payload.event === 'transcript' || payload.event === 'transcript_updated') {
     const session = getDemoSession(callId);
     if (session) {
       // Store the transcript line

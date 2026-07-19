@@ -216,6 +216,73 @@
       .demo-modal-card { padding: 28px 20px; }
       .demo-scenario-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
     }
+
+    /* ── M19.2: Post-call information hierarchy ── */
+    .post-polaris-area .demo-insights-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      max-width: 1100px;
+      margin: 0 auto 12px;
+      padding: 0 24px;
+      width: auto;
+    }
+    .post-polaris-area .demo-insights-panel .demo-insight-card {
+      margin: 0;
+    }
+    .post-polaris-area .demo-insights-panel .demo-insight-card.polaris-card {
+      grid-column: 1 / -1;
+      order: 1;
+    }
+    .post-polaris-area .demo-insights-panel .demo-insight-card:nth-child(1) { order: 3; }
+    .post-polaris-area .demo-insights-panel .demo-insight-card:nth-child(3) { order: 4; }
+    .post-polaris-area .demo-insights-panel .demo-insight-card:nth-child(4) { order: 5; }
+    .post-polaris-area .demo-insights-panel .demo-insight-card:nth-child(6) { display: none; }
+    .post-polaris-area .demo-insights-panel .demo-insight-card:nth-child(5) { display: none; }
+
+    .post-actions-section {
+      max-width: 1100px;
+      margin: 0 auto 16px;
+      padding: 0 24px;
+    }
+    .post-actions-section .post-actions-header {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .post-actions-section .demo-actions-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      background: var(--card-bg, #fff);
+      border: 1px solid var(--card-border, var(--neutral-200));
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+    .post-actions-section .demo-actions-list li {
+      font-size: 14px;
+      padding: 6px 0;
+      color: var(--neutral-600);
+      border-bottom: 1px solid var(--neutral-100);
+    }
+    .post-actions-section .demo-actions-list li:last-child { border-bottom: none; }
+    [data-theme="dark"] .post-actions-section .demo-actions-list {
+      background: #1e1e2e;
+      border-color: #2d2d3f;
+    }
+    [data-theme="dark"] .post-actions-section .demo-actions-list li {
+      color: #e5e7eb;
+      border-color: #2d2d3f;
+    }
+
+    .post-transcript-area {
+      max-width: 1100px;
+      margin: 0 auto 24px;
+      padding: 0 24px;
+    }
+    .post-transcript-area .demo-transcript-body {
+      max-height: 360px;
+    }
   </style>
 </head>
 <body>
@@ -472,25 +539,39 @@
        VIEW 3: Post-Call — Results
        ══════════════════════════════════════════════════ -->
   <section class="demo-container" id="demoPostCallView" style="display:none;">
+    <!-- ── 1. Header ── -->
     <div style="text-align:center;padding:32px 24px;">
       <div style="font-size:48px;margin-bottom:12px;">✅</div>
       <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Call Completed</h2>
       <p style="color:var(--neutral-500);margin-bottom:8px;">Here's what NorthStar captured from this call — all in real time.</p>
       <p style="font-size:13px;color:var(--neutral-400);" id="demoCallDuration">Duration: —</p>
     </div>
-    <div class="demo-live-view" style="padding-bottom:24px;">
+
+    <!-- ── 2. Polaris Hero + KPI Cards ── -->
+    <!-- Cloned from live view via JS; reordered via CSS Grid + order -->
+    <div class="post-polaris-area">
+      <div class="demo-insights-panel" id="demoPostInsights">
+        <!-- Filled by JS from the live view -->
+      </div>
+    </div>
+
+    <!-- ── 3. Executive Summary (canonical) ── -->
+    <div id="demoPostExecutiveSummary" style="display:none;max-width:1100px;margin:0 auto;padding:0 24px 24px;text-align:left;"></div>
+
+    <!-- ── 4. Recommended Actions (extracted from cloned insights) ── -->
+    <div id="postActionsSection" class="post-actions-section"></div>
+
+    <!-- ── 5. Transcript ── -->
+    <div class="post-transcript-area">
       <div class="demo-transcript-panel">
         <div class="demo-transcript-header">
           <span style="font-weight:600;font-size:14px;">📝 Call Transcript</span>
         </div>
         <div class="demo-transcript-body" id="demoPostTranscriptBody"></div>
       </div>
-      <div class="demo-insights-panel" id="demoPostInsights">
-        <!-- Filled by JS from the live view -->
-      </div>
     </div>
-    <!-- Post-call Executive Summary -->
-    <div id="demoPostExecutiveSummary" style="display:none;max-width:1100px;margin:0 auto;padding:0 24px 24px;text-align:left;"></div>
+
+    <!-- ── 6. Buttons ── -->
     <div class="demo-post-actions">
       <button class="btn btn-secondary" onclick="resetDemo()">🔄 Try Another Scenario</button>
       <a href="/login" class="btn btn-primary">🚀 Continue to Dashboard</a>
@@ -1181,6 +1262,10 @@
       // After a demo, demoPreCallView is display:none (set by transitionToLiveView).
       // The modal lives inside demoPreCallView, so it's invisible even with .active.
       document.getElementById('demoLiveView').style.display = 'none';
+      // Clear M19.2 sections
+      var resetActions = document.getElementById('postActionsSection');
+      if (resetActions) resetActions.innerHTML = '';
+
       document.getElementById('demoPostCallView').style.display = 'none';
       document.getElementById('demoPreCallView').style.display = 'block';
 
@@ -1702,6 +1787,13 @@
 
       // Render Executive Summary if available
       renderPostCallExecutiveSummary();
+
+      // ── M19.2: Extract Recommended Actions into own section ──
+      var postActionsSection = document.getElementById('postActionsSection');
+      var clonedActions = document.querySelector('#demoPostInsights #demoActions');
+      if (clonedActions && postActionsSection) {
+        postActionsSection.innerHTML = '<div class="post-actions-header">✅ Recommended Actions</div>' + clonedActions.outerHTML;
+      }
 
       document.getElementById('demoLiveView').style.display = 'none';
       document.getElementById('demoPostCallView').style.display = 'block';

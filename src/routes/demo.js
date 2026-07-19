@@ -317,7 +317,7 @@ const QUALIFICATION_PROFILES = {
   'Tree Service': [
     { name: 'Tree Height',         keywords: ['foot', 'feet', 'ft', 'tall', 'height', 'high', 'story'], unit: 'ft' },
     { name: 'Trunk Size',          keywords: ['diameter', 'inch', 'thick', 'trunk', 'width'], unit: 'inches' },
-    { name: 'Location Difficulty', keywords: ['near house', 'close to', 'power line', 'fence', 'building', 'structure', 'garage', 'over'], unit: null },
+    { name: 'Location Difficulty', keywords: ['near', 'near house', 'close to', 'power line', 'fence', 'building', 'structure', 'garage', 'over'], unit: null },
     { name: 'Stump Removal',       keywords: ['stump', 'stump grind', 'stump removal', 'take the stump', 'remove stump'], unit: null },
   ],
   'Window Tinting': [
@@ -346,6 +346,106 @@ function hasMeasurement(text, keywords) {
   if (hasDigit && hasMeasureWord) return true;
   if (hasValueWord && hasMeasureWord) return true;
   return false;
+}
+
+// ── Service detection: extracts specific service from transcript text ──
+// This is data-driven, not per-industry scripting. Each industry has
+// service sub-types with keywords. The function returns the most specific
+// match found in the transcript.
+const SERVICE_KEYWORDS = {
+  'Tree Service': [
+    { service: 'Tree Removal',          keywords: ['remov', 'take down', 'cut down', 'fell', 'stump'] },
+    { service: 'Tree Trimming',         keywords: ['trim', 'prune', 'cut back', 'thin', 'shape'] },
+    { service: 'Emergency Tree Service', keywords: ['emergency', 'storm damage', 'fallen', 'hazard', 'dangerous'] },
+    { service: 'Stump Grinding',        keywords: ['stump grind', 'stump removal', 'grind'] },
+  ],
+  'HVAC': [
+    { service: 'HVAC Repair',           keywords: ['repair', 'fix', 'not working', 'broken', 'issue', 'problem'] },
+    { service: 'HVAC Replacement',      keywords: ['replace', 'new unit', 'new system', 'upgrade', 'install'] },
+    { service: 'HVAC Maintenance',      keywords: ['maintenance', 'tune-up', 'tune up', 'check-up', 'inspection', 'service'] },
+  ],
+  'Plumbing': [
+    { service: 'Emergency Plumbing',    keywords: ['emergency', 'burst', 'flood', 'urgent', 'pouring'] },
+    { service: 'Plumbing Repair',       keywords: ['repair', 'fix', 'leak', 'drip', 'clog', 'broken'] },
+    { service: 'Plumbing Installation', keywords: ['install', 'new', 'replace', 'upgrade'] },
+  ],
+  'Roofing': [
+    { service: 'Roof Repair',           keywords: ['repair', 'fix', 'patch', 'leak'] },
+    { service: 'Roof Replacement',      keywords: ['replace', 'new roof', 're-roof', 'tear off'] },
+    { service: 'Emergency Roofing',     keywords: ['emergency', 'storm', 'leak', 'urgent'] },
+  ],
+  'Painting': [
+    { service: 'Interior Painting',     keywords: ['interior', 'inside', 'room', 'wall', 'ceiling'] },
+    { service: 'Exterior Painting',     keywords: ['exterior', 'outside', 'siding', 'trim'] },
+  ],
+};
+
+function detectService(transcriptLines, industry) {
+  const services = SERVICE_KEYWORDS[industry];
+  if (!services || !transcriptLines || transcriptLines.length === 0) {
+    return null;
+  }
+  const fullText = transcriptLines
+    .map(function(l) { return (l.text || l.content || '').toLowerCase(); })
+    .join(' ');
+  const detected = [];
+  for (let i = 0; i < services.length; i++) {
+    const s = services[i];
+    for (let k = 0; k < s.keywords.length; k++) {
+      if (fullText.indexOf(s.keywords[k]) !== -1) {
+        detected.push(s.service);
+        break;
+      }
+    }
+  }
+  return detected.length > 0 ? detected : null;
+}
+
+// ── Value extraction: extracts numeric values for qualification variables ──
+// Uses regex patterns to find numbers near measurement words.
+function extractValues(transcriptLines, industry) {
+  const profile = getQualificationProfile(industry);
+  if (!profile || !transcriptLines || transcriptLines.length === 0) return {};
+  const fullText = transcriptLines
+    .map(function(l) { return (l.text || l.content || '').toLowerCase(); })
+    .join(' ');
+  const values = {};
+  // Number pattern: digits or spelled-out numbers (including multi-word)
+  const numPattern = /(?:\d[\d,]*\.?\d*|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:\s+(?:hundred|thousand))?(?:\s+(?:and\s+)?(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety))?|hundred|thousand)/gi;
+  for (let i = 0; i < profile.length; i++) {
+    const v = profile[i];
+    if (!v.unit) continue;
+    // Build unit patterns for this specific variable
+    const unitPatterns = v.unit === 'sq ft' ? ['square foot', 'square feet', 'sq ft', 'sqft'] :
+                         v.unit === 'ft' ? ['foot', 'feet', 'ft', 'tall', 'height', 'high'] :
+                         v.unit === 'inches' ? ['inch', 'inches', 'diameter', 'thick', 'trunk', 'width'] :
+                         v.unit === 'years' ? ['year old', 'years old', 'old', 'age'] :
+                         v.unit === 'rooms' ? ['room', 'bedroom', 'floor', 'story', 'level'] :
+                         [v.unit];
+    // Find the closest number before each unit occurrence
+    let bestValue = null;
+    let bestDist = Infinity;
+    for (let u = 0; u < unitPatterns.length; u++) {
+      let searchIdx = 0;
+      while (true) {
+        const unitIdx = fullText.indexOf(unitPatterns[u], searchIdx);
+        if (unitIdx === -1) break;
+        // Look backwards up to 40 chars for a number
+        const before = fullText.substring(Math.max(0, unitIdx - 40), unitIdx);
+        const numMatch = before.match(numPattern);
+        if (numMatch) {
+          const dist = unitIdx - (unitIdx - before.length + before.lastIndexOf(numMatch[numMatch.length - 1]));
+          if (dist < bestDist && dist < 30) {
+            bestDist = dist;
+            bestValue = numMatch[numMatch.length - 1] + ' ' + (v.unit === 'sq ft' ? 'sq ft' : v.unit);
+          }
+        }
+        searchIdx = unitIdx + 1;
+      }
+    }
+    if (bestValue) values[v.name] = bestValue;
+  }
+  return values;
 }
 
 function analyzeTranscriptQualification(transcriptLines, industry) {
@@ -394,6 +494,11 @@ function polarisEstimate(businessName, industry, transcriptLines) {
   const n = lines.length;
   // Analyze transcript for estimating variable completeness
   const qual = analyzeTranscriptQualification(lines, industry);
+  // Detect specific service from transcript
+  const detectedServices = detectService(lines, industry);
+  const detectedService = detectedServices ? detectedServices.join(' + ') : null;
+  // Extract actual values for qualification variables
+  const extractedValues = extractValues(lines, industry);
   // Base confidence from transcript length
   let confidence = 0;
   if (n === 0) confidence = 0;
@@ -407,13 +512,18 @@ function polarisEstimate(businessName, industry, transcriptLines) {
   }
   // Core reasoning factors
   const reasoning = n === 0 ? [] : [
-    { factor: 'Service Requested',        detail: d.service },
+    { factor: 'Service Requested',        detail: detectedService || d.service },
     { factor: 'Industry',                 detail: industry },
     { factor: 'Urgency Level',            detail: d.emergencyLikelihood > 0.3 ? 'High' : d.emergencyLikelihood > 0.15 ? 'Moderate' : 'Standard' },
     { factor: 'Property Characteristics',  detail: 'Typical residential property' },
     { factor: 'Customer Intent',          detail: n > 2 ? 'Actively seeking service' : 'Information gathering' },
     { factor: 'Historical Pricing',       detail: `$${d.avgJobValue.toLocaleString()} avg for ${industry.toLowerCase()}` },
   ];
+  // Add values to reasoning if extracted
+  const valueKeys = Object.keys(extractedValues);
+  if (valueKeys.length > 0) {
+    reasoning.push({ factor: 'Estimating Values Collected', detail: valueKeys.map(function(k) { return k + ': ' + extractedValues[k]; }).join('; ') });
+  }
   // Qualification-based reasoning
   if (qual.totalVariables > 0) {
     reasoning.push({ factor: 'Estimating Variables Collected', detail: qual.collected.length > 0 ? qual.collected.join(', ') : 'None yet' });
@@ -432,6 +542,8 @@ function polarisEstimate(businessName, industry, transcriptLines) {
     confidence,
     revenueRange: `$${d.revenueRangeMin.toLocaleString()} - $${d.revenueRangeMax.toLocaleString()}`,
     qualification: qual,
+    extractedValues: extractedValues,
+    detectedService: detectedService || d.service,
     reasoning: reasoning,
     generatedAt: new Date().toISOString(),
   };

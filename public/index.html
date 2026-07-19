@@ -1390,12 +1390,23 @@
 
         // ── Timer ──
         // Only update from backend's actual duration
-        if (data.talkTimeStarted && data.duration) {
+        if (data.talkTimeStarted) {
           var m = Math.floor(data.duration / 60);
           var s = data.duration % 60;
           document.getElementById('demoLiveTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
         } else {
           document.getElementById('demoLiveTimer').textContent = '0:00';
+        }
+
+        // ── M18.2: Start local timer when entering a talk state ──
+        if (data.talkTimeStarted && !demoState.timerInterval) {
+          demoState.timerSec = data.duration || 0;
+          demoState.timerInterval = setInterval(function() {
+            demoState.timerSec++;
+            var m = Math.floor(demoState.timerSec / 60);
+            var s = demoState.timerSec % 60;
+            document.getElementById('demoLiveTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+          }, 1000);
         }
 
         // ── Polaris card ──
@@ -1533,6 +1544,18 @@
             } else {
               dot.className = 'demo-status-connecting';
               label.textContent = getStatusLabel(newState);
+            }
+
+            // ── M18.2: Start local timer when entering a talk state ──
+            var talkStates = ['answered', 'media_connected', 'live', 'completed'];
+            if (talkStates.indexOf(newState) >= 0 && !demoState.timerInterval) {
+              demoState.timerSec = 0;
+              demoState.timerInterval = setInterval(function() {
+                demoState.timerSec++;
+                var m = Math.floor(demoState.timerSec / 60);
+                var s = demoState.timerSec % 60;
+                document.getElementById('demoLiveTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+              }, 1000);
             }
           } catch(err) {
             console.warn('[Demo:SSE] Status parse error:', err.message);

@@ -346,6 +346,25 @@ function advanceCallState(sessionId, newState) {
   return true;
 }
 
+// ── M18O: Broadcast state change via SSE ──
+// Used by the poller to notify connected clients of state transitions.
+// Avoids duplicate broadcasts if the caller already broadcasts.
+function broadcastCallState(sessionId, newState) {
+  try {
+    const webhook = require('../retell/webhook');
+    const session = demoSessions.get(sessionId);
+    if (session) {
+      webhook.broadcastSSE(sessionId, 'status', {
+        callStatus: newState,
+        previousStatus: null,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } catch (e) {
+    // SSE not available — polling fallback handles this
+  }
+}
+
 // ── Retell API Poller ──
 // Polls the Retell API for call status when webhooks aren't available.
 // This is a fallback for when the agent can't be published.
@@ -394,39 +413,51 @@ function startCallPoller(sessionId, callId) {
       if (callStatus === 'registered' || callStatus === 'queued' || callStatus === 'in_progress') {
         if (session.callStatus === 'call_created') {
           advanceCallState(sessionId, 'dialing');
+          broadcastCallState(sessionId, 'dialing');
         }
       }
 
       if (callStatus === 'ringing') {
         if (['call_created', 'dialing'].includes(session.callStatus)) {
           advanceCallState(sessionId, 'ringing');
+          broadcastCallState(sessionId, 'ringing');
         }
       }
 
+      // ── M18O: Allow in_progress/ongoing from any pre-live state ──
+      // Production providers may skip ringing and go directly to ongoing.
+      // Map to answered + media_connected + live in one shot.
       if (callStatus === 'in_progress' || callStatus === 'ongoing') {
-        if (session.callStatus === 'ringing') {
+        if (session.callStatus === 'call_created' || session.callStatus === 'dialing' || session.callStatus === 'ringing') {
           advanceCallState(sessionId, 'answered');
           advanceCallState(sessionId, 'media_connected');
           advanceCallState(sessionId, 'live');
+          broadcastCallState(sessionId, 'answered');
+          broadcastCallState(sessionId, 'media_connected');
+          broadcastCallState(sessionId, 'live');
         }
       }
 
       // Store transcript from transcript_object (structured) or transcript (string)
       if (transcriptObject.length > 0) {
+        // ── M18O: Use canonical speaker values (ai/customer) ──
         const newLines = transcriptObject.map((entry, i) => ({
-          speaker: entry.role === 'agent' ? 'Agent' : 'Customer',
+          speaker: entry.role === 'agent' ? 'ai' : 'customer',
           text: entry.content || '',
           timestamp: new Date().toISOString(),
         }));
         if (newLines.length > (session.transcriptLines?.length || 0)) {
           session.transcriptLines = newLines;
+          // Broadcast transcript via SSE
+          broadcastCallState(sessionId, 'transcript_updated');
           console.log('poller.transcript', 'OK', `${newLines.length} lines (structured)`);
         }
       } else if (transcript && transcript.length > 0) {
         const rawLines = transcript.split('\n').filter(Boolean);
         if (rawLines.length > (session.transcriptLines?.length || 0)) {
+          // ── M18O: Use canonical speaker values (ai/customer) ──
           session.transcriptLines = rawLines.map(line => ({
-            speaker: line.startsWith('Agent:') ? 'Agent' : (line.startsWith('User:') ? 'Customer' : 'Unknown'),
+            speaker: line.startsWith('Agent:') ? 'ai' : (line.startsWith('User:') ? 'customer' : 'customer'),
             text: line.replace(/^(Agent:|User:)\s*/, ''),
             timestamp: new Date().toISOString(),
           }));
@@ -438,6 +469,7 @@ function startCallPoller(sessionId, callId) {
       if (callStatus === 'ended' || callStatus === 'not_connected' || callStatus === 'completed') {
         if (!['completed', 'polaris_summary', 'failed'].includes(session.callStatus)) {
           advanceCallState(sessionId, 'completed');
+          broadcastCallState(sessionId, 'completed');
           console.log('poller.call_ended', 'OK', `Call ${callId} ended. Reason: ${callData.disconnection_reason || 'unknown'}`);
 
           let executiveSummary;

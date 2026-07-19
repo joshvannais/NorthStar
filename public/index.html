@@ -1253,13 +1253,28 @@
       }
     }
 
+    // ── M18O: Speaker normalization — single source of truth ──
+    // All transcript rendering flows through this function.
+    // Maps any provider variant to the canonical presentation value.
+    function normalizeSpeaker(speaker) {
+      if (!speaker) return 'system';
+      var s = ('' + speaker).toLowerCase().trim();
+      // AI variants → 'ai'
+      if (s === 'ai' || s === 'agent' || s === 'assistant' || s === 'bot') return 'ai';
+      // Customer variants → 'customer'
+      if (s === 'customer' || s === 'user' || s === 'human') return 'customer';
+      // Everything else → 'system'
+      console.warn('[Demo:M18O] Unknown speaker variant: "' + speaker + '" — mapped to system');
+      return 'system';
+    }
+
     function renderTranscript(lines) {
-      console.log('[Demo:RenderTranscript] Called with ' + lines.length + ' lines. First speaker=' + (lines[0] ? lines[0].speaker : 'N/A'));
+      console.log('[Demo:RenderTranscript] Called with ' + lines.length + ' lines. First speaker=' + (lines[0] ? normalizeSpeaker(lines[0].speaker) : 'N/A'));
       var body = document.getElementById('demoTranscriptBody');
       var html = '';
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i];
-        var cls = line.speaker === 'ai' ? 'ai' : (line.speaker === 'customer' ? 'customer' : (console.warn('[Demo:RenderTranscript] UNEXPECTED speaker value: "' + line.speaker + '" — using system class') || 'system'));
+        var cls = normalizeSpeaker(line.speaker);
         var label = cls === 'ai' ? 'NorthStar AI' : (cls === 'customer' ? 'Customer' : '');
         html += '<div class="demo-msg ' + cls + '">';
         if (label && cls !== 'system') html += '<div class="demo-msg-label">' + label + '</div>';

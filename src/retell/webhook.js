@@ -631,10 +631,12 @@ async function handleWebhook(payload) {
       callEndedDemoSession.transcriptLines = parsedLines;
       console.log(`[Webhook:M18M] Populated ${parsedLines.length} transcript lines for session ${callEndedDemoSession.id}`);
 
-      // Broadcast full transcript via SSE as 'transcriptComplete'
-      broadcastSSE(callEndedDemoSession.id, 'transcriptComplete', {
+      // Broadcast full transcript via SSE as 'transcript' event
+      // (frontend listens for 'transcript' — align event names)
+      broadcastSSE(callEndedDemoSession.id, 'transcript', {
         lines: parsedLines,
         count: parsedLines.length,
+        callEnded: true,
       });
 
       // ── M18M: Trigger Polaris analysis ──

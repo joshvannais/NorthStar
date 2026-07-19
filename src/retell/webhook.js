@@ -312,6 +312,49 @@ function generateAndAttachSummary(leadId, callData) {
 }
 
 /**
+ * M18M: Parse a concatenated transcript string into structured lines.
+ *
+ * Input format examples:
+ *   "Agent: Hello\nUser: Hi\nAgent: How can I help?"
+ *   "Agent: Hello\nCustomer: Hi there\nAgent: Let me help you with that"
+ *
+ * Output: [{ speaker: 'ai', text: 'Hello' }, { speaker: 'customer', text: 'Hi there' }, ...]
+ */
+function parseTranscriptString(transcriptText) {
+  if (!transcriptText || typeof transcriptText !== 'string') return [];
+  const lines = transcriptText.split('\n').filter(Boolean);
+  const result = [];
+  for (const line of lines) {
+    const match = line.match(/^(Agent|User|Customer|AI|Bot|Human):\s*(.*)/i);
+    if (match) {
+      const rawSpeaker = match[1].toLowerCase();
+      let speaker;
+      if (rawSpeaker === 'agent' || rawSpeaker === 'ai' || rawSpeaker === 'bot') {
+        speaker = 'ai';
+      } else {
+        speaker = 'customer';
+      }
+      result.push({
+        speaker,
+        text: match[2].trim(),
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      // Line without a speaker prefix — treat as customer by default
+      const trimmed = line.trim();
+      if (trimmed) {
+        result.push({
+          speaker: 'customer',
+          text: trimmed,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+  }
+  return result;
+}
+
+/**
  * Main webhook handler for Retell AI call events.
  */
 async function handleWebhook(payload) {
@@ -359,8 +402,6 @@ async function handleWebhook(payload) {
     const session = getDemoSession(callId);
 
     // ── STAGE 1: Raw Retell webhook payload ──
-    // Log the COMPLETE raw payload structure so we can see exactly what Retell sends.
-    // This is the only way to determine the correct field paths.
     const stage1 = {
       stage: 1,
       event: payload.event,
@@ -399,9 +440,9 @@ async function handleWebhook(payload) {
         transcript_length: typeof (call.transcript || payload.transcript),
         has_transcript_object: Array.isArray(call.transcript_object || payload.transcript_object),
         transcript_object_len: Array.isArray(call.transcript_object || payload.transcript_object) ? (call.transcript_object || payload.transcript_object).length : 0,
-        last_obj_role: Array.isArray(call.transcript_object || payload.transcript_object) && (call.transcript_object || payload.transcript_object).length > 0 
+        last_obj_role: Array.isArray(call.transcript_object || payload.transcript_object) && (call.transcript_object || payload.transcript_object).length > 0
           ? (call.transcript_object || payload.transcript_object).slice(-1)[0].role : null,
-        last_obj_words: Array.isArray(call.transcript_object || payload.transcript_object) && (call.transcript_object || payload.transcript_object).length > 0 
+        last_obj_words: Array.isArray(call.transcript_object || payload.transcript_object) && (call.transcript_object || payload.transcript_object).length > 0
           ? ((call.transcript_object || payload.transcript_object).slice(-1)[0].words || '').substring(0, 80) : null,
         has_words: Array.isArray(payload.words),
         content: (call.content || payload.content || '').substring(0, 100),
@@ -410,8 +451,6 @@ async function handleWebhook(payload) {
       console.log(`[Webhook:TranscriptPayload] ${JSON.stringify(payloadLog)}`);
 
       // Extract text from the most appropriate source
-      // For transcript_updated events, Retell sends transcript_object[] with {role, words}
-      // For call_ended events, Retell sends call.transcript as a concatenated string
       let lineText = call.transcript || payload.transcript || call.text || payload.text || '';
       let lineRole = call.role || payload.role || '';
 
@@ -430,39 +469,39 @@ async function handleWebhook(payload) {
         lineText = payload.words.map(w => w.word || w.text || '').join(' ');
       }
 
-      // Store the transcript line
-      const line = {
-        speaker: lineRole === 'agent' ? 'ai' : (lineRole === 'user' ? 'customer' : (call.role === 'agent' ? 'ai' : (call.role === 'user' ? 'customer' : (payload.role === 'agent' ? 'ai' : (payload.role === 'user' ? 'customer' : 'customer'))))),
+      // ── M18M: During live calls, track speaking indicator only ──
+      // Instead of showing full transcript text during the call, we track who's speaking.
+      // The full transcript is parsed from call.transcript on call_ended.
+      const speaker = lineRole === 'agent' ? 'agent' : (lineRole === 'user' ? 'customer' : (call.role === 'agent' ? 'agent' : (call.role === 'user' ? 'customer' : 'customer')));
+
+      // Update speaking indicator on the session
+      session.currentSpeaker = speaker;
+      session.lastSpeakerAt = new Date().toISOString();
+
+      // Store in a raw transcript buffer for Polaris analysis (not shown to frontend during call)
+      if (!session._rawTranscriptBuffer) session._rawTranscriptBuffer = [];
+      session._rawTranscriptBuffer.push({
+        speaker,
         text: lineText,
         timestamp: new Date().toISOString(),
-      };
-      if (!session.transcriptLines) session.transcriptLines = [];
-      session.transcriptLines.push(line);
+      });
 
-      // ── STAGE 2: Parsed line (after extraction) ──
-      console.log(`[Webhook:Stage2] speaker=${line.speaker} text="${line.text.substring(0, 100)}" lineRole=${lineRole} lineText="${lineText.substring(0, 100)}"`);
-      // ── STAGE 3: Session transcript state (after push) ──
-      const last3 = session.transcriptLines.slice(-3);
-      console.log(`[Webhook:Stage3] totalLines=${session.transcriptLines.length} last3=${last3.map(l => `{speaker:${l.speaker},text:"${l.text.substring(0,40)}"}`).join(' | ')}`);
+      console.log(`[Webhook:M18M] Speaking: ${speaker} — text="${lineText.substring(0, 80)}" bufferLen=${session._rawTranscriptBuffer.length}`);
 
-      // Broadcast transcript via SSE
-      broadcastSSE(session.id, 'transcript', {
-        line,
-        totalLines: session.transcriptLines.length,
+      // Broadcast speaking indicator via SSE (not full transcript text)
+      broadcastSSE(session.id, 'speaking', {
+        speaker,
+        timestamp: new Date().toISOString(),
       });
 
       // Advance through state machine to reach 'live'
-      // Retell only sends call_started, transcript, call_ended, call_analyzed
-      // So we must chain-advance through intermediate states when transcript arrives
       const demo = require('../routes/demo');
       if (demo.advanceCallState && demo.isValidTransition) {
-        // Find the session id for this call
         let sid = null;
         for (const [id, s] of demo.demoSessions) {
           if (s.callId === callId) { sid = id; break; }
         }
         if (sid) {
-          // Chain advance: dialing → ringing → answered → media_connected → live
           const chain = ['dialing', 'ringing', 'answered', 'media_connected', 'live'];
           const currentIdx = chain.indexOf(session.callStatus);
           if (currentIdx >= 0) {
@@ -483,7 +522,6 @@ async function handleWebhook(payload) {
             }
           }
 
-          // Update timer start once we hit 'answered' or beyond
           if (session.callStatus === 'answered' || session.callStatus === 'media_connected' || session.callStatus === 'live') {
             if (!session.startedAt) {
               session.startedAt = new Date().toISOString();
@@ -492,9 +530,9 @@ async function handleWebhook(payload) {
         }
       }
     } else {
-      console.log(`[Webhook:Transcript] No demo session found for call_id=${callId} — transcript not stored`);
+      console.log(`[Webhook:Transcript] No demo session found for call_id=${callId} — indicator not stored`);
     }
-    logWebhookEvent(eventType, callId, `Transcript: ${(call.transcript || payload.transcript || call.text || payload.text || '').substring(0, 60)} sessionFound=${!!session}`);
+    logWebhookEvent(eventType, callId, `Speaking: ${(call.role || payload.role || 'unknown')} sessionFound=${!!session}`);
     return { received: true, processed: true };
   }
 
@@ -564,18 +602,42 @@ async function handleWebhook(payload) {
     }
     logWebhookEvent(eventType, callId, 'Advanced to completed');
 
+    // ── M18M: Build full transcript text from call data ──
+    let callTranscriptText = '';
+    if (Array.isArray(call.transcript_object || payload.transcript_object) && (call.transcript_object || payload.transcript_object).length > 0) {
+      // Structured transcript_object available — use it
+      const tObj = call.transcript_object || payload.transcript_object;
+      callTranscriptText = tObj.map(o => `${o.role === 'agent' ? 'Agent' : 'User'}: ${o.words || o.text || ''}`).join('\n');
+    } else {
+      callTranscriptText = call.transcript || payload.transcript || '';
+    }
+
+    // ── M18M: Parse transcript string into structured lines ──
+    // Format: "Agent: Hello\nCustomer: Hi\nAgent: How can I help?"
+    const parsedLines = parseTranscriptString(callTranscriptText);
+
+    // Populate the demo session's transcriptLines with parsed result
+    const callEndedDemoSession = getDemoSession(callId);
+    if (callEndedDemoSession) {
+      callEndedDemoSession.transcriptLines = parsedLines;
+      console.log(`[Webhook:M18M] Populated ${parsedLines.length} transcript lines for session ${callEndedDemoSession.id}`);
+
+      // Broadcast full transcript via SSE so frontend renders immediately
+      broadcastSSE(callEndedDemoSession.id, 'transcript', {
+        lines: parsedLines,
+        totalLines: parsedLines.length,
+        callEnded: true,
+      });
+    }
+
     // Parse lead from transcript
-    const callTranscriptText = call.transcript || payload.transcript || 
-      (Array.isArray(call.transcript_object || payload.transcript_object) 
-        ? (call.transcript_object || payload.transcript_object).map(o => o.words || o.text || '').join('\n')
-        : "");
     const lead = parseLeadFromTranscript(callTranscriptText);
     if (lead) {
       // Store transcript on the lead for display
       lead.transcript = callTranscriptText;
 
       // Store demo session ID if this call matches a demo session
-      const demoSession = getDemoSession(callId);
+      const demoSession = callEndedDemoSession;
       if (demoSession && demoSession.id) {
         lead.demoSessionId = demoSession.id;
       }

@@ -778,6 +778,10 @@ router.post('/:id/advance', (req, res) => {
 
 /**
  * GET /:id/transcript
+ *
+ * M18M: During live calls (pre-completed states), returns speaking indicators
+ * instead of full transcript text. After the call ends, returns the complete
+ * parsed transcript from call_ended webhook processing.
  */
 router.get('/:id/transcript', (req, res) => {
   try {
@@ -785,62 +789,86 @@ router.get('/:id/transcript', (req, res) => {
     if (!session) return res.status(404).json(customerError('NOT_FOUND', 'Session not found'));
 
     const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
-    if (preLive.includes(session.callStatus)) {
-      // Even if pre-live, check if we have webhook transcript data
-      if (session.transcriptLines && session.transcriptLines.length > 0) {
-        console.log(`[Demo:TranscriptEP] Pre-live with data: session=${session.id} lines=${session.transcriptLines.length} status=${session.callStatus} firstSpeaker=${session.transcriptLines[0].speaker}`);
+    const isPreLive = preLive.includes(session.callStatus);
+    const isLive = session.callStatus === 'live';
+    const isCompleted = session.callStatus === 'completed' || session.callStatus === 'polaris_summary';
+
+    // ── M18M: During live call, return speaking indicators only ──
+    if (isPreLive || isLive) {
+      const currentSpeaker = session.currentSpeaker || null;
+      const lastSpeakerAt = session.lastSpeakerAt || null;
+
+      // Check if we have any transcript data from simulation
+      if (session.callId && session.callId.startsWith('sim-') && session.transcriptLines && session.transcriptLines.length > 0) {
+        // Simulation mode: still return full transcript since it's a demo
+        console.log(`[Demo:TranscriptEP] Simulation with data: lines=${session.transcriptLines.length}`);
         return res.json({
           sessionId: session.id, callStatus: session.callStatus,
           lines: session.transcriptLines, count: session.transcriptLines.length,
           conversationState: session.callStatus,
-          message: `${session.transcriptLines.length} lines received`,
+          speakingIndicator: currentSpeaker,
+          message: `${session.transcriptLines.length} lines`,
         });
       }
-      console.log(`[Demo:TranscriptEP] Pre-live empty: session=${session.id} status=${session.callStatus}`);
+
+      // Live mode: return speaking indicator only, no transcript text
+      console.log(`[Demo:TranscriptEP] M18M live mode: speaker=${currentSpeaker} status=${session.callStatus}`);
       return res.json({
-        sessionId: session.id, callStatus: session.callStatus,
-        lines: [], count: 0,
-        conversationState: 'waiting',
-        message: 'Waiting for call to connect...',
+        sessionId: session.id,
+        callStatus: session.callStatus,
+        lines: [],
+        count: 0,
+        conversationState: isPreLive ? 'waiting' : 'live',
+        speakingIndicator: currentSpeaker,
+        lastSpeakerAt,
+        message: currentSpeaker
+          ? (currentSpeaker === 'agent' ? 'Agent is speaking...' : 'Customer is speaking...')
+          : 'Waiting for conversation...',
       });
     }
 
-    if (session.callStatus === 'live' || session.callStatus === 'completed') {
-              // ── REAL CALL: use webhook-stored transcript ──
-              // If the session already has transcript lines from webhook events,
-              // return them as-is. Do NOT overwrite with mock data.
-              if (session.transcriptLines && session.transcriptLines.length > 0) {
-                // Real transcript from webhooks — return it directly
-                console.log(`[Demo:TranscriptEP] Live/completed with data: lines=${session.transcriptLines.length}`);
-              } else if (session.callId && session.callId.startsWith('sim-')) {
-                // ── SIMULATION: generate mock transcript ──
-                // Only used when Retell is not configured (simulation mode).
-                const elapsed = session.startedAt ? Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000) : 0;
-                const full = mockTranscript(session.industry, 12);
-                const visible = Math.min(Math.floor(elapsed / 4) + 1, full.length);
-                session.transcriptLines = full.slice(0, visible);
-              } else {
-                // Live call but no transcript yet — return empty lines
-                // (transcript_updated webhooks will populate it)
-              }
-            }
+    // ── M18M: Call completed — return full parsed transcript ──
+    if (isCompleted) {
+      if (session.transcriptLines && session.transcriptLines.length > 0) {
+        console.log(`[Demo:TranscriptEP] M18M completed with data: lines=${session.transcriptLines.length}`);
 
-    // ── STAGE 4: Transcript endpoint response ──
-    // Log the exact JSON that will be returned to the frontend
-    const stage4 = {
-      stage: 4,
-      sessionId: session.id,
-      callStatus: session.callStatus,
-      count: session.transcriptLines.length,
-      first3: (session.transcriptLines || []).slice(0, 3).map(l => `{speaker:${l.speaker},text:"${(l.text||'').substring(0,60)}"}`),
-      last3: (session.transcriptLines || []).slice(-3).map(l => `{speaker:${l.speaker},text:"${(l.text||'').substring(0,60)}"}`),
-    };
-    console.log(`[Demo:Stage4] ${JSON.stringify(stage4)}`);
+        // ── STAGE 4: Transcript endpoint response ──
+        const stage4 = {
+          stage: 4,
+          sessionId: session.id,
+          callStatus: session.callStatus,
+          count: session.transcriptLines.length,
+          first3: (session.transcriptLines || []).slice(0, 3).map(l => `{speaker:${l.speaker},text:"${(l.text||'').substring(0,60)}"}`),
+          last3: (session.transcriptLines || []).slice(-3).map(l => `{speaker:${l.speaker},text:"${(l.text||'').substring(0,60)}"}`),
+        };
+        console.log(`[Demo:Stage4] ${JSON.stringify(stage4)}`);
 
+        return res.json({
+          sessionId: session.id, callStatus: session.callStatus,
+          lines: session.transcriptLines, count: session.transcriptLines.length,
+          conversationState: 'completed',
+          speakingIndicator: null,
+        });
+      }
+
+      // No transcript lines yet — return empty
+      console.log(`[Demo:TranscriptEP] M18M completed but no lines`);
+      return res.json({
+        sessionId: session.id, callStatus: session.callStatus,
+        lines: [], count: 0,
+        conversationState: 'completed',
+        speakingIndicator: null,
+        message: 'Transcript not yet available.',
+      });
+    }
+
+    // Fallback
+    console.log(`[Demo:TranscriptEP] Unknown state: ${session.callStatus}`);
     res.json({
       sessionId: session.id, callStatus: session.callStatus,
-      lines: session.transcriptLines, count: session.transcriptLines.length,
-      conversationState: 'live',
+      lines: [], count: 0,
+      conversationState: 'unknown',
+      speakingIndicator: null,
     });
   } catch (err) {
     console.error('[Demo] Transcript error:', err.message, err.stack);
@@ -938,6 +966,9 @@ router.get('/:id/status', (req, res) => {
       polairsState: isPreLive ? 'waiting' : 'analyzing',
       polarisEstimate: estimate,
       polarisState: isPreLive ? 'waiting' : 'analyzing',
+      // ── M18M: Speaking indicator ──
+      currentSpeaker: session.currentSpeaker || null,
+      lastSpeakerAt: session.lastSpeakerAt || null,
       // ── AI Panel data ──
       customerIntent: aiPanels.customerIntent,
       leadQualification: aiPanels.leadQualification,

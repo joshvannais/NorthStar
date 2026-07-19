@@ -788,7 +788,7 @@ router.get('/:id/transcript', (req, res) => {
     if (preLive.includes(session.callStatus)) {
       // Even if pre-live, check if we have webhook transcript data
       if (session.transcriptLines && session.transcriptLines.length > 0) {
-        // Webhook already stored transcript — return it regardless of state
+        console.log(`[Demo:TranscriptEP] Pre-live with data: session=${session.id} lines=${session.transcriptLines.length} status=${session.callStatus} firstSpeaker=${session.transcriptLines[0].speaker}`);
         return res.json({
           sessionId: session.id, callStatus: session.callStatus,
           lines: session.transcriptLines, count: session.transcriptLines.length,
@@ -796,6 +796,7 @@ router.get('/:id/transcript', (req, res) => {
           message: `${session.transcriptLines.length} lines received`,
         });
       }
+      console.log(`[Demo:TranscriptEP] Pre-live empty: session=${session.id} status=${session.callStatus}`);
       return res.json({
         sessionId: session.id, callStatus: session.callStatus,
         lines: [], count: 0,
@@ -810,6 +811,7 @@ router.get('/:id/transcript', (req, res) => {
               // return them as-is. Do NOT overwrite with mock data.
               if (session.transcriptLines && session.transcriptLines.length > 0) {
                 // Real transcript from webhooks — return it directly
+                console.log(`[Demo:TranscriptEP] Live/completed with data: lines=${session.transcriptLines.length}`);
               } else if (session.callId && session.callId.startsWith('sim-')) {
                 // ── SIMULATION: generate mock transcript ──
                 // Only used when Retell is not configured (simulation mode).
@@ -905,6 +907,8 @@ router.get('/:id/status', (req, res) => {
     const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
     const isPreLive = preLive.includes(session.callStatus);
     const isAnswered = ['answered', 'media_connected', 'live', 'completed', 'polaris_summary'].includes(session.callStatus);
+
+    console.log(`[Demo:StatusEP] session=${session.id} status=${session.callStatus} lines=${n} isPreLive=${isPreLive} confidence=${estimate.confidence}`);
 
     res.json({
       sessionId: session.id,

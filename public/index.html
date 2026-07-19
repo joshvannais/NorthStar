@@ -1159,13 +1159,27 @@
       if (!demoState.sessionId) return;
       try {
         var resp = await fetch(DEMO_API + '/' + demoState.sessionId + '/transcript');
-        if (!resp.ok) return;
+        if (!resp.ok) { console.warn('[Demo:PollTranscript] HTTP error:', resp.status); return; }
         var data = await resp.json();
+
+        // LOG: what we got from the backend
+        console.log('[Demo:PollTranscript] Response:', JSON.stringify({
+          linesLength: data.lines ? data.lines.length : 'undefined',
+          demoStateSeq: demoState.transcriptSeq,
+          callStatus: data.callStatus,
+          count: data.count,
+          message: data.message || '',
+          firstSpeaker: data.lines && data.lines.length > 0 ? data.lines[0].speaker : 'N/A',
+          firstText: data.lines && data.lines.length > 0 ? (data.lines[0].text || '').substring(0, 50) : 'N/A',
+        }));
 
         if (data.lines && data.lines.length > demoState.transcriptSeq) {
           demoState.transcriptSeq = data.lines.length;
+          console.log('[Demo:PollTranscript] RENDERING ' + data.lines.length + ' lines via poll');
           renderTranscript(data.lines);
           document.getElementById('demoTranscriptCount').textContent = data.lines.length + ' messages';
+        } else {
+          console.log('[Demo:PollTranscript] SKIP render: lines=' + (data.lines ? data.lines.length : 0) + ' seq=' + demoState.transcriptSeq);
         }
 
         // Hide loading once we have data
@@ -1179,6 +1193,7 @@
     }
 
     function renderTranscript(lines) {
+      console.log('[Demo:RenderTranscript] Called with ' + lines.length + ' lines. First speaker=' + (lines[0] ? lines[0].speaker : 'N/A'));
       var body = document.getElementById('demoTranscriptBody');
       var html = '';
       for (var i = 0; i < lines.length; i++) {
@@ -1190,6 +1205,7 @@
         html += line.text + '</div>';
       }
       body.innerHTML = html;
+      console.log('[Demo:RenderTranscript] body.innerHTML length=' + body.innerHTML.length + ' lines=' + lines.length);
       body.scrollTop = body.scrollHeight;
     }
 
@@ -1316,6 +1332,9 @@
         if (backendState === 'live' || backendState === 'completed' || backendState === 'polaris_summary') {
           // Transcript polling is already running
         }
+
+        // LOG the full status for debugging
+        console.log('[Demo:PollStatus] callStatus=' + backendState + ' transcriptLineCount=' + data.transcriptLineCount + ' polarisState=' + data.polarisState);
       } catch(e) {
         console.warn('[Demo] Status poll error:', e.message);
       }
@@ -1468,6 +1487,7 @@
       // Copy transcript
       var liveBody = document.getElementById('demoTranscriptBody');
       var postBody = document.getElementById('demoPostTranscriptBody');
+      console.log('[Demo:Transition] Copying transcript — liveBody.innerHTML length=' + liveBody.innerHTML.length + ' content="' + liveBody.innerHTML.substring(0, 200) + '"');
       postBody.innerHTML = liveBody.innerHTML;
 
       // Copy insights

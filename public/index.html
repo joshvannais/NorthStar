@@ -689,6 +689,51 @@
     .polaris-card.polaris-loading .polaris-metrics { gap: 2px; }
     [data-theme="dark"] .polaris-card.polaris-loading { opacity: 0.55; }
     [data-theme="dark"] .polaris-card.polaris-loading .polaris-rec-text { color: #6b7280; }
+    /* M19.4: Estimating Variables */
+    .polaris-report-section-sub {
+      font-size: 11px; color: #9ca3af; margin-bottom: 10px; margin-top: -6px;
+    }
+    .polaris-report-vars-body { display: flex; flex-direction: column; gap: 4px; }
+    .polaris-var-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0; font-size: 13px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    [data-theme="dark"] .polaris-var-row { border-color: #2d2d4f; }
+    .polaris-var-row:last-child { border-bottom: none; }
+    .polaris-var-status { flex-shrink: 0; width: 20px; text-align: center; }
+    .polaris-var-name { font-weight: 600; color: #374151; flex: 1; min-width: 0; }
+    [data-theme="dark"] .polaris-var-name { color: #d1d5db; }
+    .polaris-var-value { font-weight: 500; color: #111827; text-align: right; }
+    [data-theme="dark"] .polaris-var-value { color: #f3f4f6; }
+    .polaris-var-conf { font-size: 11px; color: #7c3aed; font-weight: 600; flex-shrink: 0; width: 40px; text-align: right; }
+    [data-theme="dark"] .polaris-var-conf { color: #a78bfa; }
+    .polaris-var-source {
+      font-size: 12px; color: #9ca3af; font-style: italic;
+      padding: 0 0 6px 30px; line-height: 1.4;
+    }
+    [data-theme="dark"] .polaris-var-source { color: #6b7280; }
+    /* M19.4: Estimate Adjustments */
+    .polaris-report-adj-body { display: flex; flex-direction: column; gap: 2px; }
+    .polaris-adj-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 5px 0; font-size: 13px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    [data-theme="dark"] .polaris-adj-row { border-color: #2d2d4f; }
+    .polaris-adj-row:last-child { border-bottom: none; }
+    .polaris-adj-label { font-weight: 500; color: #6b7280; flex: 1; }
+    [data-theme="dark"] .polaris-adj-label { color: #9ca3af; }
+    .polaris-adj-value { font-weight: 600; color: #111827; text-align: right; }
+    [data-theme="dark"] .polaris-adj-value { color: #f3f4f6; }
+    .polaris-adj-reason .polaris-adj-value { font-weight: 400; font-size: 12px; color: #4b5563; }
+    [data-theme="dark"] .polaris-adj-reason .polaris-adj-value { color: #d1d5db; }
+    .polaris-adj-total { border-top: 2px solid #7c3aed; margin-top: 4px; padding-top: 8px; }
+    .polaris-adj-total .polaris-adj-label { font-weight: 700; color: #7c3aed; }
+    .polaris-adj-total .polaris-adj-value { font-weight: 700; color: #7c3aed; }
+    [data-theme="dark"] .polaris-adj-total { border-color: #a78bfa; }
+    [data-theme="dark"] .polaris-adj-total .polaris-adj-label { color: #a78bfa; }
+    [data-theme="dark"] .polaris-adj-total .polaris-adj-value { color: #a78bfa; }
   </style>
 </head>
 <body>
@@ -1005,6 +1050,21 @@
       <div class="polaris-report-section" id="reportExecSection">
         <div class="polaris-report-section-title">📋 Executive Briefing</div>
         <div class="polaris-report-exec-body" id="reportExecBody">Preparing analysis...</div>
+      </div>
+      <!-- M19.4: Estimating Variables section --->
+      <div class="polaris-report-section" id="reportVarsSection">
+        <div class="polaris-report-section-title">📏 Estimating Variables</div>
+        <div class="polaris-report-section-sub">Values extracted from conversation</div>
+        <div class="polaris-report-vars-body" id="reportVarsBody">
+          <div style="font-size:13px;color:#9ca3af;">Preparing variables...</div>
+        </div>
+      </div>
+      <!-- M19.4: Estimate Adjustments section --->
+      <div class="polaris-report-section" id="reportAdjSection" style="display:none;">
+        <div class="polaris-report-section-title">⚙️ Estimate Adjustments</div>
+        <div class="polaris-report-section-sub">How job-specific factors affect pricing</div>
+        <div class="polaris-report-adj-body" id="reportAdjBody">
+        </div>
       </div>
       <div class="polaris-report-section">
         <div class="polaris-report-section-title">📊 Call Intelligence</div>
@@ -1342,6 +1402,9 @@
       speakingIndicator: null,
       transcriptLinesCache: [],
       postCallTransitioned: false, // M18O: guard against duplicate post-call transitions
+      // M19.4: Cached canonical estimate for post-call report
+      polarisEstimate: null,
+      polarisIntelligence: null,
     };
 
     // Store business info for multi-scenario replay
@@ -2005,6 +2068,13 @@
           if (data.executiveSummary) {
             demoState.executiveSummary = data.executiveSummary;
           }
+          // M19.4: Cache the polaris estimate before transition
+          if (data.polarisEstimate) {
+            demoState.polarisEstimate = data.polarisEstimate;
+            if (data.polarisEstimate.polarisIntelligence) {
+              demoState.polarisIntelligence = data.polarisEstimate.polarisIntelligence;
+            }
+          }
           transitionToPostCall();
         } else if (backendState === 'failed') {
           dot.className = 'demo-status-ended';
@@ -2043,6 +2113,11 @@
         // ── M19.3: Polaris loading state ──
         var polarisCard = document.querySelector('#demoInsights .polaris-card');
         if (data.polarisState === 'analyzing' && data.polarisEstimate) {
+          // M19.4: Cache the latest for post-call transition
+          demoState.polarisEstimate = data.polarisEstimate;
+          if (data.polarisEstimate.polarisIntelligence) {
+            demoState.polarisIntelligence = data.polarisEstimate.polarisIntelligence;
+          }
           renderPolarisEstimate(data.polarisEstimate);
           if (polarisCard) { polarisCard.classList.remove('polaris-loading'); polarisCard.classList.add('polaris-ready'); }
         } else if (data.polarisState === 'waiting' || !data.polarisEstimate) {
@@ -2346,93 +2421,180 @@
     }
 
     function populateCustomerProfile() {
+      // M19.4: Read from canonical record first, fall back to execSummary
+      var intel = demoState.polarisIntelligence;
+      var name = '', phone = '', addr = '', email = '';
+      if (intel && intel.customerFacts) {
+        name = intel.customerFacts.name || '';
+        phone = intel.customerFacts.phone || '';
+        addr = intel.customerFacts.address || '';
+        email = intel.customerFacts.email || '';
+      }
       var es = demoState.executiveSummary;
-      if (!es) return;
+      if (!name && es && es.customerName) name = es.customerName;
+      if (!phone && es && es.customerPhone) phone = es.customerPhone;
+      if (!addr && es && es.customerAddress) addr = es.customerAddress;
+      if (!email && es && es.customerEmail) email = es.customerEmail;
       var nameEl = document.getElementById('reportCustomerName');
       var phoneEl = document.getElementById('reportCustomerPhone');
       var addrEl = document.getElementById('reportCustomerAddress');
       var emailEl = document.getElementById('reportCustomerEmail');
-      if (nameEl) nameEl.textContent = es.customerName || 'Not provided';
-      if (phoneEl) phoneEl.textContent = es.customerPhone || 'Not provided';
-      if (addrEl) addrEl.textContent = es.customerAddress || 'Not provided';
-      if (emailEl) emailEl.textContent = es.customerEmail || 'Not provided';
+      if (nameEl) nameEl.textContent = name || 'Not provided';
+      if (phoneEl) phoneEl.textContent = phone || 'Not provided';
+      if (addrEl) addrEl.textContent = addr || 'Not provided';
+      if (emailEl) emailEl.textContent = email || 'Not provided';
     }
     function buildPolarisReport() {
       var report = document.getElementById('polarisReportContainer');
       if (!report) return;
+      // M19.4: Read from cached canonical record
+      var intel = demoState.polarisIntelligence;
+      var est = demoState.polarisEstimate;
+      // --- Hero section ---
       var rRev = document.getElementById('reportRevenue');
-      var srcRev = document.querySelector('#demoPostInsights #demoPolarisRevenue');
-      if (rRev && srcRev) rRev.textContent = srcRev.textContent;
+      if (rRev) {
+        var rev = (intel && intel.estimate && intel.estimate.revenueRange) ||
+                   (est && est.revenueRange) || 'Analyzing...';
+        rRev.textContent = rev;
+      }
       var rConf = document.getElementById('reportConfidence');
-      var srcConf = document.querySelector('#demoPostInsights #demoPolarisConfidence');
-      if (rConf && srcConf) rConf.textContent = srcConf.textContent;
       var rConfFill = document.getElementById('reportConfFill');
-      if (rConfFill && srcConf) { var pct = parseInt(srcConf.textContent) || 0; rConfFill.style.width = pct + '%'; }
+      var confidenceVal = (intel && intel.estimate && intel.estimate.confidence) ||
+                           (est && est.confidence) || 0;
+      if (rConf) rConf.textContent = confidenceVal + '%';
+      if (rConfFill) rConfFill.style.width = confidenceVal + '%';
+      // --- AI Recommendation ---
       var rRec = document.getElementById('reportRec');
-      var srcRec = document.querySelector('#demoPostInsights #demoPolarisRec');
-      if (rRec && srcRec) rRec.innerHTML = srcRec.innerHTML;
+      if (rRec) {
+        var reasoning = (intel && intel.reasoning) || (est && est.reasoning) || [];
+        var firstDetail = reasoning.length > 0 ? reasoning[0].detail || '' : '';
+        var urgency = '';
+        for (var ri = 0; ri < reasoning.length; ri++) {
+          if (reasoning[ri].factor === 'Urgency Level') {
+            urgency = reasoning[ri].detail.toLowerCase();
+            break;
+          }
+        }
+        var action = '';
+        if (urgency && urgency !== 'standard') {
+          action = 'Prioritize an on-site evaluation due to ' + urgency + ' urgency';
+        } else if (firstDetail) {
+          action = 'Schedule a consultation for ' + firstDetail.toLowerCase() + ' at the customer\'s earliest convenience';
+        } else {
+          action = 'Analyzing call...';
+        }
+        rRec.innerHTML = '<span class="polaris-report-rec-label">AI Recommendation</span><span class="polaris-report-rec-text">' + action + '.</span>';
+      }
+      // --- Executive Briefing ---
       var rExec = document.getElementById('reportExecBody');
-      var es = demoState.executiveSummary;
-      if (rExec && es) {
-        var sc = es.sentiment === 'positive' ? '#16a34a' : es.sentiment === 'negative' || es.sentiment === 'frustrated' ? '#dc2626' : '#d97706';
-        // Extract context from reasoning factors
-        var servD = '', urgD = '', intD = '';
-        var rReasonEl = document.querySelector('#demoPostInsights #polarisReasoningBody');
-        if (rReasonEl) {
-          var factors = rReasonEl.querySelectorAll('.polaris-reasoning-factor');
-          factors.forEach(function(f) {
-            var lbl = f.querySelector('.factor-label');
-            var det = f.querySelector('.factor-detail');
-            if (lbl && det) {
-              var l = lbl.textContent.trim();
-              if (l === 'Service Requested') servD = det.textContent.trim();
-              if (l === 'Urgency Level') urgD = det.textContent.trim();
-              if (l === 'Customer Intent') intD = det.textContent.trim();
-            }
-          });
-        }
-        var custLbl = es.customerName || 'A customer';
-        var svcLbl = es.serviceRequested || servD || 'services';
-        var h = '';
-        h += '<p style="margin:0 0 8px;font-weight:600;font-size:15px;">Customer Situation</p>';
-        h += '<p style="margin:0 0 6px;color:#374151;font-size:14px;line-height:1.5;">';
-        h += custLbl + ' contacted NorthStar requesting ' + svcLbl;
-        if (urgD && urgD !== 'Standard') { h += ' — identified as <strong>' + urgD + ' urgency</strong>.'; }
-        else { h += ' They are actively seeking service.'; }
-        h += '</p>';
-        if (intD) { h += '<p style="margin:0 0 6px;color:#374151;font-size:14px;line-height:1.5;"><strong>Customer intent:</strong> ' + intD + '.</p>'; }
-        if (es.keyTopics && es.keyTopics.length > 0) {
-          h += '<p style="margin:0 0 4px;color:#6b7280;font-size:13px;"><strong>Key topics discussed:</strong></p>';
-          h += '<div style="margin-bottom:4px;">';
-          es.keyTopics.forEach(function(t) { h += '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#e5e7eb;border-radius:100px;font-size:12px;color:#374151;">' + t + '</span>'; });
-          h += '</div>';
-        }
-        h += '<p style="margin:6px 0 0;color:#6b7280;font-size:13px;">';
-        h += '<strong>Sentiment:</strong> <span style="color:' + sc + ';text-transform:capitalize;">' + (es.sentiment || 'neutral') + '</span>';
-        if (es.customerName) h += '  <strong>Contact:</strong> ' + es.customerName;
-        if (es.serviceRequested) h += '  <strong>Service:</strong> ' + es.serviceRequested;
-        h += '</p>';
-        rExec.innerHTML = h;
-      } else if (rExec) { rExec.textContent = 'Call completed. Analysis available.'; }
+      if (rExec) {
+        var briefing = (intel && intel.executiveBriefing) || 'Call completed. Analysis available.';
+        rExec.textContent = briefing;
+      }
+      // --- Call Intelligence KPIs ---
       var rIntent = document.getElementById('reportIntent');
-      var s1 = document.querySelector('#demoPostInsights #demoIntent');
-      if (rIntent && s1) rIntent.textContent = s1.textContent;
       var rQual = document.getElementById('reportQual');
-      var s2 = document.querySelector('#demoPostInsights #demoQualification');
-      if (rQual && s2) rQual.textContent = s2.textContent;
       var rBook = document.getElementById('reportBooking');
-      var s3 = document.querySelector('#demoPostInsights #demoBookingProb');
-      if (rBook && s3) rBook.textContent = s3.textContent;
+      if (rIntent) {
+        var intentFact = reasoning ? reasoning.find(function(rf) { return rf.factor === 'Customer Intent'; }) : null;
+        rIntent.textContent = intentFact ? intentFact.detail : '—';
+      }
+      if (rQual) {
+        var collected = (intel && intel.estimatingVariables) ? intel.estimatingVariables.filter(function(v) { return v.status === 'collected'; }).length : 0;
+        var total = (intel && intel.estimatingVariables) ? intel.estimatingVariables.length : 0;
+        rQual.textContent = total > 0 ? collected + '/' + total + ' variables collected' : '—';
+      }
+      if (rBook) {
+        rBook.textContent = confidenceVal > 0 ? Math.min(confidenceVal + 5, 95) + '%' : '—';
+      }
+      // --- Estimating Variables ---
+      var varsBody = document.getElementById('reportVarsBody');
+      if (varsBody && intel && intel.estimatingVariables && intel.estimatingVariables.length > 0) {
+        var vh = '';
+        for (var vi = 0; vi < intel.estimatingVariables.length; vi++) {
+          var v = intel.estimatingVariables[vi];
+          var statusIcon = v.status === 'collected' ? '&#9989;' : '&#10060;';
+          var displayVal = v.display || 'Not discussed';
+          var sourceHtml = v.sourceQuote ? '<div class="polaris-var-source">\u201c' + v.sourceQuote + '\u201d</div>' : '';
+          var confPct = Math.round(v.confidence * 100) + '%';
+          vh += '<div class="polaris-var-row">';
+          vh += '  <span class="polaris-var-status">' + statusIcon + '</span>';
+          vh += '  <span class="polaris-var-name">' + v.variable + '</span>';
+          vh += '  <span class="polaris-var-value">' + displayVal + '</span>';
+          vh += '  <span class="polaris-var-conf">' + confPct + '</span>';
+          vh += '</div>';
+          if (sourceHtml) vh += sourceHtml;
+        }
+        varsBody.innerHTML = vh;
+      } else if (varsBody) {
+        varsBody.innerHTML = '<div style="font-size:13px;color:#9ca3af;">No variables extracted yet.</div>';
+      }
+      // --- Estimate Adjustments ---
+      var adjBody = document.getElementById('reportAdjBody');
+      if (adjBody && intel && intel.estimate && intel.estimate.adjustments) {
+        var adj = intel.estimate.adjustments;
+        if (adj.reasons && adj.reasons.length > 0) {
+          var ah = '';
+          ah += '<div class="polaris-adj-row"><span class="polaris-adj-label">Base Estimate</span><span class="polaris-adj-value">$' + adj.baseValue.toLocaleString() + '</span></div>';
+          ah += '<div class="polaris-adj-row"><span class="polaris-adj-label">Adjustment Factor</span><span class="polaris-adj-value">' + adj.factMultiplier.toFixed(1) + 'x</span></div>';
+          for (var ai = 0; ai < adj.reasons.length; ai++) {
+            ah += '<div class="polaris-adj-row polaris-adj-reason"><span class="polaris-adj-label">Reason</span><span class="polaris-adj-value">' + adj.reasons[ai] + '</span></div>';
+          }
+          ah += '<div class="polaris-adj-row polaris-adj-total"><span class="polaris-adj-label">Estimated Range</span><span class="polaris-adj-value">' + intel.estimate.revenueRange + '</span></div>';
+          adjBody.innerHTML = ah;
+        } else {
+          adjBody.innerHTML = '<div style="font-size:13px;color:#9ca3af;">Standard estimate based on typical scope.</div>';
+        }
+      } else if (adjBody) {
+        adjBody.innerHTML = '';
+      }
+      // --- Missing Information -> Next Steps ---
       var rAct = document.getElementById('reportActionsList');
-      var sAct = document.querySelector('#demoPostInsights #demoActions');
-      if (rAct && sAct) rAct.innerHTML = sAct.innerHTML;
+      if (rAct) {
+        var missing = (intel && intel.missingInformation) || [];
+        if (missing.length > 0) {
+          var mh = '<li style="font-weight:600;color:#7c3aed;">Information needed to refine estimate:</li>';
+          for (var mi = 0; mi < missing.length; mi++) {
+            mh += '<li>&#9656; Confirm ' + missing[mi].toLowerCase() + '</li>';
+          }
+          mh += '<li>&#9656; Schedule on-site evaluation</li>';
+          mh += '<li>&#9656; Send follow-up with pricing</li>';
+          rAct.innerHTML = mh;
+        } else {
+          rAct.innerHTML = '<li>Call completed. Lead captured.</li>';
+        }
+      }
+      // --- Reasoning factors (from canonical record) ---
       var rReas = document.getElementById('reportReasoningBody');
-      var sReas = document.querySelector('#demoPostInsights #polarisReasoningBody');
-      if (rReas && sReas) rReas.innerHTML = sReas.innerHTML;
-      report.style.display = 'block';
-    }
-
-    function renderPostCallExecutiveSummary() {
+      if (rReas) {
+        if (reasoning && reasoning.length > 0) {
+          var rh = '';
+          for (var rfi = 0; rfi < reasoning.length; rfi++) {
+            var rf = reasoning[rfi];
+            rh += '<div class="polaris-reasoning-factor"><span class="factor-label">' + rf.factor + '</span><span class="factor-detail">' + rf.detail + '</span></div>';
+          }
+          rReas.innerHTML = rh;
+        } else {
+          rReas.innerHTML = '<div class="polaris-reasoning-loader">Loading...</div>';
+        }
+      }
+      // --- Show adjustments section if there are reasons ---
+      var adjSection = document.getElementById('reportAdjSection');
+      if (adjSection && intel && intel.estimate && intel.estimate.adjustments &&
+          intel.estimate.adjustments.reasons && intel.estimate.adjustments.reasons.length > 0) {
+        adjSection.style.display = 'block';
+      } else if (adjSection) {
+        adjSection.style.display = 'none';
+      }
+      // --- Show variables section ---
+      var varsSection = document.getElementById('reportVarsSection');
+      if (varsSection && intel && intel.estimatingVariables && intel.estimatingVariables.length > 0) {
+        varsSection.style.display = 'block';
+      } else if (varsSection) {
+        varsSection.style.display = 'none';
+      }
+      // --- Show report ---
+      function renderPostCallExecutiveSummary() {
       var es = demoState.executiveSummary;
       var container = document.getElementById('demoPostExecutiveSummary');
       if (!container) return;

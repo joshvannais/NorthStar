@@ -641,15 +641,20 @@
     [data-theme="dark"] .polaris-report-reasoning-body .factor-detail { color: #e5e7eb; }
 
     /* ── Live Polaris loading state ── */
-    .polaris-card.polaris-loading .polaris-value { font-size: 20px; font-weight: 600; color: #9ca3af; }
+    .polaris-card.polaris-loading { opacity: 0.75; }
+    .polaris-card.polaris-loading .polaris-badge { font-size: 11px; font-weight: 600; }
+    .polaris-card.polaris-loading .polaris-sub { font-size: 10px; }
+    .polaris-card.polaris-loading .polaris-value { font-size: 18px; font-weight: 500; color: #9ca3af; }
     .polaris-card.polaris-loading .polaris-value-label { font-size: 10px; }
-    .polaris-card.polaris-loading .polaris-confidence-pct { font-size: 16px; color: #9ca3af; }
+    .polaris-card.polaris-loading .polaris-confidence-pct { font-size: 14px; color: #9ca3af; display: inline; }
     .polaris-card.polaris-loading .polaris-rec-text { font-size: 12px; color: #9ca3af; }
+    .polaris-card.polaris-loading .polaris-confidence-track,
+    .polaris-card.polaris-loading .polaris-confidence-fill { display: none; }
+    .polaris-card.polaris-loading .polaris-reasoning-toggle { display: none; }
+    [data-theme="dark"] .polaris-card.polaris-loading { opacity: 0.6; }
     [data-theme="dark"] .polaris-card.polaris-loading .polaris-value { color: #6b7280; }
     [data-theme="dark"] .polaris-card.polaris-loading .polaris-confidence-pct { color: #6b7280; }
     [data-theme="dark"] .polaris-card.polaris-loading .polaris-rec-text { color: #6b7280; }
-    .polaris-card.polaris-loading .polaris-badge { font-size: 11px; }
-    .polaris-card.polaris-loading .polaris-sub { font-size: 10px; }
   </style>
 </head>
 <body>
@@ -1434,9 +1439,24 @@
       demoBusinessInfo.industry = industry;
       demoBusinessInfo.phoneNumber = phoneNumber;
 
-      // Show the modal with fade-in
+      showPreCallModalWithDismiss();
+    }
+    function showPreCallModalWithDismiss() {
       var modal = document.getElementById('preCallModal');
       modal.classList.add('active');
+      modal.addEventListener('click', function dismissOutside(e) {
+        if (e.target === modal) {
+          modal.classList.remove('active');
+          modal.removeEventListener('click', dismissOutside);
+        }
+      });
+      function escHandler(e) {
+        if (e.key === 'Escape') {
+          modal.classList.remove('active');
+          document.removeEventListener('keydown', escHandler);
+        }
+      }
+      document.addEventListener('keydown', escHandler);
     }
 
     // ── Check pre-call status on load ──
@@ -1489,7 +1509,17 @@
       var recEl = document.getElementById('demoPolarisRec');
       if (recEl && estimate.reasoning && estimate.reasoning.length > 0) {
         var firstDetail = estimate.reasoning[0].detail || '';
-        recEl.innerHTML = '<span class="polaris-rec-label">AI Recommendation</span><span class="polaris-rec-text">Customer is looking for ' + firstDetail.toLowerCase() + '.</span>';
+        var urgency = '';
+        for (var ri = 0; ri < estimate.reasoning.length; ri++) {
+          if (estimate.reasoning[ri].factor === 'Urgency Level') {
+            urgency = estimate.reasoning[ri].detail.toLowerCase();
+            break;
+          }
+        }
+        var recText = 'Customer contacted NorthStar regarding ' + firstDetail.toLowerCase();
+        if (urgency && urgency !== 'standard') recText += ' with ' + urgency + ' urgency';
+        recText += '.';
+        recEl.innerHTML = '<span class="polaris-rec-label">AI Recommendation</span><span class="polaris-rec-text">' + recText + '</span>';
       } else if (recEl) {
         recEl.innerHTML = '<span class="polaris-rec-label">AI Recommendation</span><span class="polaris-rec-text">Analyzing call...</span>';
       }
@@ -1729,8 +1759,7 @@
       document.getElementById('demoPostCallView').style.display = 'none';
       document.getElementById('demoPreCallView').style.display = 'block';
 
-      var modal = document.getElementById('preCallModal');
-      modal.classList.add('active');
+      showPreCallModalWithDismiss();
 
       document.querySelectorAll('#modalScenarioChips .demo-modal-chip').forEach(function(c) {
         c.classList.remove('active');
@@ -2260,6 +2289,9 @@
         postActionsSection.innerHTML = '<div class="post-actions-header">✅ Recommended Actions</div>' + clonedActions.outerHTML;
       }
 
+      // ── M19.3.1: Suppress legacy exec summary — Polaris Report is canonical ──
+      document.getElementById('demoPostExecutiveSummary').style.display = 'none';
+
       // ── M19.3: Build the Polaris Executive Report from cloned data ──
       buildPolarisReport();
 
@@ -2285,18 +2317,43 @@
       var es = demoState.executiveSummary;
       if (rExec && es) {
         var sc = es.sentiment === 'positive' ? '#16a34a' : es.sentiment === 'negative' || es.sentiment === 'frustrated' ? '#dc2626' : '#d97706';
+        // Extract context from reasoning factors
+        var servD = '', urgD = '', intD = '';
+        var rReasonEl = document.querySelector('#demoPostInsights #polarisReasoningBody');
+        if (rReasonEl) {
+          var factors = rReasonEl.querySelectorAll('.polaris-reasoning-factor');
+          factors.forEach(function(f) {
+            var lbl = f.querySelector('.factor-label');
+            var det = f.querySelector('.factor-detail');
+            if (lbl && det) {
+              var l = lbl.textContent.trim();
+              if (l === 'Service Requested') servD = det.textContent.trim();
+              if (l === 'Urgency Level') urgD = det.textContent.trim();
+              if (l === 'Customer Intent') intD = det.textContent.trim();
+            }
+          });
+        }
+        var custLbl = es.customerName || 'a customer';
+        var svcLbl = es.serviceRequested || servD || 'services';
         var h = '';
-        h += '<p style="margin:0 0 6px;font-weight:600;">' + (es.callOutcome || 'Call completed') + '</p>';
-        h += '<p style="margin:0 0 4px;color:#6b7280;font-size:13px;">';
-        h += '<strong>Sentiment:</strong> <span style="color:' + sc + ';text-transform:capitalize;">' + (es.sentiment || 'neutral') + '</span>';
-        if (es.customerName) h += '  <strong>Customer:</strong> ' + es.customerName;
-        if (es.serviceRequested) h += '  <strong>Service:</strong> ' + es.serviceRequested;
+        h += '<p style="margin:0 0 8px;font-weight:600;font-size:15px;">Customer Situation</p>';
+        h += '<p style="margin:0 0 6px;color:#374151;font-size:14px;line-height:1.5;">';
+        h += custLbl + ' contacted NorthStar about ' + svcLbl.toLowerCase();
+        if (urgD && urgD !== 'Standard') { h += ' — identified as <strong>' + urgD.toLowerCase() + ' urgency</strong>.'; }
+        else { h += '.'; }
         h += '</p>';
+        if (intD) { h += '<p style="margin:0 0 6px;color:#374151;font-size:14px;line-height:1.5;"><strong>Customer intent:</strong> ' + intD.toLowerCase() + '.</p>'; }
         if (es.keyTopics && es.keyTopics.length > 0) {
-          h += '<div style="margin-top:6px;">';
+          h += '<p style="margin:0 0 4px;color:#6b7280;font-size:13px;"><strong>Key topics discussed:</strong></p>';
+          h += '<div style="margin-bottom:4px;">';
           es.keyTopics.forEach(function(t) { h += '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#e5e7eb;border-radius:100px;font-size:12px;color:#374151;">' + t + '</span>'; });
           h += '</div>';
         }
+        h += '<p style="margin:6px 0 0;color:#6b7280;font-size:13px;">';
+        h += '<strong>Sentiment:</strong> <span style="color:' + sc + ';text-transform:capitalize;">' + (es.sentiment || 'neutral') + '</span>';
+        if (es.customerName) h += '  <strong>Contact:</strong> ' + es.customerName;
+        if (es.serviceRequested) h += '  <strong>Service:</strong> ' + es.serviceRequested;
+        h += '</p>';
         rExec.innerHTML = h;
       } else if (rExec) { rExec.textContent = 'Call completed. Analysis available.'; }
       var rIntent = document.getElementById('reportIntent');

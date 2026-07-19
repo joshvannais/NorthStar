@@ -163,8 +163,8 @@ function advanceDemoSession(callId, toState) {
  * Parse structured lead info from Retell's call analysis.
  * Retell can return custom LLM output — we parse it here.
  */
-function parseLeadFromAnalysis(analysis) {
-  const data = analysis?.call_analysis?.custom_data || {};
+function parseLeadFromAnalysis(callData) {
+  const data = callData?.call_analysis?.custom_data || {};
 
   return {
     customerName: data.customer_name || data.name || '',
@@ -238,22 +238,22 @@ function detectUrgency(text) {
  * action items, follow-up recommendations, and a Polaris opportunity score placeholder.
  *
  * @param {string} leadId - The lead ID to update
- * @param {object} payload - The Retell webhook payload
+ * @param {object} callData - The call data object (from payload.call or Retell API)
  */
-function generateAndAttachSummary(leadId, payload) {
+function generateAndAttachSummary(leadId, callData) {
   try {
-    const transcript = payload.transcript || '';
-    const analysis = payload.call_analysis || {};
-    const callData = {
-      callId: payload.call_id,
+    const transcript = callData.transcript || '';
+    const analysis = callData.call_analysis || {};
+    const summaryData = {
+      callId: callData.call_id,
       transcript,
-      duration: payload.duration_ms || 0,
+      duration: callData.duration_ms || 0,
       analysis,
-      fromNumber: payload.from_number || '',
+      fromNumber: callData.from_number || '',
     };
 
-    const summary = generateExecutiveSummary(callData, {});
-    const actionItems = generateActionItems(callData, summary);
+    const summary = generateExecutiveSummary(summaryData, {});
+    const actionItems = generateActionItems(summaryData, summary);
     const recommendations = generateFollowUpRecommendations(summary, {});
 
     const topics = extractKeyTopics(transcript);
@@ -314,7 +314,10 @@ function generateAndAttachSummary(leadId, payload) {
  * Main webhook handler for Retell AI call events.
  */
 async function handleWebhook(payload) {
-  const callId = payload.call_id;
+  // Retell webhook payload nests all call data under a "call" key.
+  // Top-level: { event: "call_ended", call: { call_id, transcript, ... } }
+  const call = payload.call || {};
+  const callId = call.call_id || payload.call_id;
   const eventType = payload.event || 'unknown';
 
   // Increment global counter
@@ -357,22 +360,22 @@ async function handleWebhook(payload) {
       // Log the full payload for debugging
       const payloadLog = {
         event: payload.event,
-        call_id: payload.call_id,
-        role: payload.role,
-        transcript: (payload.transcript || '').substring(0, 100),
-        text: (payload.text || '').substring(0, 100),
-        transcript_length: typeof payload.transcript,
-        has_transcript_object: Array.isArray(payload.transcript_object),
+        call_id: call.call_id || payload.call_id,
+        role: call.role || payload.role,
+        transcript: (call.transcript || payload.transcript || '').substring(0, 100),
+        text: (call.text || payload.text || '').substring(0, 100),
+        transcript_length: typeof (call.transcript || payload.transcript),
+        has_transcript_object: Array.isArray(call.transcript_object || payload.transcript_object),
         has_words: Array.isArray(payload.words),
-        content: (payload.content || '').substring(0, 100),
-        other_keys: Object.keys(payload).filter(k => !['event','call_id','transcript','text','transcript_object','words','content','role','timestamp'].includes(k)),
+        content: (call.content || payload.content || '').substring(0, 100),
+        other_keys: Object.keys(payload).filter(k => !['event','call','call_id','transcript','text','transcript_object','words','content','role','timestamp'].includes(k)),
       };
       console.log(`[Webhook:TranscriptPayload] ${JSON.stringify(payloadLog)}`);
 
       // Store the transcript line
       const line = {
-        speaker: payload.role || 'customer',
-        text: payload.transcript || payload.text || '',
+        speaker: call.role || payload.role || "customer",
+        text: call.transcript || payload.transcript || call.text || payload.text || "",
         timestamp: new Date().toISOString(),
       };
       if (!session.transcriptLines) session.transcriptLines = [];
@@ -427,7 +430,7 @@ async function handleWebhook(payload) {
     } else {
       console.log(`[Webhook:Transcript] No demo session found for call_id=${callId} — transcript not stored`);
     }
-    logWebhookEvent(eventType, callId, `Transcript: ${(payload.transcript || payload.text || '').substring(0, 80)}`);
+    logWebhookEvent(eventType, callId, `Transcript: ${(call.transcript || payload.transcript || call.text || payload.text || '').substring(0, 80)}`);
     return { received: true, processed: true };
   }
 
@@ -441,7 +444,7 @@ async function handleWebhook(payload) {
     if (demo.isValidTransition) {
       for (const [sid, s] of demo.demoSessions) {
         if (s.callId === callId) {
-          const hasTranscript = payload.transcript || (Array.isArray(payload.transcript_object) && payload.transcript_object.length > 0);
+          const hasTranscript = call.transcript || payload.transcript || (Array.isArray(call.transcript_object || payload.transcript_object) && (call.transcript_object || payload.transcript_object).length > 0);
           if (hasTranscript && s.callStatus !== 'live' && s.callStatus !== 'completed') {
             // Call actually connected — advance through live states
             const toStates = ['ringing', 'answered', 'media_connected', 'live', 'completed'];
@@ -478,10 +481,10 @@ async function handleWebhook(payload) {
     logWebhookEvent(eventType, callId, 'Advanced to completed');
 
     // Parse lead from transcript
-    const lead = parseLeadFromTranscript(payload.transcript || '');
+    const lead = parseLeadFromTranscript(call.transcript || payload.transcript || "");
     if (lead) {
       // Store transcript on the lead for display
-      lead.transcript = payload.transcript || '';
+      lead.transcript = call.transcript || payload.transcript || "";
 
       // Store demo session ID if this call matches a demo session
       const demoSession = getDemoSession(callId);
@@ -492,7 +495,7 @@ async function handleWebhook(payload) {
       const savedLead = addLead(lead);
 
       // Generate executive summary from call data
-      const es = generateAndAttachSummary(savedLead.id, payload);
+      const es = generateAndAttachSummary(savedLead.id, call);
 
       // Broadcast executive summary via SSE
       if (demoSession && demoSession.id && es) {
@@ -517,10 +520,10 @@ async function handleWebhook(payload) {
     advanceDemoSession(callId, 'polaris_summary');
     logWebhookEvent(eventType, callId, 'Advanced to polaris_summary');
 
-    const lead = parseLeadFromAnalysis(payload);
+    const lead = parseLeadFromAnalysis(call);
     if (lead) {
       // Store transcript on the lead for display
-      lead.transcript = payload.transcript || payload.call_analysis?.transcript || '';
+      lead.transcript = call.transcript || payload.transcript || call.call_analysis?.transcript || payload.call_analysis?.transcript || '';
 
       // Store demo session ID if this call matches a demo session
       const demoSession2 = getDemoSession(callId);
@@ -531,17 +534,18 @@ async function handleWebhook(payload) {
       const savedLead = addLead(lead);
 
       // Generate executive summary from analysis + transcript
-      const summary = generateAndAttachSummary(savedLead.id, payload);
+      const summary = generateAndAttachSummary(savedLead.id, call);
 
       // Update the Polaris score placeholder if we got real analysis data
-      if (summary && payload.call_analysis) {
+      if (summary && (call.call_analysis || payload.call_analysis)) {
         try {
+          const analysisData = call.call_analysis || payload.call_analysis || {};
           const analysisScore = {
-            score: payload.call_analysis.call_success_probability
-              ? `${Math.round(payload.call_analysis.call_success_probability * 100)}%`
+            score: analysisData.call_success_probability
+              ? `${Math.round(analysisData.call_success_probability * 100)}%`
               : 'GENERATED',
-            confidence: payload.call_analysis.call_success_probability
-              ? Math.round(payload.call_analysis.call_success_probability * 100)
+            confidence: analysisData.call_success_probability
+              ? Math.round(analysisData.call_success_probability * 100)
               : 50,
             placeholder: false,
             source: 'Retell call_analyzed',

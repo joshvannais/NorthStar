@@ -644,6 +644,30 @@
     .polaris-report-reasoning-body .polaris-reasoning-factor:last-child { border-bottom: none; }
     .polaris-report-reasoning-body .factor-label { font-weight: 600; color: #6b7280; flex-shrink: 0; width: 140px; }
     [data-theme="dark"] .polaris-report-reasoning-body .factor-label { color: #9ca3af; }
+    .polaris-customer-body {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .polaris-customer-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .polaris-customer-label {
+      font-weight: 600;
+      color: #6b7280;
+      min-width: 70px;
+      flex-shrink: 0;
+    }
+    [data-theme="dark"] .polaris-customer-label { color: #9ca3af; }
+    .polaris-customer-value {
+      color: #111827;
+      font-weight: 500;
+    }
+    [data-theme="dark"] .polaris-customer-value { color: #e5e7eb; }
     .polaris-report-reasoning-body .factor-detail { color: #111827; text-align: right; flex: 1; line-height: 1.4; }
     [data-theme="dark"] .polaris-report-reasoning-body .factor-detail { color: #e5e7eb; }
 
@@ -967,6 +991,15 @@
             <span class="polaris-report-rec-label">AI Recommendation</span>
             <span class="polaris-report-rec-text">Analyzing call...</span>
           </div>
+        </div>
+      </div>
+      <div class="polaris-report-section" id="reportCustomerSection">
+        <div class="polaris-report-section-title">👤 Customer Profile</div>
+        <div class="polaris-report-customer-body" id="reportCustomerBody">
+          <div class="polaris-customer-row"><span class="polaris-customer-label">Name</span><span class="polaris-customer-value" id="reportCustomerName">Not provided</span></div>
+          <div class="polaris-customer-row"><span class="polaris-customer-label">Phone</span><span class="polaris-customer-value" id="reportCustomerPhone">Not provided</span></div>
+          <div class="polaris-customer-row"><span class="polaris-customer-label">Address</span><span class="polaris-customer-value" id="reportCustomerAddress">Not provided</span></div>
+          <div class="polaris-customer-row"><span class="polaris-customer-label">Email</span><span class="polaris-customer-value" id="reportCustomerEmail">Not provided</span></div>
         </div>
       </div>
       <div class="polaris-report-section" id="reportExecSection">
@@ -2303,6 +2336,8 @@
       // ── M19.3.1: Suppress legacy exec summary — Polaris Report is canonical ──
       document.getElementById('demoPostExecutiveSummary').style.display = 'none';
 
+      // ── M19.3.4: Populate Customer Profile from executiveSummary ──
+      populateCustomerProfile();
       // ── M19.3: Build the Polaris Executive Report from cloned data ──
       buildPolarisReport();
 
@@ -2310,6 +2345,18 @@
       document.getElementById('demoPostCallView').style.display = 'block';
     }
 
+    function populateCustomerProfile() {
+      var es = demoState.executiveSummary;
+      if (!es) return;
+      var nameEl = document.getElementById('reportCustomerName');
+      var phoneEl = document.getElementById('reportCustomerPhone');
+      var addrEl = document.getElementById('reportCustomerAddress');
+      var emailEl = document.getElementById('reportCustomerEmail');
+      if (nameEl) nameEl.textContent = es.customerName || 'Not provided';
+      if (phoneEl) phoneEl.textContent = es.customerPhone || 'Not provided';
+      if (addrEl) addrEl.textContent = es.customerAddress || 'Not provided';
+      if (emailEl) emailEl.textContent = es.customerEmail || 'Not provided';
+    }
     function buildPolarisReport() {
       var report = document.getElementById('polarisReportContainer');
       if (!report) return;

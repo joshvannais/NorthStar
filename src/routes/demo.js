@@ -620,6 +620,10 @@ function startCallPoller(sessionId, callId) {
                 score: 'Pending',
                 placeholder: true,
               },
+              customerName: customData.customer_name || '',
+              customerPhone: customData.phone_number || customData.phone || '',
+              customerAddress: customData.property_address || customData.address || '',
+              customerEmail: customData.email || '',
               generatedAt: new Date().toISOString(),
             };
             console.log('poller.executive_summary', 'OK', `Generated from call_analysis (sentiment: ${sentiment})`);
@@ -635,6 +639,10 @@ function startCallPoller(sessionId, callId) {
                 score: 'Pending',
                 placeholder: true,
               },
+              customerName: customData.customer_name || '',
+              customerPhone: customData.phone_number || customData.phone || '',
+              customerAddress: customData.property_address || customData.address || '',
+              customerEmail: customData.email || '',
               generatedAt: new Date().toISOString(),
             };
             console.log('poller.executive_summary', 'OK', 'Generated basic summary (no analysis available)');

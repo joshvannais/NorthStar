@@ -447,6 +447,209 @@
     .post-transcript-area .demo-transcript-body {
       max-height: 360px;
     }
+
+    /* ── Polaris Executive Report ── */
+    .demo-polaris-report {
+      max-width: 1100px;
+      margin: 0 auto 16px;
+      padding: 32px 32px 24px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+    [data-theme="dark"] .demo-polaris-report {
+      background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+      border-color: #2d2d4f;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .polaris-report-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    [data-theme="dark"] .polaris-report-head { border-color: #2d2d4f; }
+    .polaris-report-badge {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #7c3aed;
+    }
+    [data-theme="dark"] .polaris-report-badge { color: #a78bfa; }
+    .polaris-report-tag {
+      font-size: 12px;
+      font-weight: 500;
+      color: #9ca3af;
+      letter-spacing: 0.3px;
+    }
+    .polaris-report-hero {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 768px) { .polaris-report-hero { flex-direction: column; gap: 20px; } }
+    .polaris-report-opp { flex: 0 0 auto; }
+    .polaris-report-value {
+      font-size: 36px;
+      font-weight: 800;
+      line-height: 1.1;
+      color: #111827;
+      letter-spacing: -0.02em;
+    }
+    [data-theme="dark"] .polaris-report-value { color: #f3f4f6; }
+    .polaris-report-value-sub {
+      font-size: 12px;
+      font-weight: 500;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+    .polaris-report-metrics-row {
+      display: flex;
+      gap: 32px;
+      flex: 1;
+      min-width: 0;
+    }
+    @media (max-width: 768px) { .polaris-report-metrics-row { flex-direction: column; gap: 16px; } }
+    .polaris-report-conf { min-width: 120px; }
+    .polaris-report-conf-pct {
+      font-size: 24px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.1;
+    }
+    [data-theme="dark"] .polaris-report-conf-pct { color: #f3f4f6; }
+    .polaris-report-conf-track {
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 6px 0 4px;
+      max-width: 120px;
+    }
+    [data-theme="dark"] .polaris-report-conf-track { background: #2d2d4f; }
+    .polaris-report-conf-fill {
+      height: 100%;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.6s ease;
+      background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    }
+    .polaris-report-metric-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .polaris-report-rec { flex: 1; min-width: 0; }
+    .polaris-report-rec-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #7c3aed;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    [data-theme="dark"] .polaris-report-rec-label { color: #a78bfa; }
+    .polaris-report-rec-text {
+      font-size: 15px;
+      font-weight: 500;
+      color: #4b5563;
+      line-height: 1.4;
+      margin-top: 2px;
+    }
+    [data-theme="dark"] .polaris-report-rec-text { color: #d1d5db; }
+    .polaris-report-section { margin-bottom: 20px; }
+    .polaris-report-section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+    [data-theme="dark"] .polaris-report-section-title { color: #9ca3af; }
+    .polaris-report-exec-body {
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+      line-height: 1.6;
+      padding: 14px 16px;
+      background: #f9fafb;
+      border-radius: 10px;
+      border: 1px solid #f3f4f6;
+    }
+    [data-theme="dark"] .polaris-report-exec-body {
+      color: #e5e7eb;
+      background: #1a1a2e;
+      border-color: #2d2d4f;
+    }
+    .polaris-report-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 768px) { .polaris-report-kpis { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 480px) { .polaris-report-kpis { grid-template-columns: 1fr; } }
+    .polaris-report-kpi {
+      background: #f9fafb;
+      border: 1px solid #f3f4f6;
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    [data-theme="dark"] .polaris-report-kpi { background: #1a1a2e; border-color: #2d2d4f; }
+    .polaris-report-kpi-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .polaris-report-kpi-value { font-size: 18px; font-weight: 700; color: #111827; }
+    [data-theme="dark"] .polaris-report-kpi-value { color: #f3f4f6; }
+    .polaris-report-actions-list { list-style: none; padding: 0; margin: 0; }
+    .polaris-report-actions-list li {
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 0;
+      color: #374151;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    [data-theme="dark"] .polaris-report-actions-list li { color: #d1d5db; border-color: #2d2d4f; }
+    .polaris-report-actions-list li:last-child { border-bottom: none; }
+    .polaris-report-reasoning { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e5e7eb; }
+    [data-theme="dark"] .polaris-report-reasoning { border-color: #2d2d4f; }
+    .polaris-report-reasoning-toggle {
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+      font-size: 13px; font-weight: 600; color: #7c3aed; transition: color 0.2s;
+    }
+    [data-theme="dark"] .polaris-report-reasoning-toggle { color: #a78bfa; }
+    .polaris-report-reasoning-toggle:hover { color: #6d28d9; }
+    [data-theme="dark"] .polaris-report-reasoning-toggle:hover { color: #c4b5fd; }
+    .polaris-report-reasoning-body { display: none; margin-top: 12px; }
+    .polaris-report-reasoning-body.open { display: block; }
+    .polaris-report-reasoning-body .polaris-reasoning-factor {
+      padding: 7px 0; font-size: 13px; border-bottom: 1px solid #f3f4f6;
+    }
+    [data-theme="dark"] .polaris-report-reasoning-body .polaris-reasoning-factor { border-color: #1e1e3a; }
+    .polaris-report-reasoning-body .polaris-reasoning-factor:last-child { border-bottom: none; }
+    .polaris-report-reasoning-body .factor-label { font-weight: 600; color: #6b7280; flex-shrink: 0; width: 140px; }
+    [data-theme="dark"] .polaris-report-reasoning-body .factor-label { color: #9ca3af; }
+    .polaris-report-reasoning-body .factor-detail { color: #111827; text-align: right; flex: 1; line-height: 1.4; }
+    [data-theme="dark"] .polaris-report-reasoning-body .factor-detail { color: #e5e7eb; }
+
+    /* ── Live Polaris loading state ── */
+    .polaris-card.polaris-loading .polaris-value { font-size: 20px; font-weight: 600; color: #9ca3af; }
+    .polaris-card.polaris-loading .polaris-value-label { font-size: 10px; }
+    .polaris-card.polaris-loading .polaris-confidence-pct { font-size: 16px; color: #9ca3af; }
+    .polaris-card.polaris-loading .polaris-rec-text { font-size: 12px; color: #9ca3af; }
+    [data-theme="dark"] .polaris-card.polaris-loading .polaris-value { color: #6b7280; }
+    [data-theme="dark"] .polaris-card.polaris-loading .polaris-confidence-pct { color: #6b7280; }
+    [data-theme="dark"] .polaris-card.polaris-loading .polaris-rec-text { color: #6b7280; }
+    .polaris-card.polaris-loading .polaris-badge { font-size: 11px; }
+    .polaris-card.polaris-loading .polaris-sub { font-size: 10px; }
   </style>
 </head>
 <body>
@@ -647,7 +850,7 @@
       <!-- Left: Transcript -->
       <div class="demo-transcript-panel">
         <div class="demo-transcript-header">
-          <span style="font-weight:600;font-size:14px;">📝 Live Transcript</span>
+          <span style="font-weight:600;font-size:14px;">📝 Conversation</span>
           <span style="margin-left:auto;font-size:11px;color:var(--neutral-400);" id="demoTranscriptCount">0 messages</span>
         </div>
         <div class="demo-transcript-body" id="demoTranscriptBody">
@@ -728,18 +931,69 @@
       <p style="font-size:13px;color:var(--neutral-400);" id="demoCallDuration">Duration: —</p>
     </div>
 
-    <!-- ── 2. Polaris Hero + KPI Cards ── -->
-    <!-- Cloned from live view via JS; reordered via CSS Grid + order -->
-    <div class="post-polaris-area">
-      <div class="demo-insights-panel" id="demoPostInsights">
-        <!-- Filled by JS from the live view -->
+    <!-- ── 2. Polaris Executive Intelligence Report ── -->
+    <div class="demo-polaris-report" id="polarisReportContainer" style="display:none;">
+      <div class="polaris-report-head">
+        <span class="polaris-report-badge">POLARIS™</span>
+        <span class="polaris-report-tag">Executive Intelligence Report</span>
+      </div>
+      <div class="polaris-report-hero">
+        <div class="polaris-report-opp">
+          <div class="polaris-report-value" id="reportRevenue">Analyzing...</div>
+          <div class="polaris-report-value-sub">Estimated Opportunity</div>
+        </div>
+        <div class="polaris-report-metrics-row">
+          <div class="polaris-report-conf">
+            <span class="polaris-report-conf-pct" id="reportConfidence">—</span>
+            <div class="polaris-report-conf-track"><div class="polaris-report-conf-fill" id="reportConfFill"></div></div>
+            <span class="polaris-report-metric-label">Confidence</span>
+          </div>
+          <div class="polaris-report-rec" id="reportRec">
+            <span class="polaris-report-rec-label">AI Recommendation</span>
+            <span class="polaris-report-rec-text">Analyzing call...</span>
+          </div>
+        </div>
+      </div>
+      <div class="polaris-report-section" id="reportExecSection">
+        <div class="polaris-report-section-title">📋 Executive Briefing</div>
+        <div class="polaris-report-exec-body" id="reportExecBody">Preparing analysis...</div>
+      </div>
+      <div class="polaris-report-section">
+        <div class="polaris-report-section-title">📊 Call Intelligence</div>
+        <div class="polaris-report-kpis">
+          <div class="polaris-report-kpi">
+            <div class="polaris-report-kpi-label">Customer Intent</div>
+            <div class="polaris-report-kpi-value" id="reportIntent">—</div>
+          </div>
+          <div class="polaris-report-kpi">
+            <div class="polaris-report-kpi-label">Lead Qualification</div>
+            <div class="polaris-report-kpi-value" id="reportQual">—</div>
+          </div>
+          <div class="polaris-report-kpi">
+            <div class="polaris-report-kpi-label">Booking Probability</div>
+            <div class="polaris-report-kpi-value" id="reportBooking">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="polaris-report-section" id="reportActionsSection">
+        <div class="polaris-report-section-title">✅ Recommended Next Steps</div>
+        <ul class="polaris-report-actions-list" id="reportActionsList"><li>Preparing recommendations...</li></ul>
+      </div>
+      <div class="polaris-report-reasoning">
+        <div class="polaris-report-reasoning-toggle" onclick="toggleReportReasoning()">
+          <span>🔍 See how Polaris reached this conclusion</span>
+          <span class="polaris-arrow">▾</span>
+        </div>
+        <div class="polaris-report-reasoning-body" id="reportReasoningBody">
+          <div class="polaris-reasoning-loader">Loading...</div>
+        </div>
       </div>
     </div>
-
-    <!-- ── 3. Executive Summary (canonical) ── -->
-    <div id="demoPostExecutiveSummary" style="display:none;max-width:1100px;margin:0 auto;padding:0 24px 24px;text-align:left;"></div>
-
-    <!-- ── 4. Recommended Actions (extracted from cloned insights) ── -->
+    <!-- ── Kept (hidden): Legacy sections for data clone ── -->
+    <div class="post-polaris-area" style="display:none">
+      <div class="demo-insights-panel" id="demoPostInsights"></div>
+    </div>
+    <div id="demoPostExecutiveSummary" style="display:none"></div>
     <div id="postActionsSection" class="post-actions-section"></div>
 
     <!-- ── 5. Transcript ── -->
@@ -1211,6 +1465,15 @@
     }
 
     // ── Render Polaris estimate into the card ──
+    function toggleReportReasoning() {
+      var body = document.getElementById('reportReasoningBody');
+      var toggle = document.querySelector('.polaris-report-reasoning-toggle');
+      if (body) body.classList.toggle('open');
+      if (toggle) {
+        var arrow = toggle.querySelector('.polaris-arrow');
+        if (arrow) arrow.classList.toggle('open');
+      }
+    }
     function renderPolarisEstimate(estimate) {
       if (!estimate) return;
       // Confidence percentage
@@ -1700,10 +1963,15 @@
 
         // ── Polaris card ──
         // Only populate when backend says analyzing
+        // ── M19.3: Polaris loading state ──
+        var polarisCard = document.querySelector('#demoInsights .polaris-card');
         if (data.polarisState === 'analyzing' && data.polarisEstimate) {
           renderPolarisEstimate(data.polarisEstimate);
-        } else if (data.polarisState === 'waiting') {
-          // Keep showing "Waiting for conversation..."
+          if (polarisCard) { polarisCard.classList.remove('polaris-loading'); polarisCard.classList.add('polaris-ready'); }
+        } else if (data.polarisState === 'waiting' || !data.polarisEstimate) {
+          var pRev = document.getElementById('demoPolarisRevenue');
+          if (pRev && pRev.textContent === 'Analyzing...') pRev.textContent = 'Analyzing Opportunity...';
+          if (polarisCard) polarisCard.classList.add('polaris-loading');
         }
 
         // ── AI Panel Updates ──
@@ -1992,8 +2260,61 @@
         postActionsSection.innerHTML = '<div class="post-actions-header">✅ Recommended Actions</div>' + clonedActions.outerHTML;
       }
 
+      // ── M19.3: Build the Polaris Executive Report from cloned data ──
+      buildPolarisReport();
+
       document.getElementById('demoLiveView').style.display = 'none';
       document.getElementById('demoPostCallView').style.display = 'block';
+    }
+
+    function buildPolarisReport() {
+      var report = document.getElementById('polarisReportContainer');
+      if (!report) return;
+      var rRev = document.getElementById('reportRevenue');
+      var srcRev = document.querySelector('#demoPostInsights #demoPolarisRevenue');
+      if (rRev && srcRev) rRev.textContent = srcRev.textContent;
+      var rConf = document.getElementById('reportConfidence');
+      var srcConf = document.querySelector('#demoPostInsights #demoPolarisConfidence');
+      if (rConf && srcConf) rConf.textContent = srcConf.textContent;
+      var rConfFill = document.getElementById('reportConfFill');
+      if (rConfFill && srcConf) { var pct = parseInt(srcConf.textContent) || 0; rConfFill.style.width = pct + '%'; }
+      var rRec = document.getElementById('reportRec');
+      var srcRec = document.querySelector('#demoPostInsights #demoPolarisRec');
+      if (rRec && srcRec) rRec.innerHTML = srcRec.innerHTML;
+      var rExec = document.getElementById('reportExecBody');
+      var es = demoState.executiveSummary;
+      if (rExec && es) {
+        var sc = es.sentiment === 'positive' ? '#16a34a' : es.sentiment === 'negative' || es.sentiment === 'frustrated' ? '#dc2626' : '#d97706';
+        var h = '';
+        h += '<p style="margin:0 0 6px;font-weight:600;">' + (es.callOutcome || 'Call completed') + '</p>';
+        h += '<p style="margin:0 0 4px;color:#6b7280;font-size:13px;">';
+        h += '<strong>Sentiment:</strong> <span style="color:' + sc + ';text-transform:capitalize;">' + (es.sentiment || 'neutral') + '</span>';
+        if (es.customerName) h += '  <strong>Customer:</strong> ' + es.customerName;
+        if (es.serviceRequested) h += '  <strong>Service:</strong> ' + es.serviceRequested;
+        h += '</p>';
+        if (es.keyTopics && es.keyTopics.length > 0) {
+          h += '<div style="margin-top:6px;">';
+          es.keyTopics.forEach(function(t) { h += '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#e5e7eb;border-radius:100px;font-size:12px;color:#374151;">' + t + '</span>'; });
+          h += '</div>';
+        }
+        rExec.innerHTML = h;
+      } else if (rExec) { rExec.textContent = 'Call completed. Analysis available.'; }
+      var rIntent = document.getElementById('reportIntent');
+      var s1 = document.querySelector('#demoPostInsights #demoIntent');
+      if (rIntent && s1) rIntent.textContent = s1.textContent;
+      var rQual = document.getElementById('reportQual');
+      var s2 = document.querySelector('#demoPostInsights #demoQualification');
+      if (rQual && s2) rQual.textContent = s2.textContent;
+      var rBook = document.getElementById('reportBooking');
+      var s3 = document.querySelector('#demoPostInsights #demoBookingProb');
+      if (rBook && s3) rBook.textContent = s3.textContent;
+      var rAct = document.getElementById('reportActionsList');
+      var sAct = document.querySelector('#postActionsSection .demo-actions-list');
+      if (rAct && sAct) rAct.innerHTML = sAct.innerHTML;
+      var rReas = document.getElementById('reportReasoningBody');
+      var sReas = document.querySelector('#demoPostInsights #polarisReasoningBody');
+      if (rReas && sReas) rReas.innerHTML = sReas.innerHTML;
+      report.style.display = 'block';
     }
 
     function renderPostCallExecutiveSummary() {

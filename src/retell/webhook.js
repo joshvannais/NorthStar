@@ -356,6 +356,7 @@ async function handleWebhook(payload) {
   // ── Live transcript streaming ──
   if (payload.event === 'transcript' || payload.event === 'transcript_updated') {
     const session = getDemoSession(callId);
+    console.log(`[Webhook:Transcript] callId=${callId} sessionFound=${!!session} event=${payload.event}`);
     if (session) {
       // Log the full payload for debugging
       const payloadLog = {
@@ -430,7 +431,7 @@ async function handleWebhook(payload) {
     } else {
       console.log(`[Webhook:Transcript] No demo session found for call_id=${callId} — transcript not stored`);
     }
-    logWebhookEvent(eventType, callId, `Transcript: ${(call.transcript || payload.transcript || call.text || payload.text || '').substring(0, 80)}`);
+    logWebhookEvent(eventType, callId, `Transcript: ${(call.transcript || payload.transcript || call.text || payload.text || '').substring(0, 60)} sessionFound=${!!session}`);
     return { received: true, processed: true };
   }
 

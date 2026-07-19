@@ -641,10 +641,36 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     const parts = [];
     const customerLabel = (executiveSummary && executiveSummary.customerName) ? executiveSummary.customerName : 'Customer';
 
+    // Extract a descriptive object/subject from first customer utterance
+    var firstCustomerLine = '';
+    for (var fli = 0; fli < lines.length; fli++) {
+      var fl = lines[fli];
+      if ((fl.speaker === 'customer' || fl.role === 'customer') && (fl.text || fl.content)) {
+        firstCustomerLine = (fl.text || fl.content || '').toLowerCase();
+        break;
+      }
+    }
+    var descriptive = '';
+    if (firstCustomerLine) {
+      // Look for adjective+noun or noun patterns near the service keyword
+      var descPatterns = [
+        /(large|big|tall|huge|small|old|new|oak|pine|maple|cedar)\s+\w+/i,
+        /(\w+\s+oak|\w+\s+pine|\w+\s+tree)/i,
+        /(emergency|urgent|storm\s+damage|hazardous)/i,
+      ];
+      for (var dpi = 0; dpi < descPatterns.length; dpi++) {
+        var dpm = firstCustomerLine.match(descPatterns[dpi]);
+        if (dpm) { descriptive = dpm[0]; break; }
+      }
+    }
+
     if (primaryService) {
-      parts.push(customerLabel + ' requested ' + primaryService.toLowerCase() + '.');
+      var svcPart = customerLabel + ' requested ' + primaryService.toLowerCase();
+      if (descriptive) svcPart += ' of ' + descriptive;
+      svcPart += '.';
+      parts.push(svcPart);
     } else {
-      parts.push(customerLabel + ' contacted NorthStar regarding ' + d.service.toLowerCase());
+      parts.push(customerLabel + ' contacted NorthStar regarding ' + d.service.toLowerCase() + '.');
     }
 
     // Add scale/detail based on collected variables

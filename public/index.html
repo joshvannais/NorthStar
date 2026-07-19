@@ -1177,6 +1177,13 @@
 
       demoBusinessInfo.currentScenario = scenarioType;
 
+      // ── M18.3: Show the pre-call view so the modal is visible ──
+      // After a demo, demoPreCallView is display:none (set by transitionToLiveView).
+      // The modal lives inside demoPreCallView, so it's invisible even with .active.
+      document.getElementById('demoLiveView').style.display = 'none';
+      document.getElementById('demoPostCallView').style.display = 'none';
+      document.getElementById('demoPreCallView').style.display = 'block';
+
       var modal = document.getElementById('preCallModal');
       modal.classList.add('active');
 

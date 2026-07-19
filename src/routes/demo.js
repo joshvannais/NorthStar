@@ -451,36 +451,324 @@ function extractValues(transcriptLines, industry) {
 function analyzeTranscriptQualification(transcriptLines, industry) {
   const profile = getQualificationProfile(industry);
   if (!profile || !transcriptLines || transcriptLines.length === 0) {
-    return { collected: [], missing: [], completeness: 0, totalVariables: 0 };
+    return { variables: [], collected: [], missing: [], completeness: 0, totalVariables: 0 };
   }
   const fullText = transcriptLines
     .map(function(l) { return (l.text || l.content || '').toLowerCase(); })
     .join(' ');
-  const collected = [];
-  const missing = [];
+  const variables = [];
+  const collectedNames = [];
+  const missingNames = [];
   for (let i = 0; i < profile.length; i++) {
     const v = profile[i];
     let found = false;
-    // Check keyword substrings
+    let sourceQuote = null;
     for (let k = 0; k < v.keywords.length; k++) {
-      if (fullText.indexOf(v.keywords[k]) !== -1) {
+      const idx = fullText.indexOf(v.keywords[k]);
+      if (idx !== -1) {
         found = true;
+        // Extract source quote: up to 80 chars around the match
+        const start = Math.max(0, idx - 20);
+        const end = Math.min(fullText.length, idx + v.keywords[k].length + 40);
+        sourceQuote = fullText.substring(start, end).trim();
         break;
       }
     }
-    // If not found by keywords, try numeric measurement detection
     if (!found && v.unit) {
       found = hasMeasurement(fullText, v.keywords);
     }
+    // Extract value if this variable has a unit
+    let extractedValue = null, extractedUnit = null, varConfidence = 0;
     if (found) {
-      collected.push(v.name);
+      collectedNames.push(v.name);
+      varConfidence = 0.85; // keyword match baseline
+      // Try to extract value from extractValues function
+      const vals = extractValues(transcriptLines, industry);
+      if (vals[v.name]) {
+        extractedValue = vals[v.name];
+        const parts = vals[v.name].split(' ');
+        extractedUnit = parts.length > 1 ? parts.slice(1).join(' ') : (v.unit || null);
+        varConfidence = 0.95;
+      }
     } else {
-      missing.push(v.name);
+      missingNames.push(v.name);
+      varConfidence = 0;
     }
+    variables.push({
+      variable: v.name,
+      value: extractedValue,
+      unit: extractedUnit || v.unit || null,
+      display: extractedValue || null,
+      sourceQuote: sourceQuote,
+      confidence: varConfidence,
+      status: found ? 'collected' : 'missing'
+    });
   }
   const total = profile.length;
-  const completeness = total > 0 ? Math.round((collected.length / total) * 100) : 0;
-  return { collected: collected, missing: missing, completeness: completeness, totalVariables: total };
+  const completeness = total > 0 ? Math.round((collectedNames.length / total) * 100) : 0;
+  return {
+    variables: variables,
+    collected: collectedNames,
+    missing: missingNames,
+    completeness: completeness,
+    totalVariables: total
+  };
+}
+
+// ---- Source quote extraction helper ----
+function extractSourceQuote(fullText, keyword, contextChars) {
+  if (!fullText || !keyword) return null;
+  const idx = fullText.indexOf(keyword);
+  if (idx === -1) return null;
+  const ctx = contextChars || 30;
+  const start = Math.max(0, idx - ctx);
+  const end = Math.min(fullText.length, idx + keyword.length + ctx);
+  let quote = fullText.substring(start, end).trim();
+  // Strip leading/trailing sentence terminators and commas
+  quote = quote.replace(/^[^a-zA-Z0-9]+/, '').replace(/[^a-zA-Z0-9]+$/, '');
+  return quote.length > 0 ? quote : null;
+}
+
+// ---- buildPolarisIntelligence - canonical intelligence record ----
+// Single source of truth for all Polaris reasoning.
+// The report UI and downstream consumers read from this record.
+function buildPolarisIntelligence(businessName, industry, transcriptLines, executiveSummary) {
+  const d = getDefaults(industry);
+  const lines = transcriptLines || [];
+  const n = lines.length;
+  const fullText = lines
+    .map(function(l) { return (l.text || l.content || '').toLowerCase(); })
+    .join(' ');
+
+  // Industry defaults
+  const baseMin = d.revenueRangeMin;
+  const baseMax = d.revenueRangeMax;
+  const baseAvg = d.avgJobValue;
+  const baseUrgency = d.emergencyLikelihood;
+
+  // Detect specific service
+  const detectedServices = detectService(lines, industry);
+  const primaryService = detectedServices ? detectedServices[0] : null;
+  const secondaryServices = detectedServices ? detectedServices.slice(1) : [];
+  const serviceSourceQuote = primaryService ? extractSourceQuote(fullText, primaryService.toLowerCase().split(' ')[0], 40) : null;
+
+  // Run structured qualification
+  const qual = analyzeTranscriptQualification(lines, industry);
+  const extractedVals = extractValues(lines, industry);
+
+  // Determine dynamic urgency from transcript
+  let urgencyLevel = 'Standard';
+  let urgencyScore = baseUrgency;
+  const urgentWords = ['urgent', 'emergency', 'asap', 'quick', 'immediately', 'hurry', 'soon', 'leak', 'flood', 'broken', 'burst', 'dangerous', 'hazard', 'safety', 'storm', 'damage'];
+  for (let w = 0; w < urgentWords.length; w++) {
+    if (fullText.indexOf(urgentWords[w]) !== -1) {
+      urgencyScore = Math.min(1.0, urgencyScore + 0.15);
+    }
+  }
+  if (urgencyScore > 0.3) urgencyLevel = 'High';
+  else if (urgencyScore > 0.15) urgencyLevel = 'Moderate';
+
+  // Determine customer intent
+  let customerIntent = n === 0 ? 'Not yet determined' : (n > 2 ? 'Actively seeking service' : 'Information gathering');
+
+  // Dynamic revenue range based on extracted facts
+  let factMultiplier = 1.0;
+  const adjustmentReasons = [];
+
+  // Check for height/scale - large jobs increase value
+  if (extractedVals['Tree Height'] || extractedVals['Home Square Footage'] || extractedVals['System Age']) {
+    const heightMatch = extractedVals['Tree Height'];
+    if (heightMatch) {
+      const numPart = parseFloat(heightMatch.replace(/[^\d.]/g, ''));
+      if (numPart > 50) {
+        factMultiplier = Math.max(factMultiplier, 1.3);
+        adjustmentReasons.push('Large tree height (' + heightMatch + ')');
+      }
+      if (numPart > 150) {
+        factMultiplier = Math.max(factMultiplier, 1.6);
+        adjustmentReasons.push('Extreme tree height requires specialized equipment');
+      }
+    }
+    const sqftMatch = extractedVals['Home Square Footage'];
+    if (sqftMatch) {
+      const numPart = parseFloat(sqftMatch.replace(/[^\d.]/g, ''));
+      if (numPart > 3000) {
+        factMultiplier = Math.max(factMultiplier, 1.3);
+        adjustmentReasons.push('Large property (' + sqftMatch + ')');
+      }
+    }
+  }
+
+  // Access difficulty adjustment
+  const difficultyWords = ['near house', 'near', 'close to', 'difficult', 'tight', 'backyard', 'fence', 'power line', 'over', 'structure', 'building', 'garage'];
+  let difficultyFound = false;
+  for (let w = 0; w < difficultyWords.length; w++) {
+    if (fullText.indexOf(difficultyWords[w]) !== -1) {
+      difficultyFound = true;
+      break;
+    }
+  }
+  if (difficultyFound) {
+    factMultiplier = Math.max(factMultiplier, 1.2);
+    adjustmentReasons.push('Access difficulty noted');
+  }
+
+  // Urgency adjustment
+  if (urgencyLevel === 'High') {
+    factMultiplier = Math.max(factMultiplier, 1.15);
+    adjustmentReasons.push('High urgency');
+  }
+
+  // Calculate revenue range from base + factMultiplier
+  const adjMin = Math.round(baseMin * factMultiplier);
+  const adjMax = Math.round(baseMax * factMultiplier);
+
+  // Confidence: 50% depth + 30% completeness + 20% urgency clarity
+  let depthScore = 0;
+  if (n === 0) depthScore = 0;
+  else if (n < 3) depthScore = 30;
+  else if (n < 6) depthScore = 55;
+  else depthScore = Math.min(85, 55 + (n - 5) * 5);
+
+  const confFromDepth = depthScore * 0.5;
+  const confFromCompleteness = qual.totalVariables > 0 ? qual.completeness * 0.3 : 0;
+  const confFromUrgency = urgencyScore > 0.25 ? 15 : 5;
+  const confidence = Math.min(95, Math.max(10, Math.round(confFromDepth + confFromCompleteness + confFromUrgency)));
+
+  // Build executive briefing from facts
+  function buildBriefing() {
+    if (n === 0) return 'Call in progress. Analysis will update as the conversation develops.';
+    const parts = [];
+    const customerLabel = (executiveSummary && executiveSummary.customerName) ? executiveSummary.customerName : 'Customer';
+
+    if (primaryService) {
+      parts.push(customerLabel + ' requested ' + primaryService.toLowerCase() + '.');
+    } else {
+      parts.push(customerLabel + ' contacted NorthStar regarding ' + d.service.toLowerCase());
+    }
+
+    // Add scale/detail based on collected variables
+    const detailParts = [];
+    if (extractedVals['Tree Height']) detailParts.push('approximately ' + extractedVals['Tree Height']);
+    if (extractedVals['Home Square Footage']) detailParts.push('approximately ' + extractedVals['Home Square Footage']);
+    if (extractedVals['Square Footage']) detailParts.push('approximately ' + extractedVals['Square Footage']);
+    if (extractedVals['System Age']) detailParts.push('system age ' + extractedVals['System Age']);
+    if (extractedVals['Room Count']) detailParts.push(extractedVals['Room Count']);
+    if (detailParts.length > 0) {
+      parts.push('The job involves ' + detailParts.join(', ') + '.');
+    }
+
+    // Add difficulty/urgency context
+    if (difficultyFound) {
+      const difficultyQuote = extractSourceQuote(fullText, 'near', 25);
+      if (difficultyQuote) parts.push('The work area is ' + difficultyQuote + ', requiring careful access planning.');
+    }
+    if (urgencyLevel === 'High') {
+      // Use the customer's own urgency signal if found
+      const urgentSignal = extractSourceQuote(fullText, 'urgent', 25) || extractSourceQuote(fullText, 'emergency', 25);
+      if (urgentSignal) {
+        parts.push('The customer indicated the situation is urgent (' + urgentSignal + '), requiring prompt attention.');
+      } else {
+        parts.push('The customer has indicated elevated urgency requiring prompt attention.');
+      }
+    } else if (urgencyLevel === 'Moderate' && primaryService) {
+      parts.push('A timely evaluation is recommended.');
+    }
+
+    // Add missing information
+    if (qual.missing.length > 0) {
+      const missingSample = qual.missing.slice(0, 2).join(' and ');
+      const capitalized = missingSample.charAt(0).toUpperCase() + missingSample.slice(1).toLowerCase();
+      parts.push(capitalized + ' details have not yet been discussed.');
+    }
+
+    return parts.join(' ');
+  }
+
+  const executiveBriefing = buildBriefing();
+
+  // Build reasoning factors
+  const reasoning = n === 0 ? [] : [
+    { factor: 'Service Requested', detail: primaryService || d.service },
+    { factor: 'Industry', detail: industry },
+    { factor: 'Urgency Level', detail: urgencyLevel },
+    { factor: 'Property Characteristics', detail: difficultyFound ? 'Residential property with access considerations' : 'Typical residential property' },
+    { factor: 'Customer Intent', detail: customerIntent },
+    { factor: 'Estimated Job Value Range', detail: '$' + adjMin.toLocaleString() + ' - $' + adjMax.toLocaleString() },
+  ];
+
+  // Add adjustment reasons if non-trivial
+  if (adjustmentReasons.length > 0) {
+    reasoning.push({ factor: 'Estimate Adjustments', detail: adjustmentReasons.join('; ') });
+  }
+
+  // Add collected variables with values
+  const varDetails = qual.variables
+    .filter(function(v) { return v.status === 'collected'; })
+    .map(function(v) { return v.display ? v.variable + ': ' + v.display : v.variable; });
+  if (varDetails.length > 0) {
+    reasoning.push({ factor: 'Estimating Variables Collected', detail: varDetails.join(', ') });
+  }
+
+  // Add missing info
+  if (qual.missing.length > 0) {
+    reasoning.push({ factor: 'Missing Estimating Info', detail: qual.missing.join(', ') });
+    reasoning.push({ factor: 'Suggested Follow-up', detail: 'Ask about: ' + qual.missing.slice(0, 3).join(', ') + ' to refine estimate' });
+  }
+
+  reasoning.push(
+    { factor: 'Information Completeness', detail: qual.completeness + '% (' + qual.collected.length + '/' + qual.totalVariables + ' variables)' },
+    { factor: 'Confidence Level', detail: confidence + '%' },
+    { factor: 'Assumptions', detail: factMultiplier > 1.0 ? 'Estimate adjusted for job-specific factors identified in conversation.' : 'Based on typical scope. Final may vary.' },
+  );
+
+  return {
+    // Canonical structure
+    customerFacts: executiveSummary ? {
+      name: executiveSummary.customerName || null,
+      phone: executiveSummary.customerPhone || null,
+      address: executiveSummary.customerAddress || null,
+      email: executiveSummary.customerEmail || null
+    } : { name: null, phone: null, address: null, email: null },
+
+    industry: industry,
+    requestedService: {
+      primary: primaryService || d.service,
+      secondary: secondaryServices,
+      sourceQuote: serviceSourceQuote,
+      confidence: detectedServices ? 0.95 : 0.85
+    },
+
+    estimatingVariables: qual.variables,
+
+    missingInformation: qual.missing,
+
+    estimate: {
+      opportunityLabel: 'POLARIS\u2122 ESTIMATED OPPORTUNITY',
+      revenueRange: '$' + adjMin.toLocaleString() + ' - $' + adjMax.toLocaleString(),
+      rangeMin: adjMin,
+      rangeMax: adjMax,
+      confidence: confidence,
+      adjustments: {
+        baseValue: baseAvg,
+        baseRangeMin: baseMin,
+        baseRangeMax: baseMax,
+        factMultiplier: factMultiplier,
+        reasons: adjustmentReasons
+      }
+    },
+
+    executiveBriefing: executiveBriefing,
+    reasoning: reasoning,
+    generatedAt: new Date().toISOString(),
+
+    // Preserve compatibility with downstream consumers
+    confidence: confidence,
+    revenueRange: '$' + adjMin.toLocaleString() + ' - $' + adjMax.toLocaleString(),
+    qualification: qual,
+    extractedValues: extractedVals,
+    detectedService: primaryService || d.service,
+  };
 }
 
 function polarisEstimateFromSession(session) {
@@ -488,67 +776,29 @@ function polarisEstimateFromSession(session) {
   return polarisEstimate(session.businessName, session.industry, session.transcriptLines || []);
 }
 
-function polarisEstimate(businessName, industry, transcriptLines) {
-  const d = getDefaults(industry);
-  const lines = transcriptLines || [];
-  const n = lines.length;
-  // Analyze transcript for estimating variable completeness
-  const qual = analyzeTranscriptQualification(lines, industry);
-  // Detect specific service from transcript
-  const detectedServices = detectService(lines, industry);
-  const detectedService = detectedServices ? detectedServices.join(' + ') : null;
-  // Extract actual values for qualification variables
-  const extractedValues = extractValues(lines, industry);
-  // Base confidence from transcript length
-  let confidence = 0;
-  if (n === 0) confidence = 0;
-  else if (n < 3) confidence = 30;
-  else if (n < 6) confidence = 55;
-  else confidence = Math.min(85, 55 + (n - 5) * 5);
-  // Adjust: blend conversation depth (60%) with variable completeness (40%)
-  if (qual.totalVariables > 0) {
-    confidence = Math.round(confidence * 0.6 + qual.completeness * 0.4);
-    if (n > 0 && confidence < 15) confidence = 15;
-  }
-  // Core reasoning factors
-  const reasoning = n === 0 ? [] : [
-    { factor: 'Service Requested',        detail: detectedService || d.service },
-    { factor: 'Industry',                 detail: industry },
-    { factor: 'Urgency Level',            detail: d.emergencyLikelihood > 0.3 ? 'High' : d.emergencyLikelihood > 0.15 ? 'Moderate' : 'Standard' },
-    { factor: 'Property Characteristics',  detail: 'Typical residential property' },
-    { factor: 'Customer Intent',          detail: n > 2 ? 'Actively seeking service' : 'Information gathering' },
-    { factor: 'Historical Pricing',       detail: `$${d.avgJobValue.toLocaleString()} avg for ${industry.toLowerCase()}` },
-  ];
-  // Add values to reasoning if extracted
-  const valueKeys = Object.keys(extractedValues);
-  if (valueKeys.length > 0) {
-    reasoning.push({ factor: 'Estimating Values Collected', detail: valueKeys.map(function(k) { return k + ': ' + extractedValues[k]; }).join('; ') });
-  }
-  // Qualification-based reasoning
-  if (qual.totalVariables > 0) {
-    reasoning.push({ factor: 'Estimating Variables Collected', detail: qual.collected.length > 0 ? qual.collected.join(', ') : 'None yet' });
-    if (qual.missing.length > 0) {
-      reasoning.push({ factor: 'Missing Estimating Info', detail: qual.missing.join(', ') });
-      reasoning.push({ factor: 'Suggested Follow-up', detail: 'Ask about: ' + qual.missing.slice(0, 3).join(', ') + ' to refine estimate' });
-    }
-    reasoning.push({ factor: 'Information Completeness', detail: qual.completeness + '% (' + qual.collected.length + '/' + qual.totalVariables + ' variables)' });
-  }
-  reasoning.push(
-    { factor: 'Confidence Level',         detail: confidence + '%' },
-    { factor: 'Assumptions',              detail: 'Based on typical scope. Final may vary.' },
-  );
+function polarisEstimate(businessName, industry, transcriptLines, executiveSummary) {
+  // Thin consumer of the canonical intelligence record
+  const intelligence = buildPolarisIntelligence(businessName, industry, transcriptLines || [], executiveSummary);
+  // Return backward-compatible shape + the full canonical record
   return {
-    opportunityLabel: 'POLARIS™ ESTIMATED OPPORTUNITY',
-    confidence,
-    revenueRange: `$${d.revenueRangeMin.toLocaleString()} - $${d.revenueRangeMax.toLocaleString()}`,
-    qualification: qual,
-    extractedValues: extractedValues,
-    detectedService: detectedService || d.service,
-    reasoning: reasoning,
-    generatedAt: new Date().toISOString(),
+    opportunityLabel: intelligence.estimate.opportunityLabel,
+    confidence: intelligence.estimate.confidence,
+    revenueRange: intelligence.estimate.revenueRange,
+    qualification: intelligence.qualification,
+    extractedValues: intelligence.extractedValues,
+    detectedService: intelligence.detectedService,
+    reasoning: intelligence.reasoning,
+    generatedAt: intelligence.generatedAt,
+    // Expose the full canonical record
+    polarisIntelligence: intelligence,
+    // Executive briefing for frontend
+    executiveBriefing: intelligence.executiveBriefing,
+    // Variables with actual values
+    estimatingVariables: intelligence.estimatingVariables,
+    // Breakdown
+    customerFacts: intelligence.customerFacts,
   };
 }
-// ── Helpers to advance simulation state from backend ──
 function scheduleSimAdvance(sessionId) {
   // The backend drives simulation state on a timer, not the frontend
   const s = demoSessions.get(sessionId);
@@ -1177,7 +1427,7 @@ router.get('/:id/polaris-estimate', (req, res) => {
       });
     }
 
-    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines);
+    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines, session.executiveSummary);
     res.json({ ...estimate, polairsState: 'analyzing', polarisState: 'analyzing' });
   } catch (err) {
     console.error('[Demo] Polaris estimate error:', err.message, err.stack);
@@ -1206,7 +1456,7 @@ router.get('/:id/status', (req, res) => {
       liveTimeline.addEntry(session.id, 'call_completed', 'Simulated call ended', 'system');
     }
 
-    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines);
+    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines, session.executiveSummary);
 
     const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
     const isPreLive = preLive.includes(session.callStatus);
@@ -1350,3 +1600,4 @@ module.exports.isValidTransition = isValidTransition;
 module.exports.analyzeTranscriptQualification = analyzeTranscriptQualification;
 module.exports.polarisEstimateFromSession = polarisEstimateFromSession;
 module.exports.polarisEstimate = polarisEstimate;
+module.exports.buildPolarisIntelligence = buildPolarisIntelligence;

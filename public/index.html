@@ -59,21 +59,185 @@
     .demo-actions-list li:last-child { border-bottom: none; }
 
     /* ── Polaris Estimation Card ── */
-    .demo-insight-card.polaris-card { background: linear-gradient(135deg, #1e1e2e 0%, #2d1b69 100%); border: 1px solid #4c1d95; }
-    .demo-insight-card.polaris-card .insight-label { color: #a78bfa; }
-    .polaris-confidence-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
-    .polaris-confidence-label { font-size: 11px; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; }
-    .polaris-reasoning-toggle { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 8px 0; cursor: pointer; font-size: 12px; font-weight: 600; color: #a78bfa; border-top: 1px solid rgba(167,139,250,0.2); transition: color 0.2s; }
-    .polaris-reasoning-toggle:hover { color: #c4b5fd; }
+    .demo-insight-card.polaris-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+    [data-theme="dark"] .demo-insight-card.polaris-card {
+      background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+      border-color: #2d2d4f;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    /* ── Polaris brand header ── */
+    .polaris-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .polaris-badge {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: #7c3aed;
+      text-transform: uppercase;
+    }
+    [data-theme="dark"] .polaris-badge { color: #a78bfa; }
+    .polaris-sub {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      color: #9ca3af;
+      text-transform: uppercase;
+    }
+    /* ── Main body: opportunity + metrics side by side ── */
+    .polaris-body {
+      display: flex;
+      gap: 32px;
+      align-items: flex-start;
+    }
+    @media (max-width: 768px) {
+      .polaris-body { flex-direction: column; gap: 20px; }
+    }
+    /* ── Opportunity value (primary visual anchor) ── */
+    .polaris-opportunity { flex: 0 0 auto; }
+    .polaris-value {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.1;
+      color: #111827;
+      letter-spacing: -0.02em;
+    }
+    [data-theme="dark"] .polaris-value { color: #f3f4f6; }
+    .polaris-value-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+    /* ── Confidence badge ── */
+    .polaris-metrics {
+      display: flex;
+      gap: 28px;
+      flex: 1;
+      min-width: 0;
+    }
+    @media (max-width: 768px) {
+      .polaris-metrics { flex-direction: column; gap: 16px; }
+    }
+    .polaris-confidence {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 100px;
+    }
+    .polaris-confidence-pct {
+      font-size: 22px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.1;
+    }
+    [data-theme="dark"] .polaris-confidence-pct { color: #f3f4f6; }
+    .polaris-confidence-track {
+      height: 5px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      width: 100%;
+    }
+    [data-theme="dark"] .polaris-confidence-track { background: #2d2d4f; }
+    .polaris-confidence-fill {
+      height: 100%;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.6s ease;
+      background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    }
+    .polaris-confidence-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    /* ── AI Recommendation ── */
+    .polaris-rec {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+    .polaris-rec-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #7c3aed;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    [data-theme="dark"] .polaris-rec-label { color: #a78bfa; }
+    .polaris-rec-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: #4b5563;
+      line-height: 1.4;
+    }
+    [data-theme="dark"] .polaris-rec-text { color: #d1d5db; }
+    /* ── Reasoning toggle + body ── */
+    .polaris-reasoning-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+      padding: 10px 0 0;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #7c3aed;
+      border-top: 1px solid #e5e7eb;
+      transition: color 0.2s;
+    }
+    [data-theme="dark"] .polaris-reasoning-toggle {
+      color: #a78bfa;
+      border-color: #2d2d4f;
+    }
+    .polaris-reasoning-toggle:hover { color: #6d28d9; }
+    [data-theme="dark"] .polaris-reasoning-toggle:hover { color: #c4b5fd; }
     .polaris-arrow { transition: transform 0.25s; font-size: 10px; }
     .polaris-arrow.open { transform: rotate(180deg); }
-    .polaris-reasoning-body { display: none; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(167,139,250,0.1); }
+    .polaris-reasoning-body { display: none; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e5e7eb; }
+    [data-theme="dark"] .polaris-reasoning-body { border-color: #2d2d4f; }
     .polaris-reasoning-body.open { display: block; }
-    .polaris-reasoning-loader { font-size: 12px; color: #a78bfa; padding: 8px 0; }
-    .polaris-reasoning-factor { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; border-bottom: 1px solid rgba(167,139,250,0.08); }
+    .polaris-reasoning-loader { font-size: 12px; color: #7c3aed; padding: 8px 0; }
+    [data-theme="dark"] .polaris-reasoning-loader { color: #a78bfa; }
+    .polaris-reasoning-factor {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 0;
+      font-size: 13px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    [data-theme="dark"] .polaris-reasoning-factor { border-color: #1e1e3a; }
     .polaris-reasoning-factor:last-child { border-bottom: none; }
-    .polaris-reasoning-factor .factor-label { font-weight: 600; color: #c4b5fd; flex-shrink: 0; width: 120px; }
-    .polaris-reasoning-factor .factor-detail { color: #e0d7ff; text-align: right; flex: 1; line-height: 1.4; }
+    .polaris-reasoning-factor .factor-label {
+      font-weight: 600;
+      color: #6b7280;
+      flex-shrink: 0;
+      width: 140px;
+    }
+    [data-theme="dark"] .polaris-reasoning-factor .factor-label { color: #9ca3af; }
+    .polaris-reasoning-factor .factor-detail {
+      color: #111827;
+      text-align: right;
+      flex: 1;
+      line-height: 1.4;
+    }
+    [data-theme="dark"] .polaris-reasoning-factor .factor-detail { color: #e5e7eb; }
 
     /* ── Call Lifecycle States ── */
     .demo-call-state { display: none; text-align: center; padding: 24px 24px 12px; }
@@ -500,12 +664,29 @@
           <div class="insight-value" id="demoIntent">Analyzing...</div>
         </div>
         <div class="demo-insight-card polaris-card">
-          <div class="insight-label">POLARIS™ ESTIMATED OPPORTUNITY</div>
-          <div class="polaris-confidence-row">
-            <span class="insight-value" id="demoPolarisConfidence" style="font-size:20px;">—</span>
-            <span class="polaris-confidence-label">Confidence</span>
+          <div class="polaris-header">
+            <span class="polaris-badge">POLARIS™</span>
+            <span class="polaris-sub">ESTIMATED OPPORTUNITY</span>
           </div>
-          <div class="insight-value" id="demoPolarisRevenue" style="font-size:15px;margin-top:2px;">Analyzing...</div>
+          <div class="polaris-body">
+            <div class="polaris-opportunity">
+              <div class="polaris-value" id="demoPolarisRevenue">Analyzing...</div>
+              <div class="polaris-value-label">Estimated Opportunity</div>
+            </div>
+            <div class="polaris-metrics">
+              <div class="polaris-confidence">
+                <span class="polaris-confidence-pct" id="demoPolarisConfidence">—</span>
+                <div class="polaris-confidence-track">
+                  <div class="polaris-confidence-fill" id="demoPolarisConfidenceFill"></div>
+                </div>
+                <span class="polaris-confidence-label">Confidence</span>
+              </div>
+              <div class="polaris-rec" id="demoPolarisRec">
+                <span class="polaris-rec-label">AI Recommendation</span>
+                <span class="polaris-rec-text">Analyzing call...</span>
+              </div>
+            </div>
+          </div>
           <div class="polaris-reasoning-toggle" id="polarisReasoningToggle" onclick="togglePolarisReasoning()">
             <span>🔍 Show reasoning</span>
             <span class="polaris-arrow">▾</span>
@@ -1032,8 +1213,24 @@
     // ── Render Polaris estimate into the card ──
     function renderPolarisEstimate(estimate) {
       if (!estimate) return;
-      document.getElementById('demoPolarisConfidence').textContent = estimate.confidence + '%';
-      document.getElementById('demoPolarisRevenue').textContent = estimate.revenueRange || 'Analyzing...';
+      // Confidence percentage
+      var confEl = document.getElementById('demoPolarisConfidence');
+      if (confEl) confEl.textContent = estimate.confidence + '%';
+      // Confidence fill bar
+      var fillEl = document.getElementById('demoPolarisConfidenceFill');
+      if (fillEl) fillEl.style.width = estimate.confidence + '%';
+      // Revenue / opportunity value
+      var revEl = document.getElementById('demoPolarisRevenue');
+      if (revEl) revEl.textContent = estimate.revenueRange || 'Analyzing...';
+      // AI Recommendation from first reasoning factor
+      var recEl = document.getElementById('demoPolarisRec');
+      if (recEl && estimate.reasoning && estimate.reasoning.length > 0) {
+        var firstDetail = estimate.reasoning[0].detail || '';
+        recEl.innerHTML = '<span class="polaris-rec-label">AI Recommendation</span><span class="polaris-rec-text">Customer is looking for ' + firstDetail.toLowerCase() + '.</span>';
+      } else if (recEl) {
+        recEl.innerHTML = '<span class="polaris-rec-label">AI Recommendation</span><span class="polaris-rec-text">Analyzing call...</span>';
+      }
+      // Reasoning factors
       var body = document.getElementById('polarisReasoningBody');
       if (estimate.reasoning && estimate.reasoning.length > 0) {
         var html = '';

@@ -795,11 +795,23 @@ router.get('/:id/transcript', (req, res) => {
     }
 
     if (session.callStatus === 'live' || session.callStatus === 'completed') {
-      const elapsed = session.startedAt ? Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000) : 0;
-      const full = mockTranscript(session.industry, 12);
-      const visible = Math.min(Math.floor(elapsed / 4) + 1, full.length);
-      session.transcriptLines = full.slice(0, visible);
-    }
+              // ── REAL CALL: use webhook-stored transcript ──
+              // If the session already has transcript lines from webhook events,
+              // return them as-is. Do NOT overwrite with mock data.
+              if (session.transcriptLines && session.transcriptLines.length > 0) {
+                // Real transcript from webhooks — return it directly
+              } else if (session.callId && session.callId.startsWith('sim-')) {
+                // ── SIMULATION: generate mock transcript ──
+                // Only used when Retell is not configured (simulation mode).
+                const elapsed = session.startedAt ? Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000) : 0;
+                const full = mockTranscript(session.industry, 12);
+                const visible = Math.min(Math.floor(elapsed / 4) + 1, full.length);
+                session.transcriptLines = full.slice(0, visible);
+              } else {
+                // Live call but no transcript yet — return empty lines
+                // (transcript_updated webhooks will populate it)
+              }
+            }
 
     res.json({
       sessionId: session.id, callStatus: session.callStatus,

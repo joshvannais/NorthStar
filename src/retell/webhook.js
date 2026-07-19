@@ -374,7 +374,7 @@ async function handleWebhook(payload) {
 
       // Store the transcript line
       const line = {
-        speaker: call.role || payload.role || "customer",
+        speaker: call.role === 'agent' ? 'ai' : (call.role === 'user' ? 'customer' : (payload.role === 'agent' ? 'ai' : (payload.role === 'user' ? 'customer' : 'customer'))),
         text: call.transcript || payload.transcript || call.text || payload.text || "",
         timestamp: new Date().toISOString(),
       };

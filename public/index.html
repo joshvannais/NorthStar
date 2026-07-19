@@ -739,6 +739,32 @@
        DEMO JAVASCRIPT
        ══════════════════════════════════════════════════ -->
   <script>
+    // ── M18O: State lifecycle rank — monotonic progression ──
+    // Prevents stale poll responses from regressing SSE-delivered state.
+    // Terminal states (failed) are always accepted from any position.
+    var STATE_RANK = {
+      'idle':              0,
+      'requesting_call':   1,
+      'call_created':      2,
+      'dialing':           3,
+      'ringing':           4,
+      'answered':          5,
+      'media_connected':   6,
+      'live':              7,
+      'completed':         8,
+      'polaris_summary':   9,
+      'failed':           10,
+    };
+    function isValidNextState(current, next) {
+      if (!next) return false;
+      if (!current) return true; // first state — always accept
+      if (next === 'failed') return true; // terminal — always accept
+      var curRank = STATE_RANK[current];
+      var nextRank = STATE_RANK[next];
+      if (curRank === undefined || nextRank === undefined) return true; // unknown — allow
+      return nextRank >= curRank;
+    }
+
     // ── Demo State ──
     var demoState = {
       sessionId: null,
@@ -750,6 +776,7 @@
       transcriptSeq: 0,
       speakingIndicator: null,
       transcriptLinesCache: [],
+      _postCallTransitioned: false, // M18O: guard against duplicate post-call transitions
     };
 
     // Store business info for multi-scenario replay
@@ -1301,8 +1328,15 @@
         var data = await resp.json();
 
         // Backend is the SINGLE source of truth for all state
-        var backendState = data.callStatus;
-        demoState.callStatus = backendState;
+                    var backendState = data.callStatus;
+                    // ── M18O: Reject stale backward transitions ──
+                    // Poll responses can arrive after SSE has already delivered a later state.
+                    // Only accept if the backend state is at or ahead of the current state.
+                    if (!isValidNextState(demoState.callStatus, backendState)) {
+                      console.log('[Demo:PollStatus] REJECTED stale transition: ' + demoState.callStatus + ' → ' + backendState);
+                      return;
+                    }
+                    demoState.callStatus = backendState;
 
         // ── Call lifecycle overlays ──
         // Only update overlays if state has changed since last poll
@@ -1455,8 +1489,16 @@
             var data = JSON.parse(e.data);
             console.log('[Demo:SSE] State change: ' + (data.previousStatus || '?') + ' → ' + data.callStatus);
 
-            // Update overlays based on new state
+            // ── M18O: Reject stale backward transitions ──
+            // SSE events can arrive interleaved with poll responses.
+            // Only accept if the new state is at or ahead of the current state.
             var newState = data.callStatus;
+            if (!isValidNextState(demoState.callStatus, newState)) {
+              console.log('[Demo:SSE] REJECTED stale transition: ' + demoState.callStatus + ' → ' + newState);
+              return;
+            }
+
+            // Update overlays based on new state
             demoState.callStatus = newState;
 
             document.getElementById('callStateDialing').classList.remove('active');
@@ -1578,6 +1620,13 @@
 
     // ── Transition to post-call ──
     async function transitionToPostCall() {
+      // ── M18O: Guard against duplicate execution ──
+      // Both SSE and poll can trigger this — only run once.
+      if (demoState._postCallTransitioned) {
+        console.log('[Demo:M18O] transitionToPostCall already executed — skipping');
+        return;
+      }
+      demoState._postCallTransitioned = true;
       if (demoState.timerInterval) clearInterval(demoState.timerInterval);
       if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
       if (demoState.statusInterval) clearInterval(demoState.statusInterval);

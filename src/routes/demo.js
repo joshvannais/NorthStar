@@ -312,7 +312,7 @@ const QUALIFICATION_PROFILES = {
     { name: 'Area Type',           keywords: ['interior', 'exterior', 'inside', 'outside', 'room', 'wall', 'ceiling', 'trim', 'cabinet'], unit: null },
     { name: 'Square Footage',      keywords: ['square foot', 'sq ft', 'sqft', 'room size', 'house size', 'how big'], unit: 'sq ft' },
     { name: 'Room Count',          keywords: ['room', 'bedroom', 'floor', 'story', 'level'], unit: 'rooms' },
-    { name: 'Prep Work Required',  keywords: ['patch', 'repair', 'spackle', 'sand', 'prime', 'texture', 'wallpaper', 'lead paint'], unit: null },
+    { name: 'Prep Work Required',  keywords: ['patch', 'repair', 'spackle', 'sanding', 'priming', 'texture', 'wallpaper', 'lead paint'], unit: null },
   ],
   'Tree Service': [
     { name: 'Tree Height',         keywords: ['foot', 'feet', 'ft', 'tall', 'height', 'high', 'story'], unit: 'ft' },
@@ -331,6 +331,23 @@ function getQualificationProfile(industry) {
   return QUALIFICATION_PROFILES[industry] || null;
 }
 
+function hasMeasurement(text, keywords) {
+  // Check keyword substrings
+  for (let k = 0; k < keywords.length; k++) {
+    if (text.indexOf(keywords[k]) !== -1) return true;
+  }
+  // Check for numeric patterns (digits, commas, decimals) near measurement words
+  // e.g. "2,000 sq ft", "2000 square feet", "twenty five hundred feet"
+  const measureWords = ['foot', 'feet', 'sq ft', 'sqft', 'square', 'inch', 'inches', 'yard', 'yards', 'acre', 'acres', 'gallon', 'gallons', 'sq', 'ft', 'sf'];
+  const valueWords = ['thousand', 'hundred', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety', 'ten', 'eleven', 'twelve', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+  const hasDigit = /\d/.test(text);
+  const hasMeasureWord = measureWords.some(function(w) { return text.indexOf(w) !== -1; });
+  const hasValueWord = valueWords.some(function(w) { return text.indexOf(w) !== -1; });
+  if (hasDigit && hasMeasureWord) return true;
+  if (hasValueWord && hasMeasureWord) return true;
+  return false;
+}
+
 function analyzeTranscriptQualification(transcriptLines, industry) {
   const profile = getQualificationProfile(industry);
   if (!profile || !transcriptLines || transcriptLines.length === 0) {
@@ -344,11 +361,16 @@ function analyzeTranscriptQualification(transcriptLines, industry) {
   for (let i = 0; i < profile.length; i++) {
     const v = profile[i];
     let found = false;
+    // Check keyword substrings
     for (let k = 0; k < v.keywords.length; k++) {
       if (fullText.indexOf(v.keywords[k]) !== -1) {
         found = true;
         break;
       }
+    }
+    // If not found by keywords, try numeric measurement detection
+    if (!found && v.unit) {
+      found = hasMeasurement(fullText, v.keywords);
     }
     if (found) {
       collected.push(v.name);

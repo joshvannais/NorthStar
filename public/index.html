@@ -1279,6 +1279,38 @@
           // Keep showing "Waiting for conversation..."
         }
 
+        // ── AI Panel Updates ──
+        // Update Customer Intent
+        if (data.customerIntent) {
+          document.getElementById('demoIntent').textContent = data.customerIntent;
+        }
+        // Update Lead Qualification
+        if (data.leadQualification) {
+          document.getElementById('demoQualification').textContent = data.leadQualification;
+        }
+        // Update Booking Probability
+        if (typeof data.bookingProbability === 'number') {
+          document.getElementById('demoBookingProb').textContent = data.bookingProbability + '%';
+          document.getElementById('demoProbBar').style.width = data.bookingProbability + '%';
+        }
+        // Update Recommended Actions
+        if (data.recommendedActions && data.recommendedActions.length > 0) {
+          var actionsHtml = '';
+          for (var a = 0; a < data.recommendedActions.length; a++) {
+            actionsHtml += '<li>' + data.recommendedActions[a] + '</li>';
+          }
+          document.getElementById('demoActions').innerHTML = actionsHtml;
+        }
+        // Update Executive Summary
+        if (data.executiveSummaryText) {
+          document.getElementById('demoSummary').textContent = data.executiveSummaryText;
+        }
+        // Update transcript count
+        if (typeof data.transcriptLineCount === 'number') {
+          document.getElementById('demoTranscriptCount').textContent = data.transcriptLineCount + ' messages';
+        }
+        // ── End AI Panel Updates ──
+
         // ── Transcript polling ──
         // Only enable transcript polling when state is 'live' or later
         if (backendState === 'live' || backendState === 'completed' || backendState === 'polaris_summary') {
@@ -1368,6 +1400,7 @@
         source.addEventListener('transcript', function(e) {
           try {
             var data = JSON.parse(e.data);
+            console.log('[Demo:SSE:Transcript] Received line speaker=' + (data.line ? data.line.speaker : '?') + ' totalLines=' + data.totalLines + ' seq=' + demoState.transcriptSeq);
             if (data.line) {
               var lines = [data.line];
               if (demoState.transcriptSeq === 0) {
@@ -1381,7 +1414,7 @@
               if (loading) loading.style.display = 'none';
             }
           } catch(err) {
-            console.warn('[Demo:SSE] Transcript parse error:', err.message);
+            console.warn('[Demo:SSE:Transcript] Parse error:', err.message);
           }
         });
 

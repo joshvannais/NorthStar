@@ -97,6 +97,7 @@ function removeSSEConnection(sessionId, res) {
 
 function broadcastSSE(sessionId, event, data) {
   const conns = sseConnections.get(sessionId);
+  console.log(`[Webhook:SSE] broadcast sessionId=${sessionId} event=${event} connections=${conns ? conns.length : 0}`);
   if (!conns || conns.length === 0) return;
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of conns) {

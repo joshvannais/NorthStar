@@ -786,6 +786,16 @@ router.get('/:id/transcript', (req, res) => {
 
     const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
     if (preLive.includes(session.callStatus)) {
+      // Even if pre-live, check if we have webhook transcript data
+      if (session.transcriptLines && session.transcriptLines.length > 0) {
+        // Webhook already stored transcript — return it regardless of state
+        return res.json({
+          sessionId: session.id, callStatus: session.callStatus,
+          lines: session.transcriptLines, count: session.transcriptLines.length,
+          conversationState: session.callStatus,
+          message: `${session.transcriptLines.length} lines received`,
+        });
+      }
       return res.json({
         sessionId: session.id, callStatus: session.callStatus,
         lines: [], count: 0,
@@ -844,7 +854,7 @@ router.get('/:id/polaris-estimate', (req, res) => {
     }
 
     const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines);
-    res.json({ ...estimate, polairsState: 'analyzing' });
+    res.json({ ...estimate, polairsState: 'analyzing', polarisState: 'analyzing' });
   } catch (err) {
     console.error('[Demo] Polaris estimate error:', err.message, err.stack);
     res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
@@ -874,6 +884,24 @@ router.get('/:id/status', (req, res) => {
 
     const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines);
 
+    // ── AI Panel Computations ──
+    const tl = session.transcriptLines || [];
+    const n = tl.length;
+    // Customer Intent: derive from transcript content
+    const intentLabels = ['Information gathering', 'Initial interest detected', 'Actively seeking service', 'High-intent buyer'];
+    const intentIdx = n === 0 ? 0 : (n < 2 ? 1 : (n < 4 ? 2 : 3));
+    const aiPanels = {
+      customerIntent: intentLabels[intentIdx],
+      // Lead Qualification: based on conversation depth
+      leadQualification: n === 0 ? 'Waiting for conversation...' : (n < 2 ? 'Initial contact — gathering info' : (n < 4 ? 'Qualifying — discussing needs' : 'Hot lead — active discussion')),
+      // Booking Probability: number based on confidence
+      bookingProbability: isPreLive ? 0 : Math.min(estimate.confidence + 5, 95),
+      // Recommended Actions: derived from conversation stage
+      recommendedActions: n === 0 ? ['Waiting for conversation...'] : (n < 3 ? ['Continue conversation', 'Listen for pain points', 'Gather contact details'] : (n < 6 ? ['Identify key decision maker', 'Discuss pricing options', 'Propose next steps'] : ['Schedule on-site estimate', 'Send follow-up materials', 'Set appointment date'])),
+      // Executive Summary: building text
+      executiveSummaryText: n === 0 ? 'Call in progress. Analysis will update as the conversation develops.' : (n < 3 ? `📞 Call in progress with ${session.businessName}. Customer is responding. Transcript: ${n} lines.` : `📞 Active conversation with ${session.businessName}. ${n} transcript lines captured. Confidence: ${estimate.confidence}%. ${intentLabels[intentIdx]}.`),
+    };
+
     const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
     const isPreLive = preLive.includes(session.callStatus);
     const isAnswered = ['answered', 'media_connected', 'live', 'completed', 'polaris_summary'].includes(session.callStatus);
@@ -891,6 +919,16 @@ router.get('/:id/status', (req, res) => {
       conversationState: isPreLive ? 'waiting' : (session.callStatus === 'live' ? 'live' : session.callStatus),
       polairsEstimate: estimate,
       polairsState: isPreLive ? 'waiting' : 'analyzing',
+      polarisEstimate: estimate,
+      polarisState: isPreLive ? 'waiting' : 'analyzing',
+      // ── AI Panel data ──
+      customerIntent: aiPanels.customerIntent,
+      leadQualification: aiPanels.leadQualification,
+      bookingProbability: aiPanels.bookingProbability,
+      recommendedActions: aiPanels.recommendedActions,
+      executiveSummaryText: aiPanels.executiveSummaryText,
+      transcriptLineCount: n,
+      // ── End AI Panel data ──
       executiveSummary: session.executiveSummary || null,
       timestamp: now,
     });

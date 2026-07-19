@@ -780,6 +780,10 @@
 
     // ── M18M: Render speaking indicator dots ──
     function renderSpeakingIndicator(speaker) {
+      // ── M18N: Log every transition for debugging ──
+      if (speaker !== demoState.speakingIndicator) {
+        console.log('[Demo:M18N] speakingIndicator: ' + demoState.speakingIndicator + ' → ' + speaker);
+      }
       demoState.speakingIndicator = speaker;
       var body = document.getElementById('demoTranscriptBody');
       if (!body) return;
@@ -1255,7 +1259,7 @@
       var html = '';
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i];
-        var cls = line.speaker === 'ai' ? 'ai' : (line.speaker === 'customer' ? 'customer' : 'system');
+        var cls = line.speaker === 'ai' ? 'ai' : (line.speaker === 'customer' ? 'customer' : (console.warn('[Demo:RenderTranscript] UNEXPECTED speaker value: "' + line.speaker + '" — using system class') || 'system'));
         var label = cls === 'ai' ? 'NorthStar AI' : (cls === 'customer' ? 'Customer' : '');
         html += '<div class="demo-msg ' + cls + '">';
         if (label && cls !== 'system') html += '<div class="demo-msg-label">' + label + '</div>';

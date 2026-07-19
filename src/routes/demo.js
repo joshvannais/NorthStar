@@ -969,7 +969,7 @@ router.get('/:id/status', (req, res) => {
       // ── M18M: Speaking indicator ──
       currentSpeaker: session.currentSpeaker || null,
       lastSpeakerAt: session.lastSpeakerAt || null,
-      // ── AI Panel data ──
+      speakingIndicator: session.currentSpeaker || 'silent',
       customerIntent: aiPanels.customerIntent,
       leadQualification: aiPanels.leadQualification,
       bookingProbability: aiPanels.bookingProbability,

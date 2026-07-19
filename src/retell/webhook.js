@@ -368,16 +368,42 @@ async function handleWebhook(payload) {
         text: (call.text || payload.text || '').substring(0, 100),
         transcript_length: typeof (call.transcript || payload.transcript),
         has_transcript_object: Array.isArray(call.transcript_object || payload.transcript_object),
+        transcript_object_len: Array.isArray(call.transcript_object || payload.transcript_object) ? (call.transcript_object || payload.transcript_object).length : 0,
+        last_obj_role: Array.isArray(call.transcript_object || payload.transcript_object) && (call.transcript_object || payload.transcript_object).length > 0 
+          ? (call.transcript_object || payload.transcript_object).slice(-1)[0].role : null,
+        last_obj_words: Array.isArray(call.transcript_object || payload.transcript_object) && (call.transcript_object || payload.transcript_object).length > 0 
+          ? ((call.transcript_object || payload.transcript_object).slice(-1)[0].words || '').substring(0, 80) : null,
         has_words: Array.isArray(payload.words),
         content: (call.content || payload.content || '').substring(0, 100),
         other_keys: Object.keys(payload).filter(k => !['event','call','call_id','transcript','text','transcript_object','words','content','role','timestamp'].includes(k)),
       };
       console.log(`[Webhook:TranscriptPayload] ${JSON.stringify(payloadLog)}`);
 
+      // Extract text from the most appropriate source
+      // For transcript_updated events, Retell sends transcript_object[] with {role, words}
+      // For call_ended events, Retell sends call.transcript as a concatenated string
+      let lineText = call.transcript || payload.transcript || call.text || payload.text || '';
+      let lineRole = call.role || payload.role || '';
+
+      // If text is empty but transcript_object exists, extract from the last item
+      if (!lineText) {
+        const tObj = call.transcript_object || payload.transcript_object || [];
+        if (Array.isArray(tObj) && tObj.length > 0) {
+          const last = tObj[tObj.length - 1];
+          lineText = last.words || last.text || '';
+          lineRole = last.role || lineRole;
+        }
+      }
+
+      // If still empty, try words array
+      if (!lineText && Array.isArray(payload.words)) {
+        lineText = payload.words.map(w => w.word || w.text || '').join(' ');
+      }
+
       // Store the transcript line
       const line = {
-        speaker: call.role === 'agent' ? 'ai' : (call.role === 'user' ? 'customer' : (payload.role === 'agent' ? 'ai' : (payload.role === 'user' ? 'customer' : 'customer'))),
-        text: call.transcript || payload.transcript || call.text || payload.text || "",
+        speaker: lineRole === 'agent' ? 'ai' : (lineRole === 'user' ? 'customer' : (call.role === 'agent' ? 'ai' : (call.role === 'user' ? 'customer' : (payload.role === 'agent' ? 'ai' : (payload.role === 'user' ? 'customer' : 'customer'))))),
+        text: lineText,
         timestamp: new Date().toISOString(),
       };
       if (!session.transcriptLines) session.transcriptLines = [];
@@ -483,10 +509,14 @@ async function handleWebhook(payload) {
     logWebhookEvent(eventType, callId, 'Advanced to completed');
 
     // Parse lead from transcript
-    const lead = parseLeadFromTranscript(call.transcript || payload.transcript || "");
+    const callTranscriptText = call.transcript || payload.transcript || 
+      (Array.isArray(call.transcript_object || payload.transcript_object) 
+        ? (call.transcript_object || payload.transcript_object).map(o => o.words || o.text || '').join('\n')
+        : "");
+    const lead = parseLeadFromTranscript(callTranscriptText);
     if (lead) {
       // Store transcript on the lead for display
-      lead.transcript = call.transcript || payload.transcript || "";
+      lead.transcript = callTranscriptText;
 
       // Store demo session ID if this call matches a demo session
       const demoSession = getDemoSession(callId);

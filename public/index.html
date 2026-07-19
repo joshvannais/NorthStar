@@ -67,8 +67,8 @@
       min-width: 0;
     }
     [data-theme="dark"] .demo-insight-card.polaris-card {
-      background: #1e1e2e;
-      border-color: #2d2d3f;
+      background: var(--card-bg, #1e1e2e);
+      border-color: var(--neutral-200, #2d2d3f);
     }
     /* ── Polaris brand header ── */
     .polaris-header {
@@ -1302,6 +1302,7 @@
       callStatus: null,
       timerSec: 0,
       timerInterval: null,
+      finalTimerValue: null,
       transcriptInterval: null,
       statusInterval: null,
       transcriptSeq: 0,
@@ -1527,11 +1528,11 @@
           }
         }
         var serviceWord = firstDetail.toLowerCase();
-        var action = 'follow up with the customer regarding ' + serviceWord;
+        var action = '';
         if (urgency && urgency !== 'standard') {
-          action = 'prioritize an on-site evaluation due to ' + urgency + ' urgency';
+          action = 'Prioritize an on-site evaluation due to ' + urgency + ' urgency';
         } else {
-          action = 'schedule a consultation for ' + serviceWord + ' at the customer\'s earliest convenience';
+          action = 'Schedule a consultation for ' + serviceWord + ' at the customer\'s earliest convenience';
         }
         recEl.innerHTML = '<span class="polaris-rec-label">AI Recommendation</span><span class="polaris-rec-text">' + action + '.</span>';
       } else if (recEl) {
@@ -2278,7 +2279,8 @@
         }
       }
 
-      document.getElementById('demoCallDuration').textContent = 'Duration: ' + document.getElementById('demoLiveTimer').textContent;
+      var finalTimer = demoState.finalTimerValue || document.getElementById('demoLiveTimer').textContent;
+      document.getElementById('demoCallDuration').textContent = 'Duration: ' + finalTimer;
 
       // Copy transcript
       var liveBody = document.getElementById('demoTranscriptBody');
@@ -2342,16 +2344,16 @@
             }
           });
         }
-        var custLbl = es.customerName || 'a customer';
+        var custLbl = es.customerName || 'A customer';
         var svcLbl = es.serviceRequested || servD || 'services';
         var h = '';
         h += '<p style="margin:0 0 8px;font-weight:600;font-size:15px;">Customer Situation</p>';
         h += '<p style="margin:0 0 6px;color:#374151;font-size:14px;line-height:1.5;">';
-        h += custLbl + ' contacted NorthStar about ' + svcLbl.toLowerCase();
-        if (urgD && urgD !== 'Standard') { h += ' — identified as <strong>' + urgD.toLowerCase() + ' urgency</strong>.'; }
-        else { h += '.'; }
+        h += custLbl + ' contacted NorthStar requesting ' + svcLbl;
+        if (urgD && urgD !== 'Standard') { h += ' — identified as <strong>' + urgD + ' urgency</strong>.'; }
+        else { h += ' They are actively seeking service.'; }
         h += '</p>';
-        if (intD) { h += '<p style="margin:0 0 6px;color:#374151;font-size:14px;line-height:1.5;"><strong>Customer intent:</strong> ' + intD.toLowerCase() + '.</p>'; }
+        if (intD) { h += '<p style="margin:0 0 6px;color:#374151;font-size:14px;line-height:1.5;"><strong>Customer intent:</strong> ' + intD + '.</p>'; }
         if (es.keyTopics && es.keyTopics.length > 0) {
           h += '<p style="margin:0 0 4px;color:#6b7280;font-size:13px;"><strong>Key topics discussed:</strong></p>';
           h += '<div style="margin-bottom:4px;">';

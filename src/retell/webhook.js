@@ -472,7 +472,16 @@ async function handleWebhook(payload) {
       // ── M18M: During live calls, track speaking indicator only ──
       // Instead of showing full transcript text during the call, we track who's speaking.
       // The full transcript is parsed from call.transcript on call_ended.
-      const speaker = lineRole === 'agent' ? 'agent' : (lineRole === 'user' ? 'customer' : (call.role === 'agent' ? 'agent' : (call.role === 'user' ? 'customer' : 'customer')));
+      let speaker = lineRole === 'agent' ? 'agent' : (lineRole === 'user' ? 'customer' : (call.role === 'agent' ? 'agent' : (call.role === 'user' ? 'customer' : null)));
+
+      // ── M18N: If no role data in payload, alternate speakers ──
+      // Retell conversation-flow agents send transcript_updated events with no
+      // role/transcript data. We alternate based on the last known speaker so
+      // the speaking indicator shows meaningful activity during the call.
+      if (!speaker) {
+        speaker = session.lastSpeaker === 'customer' ? 'agent' : 'customer';
+      }
+      session.lastSpeaker = speaker;
 
       // Update speaking indicator on the session
       session.currentSpeaker = speaker;
@@ -502,7 +511,7 @@ async function handleWebhook(payload) {
           if (s.callId === callId) { sid = id; break; }
         }
         if (sid) {
-          const chain = ['dialing', 'ringing', 'answered', 'media_connected', 'live'];
+          const chain = ['call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'live'];
           const currentIdx = chain.indexOf(session.callStatus);
           if (currentIdx >= 0) {
             for (let i = currentIdx; i < chain.length - 1; i++) {
@@ -569,7 +578,7 @@ async function handleWebhook(payload) {
           const hasTranscript = call.transcript || payload.transcript || (Array.isArray(call.transcript_object || payload.transcript_object) && (call.transcript_object || payload.transcript_object).length > 0);
           if (hasTranscript && s.callStatus !== 'live' && s.callStatus !== 'completed') {
             // Call actually connected — advance through live states
-            const toStates = ['ringing', 'answered', 'media_connected', 'live', 'completed'];
+            const toStates = ['call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'live', 'completed'];
             const startIdx = toStates.indexOf(s.callStatus === 'dialing' ? 'ringing' : s.callStatus);
             if (startIdx < 0) {
               // Unknown state, jump to completed

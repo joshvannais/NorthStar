@@ -848,6 +848,7 @@ router.get('/:id/transcript', (req, res) => {
           lines: session.transcriptLines, count: session.transcriptLines.length,
           conversationState: 'completed',
           speakingIndicator: null,
+          complete: true,
         });
       }
 
@@ -967,8 +968,10 @@ router.get('/:id/status', (req, res) => {
       polarisEstimate: estimate,
       polarisState: isPreLive ? 'waiting' : 'analyzing',
       // ── M18M: Speaking indicator ──
-      currentSpeaker: session.currentSpeaker || null,
+      currentSpeaker: session.currentSpeaker || 'silent',
       lastSpeakerAt: session.lastSpeakerAt || null,
+      speakingIndicator: session.currentSpeaker || 'silent',
+      transcriptComplete: ['completed', 'polaris_summary'].includes(session.callStatus),
       // ── AI Panel data ──
       customerIntent: aiPanels.customerIntent,
       leadQualification: aiPanels.leadQualification,
@@ -1065,3 +1068,12 @@ module.exports = router;
 module.exports.advanceCallState = advanceCallState;
 module.exports.demoSessions = demoSessions;
 module.exports.isValidTransition = isValidTransition;
+
+/**
+ * M18M: Polaris estimate from a session object.
+ * Called by the webhook handler when call_ended fires.
+ */
+module.exports.polarisEstimateFromSession = function(session) {
+  const lines = session.transcriptLines || [];
+  return polarisEstimate(session.businessName, session.industry, lines);
+};

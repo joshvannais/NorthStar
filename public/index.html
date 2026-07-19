@@ -194,19 +194,14 @@
     .hero-stat-divider { width: 1px; background: var(--neutral-300); }
 
     /* ── M18M: Speaking indicator dots ── */
-    .demo-speaking-indicator { display: flex; align-items: center; gap: 12px; padding: 24px; flex-direction: column; }
-    .demo-speaking-dots { display: flex; gap: 8px; align-items: center; }
-    .demo-speaking-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--neutral-300); transition: all 0.3s; }
-    .demo-speaking-dot.active { transform: scale(1.5); }
-    .demo-speaking-dot.agent { background: #7c3aed; }
-    .demo-speaking-dot.agent.active { background: #8b5cf6; box-shadow: 0 0 12px rgba(124,58,237,0.5); animation: pulse-dot 1s infinite; }
-    .demo-speaking-dot.customer { background: #f59e0b; }
-    .demo-speaking-dot.customer.active { background: #fbbf24; box-shadow: 0 0 12px rgba(245,158,11,0.5); animation: pulse-dot 1s infinite; }
-    .demo-speaking-current { font-size: 14px; font-weight: 600; text-align: center; }
-    .demo-speaking-current.agent { color: #7c3aed; }
-    .demo-speaking-current.customer { color: #f59e0b; }
-    [data-theme="dark"] .demo-speaking-current.agent { color: #a78bfa; }
-    [data-theme="dark"] .demo-speaking-current.customer { color: #fbbf24; }
+    .demo-speaking-indicator { text-align: center; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .speaking-dots { display: flex; gap: 6px; justify-content: center; }
+    .speaking-dots .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand-600); animation: speak-bounce 1.4s infinite ease-in-out both; }
+    .speaking-dots .dot:nth-child(1) { animation-delay: -0.32s; }
+    .speaking-dots .dot:nth-child(2) { animation-delay: -0.16s; }
+    .speaking-dots .dot:nth-child(3) { animation-delay: 0s; }
+    @keyframes speak-bounce { 0%,80%,100%{transform:scale(0.6)} 40%{transform:scale(1)} }
+    #demoSpeakingLabel { color: var(--neutral-500); font-size: 14px; margin-top: 12px; }
 
     /* ── Responsive ── */
     @media (max-width: 768px) {
@@ -784,31 +779,23 @@
       var body = document.getElementById('demoTranscriptBody');
       if (!body) return;
 
-      var agentActive = (speaker === 'agent') ? ' active' : '';
-      var customerActive = (speaker === 'customer') ? ' active' : '';
-      var currentLabel = '';
-      var labelClass = '';
-
-      if (speaker === 'agent') {
-        currentLabel = '🔵 Agent is speaking...';
-        labelClass = ' agent';
-      } else if (speaker === 'customer') {
-        currentLabel = '🟡 Customer is speaking...';
-        labelClass = ' customer';
-      } else {
-        currentLabel = 'Waiting for conversation...';
-        labelClass = '';
+      var label = 'Agent speaking...';
+      if (speaker === 'customer') {
+        label = 'Customer speaking...';
+      } else if (!speaker || speaker === 'silent') {
+        label = 'Waiting for conversation...';
       }
 
       body.innerHTML = '' +
-        '<div class="demo-speaking-indicator">' +
-          '<div class="demo-speaking-dots">' +
-            '<div class="demo-speaking-dot agent' + agentActive + '" title="Agent (NorthStar AI)"></div>' +
-            '<div class="demo-speaking-dot customer' + customerActive + '" title="Customer"></div>' +
+        '<div class="demo-speaking-indicator" id="demoSpeakingIndicator">' +
+          '<div class="speaking-dots">' +
+            '<span class="dot"></span>' +
+            '<span class="dot"></span>' +
+            '<span class="dot"></span>' +
           '</div>' +
-          '<div class="demo-speaking-current' + labelClass + '">' + currentLabel + '</div>' +
+          '<p id="demoSpeakingLabel">' + label + '</p>' +
         '</div>';
-      console.log('[Demo:M18M] Speaking indicator: ' + speaker);
+      console.log('[Demo:M18M] Speaking indicator: ' + speaker + ' → "' + label + '"');
     }
 
     // ── Scenario shortcuts ──
@@ -1477,24 +1464,30 @@
           }
         });
 
-        source.addEventListener('transcript', function(e) {
+        source.addEventListener('transcriptComplete', function(e) {
           try {
             var data = JSON.parse(e.data);
-            console.log('[Demo:SSE:Transcript] Received — callEnded=' + (data.callEnded || false) + ' totalLines=' + data.totalLines + ' linesProvided=' + (data.lines ? data.lines.length : 0));
+            console.log('[Demo:SSE:M18M] transcriptComplete received: ' + (data.count || 0) + ' lines');
 
-            // ── M18M: Handle callEnded full transcript broadcast ──
-            if (data.callEnded && data.lines && data.lines.length > 0) {
+            if (data.lines && data.lines.length > 0) {
               // Call has ended — render the full parsed transcript immediately
               console.log('[Demo:SSE:M18M] Rendering full transcript: ' + data.lines.length + ' lines');
               renderTranscript(data.lines);
               document.getElementById('demoTranscriptCount').textContent = data.lines.length + ' messages';
               demoState.transcriptLinesCache = data.lines;
               demoState.transcriptSeq = data.lines.length;
-              return;
             }
+          } catch(err) {
+            console.warn('[Demo:SSE:transcriptComplete] Parse error:', err.message);
+          }
+        });
 
-            // ── Original per-line transcript (from simulation or legacy) ──
+        source.addEventListener('transcript', function(e) {
+          try {
+            var data = JSON.parse(e.data);
+            console.log('[Demo:SSE:Transcript] Received line speaker=' + (data.line ? data.line.speaker : '?') + ' totalLines=' + data.totalLines + ' seq=' + demoState.transcriptSeq);
             if (data.line) {
+              var lines = [data.line];
               if (demoState.transcriptSeq === 0) {
                 demoState.transcriptLinesCache = [];
               }
@@ -1506,6 +1499,19 @@
             }
           } catch(err) {
             console.warn('[Demo:SSE:Transcript] Parse error:', err.message);
+          }
+        });
+
+        // ── M18M: Polaris analysis via SSE ──
+        source.addEventListener('polaris', function(e) {
+          try {
+            var data = JSON.parse(e.data);
+            console.log('[Demo:SSE:M18M] Polaris estimate received — confidence: ' + (data.confidence || '?') + '%');
+            if (data && data.confidence !== undefined) {
+              renderPolarisEstimate(data);
+            }
+          } catch(err) {
+            console.warn('[Demo:SSE:polaris] Parse error:', err.message);
           }
         });
 

@@ -622,19 +622,32 @@ async function handleWebhook(payload) {
       callEndedDemoSession.transcriptLines = parsedLines;
       console.log(`[Webhook:M18M] Populated ${parsedLines.length} transcript lines for session ${callEndedDemoSession.id}`);
 
-      // Broadcast full transcript via SSE so frontend renders immediately
-      broadcastSSE(callEndedDemoSession.id, 'transcript', {
+      // Broadcast full transcript via SSE as 'transcriptComplete'
+      broadcastSSE(callEndedDemoSession.id, 'transcriptComplete', {
         lines: parsedLines,
-        totalLines: parsedLines.length,
-        callEnded: true,
+        count: parsedLines.length,
       });
+
+      // ── M18M: Trigger Polaris analysis ──
+      try {
+        const demo = require('../routes/demo');
+        if (demo.polarisEstimateFromSession) {
+          const polarisResult = demo.polarisEstimateFromSession(callEndedDemoSession);
+          callEndedDemoSession.polarisEstimate = polarisResult;
+          broadcastSSE(callEndedDemoSession.id, 'polaris', polarisResult);
+          console.log(`[Webhook:M18M] Polaris estimate broadcast for session ${callEndedDemoSession.id}`);
+        }
+      } catch (polarisErr) {
+        console.warn(`[Webhook:M18M] Polaris estimate failed: ${polarisErr.message}`);
+      }
     }
 
     // Parse lead from transcript
     const lead = parseLeadFromTranscript(callTranscriptText);
     if (lead) {
-      // Store transcript on the lead for display
+      // Store transcript on the lead for display (both raw string and structured lines)
       lead.transcript = callTranscriptText;
+      lead.transcriptLines = parsedLines;
 
       // Store demo session ID if this call matches a demo session
       const demoSession = callEndedDemoSession;

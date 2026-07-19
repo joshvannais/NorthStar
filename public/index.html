@@ -1172,6 +1172,14 @@
           firstSpeaker: data.lines && data.lines.length > 0 ? data.lines[0].speaker : 'N/A',
           firstText: data.lines && data.lines.length > 0 ? (data.lines[0].text || '').substring(0, 50) : 'N/A',
         }));
+        // ── STAGE 5: Frontend received data ──
+        if (data.lines && data.lines.length > 0) {
+          const first3 = data.lines.slice(0, 3).map(l => `{speaker:${l.speaker},text:"${(l.text||'').substring(0,40)}"}`);
+          const last3 = data.lines.slice(-3).map(l => `{speaker:${l.speaker},text:"${(l.text||'').substring(0,40)}"}`);
+          console.log(`[Demo:Stage5] lines=${data.lines.length} first3=${JSON.stringify(first3)} last3=${JSON.stringify(last3)}`);
+        } else {
+          console.log(`[Demo:Stage5] No lines received`);
+        }
 
         if (data.lines && data.lines.length > demoState.transcriptSeq) {
           demoState.transcriptSeq = data.lines.length;

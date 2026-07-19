@@ -357,6 +357,34 @@ async function handleWebhook(payload) {
   // ── Live transcript streaming ──
   if (payload.event === 'transcript' || payload.event === 'transcript_updated') {
     const session = getDemoSession(callId);
+
+    // ── STAGE 1: Raw Retell webhook payload ──
+    // Log the COMPLETE raw payload structure so we can see exactly what Retell sends.
+    // This is the only way to determine the correct field paths.
+    const stage1 = {
+      stage: 1,
+      event: payload.event,
+      payload_keys: Object.keys(payload),
+      call_keys: payload.call ? Object.keys(payload.call) : null,
+      role: payload.role,
+      call_role: payload.call?.role,
+      transcript: (payload.transcript || '').substring(0, 100),
+      call_transcript: (payload.call?.transcript || '').substring(0, 100),
+      has_transcript_object: Array.isArray(payload.transcript_object),
+      has_call_transcript_object: Array.isArray(payload.call?.transcript_object),
+      transcript_object_len: Array.isArray(payload.transcript_object) ? payload.transcript_object.length : (Array.isArray(payload.call?.transcript_object) ? payload.call.transcript_object.length : 0),
+      last_obj: Array.isArray(payload.transcript_object) && payload.transcript_object.length > 0
+        ? { role: payload.transcript_object.slice(-1)[0].role, words: (payload.transcript_object.slice(-1)[0].words || '').substring(0, 80) }
+        : (Array.isArray(payload.call?.transcript_object) && payload.call.transcript_object.length > 0
+          ? { role: payload.call.transcript_object.slice(-1)[0].role, words: (payload.call.transcript_object.slice(-1)[0].words || '').substring(0, 80) }
+          : null),
+      has_words: Array.isArray(payload.words),
+      call_id: payload.call_id || payload.call?.call_id,
+      timestamp: payload.timestamp || new Date().toISOString(),
+    };
+    console.log(`[Webhook:Stage1] ${JSON.stringify(stage1)}`);
+    logWebhookEvent('stage1_raw', stage1.call_id, JSON.stringify(stage1));
+
     console.log(`[Webhook:Transcript] callId=${callId} sessionFound=${!!session} event=${payload.event}`);
     if (session) {
       // Log the full payload for debugging
@@ -408,6 +436,12 @@ async function handleWebhook(payload) {
       };
       if (!session.transcriptLines) session.transcriptLines = [];
       session.transcriptLines.push(line);
+
+      // ── STAGE 2: Parsed line (after extraction) ──
+      console.log(`[Webhook:Stage2] speaker=${line.speaker} text="${line.text.substring(0, 100)}" lineRole=${lineRole} lineText="${lineText.substring(0, 100)}"`);
+      // ── STAGE 3: Session transcript state (after push) ──
+      const last3 = session.transcriptLines.slice(-3);
+      console.log(`[Webhook:Stage3] totalLines=${session.transcriptLines.length} last3=${last3.map(l => `{speaker:${l.speaker},text:"${l.text.substring(0,40)}"}`).join(' | ')}`);
 
       // Broadcast transcript via SSE
       broadcastSSE(session.id, 'transcript', {

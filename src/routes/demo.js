@@ -825,6 +825,18 @@ router.get('/:id/transcript', (req, res) => {
               }
             }
 
+    // ── STAGE 4: Transcript endpoint response ──
+    // Log the exact JSON that will be returned to the frontend
+    const stage4 = {
+      stage: 4,
+      sessionId: session.id,
+      callStatus: session.callStatus,
+      count: session.transcriptLines.length,
+      first3: (session.transcriptLines || []).slice(0, 3).map(l => `{speaker:${l.speaker},text:"${(l.text||'').substring(0,60)}"}`),
+      last3: (session.transcriptLines || []).slice(-3).map(l => `{speaker:${l.speaker},text:"${(l.text||'').substring(0,60)}"}`),
+    };
+    console.log(`[Demo:Stage4] ${JSON.stringify(stage4)}`);
+
     res.json({
       sessionId: session.id, callStatus: session.callStatus,
       lines: session.transcriptLines, count: session.transcriptLines.length,

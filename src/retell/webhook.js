@@ -370,6 +370,8 @@ async function handleWebhook(payload) {
       call_role: payload.call?.role,
       transcript: (payload.transcript || '').substring(0, 100),
       call_transcript: (payload.call?.transcript || '').substring(0, 100),
+      transcript_with_tool_calls: (payload.transcript_with_tool_calls || '').substring(0, 200),
+      call_transcript_with_tool_calls: (payload.call?.transcript_with_tool_calls || '').substring(0, 200),
       has_transcript_object: Array.isArray(payload.transcript_object),
       has_call_transcript_object: Array.isArray(payload.call?.transcript_object),
       transcript_object_len: Array.isArray(payload.transcript_object) ? payload.transcript_object.length : (Array.isArray(payload.call?.transcript_object) ? payload.call.transcript_object.length : 0),
@@ -498,6 +500,26 @@ async function handleWebhook(payload) {
 
   // ── Call ended ──
   if (payload.event === 'call_ended') {
+    // ── STAGE 1b: Raw call_ended payload ──
+    const stage1b = {
+      stage: 1,
+      event: payload.event,
+      payload_keys: Object.keys(payload),
+      call_keys: payload.call ? Object.keys(payload.call) : null,
+      transcript: (payload.transcript || '').substring(0, 100),
+      call_transcript: (payload.call?.transcript || '').substring(0, 100),
+      transcript_with_tool_calls: (payload.transcript_with_tool_calls || '').substring(0, 200),
+      call_transcript_with_tool_calls: (payload.call?.transcript_with_tool_calls || '').substring(0, 200),
+      has_transcript_object: Array.isArray(payload.transcript_object),
+      has_call_transcript_object: Array.isArray(payload.call?.transcript_object),
+      transcript_object_len: Array.isArray(payload.transcript_object) ? payload.transcript_object.length : (Array.isArray(payload.call?.transcript_object) ? payload.call.transcript_object.length : 0),
+      last_obj_role: Array.isArray(payload.transcript_object) && payload.transcript_object.length > 0 ? payload.transcript_object.slice(-1)[0].role : null,
+      call_status: payload.call?.call_status,
+      disconnection_reason: payload.call?.disconnection_reason,
+    };
+    console.log(`[Webhook:Stage1b] ${JSON.stringify(stage1b)}`);
+    logWebhookEvent('stage1_call_ended', callId, JSON.stringify(stage1b));
+
     // Chain-advance from current state through to completed.
     // This handles the case where Retell doesn't send intermediate webhook
     // events (call_started, transcript_updated) for conversation-flow agents.

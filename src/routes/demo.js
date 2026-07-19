@@ -886,6 +886,9 @@ router.get('/:id/status', (req, res) => {
 
     const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines);
 
+    const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
+    const isPreLive = preLive.includes(session.callStatus);
+
     // ── AI Panel Computations ──
     const tl = session.transcriptLines || [];
     const n = tl.length;
@@ -904,8 +907,6 @@ router.get('/:id/status', (req, res) => {
       executiveSummaryText: n === 0 ? 'Call in progress. Analysis will update as the conversation develops.' : (n < 3 ? `📞 Call in progress with ${session.businessName}. Customer is responding. Transcript: ${n} lines.` : `📞 Active conversation with ${session.businessName}. ${n} transcript lines captured. Confidence: ${estimate.confidence}%. ${intentLabels[intentIdx]}.`),
     };
 
-    const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
-    const isPreLive = preLive.includes(session.callStatus);
     const isAnswered = ['answered', 'media_connected', 'live', 'completed', 'polaris_summary'].includes(session.callStatus);
 
     console.log(`[Demo:StatusEP] session=${session.id} status=${session.callStatus} lines=${n} isPreLive=${isPreLive} confidence=${estimate.confidence}`);

@@ -776,7 +776,7 @@
       transcriptSeq: 0,
       speakingIndicator: null,
       transcriptLinesCache: [],
-      _postCallTransitioned: false, // M18O: guard against duplicate post-call transitions
+      postCallTransitioned: false, // M18O: guard against duplicate post-call transitions
     };
 
     // Store business info for multi-scenario replay
@@ -1086,6 +1086,7 @@
     // The frontend ONLY reflects what the backend tells us.
     // We NEVER invent or predict state.
     function transitionToLiveView(callStatus) {
+      demoState.postCallTransitioned = false;
       if (demoState.timerInterval) clearInterval(demoState.timerInterval);
       if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
       if (demoState.statusInterval) clearInterval(demoState.statusInterval);
@@ -1622,11 +1623,11 @@
     async function transitionToPostCall() {
       // ── M18O: Guard against duplicate execution ──
       // Both SSE and poll can trigger this — only run once.
-      if (demoState._postCallTransitioned) {
+      if (demoState.postCallTransitioned) {
         console.log('[Demo:M18O] transitionToPostCall already executed — skipping');
         return;
       }
-      demoState._postCallTransitioned = true;
+      demoState.postCallTransitioned = true;
       if (demoState.timerInterval) clearInterval(demoState.timerInterval);
       if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
       if (demoState.statusInterval) clearInterval(demoState.statusInterval);

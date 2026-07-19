@@ -277,35 +277,143 @@ function mockTranscript(industry, count) {
   return script.slice(0, Math.min(count || script.length, script.length));
 }
 
+// ── Estimate Qualification Framework (scalable across industries) ──
+// Each industry has required estimating variables defined as data.
+// The analysis function uses keyword matching across the transcript
+// to determine which variables were discussed. This is NOT per-industry
+// scripting — it is a reusable data-driven framework.
+const QUALIFICATION_PROFILES = {
+  'Roofing': [
+    { name: 'Damage Type',         keywords: ['storm damage', 'leak', 'missing shingle', 'hail', 'wind damage', 'hole', 'sagging'], unit: null },
+    { name: 'Roof Area',           keywords: ['square foot', 'sq ft', 'sqft', 'roof size', 'how many square', 'section', 'slope'], unit: 'sq ft' },
+    { name: 'Roof Age',            keywords: ['year old', 'years old', 'old roof', 'age', 'how old', 'original roof'], unit: 'years' },
+    { name: 'Damage Extent',       keywords: ['shingle', 'gutter', 'flashing', 'valley', 'vent', 'skylight', 'chimney'], unit: null },
+  ],
+  'HVAC': [
+    { name: 'Home Square Footage', keywords: ['square foot', 'sq ft', 'sqft', 'home size', 'house size', 'square footage'], unit: 'sq ft' },
+    { name: 'System Age',          keywords: ['year old', 'years old', 'old unit', 'age', 'how old', 'installed'], unit: 'years' },
+    { name: 'Service Type',        keywords: ['repair', 'replace', 'fix', 'new unit', 'new system', 'install', 'maintenance', 'tune-up'], unit: null },
+    { name: 'Current Symptoms',    keywords: ['not working', 'broken', 'noise', 'leaking', 'not cooling', 'not heating', 'strange sound', 'warm air', 'no air'], unit: null },
+    { name: 'Unit Information',    keywords: ['central air', 'window unit', 'heat pump', 'furnace', 'model', 'brand', 'ton', 'seer', 'serial'], unit: null },
+  ],
+  'Plumbing': [
+    { name: 'Issue Type',          keywords: ['burst', 'leak', 'clog', 'dripping', 'running', 'broken pipe', 'water pressure', 'backup'], unit: null },
+    { name: 'Location',            keywords: ['kitchen', 'bathroom', 'basement', 'outside', 'sink', 'toilet', 'shower', 'water heater', 'main line'], unit: null },
+    { name: 'Urgency Indicator',   keywords: ['emergency', 'urgent', 'flooding', 'water damage', 'immediate', 'pouring'], unit: null },
+    { name: 'Fixture Age',         keywords: ['year old', 'years old', 'old', 'original', 'age'], unit: 'years' },
+  ],
+  'Electrical': [
+    { name: 'Issue Type',          keywords: ['outage', 'spark', 'flicker', 'breaker', 'outlet', 'switch', 'wiring', 'trip', 'power loss'], unit: null },
+    { name: 'Location',            keywords: ['kitchen', 'bathroom', 'basement', 'outside', 'garage', 'room', 'circuit'], unit: null },
+    { name: 'Property Age',        keywords: ['year old', 'years old', 'old house', 'age', 'how old', 'original wiring'], unit: 'years' },
+    { name: 'Scope',               keywords: ['rewire', 'install', 'upgrade', 'panel', 'new', 'addition', 'remodel'], unit: null },
+  ],
+  'Painting': [
+    { name: 'Area Type',           keywords: ['interior', 'exterior', 'inside', 'outside', 'room', 'wall', 'ceiling', 'trim', 'cabinet'], unit: null },
+    { name: 'Square Footage',      keywords: ['square foot', 'sq ft', 'sqft', 'room size', 'house size', 'how big'], unit: 'sq ft' },
+    { name: 'Room Count',          keywords: ['room', 'bedroom', 'floor', 'story', 'level'], unit: 'rooms' },
+    { name: 'Prep Work Required',  keywords: ['patch', 'repair', 'spackle', 'sand', 'prime', 'texture', 'wallpaper', 'lead paint'], unit: null },
+  ],
+  'Tree Service': [
+    { name: 'Tree Height',         keywords: ['foot', 'feet', 'ft', 'tall', 'height', 'high', 'story'], unit: 'ft' },
+    { name: 'Trunk Size',          keywords: ['diameter', 'inch', 'thick', 'trunk', 'width'], unit: 'inches' },
+    { name: 'Location Difficulty', keywords: ['near house', 'close to', 'power line', 'fence', 'building', 'structure', 'garage', 'over'], unit: null },
+    { name: 'Stump Removal',       keywords: ['stump', 'stump grind', 'stump removal', 'take the stump', 'remove stump'], unit: null },
+  ],
+  'Window Tinting': [
+    { name: 'Window Count',        keywords: ['window', 'door', 'panel', 'how many'], unit: 'windows' },
+    { name: 'Glass Type',          keywords: ['residential', 'commercial', 'auto', 'home', 'office', 'car', 'truck'], unit: null },
+    { name: 'Tint Preference',     keywords: ['dark', 'light', 'shade', 'uv', 'privacy', 'heat', 'reflect', 'film', 'ceramic'], unit: null },
+  ],
+};
+
+function getQualificationProfile(industry) {
+  return QUALIFICATION_PROFILES[industry] || null;
+}
+
+function analyzeTranscriptQualification(transcriptLines, industry) {
+  const profile = getQualificationProfile(industry);
+  if (!profile || !transcriptLines || transcriptLines.length === 0) {
+    return { collected: [], missing: [], completeness: 0, totalVariables: 0 };
+  }
+  const fullText = transcriptLines
+    .map(function(l) { return (l.text || l.content || '').toLowerCase(); })
+    .join(' ');
+  const collected = [];
+  const missing = [];
+  for (let i = 0; i < profile.length; i++) {
+    const v = profile[i];
+    let found = false;
+    for (let k = 0; k < v.keywords.length; k++) {
+      if (fullText.indexOf(v.keywords[k]) !== -1) {
+        found = true;
+        break;
+      }
+    }
+    if (found) {
+      collected.push(v.name);
+    } else {
+      missing.push(v.name);
+    }
+  }
+  const total = profile.length;
+  const completeness = total > 0 ? Math.round((collected.length / total) * 100) : 0;
+  return { collected: collected, missing: missing, completeness: completeness, totalVariables: total };
+}
+
+function polarisEstimateFromSession(session) {
+  if (!session) return null;
+  return polarisEstimate(session.businessName, session.industry, session.transcriptLines || []);
+}
+
 function polarisEstimate(businessName, industry, transcriptLines) {
   const d = getDefaults(industry);
   const lines = transcriptLines || [];
   const n = lines.length;
+  // Analyze transcript for estimating variable completeness
+  const qual = analyzeTranscriptQualification(lines, industry);
+  // Base confidence from transcript length
   let confidence = 0;
   if (n === 0) confidence = 0;
   else if (n < 3) confidence = 30;
   else if (n < 6) confidence = 55;
   else confidence = Math.min(85, 55 + (n - 5) * 5);
-
+  // Adjust: blend conversation depth (60%) with variable completeness (40%)
+  if (qual.totalVariables > 0) {
+    confidence = Math.round(confidence * 0.6 + qual.completeness * 0.4);
+    if (n > 0 && confidence < 15) confidence = 15;
+  }
+  // Core reasoning factors
+  const reasoning = n === 0 ? [] : [
+    { factor: 'Service Requested',        detail: d.service },
+    { factor: 'Industry',                 detail: industry },
+    { factor: 'Urgency Level',            detail: d.emergencyLikelihood > 0.3 ? 'High' : d.emergencyLikelihood > 0.15 ? 'Moderate' : 'Standard' },
+    { factor: 'Property Characteristics',  detail: 'Typical residential property' },
+    { factor: 'Customer Intent',          detail: n > 2 ? 'Actively seeking service' : 'Information gathering' },
+    { factor: 'Historical Pricing',       detail: `$${d.avgJobValue.toLocaleString()} avg for ${industry.toLowerCase()}` },
+  ];
+  // Qualification-based reasoning
+  if (qual.totalVariables > 0) {
+    reasoning.push({ factor: 'Estimating Variables Collected', detail: qual.collected.length > 0 ? qual.collected.join(', ') : 'None yet' });
+    if (qual.missing.length > 0) {
+      reasoning.push({ factor: 'Missing Estimating Info', detail: qual.missing.join(', ') });
+      reasoning.push({ factor: 'Suggested Follow-up', detail: 'Ask about: ' + qual.missing.slice(0, 3).join(', ') + ' to refine estimate' });
+    }
+    reasoning.push({ factor: 'Information Completeness', detail: qual.completeness + '% (' + qual.collected.length + '/' + qual.totalVariables + ' variables)' });
+  }
+  reasoning.push(
+    { factor: 'Confidence Level',         detail: confidence + '%' },
+    { factor: 'Assumptions',              detail: 'Based on typical scope. Final may vary.' },
+  );
   return {
     opportunityLabel: 'POLARIS™ ESTIMATED OPPORTUNITY',
     confidence,
     revenueRange: `$${d.revenueRangeMin.toLocaleString()} - $${d.revenueRangeMax.toLocaleString()}`,
-    reasoning: n === 0 ? [] : [
-      { factor: 'Service Requested',        detail: d.service },
-      { factor: 'Industry',                 detail: industry },
-      { factor: 'Urgency Level',            detail: d.emergencyLikelihood > 0.3 ? 'High' : d.emergencyLikelihood > 0.15 ? 'Moderate' : 'Standard' },
-      { factor: 'Property Characteristics',  detail: 'Typical residential property' },
-      { factor: 'Customer Intent',          detail: n > 2 ? 'Actively seeking service' : 'Information gathering' },
-      { factor: 'Historical Pricing',       detail: `$${d.avgJobValue.toLocaleString()} avg for ${industry.toLowerCase()}` },
-      { factor: 'Business Pricing Profile', detail: `${businessName} — standard market positioning` },
-      { factor: 'Confidence Level',         detail: `${confidence}%` },
-      { factor: 'Assumptions',              detail: 'Based on typical scope. Final may vary.' },
-    ],
+    qualification: qual,
+    reasoning: reasoning,
     generatedAt: new Date().toISOString(),
   };
 }
-
 // ── Helpers to advance simulation state from backend ──
 function scheduleSimAdvance(sessionId) {
   // The backend drives simulation state on a timer, not the frontend
@@ -1097,3 +1205,6 @@ module.exports = router;
 module.exports.advanceCallState = advanceCallState;
 module.exports.demoSessions = demoSessions;
 module.exports.isValidTransition = isValidTransition;
+module.exports.analyzeTranscriptQualification = analyzeTranscriptQualification;
+module.exports.polarisEstimateFromSession = polarisEstimateFromSession;
+module.exports.polarisEstimate = polarisEstimate;

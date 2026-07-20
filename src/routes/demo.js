@@ -277,293 +277,88 @@ function mockTranscript(industry, count) {
   return script.slice(0, Math.min(count || script.length, script.length));
 }
 
-// ── Estimate Qualification Framework (scalable across industries) ──
-// Each industry has required estimating variables defined as data.
-// The analysis function uses keyword matching across the transcript
-// to determine which variables were discussed. This is NOT per-industry
-// scripting — it is a reusable data-driven framework.
-const QUALIFICATION_PROFILES = {
-  'Roofing': [
-    { name: 'Damage Type',         keywords: ['storm damage', 'leak', 'missing shingle', 'hail', 'wind damage', 'hole', 'sagging'], unit: null },
-    { name: 'Roof Area',           keywords: ['square foot', 'sq ft', 'sqft', 'roof size', 'how many square', 'section', 'slope'], unit: 'sq ft' },
-    { name: 'Roof Age',            keywords: ['year old', 'years old', 'old roof', 'age', 'how old', 'original roof'], unit: 'years' },
-    { name: 'Damage Extent',       keywords: ['shingle', 'gutter', 'flashing', 'valley', 'vent', 'skylight', 'chimney'], unit: null },
-  ],
-  'HVAC': [
-    { name: 'Home Square Footage', keywords: ['square foot', 'sq ft', 'sqft', 'home size', 'house size', 'square footage'], unit: 'sq ft' },
-    { name: 'System Age',          keywords: ['year old', 'years old', 'old unit', 'age', 'how old', 'installed'], unit: 'years' },
-    { name: 'Service Type',        keywords: ['repair', 'replace', 'fix', 'new unit', 'new system', 'install', 'maintenance', 'tune-up'], unit: null },
-    { name: 'Current Symptoms',    keywords: ['not working', 'broken', 'noise', 'leaking', 'not cooling', 'not heating', 'strange sound', 'warm air', 'no air'], unit: null },
-    { name: 'Unit Information',    keywords: ['central air', 'window unit', 'heat pump', 'furnace', 'model', 'brand', 'ton', 'seer', 'serial'], unit: null },
-  ],
-  'Plumbing': [
-    { name: 'Issue Type',          keywords: ['burst', 'leak', 'clog', 'dripping', 'running', 'broken pipe', 'water pressure', 'backup'], unit: null },
-    { name: 'Location',            keywords: ['kitchen', 'bathroom', 'basement', 'outside', 'sink', 'toilet', 'shower', 'water heater', 'main line'], unit: null },
-    { name: 'Urgency Indicator',   keywords: ['emergency', 'urgent', 'flooding', 'water damage', 'immediate', 'pouring'], unit: null },
-    { name: 'Fixture Age',         keywords: ['year old', 'years old', 'old', 'original', 'age'], unit: 'years' },
-  ],
-  'Electrical': [
-    { name: 'Issue Type',          keywords: ['outage', 'spark', 'flicker', 'breaker', 'outlet', 'switch', 'wiring', 'trip', 'power loss'], unit: null },
-    { name: 'Location',            keywords: ['kitchen', 'bathroom', 'basement', 'outside', 'garage', 'room', 'circuit'], unit: null },
-    { name: 'Property Age',        keywords: ['year old', 'years old', 'old house', 'age', 'how old', 'original wiring'], unit: 'years' },
-    { name: 'Scope',               keywords: ['rewire', 'install', 'upgrade', 'panel', 'new', 'addition', 'remodel'], unit: null },
-  ],
-  'Painting': [
-    { name: 'Area Type',           keywords: ['interior', 'exterior', 'inside', 'outside', 'room', 'wall', 'ceiling', 'trim', 'cabinet'], unit: null },
-    { name: 'Square Footage',      keywords: ['square foot', 'sq ft', 'sqft', 'room size', 'house size', 'how big'], unit: 'sq ft' },
-    { name: 'Room Count',          keywords: ['room', 'bedroom', 'floor', 'story', 'level'], unit: 'rooms' },
-    { name: 'Prep Work Required',  keywords: ['patch', 'repair', 'spackle', 'sanding', 'priming', 'texture', 'wallpaper', 'lead paint'], unit: null },
-  ],
-  'Tree Service': [
-    { name: 'Tree Height',         keywords: ['foot', 'feet', 'ft', 'tall', 'height', 'high', 'story'], unit: 'ft' },
-    { name: 'Trunk Size',          keywords: ['diameter', 'inch', 'thick', 'trunk', 'width'], unit: 'inches' },
-    { name: 'Location Difficulty', keywords: ['near', 'near house', 'close to', 'power line', 'fence', 'building', 'structure', 'garage', 'over'], unit: null },
-    { name: 'Stump Removal',       keywords: ['stump', 'stump grind', 'stump removal', 'take the stump', 'remove stump'], unit: null },
-  ],
-  'Window Tinting': [
-    { name: 'Window Count',        keywords: ['window', 'door', 'panel', 'how many'], unit: 'windows' },
-    { name: 'Glass Type',          keywords: ['residential', 'commercial', 'auto', 'home', 'office', 'car', 'truck'], unit: null },
-    { name: 'Tint Preference',     keywords: ['dark', 'light', 'shade', 'uv', 'privacy', 'heat', 'reflect', 'film', 'ceramic'], unit: null },
-  ],
-};
+// ── M19.5 Phase C: Evidence-safe extraction ──
+// The qualification framework data and all extraction logic now live in
+// src/polaris/factExtraction.js (typed PolarisFact production with strict
+// speaker isolation and turn-bounded evidence). The functions below are
+// compatibility wrappers that preserve the original demo.js API and shapes.
+const factExtraction = require('../polaris/factExtraction');
 
 function getQualificationProfile(industry) {
-  return QUALIFICATION_PROFILES[industry] || null;
+  return factExtraction.QUALIFICATION_PROFILES[industry] || null;
 }
 
-function hasMeasurement(text, keywords) {
-  // Check keyword substrings
-  for (let k = 0; k < keywords.length; k++) {
-    if (text.indexOf(keywords[k]) !== -1) return true;
-  }
-  // Check for numeric patterns (digits, commas, decimals) near measurement words
-  // e.g. "2,000 sq ft", "2000 square feet", "twenty five hundred feet"
-  const measureWords = ['foot', 'feet', 'sq ft', 'sqft', 'square', 'inch', 'inches', 'yard', 'yards', 'acre', 'acres', 'gallon', 'gallons', 'sq', 'ft', 'sf'];
-  const valueWords = ['thousand', 'hundred', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety', 'ten', 'eleven', 'twelve', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
-  const hasDigit = /\d/.test(text);
-  const hasMeasureWord = measureWords.some(function(w) { return text.indexOf(w) !== -1; });
-  const hasValueWord = valueWords.some(function(w) { return text.indexOf(w) !== -1; });
-  if (hasDigit && hasMeasureWord) return true;
-  if (hasValueWord && hasMeasureWord) return true;
-  return false;
-}
-
-// ── Service detection: extracts specific service from transcript text ──
-// This is data-driven, not per-industry scripting. Each industry has
-// service sub-types with keywords. The function returns the most specific
-// match found in the transcript.
-const SERVICE_KEYWORDS = {
-  'Tree Service': [
-    { service: 'Tree Removal',          keywords: ['remov', 'take down', 'cut down', 'fell', 'stump'] },
-    { service: 'Tree Trimming',         keywords: ['trim', 'prune', 'cut back', 'thin', 'shape'] },
-    { service: 'Emergency Tree Service', keywords: ['emergency', 'storm damage', 'fallen', 'hazard', 'dangerous'] },
-    { service: 'Stump Grinding',        keywords: ['stump grind', 'stump removal', 'grind'] },
-  ],
-  'HVAC': [
-    { service: 'HVAC Repair',           keywords: ['repair', 'fix', 'not working', 'broken', 'issue', 'problem'] },
-    { service: 'HVAC Replacement',      keywords: ['replace', 'new unit', 'new system', 'upgrade', 'install'] },
-    { service: 'HVAC Maintenance',      keywords: ['maintenance', 'tune-up', 'tune up', 'check-up', 'inspection', 'service'] },
-  ],
-  'Plumbing': [
-    { service: 'Emergency Plumbing',    keywords: ['emergency', 'burst', 'flood', 'urgent', 'pouring'] },
-    { service: 'Plumbing Repair',       keywords: ['repair', 'fix', 'leak', 'drip', 'clog', 'broken'] },
-    { service: 'Plumbing Installation', keywords: ['install', 'new', 'replace', 'upgrade'] },
-  ],
-  'Roofing': [
-    { service: 'Roof Repair',           keywords: ['repair', 'fix', 'patch', 'leak'] },
-    { service: 'Roof Replacement',      keywords: ['replace', 'new roof', 're-roof', 'tear off'] },
-    { service: 'Emergency Roofing',     keywords: ['emergency', 'storm', 'leak', 'urgent'] },
-  ],
-  'Painting': [
-    { service: 'Interior Painting',     keywords: ['interior', 'inside', 'room', 'wall', 'ceiling'] },
-    { service: 'Exterior Painting',     keywords: ['exterior', 'outside', 'siding', 'trim'] },
-  ],
-};
-
+// ── Service detection: customer speech ONLY (Phase C) ──
+// Agent confirmation questions are no longer service evidence.
 function detectService(transcriptLines, industry) {
-  const services = SERVICE_KEYWORDS[industry];
-  if (!services || !transcriptLines || transcriptLines.length === 0) {
-    return null;
-  }
-  const fullText = transcriptLines
-    .map(function(l) { return (l.text || l.content || '').toLowerCase(); })
-    .join(' ');
-  const detected = [];
-  for (let i = 0; i < services.length; i++) {
-    const s = services[i];
-    for (let k = 0; k < s.keywords.length; k++) {
-      if (fullText.indexOf(s.keywords[k]) !== -1) {
-        detected.push(s.service);
-        break;
-      }
-    }
-  }
-  return detected.length > 0 ? detected : null;
+  const turns = factExtraction.normalizeTranscript(transcriptLines);
+  const extraction = factExtraction.extractPolarisFacts(turns, industry);
+  return extraction.meta.serviceDetected.length > 0 ? extraction.meta.serviceDetected : null;
 }
 
-// ── Value extraction: extracts numeric values for qualification variables ──
-// Uses regex patterns to find numbers near measurement words.
+// ── Value extraction: constrained typed parser, customer turns only (Phase C) ──
 function extractValues(transcriptLines, industry) {
-  const profile = getQualificationProfile(industry);
-  if (!profile || !transcriptLines || transcriptLines.length === 0) return {};
-  const fullText = transcriptLines
-    .map(function(l) { return (l.text || l.content || '').toLowerCase(); })
-    .join(' ');
-  const values = {};
-  // Number pattern: digits or spelled-out numbers (including multi-word)
-  const numPattern = /(?:\d[\d,]*\.?\d*|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:\s+(?:hundred|thousand))?(?:\s+(?:and\s+)?(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety))?|hundred|thousand)/gi;
-  for (let i = 0; i < profile.length; i++) {
-    const v = profile[i];
-    if (!v.unit) continue;
-    // Build unit patterns for this specific variable
-    const unitPatterns = v.unit === 'sq ft' ? ['square foot', 'square feet', 'sq ft', 'sqft'] :
-                         v.unit === 'ft' ? ['foot', 'feet', 'ft', 'tall', 'height', 'high'] :
-                         v.unit === 'inches' ? ['inch', 'inches', 'diameter', 'thick', 'trunk', 'width'] :
-                         v.unit === 'years' ? ['year old', 'years old', 'old', 'age'] :
-                         v.unit === 'rooms' ? ['room', 'bedroom', 'floor', 'story', 'level'] :
-                         [v.unit];
-    // Find the closest number before each unit occurrence
-    let bestValue = null;
-    let bestDist = Infinity;
-    for (let u = 0; u < unitPatterns.length; u++) {
-      let searchIdx = 0;
-      while (true) {
-        const unitIdx = fullText.indexOf(unitPatterns[u], searchIdx);
-        if (unitIdx === -1) break;
-        // Look backwards up to 40 chars for a number
-        const before = fullText.substring(Math.max(0, unitIdx - 40), unitIdx);
-        const numMatch = before.match(numPattern);
-        if (numMatch) {
-          const dist = unitIdx - (unitIdx - before.length + before.lastIndexOf(numMatch[numMatch.length - 1]));
-          if (dist < bestDist && dist < 30) {
-            bestDist = dist;
-            bestValue = numMatch[numMatch.length - 1] + ' ' + (v.unit === 'sq ft' ? 'sq ft' : v.unit);
-          }
-        }
-        searchIdx = unitIdx + 1;
-      }
-    }
-    if (bestValue) values[v.name] = bestValue;
-  }
-  return values;
+  const turns = factExtraction.normalizeTranscript(transcriptLines);
+  const extraction = factExtraction.extractPolarisFacts(turns, industry);
+  return factExtraction.buildPolarisLegacyFromFacts(extraction.facts, industry).extractedValues;
 }
 
+// ── Qualification analysis: derived from typed PolarisFacts (Phase C) ──
+// Only validated, customer-sourced `collected` facts count toward
+// completeness. mentioned_unresolved / conflicting / inferred never count.
 function analyzeTranscriptQualification(transcriptLines, industry) {
-  const profile = getQualificationProfile(industry);
-  if (!profile || !transcriptLines || transcriptLines.length === 0) {
-    return { variables: [], collected: [], missing: [], completeness: 0, totalVariables: 0 };
-  }
-  const fullText = transcriptLines
-    .map(function(l) { return (l.text || l.content || '').toLowerCase(); })
-    .join(' ');
-  const variables = [];
-  const collectedNames = [];
-  const missingNames = [];
-  for (let i = 0; i < profile.length; i++) {
-    const v = profile[i];
-    let found = false;
-    let sourceQuote = null;
-    for (let k = 0; k < v.keywords.length; k++) {
-      const idx = fullText.indexOf(v.keywords[k]);
-      if (idx !== -1) {
-        found = true;
-        // Extract source quote: up to 80 chars around the match
-        const start = Math.max(0, idx - 20);
-        const end = Math.min(fullText.length, idx + v.keywords[k].length + 40);
-        sourceQuote = fullText.substring(start, end).trim();
-        break;
-      }
-    }
-    if (!found && v.unit) {
-      found = hasMeasurement(fullText, v.keywords);
-    }
-    // Extract value if this variable has a unit
-    let extractedValue = null, extractedUnit = null, varConfidence = 0;
-    if (found) {
-      collectedNames.push(v.name);
-      varConfidence = 0.85; // keyword match baseline
-      // Try to extract value from extractValues function
-      const vals = extractValues(transcriptLines, industry);
-      if (vals[v.name]) {
-        extractedValue = vals[v.name];
-        const parts = vals[v.name].split(' ');
-        extractedUnit = parts.length > 1 ? parts.slice(1).join(' ') : (v.unit || null);
-        varConfidence = 0.95;
-      }
-    } else {
-      missingNames.push(v.name);
-      varConfidence = 0;
-    }
-    variables.push({
-      variable: v.name,
-      value: extractedValue,
-      unit: extractedUnit || v.unit || null,
-      display: extractedValue || null,
-      sourceQuote: sourceQuote,
-      confidence: varConfidence,
-      status: found ? 'collected' : 'missing'
-    });
-  }
-  const total = profile.length;
-  const completeness = total > 0 ? Math.round((collectedNames.length / total) * 100) : 0;
-  return {
-    variables: variables,
-    collected: collectedNames,
-    missing: missingNames,
-    completeness: completeness,
-    totalVariables: total
-  };
+  const turns = factExtraction.normalizeTranscript(transcriptLines);
+  const extraction = factExtraction.extractPolarisFacts(turns, industry);
+  return factExtraction.buildPolarisLegacyFromFacts(extraction.facts, industry).qualification;
 }
 
-// ---- Source quote extraction helper ----
-function extractSourceQuote(fullText, keyword, contextChars) {
-  if (!fullText || !keyword) return null;
-  const idx = fullText.indexOf(keyword);
-  if (idx === -1) return null;
-  const ctx = contextChars || 30;
-  const start = Math.max(0, idx - ctx);
-  const end = Math.min(fullText.length, idx + keyword.length + ctx);
-  let quote = fullText.substring(start, end).trim();
-  // Strip leading/trailing sentence terminators and commas
-  quote = quote.replace(/^[^a-zA-Z0-9]+/, '').replace(/[^a-zA-Z0-9]+$/, '');
-  return quote.length > 0 ? quote : null;
+// ---- Source quote extraction (turn-bounded — Phase C) ----
+// Replaces the old character-window slicing. Returns the complete customer
+// sentence containing the keyword — never a clipped fragment, never agent
+// speech, never text combined across speakers.
+function extractSourceQuote(turns, keyword) {
+  return factExtraction.findCustomerSentence(turns, keyword);
 }
 
 // ---- buildPolarisIntelligence - canonical intelligence record ----
 // Single source of truth for all Polaris reasoning.
 // The report UI and downstream consumers read from this record.
-function buildPolarisIntelligence(businessName, industry, transcriptLines, executiveSummary) {
+// M19.5 Phase C: consumes typed PolarisFacts produced with strict speaker
+// isolation; legacy fields are derived from the facts via the compatibility
+// layer (buildPolarisLegacyFromFacts). Pricing baselines and multiplier
+// values are UNCHANGED — only the evidence source is now customer-only.
+function buildPolarisIntelligence(businessName, industry, transcriptLines, executiveSummary, transcriptSource) {
   const d = getDefaults(industry);
   const lines = transcriptLines || [];
   const n = lines.length;
-  const fullText = lines
-    .map(function(l) { return (l.text || l.content || '').toLowerCase(); })
-    .join(' ');
 
-  // Industry defaults
+  // Normalize once, extract typed facts, derive legacy fields from facts.
+  const turns = factExtraction.normalizeTranscript(lines, transcriptSource);
+  const extraction = factExtraction.extractPolarisFacts(turns, industry);
+  const facts = extraction.facts;
+  const meta = extraction.meta;
+  const legacy = factExtraction.buildPolarisLegacyFromFacts(facts, industry);
+  const qual = legacy.qualification;
+  const extractedVals = legacy.extractedValues;
+
+  // Industry defaults (pricing baselines unchanged in Phase C)
   const baseMin = d.revenueRangeMin;
   const baseMax = d.revenueRangeMax;
   const baseAvg = d.avgJobValue;
   const baseUrgency = d.emergencyLikelihood;
 
-  // Detect specific service
-  const detectedServices = detectService(lines, industry);
-  const primaryService = detectedServices ? detectedServices[0] : null;
-  const secondaryServices = detectedServices ? detectedServices.slice(1) : [];
-  const serviceSourceQuote = primaryService ? extractSourceQuote(fullText, primaryService.toLowerCase().split(' ')[0], 40) : null;
+  // Detected service — customer speech only (Phase C)
+  const primaryService = meta.serviceDetected.length > 0 ? meta.serviceDetected[0] : null;
+  const secondaryServices = meta.serviceDetected.slice(1);
+  const serviceSourceQuote = meta.serviceQuote;
 
-  // Run structured qualification
-  const qual = analyzeTranscriptQualification(lines, industry);
-  const extractedVals = extractValues(lines, industry);
-
-  // Determine dynamic urgency from transcript
+  // Determine dynamic urgency — customer statements only (Phase C).
+  // Agent questions ("Is this an emergency?") no longer contribute.
   let urgencyLevel = 'Standard';
-  let urgencyScore = baseUrgency;
-  const urgentWords = ['urgent', 'emergency', 'asap', 'quick', 'immediately', 'hurry', 'soon', 'leak', 'flood', 'broken', 'burst', 'dangerous', 'hazard', 'safety', 'storm', 'damage'];
-  for (let w = 0; w < urgentWords.length; w++) {
-    if (fullText.indexOf(urgentWords[w]) !== -1) {
-      urgencyScore = Math.min(1.0, urgencyScore + 0.15);
-    }
+  let urgencyScore = Math.min(1.0, baseUrgency + 0.15 * meta.urgencyHits);
+  if (meta.urgencyNegated && meta.urgencyHits === 0) {
+    // Customer explicitly stated it is NOT an emergency — never High.
+    urgencyScore = Math.min(urgencyScore, 0.3);
   }
   if (urgencyScore > 0.3) urgencyLevel = 'High';
   else if (urgencyScore > 0.15) urgencyLevel = 'Moderate';
@@ -571,7 +366,9 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
   // Determine customer intent
   let customerIntent = n === 0 ? 'Not yet determined' : (n > 2 ? 'Actively seeking service' : 'Information gathering');
 
-  // Dynamic revenue range based on extracted facts
+  // Dynamic revenue range based on extracted facts.
+  // Multiplier thresholds and values are IDENTICAL to pre-Phase-C behavior —
+  // only the evidence source changed (customer-sourced collected facts).
   let factMultiplier = 1.0;
   const adjustmentReasons = [];
 
@@ -599,15 +396,8 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     }
   }
 
-  // Access difficulty adjustment
-  const difficultyWords = ['near house', 'near', 'close to', 'difficult', 'tight', 'backyard', 'fence', 'power line', 'over', 'structure', 'building', 'garage'];
-  let difficultyFound = false;
-  for (let w = 0; w < difficultyWords.length; w++) {
-    if (fullText.indexOf(difficultyWords[w]) !== -1) {
-      difficultyFound = true;
-      break;
-    }
-  }
+  // Access difficulty adjustment — customer statements only (Phase C)
+  const difficultyFound = meta.difficultyFound;
   if (difficultyFound) {
     factMultiplier = Math.max(factMultiplier, 1.2);
     adjustmentReasons.push('Access difficulty noted');
@@ -641,12 +431,12 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     const parts = [];
     const customerLabel = (executiveSummary && executiveSummary.customerName) ? executiveSummary.customerName : 'Customer';
 
-    // Extract a descriptive object/subject from first customer utterance
+    // Extract a descriptive object/subject from the first CUSTOMER utterance
+    // (speaker-isolated via normalized turns — agent speech never leaks in).
     var firstCustomerLine = '';
-    for (var fli = 0; fli < lines.length; fli++) {
-      var fl = lines[fli];
-      if ((fl.speaker === 'customer' || fl.role === 'customer') && (fl.text || fl.content)) {
-        firstCustomerLine = (fl.text || fl.content || '').toLowerCase();
+    for (var fli = 0; fli < turns.length; fli++) {
+      if (turns[fli].speaker === 'customer' && turns[fli].utterance) {
+        firstCustomerLine = turns[fli].utterance.toLowerCase();
         break;
       }
     }
@@ -655,7 +445,7 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
       // Look for adjective+noun or noun patterns near the service keyword
       var descPatterns = [
         /(large|big|tall|huge|small|old|new|oak|pine|maple|cedar)\s+\w+/i,
-        /(\w+\s+oak|\w+\s+pine|\w+\s+tree)/i,
+        /((?!for\b|the\b|a\b|an\b|my\b|of\b|this\b|that\b|your\b)\w+\s+oak|(?!for\b|the\b|a\b|an\b|my\b|of\b|this\b|that\b|your\b)\w+\s+pine|(?!for\b|the\b|a\b|an\b|my\b|of\b|this\b|that\b|your\b)\w+\s+tree)s?\b/i,
         /(emergency|urgent|storm\s+damage|hazardous)/i,
       ];
       for (var dpi = 0; dpi < descPatterns.length; dpi++) {
@@ -678,22 +468,25 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     if (extractedVals['Tree Height']) detailParts.push('approximately ' + extractedVals['Tree Height']);
     if (extractedVals['Home Square Footage']) detailParts.push('approximately ' + extractedVals['Home Square Footage']);
     if (extractedVals['Square Footage']) detailParts.push('approximately ' + extractedVals['Square Footage']);
+    if (extractedVals['Area']) detailParts.push('approximately ' + extractedVals['Area']);
     if (extractedVals['System Age']) detailParts.push('system age ' + extractedVals['System Age']);
     if (extractedVals['Room Count']) detailParts.push(extractedVals['Room Count']);
     if (detailParts.length > 0) {
       parts.push('The job involves ' + detailParts.join(', ') + '.');
     }
 
-    // Add difficulty/urgency context
+    // Add difficulty/urgency context — complete customer sentences only
+    // (Phase C: no clipped character-window fragments, no agent speech).
     if (difficultyFound) {
-      const difficultyQuote = extractSourceQuote(fullText, 'near', 25);
-      if (difficultyQuote) parts.push('The work area is ' + difficultyQuote + ', requiring careful access planning.');
+      if (meta.difficultyQuote) {
+        parts.push('The customer noted: "' + meta.difficultyQuote + '" — careful access planning is required.');
+      } else {
+        parts.push('Access considerations were noted, requiring careful planning.');
+      }
     }
     if (urgencyLevel === 'High') {
-      // Use the customer's own urgency signal if found
-      const urgentSignal = extractSourceQuote(fullText, 'urgent', 25) || extractSourceQuote(fullText, 'emergency', 25);
-      if (urgentSignal) {
-        parts.push('The customer indicated the situation is urgent (' + urgentSignal + '), requiring prompt attention.');
+      if (meta.urgencyQuote) {
+        parts.push('The customer indicated the situation is urgent ("' + meta.urgencyQuote + '"), requiring prompt attention.');
       } else {
         parts.push('The customer has indicated elevated urgency requiring prompt attention.');
       }
@@ -762,7 +555,7 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
       primary: primaryService || d.service,
       secondary: secondaryServices,
       sourceQuote: serviceSourceQuote,
-      confidence: detectedServices ? 0.95 : 0.85
+      confidence: meta.serviceDetected.length > 0 ? 0.95 : 0.85
     },
 
     estimatingVariables: qual.variables,
@@ -788,6 +581,10 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     reasoning: reasoning,
     generatedAt: new Date().toISOString(),
 
+    // ── M19.5 Phase C: typed fact model (v1.0) alongside legacy fields ──
+    polarisFacts: facts,
+    factModelVersion: '1.0',
+
     // Preserve compatibility with downstream consumers
     confidence: confidence,
     revenueRange: '$' + adjMin.toLocaleString() + ' - $' + adjMax.toLocaleString(),
@@ -797,14 +594,18 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
   };
 }
 
-function polarisEstimateFromSession(session) {
-  if (!session) return null;
-  return polarisEstimate(session.businessName, session.industry, session.transcriptLines || []);
+function sessionTranscriptSource(session) {
+  return session && session.callId && String(session.callId).startsWith('sim') ? 'simulation' : 'retell';
 }
 
-function polarisEstimate(businessName, industry, transcriptLines, executiveSummary) {
+function polarisEstimateFromSession(session) {
+  if (!session) return null;
+  return polarisEstimate(session.businessName, session.industry, session.transcriptLines || [], undefined, sessionTranscriptSource(session));
+}
+
+function polarisEstimate(businessName, industry, transcriptLines, executiveSummary, transcriptSource) {
   // Thin consumer of the canonical intelligence record
-  const intelligence = buildPolarisIntelligence(businessName, industry, transcriptLines || [], executiveSummary);
+  const intelligence = buildPolarisIntelligence(businessName, industry, transcriptLines || [], executiveSummary, transcriptSource);
   // Return backward-compatible shape + the full canonical record
   return {
     opportunityLabel: intelligence.estimate.opportunityLabel,
@@ -1453,7 +1254,7 @@ router.get('/:id/polaris-estimate', (req, res) => {
       });
     }
 
-    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines, session.executiveSummary);
+    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines, session.executiveSummary, sessionTranscriptSource(session));
     res.json({ ...estimate, polairsState: 'analyzing', polarisState: 'analyzing' });
   } catch (err) {
     console.error('[Demo] Polaris estimate error:', err.message, err.stack);
@@ -1482,7 +1283,7 @@ router.get('/:id/status', (req, res) => {
       liveTimeline.addEntry(session.id, 'call_completed', 'Simulated call ended', 'system');
     }
 
-    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines, session.executiveSummary);
+    const estimate = polarisEstimate(session.businessName, session.industry, session.transcriptLines, session.executiveSummary, sessionTranscriptSource(session));
 
     const preLive = ['idle', 'requesting_call', 'call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation'];
     const isPreLive = preLive.includes(session.callStatus);

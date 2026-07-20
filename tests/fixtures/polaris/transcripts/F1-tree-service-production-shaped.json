@@ -1,0 +1,33 @@
+{
+  "name": "F1-tree-service-production-shaped",
+  "description": "Failed production-shaped Tree Service fixture — mixed customer/agent turns, multiple trees, quantity, height, agent urgency questions",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "agent",    "utterance": "Hello, thanks for calling NorthStar Tree Service. How can I help you today?", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "Hi, I need to get some trees removed. I have four 120-foot trees leaning toward my house.", "source": "simulation" },
+    { "turnId": "turn-2", "speaker": "agent",    "utterance": "I understand. Four white pines, about 120 feet each, leaning toward the house. Is this an emergency or a standard non-urgent request?", "source": "simulation" },
+    { "turnId": "turn-3", "speaker": "customer", "utterance": "No, it's not an emergency — they've been leaning for a while, I just want to get them taken care of before winter.", "source": "simulation" },
+    { "turnId": "turn-4", "speaker": "agent",    "utterance": "Got it. What's your name please?", "source": "simulation" },
+    { "turnId": "turn-5", "speaker": "customer", "utterance": "My name is Christopher Johnson.", "source": "simulation" },
+    { "turnId": "turn-6", "speaker": "agent",    "utterance": "Thanks Christopher. And a phone number I can reach you at?", "source": "simulation" },
+    { "turnId": "turn-7", "speaker": "customer", "utterance": "Sure, it's (518) 555-5799.", "source": "simulation" },
+    { "turnId": "turn-8", "speaker": "agent",    "utterance": "Great. And the service address?", "source": "simulation" },
+    { "turnId": "turn-9", "speaker": "customer", "utterance": "4335 Elm Street.", "source": "simulation" }
+  ],
+  "expectedFacts": {
+    "requested_service": { "status": "collected", "normalizedValue": "Tree Removal", "speaker": "customer" },
+    "quantity":           { "status": "collected", "normalizedValue": 4, "unit": "trees", "speaker": "customer" },
+    "Tree Height":        { "status": "collected", "normalizedValue": 120, "unit": "ft", "speaker": "customer" },
+    "urgency":            { "status": "collected", "normalizedValue": "standard", "speaker": "customer" },
+    "Location Difficulty": { "status": "collected", "speaker": "customer" },
+    "customer_name":      { "status": "collected", "normalizedValue": "Christopher Johnson", "speaker": "customer" },
+    "customer_phone":     { "status": "collected", "normalizedValue": "+15185555799", "speaker": "customer" }
+  },
+  "expectedProtections": {
+    "agent_urgency_question_does_not_create_urgency": true,
+    "quantity_not_misread_as_height": true,
+    "no_corrupted_source_fragments": true,
+    "unresolved_not_marked_collected": true
+  }
+}

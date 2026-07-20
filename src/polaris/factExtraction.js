@@ -278,7 +278,7 @@ const NEGATION_RE = /\b(not|no|never|isn't|isnt|aren't|arent|don't|dont|doesn't|
 const CORRECTION_RE = /\b(actually|i was wrong|i meant|meant to say|correction|scratch that|make that|my mistake|sorry|let me correct)\b/i;
 
 const COUNTABLE_NOUNS = {
-  trees: 'trees', tree: 'trees', pines: 'trees', pine: 'trees', oaks: 'trees', oak: 'trees',
+  trees: 'trees', tree: 'trees', pines: 'trees', pine: 'trees',
   maples: 'trees', maple: 'trees', evergreens: 'trees',
   stumps: 'stumps', stump: 'stumps',
   rooms: 'rooms', room: 'rooms', bedrooms: 'rooms', bedroom: 'rooms',

@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Executive Brief — POLARIS™ — NorthStar Solutions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    :root {
+      --eb-bg: var(--neutral-50, #f8f9fa);
+      --eb-card-bg: #ffffff;
+      --eb-card-border: var(--neutral-200, #e9ecef);
+      --eb-text-primary: var(--neutral-900, #1a1a2e);
+      --eb-text-secondary: var(--neutral-600, #6c757d);
+      --eb-text-muted: var(--neutral-500, #adb5bd);
+      --eb-accent: var(--accent, #d4af37);
+      --eb-success: var(--success, #2ecc71);
+      --eb-warning: #f39c12;
+      --eb-danger: #e74c3c;
+      --eb-info: var(--info, #3498db);
+    }
+    [data-theme="dark"] {
+      --eb-bg: var(--neutral-900, #1a1a2e);
+      --eb-card-bg: var(--neutral-800, #2d2d44);
+      --eb-card-border: var(--neutral-700, #3d3d5c);
+      --eb-text-primary: var(--neutral-100, #f8f9fa);
+      --eb-text-secondary: var(--neutral-400, #adb5bd);
+    }
+
+    .eb-workspace {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .eb-header {
+      margin-bottom: 24px;
+    }
+
+    .eb-header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      color: var(--eb-text-primary);
+    }
+
+    .eb-header .eb-subtitle {
+      font-size: 14px;
+      color: var(--eb-text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .eb-header .eb-subtitle .eb-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--eb-success);
+    }
+
+    .eb-header .eb-subtitle .eb-live::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--eb-success);
+      display: inline-block;
+      animation: eb-pulse 2s infinite;
+    }
+
+    @keyframes eb-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .eb-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .eb-card {
+      background: var(--eb-card-bg);
+      border: 1px solid var(--eb-card-border);
+      border-radius: 12px;
+      padding: 20px;
+      transition: box-shadow 0.2s;
+    }
+
+    .eb-card:hover {
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+
+    .eb-card-full {
+      grid-column: 1 / -1;
+    }
+
+    .eb-card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--eb-text-muted);
+      margin-bottom: 12px;
+    }
+
+    .eb-summary-text {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--eb-text-primary);
+      font-weight: 400;
+    }
+
+    .eb-summary-text strong {
+      font-weight: 600;
+      color: var(--eb-accent);
+    }
+
+    .eb-priority-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px;
+      background: linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%);
+      border-radius: 8px;
+      border: 1px solid rgba(212,175,55,0.2);
+    }
+
+    .eb-priority-rank {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--eb-accent);
+      line-height: 1;
+      min-width: 36px;
+    }
+
+    .eb-priority-body {
+      flex: 1;
+    }
+
+    .eb-priority-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--eb-text-primary);
+      margin-bottom: 4px;
+    }
+
+    .eb-priority-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--eb-text-secondary);
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .eb-priority-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .eb-priority-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .eb-priority-badge.critical { background: #e74c3c; color: #fff; }
+    .eb-priority-badge.high { background: #f39c12; color: #fff; }
+    .eb-priority-badge.medium { background: var(--info, #3498db); color: #fff; }
+    .eb-priority-badge.low { background: var(--eb-text-muted); color: #fff; }
+
+    .eb-priority-explanation {
+      font-size: 13px;
+      color: var(--eb-text-secondary);
+      line-height: 1.5;
+    }
+
+    .eb-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+    }
+
+    .eb-stat {
+      text-align: center;
+      padding: 12px 8px;
+    }
+
+    .eb-stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--eb-text-primary);
+      line-height: 1.2;
+    }
+
+    .eb-stat-value .currency {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--eb-text-secondary);
+    }
+
+    .eb-stat-label {
+      font-size: 11px;
+      color: var(--eb-text-muted);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    .eb-stat-value.positive { color: var(--eb-success); }
+    .eb-stat-value.warning { color: var(--eb-warning); }
+    .eb-stat-value.neutral { color: var(--eb-accent); }
+
+    .eb-insight-text {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--eb-text-primary);
+      padding: 12px 16px;
+      background: var(--eb-bg);
+      border-radius: 8px;
+      border-left: 3px solid var(--eb-accent);
+    }
+
+    .eb-insight-text .eb-insight-source {
+      display: block;
+      font-size: 11px;
+      color: var(--eb-text-muted);
+      margin-top: 6px;
+    }
+
+    .eb-action-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: linear-gradient(135deg, rgba(212,175,55,0.1) 0%, rgba(212,175,55,0.03) 100%);
+      border-radius: 8px;
+      border: 1px solid rgba(212,175,55,0.25);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .eb-action-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(212,175,55,0.15);
+    }
+
+    .eb-action-icon {
+      font-size: 28px;
+      min-width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--eb-card-bg);
+      border-radius: 10px;
+    }
+
+    .eb-action-body {
+      flex: 1;
+    }
+
+    .eb-action-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--eb-text-primary);
+      margin-bottom: 2px;
+    }
+
+    .eb-action-meta {
+      font-size: 12px;
+      color: var(--eb-text-secondary);
+    }
+
+    .eb-customer-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .eb-customer-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: var(--eb-bg);
+    }
+
+    .eb-customer-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--eb-text-primary);
+      flex: 1;
+    }
+
+    .eb-customer-tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .eb-customer-tag.new { background: rgba(46,204,113,0.15); color: var(--eb-success); }
+    .eb-customer-tag.returning { background: rgba(52,152,219,0.15); color: var(--eb-info); }
+    .eb-customer-tag.attention { background: rgba(231,76,60,0.15); color: var(--eb-danger); }
+
+    .eb-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+      font-size: 14px;
+      color: var(--eb-text-secondary);
+    }
+
+    .eb-loading::after {
+      content: '';
+      width: 20px;
+      height: 20px;
+      margin-left: 10px;
+      border: 2px solid var(--eb-card-border);
+      border-top-color: var(--eb-accent);
+      border-radius: 50%;
+      animation: eb-spin 0.8s linear infinite;
+    }
+
+    @keyframes eb-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .eb-error {
+      text-align: center;
+      padding: 40px;
+      color: var(--eb-text-secondary);
+    }
+
+    .eb-empty {
+      text-align: center;
+      padding: 24px;
+      color: var(--eb-text-secondary);
+      font-size: 13px;
+    }
+
+    .eb-operational-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .eb-operational-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--eb-text-primary);
+    }
+
+    .eb-operational-item .eb-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .eb-operational-item .eb-dot.active { background: var(--eb-success); }
+    .eb-operational-item .eb-dot.pending { background: var(--eb-warning); }
+    .eb-operational-item .eb-dot.risk { background: var(--eb-danger); }
+
+    .eb-opportunity-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: var(--eb-bg);
+      margin-bottom: 6px;
+    }
+
+    .eb-opportunity-value {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--eb-accent);
+      min-width: 80px;
+    }
+
+    .eb-opportunity-desc {
+      flex: 1;
+      font-size: 13px;
+      color: var(--eb-text-primary);
+    }
+
+    .eb-opportunity-prob {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--eb-success);
+    }
+
+    @media (max-width: 768px) {
+      .eb-grid {
+        grid-template-columns: 1fr;
+      }
+      .eb-workspace {
+        padding: 16px;
+      }
+      .eb-stat-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <a href="/dashboard" class="sidebar-logo">
+        <span class="sidebar-star">&#9733;</span>
+        <span class="sidebar-brand">NorthStar</span>
+      </a>
+      <nav class="sidebar-nav">
+        <a href="/dashboard" class="sidebar-item active">
+          <span class="sidebar-icon">&#9733;</span>
+          <span>Executive Brief</span>
+        </a>
+        <a href="/dashboard/polaris" class="sidebar-item">
+          <span class="sidebar-icon">&#9881;</span>
+          <span>Polaris</span>
+        </a>
+        <a href="/dashboard/leads" class="sidebar-item">
+          <span class="sidebar-icon">&#128100;</span>
+          <span>Leads</span>
+        </a>
+        <a href="/dashboard/communications" class="sidebar-item">
+          <span class="sidebar-icon">&#128172;</span>
+          <span>Communications</span>
+        </a>
+        <a href="/dashboard/calendar" class="sidebar-item">
+          <span class="sidebar-icon">&#128197;</span>
+          <span>Calendar</span>
+        </a>
+        <a href="/dashboard/business-profile" class="sidebar-item">
+          <span class="sidebar-icon">&#128202;</span>
+          <span>Business Profile</span>
+        </a>
+        <a href="/dashboard/settings" class="sidebar-item">
+          <span class="sidebar-icon">&#9881;</span>
+          <span>Settings</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="/logout" class="sidebar-item">Sign Out</a>
+      </div>
+    </aside>
+    <main class="main-content" id="mainContent">
+      <div class="eb-workspace" id="executiveBrief">
+        <div class="eb-header">
+          <h1>Executive Brief</h1>
+          <div class="eb-subtitle">
+            <span>POLARIS Intelligence Summary</span>
+            <span class="eb-live">Live</span>
+            <span id="ebTimestamp">updating...</span>
+          </div>
+        </div>
+        <div class="eb-loading" id="ebLoading">Loading Executive Brief</div>
+        <div class="eb-grid" id="ebContent" style="display:none">
+
+          <!-- 1. Executive Summary -->
+          <div class="eb-card eb-card-full">
+            <div class="eb-card-title">Executive Summary</div>
+            <div class="eb-summary-text" id="ebSummary">Loading...</div>
+          </div>
+
+          <!-- 2. Highest Priority -->
+          <div class="eb-card eb-card-full">
+            <div class="eb-card-title">Highest Priority</div>
+            <div id="ebPriority">Loading...</div>
+          </div>
+
+          <!-- 3. Revenue Snapshot -->
+          <div class="eb-card">
+            <div class="eb-card-title">Revenue Snapshot</div>
+            <div class="eb-stat-grid" id="ebRevenue">Loading...</div>
+          </div>
+
+          <!-- 4. Operational Snapshot -->
+          <div class="eb-card">
+            <div class="eb-card-title">Operational Snapshot</div>
+            <div id="ebOperational">Loading...</div>
+          </div>
+
+          <!-- 5. Customer Highlights -->
+          <div class="eb-card eb-card-full">
+            <div class="eb-card-title">Customer Highlights</div>
+            <div id="ebCustomers">Loading...</div>
+          </div>
+
+          <!-- 6. Polaris Insight -->
+          <div class="eb-card eb-card-full">
+            <div class="eb-card-title">POLARIS Insight</div>
+            <div id="ebInsight">Loading...</div>
+          </div>
+
+          <!-- 7. Recommended Next Action -->
+          <div class="eb-card eb-card-full">
+            <div class="eb-card-title">Recommended Next Action</div>
+            <div id="ebNextAction">Loading...</div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (function() {
+      var eb = document.getElementById('executiveBrief');
+      var loading = document.getElementById('ebLoading');
+      var content = document.getElementById('ebContent');
+
+      function fmtCurrency(val) {
+        if (val === null || val === undefined || val === 0) return '$0';
+        if (val >= 1000) {
+          return '$' + (val / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+        }
+        return '$' + Math.round(val).toLocaleString();
+      }
+
+      function fmtNumber(val) {
+        if (val === null || val === undefined) return '0';
+        return Math.round(val).toLocaleString();
+      }
+
+      function getPriorityBadge(priority) {
+        var p = (priority || 'medium').toLowerCase();
+        return '<span class="eb-priority-badge ' + p + '">' + p + '</span>';
+      }
+
+      function render() {
+        fetch('/api/v1/analytics/executive')
+          .then(function(r) { return r.json(); })
+          .then(function(exec) {
+            // Fetch additional data in parallel
+            return Promise.all([
+              Promise.resolve(exec),
+              fetch('/api/v1/analytics/dashboard').then(function(r) { return r.json(); }).catch(function() { return {}; }),
+              fetch('/api/v1/customers').then(function(r) { return r.json(); }).catch(function() { return []; }),
+              fetch('/api/v1/opportunities/pipeline').then(function(r) { return r.json(); }).catch(function() { return []; })
+            ]);
+          })
+          .then(function(results) {
+            var exec = results[0] || {};
+            var dashboard = results[1] || {};
+            var customers = results[2] || [];
+            var pipeline = results[3] || [];
+
+            loading.style.display = 'none';
+            content.style.display = '';
+
+            // Timestamp
+            document.getElementById('ebTimestamp').textContent = new Date().toLocaleString();
+
+            // ── 1. Executive Summary ──
+            var summaryEl = document.getElementById('ebSummary');
+            var parts = [];
+            if (exec && exec.revenue) {
+              var totalRev = exec.revenue.total || 0;
+              var outstanding = exec.revenue.outstanding || 0;
+              var forecast = exec.revenue.forecast || 0;
+              var deals = exec.pipeline ? exec.pipeline.activeDeals || 0 : 0;
+              var weightedVal = exec.pipeline ? exec.pipeline.weightedValue || 0 : 0;
+
+              if (deals > 0 || totalRev > 0) {
+                parts.push('Polaris has identified <strong>' + fmtNumber(deals) + '</strong> active opportunity');
+                if (deals !== 1) parts[parts.length-1] = parts[parts.length-1] + 'ies';
+                parts[parts.length-1] = parts[parts.length-1] + ' with a combined estimated value of <strong>' + fmtCurrency(weightedVal) + '</strong>.';
+              }
+              if (outstanding > 0) {
+                parts.push('<strong>' + fmtCurrency(outstanding) + '</strong> in outstanding revenue requires attention.');
+              }
+              if (forecast > 0) {
+                parts.push('Projected revenue of <strong>' + fmtCurrency(forecast) + '</strong> over the next period.');
+              }
+            }
+            if (parts.length === 0) {
+              parts.push('No active opportunities identified. Use Polaris to start a new conversation and generate intelligence.');
+            }
+            summaryEl.innerHTML = parts.join(' ');
+
+            // ── 2. Highest Priority ──
+            var priorityEl = document.getElementById('ebPriority');
+            if (exec && exec.recommendations && exec.recommendations.length > 0) {
+              var top = exec.recommendations[0];
+              var priority = top.priority || 'medium';
+              priorityEl.innerHTML =
+                '<div class="eb-priority-card">' +
+                  '<div class="eb-priority-rank">1</div>' +
+                  '<div class="eb-priority-body">' +
+                    '<div class="eb-priority-title">' + (top.title || top.action || 'Action Required') + '</div>' +
+                    '<div class="eb-priority-meta">' +
+                      getPriorityBadge(priority) +
+                      '<span>Confidence: ' + (top.confidence || 50) + '%</span>' +
+                      '<span>Impact: ' + (top.businessImpact || top.impact || 'Revenue') + '</span>' +
+                    '</div>' +
+                    '<div class="eb-priority-explanation">' + (top.explanation || top.reason || 'Review the latest intelligence for details.') + '</div>' +
+                  '</div>' +
+                '</div>';
+            } else if (exec && exec.companyHealth !== undefined) {
+              var health = exec.companyHealth || 50;
+              var healthLabel = health >= 80 ? 'Excellent' : health >= 60 ? 'Good' : health >= 40 ? 'Fair' : 'Needs Attention';
+              priorityEl.innerHTML =
+                '<div class="eb-priority-card">' +
+                  '<div class="eb-priority-body">' +
+                    '<div class="eb-priority-title">Company Health Score: ' + health + '/100</div>' +
+                    '<div class="eb-priority-meta"><span>Status: ' + healthLabel + '</span></div>' +
+                    '<div class="eb-priority-explanation">Polaris monitors operational and customer health to identify the highest-impact actions for your business.</div>' +
+                  '</div>' +
+                '</div>';
+            } else {
+              priorityEl.innerHTML = '<div class="eb-empty">Generate Polaris intelligence by starting a call or uploading a transcript to see prioritized recommendations.</div>';
+            }
+
+            // ── 3. Revenue Snapshot ──
+            var revenueEl = document.getElementById('ebRevenue');
+            if (exec && exec.revenue) {
+              var totalRevenue = exec.revenue.total || 0;
+              var outstandingRev = exec.revenue.outstanding || 0;
+              var forecastRev = exec.revenue.forecast || 0;
+              var collectionRate = exec.revenue.collectionRate || '0%';
+              revenueEl.innerHTML =
+                '<div class="eb-stat"><div class="eb-stat-value neutral">' + fmtCurrency(totalRevenue) + '</div><div class="eb-stat-label">Total Revenue</div></div>' +
+                '<div class="eb-stat"><div class="eb-stat-value warning">' + fmtCurrency(outstandingRev) + '</div><div class="eb-stat-label">Outstanding</div></div>' +
+                '<div class="eb-stat"><div class="eb-stat-value positive">' + fmtCurrency(forecastRev) + '</div><div class="eb-stat-label">Forecast</div></div>' +
+                '<div class="eb-stat"><div class="eb-stat-value">' + collectionRate + '</div><div class="eb-stat-label">Collection Rate</div></div>';
+            } else if (dashboard && dashboard.kpis) {
+              var dkpis = dashboard.kpis;
+              revenueEl.innerHTML =
+                '<div class="eb-stat"><div class="eb-stat-value neutral">' + fmtCurrency(dkpis.totalRevenue || 0) + '</div><div class="eb-stat-label">Total Revenue</div></div>' +
+                '<div class="eb-stat"><div class="eb-stat-value warning">' + fmtCurrency(dkpis.outstandingRevenue || 0) + '</div><div class="eb-stat-label">Outstanding</div></div>' +
+                '<div class="eb-stat"><div class="eb-stat-value">' + (dkpis.pendingEstimates || 0) + '</div><div class="eb-stat-label">Pending Est.</div></div>' +
+                '<div class="eb-stat"><div class="eb-stat-value">' + (dkpis.activeDeals || 0) + '</div><div class="eb-stat-label">Active Deals</div></div>';
+            } else {
+              revenueEl.innerHTML = '<div class="eb-empty">Revenue data will appear once Polaris processes customer interactions.</div>';
+            }
+
+            // ── 4. Operational Snapshot ──
+            var opsEl = document.getElementById('ebOperational');
+            if (dashboard && dashboard.kpis) {
+              var dkpis = dashboard.kpis;
+              var items = [];
+              if (dkpis.activeJobs !== undefined) items.push({ label: 'Active Jobs', value: dkpis.activeJobs, dot: 'active' });
+              if (dkpis.pendingEstimates !== undefined) items.push({ label: 'Estimates Awaiting Action', value: dkpis.pendingEstimates, dot: 'pending' });
+              if (dkpis.upcomingAppointments !== undefined) items.push({ label: 'Appointments', value: dkpis.upcomingAppointments, dot: 'pending' });
+              if (dkpis.schedulingConflicts !== undefined && dkpis.schedulingConflicts > 0) items.push({ label: 'Scheduling Conflicts', value: dkpis.schedulingConflicts, dot: 'risk' });
+              if (items.length > 0) {
+                opsEl.innerHTML = '<div class="eb-operational-list">' +
+                  items.map(function(item) {
+                    return '<div class="eb-operational-item"><span class="eb-dot ' + item.dot + '"></span>' + item.label + ': <strong>' + item.value + '</strong></div>';
+                  }).join('') +
+                  '</div>';
+              } else {
+                opsEl.innerHTML = '<div class="eb-empty">Operational data from recent Polaris sessions will appear here.</div>';
+              }
+            } else {
+              opsEl.innerHTML = '<div class="eb-empty">Operational snapshot will populate as Polaris processes jobs and estimates.</div>';
+            }
+
+            // ── 5. Customer Highlights ──
+            var custEl = document.getElementById('ebCustomers');
+            if (Array.isArray(customers) && customers.length > 0) {
+              var customerList = customers.slice(0, 5);
+              var customerHtml = '<div class="eb-customer-list">' +
+                customerList.map(function(c) {
+                  var tag = c.status === 'active' && c.totalJobs > 0 ? 'returning' : 'new';
+                  var tagLabel = tag === 'returning' ? 'Returning' : 'New';
+                  return '<div class="eb-customer-item">' +
+                    '<span class="eb-customer-name">' + (c.name || 'Unknown') + '</span>' +
+                    '<span class="eb-customer-tag ' + tag + '">' + tagLabel + '</span>' +
+                    '</div>';
+                }).join('') +
+                '</div>';
+              if (customers.length > 5) {
+                customerHtml += '<div class="eb-empty" style="padding:8px;font-size:12px;">+' + (customers.length - 5) + ' more customers</div>';
+              }
+              custEl.innerHTML = customerHtml;
+            } else {
+              custEl.innerHTML = '<div class="eb-empty">Customer profiles will appear as Polaris processes incoming calls and interactions.</div>';
+            }
+
+            // ── 6. Polaris Insight ──
+            var insightEl = document.getElementById('ebInsight');
+            var insightText = '';
+            var insightSource = '';
+            if (exec && exec.pipeline && exec.pipeline.weightedValue > 0) {
+              var weighted = exec.pipeline.weightedValue || 0;
+              var total = exec.pipeline.totalDeals || 0;
+              var active = exec.pipeline.activeDeals || 0;
+              if (active > 0) {
+                var avgDeal = Math.round(weighted / active);
+                insightText = 'Your active pipeline has <strong>' + active + '</strong> opportunities with an average weighted value of <strong>' + fmtCurrency(avgDeal) + '</strong> per deal.';
+                insightSource = 'Source: Polaris Pipeline Intelligence';
+              } else {
+                insightText = 'Polaris has identified <strong>' + total + '</strong> total opportunities. Engaging with leads promptly can increase conversion rates.';
+                insightSource = 'Source: Polaris Opportunity Engine';
+              }
+            } else if (dashboard && dashboard.kpis && dashboard.kpis.weightedPipelineValue > 0) {
+              insightText = 'Pipeline value is <strong>' + fmtCurrency(dashboard.kpis.weightedPipelineValue) + '</strong> across ' + (dashboard.kpis.activeDeals || 0) + ' active opportunities.';
+              insightSource = 'Source: Polaris Analytics Engine';
+            } else {
+              insightText = 'Start a conversation with Polaris to generate intelligence. Each call provides operational, customer, and next-step insights that power the Executive Brief.';
+              insightSource = 'Tip: Use the Polaris workspace to begin';
+            }
+            insightEl.innerHTML = '<div class="eb-insight-text">' + insightText + '<span class="eb-insight-source">' + insightSource + '</span></div>';
+
+            // ── 7. Recommended Next Action ──
+            var actionEl = document.getElementById('ebNextAction');
+            if (exec && exec.recommendations && exec.recommendations.length > 0) {
+              var top = exec.recommendations[0];
+              var actionTitle = top.title || top.action || 'Review Executive Brief';
+              var actionDesc = top.explanation || top.reason || 'Polaris has identified an action that requires your attention.';
+              var actionImpact = top.businessImpact || 'Business Impact';
+              var actionConfidence = top.confidence || 85;
+              actionEl.innerHTML =
+                '<a href="/dashboard/polaris" class="eb-action-card">' +
+                  '<div class="eb-action-icon">&#9733;</div>' +
+                  '<div class="eb-action-body">' +
+                    '<div class="eb-action-title">' + actionTitle + '</div>' +
+                    '<div class="eb-action-meta">' + actionDesc + '</div>' +
+                    '<div class="eb-action-meta" style="margin-top:4px;font-size:11px;color:var(--eb-text-muted);">Confidence: ' + actionConfidence + '% &middot; ' + actionImpact + '</div>' +
+                  '</div>' +
+                '</a>';
+            } else {
+              actionEl.innerHTML =
+                '<a href="/dashboard/polaris" class="eb-action-card">' +
+                  '<div class="eb-action-icon">&#9733;</div>' +
+                  '<div class="eb-action-body">' +
+                    '<div class="eb-action-title">Open Polaris Workspace</div>' +
+                    '<div class="eb-action-meta">Start or review a conversation to generate operational and customer intelligence. Polaris will analyze each interaction and provide actionable recommendations.</div>' +
+                  '</div>' +
+                '</a>';
+            }
+          })
+          .catch(function(err) {
+            loading.style.display = 'none';
+            content.style.display = '';
+            document.getElementById('ebSummary').textContent = 'Unable to load Executive Brief. The Polaris system may be initializing.';
+            document.getElementById('ebPriority').innerHTML = '<div class="eb-error">' + err.message + '</div>';
+          });
+      }
+
+      // Initial render
+      render();
+
+      // Auto-refresh every 60 seconds
+      setInterval(render, 60000);
+    })();
+  </script>
+</body>
+</html>

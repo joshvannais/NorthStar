@@ -1,75 +1,49 @@
 /**
- * contactIntelligence.js — M19.5 Phase E1: Contact Intelligence Enrichment
+ * contactIntelligence.js — M19.5 Phase E1/E2: Contact Intelligence
  *
  * Builds customer intelligence from the canonical Polaris record.
  * Consumer of Phase C + D output — never duplicates transcript parsing,
  * evidence extraction, speaker attribution, or operational reasoning.
  *
+ * Phase E2 additions:
+ * - Uses dedicated customerRepository (not customer-engine piggybacking)
+ * - Proper identity resolution with normalization (phone, email)
+ * - Typed timeline events with sourceEventId idempotency
+ * - Confidence-weighted identity matching
+ * - Weak-match rejection (no auto-merge on name alone)
+ * - Multi-property support
+ *
  * Answers: "Who is this customer and what should the business do next?"
- * Independent from operational intelligence ("What work needs to be done?").
- *
- * Both layers share the same canonical Polaris record.
- *
- * ——— KNOWN LIMITATIONS (Phase E1) ———
- *
- * 1. Identity resolution:
- *    - Phone is the primary identity signal. Uses substring search, not normalized exact matching.
- *    - Name fallback is provisional and must not be considered authoritative identity resolution.
- *      A name-only match may join two unrelated customers who share the same name.
- *    - Email matching and address matching are not implemented.
- *    - Conflicting identity evidence is not resolved.
- *    - Shared household and shared business numbers are not supported.
- *    - Multiple properties per contact are not modeled.
- *
- * 2. Timeline:
- *    - Normal single-pass processing appends one timeline entry per processed interaction.
- *    - Retry-safe event deduplication is not yet implemented. Without an idempotency key
- *      or unique source-event identifier, a webhook retry, repeated callback, replay, or
- *      duplicated processing request may create another timeline entry for the same event.
- *    - Timeline events are stored generically as notes. Calls, estimates, appointments,
- *      jobs, invoices, payments, complaints, and warranties are not represented as
- *      distinct event types.
- *
- * 3. Persistence:
- *    - Customer information persists through the existing JSON-backed customer-engine store
- *      and accumulates across calls, but a dedicated durable customer repository has not
- *      yet been implemented.
- *    - Customer records use the recommendations store rather than a dedicated customer database.
- *    - Persistence failure falls back to in-memory state and may lose updates after process termination.
- *    - Tenant isolation is not implemented.
  */
 'use strict';
 
-const customerEngine = require('./customer-engine');
+const repo = require('./customerRepository');
 
 // ── Relationship Classification ──
 
-/**
- * Classify the customer relationship based on history and current conversation.
- * Evidence-driven — never hard-coded assumptions.
- */
-function classifyRelationship(customer, record) {
-  const evidence = [];
-  let type = 'new_lead';
-  let label = 'New Lead';
-
-  if (!customer || customer.totalJobs === undefined) {
+function classifyRelationship(customer) {
+  if (!customer || !customer.id) {
     return { type: 'new_lead', label: 'New Lead', evidence: ['No prior customer history'] };
   }
 
-  // Evidence: total jobs
+  var evidence = [];
+  var type = 'new_lead';
+  var label = 'New Lead';
+
+  if (customer.events && customer.events.length > 0) {
+    evidence.push(customer.events.length + ' recorded interaction(s)');
+  }
+
   if (customer.totalJobs > 0) {
     evidence.push(customer.totalJobs + ' previous job(s)');
   }
 
-  // Evidence: total revenue
   if (customer.totalRevenue > 0) {
     evidence.push('$' + customer.totalRevenue.toLocaleString() + ' lifetime revenue');
   }
 
-  // Evidence: recency
   if (customer.lastContactedAt) {
-    const daysSince = (Date.now() - new Date(customer.lastContactedAt).getTime()) / 86400000;
+    var daysSince = (Date.now() - new Date(customer.lastContactedAt).getTime()) / 86400000;
     if (daysSince < 90) {
       evidence.push('Last contacted ' + Math.round(daysSince) + ' days ago');
     } else {
@@ -77,8 +51,7 @@ function classifyRelationship(customer, record) {
     }
   }
 
-  // Classification logic
-  if (customer.totalJobs === 0) {
+  if (customer.events && customer.events.length === 0) {
     type = 'new_lead';
     label = 'New Lead';
   } else if (customer.totalRevenue >= 10000) {
@@ -90,16 +63,17 @@ function classifyRelationship(customer, record) {
   } else if (customer.totalJobs >= 2) {
     type = 'repeat_customer';
     label = 'Repeat Customer';
+  } else if (customer.events.length > 0) {
+    type = 'returning';
+    label = 'Returning Customer';
   }
 
-  // Status-based overrides
   if (customer.status === 'inactive') {
     type = 'inactive';
     label = 'Inactive Customer';
     evidence.push('Account marked inactive');
   }
 
-  // Check for VIP indicators
   if (customer.totalRevenue >= 50000) {
     type = 'vip';
     label = 'VIP Customer';
@@ -115,12 +89,8 @@ function classifyRelationship(customer, record) {
 
 // ── Identity Extraction ──
 
-/**
- * Extract customer identity from the canonical record.
- * Reads from customerFacts and polarisFacts — never re-parses transcripts.
- */
 function extractIdentity(record) {
-  const identity = {
+  var identity = {
     name: null,
     phone: null,
     address: null,
@@ -128,7 +98,6 @@ function extractIdentity(record) {
     confidence: 0
   };
 
-  // Primary source: customerFacts (from executiveSummary / Retell data)
   if (record.customerFacts) {
     if (record.customerFacts.name) identity.name = record.customerFacts.name;
     if (record.customerFacts.phone) identity.phone = record.customerFacts.phone;
@@ -136,10 +105,9 @@ function extractIdentity(record) {
     if (record.customerFacts.email) identity.email = record.customerFacts.email;
   }
 
-  // Secondary source: polarisFacts (typed facts from conversation)
-  const facts = record.polarisFacts || [];
-  for (let i = 0; i < facts.length; i++) {
-    const f = facts[i];
+  var facts = record.polarisFacts || [];
+  for (var i = 0; i < facts.length; i++) {
+    var f = facts[i];
     if (f.status === 'collected' && f.evidence && f.evidence.speaker === 'customer') {
       if (f.variable === 'customer_name' && !identity.name) {
         identity.name = f.normalizedValue;
@@ -152,127 +120,106 @@ function extractIdentity(record) {
   }
 
   // Compute confidence based on how many fields we have
-  let filled = 0;
+  var filled = 0;
   if (identity.name) filled++;
   if (identity.phone) filled++;
   if (identity.address) filled++;
   if (identity.email) filled++;
-  identity.confidence = Math.min(1.0, filled / 3); // 3+ fields = 1.0
+  identity.confidence = Math.min(1.0, filled / 3);
 
   return identity;
 }
 
 // ── Find or Create Customer ──
 
-/**
- * Find existing customer by phone, or create a new one.
- */
 function findOrCreateCustomer(identity) {
-  if (!identity || !identity.phone && !identity.name) {
+  if (!identity || (!identity.phone && !identity.email && !identity.name)) {
     return null;
   }
 
-  // Try to find by phone (most reliable identifier)
-  if (identity.phone) {
-    const searchResult = customerEngine.searchCustomers(identity.phone);
-    if (searchResult && searchResult.customers && searchResult.customers.length > 0) {
-      const existing = searchResult.customers[0];
-      // Update with latest info
-      const updates = {};
-      if (identity.name && identity.name !== existing.name) updates.name = identity.name;
-      if (identity.address && identity.address !== existing.address) updates.address = identity.address;
-      if (identity.email && identity.email !== existing.email) updates.email = identity.email;
-      if (Object.keys(updates).length > 0) {
-        customerEngine.updateCustomer(existing.id, updates);
-      }
-      return customerEngine.getCustomer(existing.id);
+  // Use identity resolution from customerRepository
+  var resolution = repo.resolveIdentity({
+    phone: identity.phone,
+    email: identity.email,
+    name: identity.name
+  });
+
+  if (resolution.customerId) {
+    // Found existing customer — update with latest info
+    var updates = {};
+    if (identity.name) updates.name = identity.name;
+    if (identity.phone) updates.phone = identity.phone;
+    if (identity.email) updates.email = identity.email;
+    if (Object.keys(updates).length > 0) {
+      repo.updateCustomer(resolution.customerId, updates);
     }
+    return repo.getCustomer(resolution.customerId);
   }
 
-  // Try to find by name (fallback)
+  // No match — create new customer
   if (identity.name) {
-    const searchResult = customerEngine.searchCustomers(identity.name);
-    if (searchResult && searchResult.customers && searchResult.customers.length > 0) {
-      const existing = searchResult.customers[0];
-      if (identity.phone && existing.phone === identity.phone) {
-        return customerEngine.getCustomer(existing.id);
-      }
-    }
-  }
-
-  // No existing customer — create new
-  if (identity.name) {
-    const result = customerEngine.createCustomer({
+    return repo.createCustomer({
       name: identity.name,
       phone: identity.phone || undefined,
       email: identity.email || undefined,
       address: identity.address || undefined
     });
-    if (result && result.id) {
-      return customerEngine.getCustomer(result.id);
-    }
   }
 
   return null;
 }
 
-// ── Timeline Entry ──
+// ── Add Timeline Event ──
 
-/**
- * Add a timeline entry for this conversation.
- */
-function addTimelineEntry(customer, record) {
+function addCallEvent(customer, record, sourceEventId, identity) {
   if (!customer || !customer.id) return null;
 
-  // Build a structured note from the conversation
-  const serviceDesc = record.requestedService && record.requestedService.primary
+  var serviceDesc = (record.requestedService && record.requestedService.primary)
     ? record.requestedService.primary
     : 'General inquiry';
-  const revenueRange = record.estimate && record.estimate.revenueRange
+
+  var revenueRange = (record.estimate && record.estimate.revenueRange)
     ? record.estimate.revenueRange
     : 'Not yet estimated';
 
-  const noteText = 'Phone call — ' + serviceDesc +
-    '. Estimated range: ' + revenueRange +
-    '. Industry: ' + (record.industry || 'unknown') + '.';
-
-  return customerEngine.addCustomerNote(customer.id, {
-    text: noteText,
-    author: 'polaris_contact_intelligence'
+  return repo.addEvent(customer.id, {
+    eventType: repo.EVENT_TYPES.CALL_RECEIVED,
+    sourceEventId: sourceEventId,
+    occurredAt: record.generatedAt || new Date().toISOString(),
+    description: 'Phone call — ' + serviceDesc + '. Estimated range: ' + revenueRange,
+    source: 'polaris_contact_intelligence',
+    evidence: { service: serviceDesc, revenueRange: revenueRange },
+    data: {
+      industry: record.industry || null,
+      estimateConfidence: (record.estimate && record.estimate.confidence) || null,
+      serviceAddress: identity.address || null
+    }
   });
 }
 
 // ── Opportunity Detection ──
 
-/**
- * Detect business opportunities from the canonical record.
- */
 function detectOpportunities(customer, record) {
-  const opportunities = [];
-  const estimate = record.estimate || {};
-  const reasoning = record.reasoning || [];
+  var opportunities = [];
 
-  // Opportunity: outstanding estimate
-  if (estimate.revenueRange && estimate.revenueRange !== 'Not yet estimated') {
+  if (record.estimate && record.estimate.revenueRange && record.estimate.revenueRange !== 'Not yet estimated') {
     opportunities.push({
       type: 'outstanding_estimate',
       label: 'Outstanding Estimate',
       priority: 'medium',
-      reason: 'Estimate of ' + estimate.revenueRange + ' has been generated'
+      reason: 'Estimate of ' + record.estimate.revenueRange + ' has been generated'
     });
   }
 
-  // Opportunity: no follow-up needed (estimate exists)
-  if (estimate.confidence !== undefined) {
+  if (record.estimate && record.estimate.confidence !== undefined) {
     opportunities.push({
       type: 'no_follow_up',
       label: 'Review Estimate',
-      priority: estimate.confidence < 50 ? 'high' : 'medium',
-      reason: 'Estimate confidence is ' + estimate.confidence + '% — may need clarification'
+      priority: record.estimate.confidence < 50 ? 'high' : 'medium',
+      reason: 'Estimate confidence is ' + record.estimate.confidence + '%'
     });
   }
 
-  // Opportunity: repeat work (returning customer)
   if (customer && customer.totalJobs > 0) {
     opportunities.push({
       type: 'repeat_work',
@@ -282,30 +229,27 @@ function detectOpportunities(customer, record) {
     });
   }
 
-  // Opportunity: maintenance (if work was done)
   if (customer && customer.totalJobs > 0 && customer.lastContactedAt) {
-    const daysSince = (Date.now() - new Date(customer.lastContactedAt).getTime()) / 86400000;
+    var daysSince = (Date.now() - new Date(customer.lastContactedAt).getTime()) / 86400000;
     if (daysSince > 180) {
       opportunities.push({
         type: 'seasonal',
         label: 'Seasonal Service Opportunity',
         priority: 'low',
-        reason: 'Customer inactive for ' + Math.round(daysSince) + ' days — consider seasonal outreach'
+        reason: 'Customer inactive for ' + Math.round(daysSince) + ' days'
       });
     }
   }
 
-  // Opportunity: reactivation (inactive customer)
   if (customer && customer.status === 'inactive') {
     opportunities.push({
       type: 'reactivation',
       label: 'Inactive Customer Reactivation',
       priority: 'low',
-      reason: 'Customer is marked inactive — consider re-engagement campaign'
+      reason: 'Customer is marked inactive'
     });
   }
 
-  // Opportunity: high-value upsell
   if (customer && customer.totalRevenue >= 5000) {
     opportunities.push({
       type: 'upsell',
@@ -320,29 +264,25 @@ function detectOpportunities(customer, record) {
 
 // ── Executive Summary ──
 
-/**
- * Generate a concise executive briefing for the customer.
- */
 function buildExecutiveSummary(customer, record, opportunities) {
-  const parts = [];
+  var parts = [];
 
-  // Customer identity
-  const name = (record.customerFacts && record.customerFacts.name) || (customer && customer.name) || 'Unknown customer';
+  var name = (record.customerFacts && record.customerFacts.name) || (customer && customer.name) || 'Unknown customer';
   parts.push(name + ' contacted NorthStar regarding ' +
     ((record.requestedService && record.requestedService.primary) || 'a service request') + '.');
 
-  // Relationship
   if (customer) {
     if (customer.totalJobs > 0) {
       parts.push('Returning customer with ' + customer.totalJobs + ' previous job(s) totaling $' +
         customer.totalRevenue.toLocaleString() + ' in lifetime revenue.');
+    } else if (customer.events && customer.events.length > 0) {
+      parts.push('Previous contact recorded — ' + customer.events.length + ' prior interaction(s).');
     } else {
       parts.push('New lead — no prior history.');
     }
   }
 
-  // Opportunity summary
-  const highPriority = opportunities.filter(function(o) { return o.priority === 'high'; });
+  var highPriority = opportunities.filter(function(o) { return o.priority === 'high'; });
   if (highPriority.length > 0) {
     parts.push('Action needed: ' + highPriority.map(function(o) { return o.label; }).join(', ') + '.');
   }
@@ -352,9 +292,6 @@ function buildExecutiveSummary(customer, record, opportunities) {
 
 // ── Recommended Actions ──
 
-/**
- * Convert opportunities into recommended actions.
- */
 function buildRecommendedActions(opportunities) {
   return opportunities.map(function(o) {
     return {
@@ -370,57 +307,56 @@ function buildRecommendedActions(opportunities) {
 /**
  * Enrich the canonical Polaris record with contact intelligence.
  *
- * This is the ONLY public API. It consumes the canonical record produced by
- * buildPolarisIntelligence() and returns additive contact fields only.
- * It never modifies the input record.
- *
  * @param {object} record - The full canonical Polaris record
+ * @param {string} [sourceEventId] - Optional idempotency key for this interaction
  * @returns {object} Additive contact intelligence fields
  */
-function enrichCanonicalRecord(record) {
-  // 1. Extract identity from canonical record data
-  const identity = extractIdentity(record);
+function enrichCanonicalRecord(record, sourceEventId) {
+  var identity = extractIdentity(record);
 
-  // 2. Look up or create customer profile
-  const customer = findOrCreateCustomer(identity);
+  var customer = findOrCreateCustomer(identity);
 
-  // 3. Classify relationship
-  const relationship = classifyRelationship(customer, record);
+  var relationship = classifyRelationship(customer);
 
-  // 4. Add timeline entry
-  const timelineEntry = addTimelineEntry(customer, record);
+  var eventResult = addCallEvent(customer, record, sourceEventId || record.generatedAt, identity);
 
-  // 5. Update customer metrics
+  // Update customer metrics
   if (customer && customer.id) {
-    customerEngine.updateCustomerMetrics(customer.id, {});
+    // Update last contacted time
+    repo.updateCustomer(customer.id, {});
   }
 
-  // 6. Compute health score
-  const health = customer && customer.id
-    ? customerEngine.calculateCustomerHealth(customer.id)
-    : null;
+  // Build timeline from repository events, mapped to canonical format
+  var timeline = [];
+  if (customer && customer.id) {
+    var rawEvents = repo.getEvents(customer.id);
+    timeline = rawEvents.map(function(e) {
+      return {
+        timestamp: e.occurredAt,
+        type: e.eventType,
+        description: e.description,
+        source: e.source,
+        data: {
+          eventId: e.eventId,
+          sourceEventId: e.sourceEventId,
+          recordedAt: e.recordedAt
+        }
+      };
+    });
+  }
 
-  // 7. Detect opportunities
-  const opportunities = detectOpportunities(customer, record);
+  var opportunities = detectOpportunities(customer, record);
 
-  // 8. Build executive summary
-  const summary = buildExecutiveSummary(customer, record, opportunities);
+  var summary = buildExecutiveSummary(customer, record, opportunities);
 
-  // 9. Build recommended actions
-  const actions = buildRecommendedActions(opportunities);
+  var actions = buildRecommendedActions(opportunities);
 
-  // 10. Get timeline
-  const timeline = customer && customer.id
-    ? customerEngine.getCustomerTimeline(customer.id)
-    : { entries: [] };
-
-  // Return additive fields only — never modify the original record
   return {
     contactProfile: identity,
     relationshipProfile: relationship,
-    customerTimeline: timeline.entries || [],
+    customerTimeline: timeline,
     opportunities: opportunities,
-    healthScore: health,
+    healthScore: null,
     executiveSummary: summary,
     recommendedActions: actions
   };

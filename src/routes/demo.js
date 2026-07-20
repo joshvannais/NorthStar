@@ -283,6 +283,7 @@ function mockTranscript(industry, count) {
 // speaker isolation and turn-bounded evidence). The functions below are
 // compatibility wrappers that preserve the original demo.js API and shapes.
 const factExtraction = require('../polaris/factExtraction');
+const contactIntelligence = require('../polaris/contactIntelligence');
 
 function getQualificationProfile(industry) {
   return factExtraction.QUALIFICATION_PROFILES[industry] || null;
@@ -564,6 +565,16 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     { factor: 'Assumptions', detail: factMultiplier > 1.0 ? 'Estimate adjusted for job-specific factors identified in conversation.' : 'Based on typical scope. Final may vary.' },
   );
 
+  // ── M19.5 Phase E: Contact Intelligence ──
+  const contactProfile = contactIntelligence.enrichCanonicalRecord({
+    customerFacts: { name: (executiveSummary && executiveSummary.customerName) || null, phone: (executiveSummary && executiveSummary.customerPhone) || null, address: (executiveSummary && executiveSummary.customerAddress) || null, email: (executiveSummary && executiveSummary.customerEmail) || null },
+    industry: industry,
+    requestedService: { primary: primaryService || d.service },
+    estimate: { revenueRange: '$' + adjMin.toLocaleString() + ' - $' + adjMax.toLocaleString(), confidence: confidence, adjustments: { reasons: adjustmentReasons } },
+    polarisFacts: facts,
+    reasoning: reasoning
+  });
+
   return {
     // Canonical structure
     customerFacts: executiveSummary ? {
@@ -618,6 +629,15 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     qualification: qual,
     extractedValues: extractedVals,
     detectedService: primaryService || d.service,
+
+    // ── M19.5 Phase E: Contact Intelligence ──
+    contactProfile: contactProfile.contactProfile || null,
+    relationshipProfile: contactProfile.relationshipProfile || null,
+    customerTimeline: contactProfile.customerTimeline || [],
+    opportunities: contactProfile.opportunities || [],
+    healthScore: contactProfile.healthScore || null,
+    executiveSummary: contactProfile.executiveSummary || null,
+    recommendedActions: contactProfile.recommendedActions || []
   };
 }
 

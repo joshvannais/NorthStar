@@ -1,0 +1,13 @@
+{
+  "name": "D-F-hedged-unresolved",
+  "description": "Hedged/unresolved measurements — 'maybe 50 feet?' — should be mentioned_unresolved",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "customer", "utterance": "I think the tree is maybe 50 feet? I'm not really sure.", "source": "simulation" }
+  ],
+  "expectedEntity": {
+    "treeGroups": [],
+    "allHeightsUnresolved": true
+  }
+}

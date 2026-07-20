@@ -1,0 +1,14 @@
+{
+  "name": "D-E-conflicting-heights",
+  "description": "Customer gives conflicting height measurements — 80ft then 100ft — no correction",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "customer", "utterance": "The tree is about 80 feet tall.", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "Actually, maybe it's around 100 feet. I'm not sure.", "source": "simulation" }
+  ],
+  "expectedEntity": {
+    "treeGroups": [],
+    "hasConflictingHeight": true
+  }
+}

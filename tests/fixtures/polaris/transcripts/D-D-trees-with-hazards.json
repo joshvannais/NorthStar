@@ -1,0 +1,25 @@
+{
+  "name": "D-D-trees-with-hazards",
+  "description": "Trees with hazards — near power lines and leaning toward house",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "agent", "utterance": "Thanks for calling NorthStar Tree Service. How can I help you?", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "I have a large tree leaning toward my house and another near the power lines.", "source": "simulation" },
+    { "turnId": "turn-2", "speaker": "agent", "utterance": "A tree leaning toward the house and another near power lines. Are these an emergency?", "source": "simulation" },
+    { "turnId": "turn-3", "speaker": "customer", "utterance": "The one near the house is urgent. The power line one can wait.", "source": "simulation" },
+    { "turnId": "turn-4", "speaker": "agent", "utterance": "What's your name?", "source": "simulation" },
+    { "turnId": "turn-5", "speaker": "customer", "utterance": "My name is Emily Williams.", "source": "simulation" }
+  ],
+  "expectedEntity": {
+    "treeGroups": [
+      {
+        "quantity": 1,
+        "hazards": [{ "description": "leaning toward house" }]
+      }
+    ],
+    "jobEntity": {
+      "requestedService": null
+    }
+  }
+}

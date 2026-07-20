@@ -1,0 +1,21 @@
+{
+  "name": "D-H-multi-group-production",
+  "description": "Production-shaped scenario: three 90-foot pines, one 70-foot oak with stump grinding",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "agent", "utterance": "Thanks for calling NorthStar Tree Service. How can I help?", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "I need three 90-foot pines removed and one 70-foot oak taken down with stump grinding.", "source": "simulation" },
+    { "turnId": "turn-2", "speaker": "agent", "utterance": "Three pines and an oak with stump grinding. Is this an emergency?", "source": "simulation" },
+    { "turnId": "turn-3", "speaker": "customer", "utterance": "No, not an emergency. The oak is near the driveway though.", "source": "simulation" },
+    { "turnId": "turn-4", "speaker": "agent", "utterance": "What's your name?", "source": "simulation" },
+    { "turnId": "turn-5", "speaker": "customer", "utterance": "My name is Michael Brown.", "source": "simulation" }
+  ],
+  "expectedEntity": {
+    "treeGroups": [
+      { "quantity": 3, "species": "Pine", "sharedAttributes": { "height": { "value": 90, "unit": "ft" } } },
+      { "quantity": 1, "species": "Oak", "sharedAttributes": { "height": { "value": 70, "unit": "ft" } } }
+    ],
+    "jobEntity": { "requestedService": "Tree Removal" }
+  }
+}

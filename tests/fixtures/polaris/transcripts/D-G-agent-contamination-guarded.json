@@ -1,0 +1,20 @@
+{
+  "name": "D-G-agent-contamination-guarded",
+  "description": "Agent suggests species/height, customer corrects — agent speech must not create facts",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "agent", "utterance": "I see you have a 60-foot maple tree out front.", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "No, it's actually a 40-foot oak. The maple is in the backyard.", "source": "simulation" }
+  ],
+  "expectedEntity": {
+    "treeGroups": [
+      {
+        "quantity": 1,
+        "species": "Oak",
+        "sharedAttributes": { "height": { "value": 40, "unit": "ft" } }
+      }
+    ],
+    "noAgentFacts": true
+  }
+}

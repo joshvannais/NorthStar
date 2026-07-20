@@ -1,0 +1,30 @@
+{
+  "name": "D-B-multiple-trees-grouped",
+  "description": "Four white pines described as a homogeneous group — each about 120 feet tall",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "agent", "utterance": "Thanks for calling NorthStar Tree Service. How can I help you?", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "I have four white pines, each about 120 feet tall, that need to be removed.", "source": "simulation" },
+    { "turnId": "turn-2", "speaker": "agent", "utterance": "Four white pines at 120 feet each. Is this an emergency?", "source": "simulation" },
+    { "turnId": "turn-3", "speaker": "customer", "utterance": "No, it's not an emergency. They're leaning a bit but I just want them taken care of.", "source": "simulation" },
+    { "turnId": "turn-4", "speaker": "agent", "utterance": "What's your name?", "source": "simulation" },
+    { "turnId": "turn-5", "speaker": "customer", "utterance": "My name is Sarah Johnson.", "source": "simulation" },
+    { "turnId": "turn-6", "speaker": "agent", "utterance": "And your phone number?", "source": "simulation" },
+    { "turnId": "turn-7", "speaker": "customer", "utterance": "(555) 987-6543.", "source": "simulation" }
+  ],
+  "expectedEntity": {
+    "treeGroups": [
+      {
+        "quantity": 4,
+        "species": "Pine",
+        "sharedAttributes": {
+          "height": { "value": 120, "unit": "ft" }
+        }
+      }
+    ],
+    "jobEntity": {
+      "requestedService": "Tree Removal"
+    }
+  }
+}

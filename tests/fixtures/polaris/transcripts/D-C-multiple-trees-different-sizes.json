@@ -1,0 +1,31 @@
+{
+  "name": "D-C-multiple-trees-different-sizes",
+  "description": "Two 80-foot pines near driveway and one 110-foot oak leaning toward house — two distinct groups",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "agent", "utterance": "Thanks for calling NorthStar Tree Service. How can I help you?", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "I have two 80-foot pines near the driveway and one 110-foot oak leaning toward the house.", "source": "simulation" },
+    { "turnId": "turn-2", "speaker": "agent", "utterance": "So two pines near the driveway and an oak leaning toward the house. Is this an emergency?", "source": "simulation" },
+    { "turnId": "turn-3", "speaker": "customer", "utterance": "No, not an emergency. The oak is the one I'm most worried about.", "source": "simulation" },
+    { "turnId": "turn-4", "speaker": "agent", "utterance": "What's your name?", "source": "simulation" },
+    { "turnId": "turn-5", "speaker": "customer", "utterance": "My name is David Chen.", "source": "simulation" }
+  ],
+  "expectedEntity": {
+    "treeGroups": [
+      {
+        "quantity": 2,
+        "species": "Pine",
+        "sharedAttributes": { "height": { "value": 80, "unit": "ft" } }
+      },
+      {
+        "quantity": 1,
+        "species": "Oak",
+        "sharedAttributes": { "height": { "value": 110, "unit": "ft" } }
+      }
+    ],
+    "jobEntity": {
+      "requestedService": "Tree Removal"
+    }
+  }
+}

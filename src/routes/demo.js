@@ -284,6 +284,7 @@ function mockTranscript(industry, count) {
 // compatibility wrappers that preserve the original demo.js API and shapes.
 const factExtraction = require('../polaris/factExtraction');
 const contactIntelligence = require('../polaris/contactIntelligence');
+const nextStepIntelligence = require('../polaris/nextStepIntelligence');
 
 function getQualificationProfile(industry) {
   return factExtraction.QUALIFICATION_PROFILES[industry] || null;
@@ -575,6 +576,28 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     reasoning: reasoning
   });
 
+  // ── M19.5 Phase F: Next-Step Intelligence ──
+  const canonicalForNextSteps = {
+    customerFacts: executiveSummary ? {
+      name: executiveSummary.customerName || null,
+      phone: executiveSummary.customerPhone || null,
+      address: executiveSummary.customerAddress || null,
+      email: executiveSummary.customerEmail || null
+    } : { name: null, phone: null, address: null, email: null },
+    industry: industry,
+    requestedService: { primary: primaryService || d.service },
+    estimate: { revenueRange: '$' + adjMin.toLocaleString() + ' - $' + adjMax.toLocaleString(), rangeMin: adjMin, rangeMax: adjMax, confidence: confidence, adjustments: { reasons: adjustmentReasons } },
+    polarisFacts: facts,
+    reasoning: reasoning,
+    workScopes: workScopes,
+    contactProfile: contactProfile,
+    customerTimeline: contactProfile.customerTimeline || [],
+    opportunities: contactProfile.opportunities || [],
+    healthScore: contactProfile.healthScore || null,
+    generatedAt: new Date().toISOString()
+  };
+  const nextStepResult = nextStepIntelligence.buildNextSteps(canonicalForNextSteps);
+
   return {
     // Canonical structure
     customerFacts: executiveSummary ? {
@@ -637,7 +660,10 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     opportunities: contactProfile.opportunities || [],
     healthScore: contactProfile.healthScore || null,
     executiveSummary: contactProfile.executiveSummary || null,
-    recommendedActions: contactProfile.recommendedActions || []
+    recommendedActions: contactProfile.recommendedActions || [],
+    // ── M19.5 Phase F: Next-Step Intelligence ──
+    nextSteps: nextStepResult.nextSteps || [],
+    nextStepGeneratedAt: nextStepResult.generatedAt || null
   };
 }
 

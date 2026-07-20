@@ -1,0 +1,13 @@
+{
+  "name": "F5-explicit-correction",
+  "description": "Customer explicitly corrects earlier statement — resolves to corrected value, both turns preserved",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "customer", "utterance": "The tree is about 80 feet.", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "Actually, I was wrong — it is closer to 60 feet.", "source": "simulation" }
+  ],
+  "expectedFacts": {
+    "Tree Height": { "status": "collected", "normalizedValue": 60, "unit": "ft", "speaker": "customer" }
+  }
+}

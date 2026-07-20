@@ -1,0 +1,16 @@
+{
+  "name": "F3-mixed-speaker-urgency",
+  "description": "Agent asks 'Is this an emergency?' — customer says no. Urgency must NOT be High.",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "agent",    "utterance": "Is this an emergency or a standard non-urgent request?", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "No, it is not an emergency.", "source": "simulation" }
+  ],
+  "expectedFacts": {
+    "urgency": { "status": "collected", "normalizedValue": "standard", "speaker": "customer" }
+  },
+  "expectedProtections": {
+    "agent_urgency_question_does_not_create_urgency": true
+  }
+}

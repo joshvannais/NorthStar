@@ -236,13 +236,50 @@ function parseNumberToken(str) {
 }
 
 const APPROX_RE = /\b(about|approximately|around|roughly|nearly|almost|closer to|close to|over|at least)\s*$/i;
+
+const UNITS_WORDS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const TEENS_WORDS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS_WORDS = ['twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+/**
+ * A greedy spelled-number match can wrongly merge a leading quantity into a
+ * following measurement ("four one-hundred-and-twenty-foot" is quantity 4 +
+ * measurement 120, not the number 420). Detect invalid word continuations
+ * (e.g. units word followed directly by another base number word) and trim
+ * the phrase to its LAST coherent group, returning the offset of that group
+ * within the original phrase.
+ */
+function trimSpelledNumber(numStr) {
+  if (/^\d/.test(numStr)) return { offset: 0, text: numStr };
+  const re = /[a-z]+/gi;
+  const tokens = [];
+  let m;
+  while ((m = re.exec(numStr)) !== null) tokens.push({ word: m[0].toLowerCase(), index: m.index });
+  let splitAt = 0; // token index where the last coherent group starts
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const cur = tokens[i].word;
+    let nextIdx = i + 1;
+    if (tokens[nextIdx].word === 'and' && nextIdx + 1 < tokens.length) nextIdx++;
+    const next = tokens[nextIdx].word;
+    if (cur === 'and' || cur === 'hundred' || cur === 'thousand') continue;
+    if (next === 'hundred' || next === 'thousand' || next === 'and') continue;
+    if (TENS_WORDS.indexOf(cur) !== -1 && UNITS_WORDS.indexOf(next) !== -1) continue; // "twenty five"
+    // units/teens followed directly by another base number word → new group
+    if (UNITS_WORDS.indexOf(next) !== -1 || TEENS_WORDS.indexOf(next) !== -1 || TENS_WORDS.indexOf(next) !== -1) {
+      splitAt = nextIdx;
+    }
+  }
+  if (splitAt === 0) return { offset: 0, text: numStr };
+  const offset = tokens[splitAt].index;
+  return { offset: offset, text: numStr.substring(offset) };
+}
 const HEDGE_RE = /\b(maybe|possibly|perhaps|i think|i guess|i'm not sure|im not sure|not sure|unsure|no idea|don't know|dont know|can't remember|cant remember|not certain|something like that)\b/i;
 const NEGATION_RE = /\b(not|no|never|isn't|isnt|aren't|arent|don't|dont|doesn't|doesnt|didn't|didnt|won't|wont|wouldn't|wouldnt|none|nothing|without)\b/i;
 const CORRECTION_RE = /\b(actually|i was wrong|i meant|meant to say|correction|scratch that|make that|my mistake|sorry|let me correct)\b/i;
 
 const COUNTABLE_NOUNS = {
   trees: 'trees', tree: 'trees', pines: 'trees', pine: 'trees', oaks: 'trees', oak: 'trees',
-  maples: 'trees', maple: 'trees', cedars: 'trees', cedar: 'trees', evergreens: 'trees',
+  maples: 'trees', maple: 'trees', evergreens: 'trees',
   stumps: 'stumps', stump: 'stumps',
   rooms: 'rooms', room: 'rooms', bedrooms: 'rooms', bedroom: 'rooms',
   windows: 'windows', window: 'windows', doors: 'windows', door: 'windows', panels: 'windows', panel: 'windows',
@@ -299,17 +336,21 @@ function parseNumericMentions(sentence) {
     }
   }
   function addMention(kind, unit, numStr, matchIndex, matchText, noun) {
-    const value = parseNumberToken(numStr);
+    // All measurement patterns begin with NUM, so numStr sits at matchIndex.
+    // Trim wrongly-merged leading number groups ("four one-hundred-and-twenty").
+    const trim = trimSpelledNumber(numStr);
+    const value = parseNumberToken(trim.text);
     if (value === null) return;
-    const start = matchIndex;
-    const end = matchIndex + matchText.length;
+    const start = matchIndex + trim.offset;
+    const text = matchText.substring(trim.offset);
+    const end = start + text.length;
     if (overlaps(start, end)) return;
     claim(start, end);
     mentions.push({
       kind: kind,
       unit: unit,
       value: value,
-      span: matchText,
+      span: text,
       index: start,
       approx: approxBefore(start),
       noun: noun || null,
@@ -355,7 +396,8 @@ function parseNumericMentions(sentence) {
   // 6. Quantities: "four 120-foot trees", "four trees", "12 rooms".
   //    The number itself must be unconsumed; intermediate adjectives (which
   //    may themselves be consumed measurement spans like "120-foot") are
-  //    allowed as modifiers of the counted noun.
+  //    allowed as modifiers of the counted noun. Only the number span is
+  //    claimed — intermediate words remain available for other patterns.
   run(new RegExp('\\b' + NUM + '\\s+((?:[a-z0-9,-]+\\s+){0,3}?)([a-z]+)\\b', 'gi'), function(m) {
     const numStr = m[1];
     const noun = (m[3] || '').toLowerCase();
@@ -366,6 +408,9 @@ function parseNumericMentions(sentence) {
     const value = parseNumberToken(numStr);
     if (value === null) return;
     claim(numStart, numEnd);
+    // Claim the noun position too so it cannot be reused
+    const nounIdx = m.index + m[0].length - m[3].length;
+    claim(nounIdx, nounIdx + m[3].length);
     mentions.push({
       kind: 'quantity',
       unit: COUNTABLE_NOUNS[noun],
@@ -598,7 +643,7 @@ function reconcileValueMentions(varName, recs, opts) {
 
 // ── Contact fact patterns (typed facts only — ContactRecord is Phase E) ──
 const PHONE_RE = /(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/;
-const NAME_RE = /\b(?:my name is|my name's|this is|i am|i'm)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/;
+const NAME_RE = /\b(?:my name is|my name's|this is|i am|i'm)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/i;
 const ADDRESS_RE = /\b\d{1,6}\s+(?:[A-Z][A-Za-z']+\s+){1,3}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Way|Place|Pl|Circle|Cir|Terrace|Trail)\b\.?/;
 
 function extractContactFacts(customerTurns) {

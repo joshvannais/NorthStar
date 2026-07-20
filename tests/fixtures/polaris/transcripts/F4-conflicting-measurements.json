@@ -1,0 +1,13 @@
+{
+  "name": "F4-conflicting-measurements",
+  "description": "Customer provides two incompatible values without clear correction — status: conflicting",
+  "industry": "Tree Service",
+  "transcriptSource": "simulation",
+  "turns": [
+    { "turnId": "turn-0", "speaker": "customer", "utterance": "The tree is around 80 feet.", "source": "simulation" },
+    { "turnId": "turn-1", "speaker": "customer", "utterance": "It may be closer to 60 feet.", "source": "simulation" }
+  ],
+  "expectedFacts": {
+    "Tree Height": { "status": "conflicting", "speaker": "customer" }
+  }
+}

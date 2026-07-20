@@ -445,7 +445,7 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
       // Look for adjective+noun or noun patterns near the service keyword
       var descPatterns = [
         /(large|big|tall|huge|small|old|new|oak|pine|maple|cedar)\s+\w+/i,
-        /(\w+\s+oak|\w+\s+pine|\w+\s+tree)/i,
+        /((?!for\b|the\b|a\b|an\b|my\b|of\b|this\b|that\b|your\b)\w+\s+oak|(?!for\b|the\b|a\b|an\b|my\b|of\b|this\b|that\b|your\b)\w+\s+pine|(?!for\b|the\b|a\b|an\b|my\b|of\b|this\b|that\b|your\b)\w+\s+tree)s?\b/i,
         /(emergency|urgent|storm\s+damage|hazardous)/i,
       ];
       for (var dpi = 0; dpi < descPatterns.length; dpi++) {

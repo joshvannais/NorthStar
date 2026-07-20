@@ -1,5 +1,5 @@
 /**
- * contactIntelligence.js — M19.5 Phase E: Contact Intelligence
+ * contactIntelligence.js — M19.5 Phase E1: Contact Intelligence Enrichment
  *
  * Builds customer intelligence from the canonical Polaris record.
  * Consumer of Phase C + D output — never duplicates transcript parsing,
@@ -9,6 +9,34 @@
  * Independent from operational intelligence ("What work needs to be done?").
  *
  * Both layers share the same canonical Polaris record.
+ *
+ * ——— KNOWN LIMITATIONS (Phase E1) ———
+ *
+ * 1. Identity resolution:
+ *    - Phone is the primary identity signal. Uses substring search, not normalized exact matching.
+ *    - Name fallback is provisional and must not be considered authoritative identity resolution.
+ *      A name-only match may join two unrelated customers who share the same name.
+ *    - Email matching and address matching are not implemented.
+ *    - Conflicting identity evidence is not resolved.
+ *    - Shared household and shared business numbers are not supported.
+ *    - Multiple properties per contact are not modeled.
+ *
+ * 2. Timeline:
+ *    - Normal single-pass processing appends one timeline entry per processed interaction.
+ *    - Retry-safe event deduplication is not yet implemented. Without an idempotency key
+ *      or unique source-event identifier, a webhook retry, repeated callback, replay, or
+ *      duplicated processing request may create another timeline entry for the same event.
+ *    - Timeline events are stored generically as notes. Calls, estimates, appointments,
+ *      jobs, invoices, payments, complaints, and warranties are not represented as
+ *      distinct event types.
+ *
+ * 3. Persistence:
+ *    - Customer information persists through the existing JSON-backed customer-engine store
+ *      and accumulates across calls, but a dedicated durable customer repository has not
+ *      yet been implemented.
+ *    - Customer records use the recommendations store rather than a dedicated customer database.
+ *    - Persistence failure falls back to in-memory state and may lose updates after process termination.
+ *    - Tenant isolation is not implemented.
  */
 'use strict';
 

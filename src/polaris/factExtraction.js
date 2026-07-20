@@ -1156,6 +1156,8 @@ module.exports = {
   buildPolarisLegacyFromFacts,
   findCustomerSentence,
   isEligibleCollected,
+  // Phase D: entity model integration
+  extractPolarisFactsWithEntities,
   // Parser internals (exported for unit tests)
   splitSentences,
   wordsToNumber,
@@ -1164,3 +1166,42 @@ module.exports = {
   isHedged,
   isNegatedAt,
 };
+
+// ── Phase D: Entity Model Integration ──
+// Wraps Phase C extraction with entity enrichment and estimate safeguards.
+// Lazy-requires entityModel/estimateSafeguards to avoid circular dependencies.
+
+/**
+ * Extract Phase C facts, then enrich with entity model and estimate data.
+ * Returns the full pipeline output.
+ */
+function extractPolarisFactsWithEntities(turns, industry, transcriptSource) {
+  // Phase C extraction
+  const norm = normalizeTranscript(turns, transcriptSource || 'simulation');
+  const result = extractPolarisFacts(norm, industry);
+  const facts = result.facts;
+  const legacy = buildPolarisLegacyFromFacts(facts, industry);
+
+  // Phase D enrichment (only for Tree Service)
+  let entity = null;
+  let estimate = null;
+
+  if (industry === 'Tree Service') {
+    try {
+      const em = require('./entityModel');
+      const es = require('./estimateSafeguards');
+      entity = em.buildTreeServiceEntity(facts);
+      estimate = es.runEstimatePipeline(facts, industry);
+    } catch (e) {
+      // entity model not available — Phase D not installed
+    }
+  }
+
+  return {
+    facts: facts,
+    legacy: legacy,
+    entity: entity,
+    estimate: estimate,
+    factModelVersion: '1.0'
+  };
+}

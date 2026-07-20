@@ -1180,52 +1180,25 @@ function buildWorkScopes(entity, industry) {
   if (!entity || !entity.treeGroups) return [];
   
   return entity.treeGroups.map(function(group) {
-    // Build shared attributes from group-level facts
-    const sharedAttributes = {};
-    if (group.sharedHeight && group.sharedHeight.normalizedValue !== null) {
-      sharedAttributes.height = group.sharedHeight.normalizedValue;
-      sharedAttributes.heightUnit = group.sharedHeight.unit || 'ft';
-    }
-    if (group.sharedTrunkDiameter && group.sharedTrunkDiameter.normalizedValue !== null) {
-      sharedAttributes.trunkDiameter = group.sharedTrunkDiameter.normalizedValue;
-      sharedAttributes.trunkDiameterUnit = group.sharedTrunkDiameter.unit || 'in';
-    }
+    // Collect hazards from the group's hazards array
+    const hazards = (group.hazards || []).map(function(h) {
+      if (typeof h === 'string') return h;
+      if (h && h.normalizedValue) return String(h.normalizedValue);
+      if (h && h.description) return h.description;
+      return null;
+    }).filter(Boolean);
     
-    // Collect hazards from tree-level facts
-    const hazards = [];
-    for (const t of (group.trees || [])) {
-      if (t.hazards && t.hazards.length > 0) {
-        for (const h of t.hazards) {
-          if (h.normalizedValue) hazards.push(String(h.normalizedValue));
-        }
-      }
-    }
+    // Extract species
+    const species = (typeof group.species === 'string') ? group.species : null;
     
-    // Extract species from group-level species fact
-    let species = null;
-    if (group.species) {
-      if (typeof group.species === 'object' && group.species.normalizedValue) {
-        species = String(group.species.normalizedValue);
-      } else if (typeof group.species === 'string') {
-        species = group.species;
-      }
-    }
-    
-    // Extract quantity
-    let quantity = group.trees ? group.trees.length : 1;
-    if (group.quantity) {
-      if (typeof group.quantity === 'object' && group.quantity.normalizedValue !== null) {
-        quantity = group.quantity.normalizedValue;
-      } else if (typeof group.quantity === 'number') {
-        quantity = group.quantity;
-      }
-    }
+    // Extract quantity — it's a number in the entity model
+    const quantity = (typeof group.quantity === 'number') ? group.quantity : 1;
     
     // Collect fact IDs
-    const factIds = (group.facts || []).map(function(f) { return f.id; });
+    const factIds = (group.factIds || []).filter(Boolean);
     
     return {
-      scopeId: group.entityId,
+      scopeId: group.groupId,
       domain: 'tree_service',
       serviceType: null,  // Not inferred — conversation may involve removal, trimming, pruning, stump grinding, etc.
       subject: {
@@ -1234,13 +1207,13 @@ function buildWorkScopes(entity, industry) {
         quantity: quantity
       },
       quantity: quantity,
-      attributes: sharedAttributes,
-      condition: sharedAttributes.condition || null,
+      attributes: group.sharedAttributes || {},
+      condition: (group.sharedAttributes && group.sharedAttributes.condition) || null,
       hazards: hazards,
       accessConstraints: null,  // Not yet modeled — Phase D scope
       dependencies: null,       // Not yet modeled — Phase D scope
       factIds: factIds,
-      evidence: null,
+      evidence: group.evidence || null,
       estimateEligibility: null,  // Would come from estimate safeguards in future
       assumptions: [],
       unknowns: [],
@@ -1269,45 +1242,25 @@ function buildWorkScopes(entity, industry) {
  * - facts/meta/legacy/turns: shared Phase C extraction
  */
 function extractPolarisFactsWithEntities(turns, industry, transcriptSource) {
-  const norm = normalizeTranscript(turns, transcriptSource || 'simulation');
-  const result = extractPolarisFacts(norm, industry);
-  const legacy = buildPolarisLegacyFromFacts(result.facts, industry);
-  
-  // ── Phase D: entity model + estimate (Tree Service is first reference) ──
-  let entity = null;
-  let estimate = null;
-  
-  if (industry === 'Tree Service' && result.facts.length > 0) {
-    try {
-      const em = getEntityModel();
-      if (em) {
-        em.enrichFactsWithEntityInfo(result.facts, industry);
-        entity = em.buildTreeServiceEntities(result.facts);
-        
-        // Build estimate from safeguards
-        const es = getEstimateSafeguards();
-        if (es && entity) {
-          const estResult = es.runEstimatePipeline(result.facts, { industry });
-          estimate = {
-            applicable: estResult.eligibleFactCount > 0 || estResult.adjustments.length > 0,
-            estimateRange: estResult.adjustedRange || null,
-            adjustments: estResult.adjustments || [],
-            confidence: estResult.confidence || null,
-            assumptions: estResult.uncertaintyFactors || [],
-            unknowns: estResult.rangeWidth ? [estResult.rangeWidth.reason] : [],
-            eligibleFacts: estResult.eligibleFactCount || 0,
-            ineligibleFacts: estResult.wideningFactCount || 0,
-            considerations: [],
-            missingEstimateInfo: estResult.missingFactCount || 0,
-            totalQuantity: estResult.quantity || 1,
-            siteVerificationRequired: (estResult.rangeWidth && estResult.rangeWidth.factor > 1.5)
-          };
+      const norm = normalizeTranscript(turns, transcriptSource || 'simulation');
+      const result = extractPolarisFacts(norm, industry);
+      const legacy = buildPolarisLegacyFromFacts(result.facts, industry);
+      const facts = result.facts;
+
+      // ── Phase D: entity model + estimate (Tree Service is first reference) ──
+      let entity = null;
+      let estimate = null;
+
+      if (industry === 'Tree Service' && facts.length > 0) {
+        try {
+          const em = require('./entityModel');
+          const es = require('./estimateSafeguards');
+          entity = em.buildTreeServiceEntity(facts);
+          estimate = es.runEstimatePipeline(facts, industry);
+        } catch (e) {
+          // Entity model is additive — fall back to Phase C silently.
         }
       }
-    } catch (e) {
-      // Entity model is additive — fall back to Phase C silently.
-    }
-  }
   
   return {
     // Phase C shared fields
@@ -1363,41 +1316,8 @@ module.exports = {
   isNegatedAt,
 };
 
-// ── Phase D: Entity Model Integration ──
-// Wraps Phase C extraction with entity enrichment and estimate safeguards.
-// Lazy-requires entityModel/estimateSafeguards to avoid circular dependencies.
-
-/**
- * Extract Phase C facts, then enrich with entity model and estimate data.
- * Returns the full pipeline output.
- */
-function extractPolarisFactsWithEntities(turns, industry, transcriptSource) {
-  // Phase C extraction
-  const norm = normalizeTranscript(turns, transcriptSource || 'simulation');
-  const result = extractPolarisFacts(norm, industry);
-  const facts = result.facts;
-  const legacy = buildPolarisLegacyFromFacts(facts, industry);
-
-  // Phase D enrichment (only for Tree Service)
-  let entity = null;
-  let estimate = null;
-
-  if (industry === 'Tree Service') {
-    try {
-      const em = require('./entityModel');
-      const es = require('./estimateSafeguards');
-      entity = em.buildTreeServiceEntity(facts);
-      estimate = es.runEstimatePipeline(facts, industry);
-    } catch (e) {
-      // entity model not available — Phase D not installed
-    }
-  }
-
-  return {
-    facts: facts,
-    legacy: legacy,
-    entity: entity,
-    estimate: estimate,
-    factModelVersion: '1.0'
-  };
-}
+// ── End of file ──
+// extractPolarisFactsWithEntities is defined above at line 1271.
+// The duplicate definition that was here has been removed.
+// The new function returns the full capability contract:
+// { facts, meta, legacy, turns, capability, workScopes, estimate, industryDetail }

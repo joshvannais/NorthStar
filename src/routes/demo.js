@@ -333,11 +333,14 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
   const n = lines.length;
 
   // Normalize once, extract typed facts, derive legacy fields from facts.
-  const turns = factExtraction.normalizeTranscript(lines, transcriptSource);
-  const extraction = factExtraction.extractPolarisFacts(turns, industry);
+  // Phase D: extractPolarisFactsWithEntities is the shared production entry point.
+  const extraction = factExtraction.extractPolarisFactsWithEntities(lines, industry, transcriptSource);
   const facts = extraction.facts;
   const meta = extraction.meta;
-  const legacy = factExtraction.buildPolarisLegacyFromFacts(facts, industry);
+  const legacy = extraction.legacy;
+  const turns = extraction.turns;
+  const workScopes = extraction.workScopes || [];
+  const capabilityEstimate = extraction.estimate;
   const qual = legacy.qualification;
   const extractedVals = legacy.extractedValues;
 
@@ -367,51 +370,71 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
   let customerIntent = n === 0 ? 'Not yet determined' : (n > 2 ? 'Actively seeking service' : 'Information gathering');
 
   // Dynamic revenue range based on extracted facts.
-  // Multiplier thresholds and values are IDENTICAL to pre-Phase-C behavior —
-  // only the evidence source changed (customer-sourced collected facts).
+  // Phase D: industry capability estimate takes priority when available.
+  // Phase C fallback: original multiplier logic (unchanged).
+  let estimateSource = 'phase_c_fallback';
   let factMultiplier = 1.0;
   const adjustmentReasons = [];
-
-  // Check for height/scale - large jobs increase value
-  if (extractedVals['Tree Height'] || extractedVals['Home Square Footage'] || extractedVals['System Age']) {
-    const heightMatch = extractedVals['Tree Height'];
-    if (heightMatch) {
-      const numPart = parseFloat(heightMatch.replace(/[^\d.]/g, ''));
-      if (numPart > 50) {
-        factMultiplier = Math.max(factMultiplier, 1.3);
-        adjustmentReasons.push('Large tree height (' + heightMatch + ')');
-      }
-      if (numPart > 150) {
-        factMultiplier = Math.max(factMultiplier, 1.6);
-        adjustmentReasons.push('Extreme tree height requires specialized equipment');
-      }
-    }
-    const sqftMatch = extractedVals['Home Square Footage'];
-    if (sqftMatch) {
-      const numPart = parseFloat(sqftMatch.replace(/[^\d.]/g, ''));
-      if (numPart > 3000) {
-        factMultiplier = Math.max(factMultiplier, 1.3);
-        adjustmentReasons.push('Large property (' + sqftMatch + ')');
-      }
-    }
-  }
-
-  // Access difficulty adjustment — customer statements only (Phase C)
+  let adjMin = baseMin;
+  let adjMax = baseMax;
   const difficultyFound = meta.difficultyFound;
-  if (difficultyFound) {
-    factMultiplier = Math.max(factMultiplier, 1.2);
-    adjustmentReasons.push('Access difficulty noted');
-  }
 
-  // Urgency adjustment
-  if (urgencyLevel === 'High') {
-    factMultiplier = Math.max(factMultiplier, 1.15);
-    adjustmentReasons.push('High urgency');
-  }
+  if (capabilityEstimate && capabilityEstimate.applicable && capabilityEstimate.estimateRange) {
+    // Use industry capability estimate
+    estimateSource = 'industry_capability';
+    adjMin = capabilityEstimate.estimateRange.min;
+    adjMax = capabilityEstimate.estimateRange.max;
+    const baseMid = (baseMin + baseMax) / 2;
+    const estMid = (adjMin + adjMax) / 2;
+    factMultiplier = baseMid > 0 ? Math.round((estMid / baseMid) * 100) / 100 : 1.0;
+    
+    if (capabilityEstimate.adjustments && capabilityEstimate.adjustments.length > 0) {
+      capabilityEstimate.adjustments.forEach(function(adj) {
+        if (adj.reason) adjustmentReasons.push(adj.reason);
+      });
+    }
+  } else {
+    // Phase C fallback: existing multiplier logic (UNCHANGED)
+    // Check for height/scale - large jobs increase value
+    if (extractedVals['Tree Height'] || extractedVals['Home Square Footage'] || extractedVals['System Age']) {
+      const heightMatch = extractedVals['Tree Height'];
+      if (heightMatch) {
+        const numPart = parseFloat(heightMatch.replace(/[^\d.]/g, ''));
+        if (numPart > 50) {
+          factMultiplier = Math.max(factMultiplier, 1.3);
+          adjustmentReasons.push('Large tree height (' + heightMatch + ')');
+        }
+        if (numPart > 150) {
+          factMultiplier = Math.max(factMultiplier, 1.6);
+          adjustmentReasons.push('Extreme tree height requires specialized equipment');
+        }
+      }
+      const sqftMatch = extractedVals['Home Square Footage'];
+      if (sqftMatch) {
+        const numPart = parseFloat(sqftMatch.replace(/[^\d.]/g, ''));
+        if (numPart > 3000) {
+          factMultiplier = Math.max(factMultiplier, 1.3);
+          adjustmentReasons.push('Large property (' + sqftMatch + ')');
+        }
+      }
+    }
 
-  // Calculate revenue range from base + factMultiplier
-  const adjMin = Math.round(baseMin * factMultiplier);
-  const adjMax = Math.round(baseMax * factMultiplier);
+    // Access difficulty adjustment — customer statements only (Phase C)
+    if (difficultyFound) {
+      factMultiplier = Math.max(factMultiplier, 1.2);
+      adjustmentReasons.push('Access difficulty noted');
+    }
+
+    // Urgency adjustment
+    if (urgencyLevel === 'High') {
+      factMultiplier = Math.max(factMultiplier, 1.15);
+      adjustmentReasons.push('High urgency');
+    }
+
+    // Calculate revenue range from base + factMultiplier
+    adjMin = Math.round(baseMin * factMultiplier);
+    adjMax = Math.round(baseMax * factMultiplier);
+  }
 
   // Confidence: 50% depth + 30% completeness + 20% urgency clarity
   let depthScore = 0;
@@ -561,6 +584,10 @@ function buildPolarisIntelligence(businessName, industry, transcriptLines, execu
     estimatingVariables: qual.variables,
 
     missingInformation: qual.missing,
+
+    // ── M19.5 Phase D: work scopes and estimate source ──
+    workScopes: workScopes,
+    estimateSource: estimateSource,
 
     estimate: {
       opportunityLabel: 'POLARIS\u2122 ESTIMATED OPPORTUNITY',

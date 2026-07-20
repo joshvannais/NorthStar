@@ -1142,6 +1142,202 @@ function findCustomerSentence(turns, keyword) {
   return null;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. Phase D — Entity-enriched extraction (post-processing)
+// ═══════════════════════════════════════════════════════════════════════════
+// Entity enrichment runs AFTER extractPolarisFacts() as a post-processing step.
+// It does NOT modify the extraction logic itself — all inputs come from
+// Phase C typed facts. The entityModel module tags tree-related facts with
+// tree_group / tree entity info based on turn-local context.
+//
+// Lazy-required to avoid circular dependency at module load time.
+
+let _entityModel = null;
+function getEntityModel() {
+  if (!_entityModel) {
+    try { _entityModel = require('./entityModel'); } catch (e) { _entityModel = null; }
+  }
+  return _entityModel;
+}
+
+let _estimateSafeguards = null;
+function getEstimateSafeguards() {
+  if (!_estimateSafeguards) {
+    try { _estimateSafeguards = require('./estimateSafeguards'); } catch (e) { _estimateSafeguards = null; }
+  }
+  return _estimateSafeguards;
+}
+
+/**
+ * Translate industry entity model into universal work scopes.
+ * This is the generalization layer — each industry entity model maps
+ * to this shared structure. demo.js consumes workScopes, not entity internals.
+ * 
+ * Tree Service is the first reference implementation.
+ * Future industries will populate workScopes from their own entity models.
+ */
+function buildWorkScopes(entity, industry) {
+  if (!entity || !entity.treeGroups) return [];
+  
+  return entity.treeGroups.map(function(group) {
+    // Build shared attributes from group-level facts
+    const sharedAttributes = {};
+    if (group.sharedHeight && group.sharedHeight.normalizedValue !== null) {
+      sharedAttributes.height = group.sharedHeight.normalizedValue;
+      sharedAttributes.heightUnit = group.sharedHeight.unit || 'ft';
+    }
+    if (group.sharedTrunkDiameter && group.sharedTrunkDiameter.normalizedValue !== null) {
+      sharedAttributes.trunkDiameter = group.sharedTrunkDiameter.normalizedValue;
+      sharedAttributes.trunkDiameterUnit = group.sharedTrunkDiameter.unit || 'in';
+    }
+    
+    // Collect hazards from tree-level facts
+    const hazards = [];
+    for (const t of (group.trees || [])) {
+      if (t.hazards && t.hazards.length > 0) {
+        for (const h of t.hazards) {
+          if (h.normalizedValue) hazards.push(String(h.normalizedValue));
+        }
+      }
+    }
+    
+    // Extract species from group-level species fact
+    let species = null;
+    if (group.species) {
+      if (typeof group.species === 'object' && group.species.normalizedValue) {
+        species = String(group.species.normalizedValue);
+      } else if (typeof group.species === 'string') {
+        species = group.species;
+      }
+    }
+    
+    // Extract quantity
+    let quantity = group.trees ? group.trees.length : 1;
+    if (group.quantity) {
+      if (typeof group.quantity === 'object' && group.quantity.normalizedValue !== null) {
+        quantity = group.quantity.normalizedValue;
+      } else if (typeof group.quantity === 'number') {
+        quantity = group.quantity;
+      }
+    }
+    
+    // Collect fact IDs
+    const factIds = (group.facts || []).map(function(f) { return f.id; });
+    
+    return {
+      scopeId: group.entityId,
+      domain: 'tree_service',
+      serviceType: null,  // Not inferred — conversation may involve removal, trimming, pruning, stump grinding, etc.
+      subject: {
+        type: 'treeGroup',
+        species: species,
+        quantity: quantity
+      },
+      quantity: quantity,
+      attributes: sharedAttributes,
+      condition: sharedAttributes.condition || null,
+      hazards: hazards,
+      accessConstraints: null,  // Not yet modeled — Phase D scope
+      dependencies: null,       // Not yet modeled — Phase D scope
+      factIds: factIds,
+      evidence: null,
+      estimateEligibility: null,  // Would come from estimate safeguards in future
+      assumptions: [],
+      unknowns: [],
+      confidence: null
+    };
+  });
+}
+
+/**
+ * extractPolarisFactsWithEntities — Shared production entry point for all industries.
+ * 
+ * Tree Service is the FIRST REFERENCE IMPLEMENTATION of the Polaris industry
+ * capability framework. Future industries (Roofing, HVAC, Plumbing, Electrical,
+ * Landscaping, Cleaning, General Contracting, and hundreds more) will be
+ * registered through the same capability pattern.
+ * 
+ * The architecture is designed for a future registry-based capability resolver
+ * where industry entity models and estimate engines are registered behind
+ * stable interfaces rather than hard-coded conditionals.
+ * 
+ * This function returns a generalized contract:
+ * - capability: whether an industry capability is supported
+ * - workScopes: universal scope structure (industry-agnostic)
+ * - estimate: unified estimate result (or null if unsupported)
+ * - industryDetail: vertical-specific data (consumed only by industry-aware consumers)
+ * - facts/meta/legacy/turns: shared Phase C extraction
+ */
+function extractPolarisFactsWithEntities(turns, industry, transcriptSource) {
+  const norm = normalizeTranscript(turns, transcriptSource || 'simulation');
+  const result = extractPolarisFacts(norm, industry);
+  const legacy = buildPolarisLegacyFromFacts(result.facts, industry);
+  
+  // ── Phase D: entity model + estimate (Tree Service is first reference) ──
+  let entity = null;
+  let estimate = null;
+  
+  if (industry === 'Tree Service' && result.facts.length > 0) {
+    try {
+      const em = getEntityModel();
+      if (em) {
+        em.enrichFactsWithEntityInfo(result.facts, industry);
+        entity = em.buildTreeServiceEntities(result.facts);
+        
+        // Build estimate from safeguards
+        const es = getEstimateSafeguards();
+        if (es && entity) {
+          const estResult = es.runEstimatePipeline(result.facts, { industry });
+          estimate = {
+            applicable: estResult.eligibleFactCount > 0 || estResult.adjustments.length > 0,
+            estimateRange: estResult.adjustedRange || null,
+            adjustments: estResult.adjustments || [],
+            confidence: estResult.confidence || null,
+            assumptions: estResult.uncertaintyFactors || [],
+            unknowns: estResult.rangeWidth ? [estResult.rangeWidth.reason] : [],
+            eligibleFacts: estResult.eligibleFactCount || 0,
+            ineligibleFacts: estResult.wideningFactCount || 0,
+            considerations: [],
+            missingEstimateInfo: estResult.missingFactCount || 0,
+            totalQuantity: estResult.quantity || 1,
+            siteVerificationRequired: (estResult.rangeWidth && estResult.rangeWidth.factor > 1.5)
+          };
+        }
+      }
+    } catch (e) {
+      // Entity model is additive — fall back to Phase C silently.
+    }
+  }
+  
+  return {
+    // Phase C shared fields
+    facts: result.facts,
+    meta: result.meta,
+    legacy: legacy,
+    turns: norm,
+    factModelVersion: '1.0',
+    
+    // Phase D capability result
+    capability: {
+      supported: (industry === 'Tree Service'),
+      capabilityId: (industry === 'Tree Service') ? 'tree_service_v1' : null,
+      version: (industry === 'Tree Service') ? '1.0' : null
+    },
+    
+    // Universal work scopes (generalized from entity model)
+    workScopes: buildWorkScopes(entity, industry),
+    
+    // Unified estimate result
+    estimate: estimate,
+    
+    // Industry-specific detail (isolated — demo.js never reads this)
+    industryDetail: (industry === 'Tree Service' && entity) ? {
+      entity: entity,
+      treeGroups: entity.treeGroups || []
+    } : null
+  };
+}
+
 module.exports = {
   // Data (single source of truth — demo.js imports these)
   QUALIFICATION_PROFILES,

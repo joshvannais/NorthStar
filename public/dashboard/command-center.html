@@ -8,28 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    :root {
-      --cc-bg: var(--neutral-50, #f8f9fa);
-      --cc-card: #ffffff;
-      --cc-border: var(--neutral-200, #e9ecef);
-      --cc-text: var(--neutral-900, #1a1a2e);
-      --cc-text-secondary: var(--neutral-600, #6c757d);
-      --cc-text-muted: var(--neutral-500, #adb5bd);
-      --cc-accent: var(--accent, #d4af37);
-      --cc-success: #10b981;
-      --cc-warning: #f59e0b;
-      --cc-danger: #ef4444;
-      --cc-info: #3b82f6;
-    }
-    [data-theme="dark"] {
-      --cc-bg: var(--neutral-900, #1a1a2e);
-      --cc-card: var(--neutral-800, #2d2d44);
-      --cc-border: var(--neutral-700, #3d3d5c);
-      --cc-text: var(--neutral-100, #f8f9fa);
-      --cc-text-secondary: var(--neutral-400, #adb5bd);
-      --cc-text-muted: var(--neutral-500, #6c757d);
-    }
-
+    /* ── Only what's unique to Command Center ── */
     * { box-sizing: border-box; }
 
     .cc-workspace { max-width: 1400px; margin: 0 auto; padding: 16px 24px; }
@@ -38,32 +17,19 @@
     .cc-sim-banner {
       background: linear-gradient(135deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.02) 100%);
       border: 1px solid rgba(212,175,55,0.2);
-      border-radius: 10px;
-      padding: 14px 20px;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
+      border-radius: 10px; padding: 14px 20px; margin-bottom: 14px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
     }
     .cc-sim-text { flex: 1; min-width: 180px; }
-    .cc-sim-text p { margin: 0; font-size: 12px; color: var(--cc-text-secondary); line-height: 1.4; }
-    .cc-sim-text .cc-sim-heading { font-weight: 600; font-size: 14px; color: var(--cc-text); margin-bottom: 2px; }
+    .cc-sim-text p { margin: 0; font-size: 12px; color: var(--neutral-500); line-height: 1.4; }
+    .cc-sim-text .cc-sim-heading { font-weight: 600; font-size: 14px; color: var(--neutral-800); margin-bottom: 2px; }
+    [data-theme="dark"] .cc-sim-text .cc-sim-heading { color: var(--neutral-200); }
     .cc-sim-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 20px;
-      border-radius: 7px;
-      border: none;
-      background: linear-gradient(135deg, var(--cc-accent) 0%, #c9a227 100%);
-      color: #fff;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 20px; border-radius: 7px; border: none;
+      background: linear-gradient(135deg, var(--brand-500) 0%, #c9a227 100%);
+      color: #fff; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
       box-shadow: 0 2px 6px rgba(212,175,55,0.25);
     }
     .cc-sim-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.35); }
@@ -75,7 +41,7 @@
       border-radius: 50%; animation: cc-spin 0.6s linear infinite;
     }
     @keyframes cc-spin { to { transform: rotate(360deg); } }
-    .cc-sim-status { font-size: 11px; color: var(--cc-success); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+    .cc-sim-status { font-size: 11px; color: var(--success); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
 
     /* ── Header ── */
     .cc-header {
@@ -83,149 +49,153 @@
       margin-bottom: 14px; flex-wrap: wrap; gap: 6px;
     }
     .cc-header-left h1 {
-      font-size: 20px; font-weight: 700; margin: 0;
-      color: var(--cc-text); letter-spacing: -0.2px;
+      font-size: 20px; font-weight: 700; margin: 0; color: var(--neutral-800);
+      letter-spacing: -0.2px;
     }
-    .cc-header-left .cc-sub { font-size: 12px; color: var(--cc-text-secondary); display: flex; align-items: center; gap: 6px; margin-top: 1px; }
-    .cc-live-dot {
-      width: 5px; height: 5px; border-radius: 50%;
-      background: var(--cc-success); display: inline-block; animation: cc-pulse 2s infinite;
-    }
+    [data-theme="dark"] .cc-header-left h1 { color: var(--neutral-100); }
+    .cc-header-left .cc-sub { font-size: 12px; color: var(--neutral-500); display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+    .cc-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); display: inline-block; animation: cc-pulse 2s infinite; }
     @keyframes cc-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
     .cc-refresh-btn {
       font-size: 11px; padding: 6px 14px; border-radius: 6px;
-      border: 1px solid var(--cc-border); background: var(--cc-card);
-      color: var(--cc-text-secondary); cursor: pointer; transition: all 0.15s; font-weight: 500;
+      border: 1px solid var(--neutral-200); background: var(--neutral-50);
+      color: var(--neutral-500); cursor: pointer; transition: all 0.15s; font-weight: 500;
     }
-    .cc-refresh-btn:hover { border-color: var(--cc-accent); color: var(--cc-accent); }
+    [data-theme="dark"] .cc-refresh-btn { background: var(--neutral-800); border-color: var(--neutral-700); color: var(--neutral-400); }
+    .cc-refresh-btn:hover { border-color: var(--brand-500); color: var(--brand-500); }
 
-    /* ── Cards ── */
-    .cc-card {
-      background: var(--cc-card); border: 1px solid var(--cc-border);
-      border-radius: 10px; padding: 14px 18px;
-    }
+    /* ── Cards — uses shared design tokens ── */
+    .cc-card { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: 10px; padding: 14px 18px; }
+    [data-theme="dark"] .cc-card { background: var(--neutral-800); border-color: var(--neutral-700); }
+    .cc-card + .cc-card { margin-top: 12px; }
     .cc-card-title {
       font-size: 10px; font-weight: 600; text-transform: uppercase;
-      letter-spacing: 0.4px; color: var(--cc-text-muted); margin-bottom: 10px;
+      letter-spacing: 0.4px; color: var(--neutral-400); margin-bottom: 10px;
     }
-    .cc-card + .cc-card { margin-top: 12px; }
 
     /* ── Summary ── */
-    .cc-summary-text { font-size: 13px; line-height: 1.55; color: var(--cc-text); }
-    .cc-summary-text strong { color: var(--cc-accent); font-weight: 600; }
+    .cc-summary-text { font-size: 13px; line-height: 1.55; color: var(--neutral-700); }
+    [data-theme="dark"] .cc-summary-text { color: var(--neutral-300); }
+    .cc-summary-text strong { color: var(--brand-500); font-weight: 600; }
 
-    /* ── KPI Grid ── */
+    /* ── KPI Grid (PRESERVED from 2.2) ── */
     .cc-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .cc-kpi {
-      padding: 12px 14px; border-radius: 8px; border: 1px solid var(--cc-border);
-      background: var(--cc-card); cursor: default; transition: all 0.15s;
+      padding: 12px 14px; border-radius: 8px; border: 1px solid var(--neutral-200);
+      background: var(--neutral-50); cursor: default; transition: all 0.15s;
     }
+    [data-theme="dark"] .cc-kpi { background: var(--neutral-800); border-color: var(--neutral-700); }
     .cc-kpi:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-    [data-theme="dark"] .cc-kpi:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
     .cc-kpi-icon { font-size: 16px; margin-bottom: 4px; }
-    .cc-kpi-value { font-size: 20px; font-weight: 700; color: var(--cc-text); line-height: 1.15; }
-    .cc-kpi-label { font-size: 10px; color: var(--cc-text-secondary); margin-top: 2px; font-weight: 500; }
+    .cc-kpi-value { font-size: 20px; font-weight: 700; color: var(--neutral-800); line-height: 1.15; }
+    [data-theme="dark"] .cc-kpi-value { color: var(--neutral-100); }
+    .cc-kpi-label { font-size: 10px; color: var(--neutral-500); margin-top: 2px; font-weight: 500; }
 
     /* ── Priorities ── */
     .cc-priority-item {
       display: flex; align-items: flex-start; gap: 10px;
-      padding: 8px 12px; border-radius: 7px; border: 1px solid var(--cc-border);
+      padding: 8px 12px; border-radius: 7px; border: 1px solid var(--neutral-200);
       margin-bottom: 6px; transition: all 0.15s;
     }
-    .cc-priority-item:hover { border-color: var(--cc-accent); }
-    .cc-priority-rank { font-size: 14px; font-weight: 700; color: var(--cc-accent); min-width: 20px; line-height: 1.4; }
+    [data-theme="dark"] .cc-priority-item { border-color: var(--neutral-700); }
+    .cc-priority-item:hover { border-color: var(--brand-500); }
+    .cc-priority-rank { font-size: 14px; font-weight: 700; color: var(--brand-500); min-width: 20px; line-height: 1.4; }
     .cc-priority-body { flex: 1; min-width: 0; }
-    .cc-priority-title { font-size: 13px; font-weight: 600; color: var(--cc-text); }
-    .cc-priority-meta { font-size: 10px; color: var(--cc-text-secondary); margin-top: 1px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .cc-priority-title { font-size: 13px; font-weight: 600; color: var(--neutral-800); }
+    [data-theme="dark"] .cc-priority-title { color: var(--neutral-200); }
+    .cc-priority-meta { font-size: 10px; color: var(--neutral-500); margin-top: 1px; display: flex; gap: 8px; flex-wrap: wrap; }
     .cc-priority-badge { font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; }
-    .cc-priority-badge.critical { background: rgba(239,68,68,0.15); color: var(--cc-danger); }
-    .cc-priority-badge.high { background: rgba(245,158,11,0.15); color: var(--cc-warning); }
-    .cc-priority-badge.medium { background: rgba(59,130,246,0.15); color: var(--cc-info); }
-    .cc-priority-badge.low { background: rgba(108,117,125,0.15); color: var(--cc-text-secondary); }
-    .cc-priority-desc { font-size: 11px; color: var(--cc-text-secondary); margin-top: 2px; line-height: 1.3; }
+    .cc-priority-badge.critical { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .cc-priority-badge.high { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .cc-priority-badge.medium { background: rgba(59,130,246,0.15); color: var(--info); }
+    .cc-priority-badge.low { background: rgba(108,117,125,0.15); color: var(--neutral-500); }
+    .cc-priority-desc { font-size: 11px; color: var(--neutral-500); margin-top: 2px; line-height: 1.3; }
 
     /* ── Revenue ── */
     .cc-rev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 4px; }
     .cc-rev-stat { text-align: center; padding: 6px 4px; }
-    .cc-rev-val { font-size: 18px; font-weight: 700; color: var(--cc-text); }
-    .cc-rev-val.gold { color: var(--cc-accent); }
-    .cc-rev-val.green { color: var(--cc-success); }
-    .cc-rev-val.orange { color: var(--cc-warning); }
-    .cc-rev-label { font-size: 9px; color: var(--cc-text-secondary); margin-top: 1px; font-weight: 500; }
+    .cc-rev-val { font-size: 18px; font-weight: 700; color: var(--neutral-800); }
+    [data-theme="dark"] .cc-rev-val { color: var(--neutral-100); }
+    .cc-rev-val.gold { color: var(--brand-500); }
+    .cc-rev-val.green { color: var(--success); }
+    .cc-rev-val.orange { color: var(--warning); }
+    .cc-rev-label { font-size: 9px; color: var(--neutral-500); margin-top: 1px; font-weight: 500; }
 
     /* ── Pipeline ── */
     .cc-pipeline { display: flex; align-items: center; gap: 0; padding: 2px 0; }
     .cc-pipe-stage { flex: 1; text-align: center; padding: 6px 4px; position: relative; }
     .cc-pipe-stage:not(:last-child)::after {
       content: '\2192'; position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
-      color: var(--cc-text-muted); font-size: 14px; opacity: 0.4;
+      color: var(--neutral-400); font-size: 14px; opacity: 0.4;
     }
     .cc-pipe-icon { font-size: 16px; margin-bottom: 1px; }
-    .cc-pipe-count { font-size: 18px; font-weight: 700; color: var(--cc-text); margin: 1px 0; }
-    .cc-pipe-label { font-size: 9px; color: var(--cc-text-secondary); font-weight: 500; }
-    .cc-pipe-bar { height: 3px; border-radius: 2px; margin-top: 5px; background: var(--cc-border); overflow: hidden; }
+    .cc-pipe-count { font-size: 18px; font-weight: 700; color: var(--neutral-800); margin: 1px 0; }
+    [data-theme="dark"] .cc-pipe-count { color: var(--neutral-100); }
+    .cc-pipe-label { font-size: 9px; color: var(--neutral-500); font-weight: 500; }
+    .cc-pipe-bar { height: 3px; border-radius: 2px; margin-top: 5px; background: var(--neutral-200); overflow: hidden; }
+    [data-theme="dark"] .cc-pipe-bar { background: var(--neutral-700); }
     .cc-pipe-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
 
     /* ── Customers ── */
     .cc-cust-list { display: flex; flex-direction: column; gap: 4px; }
     .cc-cust-item {
       display: flex; align-items: center; gap: 8px; padding: 7px 10px;
-      border-radius: 6px; background: var(--cc-bg); cursor: pointer;
+      border-radius: 6px; background: var(--neutral-100); cursor: pointer;
       transition: all 0.12s; text-decoration: none; color: inherit;
     }
-    .cc-cust-item:hover { background: var(--cc-border); }
-    .cc-cust-name { font-size: 12px; font-weight: 500; color: var(--cc-text); flex: 1; }
+    [data-theme="dark"] .cc-cust-item { background: var(--neutral-700); }
+    .cc-cust-item:hover { background: var(--neutral-200); }
+    .cc-cust-name { font-size: 12px; font-weight: 500; color: var(--neutral-800); flex: 1; }
+    [data-theme="dark"] .cc-cust-name { color: var(--neutral-200); }
     .cc-cust-tag { font-size: 9px; font-weight: 600; padding: 1px 7px; border-radius: 3px; }
-    .cc-cust-tag.new { background: rgba(16,185,129,0.15); color: var(--cc-success); }
-    .cc-cust-tag.returning { background: rgba(59,130,246,0.15); color: var(--cc-info); }
-    .cc-cust-tag.attention { background: rgba(239,68,68,0.15); color: var(--cc-danger); }
+    .cc-cust-tag.new { background: rgba(16,185,129,0.15); color: var(--success); }
+    .cc-cust-tag.returning { background: rgba(59,130,246,0.15); color: var(--info); }
+    .cc-cust-tag.attention { background: rgba(239,68,68,0.15); color: var(--danger); }
 
-    /* ── Health (2-col) ── */
+    /* ── Health (PRESERVED 2-col from 2.2) ── */
     .cc-health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .cc-health-item {
       text-align: center; padding: 10px 8px; border-radius: 7px;
-      border: 1px solid var(--cc-border); background: var(--cc-bg); transition: all 0.12s;
+      border: 1px solid var(--neutral-200); background: var(--neutral-100); transition: all 0.12s;
     }
-    .cc-health-item:hover { border-color: var(--cc-accent); }
+    [data-theme="dark"] .cc-health-item { background: var(--neutral-700); border-color: var(--neutral-700); }
+    .cc-health-item:hover { border-color: var(--brand-500); }
     .cc-health-score { font-size: 22px; font-weight: 800; line-height: 1; }
-    .cc-health-score.excellent { color: var(--cc-success); }
-    .cc-health-score.good { color: var(--cc-info); }
-    .cc-health-score.fair { color: var(--cc-warning); }
-    .cc-health-score.poor { color: var(--cc-danger); }
-    .cc-health-label { font-size: 10px; color: var(--cc-text-secondary); margin-top: 3px; font-weight: 500; }
-    .cc-health-desc { font-size: 9px; color: var(--cc-text-muted); margin-top: 2px; line-height: 1.25; }
+    .cc-health-score.excellent { color: var(--success); }
+    .cc-health-score.good { color: var(--info); }
+    .cc-health-score.fair { color: var(--warning); }
+    .cc-health-score.poor { color: var(--danger); }
+    .cc-health-label { font-size: 10px; color: var(--neutral-500); margin-top: 3px; font-weight: 500; }
+    .cc-health-desc { font-size: 9px; color: var(--neutral-400); margin-top: 2px; line-height: 1.25; }
 
-    /* ── Quick Actions ── */
+    /* ── Quick Actions (PRESERVED from 2.2) ── */
     .cc-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
     .cc-action-btn {
       display: flex; align-items: center; justify-content: center; gap: 5px;
-      padding: 8px 10px; border-radius: 7px; border: 1px solid var(--cc-border);
-      background: var(--cc-card); color: var(--cc-text); font-size: 12px;
+      padding: 8px 10px; border-radius: 7px; border: 1px solid var(--neutral-200);
+      background: var(--neutral-50); color: var(--neutral-700); font-size: 12px;
       font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.12s;
       min-height: 38px;
     }
-    .cc-action-btn:hover { border-color: var(--cc-accent); color: var(--cc-accent); transform: translateY(-1px); }
-    .cc-action-btn.primary {
-      background: var(--cc-accent); color: #fff; border-color: var(--cc-accent);
-    }
-    .cc-action-btn.primary:hover { background: #c9a227; color: #fff; border-color: #c9a227; box-shadow: 0 2px 8px rgba(212,175,55,0.25); }
+    [data-theme="dark"] .cc-action-btn { background: var(--neutral-800); border-color: var(--neutral-700); color: var(--neutral-300); }
+    .cc-action-btn:hover { border-color: var(--brand-500); color: var(--brand-500); transform: translateY(-1px); }
 
     /* ── Grid ── */
     .cc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
     /* ── Empty States ── */
-    .cc-empty { text-align: center; padding: 16px; color: var(--cc-text-secondary); font-size: 12px; line-height: 1.4; }
+    .cc-empty { text-align: center; padding: 16px; color: var(--neutral-500); font-size: 12px; line-height: 1.4; }
 
     /* ── Loading ── */
     .cc-loading-skeleton {
-      height: 16px; background: linear-gradient(90deg, var(--cc-border) 25%, transparent 50%, var(--cc-border) 75%);
+      height: 16px; background: linear-gradient(90deg, var(--neutral-200) 25%, transparent 50%, var(--neutral-200) 75%);
       background-size: 200% 100%; animation: cc-shimmer 1.5s infinite; border-radius: 4px; margin-bottom: 6px;
     }
     @keyframes cc-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
     .cc-loading-skeleton.w70 { width: 70%; } .cc-loading-skeleton.w50 { width: 50%; }
     .cc-loading-skeleton.h40 { height: 34px; } .cc-loading-skeleton.h60 { height: 50px; }
 
-    /* ── Responsive ── */
+    /* ── Responsive (PRESERVED from 2.2) ── */
     @media (max-width: 1024px) {
       .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
     }
@@ -242,20 +212,46 @@
       .cc-actions { grid-template-columns: repeat(2, 1fr); }
       .cc-sim-banner { flex-direction: column; text-align: center; padding: 12px 16px; }
       .cc-sim-btn { justify-content: center; width: 100%; max-width: 220px; }
-      .cc-health-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 480px) {
       .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
       .cc-kpi { padding: 8px 10px; }
       .cc-kpi-value { font-size: 17px; }
       .cc-actions { grid-template-columns: 1fr 1fr; }
-      .cc-health-grid { grid-template-columns: 1fr 1fr; }
       .cc-pipe-stage { min-width: 100%; }
       .cc-pipe-stage::after { display: none !important; }
     }
   </style>
 </head>
 <body>
+  <!-- Mobile header + hamburger -->
+  <div class="mobile-header">
+    <button class="hamburger-btn" onclick="toggleMobileMenu()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      NorthStar
+    </button>
+    <img src="/assets/northstar-logo.png" alt="NorthStar" class="mobile-logo">
+  </div>
+  <div class="mobile-overlay" id="mobileOverlay" onclick="toggleMobileMenu()"></div>
+  <div class="mobile-menu" id="mobileMenu">
+    <div class="mobile-menu-header">
+      <a href="/dashboard" style="font-size:17px;font-weight:700;color:var(--brand-600);text-decoration:none;display:flex;align-items:center;gap:8px;"><img src="/assets/logo.png" alt="NorthStar" style="height:22px;"> NorthStar</a>
+      <button class="mobile-menu-close" onclick="toggleMobileMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <nav class="mobile-menu-nav">
+      <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Command Center</a>
+      <a href="/dashboard/polaris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>POLARIS</a>
+      <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
+      <a href="/dashboard/communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Communications</a>
+      <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Calendar</a>
+      <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
+    </nav>
+    <div class="mobile-menu-footer">
+      <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token');return true;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>
+      <button onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--neutral-500);width:100%;text-align:left;">&#127769; Toggle Theme</button>
+    </div>
+  </div>
+
   <div class="app-layout">
     <aside class="sidebar">
       <a href="/dashboard" class="sidebar-logo">
@@ -263,146 +259,58 @@
         <span class="sidebar-brand">NorthStar</span>
       </a>
       <nav class="sidebar-nav">
-        <a href="/dashboard" class="sidebar-item active">
-          <span class="sidebar-icon">&#9733;</span>
-          <span>Command Center</span>
-        </a>
-        <a href="/dashboard/polaris" class="sidebar-item">
-          <span class="sidebar-icon">&#9881;</span>
-          <span>Polaris</span>
-        </a>
-        <a href="/dashboard/leads" class="sidebar-item">
-          <span class="sidebar-icon">&#128100;</span>
-          <span>Leads</span>
-        </a>
-        <a href="/dashboard/communications" class="sidebar-item">
-          <span class="sidebar-icon">&#128172;</span>
-          <span>Communications</span>
-        </a>
-        <a href="/dashboard/calendar" class="sidebar-item">
-          <span class="sidebar-icon">&#128197;</span>
-          <span>Calendar</span>
-        </a>
-        <a href="/dashboard/business-profile" class="sidebar-item">
-          <span class="sidebar-icon">&#128202;</span>
-          <span>Business Profile</span>
-        </a>
-        <a href="/dashboard/settings" class="sidebar-item">
-          <span class="sidebar-icon">&#9881;</span>
-          <span>Settings</span>
-        </a>
+        <a href="/dashboard" class="sidebar-item active"><span class="sidebar-icon">&#9733;</span><span>Command Center</span></a>
+        <a href="/dashboard/polaris" class="sidebar-item"><span class="sidebar-icon">&#9881;</span><span>Polaris</span></a>
+        <a href="/dashboard/leads" class="sidebar-item"><span class="sidebar-icon">&#128100;</span><span>Leads</span></a>
+        <a href="/dashboard/communications" class="sidebar-item"><span class="sidebar-icon">&#128172;</span><span>Communications</span></a>
+        <a href="/dashboard/calendar" class="sidebar-item"><span class="sidebar-icon">&#128197;</span><span>Calendar</span></a>
+        <a href="/dashboard/business-profile" class="sidebar-item"><span class="sidebar-icon">&#128202;</span><span>Business Profile</span></a>
+        <a href="/dashboard/settings" class="sidebar-item"><span class="sidebar-icon">&#9881;</span><span>Settings</span></a>
       </nav>
       <div class="sidebar-footer" style="padding:12px;display:flex;flex-direction:column;gap:4px;">
-        <button class="sidebar-item theme-toggle" onclick="window.NorthStarTheme && NorthStarTheme.toggleTheme ? NorthStarTheme.toggleTheme() : toggleFallback()" style="background:none;border:none;cursor:pointer;width:100%;text-align:left;font-size:18px;padding:10px 12px;border-radius:8px;color:var(--neutral-300);transition:all 0.15s;">
-          <span style="display:flex;align-items:center;gap:8px;"><span id="themeToggleIcon">&#127769;</span><span style="font-size:13px;" id="themeToggleLabel">Dark Mode</span></span>
-        </button>
-        <a href="/" class="sidebar-item" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-          <span>Sign Out</span>
-        </a>
+        <button class="sidebar-item theme-toggle" onclick="(window.NorthStarTheme && NorthStarTheme.toggleTheme ? NorthStarTheme.toggleTheme() : toggleFallback())" style="background:none;border:none;cursor:pointer;width:100%;text-align:left;font-size:18px;padding:10px 12px;border-radius:8px;color:var(--neutral-300);"><span style="display:flex;align-items:center;gap:8px;"><span id="themeToggleIcon">&#127769;</span><span style="font-size:13px;" id="themeToggleLabel">Dark Mode</span></span></button>
+        <a href="/" class="sidebar-item" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
       </div>
     </aside>
     <main class="main-content">
-      <div class="cc-workspace" id="ccRoot">
-
+      <div class="cc-workspace">
         <!-- SIMULATE LEAD -->
         <div class="cc-sim-banner" id="ccSimBanner">
           <div class="cc-sim-text">
             <div class="cc-sim-heading">Try Polaris Intelligence</div>
             <p>Generate a realistic customer interaction and watch Polaris process the entire workflow in real time.</p>
-            <div class="cc-sim-status" id="ccSimStatus" style="display:none;">
-              <span>&#9989;</span>
-              <span id="ccSimStatusText">Lead generated &mdash; updating dashboard...</span>
-            </div>
+            <div class="cc-sim-status" id="ccSimStatus" style="display:none;"><span>&#9989;</span><span id="ccSimStatusText">Lead generated</span></div>
           </div>
-          <button class="cc-sim-btn" id="ccSimBtn" onclick="ccSimulateLead()">
-            <span>&#127917;</span>
-            <span>Simulate Lead</span>
-          </button>
+          <button class="cc-sim-btn" id="ccSimBtn" onclick="ccSimulateLead()"><span>&#127917;</span><span>Simulate Lead</span></button>
         </div>
-
         <!-- HEADER -->
         <div class="cc-header">
           <div class="cc-header-left">
             <h1>Command Center</h1>
-            <div class="cc-sub">
-              <span class="cc-live-dot"></span>
-              <span>Polaris Intelligence</span>
-              <span style="opacity:0.3;">&middot;</span>
-              <span id="ccTimestamp">&mdash;</span>
-            </div>
+            <div class="cc-sub"><span class="cc-live-dot"></span><span>Polaris Intelligence</span><span style="opacity:0.3;">&middot;</span><span id="ccTimestamp">&mdash;</span></div>
           </div>
           <button class="cc-refresh-btn" onclick="ccRefresh()">Refresh</button>
         </div>
-
         <!-- LOADING -->
         <div id="ccLoading">
           <div class="cc-loading-skeleton w70" style="margin-bottom:8px;"></div>
           <div class="cc-loading-skeleton" style="margin-bottom:4px;"></div>
           <div class="cc-loading-skeleton w50"></div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;">
-            <div class="cc-loading-skeleton h60"></div>
-            <div class="cc-loading-skeleton h60"></div>
-            <div class="cc-loading-skeleton h60"></div>
-            <div class="cc-loading-skeleton h60"></div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-            <div class="cc-loading-skeleton h40"></div>
-            <div class="cc-loading-skeleton h40"></div>
-          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;"><div class="cc-loading-skeleton h60"></div><div class="cc-loading-skeleton h60"></div><div class="cc-loading-skeleton h60"></div><div class="cc-loading-skeleton h60"></div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;"><div class="cc-loading-skeleton h40"></div><div class="cc-loading-skeleton h40"></div></div>
         </div>
-
         <!-- CONTENT -->
         <div id="ccContent" style="display:none;">
-
-          <!-- SECTION 1: Executive Brief -->
-          <div class="cc-card">
-            <div class="cc-card-title">Executive Brief</div>
-            <div class="cc-summary-text" id="ccSummary">Loading...</div>
-          </div>
-
-          <!-- SECTION 2: KPI Grid -->
-          <div class="cc-card">
-            <div class="cc-card-title">Key Performance Indicators</div>
-            <div class="cc-kpi-grid" id="ccKpiGrid">Loading...</div>
-          </div>
-
-          <!-- SECTION 3 + 4: Priorities + Revenue -->
+          <div class="cc-card"><div class="cc-card-title">Executive Brief</div><div class="cc-summary-text" id="ccSummary">Loading...</div></div>
+          <div class="cc-card"><div class="cc-card-title">Key Performance Indicators</div><div class="cc-kpi-grid" id="ccKpiGrid">Loading...</div></div>
           <div class="cc-grid-2" style="margin-top:12px;">
-            <div class="cc-card">
-              <div class="cc-card-title">Today's Priorities</div>
-              <div id="ccPriorities">Loading...</div>
-            </div>
-            <div class="cc-card">
-              <div class="cc-card-title">Revenue Opportunity</div>
-              <div id="ccRevenue">Loading...</div>
-            </div>
+            <div class="cc-card"><div class="cc-card-title">Today's Priorities</div><div id="ccPriorities">Loading...</div></div>
+            <div class="cc-card"><div class="cc-card-title">Revenue Opportunity</div><div id="ccRevenue">Loading...</div></div>
           </div>
-
-          <!-- SECTION 5: Operational Pipeline -->
-          <div class="cc-card" style="margin-top:12px;">
-            <div class="cc-card-title">Operational Pipeline</div>
-            <div id="ccPipeline">Loading...</div>
-          </div>
-
-          <!-- SECTION 6: Customer Intelligence -->
-          <div class="cc-card" style="margin-top:12px;">
-            <div class="cc-card-title">Customer Intelligence</div>
-            <div id="ccCustomers">Loading...</div>
-          </div>
-
-          <!-- SECTION 7: Business Health -->
-          <div class="cc-card" style="margin-top:12px;">
-            <div class="cc-card-title">Business Health</div>
-            <div class="cc-health-grid" id="ccHealth">Loading...</div>
-          </div>
-
-          <!-- SECTION 8: Quick Actions -->
-          <div class="cc-card" style="margin-top:12px;">
-            <div class="cc-card-title">Quick Actions</div>
-            <div class="cc-actions" id="ccActions"></div>
-          </div>
-
+          <div class="cc-card" style="margin-top:12px;"><div class="cc-card-title">Operational Pipeline</div><div id="ccPipeline">Loading...</div></div>
+          <div class="cc-card" style="margin-top:12px;"><div class="cc-card-title">Customer Intelligence</div><div id="ccCustomers">Loading...</div></div>
+          <div class="cc-card" style="margin-top:12px;"><div class="cc-card-title">Business Health</div><div class="cc-health-grid" id="ccHealth">Loading...</div></div>
+          <div class="cc-card" style="margin-top:12px;"><div class="cc-card-title">Quick Actions</div><div class="cc-actions" id="ccActions"></div></div>
         </div>
       </div>
     </main>
@@ -424,6 +332,13 @@
       var simStatus = document.getElementById('ccSimStatus');
       var simStatusText = document.getElementById('ccSimStatusText');
 
+      // ── Mobile menu ──
+      window.toggleMobileMenu = function() {
+        document.getElementById('mobileMenu').classList.toggle('open');
+        var overlay = document.getElementById('mobileOverlay');
+        if (overlay) overlay.classList.toggle('open');
+      };
+
       // ── Theme sync ──
       function syncThemeUI() {
         var theme = document.documentElement.getAttribute('data-theme') || 'light';
@@ -432,60 +347,43 @@
         if (icon) icon.textContent = theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
         if (label) label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
       }
-      function toggleFallback() {
+      window.toggleFallback = function() {
         var theme = document.documentElement.getAttribute('data-theme') || 'light';
         var next = theme === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
         try { localStorage.setItem('northstar-theme', next); } catch(e) {}
         syncThemeUI();
-      }
-      window.toggleFallback = toggleFallback;
-
+      };
       if (window.NorthStarTheme) {
         var origToggle = window.NorthStarTheme.toggleTheme;
-        window.NorthStarTheme.toggleTheme = function() {
-          origToggle();
-          syncThemeUI();
-        };
+        window.NorthStarTheme.toggleTheme = function() { origToggle(); syncThemeUI(); };
       }
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() {
-          if (window.NorthStarTheme) window.NorthStarTheme.loadTheme();
-          syncThemeUI();
-        });
-      } else {
+      function initTheme() {
         if (window.NorthStarTheme) window.NorthStarTheme.loadTheme();
         syncThemeUI();
       }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initTheme);
+      else initTheme();
 
       // ── Helpers ──
       function fmtCurr(val) {
-        if (val === null || val === undefined) return '$0';
+        if (val == null) return '$0';
         var n = typeof val === 'number' ? val : parseFloat(val);
-        if (isNaN(n)) return '$0';
-        if (n >= 1000) return '$' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-        return '$' + Math.round(n).toLocaleString();
+        return isNaN(n) ? '$0' : n >= 1000 ? '$' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : '$' + Math.round(n).toLocaleString();
       }
       function fmtNum(val) {
-        if (val === null || val === undefined) return '0';
+        if (val == null) return '0';
         var n = typeof val === 'number' ? val : parseInt(val);
-        if (isNaN(n)) return '0';
-        return n.toLocaleString();
+        return isNaN(n) ? '0' : n.toLocaleString();
       }
-      function healthClass(score) {
-        if (score >= 80) return 'excellent';
-        if (score >= 60) return 'good';
-        if (score >= 40) return 'fair';
-        return 'poor';
-      }
+      function healthClass(s) { return s >= 80 ? 'excellent' : s >= 60 ? 'good' : s >= 40 ? 'fair' : 'poor'; }
       function pct(val) {
-        if (val === null || val === undefined) return '0%';
+        if (val == null) return '0%';
         var s = String(val);
-        if (s.indexOf('%') >= 0) return s;
-        return Math.round(parseFloat(val)) + '%';
+        return s.indexOf('%') >= 0 ? s : Math.round(parseFloat(val)) + '%';
       }
 
-      // ── Simulate Lead ──
+      // ── Simulate Lead (fixed: also POSTs to server for API data) ──
       window.ccSimulateLead = function() {
         if (simBtn.disabled) return;
         simBtn.disabled = true;
@@ -497,7 +395,7 @@
             simBtn.disabled = false;
             simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
             simStatus.style.display = '';
-            simStatus.style.color = 'var(--cc-danger)';
+            simStatus.style.color = 'var(--danger)';
             simStatusText.textContent = 'Simulator not loaded. Please refresh.';
             return;
           }
@@ -507,41 +405,80 @@
           var leadName = lead && lead.caller ? lead.caller : 'Customer';
           var leadValue = lead && lead.avgPrice ? lead.avgPrice : 0;
 
+          // Client-side analysis
           if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
             try { PolarisEngine.analyzeLead(lead); } catch(e) { console.warn('[CC] analyzeLead error:', e); }
           }
 
-          simStatus.style.display = '';
-          simStatus.style.color = 'var(--cc-success)';
-          simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
+          // ALSO POST to server APIs so the analytics endpoints return real data
+          var serverPromises = [];
 
-          render();
+          // POST customer to server-side engine
+          if (lead.caller || lead.name) {
+            var custPayload = {
+              name: lead.caller || lead.name || 'Simulated Customer',
+              phone: lead.phone || '',
+              email: lead.email || '',
+              address: lead.address || '',
+              source: 'simulation',
+              status: 'active'
+            };
+            serverPromises.push(
+              fetch('/api/v1/customers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(custPayload)
+              }).catch(function(e) { console.warn('[CC] customer POST:', e); })
+            );
+          }
 
-          setTimeout(function() {
-            simBtn.disabled = false;
-            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-          }, 2000);
+          // POST a communication record
+          if (lead) {
+            var commPayload = {
+              type: 'inbound_call',
+              caller: lead.caller || 'Simulated Customer',
+              service: lead.service || 'General',
+              description: lead.description || 'Simulated customer interaction',
+              status: 'completed',
+              source: 'simulation'
+            };
+            serverPromises.push(
+              fetch('/api/v1/communications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(commPayload)
+              }).catch(function(e) { console.warn('[CC] comms POST:', e); })
+            );
+          }
+
+          // Wait for server writes, then refresh
+          Promise.all(serverPromises).then(function() {
+            simStatus.style.display = '';
+            simStatus.style.color = 'var(--success)';
+            simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
+
+            // Refresh all sections from server APIs
+            render();
+
+            setTimeout(function() {
+              simBtn.disabled = false;
+              simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+            }, 2000);
+          });
         } catch(e) {
           console.error('[CC] Simulation error:', e);
           simBtn.disabled = false;
           simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
           simStatus.style.display = '';
-          simStatusText.textContent = 'Simulation error: ' + (e.message || e);
-          simStatus.style.color = 'var(--cc-danger)';
+          simStatusText.textContent = 'Error: ' + (e.message || e);
+          simStatus.style.color = 'var(--danger)';
         }
       };
 
-      // ── Refresh ──
-      window.ccRefresh = function() {
-        loading.style.display = '';
-        content.style.display = 'none';
-        render();
-      };
+      window.ccRefresh = function() { loading.style.display = ''; content.style.display = 'none'; render(); };
 
-      // ── Render ──
       function render() {
         var startTime = Date.now();
-
         Promise.all([
           fetch('/api/v1/analytics/executive').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
           fetch('/api/v1/analytics/kpis').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
@@ -559,56 +496,32 @@
           var agenda = results[5] || [];
           var alerts = results[6] || {};
 
-          var elapsed = Date.now() - startTime;
-          var delay = elapsed < 250 ? 250 - elapsed : 0;
-
+          var delay = Math.max(0, 250 - (Date.now() - startTime));
           setTimeout(function() {
             loading.style.display = 'none';
             content.style.display = '';
             document.getElementById('ccTimestamp').textContent = new Date().toLocaleString();
-
             var kpis = kpisData.kpis || (dash.summary) || {};
-
-            // ── SECTION 1: Executive Summary ──
-            var summaryEl = document.getElementById('ccSummary');
-            var parts = [];
             var rev = exec.revenue || {};
             var pipe = exec.pipeline || {};
             var ops = exec.operations || {};
 
+            // Section 1: Executive Summary
+            var summaryEl = document.getElementById('ccSummary');
+            var parts = [];
             if (ops.inProgress > 0 || pipe.activeDeals > 0 || kpis.totalRevenue > 0) {
-              if (ops.inProgress > 0) {
-                parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
-              }
-              if (pipe.activeDeals > 0) {
-                parts.push('Polaris identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' worth <strong>' + fmtCurr(pipe.weightedValue) + '</strong>.');
-              }
-              if (rev.outstanding > 0) {
-                parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> outstanding.');
-              }
-              if (rev.forecast > 0) {
-                parts.push('Forecast: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
-              }
-              if (kpis.companyHealthScore > 0 && parts.length === 0) {
-                parts.push('Health score: <strong>' + kpis.companyHealthScore + '/100</strong>.');
-              }
+              if (ops.inProgress > 0) parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
+              if (pipe.activeDeals > 0) parts.push('Polaris identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' worth <strong>' + fmtCurr(pipe.weightedValue) + '</strong>.');
+              if (rev.outstanding > 0) parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> outstanding.');
+              if (rev.forecast > 0) parts.push('Forecast: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
+              if (kpis.companyHealthScore > 0 && parts.length === 0) parts.push('Health score: <strong>' + kpis.companyHealthScore + '/100</strong>.');
             } else {
               parts.push('Polaris is monitoring your business. Start a simulated or live customer interaction to generate operational intelligence.');
             }
             summaryEl.innerHTML = parts.join(' ');
 
-            // ── SECTION 2: KPI Grid ──
+            // Section 2: KPI Grid
             var kpiGrid = document.getElementById('ccKpiGrid');
-            var kpiItems = [
-              { icon: '\uD83D\uDCBC', label: 'Active Jobs', value: fmtNum(kpis.inProgressJobs || ops.inProgress) },
-              { icon: '\uD83D\uDC65', label: 'New Leads', value: fmtNum(kpis.activeDeals || pipe.activeDeals) },
-              { icon: '\uD83D\uDCCB', label: 'Pending Estimates', value: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : (kpis.totalDeals || 0) - (kpis.wonDeals || 0)) },
-              { icon: '\uD83D\uDCB0', label: 'Revenue Pipeline', value: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue) },
-              { icon: '\uD83D\uDCC5', label: 'Scheduled Today', value: fmtNum(agenda && agenda.length ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0) },
-              { icon: '\uD83D\uDCAC', label: 'Follow-Ups', value: fmtNum(kpis.overdueTasks || 0) },
-              { icon: '\uD83D\uDCC8', label: 'Win Rate', value: pct(kpis.winRate || pipe.winRate || 0) },
-              { icon: '\uD83D\uDC9A', label: 'Health', value: (kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0) + '' }
-            ];
             var bgColors = [
               'linear-gradient(135deg, rgba(16,185,129,0.07) 0%, rgba(16,185,129,0.01) 100%)',
               'linear-gradient(135deg, rgba(59,130,246,0.07) 0%, rgba(59,130,246,0.01) 100%)',
@@ -619,138 +532,79 @@
               'linear-gradient(135deg, rgba(16,185,129,0.07) 0%, rgba(16,185,129,0.01) 100%)',
               'linear-gradient(135deg, rgba(59,130,246,0.07) 0%, rgba(59,130,246,0.01) 100%)'
             ];
-            kpiGrid.innerHTML = kpiItems.map(function(k, i) {
-              return '<div class="cc-kpi" style="background:' + bgColors[i % bgColors.length] + '">' +
-                '<div class="cc-kpi-icon">' + k.icon + '</div>' +
-                '<div class="cc-kpi-value">' + k.value + '</div>' +
-                '<div class="cc-kpi-label">' + k.label + '</div></div>';
-            }).join('');
+            var items = [
+              { icon: '\uD83D\uDCBC', label: 'Active Jobs', val: fmtNum(kpis.inProgressJobs || ops.inProgress) },
+              { icon: '\uD83D\uDC65', label: 'New Leads', val: fmtNum(kpis.activeDeals || pipe.activeDeals) },
+              { icon: '\uD83D\uDCCB', label: 'Pending Est.', val: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : (kpis.totalDeals||0) - (kpis.wonDeals||0)) },
+              { icon: '\uD83D\uDCB0', label: 'Pipeline', val: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue) },
+              { icon: '\uD83D\uDCC5', label: 'Scheduled', val: fmtNum(agenda&&agenda.length ? agenda.filter(function(t){return t.type==='job'||t.type==='appointment'}).length : 0) },
+              { icon: '\uD83D\uDCAC', label: 'Follow-Ups', val: fmtNum(kpis.overdueTasks||0) },
+              { icon: '\uD83D\uDCC8', label: 'Win Rate', val: pct(kpis.winRate||pipe.winRate||0) },
+              { icon: '\uD83D\uDC9A', label: 'Health', val: (kpis.companyHealthScore||dash.companyHealth||exec.companyHealth||0)+'' }
+            ];
+            kpiGrid.innerHTML = items.map(function(k,i){return '<div class="cc-kpi" style="background:'+bgColors[i%bgColors.length]+'"><div class="cc-kpi-icon">'+k.icon+'</div><div class="cc-kpi-value">'+k.val+'</div><div class="cc-kpi-label">'+k.label+'</div></div>';}).join('');
 
-            // ── SECTION 3: Today's Priorities ──
+            // Section 3: Priorities
             var priorityEl = document.getElementById('ccPriorities');
-            var priorityItems = [];
-            if (alerts.alerts && alerts.alerts.length > 0) {
-              alerts.alerts.forEach(function(a) {
-                priorityItems.push({ rank: priorityItems.length + 1, title: a.type || 'Alert', badge: a.severity || 'medium', desc: a.message || '', impact: a.severity === 'critical' ? 'Critical' : 'Operational' });
-              });
-            }
-            if (Array.isArray(agenda) && agenda.length > 0) {
-              agenda.slice(0, 3).forEach(function(t) {
-                priorityItems.push({ rank: priorityItems.length + 1, title: t.title || t.name || 'Task', badge: t.priority || 'medium', desc: t.description || t.details || '', impact: t.impact || 'Task' });
-              });
-            }
-            if (exec.recommendations && exec.recommendations.length > 0) {
-              exec.recommendations.slice(0, 2).forEach(function(r) {
-                priorityItems.push({ rank: priorityItems.length + 1, title: r.title || r.action || 'Recommendation', badge: r.priority || 'medium', desc: r.explanation || r.reason || '', impact: r.businessImpact || 'Business' });
-              });
-            }
-            if (priorityItems.length > 0) {
-              priorityEl.innerHTML = priorityItems.slice(0, 5).map(function(p) {
-                return '<div class="cc-priority-item">' +
-                  '<div class="cc-priority-rank">' + p.rank + '</div>' +
-                  '<div class="cc-priority-body">' +
-                  '<div class="cc-priority-title">' + p.title + '</div>' +
-                  '<div class="cc-priority-meta">' +
-                  '<span class="cc-priority-badge ' + p.badge + '">' + p.badge + '</span>' +
-                  '<span>' + p.impact + '</span></div>' +
-                  (p.desc ? '<div class="cc-priority-desc">' + p.desc + '</div>' : '') +
-                  '</div></div>';
-              }).join('');
-            } else {
-              priorityEl.innerHTML = '<div class="cc-empty">You\'re all caught up. Polaris will surface high-impact opportunities as activity grows.</div>';
-            }
+            var pItems = [];
+            if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
+            if (Array.isArray(agenda) && agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
+            if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});
+            priorityEl.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris will surface opportunities as activity grows.</div>';
 
-            // ── SECTION 4: Revenue Opportunity ──
+            // Section 4: Revenue
             var revenueEl = document.getElementById('ccRevenue');
-            if (rev.total || kpis.totalRevenue) {
-              revenueEl.innerHTML = '<div class="cc-rev-grid">' +
-                '<div class="cc-rev-stat"><div class="cc-rev-val gold">' + fmtCurr(rev.total || kpis.totalRevenue) + '</div><div class="cc-rev-label">Total Revenue</div></div>' +
-                '<div class="cc-rev-stat"><div class="cc-rev-val orange">' + fmtCurr(rev.outstanding || kpis.outstandingRevenue) + '</div><div class="cc-rev-label">Outstanding</div></div>' +
-                '<div class="cc-rev-stat"><div class="cc-rev-val green">' + fmtCurr(rev.forecast || 0) + '</div><div class="cc-rev-label">Forecast</div></div>' +
-                '<div class="cc-rev-stat"><div class="cc-rev-val">' + (rev.collectionRate || pct(kpis.collectionRate) || '0%') + '</div><div class="cc-rev-label">Collection Rate</div></div>' +
-                '</div>' +
-                '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--cc-border);font-size:11px;color:var(--cc-text-secondary);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">' +
-                '<span>Pipeline: <strong>' + fmtCurr(pipe.weightedValue || kpis.weightedPipelineValue) + '</strong></span>' +
-                '<span>Win rate: <strong>' + pct(pipe.winRate || kpis.winRate || 0) + '</strong></span></div>';
-            } else {
-              revenueEl.innerHTML = '<div class="cc-empty">Revenue forecasts appear after Polaris analyzes conversations, estimates, and scheduling.</div>';
-            }
+            revenueEl.innerHTML = (rev.total || kpis.totalRevenue) ?
+              '<div class="cc-rev-grid"><div class="cc-rev-stat"><div class="cc-rev-val gold">'+fmtCurr(rev.total||kpis.totalRevenue)+'</div><div class="cc-rev-label">Total</div></div><div class="cc-rev-stat"><div class="cc-rev-val orange">'+fmtCurr(rev.outstanding||kpis.outstandingRevenue)+'</div><div class="cc-rev-label">Outstanding</div></div><div class="cc-rev-stat"><div class="cc-rev-val green">'+fmtCurr(rev.forecast||0)+'</div><div class="cc-rev-label">Forecast</div></div><div class="cc-rev-stat"><div class="cc-rev-val">'+(rev.collectionRate||pct(kpis.collectionRate)||'0%')+'</div><div class="cc-rev-label">Collection</div></div></div><div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--neutral-200);font-size:11px;color:var(--neutral-500);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;"><span>Pipeline: <strong>'+fmtCurr(pipe.weightedValue||kpis.weightedPipelineValue)+'</strong></span><span>Win rate: <strong>'+pct(pipe.winRate||kpis.winRate||0)+'</strong></span></div>' :
+              '<div class="cc-empty">Revenue forecasts appear after Polaris analyzes conversations, estimates, and scheduling.</div>';
 
-            // ── SECTION 5: Operational Pipeline ──
+            // Section 5: Pipeline
             var pipelineEl = document.getElementById('ccPipeline');
-            var totalJobs = kpis.totalJobs || ops.totalJobs || 0;
-            var inProgress = kpis.inProgressJobs || ops.inProgress || 0;
-            var completedJobs = kpis.completedJobs || ops.completedJobs || 0;
-            var pendingEstimates = kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : 0;
-            var scheduled = (agenda && agenda.length) ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0;
+            var tj = kpis.totalJobs||ops.totalJobs||0, ij = kpis.inProgressJobs||ops.inProgress||0, cj = kpis.completedJobs||ops.completedJobs||0;
+            var pe = kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : 0;
+            var sch = (agenda&&agenda.length) ? agenda.filter(function(t){return t.type==='job'||t.type==='appointment'}).length : 0;
             var stages = [
-              { icon: '\uD83D\uDCDE', count: fmtNum(kpis.activeDeals || pipe.activeDeals || 0), label: 'Incoming', pct: 25 },
-              { icon: '\uD83D\uDCCB', count: fmtNum(pendingEstimates), label: 'Estimates', pct: 25 },
-              { icon: '\uD83D\uDCC5', count: fmtNum(scheduled), label: 'Scheduled', pct: 25 },
-              { icon: '\uD83D\uDCBC', count: fmtNum(inProgress), label: 'Active', pct: 50 },
-              { icon: '\u2705', count: fmtNum(completedJobs), label: 'Completed', pct: totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0 }
+              {icon:'\uD83D\uDCDE',cnt:fmtNum(kpis.activeDeals||pipe.activeDeals||0),label:'Incoming',pct:25},
+              {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:25},
+              {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:25},
+              {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:50},
+              {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:tj>0?Math.round(cj/tj*100):0}
             ];
-            var fillColors = ['var(--cc-info)','var(--cc-warning)','var(--cc-accent)','var(--cc-success)','var(--cc-success)'];
-            pipelineEl.innerHTML = '<div class="cc-pipeline">' +
-              stages.map(function(s, i) {
-                return '<div class="cc-pipe-stage">' +
-                  '<div class="cc-pipe-icon">' + s.icon + '</div>' +
-                  '<div class="cc-pipe-count">' + s.count + '</div>' +
-                  '<div class="cc-pipe-label">' + s.label + '</div>' +
-                  '<div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:' + s.pct + '%;background:' + fillColors[i] + '"></div></div></div>';
-              }).join('') + '</div>';
+            pipelineEl.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+['var(--info)','var(--warning)','var(--brand-500)','var(--success)','var(--success)'][i]+'"></div></div></div>';}).join('')+'</div>';
 
-            // ── SECTION 6: Customer Intelligence ──
+            // Section 6: Customers
             var custEl = document.getElementById('ccCustomers');
-            if (Array.isArray(customers) && customers.length > 0) {
-              custEl.innerHTML = '<div class="cc-cust-list">' +
-                customers.slice(0, 6).map(function(c) {
-                  var tag = 'new', tagLabel = 'New';
-                  if (c.totalJobs > 0 || c.status === 'active') { tag = 'returning'; tagLabel = 'Returning'; }
-                  if (c.health !== undefined && c.health < 40) { tag = 'attention'; tagLabel = 'Attention'; }
-                  return '<a href="/dashboard/polaris" class="cc-cust-item">' +
-                    '<span class="cc-cust-name">' + (c.name || 'Unknown') + '</span>' +
-                    '<span class="cc-cust-tag ' + tag + '">' + tagLabel + '</span></a>';
-                }).join('') + '</div>' +
-                (customers.length > 6 ? '<div class="cc-empty" style="padding:4px;font-size:10px;">+' + (customers.length - 6) + ' more</div>' : '');
-            } else {
-              custEl.innerHTML = '<div class="cc-empty">Customer profiles appear as Polaris processes incoming calls. Start a simulation above.</div>';
-            }
+            custEl.innerHTML = (Array.isArray(customers) && customers.length > 0) ?
+              '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
+              '<div class="cc-empty">Customer profiles appear as Polaris processes calls. Start a simulation above.</div>';
 
-            // ── SECTION 7: Business Health ──
+            // Section 7: Health
             var healthEl = document.getElementById('ccHealth');
-            var overallHealth = kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 50;
-            var collRate = kpis.collectionRate || 0;
-            var revenueHealth = collRate > 90 ? 90 : collRate > 75 ? 75 : collRate > 50 ? 50 : 30;
-            var winRt = kpis.winRate || 0;
-            var salesHealth = winRt > 50 ? 85 : winRt > 30 ? 70 : winRt > 15 ? 55 : 35;
-            var taskComp = kpis.taskCompletionRate || 0;
-            var opsHealth = taskComp > 80 ? 85 : taskComp > 60 ? 70 : taskComp > 40 ? 55 : 30;
-            var custCount = kpis.totalCustomers || (Array.isArray(customers) ? customers.length : 0);
-            var custHealth = custCount > 10 ? 80 : custCount > 5 ? 65 : custCount > 0 ? 50 : 30;
-            var healthItems = [
-              { score: overallHealth, label: 'Overall', desc: 'Composite health score' },
-              { score: revenueHealth, label: 'Revenue', desc: 'Collection rate: ' + pct(collRate) },
-              { score: salesHealth, label: 'Sales', desc: 'Win rate: ' + pct(winRt) },
-              { score: opsHealth, label: 'Operations', desc: 'Task completion: ' + pct(taskComp) },
-              { score: custHealth, label: 'Customer', desc: custCount + ' customer' + (custCount !== 1 ? 's' : '') },
-              { score: overallHealth, label: 'Polaris', desc: 'AI-driven assessment' }
-            ];
-            healthEl.innerHTML = healthItems.map(function(h) {
-              return '<div class="cc-health-item">' +
-                '<div class="cc-health-score ' + healthClass(h.score) + '">' + Math.round(h.score) + '</div>' +
-                '<div class="cc-health-label">' + h.label + '</div>' +
-                '<div class="cc-health-desc">' + h.desc + '</div></div>';
-            }).join('');
+            var oh = kpis.companyHealthScore||dash.companyHealth||exec.companyHealth||50;
+            var cr = kpis.collectionRate||0;
+            var rh = cr>90?90:cr>75?75:cr>50?50:30;
+            var wr = kpis.winRate||0;
+            var sh = wr>50?85:wr>30?70:wr>15?55:35;
+            var tc = kpis.taskCompletionRate||0;
+            var oph = tc>80?85:tc>60?70:tc>40?55:30;
+            var cc = kpis.totalCustomers||(Array.isArray(customers)?customers.length:0);
+            var ch = cc>10?80:cc>5?65:cc>0?50:30;
+            healthEl.innerHTML = [
+              {s:oh,l:'Overall',d:'Composite health'},
+              {s:rh,l:'Revenue',d:'Collection: '+pct(cr)},
+              {s:sh,l:'Sales',d:'Win rate: '+pct(wr)},
+              {s:oph,l:'Operations',d:'Completion: '+pct(tc)},
+              {s:ch,l:'Customer',d:cc+' customer'+(cc!==1?'s':'')},
+              {s:oh,l:'Polaris',d:'AI-driven assessment'}
+            ].map(function(h){return '<div class="cc-health-item"><div class="cc-health-score '+healthClass(h.s)+'">'+Math.round(h.s)+'</div><div class="cc-health-label">'+h.l+'</div><div class="cc-health-desc">'+h.d+'</div></div>';}).join('');
 
-            // ── SECTION 8: Quick Actions ──
-            var actionsEl = document.getElementById('ccActions');
-            actionsEl.innerHTML =
-              '<a href="/dashboard/polaris" class="cc-action-btn">&#9733; Polaris</a>' +
-              '<a href="/dashboard/leads" class="cc-action-btn">&#128100; Leads</a>' +
-              '<a href="/dashboard/communications" class="cc-action-btn">&#128172; Comms</a>' +
-              '<a href="/dashboard/calendar" class="cc-action-btn">&#128197; Calendar</a>' +
-              '<a href="/dashboard/executive-brief" class="cc-action-btn">&#128200; Brief</a>' +
+            // Section 8: Actions
+            document.getElementById('ccActions').innerHTML =
+              '<a href="/dashboard/polaris" class="cc-action-btn">&#9733; Polaris</a>'+
+              '<a href="/dashboard/leads" class="cc-action-btn">&#128100; Leads</a>'+
+              '<a href="/dashboard/communications" class="cc-action-btn">&#128172; Comms</a>'+
+              '<a href="/dashboard/calendar" class="cc-action-btn">&#128197; Calendar</a>'+
+              '<a href="/dashboard/executive-brief" class="cc-action-btn">&#128200; Brief</a>'+
               '<a href="/dashboard/settings" class="cc-action-btn">&#9881; Settings</a>';
 
           }, delay);
@@ -762,9 +616,7 @@
         });
       }
 
-      // Initial render
       render();
-      // Auto-refresh every 60 seconds
       setInterval(render, 60000);
     })();
   </script>

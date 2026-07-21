@@ -235,14 +235,25 @@ window.CustomerDetail = (function() {
 
   // ── Data Fetching ──
 
+  function _authHeaders() {
+    var headers = {};
+    var token = null;
+    try { token = localStorage.getItem('token'); } catch(e) {}
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    return headers;
+  }
+
+  function _authFetch(url) {
+    return fetch(url, { headers: _authHeaders() }).then(function(r) { return r.json(); });
+  }
+
   function fetchAll(customerId) {
-    var base = '';
     // Fetch all 4 endpoints in parallel
     return Promise.all([
-      fetch('/api/v1/customers/' + encodeURIComponent(customerId)).then(function(r) { return r.json(); }),
-      fetch('/api/v1/opportunities?customerId=' + encodeURIComponent(customerId)).then(function(r) { return r.json(); }),
-      fetch('/api/v1/financial/estimates?customerId=' + encodeURIComponent(customerId)).then(function(r) { return r.json(); }),
-      fetch('/api/v1/communications?customerId=' + encodeURIComponent(customerId)).then(function(r) { return r.json(); })
+      _authFetch('/api/v1/customers/' + encodeURIComponent(customerId)),
+      _authFetch('/api/v1/opportunities?customerId=' + encodeURIComponent(customerId)),
+      _authFetch('/api/v1/financial/estimates?customerId=' + encodeURIComponent(customerId)),
+      _authFetch('/api/v1/communications?customerId=' + encodeURIComponent(customerId))
     ]).then(function(results) {
       return {
         customer: results[0],

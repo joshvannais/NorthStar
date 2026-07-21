@@ -488,15 +488,9 @@
             simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated) — Synced to all pages';
             console.log('[CC] Simulation complete:', result && result.ids);
             render();
-            // Stage 3: Emit events for notification toasts and cross-page sync
+            // Stage 3: Emit simulation:completed for notification toasts and cross-page sync
             if (typeof EventBus !== 'undefined') {
               EventBus.emit('simulation:completed', result);
-              if (result.records && result.records.lead) {
-                EventBus.emit('lead:created', result.records.lead);
-              }
-              if (result.records && result.records.estimate) {
-                EventBus.emit('estimate:created', result.records.estimate);
-              }
             }
             simBtn.disabled = false;
             simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';

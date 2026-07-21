@@ -450,6 +450,41 @@
               }).catch(function(e) { console.warn('[CC] comms POST:', e); })
             );
           }
+          // POST an opportunity so pipeline/revenue KPIs update
+          if (lead && lead.avgPrice) {
+            var oppPayload = {
+              title: (lead.service || 'General') + ' - ' + (lead.caller || 'Simulated'),
+              value: lead.avgPrice || 500,
+              stage: 'estimation',
+              probability: 70,
+              source: 'simulation',
+              customerName: lead.caller || 'Simulated Customer'
+            };
+            serverPromises.push(
+              fetch('/api/v1/opportunities', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(oppPayload)
+              }).catch(function(e) { console.warn('[CC] opp POST:', e); })
+            );
+          }
+          // POST a financial estimate to seed revenue data
+          if (lead && lead.avgPrice) {
+            var estPayload = {
+              customerName: lead.caller || 'Simulated Customer',
+              service: lead.service || 'General',
+              amount: lead.avgPrice || 500,
+              status: 'pending',
+              source: 'simulation'
+            };
+            serverPromises.push(
+              fetch('/api/v1/financial/estimates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(estPayload)
+              }).catch(function(e) { console.warn('[CC] estimate POST:', e); })
+            );
+          }
 
           // Wait for server writes, then refresh
           Promise.all(serverPromises).then(function() {

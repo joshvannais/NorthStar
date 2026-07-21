@@ -503,6 +503,8 @@ app.use('/api/v1', polarisEnginesRoutes);
 app.use('/api/v1/leads', customerIntelligenceRoutes);
 app.use('/api/v1/business-profile', businessProfileRoutes);
 app.use('/api/v1/voice', voiceRoutes);
+const simulationsRoutes = require('./routes/simulations');
+app.use('/api/v1', simulationsRoutes);
 
 // 404 + error handler (single instances)
 app.use(notFound);

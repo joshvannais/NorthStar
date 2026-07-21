@@ -431,94 +431,40 @@
           }
 
           // Chained server pipeline: create customer first, then link dependent records
-          var custPayload = {
-            name: lead.caller || lead.name || 'Simulated Customer',
-            phone: lead.phone || '',
-            email: lead.email || '',
-            address: lead.address || '',
-            status: 'active'
-          };
-          var custName = custPayload.name;
-          apiFetch('/api/v1/customers', {
+          // Single call to the canonical simulation endpoint — writes to ALL stores
+          apiFetch('/api/v1/simulations/leads', {
             method: 'POST',
-            body: JSON.stringify(custPayload)
-          }).then(function(custResp) {
-            return custResp.json();
-          }).then(function(custResult) {
-            var customerId = custResult.id;
-            if (!customerId) throw new Error('Customer creation did not return an id');
-
-            var svcTitle = (lead.service || 'General') + ' - ' + custName;
-            var estVal = lead.avgPrice || 500;
-
-            // POST communication, opportunity, and estimate in parallel with customerId
-            return Promise.all([
-              apiFetch('/api/v1/communications', {
-                method: 'POST',
-                body: JSON.stringify({
-                  customerId: customerId,
-                  type: 'call',
-                  direction: 'inbound',
-                  subject: 'Simulated call from ' + custName,
-                  content: lead.description || 'Simulated customer interaction',
-                  status: 'completed'
-                })
-              }).catch(function(e) { console.warn('[CC] comms POST:', e); }),
-
-              apiFetch('/api/v1/opportunities', {
-                method: 'POST',
-                body: JSON.stringify({
-                  customerId: customerId,
-                  title: svcTitle,
-                  estimatedValue: estVal,
-                  stage: 'estimation',
-                  priority: 'medium'
-                })
-              }).catch(function(e) { console.warn('[CC] opp POST:', e); }),
-
-              apiFetch('/api/v1/financial/estimates', {
-                method: 'POST',
-                body: JSON.stringify({
-                  customerId: customerId,
-                  title: svcTitle,
-                  items: [{ description: lead.service || 'General Service', quantity: 1, unitPrice: estVal }]
-                })
-              }).catch(function(e) { console.warn('[CC] estimate POST:', e); })
-            ]);
-          }).then(function() {
+            body: JSON.stringify({
+              name: leadName,
+              phone: lead.phone || '',
+              email: lead.email || '',
+              service: lead.service || 'General',
+              description: lead.description || '',
+              estimatedValue: leadValue
+            })
+          }).then(function(resp) {
+            if (!resp.ok) {
+              return resp.json().then(function(errBody) {
+                throw new Error(errBody.error || 'Simulation failed at stage: ' + (errBody.stage || 'unknown'));
+              });
+            }
+            return resp.json();
+          }).then(function(result) {
             simStatus.style.display = '';
             simStatus.style.color = 'var(--success)';
-            simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
-
-            // Refresh all sections from server APIs
+            simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated) — Synced to all pages';
+            console.log('[CC] Simulation complete:', result && result.ids);
             render();
-
-            setTimeout(function() {
-              simBtn.disabled = false;
-              simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-            }, 2000);
+            simBtn.disabled = false;
+            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
           }).catch(function(err) {
-            console.warn('[CC] Server pipeline error:', err);
-            // Fallback: still show client-side simulation result
+            console.error('[CC] Simulation failed:', err && err.message);
             simStatus.style.display = '';
-            simStatus.style.color = 'var(--success)';
-            simStatusText.innerHTML = 'Lead generated (client-side): <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
-            render();
-            setTimeout(function() {
-              simBtn.disabled = false;
-              simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-            }, 2000);
+            simStatus.style.color = 'var(--danger)';
+            simStatusText.textContent = 'Simulation failed: ' + ((err && err.message) || 'unknown error');
+            simBtn.disabled = false;
+            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
           });
-        } catch(e) {
-          console.error('[CC] Simulation error:', e);
-          simBtn.disabled = false;
-          simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-          simStatus.style.display = '';
-          simStatusText.textContent = 'Error: ' + (e.message || e);
-          simStatus.style.color = 'var(--danger)';
-        }
-      };
-
       window.ccRefresh = function() { loading.style.display = ''; content.style.display = 'none'; render(); };
 
       function render() {

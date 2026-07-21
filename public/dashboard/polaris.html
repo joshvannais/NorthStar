@@ -635,6 +635,7 @@
     </main>
   </div>
 
+  <script src="/js/polaris-api.js"></script>
   <script src="/js/theme.js"></script>
   <script>
 function toggleMobileMenu() {
@@ -661,14 +662,34 @@ function toggleMobileMenu() {
       var msgCounter = 0;
       var MAX_MESSAGES = 100; // safety limit
 
-      // ── Page Context ──
-      function getPageContext() {
-        var ctx = { page: 'polaris' };
-        // Check URL for lead/customer context
-        var match = window.location.search.match(/[?&]leadId=([^&]+)/);
-        if (match) ctx.leadId = decodeURIComponent(match[1]);
-        return ctx;
-      }
+      // ── Business Context Cache (canonical Polaris data for AI context) ──
+                var _businessContext = null;
+
+                function preloadBusinessContext() {
+                  if (typeof PolarisApi === 'undefined') return;
+                  PolarisApi.getCustomers().then(function(data) {
+                    _businessContext = _businessContext || {};
+                    _businessContext.customerCount = data.total || 0;
+                  }).catch(function() {});
+                  PolarisApi.getPipeline().then(function(data) {
+                    _businessContext = _businessContext || {};
+                    if (data && data.metrics) {
+                      _businessContext.activeDeals = data.metrics.activeDeals || 0;
+                      _businessContext.pipelineValue = data.metrics.totalPipelineValue || 0;
+                    }
+                  }).catch(function() {});
+                }
+
+                // ── Page Context ──
+                function getPageContext() {
+                  var ctx = { page: 'polaris' };
+                  // Check URL for lead/customer context
+                  var match = window.location.search.match(/[?&]leadId=([^&]+)/);
+                  if (match) ctx.leadId = decodeURIComponent(match[1]);
+                  // Include live business context when available
+                  if (_businessContext) ctx.business = _businessContext;
+                  return ctx;
+                }
 
       // ── Utilities ──
 
@@ -1017,9 +1038,12 @@ function toggleMobileMenu() {
       clearBtn.addEventListener('click', clearConversation);
 
       // ── Quick prompts ──
-      setupQuickPrompts();
+                setupQuickPrompts();
 
-      // ── Scroll to bottom on resize ──
+                // ── Preload business context for AI conversations ──
+                preloadBusinessContext();
+
+                // ── Scroll to bottom on resize ──
       window.addEventListener('resize', smoothScrollToBottom);
 
       // ── Log ready state ──

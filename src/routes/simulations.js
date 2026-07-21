@@ -46,7 +46,99 @@ function _getEngines() {
  *   summary: { name, service, estimatedValue }
  *   ids:     { customer, communication, opportunity, estimate, lead, callRecord }
  *   records: { customer: {...}, communication: {...}, opportunity: {...}, estimate: {...}, lead: {...} }
+ *   transcript: [...]  — simulated call transcript (speaker-attributed turns)
  */
+
+/**
+ * Generate a simulated call transcript — 8–12 turn realistic conversation.
+ * Varies the dialogue based on service type.
+ */
+function generateTranscript(customerName, service, description, estimatedValue) {
+  const firstName = customerName ? customerName.split(' ')[0] : 'there';
+  const svc = (service || 'General').toLowerCase();
+  const est = estimatedValue || 500;
+  const desc = description || '';
+
+  let issueDesc, issueDetail, scopeQuestion, scopeAnswer, materialMention, scheduleWindow;
+  if (svc.includes('roof')) {
+    issueDesc = 'I\'ve got some water coming through my ceiling after that big storm last week';
+    issueDetail = 'It\'s a brown stain about the size of a dinner plate in my upstairs bedroom. I went up in the attic and I can see daylight through a couple spots.';
+    scopeQuestion = 'Do you know approximately how old the roof is, and have you noticed any missing shingles from the ground?';
+    scopeAnswer = 'It\'s probably 15, 16 years old. I did see a few shingles in the yard after the storm, yeah.';
+    materialMention = 'architectural shingles';
+    scheduleWindow = 'Thursday morning or Friday afternoon';
+  } else if (svc.includes('hvac')) {
+    issueDesc = 'My air conditioner is blowing warm air and it\'s getting really uncomfortable in here';
+    issueDetail = 'It started yesterday. The thermostat says 78 but it\'s set to 72. I can hear the unit running outside but it doesn\'t seem to be cooling at all.';
+    scopeQuestion = 'When was the last time you had the system serviced, and have you noticed any strange noises or ice buildup on the unit?';
+    scopeAnswer = 'Honestly, I don\'t think it\'s been serviced in a couple years. No ice that I can see, but it does make a kind of rattling sound when it kicks on.';
+    materialMention = 'high-efficiency unit';
+    scheduleWindow = 'as soon as possible \u2014 tomorrow if you can';
+  } else if (svc.includes('plumb')) {
+    issueDesc = 'My kitchen sink is backed up and water is not draining at all';
+    issueDetail = 'It happened this morning. I tried plunging it and used some drain cleaner but nothing helped. Now there\'s standing water and it\'s starting to smell.';
+    scopeQuestion = 'Is it just the kitchen sink, or are other drains in the house slow too? And do you know if you\'re on a septic system or city sewer?';
+    scopeAnswer = 'Just the kitchen, bathrooms are fine. We\'re on city sewer. The disposal was acting up last week too.';
+    materialMention = 'PVC piping';
+    scheduleWindow = 'anytime Wednesday';
+  } else if (svc.includes('electric')) {
+    issueDesc = 'Half the lights in my living room stopped working and the breaker keeps tripping';
+    issueDetail = 'It started about three days ago. Every time I reset the breaker, it trips again after a few minutes. I\'m worried it might be a fire hazard.';
+    scopeQuestion = 'Have you added any new appliances recently, and does it happen when you turn on anything specific?';
+    scopeAnswer = 'We did get a new space heater for that room. I think it might be related \u2014 it trips when the heater is running and the TV is on.';
+    materialMention = 'dedicated circuit';
+    scheduleWindow = 'this week \u2014 sooner is better';
+  } else if (svc.includes('concrete')) {
+    issueDesc = 'I need a new driveway poured \u2014 the old one is all cracked and sinking';
+    issueDetail = 'It\'s about a two-car driveway, maybe 40 feet long. There are big cracks running across it and one section has sunk a couple inches.';
+    scopeQuestion = 'Do you know the approximate square footage, and is the ground underneath stable or have you noticed any drainage issues in that area?';
+    scopeAnswer = 'I\'d guess around 800 square feet. There is a low spot near the garage where water pools when it rains.';
+    materialMention = 'reinforced concrete';
+    scheduleWindow = 'in the next couple weeks';
+  } else if (svc.includes('solar')) {
+    issueDesc = 'I\'m interested in getting solar panels installed to lower my electric bills';
+    issueDetail = 'My electric bill has been running about $250 a month and I\'ve got a south-facing roof that gets full sun all day. I\'ve been thinking about solar for a while.';
+    scopeQuestion = 'Do you know the approximate age and condition of your roof, and have you checked with your HOA about any solar restrictions?';
+    scopeAnswer = 'Roof is about 8 years old, in good shape. No HOA, so that shouldn\'t be an issue.';
+    materialMention = 'tier-1 panels with microinverters';
+    scheduleWindow = 'sometime next week for a site assessment';
+  } else if (svc.includes('generator')) {
+    issueDesc = 'We lost power three times this winter and I\'m tired of it \u2014 I want a whole-house generator';
+    issueDetail = 'We have a 2,400 square foot house. I need it to run the essentials \u2014 furnace, fridge, well pump, a few lights. The outages usually last 4\u20138 hours.';
+    scopeQuestion = 'Do you have natural gas service at the property, and is there a suitable flat area within about 3 feet of the meter?';
+    scopeAnswer = 'Yes, we have natural gas. There\'s a flat spot on the side of the house right near the meter.';
+    materialMention = 'standby generator with automatic transfer switch';
+    scheduleWindow = 'this month if possible';
+  } else {
+    issueDesc = 'I need some work done around the house and wanted to get an estimate';
+    issueDetail = desc || 'I\'ve been meaning to get this taken care of for a while and finally have some time to get it done right.';
+    scopeQuestion = 'Can you tell me a bit more about the scope \u2014 how large the area is and what your timeline looks like?';
+    scopeAnswer = 'It\'s a standard-size job, nothing too complicated. I\'m flexible on timing but would like to get it done in the next month or so.';
+    materialMention = 'quality materials';
+    scheduleWindow = 'sometime in the next few weeks';
+  }
+
+  var priceStr = '$' + Math.round(est).toLocaleString();
+
+  return [
+    { speaker: 'ai',    text: 'Thank you for calling NorthStar Solutions. This is the AI office manager \u2014 how can I help you today?' },
+    { speaker: 'customer', text: 'Hi, my name is ' + firstName + '. ' + issueDesc + '.' },
+    { speaker: 'ai',    text: 'I\'m sorry to hear that, ' + firstName + '. Let me get some details so I can connect you with the right person. Can you tell me a little more about what you\'re seeing?' },
+    { speaker: 'customer', text: issueDetail },
+    { speaker: 'ai',    text: scopeQuestion },
+    { speaker: 'customer', text: scopeAnswer },
+    { speaker: 'ai',    text: 'That helps a lot. Based on what you\'ve described, this sounds like a job we can handle. We typically use ' + materialMention + ' for this kind of work, and our team is fully licensed and insured.' },
+    { speaker: 'customer', text: 'Great. What kind of price range are we looking at?' },
+    { speaker: 'ai',    text: 'For something like this, based on what you\'ve told me, you\'re typically looking in the range of ' + priceStr + '. That\'s an estimate \u2014 our team would do a full assessment on-site and give you a firm quote before any work begins. No obligation.' },
+    { speaker: 'customer', text: 'Okay, that\'s reasonable. Can we set up a time for someone to come take a look?' },
+    { speaker: 'ai',    text: 'Absolutely. Let me pull up the schedule. What days work best for you \u2014 mornings or afternoons?' },
+    { speaker: 'customer', text: scheduleWindow.charAt(0).toUpperCase() + scheduleWindow.slice(1) + ' works for me.' },
+    { speaker: 'ai',    text: 'Perfect, I\'ve noted that preference. I\'ll have one of our team members reach out to confirm the exact time. In the meantime, I\'ve captured all your information \u2014 your name, the issue you\'re having, and your availability. You\'ll get a confirmation shortly.' },
+    { speaker: 'customer', text: 'Sounds good, thank you!' },
+    { speaker: 'ai',    text: 'You\'re welcome, ' + firstName + '. We\'ll be in touch soon. Have a great day!' },
+  ];
+}
+
 /**
  * Build detailed estimate line items with realistic labor/materials breakdowns.
  */
@@ -137,13 +229,14 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
     }
     const customerId = custResult.id;
 
-    // ── Step 2: Create communication in Polaris ──
+    // ── Step 2: Generate transcript and create communication in Polaris ──
+    const transcript = generateTranscript(custName, svc, description, estVal);
     const commResult = e.comms.recordCommunication({
       customerId: customerId,
       type: 'call',
       direction: 'inbound',
       subject: 'Simulated call from ' + custName,
-      content: description || 'Simulated customer interaction',
+      content: JSON.stringify(transcript),
       status: 'completed'
     });
     if (commResult && commResult.error) {
@@ -245,6 +338,7 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
         estimate: estResult,
         lead: leadEntry,
       },
+      transcript: transcript,
     });
 
   } catch (err) {

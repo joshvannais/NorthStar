@@ -45,8 +45,8 @@
 
     /* ── Header ── */
     .cc-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 14px; flex-wrap: wrap; gap: 6px;
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+      margin-bottom: 14px; gap: 6px;
     }
     .cc-header-left h1 {
       font-size: 20px; font-weight: 700; margin: 0; color: var(--neutral-800);
@@ -67,6 +67,7 @@
     /* ── Cards — uses shared design tokens ── */
     .cc-card { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: 10px; padding: 14px 18px; }
     .cc-card + .cc-card { margin-top: 12px; }
+    .cc-grid-2 .cc-card + .cc-card { margin-top: 0; }
     .cc-card-title {
       font-size: 10px; font-weight: 600; text-transform: uppercase;
       letter-spacing: 0.4px; color: var(--neutral-400); margin-bottom: 10px;
@@ -194,7 +195,7 @@
       .cc-workspace { padding: 10px 14px; }
       .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
       .cc-kpi { padding: 10px 12px; }
-      .cc-grid-2 { grid-template-columns: 1fr; gap: 10px; }
+      .cc-grid-2 { grid-template-columns: 1fr; gap: 12px; }
       .cc-rev-grid { grid-template-columns: repeat(2, 1fr); }
       .cc-pipeline { flex-wrap: wrap; gap: 4px; }
       .cc-pipe-stage { min-width: 45%; padding: 4px; }

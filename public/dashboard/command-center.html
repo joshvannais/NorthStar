@@ -61,12 +61,11 @@
       border: 1px solid var(--neutral-200); background: var(--neutral-50);
       color: var(--neutral-500); cursor: pointer; transition: all 0.15s; font-weight: 500;
     }
-    [data-theme="dark"] .cc-refresh-btn { background: var(--neutral-800); border-color: var(--neutral-700); color: var(--neutral-400); }
+    [data-theme="dark"] .cc-refresh-btn { color: var(--neutral-400); }
     .cc-refresh-btn:hover { border-color: var(--brand-500); color: var(--brand-500); }
 
     /* ── Cards — uses shared design tokens ── */
     .cc-card { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: 10px; padding: 14px 18px; }
-    [data-theme="dark"] .cc-card { background: var(--neutral-800); border-color: var(--neutral-700); }
     .cc-card + .cc-card { margin-top: 12px; }
     .cc-card-title {
       font-size: 10px; font-weight: 600; text-transform: uppercase;
@@ -84,7 +83,6 @@
       padding: 12px 14px; border-radius: 8px; border: 1px solid var(--neutral-200);
       background: var(--neutral-50); cursor: default; transition: all 0.15s;
     }
-    [data-theme="dark"] .cc-kpi { background: var(--neutral-800); border-color: var(--neutral-700); }
     .cc-kpi:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     .cc-kpi-icon { font-size: 16px; margin-bottom: 4px; }
     .cc-kpi-value { font-size: 20px; font-weight: 700; color: var(--neutral-800); line-height: 1.15; }
@@ -97,7 +95,6 @@
       padding: 8px 12px; border-radius: 7px; border: 1px solid var(--neutral-200);
       margin-bottom: 6px; transition: all 0.15s;
     }
-    [data-theme="dark"] .cc-priority-item { border-color: var(--neutral-700); }
     .cc-priority-item:hover { border-color: var(--brand-500); }
     .cc-priority-rank { font-size: 14px; font-weight: 700; color: var(--brand-500); min-width: 20px; line-height: 1.4; }
     .cc-priority-body { flex: 1; min-width: 0; }
@@ -133,7 +130,6 @@
     [data-theme="dark"] .cc-pipe-count { color: var(--neutral-100); }
     .cc-pipe-label { font-size: 9px; color: var(--neutral-500); font-weight: 500; }
     .cc-pipe-bar { height: 3px; border-radius: 2px; margin-top: 5px; background: var(--neutral-200); overflow: hidden; }
-    [data-theme="dark"] .cc-pipe-bar { background: var(--neutral-700); }
     .cc-pipe-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
 
     /* ── Customers ── */
@@ -143,7 +139,6 @@
       border-radius: 6px; background: var(--neutral-100); cursor: pointer;
       transition: all 0.12s; text-decoration: none; color: inherit;
     }
-    [data-theme="dark"] .cc-cust-item { background: var(--neutral-700); }
     .cc-cust-item:hover { background: var(--neutral-200); }
     .cc-cust-name { font-size: 12px; font-weight: 500; color: var(--neutral-800); flex: 1; }
     [data-theme="dark"] .cc-cust-name { color: var(--neutral-200); }
@@ -158,7 +153,6 @@
       text-align: center; padding: 10px 8px; border-radius: 7px;
       border: 1px solid var(--neutral-200); background: var(--neutral-100); transition: all 0.12s;
     }
-    [data-theme="dark"] .cc-health-item { background: var(--neutral-700); border-color: var(--neutral-700); }
     .cc-health-item:hover { border-color: var(--brand-500); }
     .cc-health-score { font-size: 22px; font-weight: 800; line-height: 1; }
     .cc-health-score.excellent { color: var(--success); }
@@ -177,7 +171,7 @@
       font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.12s;
       min-height: 38px;
     }
-    [data-theme="dark"] .cc-action-btn { background: var(--neutral-800); border-color: var(--neutral-700); color: var(--neutral-300); }
+    [data-theme="dark"] .cc-action-btn { color: var(--neutral-300); }
     .cc-action-btn:hover { border-color: var(--brand-500); color: var(--brand-500); transform: translateY(-1px); }
 
     /* ── Grid ── */
@@ -436,80 +430,62 @@
             try { PolarisEngine.analyzeLead(lead); } catch(e) { console.warn('[CC] analyzeLead error:', e); }
           }
 
-          // ALSO POST to server APIs so the analytics endpoints return real data
-          var serverPromises = [];
+          // Chained server pipeline: create customer first, then link dependent records
+          var custPayload = {
+            name: lead.caller || lead.name || 'Simulated Customer',
+            phone: lead.phone || '',
+            email: lead.email || '',
+            address: lead.address || '',
+            status: 'active'
+          };
+          var custName = custPayload.name;
+          apiFetch('/api/v1/customers', {
+            method: 'POST',
+            body: JSON.stringify(custPayload)
+          }).then(function(custResp) {
+            return custResp.json();
+          }).then(function(custResult) {
+            var customerId = custResult.id;
+            if (!customerId) throw new Error('Customer creation did not return an id');
 
-          // POST customer to server-side engine
-          if (lead.caller || lead.name) {
-            var custPayload = {
-              name: lead.caller || lead.name || 'Simulated Customer',
-              phone: lead.phone || '',
-              email: lead.email || '',
-              address: lead.address || '',
-              source: 'simulation',
-              status: 'active'
-            };
-            serverPromises.push(
-              apiFetch('/api/v1/customers', {
-                method: 'POST',
-                body: JSON.stringify(custPayload)
-              }).catch(function(e) { console.warn('[CC] customer POST:', e); })
-            );
-          }
+            var svcTitle = (lead.service || 'General') + ' - ' + custName;
+            var estVal = lead.avgPrice || 500;
 
-          // POST a communication record
-          if (lead) {
-            var commPayload = {
-              type: 'inbound_call',
-              caller: lead.caller || 'Simulated Customer',
-              service: lead.service || 'General',
-              description: lead.description || 'Simulated customer interaction',
-              status: 'completed',
-              source: 'simulation'
-            };
-            serverPromises.push(
+            // POST communication, opportunity, and estimate in parallel with customerId
+            return Promise.all([
               apiFetch('/api/v1/communications', {
                 method: 'POST',
-                body: JSON.stringify(commPayload)
-              }).catch(function(e) { console.warn('[CC] comms POST:', e); })
-            );
-          }
-          // POST an opportunity so pipeline/revenue KPIs update
-          if (lead && lead.avgPrice) {
-            var oppPayload = {
-              title: (lead.service || 'General') + ' - ' + (lead.caller || 'Simulated'),
-              value: lead.avgPrice || 500,
-              stage: 'estimation',
-              probability: 70,
-              source: 'simulation',
-              customerName: lead.caller || 'Simulated Customer'
-            };
-            serverPromises.push(
+                body: JSON.stringify({
+                  customerId: customerId,
+                  type: 'call',
+                  direction: 'inbound',
+                  subject: 'Simulated call from ' + custName,
+                  content: lead.description || 'Simulated customer interaction',
+                  status: 'completed'
+                })
+              }).catch(function(e) { console.warn('[CC] comms POST:', e); }),
+
               apiFetch('/api/v1/opportunities', {
                 method: 'POST',
-                body: JSON.stringify(oppPayload)
-              }).catch(function(e) { console.warn('[CC] opp POST:', e); })
-            );
-          }
-          // POST a financial estimate to seed revenue data
-          if (lead && lead.avgPrice) {
-            var estPayload = {
-              customerName: lead.caller || 'Simulated Customer',
-              service: lead.service || 'General',
-              amount: lead.avgPrice || 500,
-              status: 'pending',
-              source: 'simulation'
-            };
-            serverPromises.push(
+                body: JSON.stringify({
+                  customerId: customerId,
+                  title: svcTitle,
+                  estimatedValue: estVal,
+                  stage: 'estimation',
+                  priority: 'medium'
+                })
+              }).catch(function(e) { console.warn('[CC] opp POST:', e); }),
+
               apiFetch('/api/v1/financial/estimates', {
                 method: 'POST',
-                body: JSON.stringify(estPayload)
+                body: JSON.stringify({
+                  customerId: customerId,
+                  title: svcTitle,
+                  items: [{ description: lead.service || 'General Service', quantity: 1, unitPrice: estVal }]
+                })
               }).catch(function(e) { console.warn('[CC] estimate POST:', e); })
-            );
-          }
-
-          // Wait for server writes, then refresh
-          Promise.all(serverPromises).then(function() {
+            ]);
+          }).then(function() {
             simStatus.style.display = '';
             simStatus.style.color = 'var(--success)';
             simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
@@ -517,6 +493,17 @@
             // Refresh all sections from server APIs
             render();
 
+            setTimeout(function() {
+              simBtn.disabled = false;
+              simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+            }, 2000);
+          }).catch(function(err) {
+            console.warn('[CC] Server pipeline error:', err);
+            // Fallback: still show client-side simulation result
+            simStatus.style.display = '';
+            simStatus.style.color = 'var(--success)';
+            simStatusText.innerHTML = 'Lead generated (client-side): <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
+            render();
             setTimeout(function() {
               simBtn.disabled = false;
               simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';

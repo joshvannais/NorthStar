@@ -416,6 +416,7 @@ function toggleMobileMenu() {
   <script src="/js/analytics-engine.js"></script>
   <script src="/js/simulator.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/polaris-api.js"></script>
   <script>
     // Premium notification toasts
     
@@ -539,27 +540,69 @@ function toggleMobileMenu() {
       } catch(e) {}
     }
 
+    /**
+     * Seed AppStore from canonical Polaris API (server source of truth).
+     * Fetches opportunities at stage 'lead' from the Polaris engine,
+     * normalizes them via the shared adapter, and merges into AppStore.
+     *
+     * Does NOT overwrite existing records — skips duplicates by ID.
+     * The shared adapter (PolarisApi.normalizeLead) is used across all pages.
+     */
+    function _seedFromPolaris() {
+      if (typeof PolarisApi === 'undefined' || typeof AppStore === 'undefined') return;
 
-    // Initial load
-    if (typeof AppStore !== 'undefined') {
-      if (AppStore.loadFromSession) AppStore.loadFromSession();
-      loadLeads();
-    } else {
-      // AppStore not ready yet - retry after script loads
-      document.addEventListener('DOMContentLoaded', function() {
-        if (typeof AppStore !== 'undefined') {
-          if (AppStore.loadFromSession) AppStore.loadFromSession();
-          loadLeads();
+      Promise.all([
+        PolarisApi.getOpportunities({ stage: 'lead', limit: 100 }),
+        PolarisApi.getCustomers()
+      ]).then(function(results) {
+        var opps = results[0];
+        var custData = results[1];
+
+        if (!opps || !opps.opportunities || opps.opportunities.length === 0) return;
+
+        var customerMap = {};
+        if (custData && custData.customers) {
+          custData.customers.forEach(function(c) { customerMap[c.id] = c; });
         }
+
+        var existingIds = {};
+        AppStore.getLeads().forEach(function(l) { existingIds[l.id] = true; });
+
+        opps.opportunities.forEach(function(opp) {
+          if (existingIds[opp.id]) return;
+          var customer = opp.customerId ? customerMap[opp.customerId] : null;
+          var leadData = PolarisApi.normalizeLead(opp, customer);
+          AppStore.addLead(leadData);
+        });
+      }).catch(function(err) {
+        console.warn('[Leads] Polaris API seed failed (non-fatal):', err.message);
       });
     }
-  </script>
-  <script>
-    // Fallback: ensure leads render even if main script had issues
-    if (typeof AppStore !== 'undefined' && typeof loadLeads !== 'undefined') {
-      if (AppStore.loadFromSession) AppStore.loadFromSession();
-      loadLeads();
-    } else {
+
+    // Initial load
+            if (typeof AppStore !== 'undefined') {
+              if (AppStore.loadFromSession) AppStore.loadFromSession();
+              loadLeads();
+              // Seed AppStore from canonical Polaris API (server source of truth)
+              _seedFromPolaris();
+            } else {
+              // AppStore not ready yet - retry after script loads
+              document.addEventListener('DOMContentLoaded', function() {
+                if (typeof AppStore !== 'undefined') {
+                  if (AppStore.loadFromSession) AppStore.loadFromSession();
+                  loadLeads();
+                  _seedFromPolaris();
+                }
+              });
+            }
+          </script>
+          <script>
+            // Fallback: ensure leads render even if main script had issues
+            if (typeof AppStore !== 'undefined' && typeof loadLeads !== 'undefined') {
+              if (AppStore.loadFromSession) AppStore.loadFromSession();
+              loadLeads();
+              _seedFromPolaris();
+            } else {
       // Wait for everything to be ready
       setTimeout(function() {
         if (typeof AppStore !== 'undefined' && AppStore.loadFromSession) AppStore.loadFromSession();

@@ -691,6 +691,7 @@ function toggleMobileMenu() {
   <script src="/js/analytics-engine.js"></script>
 <script src="/js/simulator.js"></script>
 <script src="/js/api.js"></script>
+  <script src="/js/polaris-api.js"></script>
 
 <script>
 // ===== Executive Filter State =====
@@ -1095,17 +1096,54 @@ try{if(typeof EventBus!=='undefined')EventBus.on('store:changed',function(){rend
 // Initialize
 function loadCalls() { renderCalls(); }
 
-// Seed demo data if no leads exist
+// Seed from canonical Polaris API or demo data if empty
 try {
-  if (typeof AppStore !== 'undefined' && AppStore.getLeads().length === 0 && typeof genCall === 'function') {
-    for (var i = 0; i < 3; i++) {
-      var lead = genCall();
-      if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
-        PolarisEngine.analyzeLead(lead);
-      }
+  if (typeof AppStore !== 'undefined' && AppStore.getLeads().length === 0) {
+    // First try canonical Polaris API (server source of truth)
+    if (typeof PolarisApi !== 'undefined') {
+      PolarisApi.getCommunications({ limit: 50 }).then(function(result) {
+        if (result && result.communications && result.communications.length > 0) {
+          result.communications.forEach(function(comm) {
+            var normalized = PolarisApi.normalizeCommunication(comm);
+            var existing = AppStore.getLead(comm.id);
+            if (!existing) {
+              AppStore.addLead({
+                id: comm.id,
+                callerName: normalized.callerName || comm.customerId || 'Unknown',
+                phone: normalized.phone || '',
+                service: comm.type || 'call',
+                estimatedPrice: 0,
+                jobDetail: comm.content || comm.subject || '',
+                status: 'new',
+                outcome: comm.status || 'completed',
+                source: 'polaris',
+                createdAt: comm.createdAt,
+              });
+            }
+          });
+          renderCalls();
+          return;
+        }
+        // Fallback: seed demo if Polaris returned empty
+        if (typeof genCall === 'function') seedDemoCalls();
+      }).catch(function() {
+        // Fallback: seed demo on error
+        if (typeof genCall === 'function') seedDemoCalls();
+      });
+    } else if (typeof genCall === 'function') {
+      seedDemoCalls();
     }
   }
 } catch(e) { console.warn('seed error:', e.message); }
+
+function seedDemoCalls() {
+  for (var i = 0; i < 3; i++) {
+    var lead = genCall();
+    if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
+      PolarisEngine.analyzeLead(lead);
+    }
+  }
+}
 
 loadCalls();
 </script>

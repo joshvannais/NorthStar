@@ -1495,6 +1495,20 @@ tr:hover td { background: var(--neutral-50); }
   border: 1px solid var(--neutral-200);
 }
 
+/* ── Command Center dark-mode contrast fixes ── */
+[data-theme="dark"] .cc-card-title { color: var(--neutral-500); }
+[data-theme="dark"] .cc-kpi-label { color: var(--neutral-500); }
+[data-theme="dark"] .cc-rev-label { color: var(--neutral-500); }
+[data-theme="dark"] .cc-pipe-label { color: var(--neutral-500); }
+[data-theme="dark"] .cc-empty { color: var(--neutral-500); }
+[data-theme="dark"] .cc-refresh-btn { color: var(--neutral-500); border-color: var(--neutral-400); }
+[data-theme="dark"] .cc-refresh-btn:hover { border-color: var(--brand-400); color: var(--brand-400); }
+[data-theme="dark"] .cc-health-desc { color: var(--neutral-500); }
+[data-theme="dark"] .cc-health-label { color: var(--neutral-500); }
+[data-theme="dark"] .cc-sim-text p { color: var(--neutral-500); }
+[data-theme="dark"] .cc-sub { color: var(--neutral-500); }
+[data-theme="dark"] .cc-pipe-stage:not(:last-child)::after { color: var(--neutral-500); opacity: 0.5; }
+
 /* FEATURE: Revenue KPI Card */
 .stat-card-revenue {
   background: linear-gradient(135deg, #FFF8E7, #FFECB3) !important;

@@ -956,6 +956,24 @@ function getFinancialMetrics() {
 }
 
 /**
+ * Get pending estimate metrics — count and total value of active,
+ * non-archived, non-rejected estimates.
+ *
+ * @returns {object} { pendingEstimateCount, pendingEstimateTotal }
+ */
+function getPendingEstimateMetrics() {
+  var allEstimates = listEstimates();
+  var pending = allEstimates.estimates.filter(function (e) {
+    return e.status !== 'archived' && e.status !== 'rejected';
+  });
+  var totalValue = pending.reduce(function (s, e) { return s + e.total; }, 0);
+  return {
+    pendingEstimateCount: pending.length,
+    pendingEstimateTotal: Math.round(totalValue * 100) / 100,
+  };
+}
+
+/**
  * Get payment history.
  *
  * @param {object} [filters] - Optional filters
@@ -1014,6 +1032,7 @@ module.exports = {
   calculateProfitability: calculateProfitability,
   calculateRevenueForecast: calculateRevenueForecast,
   getFinancialMetrics: getFinancialMetrics,
+  getPendingEstimateMetrics: getPendingEstimateMetrics,
   getPaymentHistory: getPaymentHistory,
 
   // Constants

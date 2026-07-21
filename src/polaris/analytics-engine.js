@@ -100,6 +100,7 @@ function generateKPIs() {
     kpis.winRate = oppMetrics.winRate || 0;
     kpis.pipelineValue = oppMetrics.totalPipelineValue || 0;
     kpis.weightedPipelineValue = oppMetrics.weightedPipelineValue || 0;
+    kpis.averageOpportunityValue = oppMetrics.averageOpportunityValue || 0;
 
     // Estimate-based pipeline indicators (NOT revenue — future potential)
     kpis.pendingEstimates = _safe(function () { return fin.getFinancialMetrics().pendingEstimateCount; }, 0);
@@ -141,7 +142,11 @@ function generateKPIs() {
   kpis.expiredCertifications = crewMetrics.expiredCertifications || 0;
 
   // Calculated KPIs
-  kpis.companyHealthScore = _calculateHealthScore(kpis);
+  var healthResult = _calculateHealthScore(kpis);
+  kpis.companyHealthScore = healthResult.score;
+  kpis.healthStatus = healthResult.status;
+  kpis.healthEligibleDimensions = healthResult.eligibleDimensions;
+  kpis.healthMessage = healthResult.message;
   kpis.cashFlow = kpis.totalRevenue - kpis.totalLaborCost;
 
   // Customer KPIs
@@ -154,37 +159,72 @@ function generateKPIs() {
 }
 
 function _calculateHealthScore(kpis) {
-  var score = 50;
+  var score = 0;
+  var eligible = [];
+  var totalDimensions = 5; // Revenue, Collection, Sales/Pipeline, Operations, Customer
 
-  // Financial health (0-20)
-  if (kpis.collectionRate > 90) score += 20;
-  else if (kpis.collectionRate > 75) score += 15;
-  else if (kpis.collectionRate > 50) score += 10;
-  else score += 5;
+  // --- Revenue Health: requires at least 1 paid or invoiced transaction
+  if (kpis.totalRevenue > 0 || kpis.totalInvoiced > 0) {
+    eligible.push('revenue');
+    if (kpis.totalRevenue > 50000) score += 20;
+    else if (kpis.totalRevenue > 25000) score += 15;
+    else if (kpis.totalRevenue > 10000) score += 10;
+    else score += 5;
+  }
 
-  // Pipeline health (0-20)
-  if (kpis.winRate > 50) score += 20;
-  else if (kpis.winRate > 30) score += 15;
-  else if (kpis.winRate > 15) score += 10;
-  else score += 5;
+  // --- Collection Rate: requires at least 1 invoice with collectible value
+  if (kpis.totalInvoiced > 0) {
+    eligible.push('collection');
+    if (kpis.collectionRate > 90) score += 20;
+    else if (kpis.collectionRate > 75) score += 15;
+    else if (kpis.collectionRate > 50) score += 10;
+    else score += 5;
+  }
 
-  // Task health (0-20)
-  if (kpis.taskCompletionRate > 80) score += 20;
-  else if (kpis.taskCompletionRate > 60) score += 15;
-  else if (kpis.taskCompletionRate > 40) score += 10;
-  else score += 5;
+  // --- Sales/Pipeline Health: requires activeDeals > 0
+  if (kpis.activeDeals > 0) {
+    eligible.push('sales');
+    if (kpis.winRate > 50) score += 20;
+    else if (kpis.winRate > 30) score += 15;
+    else if (kpis.winRate > 15) score += 10;
+    else score += 5;
+  }
 
-  // Job health (0-20)
-  if (kpis.openIssues === 0) score += 20;
-  else if (kpis.openIssues < 3) score += 15;
-  else if (kpis.openIssues < 10) score += 10;
-  else score += 5;
+  // --- Operations Health: requires totalJobs > 0
+  if (kpis.totalJobs > 0) {
+    eligible.push('operations');
+    if (kpis.openIssues === 0) score += 20;
+    else if (kpis.openIssues < 3) score += 15;
+    else if (kpis.openIssues < 10) score += 10;
+    else score += 5;
+  }
 
-  // Asset health (0-20)
-  var assetIssueRate = kpis.totalAssets > 0 ? (kpis.assetsOutOfService / kpis.totalAssets) * 20 : 0;
-  score += Math.round(20 - assetIssueRate);
+  // --- Customer Health: requires totalCustomers > 0
+  if (kpis.totalCustomers > 0) {
+    eligible.push('customer');
+    if (kpis.totalCustomers > 10) score += 20;
+    else if (kpis.totalCustomers > 5) score += 15;
+    else score += 10;
+  }
 
-  return Math.min(100, Math.max(0, Math.round(score)));
+  var eligibleCount = eligible.length;
+
+  // Normalize: if fewer than all dimensions are eligible, scale to 0-100
+  if (eligibleCount > 0 && eligibleCount < totalDimensions) {
+    score = Math.round((score / (eligibleCount * 20)) * 100);
+  } else if (eligibleCount === 0) {
+    score = 0;
+  }
+
+  var status = eligibleCount >= 3 ? 'established' : 'baseline';
+
+  return {
+    score: Math.min(100, Math.max(0, Math.round(score))),
+    eligibleDimensions: eligibleCount,
+    totalDimensions: totalDimensions,
+    status: status,
+    message: status === 'baseline' ? 'Building baseline: insufficient data for meaningful health score' : null,
+  };
 }
 
 // ── Dashboards ──
@@ -219,6 +259,10 @@ function generateExecutiveSummary() {
       totalDeals: kpis.totalDeals,
       activeDeals: kpis.activeDeals,
       weightedValue: kpis.weightedPipelineValue,
+      pipelineValue: kpis.pipelineValue,
+      averageOpportunityValue: kpis.averageOpportunityValue,
+      pendingEstimateCount: kpis.pendingEstimates,
+      pendingEstimateTotal: kpis.estimatedPipelineValue,
       winRate: kpis.winRate + '%',
     },
     operations: {
@@ -504,19 +548,21 @@ function generateAlerts() {
   var alerts = [];
   var kpis = generateKPIs().kpis;
 
-  // Financial alerts
-  if (kpis.outstandingRevenue > 10000) {
-    alerts.push({ severity: 'warning', category: 'financial', message: 'Outstanding revenue of $' + kpis.outstandingRevenue.toFixed(2) + ' needs attention' });
-  }
-  if (kpis.collectionRate < 50) {
-    alerts.push({ severity: 'critical', category: 'financial', message: 'Collection rate is low at ' + kpis.collectionRate + '%' });
+  // Financial alerts — only if actual invoicing activity exists
+  if (kpis.totalInvoiced > 0) {
+    if (kpis.outstandingRevenue > 10000) {
+      alerts.push({ severity: 'warning', category: 'financial', message: 'Outstanding revenue of $' + kpis.outstandingRevenue.toFixed(2) + ' needs attention' });
+    }
+    if (kpis.collectionRate < 50) {
+      alerts.push({ severity: 'critical', category: 'financial', message: 'Collection rate is low at ' + kpis.collectionRate + '%' });
+    }
   }
 
-  // Operations alerts
-  if (kpis.overdueTasks > 5) {
+  // Operations alerts — only if tasks/jobs exist
+  if (kpis.totalTasks > 0 && kpis.overdueTasks > 5) {
     alerts.push({ severity: 'warning', category: 'operations', message: kpis.overdueTasks + ' overdue tasks require attention' });
   }
-  if (kpis.openIssues > 5) {
+  if (kpis.totalJobs > 0 && kpis.openIssues > 5) {
     alerts.push({ severity: 'warning', category: 'operations', message: kpis.openIssues + ' open issues on jobs' });
   }
 
@@ -533,16 +579,26 @@ function generateAlerts() {
     alerts.push({ severity: 'warning', category: 'crew', message: kpis.expiredCertifications + ' expired certification(s)' });
   }
 
-  // Pipeline alerts
-  if (kpis.activeDeals === 0 && kpis.totalDeals === 0) {
-    alerts.push({ severity: 'critical', category: 'sales', message: 'No active deals in pipeline' });
+  // Pipeline alerts — only if system has been active
+  if (kpis.activeDeals === 0 && kpis.totalDeals === 0 && kpis.totalCustomers > 0) {
+    alerts.push({ severity: 'info', category: 'sales', message: 'Pipeline is empty — start a conversation to generate opportunities' });
   }
 
-  // Company health
-  if (kpis.companyHealthScore < 40) {
-    alerts.push({ severity: 'critical', category: 'company', message: 'Company health score is critical at ' + kpis.companyHealthScore + '/100' });
-  } else if (kpis.companyHealthScore < 60) {
-    alerts.push({ severity: 'warning', category: 'company', message: 'Company health score needs improvement at ' + kpis.companyHealthScore + '/100' });
+  // Company health — only when status is established (not baseline)
+  if (kpis.healthStatus === 'established') {
+    if (kpis.companyHealthScore < 40) {
+      alerts.push({ severity: 'critical', category: 'company', message: 'Company health score is critical at ' + kpis.companyHealthScore + '/100' });
+    } else if (kpis.companyHealthScore < 60) {
+      alerts.push({ severity: 'warning', category: 'company', message: 'Company health score needs improvement at ' + kpis.companyHealthScore + '/100' });
+    }
+  }
+
+  // Baseline-building info alerts
+  if (kpis.healthStatus === 'baseline') {
+    alerts.push({ severity: 'info', category: 'company', message: 'Building baseline metrics — engage with customers to generate actionable intelligence' });
+  }
+  if (kpis.activeDeals === 0 && kpis.totalDeals === 0 && kpis.totalCustomers === 0) {
+    alerts.push({ severity: 'info', category: 'sales', message: 'Building pipeline baseline — your first customer interaction will populate pipeline data' });
   }
 
   return {

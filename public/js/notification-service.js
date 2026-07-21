@@ -46,17 +46,7 @@ try {
         );
       }
     });
-    EventBus.on('lead:created', function(data) {
-      window.NotificationService.show(
-        'New lead: ' + (data.callerName || data.name || 'Unknown'),
-        'info'
-      );
-    });
-    EventBus.on('estimate:created', function(data) {
-      window.NotificationService.show(
-        'Estimate created: ' + (data.title || 'New estimate') + ' ($' + (data.total || data.estimatedValue || 0).toLocaleString() + ')',
-        'info'
-      );
-    });
+    // lead:created and estimate:created are silent domain events.
+    // They trigger refetches/sync but produce NO user-facing toast.
   }
 } catch(e) { console.warn('[NotificationService] EventBus setup:', e.message); }

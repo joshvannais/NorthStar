@@ -23,7 +23,7 @@
     .cc-sim-text { flex: 1; min-width: 180px; }
     .cc-sim-text p { margin: 0; font-size: 12px; color: var(--neutral-500); line-height: 1.4; }
     .cc-sim-text .cc-sim-heading { font-weight: 600; font-size: 14px; color: var(--neutral-800); margin-bottom: 2px; }
-    [data-theme="dark"] .cc-sim-text .cc-sim-heading { color: var(--neutral-200); }
+    [data-theme="dark"] .cc-sim-text .cc-sim-heading { color: #e8eaed; }
     .cc-sim-btn {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 8px 20px; border-radius: 7px; border: none;
@@ -172,7 +172,7 @@
     .cc-action-btn:hover { border-color: var(--brand-500); color: var(--brand-500); transform: translateY(-1px); }
 
     /* ── Grid ── */
-    .cc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .cc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
 
     /* ── Empty States ── */
     .cc-empty { text-align: center; padding: 16px; color: var(--neutral-500); font-size: 12px; line-height: 1.4; }
@@ -296,7 +296,7 @@
             <h1>Command Center</h1>
             <div class="cc-sub"><span class="cc-live-dot"></span><span>Polaris™ Intelligence</span><span style="opacity:0.3;">&middot;</span><span id="ccTimestamp">&mdash;</span></div>
           </div>
-          <button class="cc-refresh-btn" onclick="ccRefresh()">Refresh</button>
+          <button class="cc-refresh-btn" onclick="ccRefresh()" style="align-self:center;flex-shrink:0;">Refresh</button>
         </div>
         <!-- LOADING -->
         <div id="ccLoading">
@@ -310,7 +310,7 @@
         <div id="ccContent" style="display:none;">
           <div class="cc-card"><div class="cc-card-title">Executive Brief</div><div class="cc-summary-text" id="ccSummary">Loading...</div></div>
           <div class="cc-card"><div class="cc-card-title">Key Performance Indicators</div><div class="cc-kpi-grid" id="ccKpiGrid">Loading...</div></div>
-          <div class="cc-grid-2" style="margin-top:12px;">
+          <div class="cc-grid-2">
             <div class="cc-card"><div class="cc-card-title">Today's Priorities</div><div id="ccPriorities">Loading...</div></div>
             <div class="cc-card"><div class="cc-card-title">Revenue Opportunity</div><div id="ccRevenue">Loading...</div></div>
           </div>
@@ -611,7 +611,12 @@
           alerts = (alerts && typeof alerts === 'object') ? alerts : {};
           var el = document.getElementById('ccPriorities');
           if (!el) return;
+          var pipe = (exec.pipeline) || {};
           var pItems = [];
+          // Pipeline-aware priority when active deals exist
+          if (pipe.activeDeals > 0) {
+            pItems.push({rank:1,title:'Follow up on open leads',badge:'high',desc:pipe.activeDeals + ' active ' + (pipe.activeDeals===1?'lead':'leads') + ' — ' + (pipe.totalValue ? '$' + Math.round(pipe.totalValue).toLocaleString() + ' in pipeline' : 'review and follow up to improve close rates.'),impact:'Pipeline'});
+          }
           if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
           if (agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
           if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});

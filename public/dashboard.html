@@ -1,122 +1,255 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard — NorthStar AI</title>
+  <title>Command Center — POLARIS™ — NorthStar Solutions</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
-<style>
-/* Hero KPI card spacing polish */
-.ds-hero-kpi {
-  padding: 28px 32px;
-}
-.ds-hero-kpi-title {
-  font-size: 15px;
-  letter-spacing: 0.02em;
-}
-.ds-hero-kpi-value {
-  font-size: 42px;
-  padding: 8px 0 4px;
-}
-.ds-hero-kpi-subtitle {
-  padding-top: 4px;
-  font-size: 14px;
-}
-.ds-hero-kpi-filters {
-  padding: 12px 0 4px;
-}
-.ds-pill {
-  padding: 5px 14px;
-  margin-right: 6px;
-}
-/* Dashboard grid layout — stable vertical stack */
-.main-content > .ds-widget { margin-bottom: var(--space-lg); }
-.main-content > .ds-widget-full { width: 100%; }
-.main-content > .ds-widget-half { width: 100%; }
-/* KPI card border fix */
-.ds-kpi-card {
-  border: 1px solid var(--neutral-200);
-  border-radius: var(--radius);
-}
+  <style>
+    /* ── Only what's unique to Command Center ── */
+    * { box-sizing: border-box; }
 
-.drawer-polaris-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.drawer-polaris-item {
-  padding: 8px 10px;
-  background: var(--bg-secondary, #f8f9fa);
-  border-radius: 6px;
-  border: 1px solid var(--neutral-200, #e0e0e0);
-}
-.drawer-polaris-item-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--neutral-500, #888);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-}
-.drawer-polaris-item-value {
-  font-size: 13px;
-  color: var(--text-primary, #222);
-  line-height: 1.5;
-}
-[data-theme="dark"] .drawer-polaris-item {
-  background: rgba(212,175,55,0.1);
-  border-color: rgba(212,175,55,0.3);
-}
-[data-theme="dark"] .drawer-polaris-item-label {
-  color: var(--brand-400);
-}
-[data-theme="dark"] .drawer-polaris-item-value {
-  color: var(--neutral-700);
-}
-</style>
+    .cc-workspace { max-width: 1400px; margin: 0 auto; padding: 16px 24px; }
+
+    /* ── Simulate Lead ── */
+    .cc-sim-banner {
+      background: linear-gradient(135deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.02) 100%);
+      border: 1px solid rgba(212,175,55,0.2);
+      border-radius: 10px; padding: 14px 20px; margin-bottom: 14px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    }
+    .cc-sim-text { flex: 1; min-width: 180px; }
+    .cc-sim-text p { margin: 0; font-size: 12px; color: var(--neutral-500); line-height: 1.4; }
+    .cc-sim-text .cc-sim-heading { font-weight: 600; font-size: 14px; color: var(--neutral-800); margin-bottom: 2px; }
+    [data-theme="dark"] .cc-sim-text .cc-sim-heading { color: var(--neutral-200); }
+    .cc-sim-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 20px; border-radius: 7px; border: none;
+      background: linear-gradient(135deg, var(--brand-500) 0%, #c9a227 100%);
+      color: #fff; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(212,175,55,0.25);
+    }
+    .cc-sim-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.35); }
+    .cc-sim-btn:active { transform: translateY(0); }
+    .cc-sim-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .cc-sim-spinner {
+      display: inline-block; width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+      border-radius: 50%; animation: cc-spin 0.6s linear infinite;
+    }
+    @keyframes cc-spin { to { transform: rotate(360deg); } }
+    .cc-sim-status { font-size: 11px; color: var(--success); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+
+    /* ── Header ── */
+    .cc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px; flex-wrap: wrap; gap: 6px;
+    }
+    .cc-header-left h1 {
+      font-size: 20px; font-weight: 700; margin: 0; color: var(--neutral-800);
+      letter-spacing: -0.2px;
+    }
+    [data-theme="dark"] .cc-header-left h1 { color: var(--neutral-100); }
+    .cc-header-left .cc-sub { font-size: 12px; color: var(--neutral-500); display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+    .cc-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); display: inline-block; animation: cc-pulse 2s infinite; }
+    @keyframes cc-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .cc-refresh-btn {
+      font-size: 11px; padding: 6px 14px; border-radius: 6px;
+      border: 1px solid var(--neutral-200); background: var(--neutral-50);
+      color: var(--neutral-500); cursor: pointer; transition: all 0.15s; font-weight: 500;
+    }
+    [data-theme="dark"] .cc-refresh-btn { color: var(--neutral-400); }
+    .cc-refresh-btn:hover { border-color: var(--brand-500); color: var(--brand-500); }
+
+    /* ── Cards — uses shared design tokens ── */
+    .cc-card { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: 10px; padding: 14px 18px; }
+    .cc-card + .cc-card { margin-top: 12px; }
+    .cc-card-title {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.4px; color: var(--neutral-400); margin-bottom: 10px;
+    }
+
+    /* ── Summary ── */
+    .cc-summary-text { font-size: 13px; line-height: 1.55; color: var(--neutral-700); }
+    [data-theme="dark"] .cc-summary-text { color: var(--neutral-300); }
+    .cc-summary-text strong { color: var(--brand-500); font-weight: 600; }
+
+    /* ── KPI Grid (PRESERVED from 2.2) ── */
+    .cc-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .cc-kpi {
+      padding: 12px 14px; border-radius: 8px; border: 1px solid var(--neutral-200);
+      background: var(--neutral-50); cursor: default; transition: all 0.15s;
+    }
+    .cc-kpi:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .cc-kpi-icon { font-size: 16px; margin-bottom: 4px; }
+    .cc-kpi-value { font-size: 20px; font-weight: 700; color: var(--neutral-800); line-height: 1.15; }
+    [data-theme="dark"] .cc-kpi-value { color: var(--neutral-100); }
+    .cc-kpi-label { font-size: 10px; color: var(--neutral-500); margin-top: 2px; font-weight: 500; }
+
+    /* ── Priorities ── */
+    .cc-priority-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 12px; border-radius: 7px; border: 1px solid var(--neutral-200);
+      margin-bottom: 6px; transition: all 0.15s;
+    }
+    .cc-priority-item:hover { border-color: var(--brand-500); }
+    .cc-priority-rank { font-size: 14px; font-weight: 700; color: var(--brand-500); min-width: 20px; line-height: 1.4; }
+    .cc-priority-body { flex: 1; min-width: 0; }
+    .cc-priority-title { font-size: 13px; font-weight: 600; color: var(--neutral-800); }
+    [data-theme="dark"] .cc-priority-title { color: var(--neutral-200); }
+    .cc-priority-meta { font-size: 10px; color: var(--neutral-500); margin-top: 1px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .cc-priority-badge { font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; }
+    .cc-priority-badge.critical { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .cc-priority-badge.high { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .cc-priority-badge.medium { background: rgba(59,130,246,0.15); color: var(--info); }
+    .cc-priority-badge.low { background: rgba(108,117,125,0.15); color: var(--neutral-500); }
+    .cc-priority-desc { font-size: 11px; color: var(--neutral-500); margin-top: 2px; line-height: 1.3; }
+
+    /* ── Revenue ── */
+    .cc-rev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 4px; }
+    .cc-rev-stat { text-align: center; padding: 6px 4px; }
+    .cc-rev-val { font-size: 18px; font-weight: 700; color: var(--neutral-800); }
+    [data-theme="dark"] .cc-rev-val { color: var(--neutral-100); }
+    .cc-rev-val.gold { color: var(--brand-500); }
+    .cc-rev-val.green { color: var(--success); }
+    .cc-rev-val.orange { color: var(--warning); }
+    .cc-rev-label { font-size: 9px; color: var(--neutral-500); margin-top: 1px; font-weight: 500; }
+
+    /* ── Pipeline ── */
+    .cc-pipeline { display: flex; align-items: center; gap: 0; padding: 2px 0; }
+    .cc-pipe-stage { flex: 1; text-align: center; padding: 6px 4px; position: relative; }
+    .cc-pipe-stage:not(:last-child)::after {
+      content: '\2192'; position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+      color: var(--neutral-400); font-size: 14px; opacity: 0.4;
+    }
+    .cc-pipe-icon { font-size: 16px; margin-bottom: 1px; }
+    .cc-pipe-count { font-size: 18px; font-weight: 700; color: var(--neutral-800); margin: 1px 0; }
+    [data-theme="dark"] .cc-pipe-count { color: var(--neutral-100); }
+    .cc-pipe-label { font-size: 9px; color: var(--neutral-500); font-weight: 500; }
+    .cc-pipe-bar { height: 3px; border-radius: 2px; margin-top: 5px; background: var(--neutral-200); overflow: hidden; }
+    .cc-pipe-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
+
+    /* ── Customers ── */
+    .cc-cust-list { display: flex; flex-direction: column; gap: 4px; }
+    .cc-cust-item {
+      display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+      border-radius: 6px; background: var(--neutral-100); cursor: pointer;
+      transition: all 0.12s; text-decoration: none; color: inherit;
+    }
+    .cc-cust-item:hover { background: var(--neutral-200); }
+    .cc-cust-name { font-size: 12px; font-weight: 500; color: var(--neutral-800); flex: 1; }
+    [data-theme="dark"] .cc-cust-name { color: var(--neutral-200); }
+    .cc-cust-tag { font-size: 9px; font-weight: 600; padding: 1px 7px; border-radius: 3px; }
+    .cc-cust-tag.new { background: rgba(16,185,129,0.15); color: var(--success); }
+    .cc-cust-tag.returning { background: rgba(59,130,246,0.15); color: var(--info); }
+    .cc-cust-tag.attention { background: rgba(239,68,68,0.15); color: var(--danger); }
+
+    /* ── Health (PRESERVED 2-col from 2.2) ── */
+    .cc-health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .cc-health-item {
+      text-align: center; padding: 10px 8px; border-radius: 7px;
+      border: 1px solid var(--neutral-200); background: var(--neutral-100); transition: all 0.12s;
+    }
+    .cc-health-item:hover { border-color: var(--brand-500); }
+    .cc-health-score { font-size: 22px; font-weight: 800; line-height: 1; }
+    .cc-health-score.excellent { color: var(--success); }
+    .cc-health-score.good { color: var(--info); }
+    .cc-health-score.fair { color: var(--warning); }
+    .cc-health-score.poor { color: var(--danger); }
+    .cc-health-label { font-size: 10px; color: var(--neutral-500); margin-top: 3px; font-weight: 500; }
+    .cc-health-desc { font-size: 9px; color: var(--neutral-400); margin-top: 2px; line-height: 1.25; }
+
+    /* ── Quick Actions (PRESERVED from 2.2) ── */
+    .cc-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .cc-action-btn {
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 8px 10px; border-radius: 7px; border: 1px solid var(--neutral-200);
+      background: var(--neutral-50); color: var(--neutral-700); font-size: 12px;
+      font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.12s;
+      min-height: 38px;
+    }
+    [data-theme="dark"] .cc-action-btn { color: var(--neutral-300); }
+    .cc-action-btn:hover { border-color: var(--brand-500); color: var(--brand-500); transform: translateY(-1px); }
+
+    /* ── Grid ── */
+    .cc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ── Empty States ── */
+    .cc-empty { text-align: center; padding: 16px; color: var(--neutral-500); font-size: 12px; line-height: 1.4; }
+
+    /* ── Loading ── */
+    .cc-loading-skeleton {
+      height: 16px; background: linear-gradient(90deg, var(--neutral-200) 25%, transparent 50%, var(--neutral-200) 75%);
+      background-size: 200% 100%; animation: cc-shimmer 1.5s infinite; border-radius: 4px; margin-bottom: 6px;
+    }
+    @keyframes cc-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    .cc-loading-skeleton.w70 { width: 70%; } .cc-loading-skeleton.w50 { width: 50%; }
+    .cc-loading-skeleton.h40 { height: 34px; } .cc-loading-skeleton.h60 { height: 50px; }
+
+    /* ── Responsive (PRESERVED from 2.2) ── */
+    @media (max-width: 1024px) {
+      .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .cc-workspace { padding: 10px 14px; }
+      .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+      .cc-kpi { padding: 10px 12px; }
+      .cc-grid-2 { grid-template-columns: 1fr; gap: 10px; }
+      .cc-rev-grid { grid-template-columns: repeat(2, 1fr); }
+      .cc-pipeline { flex-wrap: wrap; gap: 4px; }
+      .cc-pipe-stage { min-width: 45%; padding: 4px; }
+      .cc-pipe-stage:nth-child(2)::after,
+      .cc-pipe-stage:nth-child(4)::after { display: none; }
+      .cc-actions { grid-template-columns: repeat(2, 1fr); }
+      .cc-sim-banner { flex-direction: column; text-align: center; padding: 12px 16px; }
+      .cc-sim-btn { justify-content: center; width: 100%; max-width: 220px; }
+    }
+    @media (max-width: 480px) {
+      .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .cc-kpi { padding: 8px 10px; }
+      .cc-kpi-value { font-size: 17px; }
+      .cc-actions { grid-template-columns: 1fr 1fr; }
+      .cc-pipe-stage { min-width: 100%; }
+      .cc-pipe-stage::after { display: none !important; }
+    }
+  </style>
 </head>
 <body>
-<a href="#mainContent" class="skip-link">Skip to main content</a>
-<div class="mobile-header">
-  <button class="hamburger-btn" onclick="toggleMobileMenu()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    NorthStar
-  </button>
-  <img src="/assets/northstar-logo.png" alt="NorthStar" class="mobile-logo">
-</div>
-<div class="mobile-overlay" id="mobileOverlay" onclick="toggleMobileMenu()"></div>
-<div class="mobile-menu" id="mobileMenu">
-  <div class="mobile-menu-header">
-    <a href="/dashboard" style="font-size:17px;font-weight:700;color:var(--brand-600);text-decoration:none;display:flex;align-items:center;gap:8px;"><img src="/assets/logo.png" alt="NorthStar" style="height:22px;"> NorthStar</a>
-    <button class="mobile-menu-close" onclick="toggleMobileMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  <!-- Mobile header + hamburger -->
+  <div class="mobile-header">
+    <button class="hamburger-btn" onclick="toggleMobileMenu()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      NorthStar
+    </button>
+    <img src="/assets/northstar-logo.png" alt="NorthStar" class="mobile-logo">
   </div>
-  <nav class="mobile-menu-nav">
-    <a href="/dashboard" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
-    <a href="/dashboard/polaris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>POLARIS</a>
-    <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
-    <a href="/dashboard/communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Communications</a>
-    <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>My Number</a>
-    <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Calendar</a>
-    <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>AI Settings</a>
-    <a href="/dashboard/business-profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Business Profile</a>
-<a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
-  </nav>
-  <div class="mobile-menu-footer">
-    <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>
-    <button onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--neutral-500);width:100%;text-align:left;">&#127769; Toggle Theme</button>
+  <div class="mobile-overlay" id="mobileOverlay" onclick="toggleMobileMenu()"></div>
+  <div class="mobile-menu" id="mobileMenu">
+    <div class="mobile-menu-header">
+      <a href="/dashboard" style="font-size:17px;font-weight:700;color:var(--brand-600);text-decoration:none;display:flex;align-items:center;gap:8px;"><img src="/assets/logo.png" alt="NorthStar" style="height:22px;"> NorthStar</a>
+      <button class="mobile-menu-close" onclick="toggleMobileMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <nav class="mobile-menu-nav">
+      <a href="/dashboard" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Command Center</a>
+      <a href="/dashboard/polaris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>POLARIS</a>
+      <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
+      <a href="/dashboard/communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Communications</a>
+      <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>My Number</a>
+      <a href="/dashboard/calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Calendar</a>
+      <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>AI Settings</a>
+      <a href="/dashboard/business-profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Business Profile</a>
+      <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
+    </nav>
+    <div class="mobile-menu-footer">
+      <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token');return true;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>
+      <button onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--neutral-500);width:100%;text-align:left;">&#127769; Toggle Theme</button>
+    </div>
   </div>
-</div>
-<script>
-function toggleMobileMenu() {
-  document.getElementById('mobileOverlay').style.display = document.getElementById('mobileOverlay').style.display === 'block' ? 'none' : 'block';
-  document.getElementById('mobileMenu').classList.toggle('open');
-}
-</script>
 
-  <div class="dashboard-layout">
+  <div class="app-layout">
     <aside class="sidebar">
       <a href="/dashboard" class="sidebar-logo">
         <img src="/assets/logo.png" alt="NorthStar" class="logo-img">
@@ -125,7 +258,7 @@ function toggleMobileMenu() {
       <nav class="sidebar-nav">
         <a href="/dashboard" class="active" aria-current="page">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          <span>Dashboard</span>
+          <span>Command Center</span>
         </a>
         <a href="/dashboard/polaris">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -139,1125 +272,462 @@ function toggleMobileMenu() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           <span>Communications</span>
         </a>
-        <a href="/dashboard/my-number">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          <span>My Number</span>
-        </a>
         <a href="/dashboard/calendar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
           <span>Calendar</span>
         </a>
-        <a href="/dashboard/ai-settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>
-          <span>AI Settings</span>
-        </a>
-        <a href="/dashboard/business-profile">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          <span>Business Profile</span>
-        </a>
         <a href="/dashboard/settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
           <span>Settings</span>
         </a>
       </nav>
-      <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-        <span>Sign Out</span>
-      </a>
-      <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button>
     </aside>
-    <main class="main-content" id="mainContent">
-      <div class="page-header">
-        <div>
-          <h1>Dashboard</h1>
-          <p id="welcomeMessage">Welcome back! Here's your business overview.</p>
+    <main class="main-content">
+      <div class="cc-workspace">
+        <!-- SIMULATE LEAD -->
+        <div class="cc-sim-banner" id="ccSimBanner">
+          <div class="cc-sim-text">
+            <div class="cc-sim-heading">Try Polaris Intelligence</div>
+            <p>Generate a realistic customer interaction and watch Polaris process the entire workflow in real time.</p>
+            <div class="cc-sim-status" id="ccSimStatus" style="display:none;"><span>&#9989;</span><span id="ccSimStatusText">Lead generated</span></div>
+          </div>
+          <button class="cc-sim-btn" id="ccSimBtn" onclick="ccSimulateLead()"><span>&#127917;</span><span>Simulate Lead</span></button>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-primary btn-sm" onclick="simulateDemoLead()">➕ Simulate Lead</button>
+        <!-- HEADER -->
+        <div class="cc-header">
+          <div class="cc-header-left">
+            <h1>Command Center</h1>
+            <div class="cc-sub"><span class="cc-live-dot"></span><span>Polaris Intelligence</span><span style="opacity:0.3;">&middot;</span><span id="ccTimestamp">&mdash;</span></div>
+          </div>
+          <button class="cc-refresh-btn" onclick="ccRefresh()">Refresh</button>
         </div>
-      </div>
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 1: Daily Brief (V1-02)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full" id="widget-daily-brief">
-        <div class="ds-card" id="dailyBriefCard">
-          <!-- Skeleton loading state -->
-          <div class="ds-skeleton" id="briefSkeleton">
-            <div class="skeleton skeleton-title" style="width:30%;"></div>
-            <div class="skeleton skeleton-text"></div>
-            <div class="skeleton skeleton-text" style="width:80%;"></div>
-            <div class="skeleton skeleton-text" style="width:50%;"></div>
+        <!-- LOADING -->
+        <div id="ccLoading">
+          <div class="cc-loading-skeleton w70" style="margin-bottom:8px;"></div>
+          <div class="cc-loading-skeleton" style="margin-bottom:4px;"></div>
+          <div class="cc-loading-skeleton w50"></div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;"><div class="cc-loading-skeleton h60"></div><div class="cc-loading-skeleton h60"></div><div class="cc-loading-skeleton h60"></div><div class="cc-loading-skeleton h60"></div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;"><div class="cc-loading-skeleton h40"></div><div class="cc-loading-skeleton h40"></div></div>
+        </div>
+        <!-- CONTENT -->
+        <div id="ccContent" style="display:none;">
+          <div class="cc-card"><div class="cc-card-title">Executive Brief</div><div class="cc-summary-text" id="ccSummary">Loading...</div></div>
+          <div class="cc-card"><div class="cc-card-title">Key Performance Indicators</div><div class="cc-kpi-grid" id="ccKpiGrid">Loading...</div></div>
+          <div class="cc-grid-2" style="margin-top:12px;">
+            <div class="cc-card"><div class="cc-card-title">Today's Priorities</div><div id="ccPriorities">Loading...</div></div>
+            <div class="cc-card"><div class="cc-card-title">Revenue Opportunity</div><div id="ccRevenue">Loading...</div></div>
           </div>
-          <!-- Populated state -->
-          <div class="ds-brief" id="briefContent" style="display:none;">
-            <div class="ds-brief-header">
-              <span class="ds-brief-label">NORTHSTAR DAILY BRIEF</span>
-              <div style="display:flex;gap:4px;align-items:center;">
-                <button class="ds-brief-btn" onclick="refreshBrief()" title="Refresh brief" id="briefRefreshBtn">↻</button>
-                <span class="ds-brief-time" id="briefTimestamp">Last updated: —</span>
-              </div>
-            </div>
-            <div class="ds-brief-body" id="briefBody">
-              <!-- Filled by JS -->
-            </div>
-          </div>
-          <!-- Error state -->
-          <div class="ds-error-inline" id="briefError" style="display:none;">
-            <span>⚠️</span>
-            <span>Unable to load daily brief.</span>
-            <button class="btn btn-sm btn-ghost" onclick="refreshBrief()">Retry</button>
-          </div>
+          <div class="cc-card" style="margin-top:12px;"><div class="cc-card-title">Operational Pipeline</div><div id="ccPipeline">Loading...</div></div>
+          <div class="cc-card" style="margin-top:12px;"><div class="cc-card-title">Customer Intelligence</div><div id="ccCustomers">Loading...</div></div>
+          <div class="cc-card" style="margin-top:12px;"><div class="cc-card-title">Business Health</div><div class="cc-health-grid" id="ccHealth">Loading...</div></div>
+          <div class="cc-card" style="margin-top:12px;"><div class="cc-card-title">Quick Actions</div><div class="cc-actions" id="ccActions"></div></div>
         </div>
       </div>
-
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 2: Quick Actions (V1-03)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full" id="widget-quick-actions">
-        <div class="ds-quick-actions">
-          <button class="ds-action-card" onclick="simulateDemoLead()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="8"/></svg>
-            <span>Simulate Lead</span>
-          </button>
-          <button class="ds-action-card" onclick="openTestAIModal()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <span>Test AI</span>
-          </button>
-          <button class="ds-action-card" onclick="openCallMyAIModal()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-            <span>Call My AI</span>
-          </button>
-          <button class="ds-action-card" onclick="showComingSoon('Invite Team Member')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <span>Invite Team</span>
-          </button>
-          <button class="ds-action-card" onclick="showComingSoon('Integration')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
-            <span>Connect Integrations</span>
-          </button>
-          <button class="ds-action-card" onclick="showComingSoon('Knowledge Base')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg>
-            <span>Knowledge Base</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="ds-widget ds-widget-full" id="widget-polaris-card">
-        <div class="polaris-card">
-          <div class="polaris-header">
-            <h2>🏆 POLARIS™ Revenue Intelligence</h2>
-            <span class="polaris-badge">LIVE</span>
-          </div>
-          <div class="polaris-grid" id="polarisCardGrid">
-            <div class="polaris-item">
-              <div class="polaris-item-label">Top Opportunity</div>
-              <div class="polaris-item-value" id="polarisTopOpp">—</div>
-              <div class="polaris-item-desc" id="polarisTopOppDesc">—</div>
-              <div class="polaris-confidence" id="polarisTopConf">—</div>
-            </div>
-            <div class="polaris-item">
-              <div class="polaris-item-label">Pipeline Value</div>
-              <div class="polaris-item-value" id="polarisPipeline">$0</div>
-              <div class="polaris-item-desc" id="polarisPipelineDesc">Total qualified pipeline</div>
-              <div class="polaris-confidence" id="polarisPipeConf">—</div>
-            </div>
-            <div class="polaris-item">
-              <div class="polaris-item-label">Recommended Focus</div>
-              <div class="polaris-item-value" id="polarisFocus">—</div>
-              <div class="polaris-item-desc" id="polarisFocusDesc">—</div>
-              <div class="polaris-confidence" id="polarisFocusConf">—</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 4: KPI Grid (V1-05)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full" id="widget-kpi-grid">
-        <div class="ds-kpi-grid" id="kpiGrid">
-          <!-- Each KPI card loaded by JS -->
-        </div>
-      </div>
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET: Active Calls (M17-P6)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full" id="widget-active-calls">
-        <div class="ds-card" id="activeCallsCard">
-          <div class="ds-card-header">
-            <span class="ds-card-title">📞 Active Calls</span>
-            <span id="activeCallsLiveBadge" style="display:none;font-size:11px;font-weight:600;padding:3px 8px;border-radius:100px;background:rgba(34,197,94,0.12);color:#16a34a;">
-              <span class="active-calls-dot"></span> LIVE
-            </span>
-          </div>
-          <div class="ds-card-body" id="activeCallsBody">
-            <div class="ds-empty-inline" id="activeCallsEmpty">
-              <p>No active calls. Active calls will appear here in real time when NorthStar is answering your phone.</p>
-            </div>
-            <div class="ds-kpi-grid" id="activeCallsGrid" style="display:none;">
-              <div class="ds-kpi-card">
-                <div class="ds-kpi-icon" style="background:rgba(34,197,94,0.1);color:#16a34a;">
-                  <span style="font-size:20px;">📞</span>
-                </div>
-                <div class="ds-kpi-value" id="acActiveCount" style="color:#16a34a;">0</div>
-                <div class="ds-kpi-label">Active Calls</div>
-              </div>
-              <div class="ds-kpi-card">
-                <div class="ds-kpi-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6;">
-                  <span style="font-size:20px;">⏱</span>
-                </div>
-                <div class="ds-kpi-value" id="acDuration">0:00</div>
-                <div class="ds-kpi-label">Current Duration</div>
-              </div>
-              <div class="ds-kpi-card">
-                <div class="ds-kpi-icon" style="background:rgba(245,158,11,0.1);color:#f59e0b;">
-                  <span style="font-size:20px;">🗣</span>
-                </div>
-                <div class="ds-kpi-value" id="acSpeaking">—</div>
-                <div class="ds-kpi-label">Speaking</div>
-              </div>
-              <div class="ds-kpi-card">
-                <div class="ds-kpi-icon" style="background:rgba(99,102,241,0.1);color:#6366f1;">
-                  <span style="font-size:20px;">✅</span>
-                </div>
-                <div class="ds-kpi-value" id="acCompleted">0</div>
-                <div class="ds-kpi-label">Completed Today</div>
-              </div>
-              <div class="ds-kpi-card">
-                <div class="ds-kpi-icon" style="background:rgba(239,68,68,0.1);color:#ef4444;">
-                  <span style="font-size:20px;">🔥</span>
-                </div>
-                <div class="ds-kpi-value" id="acQualification">—</div>
-                <div class="ds-kpi-label">Lead Qualification</div>
-              </div>
-              <div class="ds-kpi-card">
-                <div class="ds-kpi-icon" style="background:rgba(16,185,129,0.1);color:#10b981;">
-                  <span style="font-size:20px;">📊</span>
-                </div>
-                <div class="ds-kpi-value" id="acBookingProb">—</div>
-                <div class="ds-kpi-label">Booking Probability</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <style>
-        .active-calls-dot {
-          display: inline-block;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: #16a34a;
-          margin-right: 4px;
-          animation: pulse-dot 1.5s ease-in-out infinite;
-        }
-        @keyframes pulse-dot {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(0.7); }
-        }
-      </style>
-      <!-- ════════════════════════════════════════════════════════
-           POLARIS Revenue Intelligence Card
-           ════════════════════════════════════════════════════════ -->
-      
-
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 5: Revenue Trends (V1-06) — Professional+
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full ds-gated-pro" id="widget-revenue-trends">
-        <div class="ds-card" id="revenueTrendsCard">
-          <div class="ds-card-header">
-            <span class="ds-card-title">Revenue Trends</span>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <select class="ds-metric-select" id="trendMetricSelect" onchange="loadTrendChart()">
-                <option value="revenue">Revenue Opportunity</option>
-                <option value="calls">Communications</option>
-                <option value="leads">Leads</option>
-                <option value="appointments">Appointments</option>
-                <option value="conversion">Conversion Rate</option>
-                <option value="avgJobValue">Avg Job Value</option>
-              </select>
-            </div>
-          </div>
-          <div class="ds-card-body">
-            <div class="ds-trend-periods" id="trendPeriodPills">
-              <button class="ds-pill active" data-period="7d" onclick="switchTrendPeriod('7d')">7D</button>
-              <button class="ds-pill" data-period="30d" onclick="switchTrendPeriod('30d')">30D</button>
-              <button class="ds-pill" data-period="90d" onclick="switchTrendPeriod('90d')">90D</button>
-              <button class="ds-pill" data-period="1y" onclick="switchTrendPeriod('1y')">1Y</button>
-            </div>
-            <div class="ds-chart-area" id="trendChartArea">
-              <div class="ds-skeleton" id="chartSkeleton" style="height:280px;border-radius:var(--radius-sm);"></div>
-              <canvas id="trendChartCanvas" style="display:none;width:100%;height:280px;"></canvas>
-              <div class="ds-chart-empty" id="chartEmpty" style="display:none;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" style="opacity:0.3;"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-                <p>No trend data available for this period.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 6: NorthStar Coach (V1-07) — Professional+
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full ds-gated-pro" id="widget-coach">
-        <div class="ds-card" id="coachCard">
-          <div class="ds-card-header">
-            <span class="ds-card-title"><img src="/assets/logo.png" alt="N" style="height:18px;width:18px;border-radius:4px;vertical-align:middle;margin-right:6px;">NorthStar Coach</span>
-            <button class="btn btn-sm btn-ghost" onclick="dismissCoach()">Dismiss</button>
-          </div>
-          <div class="ds-card-body" id="coachBody">
-            <div class="ds-skeleton" id="coachSkeleton">
-              <div class="skeleton skeleton-text" style="width:90%;"></div>
-              <div class="skeleton skeleton-text" style="width:60%;"></div>
-            </div>
-            <div class="ds-coach-content" id="coachContent" style="display:none;">
-              <p class="ds-coach-text" id="coachText">NorthStar is analyzing your data. Check back soon for a personalized recommendation.</p>
-              <div class="ds-coach-reason" id="coachReason"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 7: Recent Leads (V1-08)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-half" id="widget-recent-leads">
-        <div class="ds-card">
-          <div class="ds-card-header">
-            <span class="ds-card-title">📋 Recent Leads</span>
-            <a href="/dashboard/leads" class="btn btn-sm btn-ghost">View All</a>
-          </div>
-          <div class="ds-card-body" id="recentLeadsBody">
-            <div class="ds-skeleton" id="leadsSkeleton">
-              <div class="skeleton skeleton-text" style="width:100%;"></div>
-              <div class="skeleton skeleton-text" style="width:100%;"></div>
-              <div class="skeleton skeleton-text" style="width:100%;"></div>
-              <div class="skeleton skeleton-text" style="width:80%;"></div>
-            </div>
-            <div class="ds-list" id="recentLeadsList"></div>
-            <div class="ds-empty-inline" id="recentLeadsEmpty" style="display:none;">
-              <p>No leads yet. Click "Simulate Lead" to test your AI Office Manager.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 8: Recent Communications (V1-09)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-half" id="widget-recent-calls">
-        <div class="ds-card">
-          <div class="ds-card-header">
-            <span class="ds-card-title">📞 Recent Communications</span>
-            <a href="/dashboard/communications" class="btn btn-sm btn-ghost">View All</a>
-          </div>
-          <div class="ds-card-body" id="recentCallsBody">
-            <div class="ds-skeleton" id="callsSkeleton">
-              <div class="skeleton skeleton-text" style="width:100%;"></div>
-              <div class="skeleton skeleton-text" style="width:100%;"></div>
-              <div class="skeleton skeleton-text" style="width:100%;"></div>
-              <div class="skeleton skeleton-text" style="width:80%;"></div>
-            </div>
-            <div class="ds-list" id="recentCallsList"></div>
-            <div class="ds-empty-inline" id="recentCallsEmpty" style="display:none;">
-              <p>No communications recorded yet. Calls will appear here once NorthStar answers your phone.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 9: Upcoming Appointments (V1-10)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-half" id="widget-appointments">
-        <div class="ds-card">
-          <div class="ds-card-header">
-            <span class="ds-card-title">📅 Upcoming Appointments</span>
-            <a href="/dashboard/leads" class="btn btn-sm btn-ghost">View All</a>
-          </div>
-          <div class="ds-card-body" id="appointmentsBody">
-            <div class="ds-skeleton" id="apptsSkeleton">
-              <div class="skeleton skeleton-text" style="width:100%;"></div>
-              <div class="skeleton skeleton-text" style="width:100%;"></div>
-              <div class="skeleton skeleton-text" style="width:70%;"></div>
-            </div>
-            <div class="ds-list" id="appointmentsList"></div>
-            <div class="ds-empty-inline" id="appointmentsEmpty" style="display:none;">
-              <p>No appointments scheduled. Appear here once NorthStar books estimate appointments.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 10: NorthStar Status (V1-11)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-half" id="widget-status">
-        <div class="ds-card">
-          <div class="ds-card-header">
-            <span class="ds-card-title">🔵 NorthStar Status</span>
-          </div>
-          <div class="ds-card-body">
-            <div class="ds-status-grid" id="statusGrid">
-              <div class="ds-status-item">
-                <span class="ds-status-dot status-active" id="statusAiDot"></span>
-                <div>
-                  <div class="ds-status-name">AI Receptionist</div>
-                  <div class="ds-status-desc" id="statusAiDesc">Connected</div>
-                </div>
-              </div>
-              <div class="ds-status-item">
-                <span class="ds-status-dot status-active" id="statusPhoneDot"></span>
-                <div>
-                  <div class="ds-status-name">Phone Line</div>
-                  <div class="ds-status-desc" id="statusPhoneDesc">Active</div>
-                </div>
-              </div>
-              <div class="ds-status-item">
-                <span class="ds-status-dot status-active" id="statusCallingDot"></span>
-                <div>
-                  <div class="ds-status-name">Call Forwarding</div>
-                  <div class="ds-status-desc" id="statusCallingDesc">Configured</div>
-                </div>
-              </div>
-              <div class="ds-status-item">
-                <span class="ds-status-dot status-active" id="statusNotifDot"></span>
-                <div>
-                  <div class="ds-status-name">Notifications</div>
-                  <div class="ds-status-desc" id="statusNotifDesc">Active</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ════════════════════════════════════════════════════════
-           WIDGET 11: Analytics Detail (existing premium feature)
-           ════════════════════════════════════════════════════════ -->
-      <div class="ds-widget ds-widget-full" id="widget-analytics">
-        <div class="ds-card">
-          <div class="ds-card-header">
-            <span class="ds-card-title">📊 Analytics Overview</span>
-          </div>
-          <div class="ds-card-body">
-            <div class="ds-analytics-grid" id="analyticsGrid">
-              <div class="ds-analytics-item">
-                <div class="ds-analytics-label">Communications Answered</div>
-                <div class="ds-analytics-value" id="analyticsCalls">0</div>
-              </div>
-              <div class="ds-analytics-item">
-                <div class="ds-analytics-label">Leads Captured</div>
-                <div class="ds-analytics-value" id="analyticsLeads">0</div>
-              </div>
-              <div class="ds-analytics-item">
-                <div class="ds-analytics-label">Appointments Booked</div>
-                <div class="ds-analytics-value" id="analyticsAppts">0</div>
-              </div>
-              <div class="ds-analytics-item">
-                <div class="ds-analytics-label">Avg. Job Value</div>
-                <div class="ds-analytics-value" id="analyticsAvgValue">$0</div>
-              </div>
-              <div class="ds-analytics-item">
-                <div class="ds-analytics-label">Avg. Call Length</div>
-                <div class="ds-analytics-value" id="analyticsCallLength">0:00</div>
-              </div>
-              <div class="ds-analytics-item">
-                <div class="ds-analytics-label">Conversion Rate</div>
-                <div class="ds-analytics-value" id="analyticsConversion">0%</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
     </main>
   </div>
-    <!-- Modals -->
-  <div class="modal-backdrop" id="testAIModal" style="display:none;" role="dialog" aria-modal="true" aria-label="Test your AI" onclick="closeTestAIModal(event)">
-    <div class="modal-panel modal-sm" onclick="event.stopPropagation()">
-      <div class="modal-header"><h3 class="modal-title">Test Your AI</h3><button class="modal-close" onclick="closeTestAIModal()" aria-label="Close">&times;</button></div>
-      <div class="modal-body">
-        <p class="modal-desc">Type a question a customer might ask.</p>
-        <div class="form-group"><input type="text" id="testAiInput" placeholder="e.g., How much is a tree removal?"></div>
-        <div id="testAiResponse" class="modal-ai-response">Your AI's response will appear here.</div>
-      </div>
-      <div class="modal-footer"><button class="btn btn-secondary btn-sm" onclick="closeTestAIModal()">Close</button><button class="btn btn-primary btn-sm" onclick="testAIResponse()">Ask AI</button></div>
-    </div>
-  </div>
-  <div class="modal-backdrop" id="callMyAIModal" style="display:none;" role="dialog" aria-modal="true" aria-label="Call your AI" onclick="closeCallMyAIModal(event)">
-    <div class="modal-panel modal-sm" onclick="event.stopPropagation()">
-      <div class="modal-header"><h3 class="modal-title">Call Your AI</h3><button class="modal-close" onclick="closeCallMyAIModal()" aria-label="Close">&times;</button></div>
-      <div class="modal-body">
-        <p class="modal-desc">Call your NorthStar AI phone number.</p>
-        <div class="modal-phone-number" id="myPhoneNumberDisplay">(860) 467-0739</div>
-        <p class="modal-desc">Your AI receptionist will answer.</p>
-      </div>
-      <div class="modal-footer"><button class="btn btn-primary" onclick="closeCallMyAIModal()">Got it</button></div>
-    </div>
-  </div>
-  <div class="modal-backdrop" id="comingSoonModal" style="display:none;" role="dialog" aria-modal="true" aria-label="Coming soon" onclick="closeComingSoon(event)">
-    <div class="modal-panel modal-sm" onclick="event.stopPropagation()">
-      <div class="modal-header"><h3 class="modal-title">Coming Soon</h3><button class="modal-close" onclick="closeComingSoon()" aria-label="Close">&times;</button></div>
-      <div class="modal-body"><span class="modal-emoji">🚧</span><p class="modal-desc" id="comingSoonMessage">Under development.</p></div>
-      <div class="modal-footer"><button class="btn btn-primary" onclick="closeComingSoon()">OK</button></div>
-    </div>
-  </div>
-  <!-- Premium Notification Toasts -->
-  <script>
-    window.showToast = NotificationService.show;
 
-  </script>
+  <!-- Shared JS — load order matters -->
+  <script src="/js/theme.js"></script>
   <script src="/js/event-bus.js"></script>
-  <script src="/js/communications-engine.js"></script>
-  <script src="/js/business-models.js"></script>
   <script src="/js/app-store.js"></script>
+  <script src="/js/simulator.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
-  <script src="/js/tooltip-service.js"></script>
-  <script src="/js/simulator.js"></script>
-  <script src="/js/api.js"></script>
-  <script src="/js/customer-drawer.js"></script>
-  <script src="/js/status-pill.js"></script>
-  <script src="/js/customer-card.js"></script>
-  <script src="/js/analytics-engine.js"></script>
-  <script src="/js/theme.js"></script>
-  <script>
-console.log("DASHBOARD_INIT: executing");
-try {
 
-console.log("DASHBOARD_INIT: script started");
-    // ═══════════════════════════════════════════════════════════════
-    // Application State
-    // ═══════════════════════════════════════════════════════════════
-    console.log("DASHBOARD_INIT: localStorage check");
-    var user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (user.name) {
-      document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your business overview.`;
-    }
+    (function() {
+      var loading = document.getElementById('ccLoading');
+      var content = document.getElementById('ccContent');
+      var simBtn = document.getElementById('ccSimBtn');
+      var simStatus = document.getElementById('ccSimStatus');
+      var simStatusText = document.getElementById('ccSimStatusText');
 
-    // Dashboard data (live reference to AppStore)
-    function getLiveLeads() { if (typeof CommunicationsEngine !== 'undefined' && CommunicationsEngine.getConversations) { return CommunicationsEngine.getConversations(); } return AppStore.getLeads(); }
-    function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
-    // Auto-refresh dashboard when store changes
-    EventBus.on('store:changed', function() { try { loadDashboard(); } catch(e) { console.warn('store:changed refresh skipped:', e.message); } });
+      // ── Mobile menu ──
+      window.toggleMobileMenu = function() {
+        document.getElementById('mobileMenu').classList.toggle('open');
+        var overlay = document.getElementById('mobileOverlay');
+        if (overlay) overlay.classList.toggle('open');
+      };
 
-    // ═══════════════════════════════════════════════════════════════
-    // API Fetch Helper — calls backend, falls back to simulated data
-    // ═══════════════════════════════════════════════════════════════
-    const API_BASE = '/api/v1';
-    function getAuthHeaders() {
-      const token = localStorage.getItem('token');
-      return token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-    }
-    async function apiFetch(endpoint, params) {
-      var url = API_BASE + endpoint;
-      if (params) url += '?' + new URLSearchParams(params).toString();
-      try {
-        var resp = await fetch(url, { headers: getAuthHeaders() });
-        if (!resp.ok) { console.warn('[API] ' + endpoint + ' returned ' + resp.status); return null; }
-        var json = await resp.json();
-        return json.data || json;
-      } catch (err) {
-        console.warn('[API] Fetch failed for ' + endpoint + ':', err.message);
-        return null;
+      // ── Theme sync ──
+      function syncThemeUI() {
+        var theme = document.documentElement.getAttribute('data-theme') || 'light';
+        var icon = document.getElementById('themeToggleIcon');
+        var label = document.getElementById('themeToggleLabel');
+        if (icon) icon.textContent = theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
+        if (label) label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
       }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // Helpers
-    // ═══════════════════════════════════════════════════════════════
-    // Status rendered via shared StatusPill.render()
-
-
-
-    // ═══════════════════════════════════════════════════════════════
-    // WIDGET: Daily Brief (V1-02)
-    // ═══════════════════════════════════════════════════════════════
-    var briefLastRefresh = 0;
-    function refreshBrief() {
-      const now = Date.now();
-      if (now - briefLastRefresh < 60000) {
-        NotificationService.show('Please wait 60 seconds before refreshing.', 'warning');
-        return;
+      window.toggleFallback = function() {
+        var theme = document.documentElement.getAttribute('data-theme') || 'light';
+        var next = theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        try { localStorage.setItem('northstar-theme', next); } catch(e) {}
+        syncThemeUI();
+      };
+      if (window.NorthStarTheme) {
+        var origToggle = window.NorthStarTheme.toggleTheme;
+        window.NorthStarTheme.toggleTheme = function() { origToggle(); syncThemeUI(); };
       }
-      briefLastRefresh = now;
-      loadDailyBrief();
-    }
+      function initTheme() {
+        if (window.NorthStarTheme) window.NorthStarTheme.loadTheme();
+        syncThemeUI();
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initTheme);
+      else initTheme();
 
-    async function loadDailyBrief() {
-      const skeleton = document.getElementById('briefSkeleton');
-      const content = document.getElementById('briefContent');
-      const error = document.getElementById('briefError');
-      skeleton.style.display = 'block';
-      content.style.display = 'none';
-      error.style.display = 'none';
-
-      // Try API first
-
-                  // Fallback to simulated data
-      setTimeout(() => {
-        skeleton.style.display = 'none';
-        const allLeads = getLiveLeads();
-        const count = allLeads.length;
-        const today = allLeads.filter(c => {
-          try { const d = new Date(c.receivedAt || c.time); return !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString(); } catch(e) { return false; }
-        }).length;
-        const appointments = allLeads.filter(c => c.status === 'scheduled').length;
-        const pipeline = allLeads.filter(c => c.status === 'new' || c.status === 'contacted' || c.status === 'qualified');
-        const totalPipeline = pipeline.reduce((s,c) => s + (c.avgPrice||0), 0);
-        const totalRev = allLeads.reduce((s,c) => s + (c.avgPrice||0), 0);
-        const hours = new Date().getHours();
-        const greeting = hours < 12 ? 'Good morning' : hours < 17 ? 'Good afternoon' : 'Good evening';
-        const name = user.name || 'there';
-        const highVal = allLeads.sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
-
-        // Build a rich text brief with pipeline stats and recent leads
-        let body = greeting + ', ' + name + '. ';
-        if (today > 0) body += 'NorthStar answered ' + today + ' call' + (today !== 1 ? 's' : '') + ' today';
-        if (count > 0 && today > 0) body += ', captured ' + count + ' lead' + (count !== 1 ? 's' : '');
-        else if (count > 0) body += 'NorthStar has captured ' + count + ' lead' + (count !== 1 ? 's' : '');
-        if (appointments > 0) body += ', and booked ' + appointments + ' appointment' + (appointments !== 1 ? 's' : '');
-        body += '. ';
-        if (totalPipeline > 0) body += 'Pipeline value: $' + Math.round(totalPipeline).toLocaleString() + '. Average lead value: $' + Math.round(count > 0 ? totalRev / count : 0).toLocaleString() + '. ';
-        if (highVal && highVal.avgPrice > 0) {
-          body += 'Top opportunity: $' + Math.round(highVal.avgPrice).toLocaleString() + ' ' + (highVal.service || 'job') + ' with ' + (highVal.caller || 'a prospect') + '. ';
-          body += 'Follow up with ' + (highVal.caller || 'this lead') + ' to close.';
-        } else if (allLeads.length > 0) {
-          body += 'Keep an eye on your recent leads - timely follow-up makes the difference.';
-        } else {
-          body = greeting + ', ' + name + '. Welcome to NorthStar! Once you connect your phone number, I\u0027ll start answering calls and capturing leads for you.';
-        }
-        document.getElementById('briefBody').innerHTML = '<p>' + body + '</p>';
-        document.getElementById('briefTimestamp').textContent = 'Last updated: ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
-        content.style.display = 'block';
-      }, 600);
-    }
-    // WIDGET: KPI Grid (V1-05)
-    // ═══════════════════════════════════════════════════════════════
-    var kpiDefinitions = [
-      { id:'today_calls', icon:'📞', label:"Today's Communications", format:'int', link:'/dashboard/communications?filter=today', tier:'starter' },
-      { id:'new_leads', icon:'👤', label:'New Leads', format:'int', link:'/dashboard/leads?filter=today', tier:'starter' },
-      { id:'appointments', icon:'📅', label:'Appointments', format:'int', link:'/dashboard/calendar?filter=today', tier:'starter' },
-      { id:'lead_conversion', icon:'📊', label:'Lead Conv.', format:'pct', link:'/dashboard/reports/conversion', tier:'starter' },
-      { id:'avg_job_value', icon:'💰', label:'Avg Job Value', format:'cur', link:'/dashboard/reports/job-value', tier:'starter' },
-      { id:'avg_call_length', icon:'⏱', label:'Avg Communication Length', format:'dur', link:'/dashboard/communications', tier:'starter' },
-      { id:'missed_calls', icon:'🚫', label:'Missed Communications Prev.', format:'int', link:'/dashboard/communications?filter=prevented', tier:'starter' },
-      { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', format:'dur', link:'/dashboard/reports/response-time', tier:'pro' },
-      { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', format:'pct', link:'/dashboard/communications?filter=transferred', tier:'pro' },
-    ];
-
-    function loadKpiGrid() {
-      const grid = document.getElementById('kpiGrid');
-      const total = AnalyticsEngine.total();
-      const today = AnalyticsEngine.todayCalls();
-      const avgValue = AnalyticsEngine.avgJobValue();
-
-      let html = '';
-      kpiDefinitions.forEach(kpi => {
-        let value = '—';
-        let trend = '';
-        switch(kpi.id) {
-          case 'today_calls': value = today; trend = today > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
-          case 'new_leads': value = total; trend = total > 0 ? '<span class="ds-trend-up">↑</span>' : ''; break;
-          case 'appointments': value = AnalyticsEngine.appointments(); trend = ''; break;
-          case 'lead_conversion': value = AnalyticsEngine.conversionRate(); break;
-          case 'avg_job_value': value = avgValue > 0 ? '$'+avgValue.toLocaleString() : '—'; break;
-          case 'avg_call_length': value = AnalyticsEngine.avgCallLength(); break;
-          case 'missed_calls': value = AnalyticsEngine.missedCalls(); trend = '0'; break;
-          case 'avg_response_time': value = AnalyticsEngine.avgResponseTime(); break;
-          case 'ai_transfer_rate': value = total > 0 ? Math.round((AnalyticsEngine.qualified()/total)*100)+'%' : '—'; break;
-        }
-        html += `<div class="ds-kpi-card" onclick="window.location.href='${kpi.link || '#'}'">
-          <div class="ds-kpi-icon" style="background:var(--kpi-${kpi.id}-bg,var(--neutral-50));color:var(--kpi-${kpi.id}-color,var(--neutral-500));">
-            <span style="font-size:20px;">${kpi.icon}</span>
-          </div>
-          <div class="ds-kpi-value">${value}</div>
-          <div class="ds-kpi-label">${kpi.label}</div>
-          <div class="ds-kpi-trend">${trend}</div>
-        </div>`;
-      });
-      grid.innerHTML = html;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // WIDGET: Revenue Trends (V1-06) — Simulated chart
-    // ═══════════════════════════════════════════════════════════════
-    var currentTrendPeriod = '30d';
-
-    function switchTrendPeriod(period) {
-      currentTrendPeriod = period;
-      document.querySelectorAll('#trendPeriodPills .ds-pill').forEach(p => {
-        p.classList.toggle('active', p.dataset.period === period);
-      });
-      loadTrendChart();
-    }
-
-    function loadTrendChart() {
-      const skeleton = document.getElementById('chartSkeleton');
-      const canvas = document.getElementById('trendChartCanvas');
-      const empty = document.getElementById('chartEmpty');
-      skeleton.style.display = 'block';
-      canvas.style.display = 'none';
-      empty.style.display = 'none';
-
-      if (getLiveLeads().length === 0) {
-        setTimeout(() => {
-          skeleton.style.display = 'none';
-          empty.style.display = 'block';
-        }, 400);
-        return;
+      // ── Auth-aware fetch with 10s timeout ──
+      function apiFetch(url, opts) {
+        opts = opts || {};
+        opts.headers = opts.headers || {};
+        var token = localStorage.getItem('token');
+        if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+        if (opts.body) opts.headers['Content-Type'] = 'application/json';
+        return fetch(url, opts);
       }
 
-      setTimeout(() => {
-        skeleton.style.display = 'none';
-        // Draw simple chart using canvas
-        const ctx = canvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.parentElement.getBoundingClientRect();
-        const w = rect.width;
-        canvas.width = w * dpr;
-        canvas.height = 280 * dpr;
-        canvas.style.width = w + 'px';
-        canvas.style.height = '280px';
-        ctx.scale(dpr, dpr);
-
-        const padding = { top: 20, right: 20, bottom: 30, left: 50 };
-        const cw = w - padding.left - padding.right;
-        const ch = 280 - padding.top - padding.bottom;
-
-        // Background
-        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neutral-50') || '#f8fafc';
-        ctx.fillRect(0, 0, w, 280);
-
-        // Generate data points from actual revenue history
-        const trends = AnalyticsEngine.revenueTrends();
-        const data = trends.length > 0 ? trends.map(function(t) { return t.revenue; }) : [0];
-        // Pad to at least 2 points for display
-        while (data.length < 2) data.push(0);
-
-        const points = data.length;
-        const maxVal = Math.max.apply(null, data) * 1.1 || 1000;
-        const minVal = Math.min.apply(null, data) * 0.9 || 0;
-
-        // Grid lines
-        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neutral-200') || '#e2e8f0';
-        ctx.lineWidth = 1;
-        for (let i = 0; i <= 4; i++) {
-          const y = padding.top + (ch / 4) * i;
-          ctx.beginPath();
-          ctx.moveTo(padding.left, y);
-          ctx.lineTo(padding.left + cw, y);
-          ctx.stroke();
-          const val = Math.round(maxVal - (maxVal - minVal) * (i / 4));
-          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neutral-400') || '#94a3b8';
-          ctx.font = '11px Inter, sans-serif';
-          ctx.textAlign = 'right';
-          ctx.fillText('$' + val.toLocaleString(), padding.left - 8, y + 4);
-        }
-
-        // Line
-        ctx.beginPath();
-        ctx.strokeStyle = '#D4AF37';
-        ctx.lineWidth = 2.5;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        data.forEach((val, i) => {
-          const x = padding.left + (cw / (points - 1)) * i;
-          const y = padding.top + ch - ((val - minVal) / (maxVal - minVal)) * ch;
-          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      function fetchWithTimeout(url, timeoutMs) {
+        timeoutMs = timeoutMs || 10000;
+        var controller = new AbortController();
+        var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+        return apiFetch(url, { signal: controller.signal }).then(function(r) {
+          clearTimeout(timer);
+          return r;
+        }, function(err) {
+          clearTimeout(timer);
+          throw err;
         });
-        ctx.stroke();
-
-        // Gradient fill
-        const gradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + ch);
-        gradient.addColorStop(0, 'rgba(212, 175, 55, 0.2)');
-        gradient.addColorStop(1, 'rgba(212, 175, 55, 0.01)');
-        ctx.lineTo(padding.left + cw, padding.top + ch);
-        ctx.lineTo(padding.left, padding.top + ch);
-        ctx.closePath();
-        ctx.fillStyle = gradient;
-        ctx.fill();
-
-        // Data points
-        data.forEach((val, i) => {
-          const x = padding.left + (cw / (points - 1)) * i;
-          const y = padding.top + ch - ((val - minVal) / (maxVal - minVal)) * ch;
-          ctx.beginPath();
-          ctx.arc(x, y, 4, 0, Math.PI * 2);
-          ctx.fillStyle = '#D4AF37';
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(x, y, 2, 0, Math.PI * 2);
-          ctx.fillStyle = 'white';
-          ctx.fill();
-        });
-
-        canvas.style.display = 'block';
-      }, 500);
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // WIDGET: NorthStar Coach (V1-07)
-    // ═══════════════════════════════════════════════════════════════
-    var coachDismissed = false;
-
-    function loadCoach() {
-      if (coachDismissed) {
-        document.getElementById('coachContent').style.display = 'none';
-        document.getElementById('coachCard').style.display = 'none';
-        return;
       }
-      const skeleton = document.getElementById('coachSkeleton');
-      const content = document.getElementById('coachContent');
-      skeleton.style.display = 'block';
-      content.style.display = 'none';
 
-      setTimeout(() => {
-        skeleton.style.display = 'none';
-        const highVal = getLiveLeads().sort((a,b) => (b.avgPrice||0) - (a.avgPrice||0))[0];
-        if (highVal && highVal.avgPrice > 500) {
-          document.getElementById('coachText').textContent = `Call ${highVal.caller} back — their ${highVal.service||'job'} is estimated at $${(highVal.avgPrice||0).toLocaleString()}. This is your highest-value opportunity right now.`;
-          document.getElementById('coachReason').textContent = `💡 Why: This lead has been waiting for follow-up. Responding quickly increases your chance of booking by 60%.`;
-        } else if (getLiveLeads().length > 0) {
-          document.getElementById('coachText').textContent = `You have ${getLiveLeads().length} lead${getLiveLeads().length!==1?'s':''} to review. Follow up promptly to maximize conversions.`;
-          document.getElementById('coachReason').textContent = `💡 Tip: Leads contacted within 5 minutes convert at 9x the rate of those contacted after 30 minutes.`;
-        } else {
-          document.getElementById('coachText').textContent = `Welcome to NorthStar! Once you connect your phone number, I'll analyze your calls and provide personalized coaching.`;
-          document.getElementById('coachReason').textContent = '';
-        }
-        content.style.display = 'block';
-      }, 400);
-    }
-
-    function dismissCoach() {
-      coachDismissed = true;
-      document.getElementById('coachCard').style.display = 'none';
-      NotificationService.show('Coach dismissed for now.', 'info');
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // WIDGET: Recent Leads (V1-08)
-    // ═══════════════════════════════════════════════════════════════
-    function loadRecentLeads() {
-      const skeleton = document.getElementById('leadsSkeleton');
-      const list = document.getElementById('recentLeadsList');
-      const empty = document.getElementById('recentLeadsEmpty');
-      skeleton.style.display = 'block';
-      list.innerHTML = '';
-      empty.style.display = 'none';
-
-      setTimeout(() => {
-        skeleton.style.display = 'none';
-        const leads = getLiveLeads().slice(0, 5);
-        if (leads.length === 0) {
-          empty.style.display = 'block';
-          return;
-        }
-        let html = '';
-        leads.forEach(l => {
-          html += `<div class="ds-list-item" style="cursor:pointer;" onclick="CustomerDrawer.open(getLiveLeads().find(lead => lead.id === '${l.id}') || getLiveLeads().filter(lead => lead.caller === '${l.caller}' && lead.service === '${l.service}')[0])">
-            <div class="ds-list-item-icon">👤</div>
-            <div class="ds-list-item-content">
-              <div class="ds-list-item-title">${l.caller || 'Unknown'}</div>
-              <div class="ds-list-item-sub">${l.service || '—'} · ${fmtTime(l.receivedAt || l.time)}</div>
-            </div>
-            <div>${StatusPill.render(l.status || 'new')}</div>
-          </div>`;
+      // ── Section fetcher: safe JSON parse, timeout, error tolerance ──
+      function fetchSection(label, url, extractor) {
+        return fetchWithTimeout(url).then(function(r) {
+          if (!r.ok) throw new Error(label + ' HTTP ' + r.status);
+          return r.json().catch(function(){ return {}; });
+        }).then(function(data) {
+          return extractor ? extractor(data) : data;
+        }).catch(function(err) {
+          console.warn('[CC] ' + label + ' failed:', err && err.message);
+          return null;
         });
-        list.innerHTML = html;
-      }, 400);
-    }
+      }
 
-    // ═══════════════════════════════════════════════════════════════
-    // WIDGET: Recent Communications (V1-09)
-    // ═══════════════════════════════════════════════════════════════
-    function loadRecentCalls() {
-      const skeleton = document.getElementById('callsSkeleton');
-      const list = document.getElementById('recentCallsList');
-      const empty = document.getElementById('recentCallsEmpty');
-      skeleton.style.display = 'block';
-      list.innerHTML = '';
-      empty.style.display = 'none';
+      function showSection(id, html) {
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = html;
+      }
 
-      setTimeout(() => {
-        skeleton.style.display = 'none';
-        const calls = getLiveLeads().slice(0, 5);
-        if (calls.length === 0) {
-          empty.style.display = 'block';
-          return;
-        }
-        let html = '';
-        calls.forEach(c => {
-          html += `<div class="ds-list-item">
-            <div class="ds-list-item-icon">📞</div>
-            <div class="ds-list-item-content">
-              <div class="ds-list-item-title">${c.caller || 'Unknown'}</div>
-              <div class="ds-list-item-sub">${c.service || '—'} · ${fmtTime(c.receivedAt || c.time)}</div>
-            </div>
-            <div>${StatusPill.render(c.status || 'new')}</div>
-          </div>`;
-        });
-        list.innerHTML = html;
-      }, 400);
-    }
+      function errState() {
+        return '<div class="cc-empty" style="color:var(--danger);cursor:pointer;" onclick="ccRefresh()">Polaris could not load this section. Tap to retry.</div>';
+      }
 
-    // ═══════════════════════════════════════════════════════════════
-    // WIDGET: Upcoming Appointments (V1-10)
-    // ═══════════════════════════════════════════════════════════════
-    function loadAppointments() {
-      const skeleton = document.getElementById('apptsSkeleton');
-      const list = document.getElementById('appointmentsList');
-      const empty = document.getElementById('appointmentsEmpty');
-      skeleton.style.display = 'block';
-      list.innerHTML = '';
-      empty.style.display = 'none';
+      // ── Helpers ──
+      function fmtCurr(val) {
+        if (val == null) return '$0';
+        var n = typeof val === 'number' ? val : parseFloat(val);
+        return isNaN(n) ? '$0' : n >= 1000 ? '$' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : '$' + Math.round(n).toLocaleString();
+      }
+      function fmtNum(val) {
+        if (val == null) return '0';
+        var n = typeof val === 'number' ? val : parseInt(val);
+        return isNaN(n) ? '0' : n.toLocaleString();
+      }
+      function healthClass(s) { return s >= 80 ? 'excellent' : s >= 60 ? 'good' : s >= 40 ? 'fair' : 'poor'; }
+      function pct(val) {
+        if (val == null) return '0%';
+        var s = String(val);
+        return s.indexOf('%') >= 0 ? s : Math.round(parseFloat(val)) + '%';
+      }
 
-      setTimeout(() => {
-        skeleton.style.display = 'none';
-        const appts = getLiveLeads().filter(c => c.status === 'scheduled').slice(0, 5);
-        if (appts.length === 0) {
-          empty.style.display = 'block';
-          return;
-        }
-        let html = '';
-        appts.forEach(a => {
-          html += `<div class="ds-list-item">
-            <div class="ds-list-item-icon">📅</div>
-            <div class="ds-list-item-content">
-              <div class="ds-list-item-title">${a.caller || 'Unknown'}</div>
-              <div class="ds-list-item-sub">${a.service || '—'} · ${fmtTime(a.receivedAt || a.time)}</div>
-            </div>
-            <span class="call-status-badge booked">Scheduled</span>
-          </div>`;
-        });
-        list.innerHTML = html;
-      }, 400);
-    }
+      // ── Simulate Lead (unchanged core, but with proper brace closing) ──
+      window.ccSimulateLead = function() {
+        if (simBtn.disabled) return;
+        simBtn.disabled = true;
+        simBtn.innerHTML = '<span class="cc-sim-spinner"></span><span>Processing...</span>';
+        simStatus.style.display = 'none';
 
-    // ═══════════════════════════════════════════════════════════════
-    // WIDGET: Analytics Overview (existing feature)
-    // ═══════════════════════════════════════════════════════════════
-    function loadAnalytics() {
-      const total = getLiveLeads().length;
-      const scheduled = getLiveLeads().filter(c => c.status === 'scheduled').length;
-      const revenue = getLiveLeads().reduce((s,c) => s + (c.avgPrice||0), 0);
-      const avgValue = total > 0 ? Math.round(revenue / total) : 0;
-
-      document.getElementById('analyticsCalls').textContent = total;
-      document.getElementById('analyticsLeads').textContent = total;
-      document.getElementById('analyticsAppts').textContent = scheduled;
-      document.getElementById('analyticsAvgValue').textContent = '$' + avgValue.toLocaleString();
-      document.getElementById('analyticsCallLength').textContent = total > 0 ? '3:24' : '0:00';
-      document.getElementById('analyticsConversion').textContent = total > 0 ? Math.round((scheduled/total)*100) + '%' : '0%';
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // Initial Load
-    // ═══════════════════════════════════════════════════════════════
-    function loadDashboard() {
-      try { renderPolarisCard(); } catch(e) { console.warn('renderPolarisCard:', e.message); }
-      try { loadDailyBrief(); } catch(e) { console.warn('loadDailyBrief:', e.message); }
-      try { loadKpiGrid(); } catch(e) { console.warn('loadKpiGrid:', e.message); }
-      try { loadTrendChart(); } catch(e) { console.warn('loadTrendChart:', e.message); }
-      try { loadCoach(); } catch(e) { console.warn('loadCoach:', e.message); }
-      try { loadRecentLeads(); } catch(e) { console.warn('loadRecentLeads:', e.message); }
-      try { loadRecentCalls(); } catch(e) { console.warn('loadRecentCalls:', e.message); }
-      try { loadAppointments(); } catch(e) { console.warn('loadAppointments:', e.message); }
-      try { loadAnalytics(); } catch(e) { console.warn('loadAnalytics:', e.message); }
-      try { loadActiveCalls(); } catch(e) { console.warn('loadActiveCalls:', e.message); }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // WIDGET: Active Calls (M17-P6) — polls /api/v1/voice/dashboard
-    // ═══════════════════════════════════════════════════════════════
-    var activeCallsInterval = null;
-    var prevActiveCount = -1;
-
-    function formatDuration(seconds) {
-      if (!seconds || seconds <= 0) return '0:00';
-      var m = Math.floor(seconds / 60);
-      var s = seconds % 60;
-      return m + ':' + (s < 10 ? '0' : '') + s;
-    }
-
-    function getQualColor(qual) {
-      if (qual === 'Hot') return '#ef4444';
-      if (qual === 'Warm') return '#f59e0b';
-      return '#6366f1';
-    }
-
-    async function loadActiveCalls() {
-      try {
-        var resp = await fetch('/api/v1/voice/dashboard', { headers: getAuthHeaders() });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        var data = await resp.json();
-
-        var hasActive = data.activeCalls > 0;
-        var liveBadge = document.getElementById('activeCallsLiveBadge');
-        var empty = document.getElementById('activeCallsEmpty');
-        var grid = document.getElementById('activeCallsGrid');
-
-        // Update live badge
-        if (hasActive) {
-          liveBadge.style.display = 'inline-flex';
-          if (prevActiveCount !== data.activeCalls) {
-            prevActiveCount = data.activeCalls;
+        try {
+          if (typeof genCall !== 'function') {
+            simBtn.disabled = false;
+            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+            simStatus.style.display = '';
+            simStatus.style.color = 'var(--danger)';
+            simStatusText.textContent = 'Simulator not loaded. Please refresh.';
+            return;
           }
-        } else {
-          liveBadge.style.display = 'none';
+
+          console.log('[CC] Simulating lead...');
+          var lead = genCall();
+          var leadName = lead && lead.caller ? lead.caller : 'Customer';
+          var leadValue = lead && lead.avgPrice ? lead.avgPrice : 0;
+
+          if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
+            try { PolarisEngine.analyzeLead(lead); } catch(e) { console.warn('[CC] analyzeLead error:', e); }
+          }
+
+          apiFetch('/api/v1/simulations/leads', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: leadName,
+              phone: lead.phone || '',
+              email: lead.email || '',
+              service: lead.service || 'General',
+              description: lead.description || '',
+              estimatedValue: leadValue
+            })
+          }).then(function(resp) {
+            if (!resp.ok) {
+              return resp.json().then(function(errBody) {
+                throw new Error(errBody.error || 'Simulation failed at stage: ' + (errBody.stage || 'unknown'));
+              });
+            }
+            return resp.json();
+          }).then(function(result) {
+            simStatus.style.display = '';
+            simStatus.style.color = 'var(--success)';
+            simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated) — Synced to all pages';
+            console.log('[CC] Simulation complete:', result && result.ids);
+            render();
+            simBtn.disabled = false;
+            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+          }).catch(function(err) {
+            console.error('[CC] Simulation failed:', err && err.message);
+            simStatus.style.display = '';
+            simStatus.style.color = 'var(--danger)';
+            simStatusText.textContent = 'Simulation failed: ' + ((err && err.message) || 'unknown error');
+            simBtn.disabled = false;
+            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+          });
+        } catch(ex) {
+          simBtn.disabled = false;
+          simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+        }
+      };  // <-- THE MISSING CLOSING BRACE
+
+      window.ccRefresh = function() { loading.style.display = ''; content.style.display = 'none'; render(); };
+
+      function render() {
+        // Track which sections have resolved
+        var resolved = {};
+        function tryHideLoading() {
+          if (resolved.exec && resolved.kpis && resolved.dash) {
+            loading.style.display = 'none';
+            content.style.display = '';
+            document.getElementById('ccTimestamp').textContent = new Date().toLocaleString();
+          }
         }
 
-        // Show/hide sections
-        empty.style.display = hasActive ? 'none' : 'block';
-        grid.style.display = hasActive ? 'grid' : 'none';
-
-        // Always update the values (even when 0 calls, show clean state)
-        document.getElementById('acActiveCount').textContent = data.activeCalls;
-        document.getElementById('acActiveCount').style.color = hasActive ? '#16a34a' : 'var(--neutral-500)';
-
-        // Duration: use the first active call duration
-        var dur = data.activeCallDurations && data.activeCallDurations.length > 0 ? data.activeCallDurations[0] : 0;
-        document.getElementById('acDuration').textContent = formatDuration(dur);
-
-        // Speaking indicator
-        if (data.aiSpeaking && data.customerSpeaking) {
-          document.getElementById('acSpeaking').textContent = 'Both';
-        } else if (data.aiSpeaking) {
-          document.getElementById('acSpeaking').textContent = 'AI';
-        } else if (data.customerSpeaking) {
-          document.getElementById('acSpeaking').textContent = 'Customer';
-        } else if (hasActive) {
-          document.getElementById('acSpeaking').textContent = '—';
-        } else {
-          document.getElementById('acSpeaking').textContent = '—';
+        // Section renderers
+        function renderExec(exec) {
+          if (!exec || typeof exec !== 'object') { showSection('ccSummary', errState()); return; }
+          var rev = exec.revenue || {};
+          var pipe = exec.pipeline || {};
+          var ops = exec.operations || {};
+          var el = document.getElementById('ccSummary');
+          if (!el) return;
+          var parts = [];
+          if (ops.inProgress > 0 || pipe.activeDeals > 0 || (rev.total || 0) > 0) {
+            if (ops.inProgress > 0) parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
+            if (pipe.activeDeals > 0) parts.push('Polaris identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' worth <strong>' + fmtCurr(pipe.weightedValue) + '</strong>.');
+            if (rev.outstanding > 0) parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> outstanding.');
+            if (rev.forecast > 0) parts.push('Forecast: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
+            if (exec.companyHealth > 0 && parts.length === 0) parts.push('Health score: <strong>' + exec.companyHealth + '/100</strong>.');
+          } else {
+            parts.push('Polaris is monitoring your business. Start a simulated or live customer interaction to generate operational intelligence.');
+          }
+          el.innerHTML = parts.join(' ');
         }
 
-        document.getElementById('acCompleted').textContent = data.callsCompletedToday;
-
-        // Qualification
-        var qual = document.getElementById('acQualification');
-        if (data.liveLeadQualification) {
-          qual.textContent = data.liveLeadQualification;
-          qual.style.color = getQualColor(data.liveLeadQualification);
-        } else {
-          qual.textContent = '—';
-          qual.style.color = 'var(--neutral-500)';
+        function renderKpis(kpisData, dash, exec) {
+          if (!kpisData && !dash && !exec) { showSection('ccKpiGrid', errState()); return; }
+          kpisData = (kpisData && typeof kpisData === 'object') ? kpisData : {};
+          dash = (dash && typeof dash === 'object') ? dash : {};
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          var kpis = kpisData.kpis || dash.summary || {};
+          var pipe = exec.pipeline || {};
+          var ops = exec.operations || {};
+          var el = document.getElementById('ccKpiGrid');
+          if (!el) return;
+          var items = [
+            { icon: '\uD83D\uDCBC', label: 'Active Jobs', val: fmtNum(kpis.inProgressJobs || ops.inProgress || 0) },
+            { icon: '\uD83D\uDC65', label: 'New Leads', val: fmtNum(kpis.activeDeals || pipe.activeDeals || 0) },
+            { icon: '\uD83D\uDCCB', label: 'Pending Est.', val: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : ((kpis.totalDeals||0) - (kpis.wonDeals||0))) },
+            { icon: '\uD83D\uDCB0', label: 'Pipeline', val: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue || 0) },
+            { icon: '\uD83D\uDCC5', label: 'Scheduled', val: '0' },
+            { icon: '\uD83D\uDCAC', label: 'Follow-Ups', val: fmtNum(kpis.overdueTasks || 0) },
+            { icon: '\uD83D\uDCC8', label: 'Win Rate', val: pct(kpis.winRate || pipe.winRate || 0) },
+            { icon: '\uD83D\uDC9A', label: 'Health', val: (kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0) + '' }
+          ];
+          el.innerHTML = items.map(function(k){return '<div class="cc-kpi"><div class="cc-kpi-icon">'+k.icon+'</div><div class="cc-kpi-value">'+k.val+'</div><div class="cc-kpi-label">'+k.label+'</div></div>';}).join('');
         }
 
-        // Booking probability
-        var prob = document.getElementById('acBookingProb');
-        if (data.bookingProbability > 0) {
-          prob.textContent = Math.round(data.bookingProbability * 100) + '%';
-          prob.style.color = data.bookingProbability >= 0.7 ? '#16a34a' : data.bookingProbability >= 0.4 ? '#f59e0b' : '#ef4444';
-        } else {
-          prob.textContent = '—';
-          prob.style.color = 'var(--neutral-500)';
+        function renderRevenue(exec, kpisData, dash) {
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          dash = (dash && typeof dash === 'object') ? dash : {};
+          kpisData = (kpisData && typeof kpisData === 'object') ? kpisData : {};
+          var kpis = kpisData.kpis || dash.summary || {};
+          var rev = exec.revenue || {};
+          var pipe = exec.pipeline || {};
+          var el = document.getElementById('ccRevenue');
+          if (!el) return;
+          el.innerHTML = (rev.total || kpis.totalRevenue) ?
+            '<div class="cc-rev-grid"><div class="cc-rev-stat"><div class="cc-rev-val gold">'+fmtCurr(rev.total||kpis.totalRevenue)+'</div><div class="cc-rev-label">Total</div></div><div class="cc-rev-stat"><div class="cc-rev-val orange">'+fmtCurr(rev.outstanding||kpis.outstandingRevenue)+'</div><div class="cc-rev-label">Outstanding</div></div><div class="cc-rev-stat"><div class="cc-rev-val green">'+fmtCurr(rev.forecast||0)+'</div><div class="cc-rev-label">Forecast</div></div><div class="cc-rev-stat"><div class="cc-rev-val">'+(rev.collectionRate||pct(kpis.collectionRate)||'0%')+'</div><div class="cc-rev-label">Collection</div></div></div><div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--neutral-200);font-size:11px;color:var(--neutral-500);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;"><span>Pipeline: <strong>'+fmtCurr(pipe.weightedValue||kpis.weightedPipelineValue)+'</strong></span><span>Win rate: <strong>'+pct(pipe.winRate||kpis.winRate||0)+'</strong></span></div>' :
+            '<div class="cc-empty">Revenue forecasts appear after Polaris analyzes conversations, estimates, and scheduling.</div>';
         }
-      } catch (err) {
-        console.warn('[ActiveCalls] Poll failed:', err.message);
-        // Graceful degradation — show empty state
-        document.getElementById('activeCallsLiveBadge').style.display = 'none';
-        document.getElementById('activeCallsEmpty').style.display = 'block';
-        document.getElementById('activeCallsGrid').style.display = 'none';
+
+        function renderPriorities(alerts, agenda, exec) {
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          agenda = Array.isArray(agenda) ? agenda : [];
+          alerts = (alerts && typeof alerts === 'object') ? alerts : {};
+          var el = document.getElementById('ccPriorities');
+          if (!el) return;
+          var pItems = [];
+          if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
+          if (agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
+          if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});
+          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris will surface opportunities as activity grows.</div>';
+        }
+
+        function renderPipeline(kpisData, dash, exec, agenda) {
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          dash = (dash && typeof dash === 'object') ? dash : {};
+          kpisData = (kpisData && typeof kpisData === 'object') ? kpisData : {};
+          agenda = Array.isArray(agenda) ? agenda : [];
+          var kpis = kpisData.kpis || dash.summary || {};
+          var pipe = exec.pipeline || {};
+          var ops = exec.operations || {};
+          var el = document.getElementById('ccPipeline');
+          if (!el) return;
+          var tj = kpis.totalJobs || ops.totalJobs || 0;
+          var ij = kpis.inProgressJobs || ops.inProgress || 0;
+          var cj = kpis.completedJobs || ops.completedJobs || 0;
+          var pe = kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : 0;
+          var sch = agenda.filter(function(t){return t.type==='job'||t.type==='appointment'}).length;
+          var stages = [
+            {icon:'\uD83D\uDCDE',cnt:fmtNum(kpis.activeDeals||pipe.activeDeals||0),label:'Incoming',pct:25},
+            {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:25},
+            {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:25},
+            {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:50},
+            {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:tj>0?Math.round(cj/tj*100):0}
+          ];
+          el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+['var(--info)','var(--warning)','var(--brand-500)','var(--success)','var(--success)'][i]+'"></div></div></div>';}).join('')+'</div>';
+        }
+
+        function renderCustomers(customers) {
+          customers = Array.isArray(customers) ? customers : [];
+          var el = document.getElementById('ccCustomers');
+          if (!el) return;
+          el.innerHTML = customers.length > 0 ?
+            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
+            '<div class="cc-empty">Customer profiles appear as Polaris processes calls. Start a simulation above.</div>';
+        }
+
+        function renderHealth(kpisData, dash, exec, customers) {
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          dash = (dash && typeof dash === 'object') ? dash : {};
+          kpisData = (kpisData && typeof kpisData === 'object') ? kpisData : {};
+          customers = Array.isArray(customers) ? customers : [];
+          var kpis = kpisData.kpis || dash.summary || {};
+          var el = document.getElementById('ccHealth');
+          if (!el) return;
+          var oh = kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 50;
+          var cr = kpis.collectionRate || 0;
+          var rh = cr>90?90:cr>75?75:cr>50?50:30;
+          var wr = kpis.winRate || 0;
+          var sh = wr>50?85:wr>30?70:wr>15?55:35;
+          var tc = kpis.taskCompletionRate || 0;
+          var cc = kpis.totalCustomers || customers.length || 0;
+          var ch = cc>10?80:cc>5?65:cc>0?50:30;
+          el.innerHTML = [
+            {s:oh,l:'Overall',d:'Composite health'},
+            {s:rh,l:'Revenue',d:'Collection: '+pct(cr)},
+            {s:sh,l:'Sales',d:'Win rate: '+pct(wr)},
+            {s:tc||50,l:'Operations',d:'Completion: '+pct(tc)},
+            {s:ch,l:'Customer',d:cc+' customer'+(cc!==1?'s':'')},
+            {s:oh,l:'Polaris',d:'AI-driven assessment'}
+          ].map(function(h){return '<div class="cc-health-item"><div class="cc-health-score '+healthClass(h.s)+'">'+Math.round(h.s)+'</div><div class="cc-health-label">'+h.l+'</div><div class="cc-health-desc">'+h.d+'</div></div>';}).join('');
+        }
+
+        function renderActions() {
+          document.getElementById('ccActions').innerHTML =
+            '<a href="/dashboard/polaris" class="cc-action-btn">&#9733; Polaris</a>'+
+            '<a href="/dashboard/leads" class="cc-action-btn">&#128100; Leads</a>'+
+            '<a href="/dashboard/communications" class="cc-action-btn">&#128172; Comms</a>'+
+            '<a href="/dashboard/calendar" class="cc-action-btn">&#128197; Calendar</a>'+
+            '<a href="/dashboard/executive-brief" class="cc-action-btn">&#128200; Brief</a>'+
+            '<a href="/dashboard/settings" class="cc-action-btn">&#9881; Settings</a>';
+        }
+
+        // ── Fire all section requests independently with timeout ──
+        var execP = fetchSection('executive', '/api/v1/analytics/executive', null);
+        var kpisP = fetchSection('kpis', '/api/v1/analytics/kpis', null);
+        var dashP = fetchSection('dashboard', '/api/v1/analytics/dashboard', null);
+        var custP = fetchSection('customers', '/api/v1/customers', function(d){ return (d && d.customers) || []; });
+        var agendaP = fetchSection('agenda', '/api/v1/workflows/agenda/today', function(d){ return (d && d.tasks) || []; });
+        var alertsP = fetchSection('alerts', '/api/v1/analytics/alerts', null);
+
+        // Shared state for cross-section data
+        var state = { exec:null, kpis:null, dash:null, cust:[], agenda:[], alerts:null };
+
+        // Each section resolves independently — one failure cannot block others
+        execP.then(function(v) {
+          state.exec = v || {};
+          renderExec(state.exec);
+          renderRevenue(state.exec, state.kpis, state.dash);
+          resolved.exec = true;
+          tryHideLoading();
+        });
+
+        kpisP.then(function(v) {
+          state.kpis = v || {};
+          renderKpis(state.kpis, state.dash, state.exec);
+          renderRevenue(state.exec, state.kpis, state.dash);
+          renderPipeline(state.kpis, state.dash, state.exec, state.agenda);
+          renderHealth(state.kpis, state.dash, state.exec, state.cust);
+          resolved.kpis = true;
+          tryHideLoading();
+        });
+
+        dashP.then(function(v) {
+          state.dash = v || {};
+          renderKpis(state.kpis, state.dash, state.exec);
+          renderRevenue(state.exec, state.kpis, state.dash);
+          renderPipeline(state.kpis, state.dash, state.exec, state.agenda);
+          renderHealth(state.kpis, state.dash, state.exec, state.cust);
+          resolved.dash = true;
+          tryHideLoading();
+        });
+
+        custP.then(function(v) {
+          state.cust = Array.isArray(v) ? v : (v && v.customers) ? v.customers : [];
+          renderCustomers(state.cust);
+          renderHealth(state.kpis, state.dash, state.exec, state.cust);
+        });
+
+        agendaP.then(function(v) {
+          state.agenda = Array.isArray(v) ? v : [];
+          renderPriorities(state.alerts, state.agenda, state.exec);
+          renderPipeline(state.kpis, state.dash, state.exec, state.agenda);
+        });
+
+        alertsP.then(function(v) {
+          state.alerts = v || {};
+          renderPriorities(state.alerts, state.agenda, state.exec);
+        });
+
+        // Always render actions immediately
+        renderActions();
+
+        // Safety timer: hide skeleton after 12s no matter what
+        setTimeout(function() {
+          loading.style.display = 'none';
+          content.style.display = '';
+          document.getElementById('ccTimestamp').textContent = new Date().toLocaleString();
+        }, 12000);
       }
-    }
 
-    function startActiveCallsPolling() {
-      // Initial load
-      loadActiveCalls();
-      // Poll every 2.5 seconds
-      activeCallsInterval = setInterval(loadActiveCalls, 2500);
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // Actions: Simulate Lead, Test AI, Call My AI, Coming Soon
-    // ════════════════════════════════════════════════��═════════════��
-    function simulateDemoLead() {
-      try {
-        // genCall() is already routed through AppStore.addLead + EventBus by
-        // the simulator.js wrapper, so we don't call addLead again here (that
-        // would create duplicates). genCall returns the normalized lead.
-        const lead = genCall();
-        PolarisEngine.analyzeLead(lead);
-        NotificationService.show("✅ New lead: " + lead.caller + " ($" + (lead.avgPrice||0).toLocaleString() + " estimated)", 'success');
-        try { loadDashboard(); } catch(e) { console.warn('dashboard refresh error:', e.message); }
-      } catch(e) {
-        console.error('simulateDemoLead:', e);
-      }
-    }
-
-    function openTestAIModal() {
-      document.getElementById('testAIModal').style.display = 'flex';
-      document.getElementById('testAiInput').value = '';
-      document.getElementById('testAiResponse').textContent = 'Your AI\'s response will appear here.';
-      document.getElementById('testAiInput').focus();
-    }
-
-    function closeTestAIModal(e) {
-      if (e && e.target !== e.currentTarget) return;
-      document.getElementById('testAIModal').style.display = 'none';
-    }
-
-    function testAIResponse() {
-      const q = document.getElementById('testAiInput').value.trim();
-      if (!q) { NotificationService.show('Please type a question first.', 'warning'); return; }
-      const responses = [
-        "Thanks for reaching out to NorthStar! I'd be happy to help with that. Let me check with the team and get back to you with a quote. Could you provide your address and preferred time for an estimate?",
-        "Great question! We offer competitive pricing for that service. I'd recommend scheduling a free estimate so our team can assess your specific needs. When would work best for you?",
-        "I'd be glad to help with that inquiry. Let me take down your details and someone from our team will reach out. What's the best phone number to reach you?",
-      ];
-      document.getElementById('testAiResponse').innerHTML = '<strong style="color:var(--brand-600);">AI:</strong> ' + responses[Math.floor(Math.random() * responses.length)];
-      NotificationService.show('💬 AI response generated.', 'info');
-    }
-
-    function openCallMyAIModal() {
-      document.getElementById('callMyAIModal').style.display = 'flex';
-    }
-
-    function closeCallMyAIModal(e) {
-      if (e && e.target !== e.currentTarget) return;
-      document.getElementById('callMyAIModal').style.display = 'none';
-    }
-
-    function showComingSoon(feature) {
-      document.getElementById('comingSoonMessage').textContent = feature + ' is under development and will be available in an upcoming release.';
-      document.getElementById('comingSoonModal').style.display = 'flex';
-    }
-
-    function closeComingSoon(e) {
-      if (e && e.target !== e.currentTarget) return;
-      document.getElementById('comingSoonModal').style.display = 'none';
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // Kick off
-    // ═══════════════════════════════════════════════════════════════
-    // ============================================================
-    // POLARIS Revenue Intelligence Card
-    // ============================================================
-        function renderPolarisCard() {
-      PolarisEngine.renderPolarisCard(getLiveLeads());
-    }
-    // ============================================================
-    // Kick off
-    // ============================================================
-    // Load on DOMContentLoaded, or immediately if the event already fired
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function() { loadDashboard(); startActiveCallsPolling(); });
-} else {
-  loadDashboard();
-  startActiveCallsPolling();
-}
-  
-
-console.log("DASHBOARD_INIT: completed");
-} catch(e) {
-  console.error("DASHBOARD_INIT ERROR:", e.message);
-  var errDiv = document.getElementById('briefError');
-  if (errDiv) { errDiv.style.display = 'block'; errDiv.textContent = 'Init Error: ' + e.message; }
-}</script>
+      // ── Initial render ──
+      render();
+      setInterval(render, 60000);
+    })();
+  </script>
 </body>
 </html>

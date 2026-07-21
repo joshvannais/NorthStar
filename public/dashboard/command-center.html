@@ -284,8 +284,8 @@
         <!-- SIMULATE LEAD -->
         <div class="cc-sim-banner" id="ccSimBanner">
           <div class="cc-sim-text">
-            <div class="cc-sim-heading">Try Polaris\u2122 Intelligence</div>
-            <p>Generate a realistic customer interaction and watch Polaris\u2122 process the entire workflow in real time.</p>
+            <div class="cc-sim-heading">Try Polaris™ Intelligence</div>
+            <p>Generate a realistic customer interaction and watch Polaris™ process the entire workflow in real time.</p>
             <div class="cc-sim-status" id="ccSimStatus" style="display:none;"><span>&#9989;</span><span id="ccSimStatusText">Lead generated</span></div>
           </div>
           <button class="cc-sim-btn" id="ccSimBtn" onclick="ccSimulateLead()"><span>&#127917;</span><span>Simulate Lead</span></button>
@@ -294,7 +294,7 @@
         <div class="cc-header">
           <div class="cc-header-left">
             <h1>Command Center</h1>
-            <div class="cc-sub"><span class="cc-live-dot"></span><span>Polaris\u2122 Intelligence</span><span style="opacity:0.3;">&middot;</span><span id="ccTimestamp">&mdash;</span></div>
+            <div class="cc-sub"><span class="cc-live-dot"></span><span>Polaris™ Intelligence</span><span style="opacity:0.3;">&middot;</span><span id="ccTimestamp">&mdash;</span></div>
           </div>
           <button class="cc-refresh-btn" onclick="ccRefresh()">Refresh</button>
         </div>
@@ -414,7 +414,7 @@
       }
 
       function errState() {
-        return '<div class="cc-empty" style="color:var(--danger);cursor:pointer;" onclick="ccRefresh()">Polaris\u2122 could not load this section. Tap to retry.</div>';
+        return '<div class="cc-empty" style="color:var(--danger);cursor:pointer;" onclick="ccRefresh()">Polaris™ could not load this section. Tap to retry.</div>';
       }
 
       // ── Helpers ──
@@ -537,7 +537,7 @@
             if (pipe.activeDeals > 0) {
               var pipeVal = pipe.totalValue || pipe.pipelineValue || 0;
               var weightedVal = pipe.weightedValue || pipe.weightedPipelineValue || 0;
-              parts.push('Polaris\u2122 identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' with a combined pipeline value of <strong>' + fmtCurr(pipeVal) + '</strong>.');
+              parts.push('Polaris™ identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' with a combined pipeline value of <strong>' + fmtCurr(pipeVal) + '</strong>.');
               parts.push('Based on current stage probabilities, the weighted pipeline is <strong>' + fmtCurr(weightedVal) + '</strong>.');
               if (pipe.averageOpportunityValue > 0 || pipe.avgDealValue > 0) {
                 parts.push('The average opportunity value is <strong>' + fmtCurr(pipe.averageOpportunityValue || pipe.avgDealValue) + '</strong>.');
@@ -547,7 +547,7 @@
             if (rev.forecast > 0) parts.push('Forecast: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
             if (exec.companyHealth > 0 && parts.length === 0) parts.push('Health score: <strong>' + exec.companyHealth + '/100</strong>.');
           } else {
-            parts.push('Polaris\u2122 is monitoring your business. New opportunities will appear here as customer interactions are processed.');
+            parts.push('Polaris™ is monitoring your business. New opportunities will appear here as customer interactions are processed.');
           }
           el.innerHTML = parts.join(' ');
         }
@@ -596,7 +596,7 @@
             var activeCount = pipe.activeDeals || 0;
             html += '<div style="margin-top:'+(hasRevenue?'8px':'0')+';padding-top:'+(hasRevenue?'8px':'0')+';border-top:'+(hasRevenue?'1px solid var(--neutral-200)':'none')+';font-size:11px;color:var(--neutral-500);"><p style="margin:0 0 4px;">You have <strong>'+fmtNum(activeCount)+'</strong> open '+(activeCount===1?'opportunity':'opportunities')+' representing <strong>'+fmtCurr(pipeVal)+'</strong> in pipeline value.</p><p style="margin:0 0 4px;">Weighted: <strong>'+fmtCurr(weightedVal)+'</strong> &middot; Following up on your highest-value estimates could improve booking potential.</p></div>';
           } else if (!hasRevenue) {
-            html = '<div class="cc-empty">Polaris\u2122 is establishing your revenue baseline.</div>';
+            html = '<div class="cc-empty">Polaris™ is establishing your revenue baseline.</div>';
           }
           el.innerHTML = html;
         }
@@ -611,7 +611,7 @@
           if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
           if (agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
           if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});
-          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris\u2122 will surface opportunities as activity grows.</div>';
+          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris™ will surface opportunities as activity grows.</div>';
         }
 
         function renderPipeline(kpisData, dash, exec, agenda) {
@@ -648,7 +648,7 @@
           if (!el) return;
           el.innerHTML = customers.length > 0 ?
             '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
-            '<div class="cc-empty">Customer profiles appear as Polaris\u2122 processes calls. Start a simulation above.</div>';
+            '<div class="cc-empty">Customer profiles appear as Polaris™ processes calls. Start a simulation above.</div>';
         }
 
         function renderHealth(kpisData, dash, exec, customers) {

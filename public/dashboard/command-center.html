@@ -330,8 +330,11 @@
   <script src="/js/simulator.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
-  
-  <script>
+      <script src="/js/status-pill.js"></script>
+      <script src="/js/customer-card.js"></script>
+      <script src="/js/customer-drawer.js"></script>
+
+      <script>
     (function() {
       var loading = document.getElementById('ccLoading');
       var content = document.getElementById('ccContent');
@@ -664,12 +667,65 @@
           }).catch(function() {});
         };
 
+        // ── Bridge: Polaris customer → CustomerDrawer lead shape ──
+        window.ccOpenDrawer = function(customerId) {
+          if (!customerId || typeof CustomerDrawer === 'undefined') return;
+          var cust = null;
+          var arr = window._ccCustomers || [];
+          for (var i = 0; i < arr.length; i++) {
+            if (arr[i].id === customerId) { cust = arr[i]; break; }
+          }
+          if (!cust) return;
+          // Fetch related data in parallel
+          var oppsP = apiFetch('/api/v1/opportunities').then(function(r){return r.json();}).catch(function(){return {};});
+          var commsP = apiFetch('/api/v1/communications').then(function(r){return r.json();}).catch(function(){return {};});
+          Promise.all([oppsP, commsP]).then(function(results) {
+            var opps = (results[0] && results[0].opportunities) || [];
+            var comms = (results[1] && results[1].communications) || [];
+            // Find related opportunity
+            var relOpp = null;
+            for (var j = 0; j < opps.length; j++) {
+              if (opps[j].customerId === customerId) { relOpp = opps[j]; break; }
+            }
+            // Find related communication
+            var relComm = null;
+            for (var k = 0; k < comms.length; k++) {
+              if (comms[k].customerId === customerId) { relComm = comms[k]; break; }
+            }
+            // Build lead-shaped object for CustomerDrawer
+            var lead = {
+              id: cust.id,
+              caller: cust.name,
+              customerName: cust.name,
+              phone: cust.phone || '',
+              phoneNumber: cust.phone || '',
+              email: cust.email || '',
+              address: cust.address || '',
+              status: cust.status || 'active',
+              totalJobs: cust.totalJobs || 0,
+              totalRevenue: cust.totalRevenue || 0,
+              service: relOpp ? (relOpp.service || relOpp.description || '—') : '—',
+              serviceRequested: relOpp ? (relOpp.service || relOpp.description || '—') : '—',
+              jobDetail: relOpp ? (relOpp.description || relOpp.summary || '') : '',
+              summary: relOpp ? (relOpp.description || relOpp.summary || '') : '',
+              avgPrice: relOpp ? (relOpp.estimatedValue || relOpp.amount || 0) : 0,
+              time: cust.createdAt || relOpp ? relOpp.createdAt : null,
+              receivedAt: cust.createdAt,
+              transcript: relComm ? (relComm.transcript || relComm.content || '') : '',
+              pricingBreakdown: relOpp && relOpp.pricingBreakdown ? relOpp.pricingBreakdown : [],
+              polarisAnalysis: relOpp && relOpp.polarisAnalysis ? relOpp.polarisAnalysis : null
+            };
+            CustomerDrawer.open(lead);
+          });
+        };
+
         function renderCustomers(customers) {
           customers = Array.isArray(customers) ? customers : [];
+          window._ccCustomers = customers;
           var el = document.getElementById('ccCustomers');
           if (!el) return;
           el.innerHTML = customers.length > 0 ?
-            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" data-customer-id="'+c.id+'" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name" onclick="alert(\'clicked: '+(c.name||'Unknown')+'\')">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
+            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" data-customer-id="'+c.id+'" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name" onclick="ccOpenDrawer(\''+c.id+'\')">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
             '<div class="cc-empty">Customer profiles appear as Polaris™ processes calls. Start a simulation above.</div>';
           // Attach click handlers directly to each button
           var btns = el.querySelectorAll('[data-customer-id]');
@@ -789,5 +845,50 @@
       setInterval(render, 60000);
     })();
   </script>
+  <!-- Customer Detail Drawer -->
+  <div class="drawer-overlay" id="drawerOverlay" onclick="CustomerDrawer.close()"></div>
+  <div class="customer-drawer" id="customerDrawer">
+    <div class="drawer-header">
+      <h2 id="drawerTitle">Customer Details</h2>
+      <button class="drawer-close" onclick="CustomerDrawer.close()">x</button>
+    </div>
+    <div class="drawer-body" id="drawerBody">
+      <div class="drawer-section">
+        <h3>Contact Information</h3>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="drawerName">-</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="drawerPhone">-</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Email</span><span class="drawer-detail-value" id="drawerEmail">-</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="drawerAddress">-</span></div>
+      </div>
+      <div class="drawer-section" id="drawerCustomerSection" style="display:none;">
+        <h3>Customer Profile</h3>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerCustomerStatus"><span class="badge badge-won">Active</span></span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Jobs</span><span class="drawer-detail-value" id="drawerCustomerJobs">0</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Revenue</span><span class="drawer-detail-value" id="drawerCustomerRevenue">$0</span></div>
+      </div>
+      <div class="drawer-section">
+        <h3>Job Details</h3>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">-</span></div>
+        <div class="drawer-detail-row drawer-detail-row-nb"><span class="drawer-detail-label">Description</span></div>
+        <div class="drawer-description-box" id="drawerDescription">-</div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">-</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerStatus">-</span></div>
+        <div class="drawer-detail-row"><span class="drawer-detail-label">Date</span><span class="drawer-detail-value" id="drawerDate">-</span></div>
+      </div>
+      <div class="drawer-section">
+        <h3>POLARIS\u2122 Revenue Intelligence</h3>
+        <div id="drawerPolarisInsight" class="drawer-polaris-insight">Loading Polaris analysis...</div>
+      </div>
+      <div class="drawer-section">
+        <h3>Pricing Breakdown</h3>
+        <div id="drawerPricingBreakdown"><p style="font-size:13px;color:var(--neutral-500);">No pricing data available.</p></div>
+      </div>
+      <div class="drawer-section">
+        <h3>Call Transcript</h3>
+        <div class="drawer-transcript" id="drawerTranscript">No transcript available.</div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

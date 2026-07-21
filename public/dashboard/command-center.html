@@ -646,8 +646,6 @@
           el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+s.color+'"></div></div></div>';}).join('')+'</div>';
         }
 
-        };
-
         function renderCustomers(customers) {
           customers = Array.isArray(customers) ? customers : [];
           var el = document.getElementById('ccCustomers');

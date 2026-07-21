@@ -669,7 +669,7 @@
           var el = document.getElementById('ccCustomers');
           if (!el) return;
           el.innerHTML = customers.length > 0 ?
-            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" onclick="ccOpenCustomer('+c.id+')" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
+            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" onclick="ccOpenCustomer(\''+c.id+'\')" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
             '<div class="cc-empty">Customer profiles appear as Polaris™ processes calls. Start a simulation above.</div>';
         }
 

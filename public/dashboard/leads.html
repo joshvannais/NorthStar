@@ -347,7 +347,8 @@ function toggleMobileMenu() {
         <button class="btn btn-primary btn-sm" onclick="document.getElementById('importCsvInput').click()" style="width:100%;justify-content:center;">Choose File</button>
       </div>
     </div>
-    <div class="drawer-overlay" id="drawerOverlay" onclick="CustomerDrawer.close()"></div>
+    
+
 
   <!-- Customer Detail Drawer -->
   <div class="customer-drawer" id="customerDrawer">
@@ -411,6 +412,7 @@ function toggleMobileMenu() {
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
   <script src="/js/customer-drawer.js"></script>
+  <script src="/js/customer-detail.js"></script>
   <script src="/js/status-pill.js"></script>
   <script src="/js/customer-card.js"></script>
   <script src="/js/analytics-engine.js"></script>
@@ -429,7 +431,12 @@ function toggleMobileMenu() {
       var idx = parseInt(el.getAttribute('data-lead-index'), 10);
       const leads = CommunicationsEngine.getConversations ? CommunicationsEngine.getConversations() : AppStore.getLeads();
       var lead = leads[idx];
-      if (lead && typeof CustomerDrawer !== 'undefined') CustomerDrawer.open(lead);
+      if (!lead) return;
+      if (lead.customerId && typeof CustomerDetail !== 'undefined') {
+        CustomerDetail.open(lead.customerId);
+      } else if (typeof CustomerDrawer !== 'undefined') {
+        CustomerDrawer.open(lead);
+      }
     }
     function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
     // Subscribe to store changes for auto-refresh

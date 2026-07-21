@@ -641,7 +641,8 @@ function toggleMobileMenu() {
   </div>
       </main>
 <!-- Drawer overlay -->
-  <div class="drawer-overlay" id="drawerOverlay" onclick="CustomerDrawer.close()"></div>
+  
+
   <!-- Customer Detail Drawer -->
   <div class="customer-drawer" id="customerDrawer">
     <div class="drawer-header">
@@ -686,6 +687,7 @@ function toggleMobileMenu() {
 <script src="/js/polaris-engine.js"></script>
 <script src="/js/notification-service.js"></script>
   <script src="/js/customer-drawer.js"></script>
+  <script src="/js/customer-detail.js"></script>
   <script src="/js/status-pill.js"></script>
   <script src="/js/customer-card.js"></script>
   <script src="/js/analytics-engine.js"></script>
@@ -991,7 +993,10 @@ var currentFilteredCalls = [];
 function openCallCard(el) {
   var idx = parseInt(el.getAttribute('data-lead-index'), 10);
   var lead = currentFilteredCalls[idx];
-  if (lead && typeof CustomerDrawer !== 'undefined') {
+  if (!lead) return;
+  if (lead.customerId && typeof CustomerDetail !== 'undefined') {
+    CustomerDetail.open(lead.customerId);
+  } else if (typeof CustomerDrawer !== 'undefined') {
     CustomerDrawer.open(lead);
   }
 }

@@ -8,7 +8,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    /* ── CSS Custom Properties ── */
     :root {
       --cc-bg: var(--neutral-50, #f8f9fa);
       --cc-card: #ffffff;
@@ -33,439 +32,224 @@
 
     * { box-sizing: border-box; }
 
-    .cc-workspace {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 24px 28px;
-    }
+    .cc-workspace { max-width: 1400px; margin: 0 auto; padding: 16px 24px; }
 
-    /* ── Simulate Lead CTA ── */
+    /* ── Simulate Lead ── */
     .cc-sim-banner {
       background: linear-gradient(135deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.02) 100%);
       border: 1px solid rgba(212,175,55,0.2);
-      border-radius: 12px;
-      padding: 20px 24px;
-      margin-bottom: 20px;
+      border-radius: 10px;
+      padding: 14px 20px;
+      margin-bottom: 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      gap: 12px;
       flex-wrap: wrap;
     }
-    .cc-sim-text { flex: 1; min-width: 200px; }
-    .cc-sim-text p {
-      margin: 0;
-      font-size: 13px;
-      color: var(--cc-text-secondary);
-      line-height: 1.5;
-    }
-    .cc-sim-text strong { color: var(--cc-text); }
+    .cc-sim-text { flex: 1; min-width: 180px; }
+    .cc-sim-text p { margin: 0; font-size: 12px; color: var(--cc-text-secondary); line-height: 1.4; }
+    .cc-sim-text .cc-sim-heading { font-weight: 600; font-size: 14px; color: var(--cc-text); margin-bottom: 2px; }
     .cc-sim-btn {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 24px;
-      border-radius: 8px;
+      gap: 6px;
+      padding: 8px 20px;
+      border-radius: 7px;
       border: none;
       background: linear-gradient(135deg, var(--cc-accent) 0%, #c9a227 100%);
       color: #fff;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
       white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(212,175,55,0.3);
+      box-shadow: 0 2px 6px rgba(212,175,55,0.25);
     }
-    .cc-sim-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(212,175,55,0.4);
-    }
+    .cc-sim-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.35); }
     .cc-sim-btn:active { transform: translateY(0); }
-    .cc-sim-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-    }
+    .cc-sim-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
     .cc-sim-spinner {
-      display: inline-block;
-      width: 14px; height: 14px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: cc-spin 0.6s linear infinite;
+      display: inline-block; width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+      border-radius: 50%; animation: cc-spin 0.6s linear infinite;
     }
     @keyframes cc-spin { to { transform: rotate(360deg); } }
-
-    .cc-sim-status {
-      font-size: 12px;
-      color: var(--cc-success);
-      margin-top: 6px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .cc-sim-status .cc-note { color: var(--cc-text-muted); }
+    .cc-sim-status { font-size: 11px; color: var(--cc-success); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
 
     /* ── Header ── */
     .cc-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      gap: 8px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px; flex-wrap: wrap; gap: 6px;
     }
     .cc-header-left h1 {
-      font-size: 22px;
-      font-weight: 700;
-      margin: 0;
-      color: var(--cc-text);
-      letter-spacing: -0.3px;
+      font-size: 20px; font-weight: 700; margin: 0;
+      color: var(--cc-text); letter-spacing: -0.2px;
     }
-    .cc-header-left .cc-sub {
-      font-size: 13px;
-      color: var(--cc-text-secondary);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 2px;
-    }
+    .cc-header-left .cc-sub { font-size: 12px; color: var(--cc-text-secondary); display: flex; align-items: center; gap: 6px; margin-top: 1px; }
     .cc-live-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--cc-success);
-      display: inline-block;
-      animation: cc-pulse 2s infinite;
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--cc-success); display: inline-block; animation: cc-pulse 2s infinite;
     }
     @keyframes cc-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
     .cc-refresh-btn {
-      font-size: 12px;
-      padding: 7px 16px;
-      border-radius: 6px;
-      border: 1px solid var(--cc-border);
-      background: var(--cc-card);
-      color: var(--cc-text-secondary);
-      cursor: pointer;
-      transition: all 0.15s;
-      font-weight: 500;
+      font-size: 11px; padding: 6px 14px; border-radius: 6px;
+      border: 1px solid var(--cc-border); background: var(--cc-card);
+      color: var(--cc-text-secondary); cursor: pointer; transition: all 0.15s; font-weight: 500;
     }
-    .cc-refresh-btn:hover {
-      border-color: var(--cc-accent);
-      color: var(--cc-accent);
-      background: rgba(212,175,55,0.04);
-    }
+    .cc-refresh-btn:hover { border-color: var(--cc-accent); color: var(--cc-accent); }
 
     /* ── Cards ── */
     .cc-card {
-      background: var(--cc-card);
-      border: 1px solid var(--cc-border);
-      border-radius: 12px;
-      padding: 20px 22px;
-      transition: box-shadow 0.2s;
+      background: var(--cc-card); border: 1px solid var(--cc-border);
+      border-radius: 10px; padding: 14px 18px;
     }
     .cc-card-title {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--cc-text-muted);
-      margin-bottom: 14px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.4px; color: var(--cc-text-muted); margin-bottom: 10px;
     }
-    .cc-card + .cc-card { margin-top: 16px; }
+    .cc-card + .cc-card { margin-top: 12px; }
 
-    /* ── Executive Summary ── */
-    .cc-summary-text {
-      font-size: 14px;
-      line-height: 1.65;
-      color: var(--cc-text);
-    }
+    /* ── Summary ── */
+    .cc-summary-text { font-size: 13px; line-height: 1.55; color: var(--cc-text); }
     .cc-summary-text strong { color: var(--cc-accent); font-weight: 600; }
 
     /* ── KPI Grid ── */
-    .cc-kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-    }
+    .cc-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .cc-kpi {
-      padding: 16px 18px;
-      border-radius: 10px;
-      border: 1px solid var(--cc-border);
-      background: var(--cc-card);
-      cursor: default;
-      transition: all 0.2s;
-      position: relative;
-      overflow: hidden;
+      padding: 12px 14px; border-radius: 8px; border: 1px solid var(--cc-border);
+      background: var(--cc-card); cursor: default; transition: all 0.15s;
     }
-    .cc-kpi:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-    }
-    [data-theme="dark"] .cc-kpi:hover {
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-    }
-    .cc-kpi-icon { font-size: 20px; margin-bottom: 8px; }
-    .cc-kpi-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--cc-text);
-      line-height: 1.15;
-    }
-    .cc-kpi-label {
-      font-size: 11px;
-      color: var(--cc-text-secondary);
-      margin-top: 3px;
-      font-weight: 500;
-    }
+    .cc-kpi:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    [data-theme="dark"] .cc-kpi:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .cc-kpi-icon { font-size: 16px; margin-bottom: 4px; }
+    .cc-kpi-value { font-size: 20px; font-weight: 700; color: var(--cc-text); line-height: 1.15; }
+    .cc-kpi-label { font-size: 10px; color: var(--cc-text-secondary); margin-top: 2px; font-weight: 500; }
 
     /* ── Priorities ── */
     .cc-priority-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--cc-border);
-      margin-bottom: 8px;
-      transition: all 0.15s;
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 12px; border-radius: 7px; border: 1px solid var(--cc-border);
+      margin-bottom: 6px; transition: all 0.15s;
     }
     .cc-priority-item:hover { border-color: var(--cc-accent); }
-    .cc-priority-rank {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--cc-accent);
-      min-width: 24px;
-      line-height: 1.4;
-    }
+    .cc-priority-rank { font-size: 14px; font-weight: 700; color: var(--cc-accent); min-width: 20px; line-height: 1.4; }
     .cc-priority-body { flex: 1; min-width: 0; }
-    .cc-priority-title { font-size: 14px; font-weight: 600; color: var(--cc-text); }
-    .cc-priority-meta {
-      font-size: 11px; color: var(--cc-text-secondary);
-      margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap;
-    }
-    .cc-priority-badge {
-      font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px; text-transform: uppercase;
-    }
+    .cc-priority-title { font-size: 13px; font-weight: 600; color: var(--cc-text); }
+    .cc-priority-meta { font-size: 10px; color: var(--cc-text-secondary); margin-top: 1px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .cc-priority-badge { font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; }
     .cc-priority-badge.critical { background: rgba(239,68,68,0.15); color: var(--cc-danger); }
     .cc-priority-badge.high { background: rgba(245,158,11,0.15); color: var(--cc-warning); }
     .cc-priority-badge.medium { background: rgba(59,130,246,0.15); color: var(--cc-info); }
     .cc-priority-badge.low { background: rgba(108,117,125,0.15); color: var(--cc-text-secondary); }
-    .cc-priority-desc { font-size: 12px; color: var(--cc-text-secondary); margin-top: 4px; line-height: 1.4; }
+    .cc-priority-desc { font-size: 11px; color: var(--cc-text-secondary); margin-top: 2px; line-height: 1.3; }
 
     /* ── Revenue ── */
-    .cc-rev-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-      gap: 8px;
-    }
-    .cc-rev-stat {
-      text-align: center;
-      padding: 10px 6px;
-    }
-    .cc-rev-val {
-      font-size: 21px;
-      font-weight: 700;
-      color: var(--cc-text);
-    }
+    .cc-rev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 4px; }
+    .cc-rev-stat { text-align: center; padding: 6px 4px; }
+    .cc-rev-val { font-size: 18px; font-weight: 700; color: var(--cc-text); }
     .cc-rev-val.gold { color: var(--cc-accent); }
     .cc-rev-val.green { color: var(--cc-success); }
     .cc-rev-val.orange { color: var(--cc-warning); }
-    .cc-rev-label { font-size: 10px; color: var(--cc-text-secondary); margin-top: 2px; font-weight: 500; }
+    .cc-rev-label { font-size: 9px; color: var(--cc-text-secondary); margin-top: 1px; font-weight: 500; }
 
     /* ── Pipeline ── */
-    .cc-pipeline {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      padding: 4px 0;
-    }
-    .cc-pipe-stage {
-      flex: 1;
-      text-align: center;
-      padding: 8px 6px;
-      position: relative;
-    }
+    .cc-pipeline { display: flex; align-items: center; gap: 0; padding: 2px 0; }
+    .cc-pipe-stage { flex: 1; text-align: center; padding: 6px 4px; position: relative; }
     .cc-pipe-stage:not(:last-child)::after {
-      content: '\2192';
-      position: absolute;
-      right: -10px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--cc-text-muted);
-      font-size: 16px;
-      opacity: 0.5;
+      content: '\2192'; position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+      color: var(--cc-text-muted); font-size: 14px; opacity: 0.4;
     }
-    .cc-pipe-icon { font-size: 20px; margin-bottom: 2px; }
-    .cc-pipe-count {
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--cc-text);
-      margin: 2px 0;
-    }
-    .cc-pipe-label { font-size: 10px; color: var(--cc-text-secondary); font-weight: 500; }
-    .cc-pipe-bar {
-      height: 4px;
-      border-radius: 2px;
-      margin-top: 8px;
-      background: var(--cc-border);
-      overflow: hidden;
-    }
-    .cc-pipe-fill {
-      height: 100%;
-      border-radius: 2px;
-      transition: width 0.8s ease;
-    }
+    .cc-pipe-icon { font-size: 16px; margin-bottom: 1px; }
+    .cc-pipe-count { font-size: 18px; font-weight: 700; color: var(--cc-text); margin: 1px 0; }
+    .cc-pipe-label { font-size: 9px; color: var(--cc-text-secondary); font-weight: 500; }
+    .cc-pipe-bar { height: 3px; border-radius: 2px; margin-top: 5px; background: var(--cc-border); overflow: hidden; }
+    .cc-pipe-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
 
     /* ── Customers ── */
-    .cc-cust-list { display: flex; flex-direction: column; gap: 6px; }
+    .cc-cust-list { display: flex; flex-direction: column; gap: 4px; }
     .cc-cust-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 9px 13px;
-      border-radius: 7px;
-      background: var(--cc-bg);
-      cursor: pointer;
-      transition: all 0.15s;
-      text-decoration: none;
-      color: inherit;
+      display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+      border-radius: 6px; background: var(--cc-bg); cursor: pointer;
+      transition: all 0.12s; text-decoration: none; color: inherit;
     }
     .cc-cust-item:hover { background: var(--cc-border); }
-    .cc-cust-name { font-size: 13px; font-weight: 500; color: var(--cc-text); flex: 1; }
-    .cc-cust-tag {
-      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 3px;
-    }
+    .cc-cust-name { font-size: 12px; font-weight: 500; color: var(--cc-text); flex: 1; }
+    .cc-cust-tag { font-size: 9px; font-weight: 600; padding: 1px 7px; border-radius: 3px; }
     .cc-cust-tag.new { background: rgba(16,185,129,0.15); color: var(--cc-success); }
     .cc-cust-tag.returning { background: rgba(59,130,246,0.15); color: var(--cc-info); }
     .cc-cust-tag.attention { background: rgba(239,68,68,0.15); color: var(--cc-danger); }
 
-    /* ── Health ── */
-    .cc-health-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 10px;
-    }
+    /* ── Health (2-col) ── */
+    .cc-health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .cc-health-item {
-      text-align: center;
-      padding: 16px 10px;
-      border-radius: 9px;
-      border: 1px solid var(--cc-border);
-      background: var(--cc-bg);
-      transition: all 0.15s;
+      text-align: center; padding: 10px 8px; border-radius: 7px;
+      border: 1px solid var(--cc-border); background: var(--cc-bg); transition: all 0.12s;
     }
     .cc-health-item:hover { border-color: var(--cc-accent); }
-    .cc-health-score {
-      font-size: 30px;
-      font-weight: 800;
-      line-height: 1;
-    }
+    .cc-health-score { font-size: 22px; font-weight: 800; line-height: 1; }
     .cc-health-score.excellent { color: var(--cc-success); }
     .cc-health-score.good { color: var(--cc-info); }
     .cc-health-score.fair { color: var(--cc-warning); }
     .cc-health-score.poor { color: var(--cc-danger); }
-    .cc-health-label { font-size: 11px; color: var(--cc-text-secondary); margin-top: 5px; font-weight: 500; }
-    .cc-health-desc { font-size: 10px; color: var(--cc-text-muted); margin-top: 3px; line-height: 1.35; }
+    .cc-health-label { font-size: 10px; color: var(--cc-text-secondary); margin-top: 3px; font-weight: 500; }
+    .cc-health-desc { font-size: 9px; color: var(--cc-text-muted); margin-top: 2px; line-height: 1.25; }
 
     /* ── Quick Actions ── */
-    .cc-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
+    .cc-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
     .cc-action-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      padding: 10px 18px;
-      border-radius: 8px;
-      border: 1px solid var(--cc-border);
-      background: var(--cc-card);
-      color: var(--cc-text);
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.15s;
-      min-height: 40px;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 8px 10px; border-radius: 7px; border: 1px solid var(--cc-border);
+      background: var(--cc-card); color: var(--cc-text); font-size: 12px;
+      font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.12s;
+      min-height: 38px;
     }
-    .cc-action-btn:hover {
-      border-color: var(--cc-accent);
-      color: var(--cc-accent);
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(212,175,55,0.1);
-    }
-    .cc-action-btn:active { transform: translateY(0); }
+    .cc-action-btn:hover { border-color: var(--cc-accent); color: var(--cc-accent); transform: translateY(-1px); }
     .cc-action-btn.primary {
-      background: var(--cc-accent);
-      color: #fff;
-      border-color: var(--cc-accent);
+      background: var(--cc-accent); color: #fff; border-color: var(--cc-accent);
     }
-    .cc-action-btn.primary:hover {
-      background: #c9a227;
-      color: #fff;
-      border-color: #c9a227;
-      box-shadow: 0 2px 12px rgba(212,175,55,0.3);
-    }
+    .cc-action-btn.primary:hover { background: #c9a227; color: #fff; border-color: #c9a227; box-shadow: 0 2px 8px rgba(212,175,55,0.25); }
 
-    /* ── Grid Layout ── */
-    .cc-grid {
-      display: grid;
-      gap: 16px;
-    }
-    .cc-grid-2 { grid-template-columns: 1fr 1fr; }
+    /* ── Grid ── */
+    .cc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
     /* ── Empty States ── */
-    .cc-empty {
-      text-align: center;
-      padding: 24px 16px;
-      color: var(--cc-text-secondary);
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .cc-empty-icon {
-      font-size: 28px;
-      margin-bottom: 8px;
-      opacity: 0.5;
-    }
+    .cc-empty { text-align: center; padding: 16px; color: var(--cc-text-secondary); font-size: 12px; line-height: 1.4; }
 
     /* ── Loading ── */
     .cc-loading-skeleton {
-      height: 20px;
-      background: linear-gradient(90deg, var(--cc-border) 25%, transparent 50%, var(--cc-border) 75%);
-      background-size: 200% 100%;
-      animation: cc-shimmer 1.5s infinite;
-      border-radius: 5px;
-      margin-bottom: 8px;
+      height: 16px; background: linear-gradient(90deg, var(--cc-border) 25%, transparent 50%, var(--cc-border) 75%);
+      background-size: 200% 100%; animation: cc-shimmer 1.5s infinite; border-radius: 4px; margin-bottom: 6px;
     }
     @keyframes cc-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-    .cc-loading-skeleton.w70 { width: 70%; }
-    .cc-loading-skeleton.w50 { width: 50%; }
-    .cc-loading-skeleton.h40 { height: 40px; }
-    .cc-loading-skeleton.h60 { height: 60px; }
+    .cc-loading-skeleton.w70 { width: 70%; } .cc-loading-skeleton.w50 { width: 50%; }
+    .cc-loading-skeleton.h40 { height: 34px; } .cc-loading-skeleton.h60 { height: 50px; }
 
     /* ── Responsive ── */
     @media (max-width: 1024px) {
       .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-      .cc-workspace { padding: 20px; }
     }
     @media (max-width: 768px) {
-      .cc-workspace { padding: 14px; }
-      .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-      .cc-grid-2 { grid-template-columns: 1fr; }
+      .cc-workspace { padding: 10px 14px; }
+      .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+      .cc-kpi { padding: 10px 12px; }
+      .cc-grid-2 { grid-template-columns: 1fr; gap: 10px; }
       .cc-rev-grid { grid-template-columns: repeat(2, 1fr); }
-      .cc-pipeline { flex-wrap: wrap; gap: 8px; }
-      .cc-pipe-stage { min-width: 45%; }
-      .cc-pipe-stage:nth-child(2)::after { display: none; }
+      .cc-pipeline { flex-wrap: wrap; gap: 4px; }
+      .cc-pipe-stage { min-width: 45%; padding: 4px; }
+      .cc-pipe-stage:nth-child(2)::after,
       .cc-pipe-stage:nth-child(4)::after { display: none; }
-      .cc-sim-banner { flex-direction: column; align-items: stretch; text-align: center; }
-      .cc-sim-btn { justify-content: center; }
-      .cc-header-left h1 { font-size: 18px; }
-      .cc-actions { gap: 6px; }
-      .cc-action-btn { flex: 1; justify-content: center; min-width: 0; }
+      .cc-actions { grid-template-columns: repeat(2, 1fr); }
+      .cc-sim-banner { flex-direction: column; text-align: center; padding: 12px 16px; }
+      .cc-sim-btn { justify-content: center; width: 100%; max-width: 220px; }
+      .cc-health-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 480px) {
-      .cc-kpi-grid { grid-template-columns: 1fr; }
-      .cc-health-grid { grid-template-columns: 1fr; }
+      .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .cc-kpi { padding: 8px 10px; }
+      .cc-kpi-value { font-size: 17px; }
+      .cc-actions { grid-template-columns: 1fr 1fr; }
+      .cc-health-grid { grid-template-columns: 1fr 1fr; }
       .cc-pipe-stage { min-width: 100%; }
       .cc-pipe-stage::after { display: none !important; }
     }
@@ -509,27 +293,26 @@
         </a>
       </nav>
       <div class="sidebar-footer" style="padding:12px;display:flex;flex-direction:column;gap:4px;">
-        <button class="sidebar-item theme-toggle" onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;width:100%;text-align:left;font-size:18px;padding:10px 12px;border-radius:8px;color:var(--neutral-300);transition:all 0.15s;">
+        <button class="sidebar-item theme-toggle" onclick="window.NorthStarTheme && NorthStarTheme.toggleTheme ? NorthStarTheme.toggleTheme() : toggleFallback()" style="background:none;border:none;cursor:pointer;width:100%;text-align:left;font-size:18px;padding:10px 12px;border-radius:8px;color:var(--neutral-300);transition:all 0.15s;">
           <span style="display:flex;align-items:center;gap:8px;"><span id="themeToggleIcon">&#127769;</span><span style="font-size:13px;" id="themeToggleLabel">Dark Mode</span></span>
         </button>
-        <a href="/logout" class="sidebar-item" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')">
+        <a href="/" class="sidebar-item" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
           <span>Sign Out</span>
         </a>
       </div>
     </aside>
-    <main class="main-content" id="mainContent">
+    <main class="main-content">
       <div class="cc-workspace" id="ccRoot">
 
-        <!-- ═══ SIMULATE LEAD ═══ -->
+        <!-- SIMULATE LEAD -->
         <div class="cc-sim-banner" id="ccSimBanner">
           <div class="cc-sim-text">
-            <p style="margin-bottom:2px;font-weight:600;font-size:14px;color:var(--cc-text);">Try Polaris Intelligence</p>
-            <p>Generate a realistic customer interaction and watch Polaris process the entire workflow — from lead creation to business intelligence — in real time.</p>
+            <div class="cc-sim-heading">Try Polaris Intelligence</div>
+            <p>Generate a realistic customer interaction and watch Polaris process the entire workflow in real time.</p>
             <div class="cc-sim-status" id="ccSimStatus" style="display:none;">
               <span>&#9989;</span>
               <span id="ccSimStatusText">Lead generated &mdash; updating dashboard...</span>
-              <span class="cc-note" id="ccSimStatusNote"></span>
             </div>
           </div>
           <button class="cc-sim-btn" id="ccSimBtn" onclick="ccSimulateLead()">
@@ -538,38 +321,38 @@
           </button>
         </div>
 
-        <!-- ═══ HEADER ═══ -->
+        <!-- HEADER -->
         <div class="cc-header">
           <div class="cc-header-left">
             <h1>Command Center</h1>
             <div class="cc-sub">
               <span class="cc-live-dot"></span>
               <span>Polaris Intelligence</span>
-              <span style="opacity:0.4;">&middot;</span>
+              <span style="opacity:0.3;">&middot;</span>
               <span id="ccTimestamp">&mdash;</span>
             </div>
           </div>
-          <button class="cc-refresh-btn" onclick="ccRefresh()">Refresh Now</button>
+          <button class="cc-refresh-btn" onclick="ccRefresh()">Refresh</button>
         </div>
 
-        <!-- ═══ LOADING ═══ -->
-        <div id="ccLoading" style="margin-bottom:16px;">
-          <div class="cc-loading-skeleton w70" style="margin-bottom:12px;"></div>
-          <div class="cc-loading-skeleton" style="margin-bottom:6px;"></div>
+        <!-- LOADING -->
+        <div id="ccLoading">
+          <div class="cc-loading-skeleton w70" style="margin-bottom:8px;"></div>
+          <div class="cc-loading-skeleton" style="margin-bottom:4px;"></div>
           <div class="cc-loading-skeleton w50"></div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px;">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;">
             <div class="cc-loading-skeleton h60"></div>
             <div class="cc-loading-skeleton h60"></div>
             <div class="cc-loading-skeleton h60"></div>
             <div class="cc-loading-skeleton h60"></div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
             <div class="cc-loading-skeleton h40"></div>
             <div class="cc-loading-skeleton h40"></div>
           </div>
         </div>
 
-        <!-- ═══ CONTENT ═══ -->
+        <!-- CONTENT -->
         <div id="ccContent" style="display:none;">
 
           <!-- SECTION 1: Executive Brief -->
@@ -585,7 +368,7 @@
           </div>
 
           <!-- SECTION 3 + 4: Priorities + Revenue -->
-          <div class="cc-grid cc-grid-2" style="margin-top:16px;">
+          <div class="cc-grid-2" style="margin-top:12px;">
             <div class="cc-card">
               <div class="cc-card-title">Today's Priorities</div>
               <div id="ccPriorities">Loading...</div>
@@ -597,25 +380,25 @@
           </div>
 
           <!-- SECTION 5: Operational Pipeline -->
-          <div class="cc-card" style="margin-top:16px;">
+          <div class="cc-card" style="margin-top:12px;">
             <div class="cc-card-title">Operational Pipeline</div>
             <div id="ccPipeline">Loading...</div>
           </div>
 
           <!-- SECTION 6: Customer Intelligence -->
-          <div class="cc-card" style="margin-top:16px;">
+          <div class="cc-card" style="margin-top:12px;">
             <div class="cc-card-title">Customer Intelligence</div>
             <div id="ccCustomers">Loading...</div>
           </div>
 
           <!-- SECTION 7: Business Health -->
-          <div class="cc-card" style="margin-top:16px;">
+          <div class="cc-card" style="margin-top:12px;">
             <div class="cc-card-title">Business Health</div>
             <div class="cc-health-grid" id="ccHealth">Loading...</div>
           </div>
 
           <!-- SECTION 8: Quick Actions -->
-          <div class="cc-card" style="margin-top:16px;">
+          <div class="cc-card" style="margin-top:12px;">
             <div class="cc-card-title">Quick Actions</div>
             <div class="cc-actions" id="ccActions"></div>
           </div>
@@ -625,12 +408,13 @@
     </main>
   </div>
 
-  <!-- Shared JS -->
+  <!-- Shared JS — load order matters -->
   <script src="/js/theme.js"></script>
+  <script src="/js/event-bus.js"></script>
+  <script src="/js/app-store.js"></script>
   <script src="/js/simulator.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
-  <script src="/js/app-store.js"></script>
 
   <script>
     (function() {
@@ -640,31 +424,41 @@
       var simStatus = document.getElementById('ccSimStatus');
       var simStatusText = document.getElementById('ccSimStatusText');
 
-      // ── Theme toggle label sync ──
+      // ── Theme sync ──
       function syncThemeUI() {
         var theme = document.documentElement.getAttribute('data-theme') || 'light';
         var icon = document.getElementById('themeToggleIcon');
         var label = document.getElementById('themeToggleLabel');
-        if (icon) {
-          icon.textContent = theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
-        }
-        if (label) {
-          label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
-        }
+        if (icon) icon.textContent = theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
+        if (label) label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
       }
-      // Watch for theme changes
-      var origToggle = window.NorthStarTheme && window.NorthStarTheme.toggleTheme;
+      function toggleFallback() {
+        var theme = document.documentElement.getAttribute('data-theme') || 'light';
+        var next = theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        try { localStorage.setItem('northstar-theme', next); } catch(e) {}
+        syncThemeUI();
+      }
+      window.toggleFallback = toggleFallback;
+
       if (window.NorthStarTheme) {
-        var wrappedToggle = function() {
+        var origToggle = window.NorthStarTheme.toggleTheme;
+        window.NorthStarTheme.toggleTheme = function() {
           origToggle();
           syncThemeUI();
         };
-        window.NorthStarTheme.toggleTheme = wrappedToggle;
       }
-      document.addEventListener('DOMContentLoaded', syncThemeUI);
-      if (document.readyState !== 'loading') syncThemeUI();
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+          if (window.NorthStarTheme) window.NorthStarTheme.loadTheme();
+          syncThemeUI();
+        });
+      } else {
+        if (window.NorthStarTheme) window.NorthStarTheme.loadTheme();
+        syncThemeUI();
+      }
 
-      // ── Formatting helpers ──
+      // ── Helpers ──
       function fmtCurr(val) {
         if (val === null || val === undefined) return '$0';
         var n = typeof val === 'number' ? val : parseFloat(val);
@@ -672,21 +466,18 @@
         if (n >= 1000) return '$' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
         return '$' + Math.round(n).toLocaleString();
       }
-
       function fmtNum(val) {
         if (val === null || val === undefined) return '0';
         var n = typeof val === 'number' ? val : parseInt(val);
         if (isNaN(n)) return '0';
         return n.toLocaleString();
       }
-
       function healthClass(score) {
         if (score >= 80) return 'excellent';
         if (score >= 60) return 'good';
         if (score >= 40) return 'fair';
         return 'poor';
       }
-
       function pct(val) {
         if (val === null || val === undefined) return '0%';
         var s = String(val);
@@ -706,36 +497,36 @@
             simBtn.disabled = false;
             simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
             simStatus.style.display = '';
-            simStatusText.textContent = 'Simulator not loaded. Please refresh the page.';
+            simStatus.style.color = 'var(--cc-danger)';
+            simStatusText.textContent = 'Simulator not loaded. Please refresh.';
             return;
           }
 
+          console.log('[CC] Simulating lead...');
           var lead = genCall();
-          var leadName = lead.caller || 'Customer';
-          var leadValue = lead.avgPrice || 0;
+          var leadName = lead && lead.caller ? lead.caller : 'Customer';
+          var leadValue = lead && lead.avgPrice ? lead.avgPrice : 0;
 
           if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
-            PolarisEngine.analyzeLead(lead);
+            try { PolarisEngine.analyzeLead(lead); } catch(e) { console.warn('[CC] analyzeLead error:', e); }
           }
 
-          // Show status
           simStatus.style.display = '';
-          simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + leadValue.toLocaleString() + ' estimated)';
           simStatus.style.color = 'var(--cc-success)';
+          simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
 
-          // Refresh the dashboard
           render();
 
-          // Re-enable after a short delay
           setTimeout(function() {
             simBtn.disabled = false;
             simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
           }, 2000);
-        } catch (e) {
+        } catch(e) {
+          console.error('[CC] Simulation error:', e);
           simBtn.disabled = false;
           simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
           simStatus.style.display = '';
-          simStatusText.textContent = 'Simulation error: ' + e.message;
+          simStatusText.textContent = 'Simulation error: ' + (e.message || e);
           simStatus.style.color = 'var(--cc-danger)';
         }
       };
@@ -769,7 +560,7 @@
           var alerts = results[6] || {};
 
           var elapsed = Date.now() - startTime;
-          var delay = elapsed < 350 ? 350 - elapsed : 0;
+          var delay = elapsed < 250 ? 250 - elapsed : 0;
 
           setTimeout(function() {
             loading.style.display = 'none';
@@ -790,16 +581,16 @@
                 parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
               }
               if (pipe.activeDeals > 0) {
-                parts.push('Polaris has identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' worth <strong>' + fmtCurr(pipe.weightedValue) + '</strong>.');
+                parts.push('Polaris identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' worth <strong>' + fmtCurr(pipe.weightedValue) + '</strong>.');
               }
               if (rev.outstanding > 0) {
-                parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> in outstanding revenue requires attention.');
+                parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> outstanding.');
               }
               if (rev.forecast > 0) {
-                parts.push('Forecasted revenue: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
+                parts.push('Forecast: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
               }
               if (kpis.companyHealthScore > 0 && parts.length === 0) {
-                parts.push('Company health score: <strong>' + kpis.companyHealthScore + '/100</strong>.');
+                parts.push('Health score: <strong>' + kpis.companyHealthScore + '/100</strong>.');
               }
             } else {
               parts.push('Polaris is monitoring your business. Start a simulated or live customer interaction to generate operational intelligence.');
@@ -813,20 +604,20 @@
               { icon: '\uD83D\uDC65', label: 'New Leads', value: fmtNum(kpis.activeDeals || pipe.activeDeals) },
               { icon: '\uD83D\uDCCB', label: 'Pending Estimates', value: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : (kpis.totalDeals || 0) - (kpis.wonDeals || 0)) },
               { icon: '\uD83D\uDCB0', label: 'Revenue Pipeline', value: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue) },
-              { icon: '\uD83D\uDCC5', label: 'Jobs Scheduled Today', value: fmtNum(agenda && agenda.length ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0) },
-              { icon: '\uD83D\uDCAC', label: 'Outstanding Follow-Ups', value: fmtNum(kpis.overdueTasks || 0) },
+              { icon: '\uD83D\uDCC5', label: 'Scheduled Today', value: fmtNum(agenda && agenda.length ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0) },
+              { icon: '\uD83D\uDCAC', label: 'Follow-Ups', value: fmtNum(kpis.overdueTasks || 0) },
               { icon: '\uD83D\uDCC8', label: 'Win Rate', value: pct(kpis.winRate || pipe.winRate || 0) },
-              { icon: '\uD83D\uDC9A', label: 'Company Health', value: (kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0) + '' }
+              { icon: '\uD83D\uDC9A', label: 'Health', value: (kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0) + '' }
             ];
             var bgColors = [
-              'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%)',
-              'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(59,130,246,0.02) 100%)',
-              'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.02) 100%)',
-              'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)',
-              'linear-gradient(135deg, rgba(139,92,246,0.08) 0%, rgba(139,92,246,0.02) 100%)',
-              'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0.02) 100%)',
-              'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%)',
-              'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(59,130,246,0.02) 100%)'
+              'linear-gradient(135deg, rgba(16,185,129,0.07) 0%, rgba(16,185,129,0.01) 100%)',
+              'linear-gradient(135deg, rgba(59,130,246,0.07) 0%, rgba(59,130,246,0.01) 100%)',
+              'linear-gradient(135deg, rgba(245,158,11,0.07) 0%, rgba(245,158,11,0.01) 100%)',
+              'linear-gradient(135deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.01) 100%)',
+              'linear-gradient(135deg, rgba(139,92,246,0.07) 0%, rgba(139,92,246,0.01) 100%)',
+              'linear-gradient(135deg, rgba(239,68,68,0.07) 0%, rgba(239,68,68,0.01) 100%)',
+              'linear-gradient(135deg, rgba(16,185,129,0.07) 0%, rgba(16,185,129,0.01) 100%)',
+              'linear-gradient(135deg, rgba(59,130,246,0.07) 0%, rgba(59,130,246,0.01) 100%)'
             ];
             kpiGrid.innerHTML = kpiItems.map(function(k, i) {
               return '<div class="cc-kpi" style="background:' + bgColors[i % bgColors.length] + '">' +
@@ -838,41 +629,21 @@
             // ── SECTION 3: Today's Priorities ──
             var priorityEl = document.getElementById('ccPriorities');
             var priorityItems = [];
-
             if (alerts.alerts && alerts.alerts.length > 0) {
               alerts.alerts.forEach(function(a) {
-                priorityItems.push({
-                  rank: priorityItems.length + 1,
-                  title: a.type || 'Alert',
-                  badge: a.severity || 'medium',
-                  desc: a.message || '',
-                  impact: a.severity === 'critical' ? 'Critical' : 'Operational'
-                });
+                priorityItems.push({ rank: priorityItems.length + 1, title: a.type || 'Alert', badge: a.severity || 'medium', desc: a.message || '', impact: a.severity === 'critical' ? 'Critical' : 'Operational' });
               });
             }
             if (Array.isArray(agenda) && agenda.length > 0) {
               agenda.slice(0, 3).forEach(function(t) {
-                priorityItems.push({
-                  rank: priorityItems.length + 1,
-                  title: t.title || t.name || 'Task',
-                  badge: t.priority || 'medium',
-                  desc: t.description || t.details || '',
-                  impact: t.impact || 'Task'
-                });
+                priorityItems.push({ rank: priorityItems.length + 1, title: t.title || t.name || 'Task', badge: t.priority || 'medium', desc: t.description || t.details || '', impact: t.impact || 'Task' });
               });
             }
             if (exec.recommendations && exec.recommendations.length > 0) {
               exec.recommendations.slice(0, 2).forEach(function(r) {
-                priorityItems.push({
-                  rank: priorityItems.length + 1,
-                  title: r.title || r.action || 'Recommendation',
-                  badge: r.priority || 'medium',
-                  desc: r.explanation || r.reason || '',
-                  impact: r.businessImpact || 'Business'
-                });
+                priorityItems.push({ rank: priorityItems.length + 1, title: r.title || r.action || 'Recommendation', badge: r.priority || 'medium', desc: r.explanation || r.reason || '', impact: r.businessImpact || 'Business' });
               });
             }
-
             if (priorityItems.length > 0) {
               priorityEl.innerHTML = priorityItems.slice(0, 5).map(function(p) {
                 return '<div class="cc-priority-item">' +
@@ -886,7 +657,7 @@
                   '</div></div>';
               }).join('');
             } else {
-              priorityEl.innerHTML = '<div class="cc-empty"><div class="cc-empty-icon">&#9989;</div>You\'re all caught up. Polaris will surface high-impact opportunities as your business activity grows.</div>';
+              priorityEl.innerHTML = '<div class="cc-empty">You\'re all caught up. Polaris will surface high-impact opportunities as activity grows.</div>';
             }
 
             // ── SECTION 4: Revenue Opportunity ──
@@ -898,12 +669,11 @@
                 '<div class="cc-rev-stat"><div class="cc-rev-val green">' + fmtCurr(rev.forecast || 0) + '</div><div class="cc-rev-label">Forecast</div></div>' +
                 '<div class="cc-rev-stat"><div class="cc-rev-val">' + (rev.collectionRate || pct(kpis.collectionRate) || '0%') + '</div><div class="cc-rev-label">Collection Rate</div></div>' +
                 '</div>' +
-                '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--cc-border);font-size:12px;color:var(--cc-text-secondary);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">' +
-                '<span>Pipeline: <strong>' + fmtCurr(pipe.weightedValue || kpis.weightedPipelineValue) + '</strong> across ' + fmtNum(pipe.activeDeals || kpis.activeDeals) + ' deals</span>' +
-                '<span>Win rate: <strong>' + pct(pipe.winRate || kpis.winRate || 0) + '</strong></span>' +
-                '</div>';
+                '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--cc-border);font-size:11px;color:var(--cc-text-secondary);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">' +
+                '<span>Pipeline: <strong>' + fmtCurr(pipe.weightedValue || kpis.weightedPipelineValue) + '</strong></span>' +
+                '<span>Win rate: <strong>' + pct(pipe.winRate || kpis.winRate || 0) + '</strong></span></div>';
             } else {
-              revenueEl.innerHTML = '<div class="cc-empty"><div class="cc-empty-icon">&#128176;</div>Revenue forecasts will appear after Polaris analyzes customer conversations, estimates, and scheduling activity.</div>';
+              revenueEl.innerHTML = '<div class="cc-empty">Revenue forecasts appear after Polaris analyzes conversations, estimates, and scheduling.</div>';
             }
 
             // ── SECTION 5: Operational Pipeline ──
@@ -913,7 +683,6 @@
             var completedJobs = kpis.completedJobs || ops.completedJobs || 0;
             var pendingEstimates = kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : 0;
             var scheduled = (agenda && agenda.length) ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0;
-
             var stages = [
               { icon: '\uD83D\uDCDE', count: fmtNum(kpis.activeDeals || pipe.activeDeals || 0), label: 'Incoming', pct: 25 },
               { icon: '\uD83D\uDCCB', count: fmtNum(pendingEstimates), label: 'Estimates', pct: 25 },
@@ -928,35 +697,24 @@
                   '<div class="cc-pipe-icon">' + s.icon + '</div>' +
                   '<div class="cc-pipe-count">' + s.count + '</div>' +
                   '<div class="cc-pipe-label">' + s.label + '</div>' +
-                  '<div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:' + s.pct + '%;background:' + fillColors[i] + '"></div></div>' +
-                  '</div>';
+                  '<div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:' + s.pct + '%;background:' + fillColors[i] + '"></div></div></div>';
               }).join('') + '</div>';
 
             // ── SECTION 6: Customer Intelligence ──
             var custEl = document.getElementById('ccCustomers');
             if (Array.isArray(customers) && customers.length > 0) {
-              var custList = customers.slice(0, 6);
               custEl.innerHTML = '<div class="cc-cust-list">' +
-                custList.map(function(c) {
-                  var tag = 'new';
-                  var tagLabel = 'New';
-                  if (c.totalJobs > 0 || c.status === 'active') {
-                    tag = 'returning';
-                    tagLabel = 'Returning';
-                  }
-                  if (c.health !== undefined && c.health < 40) {
-                    tag = 'attention';
-                    tagLabel = 'Attention';
-                  }
+                customers.slice(0, 6).map(function(c) {
+                  var tag = 'new', tagLabel = 'New';
+                  if (c.totalJobs > 0 || c.status === 'active') { tag = 'returning'; tagLabel = 'Returning'; }
+                  if (c.health !== undefined && c.health < 40) { tag = 'attention'; tagLabel = 'Attention'; }
                   return '<a href="/dashboard/polaris" class="cc-cust-item">' +
                     '<span class="cc-cust-name">' + (c.name || 'Unknown') + '</span>' +
                     '<span class="cc-cust-tag ' + tag + '">' + tagLabel + '</span></a>';
-                }).join('') + '</div>';
-              if (customers.length > 6) {
-                custEl.innerHTML += '<div class="cc-empty" style="padding:6px;font-size:11px;">+' + (customers.length - 6) + ' more customers</div>';
-              }
+                }).join('') + '</div>' +
+                (customers.length > 6 ? '<div class="cc-empty" style="padding:4px;font-size:10px;">+' + (customers.length - 6) + ' more</div>' : '');
             } else {
-              custEl.innerHTML = '<div class="cc-empty"><div class="cc-empty-icon">&#128101;</div>Customer profiles will appear as Polaris processes incoming calls and interactions. Start a simulation above to see this section populate.</div>';
+              custEl.innerHTML = '<div class="cc-empty">Customer profiles appear as Polaris processes incoming calls. Start a simulation above.</div>';
             }
 
             // ── SECTION 7: Business Health ──
@@ -970,13 +728,13 @@
             var opsHealth = taskComp > 80 ? 85 : taskComp > 60 ? 70 : taskComp > 40 ? 55 : 30;
             var custCount = kpis.totalCustomers || (Array.isArray(customers) ? customers.length : 0);
             var custHealth = custCount > 10 ? 80 : custCount > 5 ? 65 : custCount > 0 ? 50 : 30;
-
             var healthItems = [
-              { score: overallHealth, label: 'Overall Business', desc: 'Composite of all health dimensions' },
-              { score: revenueHealth, label: 'Revenue Health', desc: 'Based on collection rate: ' + pct(collRate) },
-              { score: salesHealth, label: 'Sales Health', desc: 'Based on win rate: ' + pct(winRt) },
-              { score: opsHealth, label: 'Operations Health', desc: 'Based on task completion: ' + pct(taskComp) },
-              { score: custHealth, label: 'Customer Health', desc: custCount + ' customer' + (custCount !== 1 ? 's' : '') + ' in system' }
+              { score: overallHealth, label: 'Overall', desc: 'Composite health score' },
+              { score: revenueHealth, label: 'Revenue', desc: 'Collection rate: ' + pct(collRate) },
+              { score: salesHealth, label: 'Sales', desc: 'Win rate: ' + pct(winRt) },
+              { score: opsHealth, label: 'Operations', desc: 'Task completion: ' + pct(taskComp) },
+              { score: custHealth, label: 'Customer', desc: custCount + ' customer' + (custCount !== 1 ? 's' : '') },
+              { score: overallHealth, label: 'Polaris', desc: 'AI-driven assessment' }
             ];
             healthEl.innerHTML = healthItems.map(function(h) {
               return '<div class="cc-health-item">' +
@@ -988,26 +746,25 @@
             // ── SECTION 8: Quick Actions ──
             var actionsEl = document.getElementById('ccActions');
             actionsEl.innerHTML =
-              '<a href="/dashboard/polaris" class="cc-action-btn primary">&#9733; Open Polaris</a>' +
-              '<a href="/dashboard/leads" class="cc-action-btn">&#128100; Review Leads</a>' +
-              '<a href="/dashboard/communications" class="cc-action-btn">&#128172; Communications</a>' +
+              '<a href="/dashboard/polaris" class="cc-action-btn">&#9733; Polaris</a>' +
+              '<a href="/dashboard/leads" class="cc-action-btn">&#128100; Leads</a>' +
+              '<a href="/dashboard/communications" class="cc-action-btn">&#128172; Comms</a>' +
               '<a href="/dashboard/calendar" class="cc-action-btn">&#128197; Calendar</a>' +
-              '<a href="/dashboard/executive-brief" class="cc-action-btn">&#128200; Executive Brief</a>' +
+              '<a href="/dashboard/executive-brief" class="cc-action-btn">&#128200; Brief</a>' +
               '<a href="/dashboard/settings" class="cc-action-btn">&#9881; Settings</a>';
 
           }, delay);
         }).catch(function(err) {
           loading.style.display = 'none';
           content.style.display = '';
-          document.getElementById('ccSummary').textContent = 'Command Center is loading — Polaris may be initializing. Please wait or refresh the page.';
+          document.getElementById('ccSummary').textContent = 'Command Center is loading — Polaris may be initializing. Please refresh.';
           document.getElementById('ccKpiGrid').innerHTML = '<div class="cc-empty">' + err.message + '</div>';
         });
       }
 
       // Initial render
       render();
-
-      // Auto-refresh every 60 seconds — silent update
+      // Auto-refresh every 60 seconds
       setInterval(render, 60000);
     })();
   </script>

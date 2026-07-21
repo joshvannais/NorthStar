@@ -642,12 +642,34 @@
           el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+s.color+'"></div></div></div>';}).join('')+'</div>';
         }
 
+        // ── Customer detail drawer ──
+        window.ccOpenCustomer = function(customerId) {
+          if (!customerId) return;
+          apiFetch('/api/v1/customers').then(function(r) { return r.json(); }).then(function(data) {
+            var customers = data.customers || [];
+            var cust = customers.find(function(c) { return c.id === customerId; });
+            if (!cust) return;
+            var html = '<div class="cal-modal-overlay" id="ccCustOverlay" onclick="document.getElementById(\'ccCustOverlay\').remove()">' +
+              '<div class="cal-modal" onclick="event.stopPropagation()" style="max-width:480px;">' +
+              '<div class="cal-modal-header"><h2>' + (cust.name || 'Customer') + '</h2>' +
+              '<button class="cal-modal-close" onclick="document.getElementById(\'ccCustOverlay\').remove()">&times;</button></div>' +
+              '<div class="cal-modal-body" style="font-size:12px;line-height:1.6;">';
+            if (cust.email) html += '<div><strong>Email:</strong> ' + cust.email + '</div>';
+            if (cust.phone) html += '<div><strong>Phone:</strong> ' + cust.phone + '</div>';
+            if (cust.address) html += '<div><strong>Address:</strong> ' + cust.address + '</div>';
+            html += '<div style="margin-top:8px;"><strong>Status:</strong> ' + (cust.status || 'active') + '</div>';
+            if (cust.totalJobs) html += '<div><strong>Total Jobs:</strong> ' + cust.totalJobs + '</div>';
+            html += '</div></div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+          }).catch(function() {});
+        };
+
         function renderCustomers(customers) {
           customers = Array.isArray(customers) ? customers : [];
           var el = document.getElementById('ccCustomers');
           if (!el) return;
           el.innerHTML = customers.length > 0 ?
-            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
+            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" onclick="ccOpenCustomer('+c.id+')" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
             '<div class="cc-empty">Customer profiles appear as Polaris™ processes calls. Start a simulation above.</div>';
         }
 

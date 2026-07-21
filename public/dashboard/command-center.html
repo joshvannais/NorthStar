@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <style>
+    /* ── CSS Custom Properties ── */
     :root {
       --cc-bg: var(--neutral-50, #f8f9fa);
       --cc-card: #ffffff;
@@ -20,14 +21,6 @@
       --cc-warning: #f59e0b;
       --cc-danger: #ef4444;
       --cc-info: #3b82f6;
-      --cc-kpi-bg-1: rgba(16,185,129,0.08);
-      --cc-kpi-bg-2: rgba(59,130,246,0.08);
-      --cc-kpi-bg-3: rgba(245,158,11,0.08);
-      --cc-kpi-bg-4: rgba(212,175,55,0.08);
-      --cc-kpi-bg-5: rgba(139,92,246,0.08);
-      --cc-kpi-bg-6: rgba(239,68,68,0.08);
-      --cc-kpi-bg-7: rgba(16,185,129,0.08);
-      --cc-kpi-bg-8: rgba(59,130,246,0.08);
     }
     [data-theme="dark"] {
       --cc-bg: var(--neutral-900, #1a1a2e);
@@ -35,6 +28,7 @@
       --cc-border: var(--neutral-700, #3d3d5c);
       --cc-text: var(--neutral-100, #f8f9fa);
       --cc-text-secondary: var(--neutral-400, #adb5bd);
+      --cc-text-muted: var(--neutral-500, #6c757d);
     }
 
     * { box-sizing: border-box; }
@@ -42,8 +36,75 @@
     .cc-workspace {
       max-width: 1400px;
       margin: 0 auto;
-      padding: 20px 24px;
+      padding: 24px 28px;
     }
+
+    /* ── Simulate Lead CTA ── */
+    .cc-sim-banner {
+      background: linear-gradient(135deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.02) 100%);
+      border: 1px solid rgba(212,175,55,0.2);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .cc-sim-text { flex: 1; min-width: 200px; }
+    .cc-sim-text p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--cc-text-secondary);
+      line-height: 1.5;
+    }
+    .cc-sim-text strong { color: var(--cc-text); }
+    .cc-sim-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      border-radius: 8px;
+      border: none;
+      background: linear-gradient(135deg, var(--cc-accent) 0%, #c9a227 100%);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(212,175,55,0.3);
+    }
+    .cc-sim-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(212,175,55,0.4);
+    }
+    .cc-sim-btn:active { transform: translateY(0); }
+    .cc-sim-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .cc-sim-spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: cc-spin 0.6s linear infinite;
+    }
+    @keyframes cc-spin { to { transform: rotate(360deg); } }
+
+    .cc-sim-status {
+      font-size: 12px;
+      color: var(--cc-success);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .cc-sim-status .cc-note { color: var(--cc-text-muted); }
 
     /* ── Header ── */
     .cc-header {
@@ -55,10 +116,11 @@
       gap: 8px;
     }
     .cc-header-left h1 {
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 700;
       margin: 0;
       color: var(--cc-text);
+      letter-spacing: -0.3px;
     }
     .cc-header-left .cc-sub {
       font-size: 13px;
@@ -73,105 +135,88 @@
       border-radius: 50%;
       background: var(--cc-success);
       display: inline-block;
-      animation: pulse 2s infinite;
+      animation: cc-pulse 2s infinite;
     }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes cc-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
     .cc-refresh-btn {
       font-size: 12px;
-      padding: 6px 14px;
+      padding: 7px 16px;
       border-radius: 6px;
       border: 1px solid var(--cc-border);
       background: var(--cc-card);
       color: var(--cc-text-secondary);
       cursor: pointer;
       transition: all 0.15s;
+      font-weight: 500;
     }
     .cc-refresh-btn:hover {
       border-color: var(--cc-accent);
       color: var(--cc-accent);
+      background: rgba(212,175,55,0.04);
     }
-
-    /* ── Grid ── */
-    .cc-grid {
-      display: grid;
-      gap: 16px;
-    }
-    .cc-grid-2 { grid-template-columns: 1fr 1fr; }
-    .cc-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
-    .cc-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
-    .cc-grid-full { grid-column: 1 / -1; }
 
     /* ── Cards ── */
     .cc-card {
       background: var(--cc-card);
       border: 1px solid var(--cc-border);
       border-radius: 12px;
-      padding: 18px 20px;
+      padding: 20px 22px;
       transition: box-shadow 0.2s;
     }
-
-    /* ── Card Title ── */
     .cc-card-title {
       font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: var(--cc-text-muted);
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
+    .cc-card + .cc-card { margin-top: 16px; }
 
     /* ── Executive Summary ── */
     .cc-summary-text {
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.65;
       color: var(--cc-text);
     }
     .cc-summary-text strong { color: var(--cc-accent); font-weight: 600; }
 
-    /* ── KPI Cards ── */
+    /* ── KPI Grid ── */
     .cc-kpi-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 12px;
     }
     .cc-kpi {
-      padding: 14px 16px;
+      padding: 16px 18px;
       border-radius: 10px;
       border: 1px solid var(--cc-border);
       background: var(--cc-card);
-      cursor: pointer;
+      cursor: default;
       transition: all 0.2s;
       position: relative;
       overflow: hidden;
     }
     .cc-kpi:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
     }
-    .cc-kpi-icon {
-      font-size: 18px;
-      margin-bottom: 6px;
+    [data-theme="dark"] .cc-kpi:hover {
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     }
+    .cc-kpi-icon { font-size: 20px; margin-bottom: 8px; }
     .cc-kpi-value {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 700;
       color: var(--cc-text);
-      line-height: 1.2;
+      line-height: 1.15;
     }
-    .cc-kpi-value .cc-cur { font-size: 13px; font-weight: 500; color: var(--cc-text-secondary); }
     .cc-kpi-label {
       font-size: 11px;
       color: var(--cc-text-secondary);
-      margin-top: 2px;
+      margin-top: 3px;
+      font-weight: 500;
     }
-    .cc-kpi-loading {
-      height: 60px;
-      background: linear-gradient(90deg, var(--cc-border) 25%, transparent 50%, var(--cc-border) 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
-      border-radius: 6px;
-    }
-    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
     /* ── Priorities ── */
     .cc-priority-item {
@@ -194,7 +239,10 @@
     }
     .cc-priority-body { flex: 1; min-width: 0; }
     .cc-priority-title { font-size: 14px; font-weight: 600; color: var(--cc-text); }
-    .cc-priority-meta { font-size: 11px; color: var(--cc-text-secondary); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .cc-priority-meta {
+      font-size: 11px; color: var(--cc-text-secondary);
+      margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap;
+    }
     .cc-priority-badge {
       font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px; text-transform: uppercase;
     }
@@ -215,7 +263,7 @@
       padding: 10px 6px;
     }
     .cc-rev-val {
-      font-size: 20px;
+      font-size: 21px;
       font-weight: 700;
       color: var(--cc-text);
     }
@@ -229,41 +277,43 @@
       display: flex;
       align-items: center;
       gap: 0;
-      padding: 8px 0;
+      padding: 4px 0;
     }
     .cc-pipe-stage {
       flex: 1;
       text-align: center;
-      padding: 8px 4px;
+      padding: 8px 6px;
       position: relative;
     }
     .cc-pipe-stage:not(:last-child)::after {
-      content: '→';
+      content: '\2192';
       position: absolute;
-      right: -8px;
+      right: -10px;
       top: 50%;
       transform: translateY(-50%);
       color: var(--cc-text-muted);
-      font-size: 14px;
+      font-size: 16px;
+      opacity: 0.5;
     }
-    .cc-pipe-icon { font-size: 18px; }
+    .cc-pipe-icon { font-size: 20px; margin-bottom: 2px; }
     .cc-pipe-count {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
       color: var(--cc-text);
       margin: 2px 0;
     }
     .cc-pipe-label { font-size: 10px; color: var(--cc-text-secondary); font-weight: 500; }
     .cc-pipe-bar {
-      height: 3px;
+      height: 4px;
       border-radius: 2px;
-      margin-top: 6px;
+      margin-top: 8px;
       background: var(--cc-border);
+      overflow: hidden;
     }
     .cc-pipe-fill {
       height: 100%;
       border-radius: 2px;
-      transition: width 0.6s ease;
+      transition: width 0.8s ease;
     }
 
     /* ── Customers ── */
@@ -272,16 +322,18 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 8px 12px;
-      border-radius: 6px;
+      padding: 9px 13px;
+      border-radius: 7px;
       background: var(--cc-bg);
       cursor: pointer;
       transition: all 0.15s;
+      text-decoration: none;
+      color: inherit;
     }
     .cc-cust-item:hover { background: var(--cc-border); }
     .cc-cust-name { font-size: 13px; font-weight: 500; color: var(--cc-text); flex: 1; }
     .cc-cust-tag {
-      font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px;
+      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 3px;
     }
     .cc-cust-tag.new { background: rgba(16,185,129,0.15); color: var(--cc-success); }
     .cc-cust-tag.returning { background: rgba(59,130,246,0.15); color: var(--cc-info); }
@@ -295,13 +347,15 @@
     }
     .cc-health-item {
       text-align: center;
-      padding: 14px 8px;
-      border-radius: 8px;
+      padding: 16px 10px;
+      border-radius: 9px;
       border: 1px solid var(--cc-border);
       background: var(--cc-bg);
+      transition: all 0.15s;
     }
+    .cc-health-item:hover { border-color: var(--cc-accent); }
     .cc-health-score {
-      font-size: 28px;
+      font-size: 30px;
       font-weight: 800;
       line-height: 1;
     }
@@ -309,8 +363,8 @@
     .cc-health-score.good { color: var(--cc-info); }
     .cc-health-score.fair { color: var(--cc-warning); }
     .cc-health-score.poor { color: var(--cc-danger); }
-    .cc-health-label { font-size: 11px; color: var(--cc-text-secondary); margin-top: 4px; font-weight: 500; }
-    .cc-health-desc { font-size: 10px; color: var(--cc-text-muted); margin-top: 2px; line-height: 1.3; }
+    .cc-health-label { font-size: 11px; color: var(--cc-text-secondary); margin-top: 5px; font-weight: 500; }
+    .cc-health-desc { font-size: 10px; color: var(--cc-text-muted); margin-top: 3px; line-height: 1.35; }
 
     /* ── Quick Actions ── */
     .cc-actions {
@@ -319,10 +373,10 @@
       gap: 8px;
     }
     .cc-action-btn {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 9px 16px;
+      gap: 7px;
+      padding: 10px 18px;
       border-radius: 8px;
       border: 1px solid var(--cc-border);
       background: var(--cc-card);
@@ -332,37 +386,58 @@
       cursor: pointer;
       text-decoration: none;
       transition: all 0.15s;
+      min-height: 40px;
     }
     .cc-action-btn:hover {
       border-color: var(--cc-accent);
       color: var(--cc-accent);
       transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(212,175,55,0.1);
     }
+    .cc-action-btn:active { transform: translateY(0); }
     .cc-action-btn.primary {
       background: var(--cc-accent);
       color: #fff;
       border-color: var(--cc-accent);
     }
     .cc-action-btn.primary:hover {
-      opacity: 0.9;
+      background: #c9a227;
       color: #fff;
+      border-color: #c9a227;
+      box-shadow: 0 2px 12px rgba(212,175,55,0.3);
     }
 
-    /* ── Empty & Loading ── */
+    /* ── Grid Layout ── */
+    .cc-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .cc-grid-2 { grid-template-columns: 1fr 1fr; }
+
+    /* ── Empty States ── */
     .cc-empty {
       text-align: center;
-      padding: 20px;
+      padding: 24px 16px;
       color: var(--cc-text-secondary);
       font-size: 13px;
+      line-height: 1.5;
     }
+    .cc-empty-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+
+    /* ── Loading ── */
     .cc-loading-skeleton {
       height: 20px;
       background: linear-gradient(90deg, var(--cc-border) 25%, transparent 50%, var(--cc-border) 75%);
       background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
-      border-radius: 4px;
+      animation: cc-shimmer 1.5s infinite;
+      border-radius: 5px;
       margin-bottom: 8px;
     }
+    @keyframes cc-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
     .cc-loading-skeleton.w70 { width: 70%; }
     .cc-loading-skeleton.w50 { width: 50%; }
     .cc-loading-skeleton.h40 { height: 40px; }
@@ -371,23 +446,28 @@
     /* ── Responsive ── */
     @media (max-width: 1024px) {
       .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-      .cc-health-grid { grid-template-columns: repeat(3, 1fr); }
+      .cc-workspace { padding: 20px; }
     }
     @media (max-width: 768px) {
-      .cc-workspace { padding: 14px 16px; }
+      .cc-workspace { padding: 14px; }
       .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-      .cc-health-grid { grid-template-columns: repeat(2, 1fr); }
       .cc-grid-2 { grid-template-columns: 1fr; }
-      .cc-grid-3 { grid-template-columns: 1fr; }
-      .cc-grid-4 { grid-template-columns: 1fr; }
       .cc-rev-grid { grid-template-columns: repeat(2, 1fr); }
-      .cc-pipeline { flex-wrap: wrap; }
-      .cc-pipe-stage { min-width: 50%; }
+      .cc-pipeline { flex-wrap: wrap; gap: 8px; }
+      .cc-pipe-stage { min-width: 45%; }
       .cc-pipe-stage:nth-child(2)::after { display: none; }
+      .cc-pipe-stage:nth-child(4)::after { display: none; }
+      .cc-sim-banner { flex-direction: column; align-items: stretch; text-align: center; }
+      .cc-sim-btn { justify-content: center; }
+      .cc-header-left h1 { font-size: 18px; }
+      .cc-actions { gap: 6px; }
+      .cc-action-btn { flex: 1; justify-content: center; min-width: 0; }
     }
     @media (max-width: 480px) {
       .cc-kpi-grid { grid-template-columns: 1fr; }
       .cc-health-grid { grid-template-columns: 1fr; }
+      .cc-pipe-stage { min-width: 100%; }
+      .cc-pipe-stage::after { display: none !important; }
     }
   </style>
 </head>
@@ -428,26 +508,51 @@
           <span>Settings</span>
         </a>
       </nav>
-      <div class="sidebar-footer">
-        <a href="/logout" class="sidebar-item">Sign Out</a>
+      <div class="sidebar-footer" style="padding:12px;display:flex;flex-direction:column;gap:4px;">
+        <button class="sidebar-item theme-toggle" onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;width:100%;text-align:left;font-size:18px;padding:10px 12px;border-radius:8px;color:var(--neutral-300);transition:all 0.15s;">
+          <span style="display:flex;align-items:center;gap:8px;"><span id="themeToggleIcon">&#127769;</span><span style="font-size:13px;" id="themeToggleLabel">Dark Mode</span></span>
+        </button>
+        <a href="/logout" class="sidebar-item" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+          <span>Sign Out</span>
+        </a>
       </div>
     </aside>
     <main class="main-content" id="mainContent">
       <div class="cc-workspace" id="ccRoot">
-        <!-- Header -->
+
+        <!-- ═══ SIMULATE LEAD ═══ -->
+        <div class="cc-sim-banner" id="ccSimBanner">
+          <div class="cc-sim-text">
+            <p style="margin-bottom:2px;font-weight:600;font-size:14px;color:var(--cc-text);">Try Polaris Intelligence</p>
+            <p>Generate a realistic customer interaction and watch Polaris process the entire workflow — from lead creation to business intelligence — in real time.</p>
+            <div class="cc-sim-status" id="ccSimStatus" style="display:none;">
+              <span>&#9989;</span>
+              <span id="ccSimStatusText">Lead generated &mdash; updating dashboard...</span>
+              <span class="cc-note" id="ccSimStatusNote"></span>
+            </div>
+          </div>
+          <button class="cc-sim-btn" id="ccSimBtn" onclick="ccSimulateLead()">
+            <span>&#127917;</span>
+            <span>Simulate Lead</span>
+          </button>
+        </div>
+
+        <!-- ═══ HEADER ═══ -->
         <div class="cc-header">
           <div class="cc-header-left">
             <h1>Command Center</h1>
             <div class="cc-sub">
               <span class="cc-live-dot"></span>
               <span>Polaris Intelligence</span>
-              <span id="ccTimestamp">—</span>
+              <span style="opacity:0.4;">&middot;</span>
+              <span id="ccTimestamp">&mdash;</span>
             </div>
           </div>
           <button class="cc-refresh-btn" onclick="ccRefresh()">Refresh Now</button>
         </div>
 
-        <!-- Loading State -->
+        <!-- ═══ LOADING ═══ -->
         <div id="ccLoading" style="margin-bottom:16px;">
           <div class="cc-loading-skeleton w70" style="margin-bottom:12px;"></div>
           <div class="cc-loading-skeleton" style="margin-bottom:6px;"></div>
@@ -464,23 +569,23 @@
           </div>
         </div>
 
-        <!-- Content -->
+        <!-- ═══ CONTENT ═══ -->
         <div id="ccContent" style="display:none;">
 
           <!-- SECTION 1: Executive Brief -->
-          <div class="cc-card" style="margin-bottom:16px;">
+          <div class="cc-card">
             <div class="cc-card-title">Executive Brief</div>
             <div class="cc-summary-text" id="ccSummary">Loading...</div>
           </div>
 
           <!-- SECTION 2: KPI Grid -->
-          <div class="cc-card" style="margin-bottom:16px;">
+          <div class="cc-card">
             <div class="cc-card-title">Key Performance Indicators</div>
             <div class="cc-kpi-grid" id="ccKpiGrid">Loading...</div>
           </div>
 
-          <!-- SECTION 3 + 4: Priorities + Revenue (2-col) -->
-          <div class="cc-grid cc-grid-2" style="margin-bottom:16px;">
+          <!-- SECTION 3 + 4: Priorities + Revenue -->
+          <div class="cc-grid cc-grid-2" style="margin-top:16px;">
             <div class="cc-card">
               <div class="cc-card-title">Today's Priorities</div>
               <div id="ccPriorities">Loading...</div>
@@ -492,25 +597,25 @@
           </div>
 
           <!-- SECTION 5: Operational Pipeline -->
-          <div class="cc-card" style="margin-bottom:16px;">
+          <div class="cc-card" style="margin-top:16px;">
             <div class="cc-card-title">Operational Pipeline</div>
             <div id="ccPipeline">Loading...</div>
           </div>
 
           <!-- SECTION 6: Customer Intelligence -->
-          <div class="cc-card" style="margin-bottom:16px;">
+          <div class="cc-card" style="margin-top:16px;">
             <div class="cc-card-title">Customer Intelligence</div>
             <div id="ccCustomers">Loading...</div>
           </div>
 
           <!-- SECTION 7: Business Health -->
-          <div class="cc-card" style="margin-bottom:16px;">
+          <div class="cc-card" style="margin-top:16px;">
             <div class="cc-card-title">Business Health</div>
             <div class="cc-health-grid" id="ccHealth">Loading...</div>
           </div>
 
           <!-- SECTION 8: Quick Actions -->
-          <div class="cc-card" style="margin-bottom:16px;">
+          <div class="cc-card" style="margin-top:16px;">
             <div class="cc-card-title">Quick Actions</div>
             <div class="cc-actions" id="ccActions"></div>
           </div>
@@ -520,11 +625,46 @@
     </main>
   </div>
 
+  <!-- Shared JS -->
+  <script src="/js/theme.js"></script>
+  <script src="/js/simulator.js"></script>
+  <script src="/js/polaris-engine.js"></script>
+  <script src="/js/notification-service.js"></script>
+  <script src="/js/app-store.js"></script>
+
   <script>
     (function() {
       var loading = document.getElementById('ccLoading');
       var content = document.getElementById('ccContent');
+      var simBtn = document.getElementById('ccSimBtn');
+      var simStatus = document.getElementById('ccSimStatus');
+      var simStatusText = document.getElementById('ccSimStatusText');
 
+      // ── Theme toggle label sync ──
+      function syncThemeUI() {
+        var theme = document.documentElement.getAttribute('data-theme') || 'light';
+        var icon = document.getElementById('themeToggleIcon');
+        var label = document.getElementById('themeToggleLabel');
+        if (icon) {
+          icon.textContent = theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
+        }
+        if (label) {
+          label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+        }
+      }
+      // Watch for theme changes
+      var origToggle = window.NorthStarTheme && window.NorthStarTheme.toggleTheme;
+      if (window.NorthStarTheme) {
+        var wrappedToggle = function() {
+          origToggle();
+          syncThemeUI();
+        };
+        window.NorthStarTheme.toggleTheme = wrappedToggle;
+      }
+      document.addEventListener('DOMContentLoaded', syncThemeUI);
+      if (document.readyState !== 'loading') syncThemeUI();
+
+      // ── Formatting helpers ──
       function fmtCurr(val) {
         if (val === null || val === undefined) return '$0';
         var n = typeof val === 'number' ? val : parseFloat(val);
@@ -554,12 +694,60 @@
         return Math.round(parseFloat(val)) + '%';
       }
 
-      function ccRefresh() {
+      // ── Simulate Lead ──
+      window.ccSimulateLead = function() {
+        if (simBtn.disabled) return;
+        simBtn.disabled = true;
+        simBtn.innerHTML = '<span class="cc-sim-spinner"></span><span>Processing...</span>';
+        simStatus.style.display = 'none';
+
+        try {
+          if (typeof genCall !== 'function') {
+            simBtn.disabled = false;
+            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+            simStatus.style.display = '';
+            simStatusText.textContent = 'Simulator not loaded. Please refresh the page.';
+            return;
+          }
+
+          var lead = genCall();
+          var leadName = lead.caller || 'Customer';
+          var leadValue = lead.avgPrice || 0;
+
+          if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
+            PolarisEngine.analyzeLead(lead);
+          }
+
+          // Show status
+          simStatus.style.display = '';
+          simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + leadValue.toLocaleString() + ' estimated)';
+          simStatus.style.color = 'var(--cc-success)';
+
+          // Refresh the dashboard
+          render();
+
+          // Re-enable after a short delay
+          setTimeout(function() {
+            simBtn.disabled = false;
+            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+          }, 2000);
+        } catch (e) {
+          simBtn.disabled = false;
+          simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+          simStatus.style.display = '';
+          simStatusText.textContent = 'Simulation error: ' + e.message;
+          simStatus.style.color = 'var(--cc-danger)';
+        }
+      };
+
+      // ── Refresh ──
+      window.ccRefresh = function() {
         loading.style.display = '';
         content.style.display = 'none';
         render();
-      }
+      };
 
+      // ── Render ──
       function render() {
         var startTime = Date.now();
 
@@ -580,9 +768,8 @@
           var agenda = results[5] || [];
           var alerts = results[6] || {};
 
-          // Ensure minimum load time for smooth transition
           var elapsed = Date.now() - startTime;
-          var delay = elapsed < 400 ? 400 - elapsed : 0;
+          var delay = elapsed < 350 ? 350 - elapsed : 0;
 
           setTimeout(function() {
             loading.style.display = 'none';
@@ -598,7 +785,7 @@
             var pipe = exec.pipeline || {};
             var ops = exec.operations || {};
 
-            if (ops.inProgress > 0 || pipe.activeDeals > 0) {
+            if (ops.inProgress > 0 || pipe.activeDeals > 0 || kpis.totalRevenue > 0) {
               if (ops.inProgress > 0) {
                 parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
               }
@@ -611,53 +798,58 @@
               if (rev.forecast > 0) {
                 parts.push('Forecasted revenue: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
               }
-            } else if (kpis.totalRevenue > 0) {
-              parts.push('Total revenue: <strong>' + fmtCurr(kpis.totalRevenue) + '</strong>. ' + fmtNum(kpis.totalJobs || 0) + ' ' + (kpis.totalJobs === 1 ? 'job has' : 'jobs have') + ' been completed.');
-              parts.push('Company health score: <strong>' + (kpis.companyHealthScore || 0) + '/100</strong>.');
+              if (kpis.companyHealthScore > 0 && parts.length === 0) {
+                parts.push('Company health score: <strong>' + kpis.companyHealthScore + '/100</strong>.');
+              }
             } else {
-              parts.push('No active opportunities identified. Use Polaris to start a conversation and generate intelligence.');
+              parts.push('Polaris is monitoring your business. Start a simulated or live customer interaction to generate operational intelligence.');
             }
             summaryEl.innerHTML = parts.join(' ');
 
             // ── SECTION 2: KPI Grid ──
             var kpiGrid = document.getElementById('ccKpiGrid');
-            var kpiData = [
-              { icon: '&#128188;', label: 'Active Jobs', value: fmtNum(kpis.inProgressJobs || kpis.inProgressJobs === 0 ? kpis.inProgressJobs : ops.inProgress), key: 'inProgressJobs' },
-              { icon: '&#128100;', label: 'New Leads', value: fmtNum(kpis.activeDeals || kpis.activeDeals === 0 ? kpis.activeDeals : pipe.activeDeals), key: 'activeDeals' },
-              { icon: '&#128203;', label: 'Pending Estimates', value: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : (kpis.totalDeals || 0) - (kpis.wonDeals || 0)), key: 'pendingEstimates' },
-              { icon: '&#128176;', label: 'Revenue Pipeline', value: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue), key: 'pipelineValue', isCurrency: true },
-              { icon: '&#128197;', label: 'Jobs Scheduled Today', value: fmtNum(agenda && agenda.length ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0), key: 'scheduledToday' },
-              { icon: '&#128172;', label: 'Outstanding Follow-Ups', value: fmtNum(kpis.overdueTasks || 0), key: 'overdueTasks' },
-              { icon: '&#128200;', label: 'Win Rate', value: pct(kpis.winRate || pipe.winRate || 0), key: 'winRate' },
-              { icon: '&#128153;', label: 'Company Health', value: (kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0) + '', key: 'health', isHealth: true }
+            var kpiItems = [
+              { icon: '\uD83D\uDCBC', label: 'Active Jobs', value: fmtNum(kpis.inProgressJobs || ops.inProgress) },
+              { icon: '\uD83D\uDC65', label: 'New Leads', value: fmtNum(kpis.activeDeals || pipe.activeDeals) },
+              { icon: '\uD83D\uDCCB', label: 'Pending Estimates', value: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : (kpis.totalDeals || 0) - (kpis.wonDeals || 0)) },
+              { icon: '\uD83D\uDCB0', label: 'Revenue Pipeline', value: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue) },
+              { icon: '\uD83D\uDCC5', label: 'Jobs Scheduled Today', value: fmtNum(agenda && agenda.length ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0) },
+              { icon: '\uD83D\uDCAC', label: 'Outstanding Follow-Ups', value: fmtNum(kpis.overdueTasks || 0) },
+              { icon: '\uD83D\uDCC8', label: 'Win Rate', value: pct(kpis.winRate || pipe.winRate || 0) },
+              { icon: '\uD83D\uDC9A', label: 'Company Health', value: (kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0) + '' }
             ];
-            var bgColors = ['var(--cc-kpi-bg-1)','var(--cc-kpi-bg-2)','var(--cc-kpi-bg-3)','var(--cc-kpi-bg-4)','var(--cc-kpi-bg-5)','var(--cc-kpi-bg-6)','var(--cc-kpi-bg-7)','var(--cc-kpi-bg-8)'];
-            kpiGrid.innerHTML = kpiData.map(function(k, i) {
+            var bgColors = [
+              'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%)',
+              'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(59,130,246,0.02) 100%)',
+              'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.02) 100%)',
+              'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)',
+              'linear-gradient(135deg, rgba(139,92,246,0.08) 0%, rgba(139,92,246,0.02) 100%)',
+              'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0.02) 100%)',
+              'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%)',
+              'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(59,130,246,0.02) 100%)'
+            ];
+            kpiGrid.innerHTML = kpiItems.map(function(k, i) {
               return '<div class="cc-kpi" style="background:' + bgColors[i % bgColors.length] + '">' +
                 '<div class="cc-kpi-icon">' + k.icon + '</div>' +
                 '<div class="cc-kpi-value">' + k.value + '</div>' +
-                '<div class="cc-kpi-label">' + k.label + '</div>' +
-                '</div>';
+                '<div class="cc-kpi-label">' + k.label + '</div></div>';
             }).join('');
 
             // ── SECTION 3: Today's Priorities ──
             var priorityEl = document.getElementById('ccPriorities');
             var priorityItems = [];
 
-            // From alerts
             if (alerts.alerts && alerts.alerts.length > 0) {
               alerts.alerts.forEach(function(a) {
                 priorityItems.push({
                   rank: priorityItems.length + 1,
                   title: a.type || 'Alert',
                   badge: a.severity || 'medium',
-                  desc: a.message || 'No details',
+                  desc: a.message || '',
                   impact: a.severity === 'critical' ? 'Critical' : 'Operational'
                 });
               });
             }
-
-            // From agenda
             if (Array.isArray(agenda) && agenda.length > 0) {
               agenda.slice(0, 3).forEach(function(t) {
                 priorityItems.push({
@@ -669,8 +861,6 @@
                 });
               });
             }
-
-            // From exec recommendations
             if (exec.recommendations && exec.recommendations.length > 0) {
               exec.recommendations.slice(0, 2).forEach(function(r) {
                 priorityItems.push({
@@ -691,13 +881,12 @@
                   '<div class="cc-priority-title">' + p.title + '</div>' +
                   '<div class="cc-priority-meta">' +
                   '<span class="cc-priority-badge ' + p.badge + '">' + p.badge + '</span>' +
-                  '<span>' + p.impact + '</span>' +
-                  '</div>' +
+                  '<span>' + p.impact + '</span></div>' +
                   (p.desc ? '<div class="cc-priority-desc">' + p.desc + '</div>' : '') +
                   '</div></div>';
               }).join('');
             } else {
-              priorityEl.innerHTML = '<div class="cc-empty">No priorities detected. Use Polaris to generate intelligence.</div>';
+              priorityEl.innerHTML = '<div class="cc-empty"><div class="cc-empty-icon">&#9989;</div>You\'re all caught up. Polaris will surface high-impact opportunities as your business activity grows.</div>';
             }
 
             // ── SECTION 4: Revenue Opportunity ──
@@ -709,11 +898,12 @@
                 '<div class="cc-rev-stat"><div class="cc-rev-val green">' + fmtCurr(rev.forecast || 0) + '</div><div class="cc-rev-label">Forecast</div></div>' +
                 '<div class="cc-rev-stat"><div class="cc-rev-val">' + (rev.collectionRate || pct(kpis.collectionRate) || '0%') + '</div><div class="cc-rev-label">Collection Rate</div></div>' +
                 '</div>' +
-                '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--cc-border);font-size:12px;color:var(--cc-text-secondary);">' +
-                'Pipeline: <strong>' + fmtCurr(pipe.weightedValue || kpis.weightedPipelineValue) + '</strong> across ' + fmtNum(pipe.activeDeals || kpis.activeDeals) + ' deals' +
+                '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--cc-border);font-size:12px;color:var(--cc-text-secondary);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">' +
+                '<span>Pipeline: <strong>' + fmtCurr(pipe.weightedValue || kpis.weightedPipelineValue) + '</strong> across ' + fmtNum(pipe.activeDeals || kpis.activeDeals) + ' deals</span>' +
+                '<span>Win rate: <strong>' + pct(pipe.winRate || kpis.winRate || 0) + '</strong></span>' +
                 '</div>';
             } else {
-              revenueEl.innerHTML = '<div class="cc-empty">Revenue data appears once Polaris processes customer interactions.</div>';
+              revenueEl.innerHTML = '<div class="cc-empty"><div class="cc-empty-icon">&#128176;</div>Revenue forecasts will appear after Polaris analyzes customer conversations, estimates, and scheduling activity.</div>';
             }
 
             // ── SECTION 5: Operational Pipeline ──
@@ -725,11 +915,11 @@
             var scheduled = (agenda && agenda.length) ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0;
 
             var stages = [
-              { icon: '&#128222;', count: fmtNum(kpis.activeDeals || pipe.activeDeals || 0), label: 'Incoming', pct: 25 },
-              { icon: '&#128203;', count: fmtNum(pendingEstimates), label: 'Estimates', pct: 25 },
-              { icon: '&#128197;', count: fmtNum(scheduled), label: 'Scheduled', pct: 25 },
-              { icon: '&#128188;', count: fmtNum(inProgress), label: 'Active', pct: 50 },
-              { icon: '&#10004;', count: fmtNum(completedJobs), label: 'Completed', pct: totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0 }
+              { icon: '\uD83D\uDCDE', count: fmtNum(kpis.activeDeals || pipe.activeDeals || 0), label: 'Incoming', pct: 25 },
+              { icon: '\uD83D\uDCCB', count: fmtNum(pendingEstimates), label: 'Estimates', pct: 25 },
+              { icon: '\uD83D\uDCC5', count: fmtNum(scheduled), label: 'Scheduled', pct: 25 },
+              { icon: '\uD83D\uDCBC', count: fmtNum(inProgress), label: 'Active', pct: 50 },
+              { icon: '\u2705', count: fmtNum(completedJobs), label: 'Completed', pct: totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0 }
             ];
             var fillColors = ['var(--cc-info)','var(--cc-warning)','var(--cc-accent)','var(--cc-success)','var(--cc-success)'];
             pipelineEl.innerHTML = '<div class="cc-pipeline">' +
@@ -740,8 +930,7 @@
                   '<div class="cc-pipe-label">' + s.label + '</div>' +
                   '<div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:' + s.pct + '%;background:' + fillColors[i] + '"></div></div>' +
                   '</div>';
-              }).join('') +
-              '</div>';
+              }).join('') + '</div>';
 
             // ── SECTION 6: Customer Intelligence ──
             var custEl = document.getElementById('ccCustomers');
@@ -755,21 +944,19 @@
                     tag = 'returning';
                     tagLabel = 'Returning';
                   }
-                  if (c.health && c.health < 40) {
+                  if (c.health !== undefined && c.health < 40) {
                     tag = 'attention';
                     tagLabel = 'Attention';
                   }
                   return '<a href="/dashboard/polaris" class="cc-cust-item">' +
                     '<span class="cc-cust-name">' + (c.name || 'Unknown') + '</span>' +
-                    '<span class="cc-cust-tag ' + tag + '">' + tagLabel + '</span>' +
-                    '</a>';
-                }).join('') +
-                '</div>';
+                    '<span class="cc-cust-tag ' + tag + '">' + tagLabel + '</span></a>';
+                }).join('') + '</div>';
               if (customers.length > 6) {
                 custEl.innerHTML += '<div class="cc-empty" style="padding:6px;font-size:11px;">+' + (customers.length - 6) + ' more customers</div>';
               }
             } else {
-              custEl.innerHTML = '<div class="cc-empty">Customer profiles appear as Polaris processes interactions.</div>';
+              custEl.innerHTML = '<div class="cc-empty"><div class="cc-empty-icon">&#128101;</div>Customer profiles will appear as Polaris processes incoming calls and interactions. Start a simulation above to see this section populate.</div>';
             }
 
             // ── SECTION 7: Business Health ──
@@ -795,8 +982,7 @@
               return '<div class="cc-health-item">' +
                 '<div class="cc-health-score ' + healthClass(h.score) + '">' + Math.round(h.score) + '</div>' +
                 '<div class="cc-health-label">' + h.label + '</div>' +
-                '<div class="cc-health-desc">' + h.desc + '</div>' +
-                '</div>';
+                '<div class="cc-health-desc">' + h.desc + '</div></div>';
             }).join('');
 
             // ── SECTION 8: Quick Actions ──
@@ -813,7 +999,7 @@
         }).catch(function(err) {
           loading.style.display = 'none';
           content.style.display = '';
-          document.getElementById('ccSummary').textContent = 'Unable to load Command Center. Polaris may be initializing.';
+          document.getElementById('ccSummary').textContent = 'Command Center is loading — Polaris may be initializing. Please wait or refresh the page.';
           document.getElementById('ccKpiGrid').innerHTML = '<div class="cc-empty">' + err.message + '</div>';
         });
       }
@@ -821,11 +1007,8 @@
       // Initial render
       render();
 
-      // Auto-refresh every 60 seconds
-      setInterval(function() {
-        // Don't re-show loading on auto-refresh — just update silently
-        render();
-      }, 60000);
+      // Auto-refresh every 60 seconds — silent update
+      setInterval(render, 60000);
     })();
   </script>
 </body>

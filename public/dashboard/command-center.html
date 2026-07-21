@@ -676,21 +676,49 @@
             if (arr[i].id === customerId) { cust = arr[i]; break; }
           }
           if (!cust) return;
-          // Fetch related data in parallel
+          // Fetch all related data in parallel
           var oppsP = apiFetch('/api/v1/opportunities').then(function(r){return r.json();}).catch(function(){return {};});
           var commsP = apiFetch('/api/v1/communications').then(function(r){return r.json();}).catch(function(){return {};});
-          Promise.all([oppsP, commsP]).then(function(results) {
+          var estsP = apiFetch('/api/v1/estimates').then(function(r){return r.json();}).catch(function(){return {};});
+          Promise.all([oppsP, commsP, estsP]).then(function(results) {
             var opps = (results[0] && results[0].opportunities) || [];
             var comms = (results[1] && results[1].communications) || [];
-            // Find related opportunity
-            var relOpp = null;
+            var ests = (results[2] && results[2].estimates) || [];
+            // Find related records
+            var relOpp = null, relComm = null, relEst = null;
             for (var j = 0; j < opps.length; j++) {
               if (opps[j].customerId === customerId) { relOpp = opps[j]; break; }
             }
-            // Find related communication
-            var relComm = null;
             for (var k = 0; k < comms.length; k++) {
               if (comms[k].customerId === customerId) { relComm = comms[k]; break; }
+            }
+            for (var e = 0; e < ests.length; e++) {
+              if (ests[e].customerId === customerId) { relEst = ests[e]; break; }
+            }
+            // Build pricing breakdown from estimate items
+            var pricingBreakdown = [];
+            if (relEst && relEst.items && relEst.items.length > 0) {
+              pricingBreakdown = relEst.items.map(function(item) {
+                return { l: item.description || 'Item', a: item.total || item.unitPrice || 0 };
+              });
+              if (relEst.subtotal) pricingBreakdown.push({ l: 'Subtotal', a: relEst.subtotal });
+              if (relEst.tax) pricingBreakdown.push({ l: 'Tax', a: relEst.tax });
+              if (relEst.total) pricingBreakdown.push({ l: 'Total', a: relEst.total });
+            } else if (relOpp && relOpp.estimatedValue) {
+              pricingBreakdown = [{ l: 'Estimated Value', a: relOpp.estimatedValue }];
+            }
+            // Build Polaris analysis from opportunity data
+            var polarisAnalysis = null;
+            if (relOpp && relOpp.polarisAnalysis) {
+              polarisAnalysis = relOpp.polarisAnalysis;
+            } else if (relOpp && relOpp.estimatedValue) {
+              polarisAnalysis = {
+                insight: relOpp.description || (cust.name + ' requested a quote for ' + (relOpp.title || 'services')),
+                estimatedPrice: relOpp.estimatedValue,
+                confidence: 70,
+                service: relOpp.title || 'Service',
+                upsell: 'Standard service with recommended add-ons'
+              };
             }
             // Build lead-shaped object for CustomerDrawer
             var lead = {
@@ -704,16 +732,16 @@
               status: cust.status || 'active',
               totalJobs: cust.totalJobs || 0,
               totalRevenue: cust.totalRevenue || 0,
-              service: relOpp ? (relOpp.service || relOpp.description || '—') : '—',
-              serviceRequested: relOpp ? (relOpp.service || relOpp.description || '—') : '—',
-              jobDetail: relOpp ? (relOpp.description || relOpp.summary || '') : '',
-              summary: relOpp ? (relOpp.description || relOpp.summary || '') : '',
-              avgPrice: relOpp ? (relOpp.estimatedValue || relOpp.amount || 0) : 0,
-              time: cust.createdAt || relOpp ? relOpp.createdAt : null,
+              service: relOpp ? (relOpp.title || relOpp.description || '—') : '—',
+              serviceRequested: relOpp ? (relOpp.title || relOpp.description || '—') : '—',
+              jobDetail: relOpp ? (relOpp.description || '') : '',
+              summary: relOpp ? (relOpp.description || '') : '',
+              avgPrice: relOpp ? (relOpp.estimatedValue || 0) : 0,
+              time: cust.createdAt || (relOpp ? relOpp.createdAt : null),
               receivedAt: cust.createdAt,
               transcript: relComm ? (relComm.transcript || relComm.content || '') : '',
-              pricingBreakdown: relOpp && relOpp.pricingBreakdown ? relOpp.pricingBreakdown : [],
-              polarisAnalysis: relOpp && relOpp.polarisAnalysis ? relOpp.polarisAnalysis : null
+              pricingBreakdown: pricingBreakdown,
+              polarisAnalysis: polarisAnalysis
             };
             CustomerDrawer.open(lead);
           });

@@ -47,6 +47,65 @@ function _getEngines() {
  *   ids:     { customer, communication, opportunity, estimate, lead, callRecord }
  *   records: { customer: {...}, communication: {...}, opportunity: {...}, estimate: {...}, lead: {...} }
  */
+/**
+ * Build detailed estimate line items with realistic labor/materials breakdowns.
+ */
+function buildEstimateItems(serviceName, totalValue) {
+  const v = totalValue || 500;
+  const svc = (serviceName || '').toLowerCase();
+  if (svc.includes('solar') || svc.includes('panel')) {
+    return [
+      { description: 'Solar Panels', quantity: Math.max(1, Math.round(v / 2500)), unitPrice: 2500 },
+      { description: 'Inverter & Electrical', quantity: 1, unitPrice: Math.round(v * 0.12) },
+      { description: 'Mounting Hardware', quantity: 1, unitPrice: Math.round(v * 0.08) },
+      { description: 'Installation Labor', quantity: 1, unitPrice: Math.round(v * 0.15) },
+      { description: 'Permits & Inspection', quantity: 1, unitPrice: Math.round(v * 0.05) }
+    ];
+  }
+  if (svc.includes('generator')) {
+    return [
+      { description: 'Generator Unit', quantity: 1, unitPrice: Math.round(v * 0.55) },
+      { description: 'Transfer Switch', quantity: 1, unitPrice: Math.round(v * 0.15) },
+      { description: 'Electrical & Conduit', quantity: 1, unitPrice: Math.round(v * 0.08) },
+      { description: 'Concrete Pad', quantity: 1, unitPrice: Math.round(v * 0.07) },
+      { description: 'Installation Labor', quantity: 1, unitPrice: Math.round(v * 0.15) }
+    ];
+  }
+  if (svc.includes('roof')) {
+    return [
+      { description: 'Roofing Materials', quantity: 1, unitPrice: Math.round(v * 0.40) },
+      { description: 'Flashing & Accessories', quantity: 1, unitPrice: Math.round(v * 0.10) },
+      { description: 'Tear-off & Disposal', quantity: 1, unitPrice: Math.round(v * 0.12) },
+      { description: 'Installation Labor', quantity: 1, unitPrice: Math.round(v * 0.30) },
+      { description: 'Permits', quantity: 1, unitPrice: Math.round(v * 0.08) }
+    ];
+  }
+  if (svc.includes('concrete')) {
+    return [
+      { description: 'Concrete Material', quantity: 1, unitPrice: Math.round(v * 0.30) },
+      { description: 'Grading & Base Prep', quantity: 1, unitPrice: Math.round(v * 0.15) },
+      { description: 'Forms & Reinforcement', quantity: 1, unitPrice: Math.round(v * 0.10) },
+      { description: 'Installation Labor', quantity: 1, unitPrice: Math.round(v * 0.35) },
+      { description: 'Finishing & Sealing', quantity: 1, unitPrice: Math.round(v * 0.10) }
+    ];
+  }
+  if (svc.includes('hvac')) {
+    return [
+      { description: 'HVAC Unit', quantity: 1, unitPrice: Math.round(v * 0.45) },
+      { description: 'Ductwork', quantity: 1, unitPrice: Math.round(v * 0.15) },
+      { description: 'Thermostat & Controls', quantity: 1, unitPrice: Math.round(v * 0.05) },
+      { description: 'Installation Labor', quantity: 1, unitPrice: Math.round(v * 0.25) },
+      { description: 'Permits', quantity: 1, unitPrice: Math.round(v * 0.10) }
+    ];
+  }
+  return [
+    { description: 'Materials', quantity: 1, unitPrice: Math.round(v * 0.35) },
+    { description: 'Equipment', quantity: 1, unitPrice: Math.round(v * 0.15) },
+    { description: 'Labor', quantity: 1, unitPrice: Math.round(v * 0.40) },
+    { description: 'Permits & Fees', quantity: 1, unitPrice: Math.round(v * 0.10) }
+  ];
+}
+
 router.post('/simulations/leads', requireAuth, async (req, res) => {
   try {
     const { name, phone, email, service, description, estimatedValue } = req.body;
@@ -109,7 +168,7 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
       customerId: customerId,
       title: svc + ' - ' + custName,
       description: description || null,
-      items: [{ description: svc + ' Service', quantity: 1, unitPrice: estVal }],
+      items: buildEstimateItems(svc, estVal),
       status: 'draft'
     });
     if (estResult && estResult.error) {

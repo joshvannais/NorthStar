@@ -92,14 +92,18 @@ function generateKPIs() {
   kpis.collectionRate = _safe(function () { return fin.getFinancialMetrics().collectionRate; }, 0);
 
   // Opportunity KPIs
-  var opp = _getOppEngine();
-  var oppMetrics = _safe(function () { return opp.getPipelineMetrics(); }, {});
-  kpis.totalDeals = oppMetrics.totalDeals || 0;
-  kpis.activeDeals = oppMetrics.activeDeals || 0;
-  kpis.wonDeals = oppMetrics.wonDeals || 0;
-  kpis.winRate = oppMetrics.winRate || 0;
-  kpis.pipelineValue = oppMetrics.totalPipelineValue || 0;
-  kpis.weightedPipelineValue = oppMetrics.weightedPipelineValue || 0;
+    var opp = _getOppEngine();
+    var oppMetrics = _safe(function () { return opp.getPipelineMetrics(); }, {});
+    kpis.totalDeals = oppMetrics.totalDeals || 0;
+    kpis.activeDeals = oppMetrics.activeDeals || 0;
+    kpis.wonDeals = oppMetrics.wonDeals || 0;
+    kpis.winRate = oppMetrics.winRate || 0;
+    kpis.pipelineValue = oppMetrics.totalPipelineValue || 0;
+    kpis.weightedPipelineValue = oppMetrics.weightedPipelineValue || 0;
+
+    // Estimate-based pipeline indicators (NOT revenue — future potential)
+    kpis.pendingEstimates = _safe(function () { return fin.getFinancialMetrics().pendingEstimateCount; }, 0);
+    kpis.estimatedPipelineValue = _safe(function () { return fin.getFinancialMetrics().pendingEstimateTotal; }, 0);
 
   // Workflow KPIs
   var wf = _getWfEngine();

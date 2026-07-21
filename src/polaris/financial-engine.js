@@ -925,21 +925,34 @@ function getFinancialMetrics() {
     }
   });
 
-  return {
-    totalRevenue: Math.round(totalRevenue * 100) / 100,
-    totalInvoiced: Math.round(totalInvoiced * 100) / 100,
-    totalOutstanding: Math.round(totalOutstanding * 100) / 100,
-    paidInvoiceCount: paidInvoices.total,
-    sentInvoiceCount: sentInvoices.total,
-    overdueInvoiceCount: overdueInvoices.total,
-    draftInvoiceCount: draftInvoices.total,
-    totalInvoiceCount: allInvoices.total,
-    averageInvoiceValue: avgInvoiceValue,
-    collectionRate: collectionRate,
-    collectionRateDisplay: collectionRate + '%',
-    paymentAging: aging,
-    calculatedAt: _now(),
-  };
+  // ── Estimate-derived pipeline metrics (separate from invoice revenue) ──
+    var allEstimates = listEstimates();
+    var pendingEstimates = allEstimates.estimates.filter(function (e) {
+      return e.status !== 'archived' && e.status !== 'rejected';
+    });
+    var totalEstimatedValue = pendingEstimates.reduce(function (s, e) { return s + e.total; }, 0);
+
+    return {
+      // Invoice-based revenue (actual money, never mixed with estimates)
+      totalRevenue: Math.round(totalRevenue * 100) / 100,
+      totalInvoiced: Math.round(totalInvoiced * 100) / 100,
+      totalOutstanding: Math.round(totalOutstanding * 100) / 100,
+      paidInvoiceCount: paidInvoices.total,
+      sentInvoiceCount: sentInvoices.total,
+      overdueInvoiceCount: overdueInvoices.total,
+      draftInvoiceCount: draftInvoices.total,
+      totalInvoiceCount: allInvoices.total,
+      averageInvoiceValue: avgInvoiceValue,
+      collectionRate: collectionRate,
+      collectionRateDisplay: collectionRate + '%',
+      paymentAging: aging,
+
+      // Estimate-based pipeline metrics (not revenue — future potential)
+      pendingEstimateCount: pendingEstimates.length,
+      pendingEstimateTotal: Math.round(totalEstimatedValue * 100) / 100,
+
+      calculatedAt: _now(),
+    };
 }
 
 /**

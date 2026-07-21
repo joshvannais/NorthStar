@@ -645,6 +645,7 @@ function toggleMobileMenu() {
   if (menu) menu.classList.toggle('open');
 }
   </script>
+  <script src="/js/event-bus.js"></script>
   <script>
     (function() {
       'use strict';
@@ -1042,6 +1043,14 @@ function toggleMobileMenu() {
 
                 // ── Preload business context for AI conversations ──
                 preloadBusinessContext();
+
+                // ── Refresh context when a simulation completes elsewhere ──
+                if (window.EventBus) {
+                  window.EventBus.on('simulation:completed', function() {
+                    console.log('[Polaris] simulation:completed received — refreshing business context');
+                    preloadBusinessContext();
+                  });
+                }
 
                 // ── Scroll to bottom on resize ──
       window.addEventListener('resize', smoothScrollToBottom);

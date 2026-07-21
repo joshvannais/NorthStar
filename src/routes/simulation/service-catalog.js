@@ -5,14 +5,13 @@
  * reads these definitions and adapts its behavior automatically.
  * No core engine code changes are needed for new services.
  *
- * Each service defines:
- *   - classificationKeywords: terms that identify this work
- *   - scopeSchema: the dimensions and facts to collect
- *   - pricing: unit rates and calculation strategy
- *   - questions: intake questions grouped by phase
+ * PRICING NOTE: All pricing data (materials, rates, calculate()) lives
+ * inside the `pricing` object. The calculate() method uses `this` to
+ * access rates/materials — `this` is the pricing object.
  */
 
 const SERVICE_CATALOG = {
+
   fence: {
     id: 'fence',
     displayName: 'Fence Installation',
@@ -31,15 +30,7 @@ const SERVICE_CATALOG = {
 
     jobTypes: ['install', 'replace', 'repair', 'inspect'],
 
-    materials: {
-      cedar: { label: 'Cedar', perLinearFoot: 18 },
-      pine: { label: 'Pressure-Treated Pine', perLinearFoot: 10 },
-      vinyl: { label: 'Vinyl', perLinearFoot: 22 },
-      aluminum: { label: 'Aluminum', perLinearFoot: 28 },
-      'wrought-iron': { label: 'Wrought Iron', perLinearFoot: 45 },
-      'chain-link': { label: 'Chain Link', perLinearFoot: 8 },
-    },
-
+    // ── Pricing (all materials + rates + strategy live here) ──
     pricing: {
       strategy: 'perLinearFoot',
       laborPerLinearFoot: 12,
@@ -48,9 +39,18 @@ const SERVICE_CATALOG = {
       gateDrive: 850,
       permitBase: 350,
       overheadPercent: 0.10,
+      materials: {
+        cedar: { label: 'Cedar', perLinearFoot: 18 },
+        pine: { label: 'Pressure-Treated Pine', perLinearFoot: 10 },
+        vinyl: { label: 'Vinyl', perLinearFoot: 22 },
+        aluminum: { label: 'Aluminum', perLinearFoot: 28 },
+        'wrought-iron': { label: 'Wrought Iron', perLinearFoot: 45 },
+        'chain-link': { label: 'Chain Link', perLinearFoot: 8 },
+      },
       calculate(items) {
         const { linearFeet, material, removalRequired, gates } = items;
-        const matRate = this.materials[material] ? this.materials[material].perLinearFoot : 15;
+        const mats = this.materials;
+        const matRate = mats[material] ? mats[material].perLinearFoot : 15;
         const materials = matRate * linearFeet;
         const labor = this.laborPerLinearFoot * linearFeet;
         const removal = removalRequired ? this.removalPerLinearFoot * linearFeet : 0;
@@ -64,7 +64,7 @@ const SERVICE_CATALOG = {
           total,
           range: { low: Math.round(total * 0.85), high: Math.round(total * 1.15) },
           breakdown: [
-            { label: `${this.materials[material] ? this.materials[material].label : 'Material'} (${linearFeet} ft)`, amount: materials },
+            { label: `${mats[material] ? mats[material].label : 'Material'} (${linearFeet} ft)`, amount: materials },
             { label: `Labor (${linearFeet} ft @ $${this.laborPerLinearFoot}/ft)`, amount: labor },
             { label: 'Removal & disposal', amount: removal },
             { label: `Gates (${(gates||[]).length})`, amount: gateTotal },
@@ -114,14 +114,6 @@ const SERVICE_CATALOG = {
 
     jobTypes: ['replace', 'repair', 'inspect', 'install'],
 
-    materials: {
-      'architectural': { label: 'Architectural Asphalt Shingles', perSquare: 160 },
-      '3-tab': { label: '3-Tab Shingles', perSquare: 100 },
-      'metal': { label: 'Metal Roofing', perSquare: 350 },
-      'tile': { label: 'Tile Roofing', perSquare: 500 },
-      'slate': { label: 'Slate', perSquare: 700 },
-    },
-
     pricing: {
       strategy: 'perSquare',
       laborPerSquare: 200,
@@ -129,9 +121,17 @@ const SERVICE_CATALOG = {
       flashingBase: 600,
       permitBase: 250,
       overheadPercent: 0.10,
+      materials: {
+        'architectural': { label: 'Architectural Asphalt Shingles', perSquare: 160 },
+        '3-tab': { label: '3-Tab Shingles', perSquare: 100 },
+        'metal': { label: 'Metal Roofing', perSquare: 350 },
+        'tile': { label: 'Tile Roofing', perSquare: 500 },
+        'slate': { label: 'Slate', perSquare: 700 },
+      },
       calculate(items) {
         const { squares, material, existingLayers } = items;
-        const matRate = this.materials[material] ? this.materials[material].perSquare : 160;
+        const mats = this.materials;
+        const matRate = mats[material] ? mats[material].perSquare : 160;
         const materials = matRate * squares;
         const labor = this.laborPerSquare * squares;
         const tearoff = (existingLayers || 1) * this.tearoffPerSquare * squares;
@@ -145,7 +145,7 @@ const SERVICE_CATALOG = {
           total,
           range: { low: Math.round(total * 0.85), high: Math.round(total * 1.15) },
           breakdown: [
-            { label: `${this.materials[material] ? this.materials[material].label : 'Material'} (${squares} sq)`, amount: materials },
+            { label: `${mats[material] ? mats[material].label : 'Material'} (${squares} sq)`, amount: materials },
             { label: `Labor (${squares} sq)`, amount: labor },
             { label: 'Tear-off & disposal', amount: tearoff },
             { label: 'Flashing replacement', amount: flashing },
@@ -267,6 +267,23 @@ const SERVICE_CATALOG = {
     jobTypes: ['repair', 'replace', 'install', 'emergency', 'inspect'],
     emergencyKeywords: ['burst', 'flooding', 'gushing', 'emergency', 'shut off', 'cannot stop'],
 
+    pricing: {
+      strategy: 'diagnosticFee',
+      diagnosticFee: 129,
+      hourlyRate: 95,
+      calculate(items) {
+        // Plumbing pricing is discovery-based; on-site assessment needed
+        return {
+          total: this.diagnosticFee,
+          range: { low: 129, high: 2000 },
+          breakdown: [
+            { label: 'Diagnostic service call', amount: this.diagnosticFee },
+            { label: 'Repair estimate (on-site)', amount: 0 },
+          ],
+        };
+      },
+    },
+
     questions: {
       discovery: [
         { id: 'jobType', ask: 'Is this a repair, a replacement, or an emergency?', extract: /(repair|replace|emergency|install|fix|broke)/i },
@@ -302,6 +319,22 @@ const SERVICE_CATALOG = {
     jobTypes: ['repair', 'install', 'upgrade', 'emergency', 'inspect'],
     emergencyKeywords: ['spark', 'burning', 'smell', 'smoke', 'shock', 'fire', 'hot to touch'],
 
+    pricing: {
+      strategy: 'diagnosticFee',
+      diagnosticFee: 149,
+      hourlyRate: 110,
+      calculate(items) {
+        return {
+          total: this.diagnosticFee,
+          range: { low: 149, high: 3000 },
+          breakdown: [
+            { label: 'Diagnostic service call', amount: this.diagnosticFee },
+            { label: 'Repair estimate (on-site)', amount: 0 },
+          ],
+        };
+      },
+    },
+
     questions: {
       discovery: [
         { id: 'jobType', ask: 'Is this a repair, an upgrade, or are you experiencing an emergency?', extract: /(repair|upgrade|emergency|install|fix)/i },
@@ -334,6 +367,39 @@ const SERVICE_CATALOG = {
 
     jobTypes: ['install', 'replace', 'repair', 'resurface'],
 
+    pricing: {
+      strategy: 'perSquareFoot',
+      concretePerSqft: 8,
+      laborPerSqft: 4,
+      removalPerSqft: 3,
+      reinforcementPerSqft: 2,
+      overheadPercent: 0.10,
+      calculate(items) {
+        const { squareFeet, finish, existingRemoval, reinforcement } = items;
+        const sqft = squareFeet || 400;
+        const finishMul = finish === 'stamped' ? 1.5 : finish === 'exposed aggregate' ? 1.3 : 1.0;
+        const matCost = this.concretePerSqft * sqft * finishMul;
+        const labor = this.laborPerSqft * sqft;
+        const removal = existingRemoval ? this.removalPerSqft * sqft : 0;
+        const rebar = reinforcement ? this.reinforcementPerSqft * sqft : 0;
+        const subtotal = matCost + labor + removal + rebar;
+        const overhead = Math.round(subtotal * this.overheadPercent);
+        const total = subtotal + overhead;
+
+        return {
+          total,
+          range: { low: Math.round(total * 0.88), high: Math.round(total * 1.12) },
+          breakdown: [
+            { label: `Concrete (${sqft} sqft, ${finish || 'standard'})`, amount: matCost },
+            { label: `Labor (${sqft} sqft)`, amount: labor },
+            { label: 'Removal & disposal', amount: removal },
+            { label: 'Reinforcement', amount: rebar },
+            { label: 'Overhead (10%)', amount: overhead },
+          ],
+        };
+      },
+    },
+
     questions: {
       discovery: [
         { id: 'jobType', ask: 'Is this a new concrete installation, a replacement, or a repair?', extract: /(new|install|replace|repair|resurface|crack)/i },
@@ -343,6 +409,7 @@ const SERVICE_CATALOG = {
         { id: 'finish', ask: 'What type of finish — smooth, stamped, or exposed aggregate?', extract: /(smooth|stamp|aggregate|broom|finish)/i },
         { id: 'existingRemoval', ask: 'Is there existing concrete that needs to be removed first?', extract: /(yes|existing|remove|tear|old)/i },
         { id: 'access', ask: 'Can a concrete truck access the pour site?', extract: /(yes|no|truck|access|pump)/i },
+        { id: 'reinforcement', ask: 'Do you need rebar or wire mesh reinforcement?', extract: /(yes|rebar|wire|mesh|reinforce|no)/i },
       ],
       scheduling: [
         { id: 'timeline', ask: 'What\'s your timeline for this project?', extract: /(week|month|soon|spring|summer)/i },

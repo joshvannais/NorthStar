@@ -66,19 +66,20 @@ function _populateScope(scenario, svc) {
 
   if (svc.id === 'fence') {
     scope.linearFeet = _pickRandom([60, 100, 150, 175, 200, 250, 300]);
-    scope.material = _pickRandom(Object.keys(svc.materials));
+    scope.material = _pickRandom(Object.keys(svc.pricing.materials));
     scope.height = _pickRandom([4, 6, 8]);
     scope.gates = [{ type: 'walk', width: 4 }, { type: _pickRandom(['walk', 'drive']), width: _pickRandom([8, 10, 12]) }];
     scope.removalRequired = Math.random() > 0.3;
     scope.terrain = _pickRandom(['mostly flat', 'slight grade', 'hilly in back corner', 'flat with one tree line']);
-    scope.hoa = Math.random() > 0.5 ? 'yes — ' + svc.materials[scope.material].label + ' required' : 'no';
+    const matInfo = (svc.pricing && svc.pricing.materials && svc.pricing.materials[scope.material]) ? svc.pricing.materials[scope.material].label : scope.material;
+    scope.hoa = Math.random() > 0.5 ? 'yes — ' + matInfo + ' required' : 'no';
     scope.permitsRequired = 'required, ~2 week processing';
     scope.timeline = _pickRandom(['within 3-4 weeks', 'within 6-8 weeks', 'before summer', 'next month', 'whenever works']);
     scope.urgency = 'moderate';
     scope.access = 'good — side gate access';
   } else if (svc.id === 'roofing') {
     scope.squares = _pickRandom([18, 22, 28, 32, 38, 45]);
-    scope.material = _pickRandom(Object.keys(svc.materials));
+    scope.material = _pickRandom(Object.keys(svc.pricing.materials));
     scope.pitch = _pickRandom(['4/12 walkable', '6/12 moderate', '8/12 steep']);
     scope.stories = _pickRandom([1, 2]);
     scope.existingLayers = _pickRandom([1, 2]);
@@ -140,6 +141,7 @@ function generateTranscript(scenario, svc) {
   const discoveryQs = (svc.questions.discovery || []).slice(0, 3);
   for (const q of discoveryQs) {
     const answer = _buildAnswer(scenario, q);
+    if (!answer || answer === 'skip') continue;
     turns.push({ speaker: 'ai', text: q.ask });
     turns.push({ speaker: 'customer', text: answer });
   }
@@ -253,11 +255,11 @@ function _buildAnswer(scenario, question) {
     // Fence
     jobType: { install: 'New installation.', replace: 'Replacing an existing fence.', repair: 'Repairing some damaged sections.' }[scope.jobType],
     linearFeet: `About ${scope.linearFeet} feet.`,
-    material: `${scope.material.charAt(0).toUpperCase() + scope.material.slice(1)}${scope.hoa && scope.hoa.includes('yes') ? ' — our HOA requires it' : ''}.`,
-    height: `${scope.height} feet.`,
+    material: scope.material ? `${scope.material.charAt(0).toUpperCase() + scope.material.slice(1)}${scope.hoa && scope.hoa.includes('yes') ? ' — our HOA requires it' : ''}.` : 'Not sure yet.',
+    height: scope.height ? `${scope.height} feet.` : '6 feet.',
     gates: `Yes — a walk gate on the side and a double drive gate in the back.`,
     removalRequired: scope.removalRequired ? 'Yes, there\'s an old fence that needs to come down first.' : 'No, it\'s bare ground right now.',
-    terrain: scope.terrain + '. Nothing too difficult.',
+    terrain: scope.terrain ? scope.terrain + '. Nothing too difficult.' : 'Mostly flat.',
     hoa: scope.hoa,
     permitsRequired: scope.permitsRequired,
 
@@ -273,7 +275,7 @@ function _buildAnswer(scenario, question) {
     // HVAC
     systemType: 'Central AC with a gas furnace.',
     tonnage: `${scope.tonnage} tons, I believe.`,
-    sqft: `About ${scope.sqft.toLocaleString()} square feet.`,
+    sqft: scope.sqft ? `About ${scope.sqft.toLocaleString()} square feet.` : 'About 2,000 square feet.',
     seer: `SEER ${scope.seer} or higher if possible.`,
     fuelType: 'Gas.',
     existingAge: `About ${scope.existingAge} years old.`,
@@ -342,7 +344,7 @@ function _buildSummary(scenario, svc) {
     return `${scope.squares}-square roof replacement with ${scope.material}, tear-off of ${scope.existingLayers} layer(s), flashing replacement, for a ${scope.stories}-story home.`;
   }
   if (svc.id === 'hvac') {
-    return `${scope.tonnage}-ton SEER-${scope.seer} ${scope.systemType} replacement${scope.ductworkReplace ? ' with new ductwork' : ''}${scope.thermostat === 'smart' ? ' and smart thermostat' : ''} for ${scope.sqft.toLocaleString()}-sqft home.`;
+    return `${scope.tonnage}-ton SEER-${scope.seer} ${scope.systemType} replacement${scope.ductworkReplace ? ' with new ductwork' : ''}${scope.thermostat === 'smart' ? ' and smart thermostat' : ''} for ${(scope.sqft || 2000).toLocaleString()}-sqft home.`;
   }
   return `${name} — ${scenario.job.type} at ${scenario.customer.address}.`;
 }
@@ -352,7 +354,7 @@ function _buildSummary(scenario, svc) {
 // ═══════════════════════════════════════════════════════
 
 function extractScope(transcript, scenario) {
-  const fullText = transcript.map(t => t.text).join(' ');
+  const fullText = transcript.map(t => (t && t.text ? t.text : '')).join(' ');
   const svc = CATALOG[scenario.serviceKey];
   if (!svc) return { extracted: {}, evidence: {}, missing: [] };
 
@@ -410,7 +412,7 @@ function _getRelatedKeywords(dim, value) {
 // ═══════════════════════════════════════════════════════
 
 function classifyService(transcript) {
-  const text = transcript.map(t => t.text.toLowerCase()).join(' ');
+  const text = transcript.map(t => (t && t.text ? t.text : '')).join(' ').toLowerCase();
   const scores = {};
 
   for (const [key, svc] of Object.entries(CATALOG)) {
@@ -509,7 +511,7 @@ function calculateConfidence(extractedScope, missingInfo, serviceKey) {
 // ═══════════════════════════════════════════════════════
 
 function selectAction(transcript, customerName, scope) {
-  const text = transcript.map(t => t.text.toLowerCase()).join(' ');
+  const text = transcript.map(t => (t && t.text ? t.text : '')).join(' ').toLowerCase();
   const name = customerName.split(' ')[0];
 
   if (text.includes('emergency') || (scope && scope.urgency === 'emergency')) {

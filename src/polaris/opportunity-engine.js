@@ -575,6 +575,8 @@ function getPipelineMetrics() {
     if (o.lastActivity < staleThreshold) staleDeals++;
   });
 
+  var averageOpportunityValue = active.total > 0 ? Math.round((totalValue / active.total) * 100) / 100 : 0;
+
   return {
     totalDeals: all.total,
     activeDeals: active.total,
@@ -584,6 +586,7 @@ function getPipelineMetrics() {
     weightedPipelineValue: weightedValue,
     wonValue: wonValue,
     averageDealValue: averageDealValue,
+    averageOpportunityValue: averageOpportunityValue,
     winRate: winRate,
     lossRate: lossRate,
     staleDeals: staleDeals,

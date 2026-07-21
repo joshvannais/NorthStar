@@ -436,6 +436,32 @@
         return s.indexOf('%') >= 0 ? s : Math.round(parseFloat(val)) + '%';
       }
 
+      // ── Customer detail drawer ──
+      window.ccOpenCustomer = function(customerId) {
+        if (!customerId) return;
+        // Fetch canonical customer + related data
+        apiFetch('/api/v1/customers').then(function(r) { return r.json(); }).then(function(data) {
+          var customers = data.customers || [];
+          var cust = null;
+          for (var i = 0; i < customers.length; i++) {
+            if (customers[i].id === customerId) { cust = customers[i]; break; }
+          }
+          if (!cust) return;
+          var html = '<div class="cal-modal-overlay" id="ccCustOverlay" onclick="document.getElementById(\'ccCustOverlay\').remove()">' +
+            '<div class="cal-modal" onclick="event.stopPropagation()" style="max-width:480px;">' +
+            '<div class="cal-modal-header"><h2>' + (cust.name || 'Customer') + '</h2>' +
+            '<button class="cal-modal-close" onclick="document.getElementById(\'ccCustOverlay\').remove()">&times;</button></div>' +
+            '<div class="cal-modal-body" style="font-size:12px;line-height:1.6;">';
+          if (cust.email) html += '<div><strong>Email:</strong> ' + cust.email + '</div>';
+          if (cust.phone) html += '<div><strong>Phone:</strong> ' + cust.phone + '</div>';
+          if (cust.address) html += '<div><strong>Address:</strong> ' + cust.address + '</div>';
+          html += '<div style="margin-top:8px;"><strong>Status:</strong> ' + (cust.status || 'active') + '</div>';
+          if (cust.totalJobs) html += '<div><strong>Total Jobs:</strong> ' + cust.totalJobs + '</div>';
+          html += '</div></div></div>';
+          document.body.insertAdjacentHTML('beforeend', html);
+        }).catch(function() {});
+      };
+
       // ── Simulate Lead (unchanged core, but with proper brace closing) ──
       window.ccSimulateLead = function() {
         if (simBtn.disabled) return;
@@ -608,11 +634,15 @@
           alerts = (alerts && typeof alerts === 'object') ? alerts : {};
           var el = document.getElementById('ccPriorities');
           if (!el) return;
+          var pipe = (exec.pipeline) || {};
           var pItems = [];
+          if (pipe.activeDeals > 0) {
+            pItems.push({rank:1,title:'Review open pipeline',badge:'high',desc:pipe.activeDeals + ' active ' + (pipe.activeDeals===1?'opportunity':'opportunities') + ' — follow up with highest-value leads to improve close rates.',impact:'Pipeline'});
+          }
           if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
           if (agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
           if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});
-          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris™ will surface opportunities as activity grows.</div>';
+          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">Priorities will appear as Polaris™ analyzes your active opportunities and customer activity.</div>';
         }
 
         function renderPipeline(kpisData, dash, exec, agenda) {
@@ -648,7 +678,7 @@
           var el = document.getElementById('ccCustomers');
           if (!el) return;
           el.innerHTML = customers.length > 0 ?
-            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
+            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" onclick="ccOpenCustomer('+c.id+')" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
             '<div class="cc-empty">Customer profiles appear as Polaris™ processes calls. Start a simulation above.</div>';
         }
 
@@ -736,13 +766,13 @@
 
         agendaP.then(function(v) {
           state.agenda = Array.isArray(v) ? v : [];
-          renderPriorities(state.alerts, state.agenda, state.exec);
+          renderPriorities(state.alerts, state.agenda, state.exec, state);
           renderPipeline(state.kpis, state.dash, state.exec, state.agenda);
         });
 
         alertsP.then(function(v) {
           state.alerts = v || {};
-          renderPriorities(state.alerts, state.agenda, state.exec);
+          renderPriorities(state.alerts, state.agenda, state.exec, state);
         });
 
         // Always render actions immediately
@@ -888,11 +918,15 @@
           alerts = (alerts && typeof alerts === 'object') ? alerts : {};
           var el = document.getElementById('ccPriorities');
           if (!el) return;
+          var pipe = (exec.pipeline) || {};
           var pItems = [];
+          if (pipe.activeDeals > 0) {
+            pItems.push({rank:1,title:'Review open pipeline',badge:'high',desc:pipe.activeDeals + ' active ' + (pipe.activeDeals===1?'opportunity':'opportunities') + ' — follow up with highest-value leads to improve close rates.',impact:'Pipeline'});
+          }
           if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
           if (agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
           if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});
-          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris™ will surface opportunities as activity grows.</div>';
+          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">Priorities will appear as Polaris™ analyzes your active opportunities and customer activity.</div>';
         }
 
         function renderPipeline(kpisData, dash, exec, agenda) {
@@ -928,7 +962,7 @@
           var el = document.getElementById('ccCustomers');
           if (!el) return;
           el.innerHTML = customers.length > 0 ?
-            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
+            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" onclick="ccOpenCustomer('+c.id+')" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
             '<div class="cc-empty">Customer profiles appear as Polaris™ processes calls. Start a simulation above.</div>';
         }
 
@@ -1016,13 +1050,13 @@
 
         agendaP.then(function(v) {
           state.agenda = Array.isArray(v) ? v : [];
-          renderPriorities(state.alerts, state.agenda, state.exec);
+          renderPriorities(state.alerts, state.agenda, state.exec, state);
           renderPipeline(state.kpis, state.dash, state.exec, state.agenda);
         });
 
         alertsP.then(function(v) {
           state.alerts = v || {};
-          renderPriorities(state.alerts, state.agenda, state.exec);
+          renderPriorities(state.alerts, state.agenda, state.exec, state);
         });
 
         // Always render actions immediately

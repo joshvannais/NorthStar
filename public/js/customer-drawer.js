@@ -19,7 +19,7 @@ window.CustomerDrawer = (function() {
   }
 
   function fmtTime(dateVal) {
-    if (!dateVal) return '—';
+    if (!dateVal) return '\u2014';
     try {
       var d = new Date(dateVal);
       if (isNaN(d.getTime())) return String(dateVal);
@@ -44,12 +44,95 @@ window.CustomerDrawer = (function() {
     return '<span class="badge ' + cls + '">' + label + '</span>';
   }
 
-  function generatePolarisInsight(lead) {
-    if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
-      var result = PolarisEngine.analyzeLead(lead);
-      return result.insight || result;
+  function generatePolarisIntel(lead) {
+    var intel = {
+      service: '',
+      confidence: { score: 0, label: 'Pending', explanation: '' },
+      pricing: { range: { low: 0, high: 0 }, breakdown: [], total: 0 },
+      recommendedAction: '',
+      evidence: [],
+      assumptions: [],
+      missing: [],
+      scope: {}
+    };
+
+    intel.service = lead.service || lead.serviceRequested || '';
+
+    // Try to extract canonical Polaris intelligence from estimate
+    var canonical = null;
+    if (lead.polarisEstimate) {
+      if (lead.polarisEstimate.description) {
+        try {
+          canonical = typeof lead.polarisEstimate.description === 'string'
+            ? JSON.parse(lead.polarisEstimate.description)
+            : lead.polarisEstimate.description;
+        } catch(e) { canonical = null; }
+      }
+      if (!canonical && lead.polarisEstimate.intel) {
+        canonical = lead.polarisEstimate.intel;
+      }
     }
-    return 'No Polaris insight available.';
+
+    // PolarisEngine analysis as secondary source
+    var analysis = lead.polarisAnalysis;
+    if (!analysis && typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
+      try { analysis = PolarisEngine.analyzeLead(lead); } catch(e) {}
+    }
+
+    // Confidence — canonical first, then analysis, never hardcoded
+    if (canonical && canonical.confidence) {
+      intel.confidence = canonical.confidence;
+    } else if (analysis) {
+      var score = analysis.confidence || 0;
+      intel.confidence = {
+        score: score,
+        label: score >= 80 ? 'High' : score >= 50 ? 'Medium' : 'Low',
+        explanation: analysis.difficulty
+          ? 'Based on ' + analysis.difficulty + ' complexity assessment.'
+          : 'Based on available lead data.'
+      };
+    }
+
+    // Recommended action — canonical first, then analysis
+    if (canonical && canonical.recommendedAction) {
+      intel.recommendedAction = canonical.recommendedAction;
+    } else if (analysis && analysis.upsell) {
+      intel.recommendedAction = analysis.upsell;
+    }
+
+    // Pricing — canonical breakdown from estimate items, then analysis
+    if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
+      intel.pricing.breakdown = [];
+      var total = 0;
+      for (var i = 0; i < lead.pricingBreakdown.length; i++) {
+        var item = lead.pricingBreakdown[i];
+        var amt = item.a || 0;
+        if (amt > 0) { intel.pricing.breakdown.push(item); total += amt; }
+      }
+      intel.pricing.total = total;
+      if (total > 0) {
+        intel.pricing.range = { low: Math.round(total * 0.85), high: Math.round(total * 1.15) };
+      }
+    } else if (analysis && analysis.estimatedPrice && analysis.estimatedPrice > 0) {
+      intel.pricing.total = analysis.estimatedPrice;
+      intel.pricing.range = { low: Math.round(analysis.estimatedPrice * 0.85), high: Math.round(analysis.estimatedPrice * 1.15) };
+    }
+
+    // Scope, evidence, assumptions, missing — canonical first
+    if (canonical) {
+      intel.scope = canonical.scope || {};
+      intel.evidence = canonical.evidence || [];
+      intel.assumptions = canonical.assumptions || [];
+      intel.missing = canonical.missing || [];
+    } else if (analysis) {
+      intel.assumptions = ['Estimated pricing based on market analysis and service category.'];
+      if (lead.description) {
+        intel.evidence = ['Customer inquiry: ' + (lead.description.length > 120 ? lead.description.substring(0, 120) + '...' : lead.description)];
+      }
+      intel.missing = ['On-site inspection needed for final pricing.'];
+    }
+
+    return intel;
   }
 
   function formatTranscript(transcript, callerName) {
@@ -77,15 +160,15 @@ window.CustomerDrawer = (function() {
     el('drawerTitle').textContent = lead.caller || lead.customerName || 'Customer Details';
 
     // Contact Information
-    el('drawerName').textContent = lead.caller || lead.customerName || '—';
-    el('drawerPhone').textContent = lead.phone || lead.phoneNumber || '—';
-    el('drawerAddress').textContent = lead.address || '—';
+    el('drawerName').textContent = lead.caller || lead.customerName || '\u2014';
+    el('drawerPhone').textContent = lead.phone || lead.phoneNumber || '\u2014';
+    el('drawerAddress').textContent = lead.address || '\u2014';
 
     // Job Details
-    el('drawerService').textContent = lead.service || lead.serviceRequested || '—';
+    el('drawerService').textContent = lead.service || lead.serviceRequested || '\u2014';
     var desc = lead.jobDetail || lead.summary || '';
-    el('drawerDescription').textContent = desc ? capitalizeFirst(desc) : '—';
-    el('drawerValue').textContent = lead.avgPrice ? '$' + Math.round(lead.avgPrice).toLocaleString() : '—';
+    el('drawerDescription').textContent = desc ? capitalizeFirst(desc) : '\u2014';
+    el('drawerValue').textContent = lead.avgPrice ? '$' + Math.round(lead.avgPrice).toLocaleString() : '\u2014';
     el('drawerStatus').innerHTML = getStatusBadge(lead.status || 'new');
     el('drawerDate').textContent = fmtTime(lead.time || (lead.receivedAt ? lead.receivedAt : null));
 
@@ -102,60 +185,149 @@ window.CustomerDrawer = (function() {
       }
     }
 
-    // POLARIS Revenue Intelligence
+    // ── Canonical Polaris Intelligence Card ──
+    var intel = generatePolarisIntel(lead);
     var polarisEl = el('drawerPolarisInsight');
-    var analysis = lead.polarisAnalysis;
-    if (!analysis && typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
-      analysis = PolarisEngine.analyzeLead(lead);
-    }
-    if (analysis && analysis.insight) {
-      var confLabel = analysis.confidence >= 80 ? 'High' : analysis.confidence >= 50 ? 'Medium' : 'Low';
-      var confClass = confLabel.toLowerCase();
-      var price = Math.round(analysis.estimatedPrice || 0).toLocaleString();
-      polarisEl.innerHTML = '<div class="drawer-polaris-grid">' +
-        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Summary</div><div class="drawer-polaris-item-value">' + analysis.insight + '</div></div>' +
-        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Pricing Recommendation</div><div class="drawer-polaris-item-value">$' + price + '</div></div>' +
-        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Confidence Score</div><div class="drawer-polaris-item-value"><span class="polaris-confidence ' + confClass + '">' + confLabel + ' (' + analysis.confidence + '%)</span></div></div>' +
-        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Revenue Opportunity</div><div class="drawer-polaris-item-value">$' + price + ' \u2014 ' + (analysis.service || 'Service') + '</div></div>' +
-        '<div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Recommendation</div><div class="drawer-polaris-item-value">' + (analysis.upsell || 'Standard service') + '</div></div>' +
-        '</div>';
-    } else {
-      polarisEl.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">' + generatePolarisInsight(lead) + '</p>';
+
+    // Confidence badge
+    var confScore = intel.confidence.score || 0;
+    var confLabel = intel.confidence.label || 'Pending';
+    var confClass = confLabel.toLowerCase();
+    var confExplanation = intel.confidence.explanation || '';
+
+    // Pricing range
+    var hasRange = intel.pricing.range.low > 0 && intel.pricing.range.high > 0;
+    var hasBreakdown = intel.pricing.breakdown.length > 0;
+    var rangeSection = '';
+    if (hasRange) {
+      rangeSection = '<div class="drawer-polaris-item">' +
+        '<div class="drawer-polaris-item-label">Preliminary Range</div>' +
+        '<div class="drawer-polaris-item-value" style="font-size:18px;font-weight:700;color:var(--brand-500);">' +
+        '$' + Math.round(intel.pricing.range.low).toLocaleString() + ' \u2013 $' + Math.round(intel.pricing.range.high).toLocaleString() +
+        '</div></div>';
     }
 
-    // Generate Polaris estimate via M13 bridge
-    if (typeof PolarisM13Bridge !== 'undefined' && PolarisM13Bridge.augmentLead && lead && lead.id) {
-      if (!lead.polarisEstimate) {
-        PolarisM13Bridge.augmentLead(lead).then(function() {
-          if (lead.polarisEstimate) {
-            renderDrawerEstimate(lead.polarisEstimate);
-          }
-        });
+    // Pricing breakdown items
+    var breakdownSection = '';
+    if (hasBreakdown) {
+      breakdownSection = '<div class="drawer-polaris-item">' +
+        '<div class="drawer-polaris-item-label">Pricing Breakdown</div>' +
+        '<div class="drawer-polaris-item-value">';
+      var breakdownTotal = 0;
+      for (var bi = 0; bi < intel.pricing.breakdown.length; bi++) {
+        var bitem = intel.pricing.breakdown[bi];
+        var amt = bitem.a || 0;
+        breakdownTotal += amt;
+        breakdownSection += '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;">' +
+          '<span>' + (bitem.l || 'Item') + '</span>' +
+          '<span>$' + Math.round(amt).toLocaleString() + '</span></div>';
+      }
+      if (hasRange) {
+        breakdownSection += '<div style="display:flex;justify-content:space-between;padding:4px 0;margin-top:4px;border-top:1px solid var(--neutral-200);font-size:12px;color:var(--neutral-500);">' +
+          '<span>Cost subtotal</span><span>$' + Math.round(breakdownTotal).toLocaleString() + '</span></div>' +
+          '<div style="font-size:10px;color:var(--neutral-400);margin-top:2px;">Range includes markup, contingency, and on-site verification</div>';
       } else {
-        renderDrawerEstimate(lead.polarisEstimate);
+        breakdownSection += '<div style="display:flex;justify-content:space-between;padding:4px 0;margin-top:4px;border-top:1px solid var(--neutral-200);font-size:12px;font-weight:600;">' +
+          '<span>Total</span><span>$' + Math.round(breakdownTotal).toLocaleString() + '</span></div>';
       }
-    } else if (typeof PolarisEngine !== 'undefined' && PolarisEngine.generateEstimate && lead && lead.id) {
-      if (!lead.polarisEstimate) {
-        try { PolarisEngine.generateEstimate(lead); } catch(e) {}
-      }
-      if (lead.polarisEstimate) {
-        renderDrawerEstimate(lead.polarisEstimate);
-      }
+      breakdownSection += '</div></div>';
     }
 
-    // Pricing Breakdown
+    // Evidence
+    var evidenceSection = '';
+    if (intel.evidence.length > 0) {
+      evidenceSection = '<div class="drawer-polaris-item">' +
+        '<div class="drawer-polaris-item-label">Evidence</div><div class="drawer-polaris-item-value">';
+      for (var ei = 0; ei < intel.evidence.length; ei++) {
+        evidenceSection += '<div style="font-size:12px;padding:2px 0;">\u2022 ' + intel.evidence[ei] + '</div>';
+      }
+      evidenceSection += '</div></div>';
+    }
+
+    // Assumptions
+    var assumptionsSection = '';
+    if (intel.assumptions.length > 0) {
+      assumptionsSection = '<div class="drawer-polaris-item">' +
+        '<div class="drawer-polaris-item-label">Assumptions</div><div class="drawer-polaris-item-value">';
+      for (var ai = 0; ai < intel.assumptions.length; ai++) {
+        assumptionsSection += '<div style="font-size:12px;padding:2px 0;color:var(--neutral-500);">\u2022 ' + intel.assumptions[ai] + '</div>';
+      }
+      assumptionsSection += '</div></div>';
+    }
+
+    // Missing information
+    var missingSection = '';
+    if (intel.missing.length > 0) {
+      missingSection = '<div class="drawer-polaris-item">' +
+        '<div class="drawer-polaris-item-label">Missing Information</div><div class="drawer-polaris-item-value">';
+      for (var mi = 0; mi < intel.missing.length; mi++) {
+        missingSection += '<div style="font-size:12px;padding:2px 0;color:var(--warning);">\u26A0 ' + intel.missing[mi] + '</div>';
+      }
+      missingSection += '</div></div>';
+    }
+
+    // Scope dimensions
+    var scopeSection = '';
+    var scopeKeys = Object.keys(intel.scope);
+    if (scopeKeys.length > 0) {
+      scopeSection = '<div class="drawer-polaris-item">' +
+        '<div class="drawer-polaris-item-label">Scope</div><div class="drawer-polaris-item-value">';
+      for (var si = 0; si < scopeKeys.length; si++) {
+        var k = scopeKeys[si];
+        var v = intel.scope[k];
+        if (v && typeof v === 'object') v = JSON.stringify(v);
+        scopeSection += '<div style="font-size:12px;padding:2px 0;"><strong>' + k + ':</strong> ' + (v || '\u2014') + '</div>';
+      }
+      scopeSection += '</div></div>';
+    }
+
+    // Assemble the full Polaris card
+    polarisEl.innerHTML =
+      '<div class="drawer-polaris-grid">' +
+        '<div class="drawer-polaris-item">' +
+          '<div class="drawer-polaris-item-label">Service</div>' +
+          '<div class="drawer-polaris-item-value" style="font-weight:600;">' + (intel.service || '\u2014') + '</div>' +
+        '</div>' +
+        rangeSection +
+        breakdownSection +
+        '<div class="drawer-polaris-item">' +
+          '<div class="drawer-polaris-item-label">Confidence</div>' +
+          '<div class="drawer-polaris-item-value">' +
+            '<span class="polaris-confidence ' + confClass + '">' + confLabel +
+              (confScore > 0 ? ' (' + confScore + '%)' : '') + '</span>' +
+            (confExplanation ? '<div style="font-size:11px;color:var(--neutral-500);margin-top:3px;">' + confExplanation + '</div>' : '') +
+          '</div>' +
+        '</div>' +
+        (intel.recommendedAction ?
+          '<div class="drawer-polaris-item">' +
+            '<div class="drawer-polaris-item-label">Recommended Action</div>' +
+            '<div class="drawer-polaris-item-value" style="font-weight:500;">' + intel.recommendedAction + '</div>' +
+          '</div>' : '') +
+        scopeSection +
+        evidenceSection +
+        assumptionsSection +
+        missingSection +
+      '</div>';
+
+    // Backwards-compat: populate the legacy pricing breakdown section
     var pbDiv = el('drawerPricingBreakdown');
-    if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
-      var pbHtml = '';
-      var pbTotal = 0;
-      lead.pricingBreakdown.forEach(function(item) {
-        pbTotal += item.a || 0;
-        pbHtml += '<div class="drawer-pricing-item"><span>' + (item.l || 'Item') + '</span><span>$' + Math.round(item.a || 0).toLocaleString() + '</span></div>';
-      });
-      pbHtml += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>$' + Math.round(pbTotal).toLocaleString() + '</strong></span></div>';
-      pbDiv.innerHTML = pbHtml;
-    } else {
-      pbDiv.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">Est. value: $' + Math.round(lead.avgPrice || 0).toLocaleString() + '</p>';
+    if (pbDiv) {
+      if (hasBreakdown) {
+        var pbHtml = '';
+        var pbTotal = 0;
+        for (var pbi = 0; pbi < intel.pricing.breakdown.length; pbi++) {
+          var pbItem = intel.pricing.breakdown[pbi];
+          var pba = pbItem.a || 0;
+          pbTotal += pba;
+          pbHtml += '<div class="drawer-pricing-item"><span>' + (pbItem.l || 'Item') + '</span><span>$' + Math.round(pba).toLocaleString() + '</span></div>';
+        }
+        pbHtml += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>$' + Math.round(pbTotal).toLocaleString() + '</strong></span></div>';
+        pbDiv.innerHTML = pbHtml;
+      } else if (hasRange) {
+        pbDiv.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">Preliminary range: $' + Math.round(intel.pricing.range.low).toLocaleString() + ' \u2013 $' + Math.round(intel.pricing.range.high).toLocaleString() + '</p>';
+      } else {
+        pbDiv.innerHTML = '<p style="font-size:13px;color:var(--neutral-500);">Pricing will be available after Polaris processes this lead.</p>';
+      }
     }
 
     // Call Transcript
@@ -274,22 +446,22 @@ window.CustomerDrawer = (function() {
     section.style.display = '';
 
     var eventLabels = {
-      'call_creating': '📞 Creating call...',
-      'call_created': '📞 Call created',
-      'call_started': '📞 Call started',
-      'simulation_started': '🔬 Simulation started',
-      'conversation_started': '💬 Conversation started',
-      'state_dialing': '📞 Dialing',
-      'state_ringing': '🔔 Ringing',
-      'state_answered': '✅ Answered',
-      'state_media_connected': '🔊 Media connected',
-      'state_live': '🎙️ Live conversation',
-      'state_completed': '🏁 Call completed',
-      'state_polaris_summary': '⭐ Polaris summary generated',
-      'call_completed': '🏁 Call completed',
+      'call_creating': '\uD83D\uDCDE Creating call...',
+      'call_created': '\uD83D\uDCDE Call created',
+      'call_started': '\uD83D\uDCDE Call started',
+      'simulation_started': '\uD83D\uDD2C Simulation started',
+      'conversation_started': '\uD83D\uDCAC Conversation started',
+      'state_dialing': '\uD83D\uDCDE Dialing',
+      'state_ringing': '\uD83D\uDD14 Ringing',
+      'state_answered': '\u2705 Answered',
+      'state_media_connected': '\uD83D\uDD0A Media connected',
+      'state_live': '\uD83C\uDF99\uFE0F Live conversation',
+      'state_completed': '\uD83C\uDFC1 Call completed',
+      'state_polaris_summary': '\u2B50 Polaris summary generated',
+      'call_completed': '\uD83C\uDFC1 Call completed',
     };
 
-    var html = '<h3>📋 Call Lifecycle Timeline</h3>';
+    var html = '<h3>\uD83D\uDCCB Call Lifecycle Timeline</h3>';
     html += '<div style="max-height:300px;overflow-y:auto;">';
     entries.forEach(function(entry) {
       var time = new Date(entry.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });

@@ -464,38 +464,45 @@ class CalendarRenderer {
 // CalendarData — API calls
 // ================================================================
 class CalendarData {
-  constructor() { this.baseUrl = '/api/v1/calendar'; }
+      constructor() { this.baseUrl = '/api/v1/calendar'; }
 
-  async fetchEvents() {
-    try { const r = await fetch(`${this.baseUrl}/events`); const d = await r.json(); return d.events || []; }
-    catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); return []; }
-  }
+      _authHeaders() {
+        var headers = {};
+        var token = localStorage.getItem('token');
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        return headers;
+      }
 
-  async createEvent(data) {
-    try { const r = await fetch(`${this.baseUrl}/events`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }); const d = await r.json(); return d.event; }
-    catch(e) { console.warn('[CalendarData] createEvent:', e.message); return null; }
-  }
+      async fetchEvents() {
+        try { const r = await fetch(`${this.baseUrl}/events`, { headers: this._authHeaders() }); const d = await r.json(); return d.events || []; }
+        catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); return []; }
+      }
 
-  async updateEvent(id, data) {
-    try { const r = await fetch(`${this.baseUrl}/events/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }); const d = await r.json(); return d.event; }
-    catch(e) { console.warn('[CalendarData] updateEvent:', e.message); return null; }
-  }
+      async createEvent(data) {
+        try { const r = await fetch(`${this.baseUrl}/events`, { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify(data) }); const d = await r.json(); return d.event; }
+        catch(e) { console.warn('[CalendarData] createEvent:', e.message); return null; }
+      }
 
-  async deleteEvent(id) {
-    try { const r = await fetch(`${this.baseUrl}/events/${id}`, { method:'DELETE' }); return r.ok; }
-    catch(e) { console.warn('[CalendarData] deleteEvent:', e.message); return false; }
-  }
+      async updateEvent(id, data) {
+        try { const r = await fetch(`${this.baseUrl}/events/${id}`, { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify(data) }); const d = await r.json(); return d.event; }
+        catch(e) { console.warn('[CalendarData] updateEvent:', e.message); return null; }
+      }
 
-  async exportICS() {
-    try { const r = await fetch(`${this.baseUrl}/export/ics`); const blob = await r.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'calendar.ics'; a.click(); URL.revokeObjectURL(url); }
-    catch(e) { console.warn('[CalendarData] exportICS:', e.message); }
-  }
+      async deleteEvent(id) {
+        try { const r = await fetch(`${this.baseUrl}/events/${id}`, { method:'DELETE', headers: this._authHeaders() }); return r.ok; }
+        catch(e) { console.warn('[CalendarData] deleteEvent:', e.message); return false; }
+      }
 
-  async importICS(icsContent) {
-    try { const r = await fetch(`${this.baseUrl}/import/ics`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({icsContent}) }); return await r.json(); }
-    catch(e) { console.warn('[CalendarData] importICS:', e.message); return null; }
-  }
-}
+      async exportICS() {
+        try { const r = await fetch(`${this.baseUrl}/export/ics`, { headers: this._authHeaders() }); const blob = await r.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'calendar.ics'; a.click(); URL.revokeObjectURL(url); }
+        catch(e) { console.warn('[CalendarData] exportICS:', e.message); }
+      }
+
+      async importICS(icsContent) {
+        try { const r = await fetch(`${this.baseUrl}/import/ics`, { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify({icsContent}) }); return await r.json(); }
+        catch(e) { console.warn('[CalendarData] importICS:', e.message); return null; }
+      }
+    }
 
 // ================================================================
 // CalendarModal

@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Command Center — POLARIS™ — NorthStar Solutions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    :root {
+      --cc-bg: var(--neutral-50, #f8f9fa);
+      --cc-card: #ffffff;
+      --cc-border: var(--neutral-200, #e9ecef);
+      --cc-text: var(--neutral-900, #1a1a2e);
+      --cc-text-secondary: var(--neutral-600, #6c757d);
+      --cc-text-muted: var(--neutral-500, #adb5bd);
+      --cc-accent: var(--accent, #d4af37);
+      --cc-success: #10b981;
+      --cc-warning: #f59e0b;
+      --cc-danger: #ef4444;
+      --cc-info: #3b82f6;
+      --cc-kpi-bg-1: rgba(16,185,129,0.08);
+      --cc-kpi-bg-2: rgba(59,130,246,0.08);
+      --cc-kpi-bg-3: rgba(245,158,11,0.08);
+      --cc-kpi-bg-4: rgba(212,175,55,0.08);
+      --cc-kpi-bg-5: rgba(139,92,246,0.08);
+      --cc-kpi-bg-6: rgba(239,68,68,0.08);
+      --cc-kpi-bg-7: rgba(16,185,129,0.08);
+      --cc-kpi-bg-8: rgba(59,130,246,0.08);
+    }
+    [data-theme="dark"] {
+      --cc-bg: var(--neutral-900, #1a1a2e);
+      --cc-card: var(--neutral-800, #2d2d44);
+      --cc-border: var(--neutral-700, #3d3d5c);
+      --cc-text: var(--neutral-100, #f8f9fa);
+      --cc-text-secondary: var(--neutral-400, #adb5bd);
+    }
+
+    * { box-sizing: border-box; }
+
+    .cc-workspace {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px 24px;
+    }
+
+    /* ── Header ── */
+    .cc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .cc-header-left h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0;
+      color: var(--cc-text);
+    }
+    .cc-header-left .cc-sub {
+      font-size: 13px;
+      color: var(--cc-text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .cc-live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--cc-success);
+      display: inline-block;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .cc-refresh-btn {
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--cc-border);
+      background: var(--cc-card);
+      color: var(--cc-text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .cc-refresh-btn:hover {
+      border-color: var(--cc-accent);
+      color: var(--cc-accent);
+    }
+
+    /* ── Grid ── */
+    .cc-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .cc-grid-2 { grid-template-columns: 1fr 1fr; }
+    .cc-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .cc-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    .cc-grid-full { grid-column: 1 / -1; }
+
+    /* ── Cards ── */
+    .cc-card {
+      background: var(--cc-card);
+      border: 1px solid var(--cc-border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      transition: box-shadow 0.2s;
+    }
+
+    /* ── Card Title ── */
+    .cc-card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--cc-text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* ── Executive Summary ── */
+    .cc-summary-text {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--cc-text);
+    }
+    .cc-summary-text strong { color: var(--cc-accent); font-weight: 600; }
+
+    /* ── KPI Cards ── */
+    .cc-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .cc-kpi {
+      padding: 14px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--cc-border);
+      background: var(--cc-card);
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .cc-kpi:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .cc-kpi-icon {
+      font-size: 18px;
+      margin-bottom: 6px;
+    }
+    .cc-kpi-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--cc-text);
+      line-height: 1.2;
+    }
+    .cc-kpi-value .cc-cur { font-size: 13px; font-weight: 500; color: var(--cc-text-secondary); }
+    .cc-kpi-label {
+      font-size: 11px;
+      color: var(--cc-text-secondary);
+      margin-top: 2px;
+    }
+    .cc-kpi-loading {
+      height: 60px;
+      background: linear-gradient(90deg, var(--cc-border) 25%, transparent 50%, var(--cc-border) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 6px;
+    }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    /* ── Priorities ── */
+    .cc-priority-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--cc-border);
+      margin-bottom: 8px;
+      transition: all 0.15s;
+    }
+    .cc-priority-item:hover { border-color: var(--cc-accent); }
+    .cc-priority-rank {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--cc-accent);
+      min-width: 24px;
+      line-height: 1.4;
+    }
+    .cc-priority-body { flex: 1; min-width: 0; }
+    .cc-priority-title { font-size: 14px; font-weight: 600; color: var(--cc-text); }
+    .cc-priority-meta { font-size: 11px; color: var(--cc-text-secondary); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .cc-priority-badge {
+      font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px; text-transform: uppercase;
+    }
+    .cc-priority-badge.critical { background: rgba(239,68,68,0.15); color: var(--cc-danger); }
+    .cc-priority-badge.high { background: rgba(245,158,11,0.15); color: var(--cc-warning); }
+    .cc-priority-badge.medium { background: rgba(59,130,246,0.15); color: var(--cc-info); }
+    .cc-priority-badge.low { background: rgba(108,117,125,0.15); color: var(--cc-text-secondary); }
+    .cc-priority-desc { font-size: 12px; color: var(--cc-text-secondary); margin-top: 4px; line-height: 1.4; }
+
+    /* ── Revenue ── */
+    .cc-rev-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 8px;
+    }
+    .cc-rev-stat {
+      text-align: center;
+      padding: 10px 6px;
+    }
+    .cc-rev-val {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--cc-text);
+    }
+    .cc-rev-val.gold { color: var(--cc-accent); }
+    .cc-rev-val.green { color: var(--cc-success); }
+    .cc-rev-val.orange { color: var(--cc-warning); }
+    .cc-rev-label { font-size: 10px; color: var(--cc-text-secondary); margin-top: 2px; font-weight: 500; }
+
+    /* ── Pipeline ── */
+    .cc-pipeline {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 8px 0;
+    }
+    .cc-pipe-stage {
+      flex: 1;
+      text-align: center;
+      padding: 8px 4px;
+      position: relative;
+    }
+    .cc-pipe-stage:not(:last-child)::after {
+      content: '→';
+      position: absolute;
+      right: -8px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--cc-text-muted);
+      font-size: 14px;
+    }
+    .cc-pipe-icon { font-size: 18px; }
+    .cc-pipe-count {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--cc-text);
+      margin: 2px 0;
+    }
+    .cc-pipe-label { font-size: 10px; color: var(--cc-text-secondary); font-weight: 500; }
+    .cc-pipe-bar {
+      height: 3px;
+      border-radius: 2px;
+      margin-top: 6px;
+      background: var(--cc-border);
+    }
+    .cc-pipe-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+
+    /* ── Customers ── */
+    .cc-cust-list { display: flex; flex-direction: column; gap: 6px; }
+    .cc-cust-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: var(--cc-bg);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .cc-cust-item:hover { background: var(--cc-border); }
+    .cc-cust-name { font-size: 13px; font-weight: 500; color: var(--cc-text); flex: 1; }
+    .cc-cust-tag {
+      font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px;
+    }
+    .cc-cust-tag.new { background: rgba(16,185,129,0.15); color: var(--cc-success); }
+    .cc-cust-tag.returning { background: rgba(59,130,246,0.15); color: var(--cc-info); }
+    .cc-cust-tag.attention { background: rgba(239,68,68,0.15); color: var(--cc-danger); }
+
+    /* ── Health ── */
+    .cc-health-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+    }
+    .cc-health-item {
+      text-align: center;
+      padding: 14px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--cc-border);
+      background: var(--cc-bg);
+    }
+    .cc-health-score {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .cc-health-score.excellent { color: var(--cc-success); }
+    .cc-health-score.good { color: var(--cc-info); }
+    .cc-health-score.fair { color: var(--cc-warning); }
+    .cc-health-score.poor { color: var(--cc-danger); }
+    .cc-health-label { font-size: 11px; color: var(--cc-text-secondary); margin-top: 4px; font-weight: 500; }
+    .cc-health-desc { font-size: 10px; color: var(--cc-text-muted); margin-top: 2px; line-height: 1.3; }
+
+    /* ── Quick Actions ── */
+    .cc-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .cc-action-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--cc-border);
+      background: var(--cc-card);
+      color: var(--cc-text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+    .cc-action-btn:hover {
+      border-color: var(--cc-accent);
+      color: var(--cc-accent);
+      transform: translateY(-1px);
+    }
+    .cc-action-btn.primary {
+      background: var(--cc-accent);
+      color: #fff;
+      border-color: var(--cc-accent);
+    }
+    .cc-action-btn.primary:hover {
+      opacity: 0.9;
+      color: #fff;
+    }
+
+    /* ── Empty & Loading ── */
+    .cc-empty {
+      text-align: center;
+      padding: 20px;
+      color: var(--cc-text-secondary);
+      font-size: 13px;
+    }
+    .cc-loading-skeleton {
+      height: 20px;
+      background: linear-gradient(90deg, var(--cc-border) 25%, transparent 50%, var(--cc-border) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .cc-loading-skeleton.w70 { width: 70%; }
+    .cc-loading-skeleton.w50 { width: 50%; }
+    .cc-loading-skeleton.h40 { height: 40px; }
+    .cc-loading-skeleton.h60 { height: 60px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1024px) {
+      .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .cc-health-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .cc-workspace { padding: 14px 16px; }
+      .cc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .cc-health-grid { grid-template-columns: repeat(2, 1fr); }
+      .cc-grid-2 { grid-template-columns: 1fr; }
+      .cc-grid-3 { grid-template-columns: 1fr; }
+      .cc-grid-4 { grid-template-columns: 1fr; }
+      .cc-rev-grid { grid-template-columns: repeat(2, 1fr); }
+      .cc-pipeline { flex-wrap: wrap; }
+      .cc-pipe-stage { min-width: 50%; }
+      .cc-pipe-stage:nth-child(2)::after { display: none; }
+    }
+    @media (max-width: 480px) {
+      .cc-kpi-grid { grid-template-columns: 1fr; }
+      .cc-health-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <a href="/dashboard" class="sidebar-logo">
+        <span class="sidebar-star">&#9733;</span>
+        <span class="sidebar-brand">NorthStar</span>
+      </a>
+      <nav class="sidebar-nav">
+        <a href="/dashboard" class="sidebar-item active">
+          <span class="sidebar-icon">&#9733;</span>
+          <span>Command Center</span>
+        </a>
+        <a href="/dashboard/polaris" class="sidebar-item">
+          <span class="sidebar-icon">&#9881;</span>
+          <span>Polaris</span>
+        </a>
+        <a href="/dashboard/leads" class="sidebar-item">
+          <span class="sidebar-icon">&#128100;</span>
+          <span>Leads</span>
+        </a>
+        <a href="/dashboard/communications" class="sidebar-item">
+          <span class="sidebar-icon">&#128172;</span>
+          <span>Communications</span>
+        </a>
+        <a href="/dashboard/calendar" class="sidebar-item">
+          <span class="sidebar-icon">&#128197;</span>
+          <span>Calendar</span>
+        </a>
+        <a href="/dashboard/business-profile" class="sidebar-item">
+          <span class="sidebar-icon">&#128202;</span>
+          <span>Business Profile</span>
+        </a>
+        <a href="/dashboard/settings" class="sidebar-item">
+          <span class="sidebar-icon">&#9881;</span>
+          <span>Settings</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="/logout" class="sidebar-item">Sign Out</a>
+      </div>
+    </aside>
+    <main class="main-content" id="mainContent">
+      <div class="cc-workspace" id="ccRoot">
+        <!-- Header -->
+        <div class="cc-header">
+          <div class="cc-header-left">
+            <h1>Command Center</h1>
+            <div class="cc-sub">
+              <span class="cc-live-dot"></span>
+              <span>Polaris Intelligence</span>
+              <span id="ccTimestamp">—</span>
+            </div>
+          </div>
+          <button class="cc-refresh-btn" onclick="ccRefresh()">Refresh Now</button>
+        </div>
+
+        <!-- Loading State -->
+        <div id="ccLoading" style="margin-bottom:16px;">
+          <div class="cc-loading-skeleton w70" style="margin-bottom:12px;"></div>
+          <div class="cc-loading-skeleton" style="margin-bottom:6px;"></div>
+          <div class="cc-loading-skeleton w50"></div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px;">
+            <div class="cc-loading-skeleton h60"></div>
+            <div class="cc-loading-skeleton h60"></div>
+            <div class="cc-loading-skeleton h60"></div>
+            <div class="cc-loading-skeleton h60"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+            <div class="cc-loading-skeleton h40"></div>
+            <div class="cc-loading-skeleton h40"></div>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div id="ccContent" style="display:none;">
+
+          <!-- SECTION 1: Executive Brief -->
+          <div class="cc-card" style="margin-bottom:16px;">
+            <div class="cc-card-title">Executive Brief</div>
+            <div class="cc-summary-text" id="ccSummary">Loading...</div>
+          </div>
+
+          <!-- SECTION 2: KPI Grid -->
+          <div class="cc-card" style="margin-bottom:16px;">
+            <div class="cc-card-title">Key Performance Indicators</div>
+            <div class="cc-kpi-grid" id="ccKpiGrid">Loading...</div>
+          </div>
+
+          <!-- SECTION 3 + 4: Priorities + Revenue (2-col) -->
+          <div class="cc-grid cc-grid-2" style="margin-bottom:16px;">
+            <div class="cc-card">
+              <div class="cc-card-title">Today's Priorities</div>
+              <div id="ccPriorities">Loading...</div>
+            </div>
+            <div class="cc-card">
+              <div class="cc-card-title">Revenue Opportunity</div>
+              <div id="ccRevenue">Loading...</div>
+            </div>
+          </div>
+
+          <!-- SECTION 5: Operational Pipeline -->
+          <div class="cc-card" style="margin-bottom:16px;">
+            <div class="cc-card-title">Operational Pipeline</div>
+            <div id="ccPipeline">Loading...</div>
+          </div>
+
+          <!-- SECTION 6: Customer Intelligence -->
+          <div class="cc-card" style="margin-bottom:16px;">
+            <div class="cc-card-title">Customer Intelligence</div>
+            <div id="ccCustomers">Loading...</div>
+          </div>
+
+          <!-- SECTION 7: Business Health -->
+          <div class="cc-card" style="margin-bottom:16px;">
+            <div class="cc-card-title">Business Health</div>
+            <div class="cc-health-grid" id="ccHealth">Loading...</div>
+          </div>
+
+          <!-- SECTION 8: Quick Actions -->
+          <div class="cc-card" style="margin-bottom:16px;">
+            <div class="cc-card-title">Quick Actions</div>
+            <div class="cc-actions" id="ccActions"></div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (function() {
+      var loading = document.getElementById('ccLoading');
+      var content = document.getElementById('ccContent');
+
+      function fmtCurr(val) {
+        if (val === null || val === undefined) return '$0';
+        var n = typeof val === 'number' ? val : parseFloat(val);
+        if (isNaN(n)) return '$0';
+        if (n >= 1000) return '$' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+        return '$' + Math.round(n).toLocaleString();
+      }
+
+      function fmtNum(val) {
+        if (val === null || val === undefined) return '0';
+        var n = typeof val === 'number' ? val : parseInt(val);
+        if (isNaN(n)) return '0';
+        return n.toLocaleString();
+      }
+
+      function healthClass(score) {
+        if (score >= 80) return 'excellent';
+        if (score >= 60) return 'good';
+        if (score >= 40) return 'fair';
+        return 'poor';
+      }
+
+      function pct(val) {
+        if (val === null || val === undefined) return '0%';
+        var s = String(val);
+        if (s.indexOf('%') >= 0) return s;
+        return Math.round(parseFloat(val)) + '%';
+      }
+
+      function ccRefresh() {
+        loading.style.display = '';
+        content.style.display = 'none';
+        render();
+      }
+
+      function render() {
+        var startTime = Date.now();
+
+        Promise.all([
+          fetch('/api/v1/analytics/executive').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
+          fetch('/api/v1/analytics/kpis').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
+          fetch('/api/v1/analytics/dashboard').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
+          fetch('/api/v1/customers').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }),
+          fetch('/api/v1/opportunities/pipeline').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }),
+          fetch('/api/v1/workflows/agenda/today').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }),
+          fetch('/api/v1/analytics/alerts').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; })
+        ]).then(function(results) {
+          var exec = results[0] || {};
+          var kpisData = results[1] || {};
+          var dash = results[2] || {};
+          var customers = results[3] || [];
+          var pipeline = results[4] || [];
+          var agenda = results[5] || [];
+          var alerts = results[6] || {};
+
+          // Ensure minimum load time for smooth transition
+          var elapsed = Date.now() - startTime;
+          var delay = elapsed < 400 ? 400 - elapsed : 0;
+
+          setTimeout(function() {
+            loading.style.display = 'none';
+            content.style.display = '';
+            document.getElementById('ccTimestamp').textContent = new Date().toLocaleString();
+
+            var kpis = kpisData.kpis || (dash.summary) || {};
+
+            // ── SECTION 1: Executive Summary ──
+            var summaryEl = document.getElementById('ccSummary');
+            var parts = [];
+            var rev = exec.revenue || {};
+            var pipe = exec.pipeline || {};
+            var ops = exec.operations || {};
+
+            if (ops.inProgress > 0 || pipe.activeDeals > 0) {
+              if (ops.inProgress > 0) {
+                parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
+              }
+              if (pipe.activeDeals > 0) {
+                parts.push('Polaris has identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' worth <strong>' + fmtCurr(pipe.weightedValue) + '</strong>.');
+              }
+              if (rev.outstanding > 0) {
+                parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> in outstanding revenue requires attention.');
+              }
+              if (rev.forecast > 0) {
+                parts.push('Forecasted revenue: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
+              }
+            } else if (kpis.totalRevenue > 0) {
+              parts.push('Total revenue: <strong>' + fmtCurr(kpis.totalRevenue) + '</strong>. ' + fmtNum(kpis.totalJobs || 0) + ' ' + (kpis.totalJobs === 1 ? 'job has' : 'jobs have') + ' been completed.');
+              parts.push('Company health score: <strong>' + (kpis.companyHealthScore || 0) + '/100</strong>.');
+            } else {
+              parts.push('No active opportunities identified. Use Polaris to start a conversation and generate intelligence.');
+            }
+            summaryEl.innerHTML = parts.join(' ');
+
+            // ── SECTION 2: KPI Grid ──
+            var kpiGrid = document.getElementById('ccKpiGrid');
+            var kpiData = [
+              { icon: '&#128188;', label: 'Active Jobs', value: fmtNum(kpis.inProgressJobs || kpis.inProgressJobs === 0 ? kpis.inProgressJobs : ops.inProgress), key: 'inProgressJobs' },
+              { icon: '&#128100;', label: 'New Leads', value: fmtNum(kpis.activeDeals || kpis.activeDeals === 0 ? kpis.activeDeals : pipe.activeDeals), key: 'activeDeals' },
+              { icon: '&#128203;', label: 'Pending Estimates', value: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : (kpis.totalDeals || 0) - (kpis.wonDeals || 0)), key: 'pendingEstimates' },
+              { icon: '&#128176;', label: 'Revenue Pipeline', value: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue), key: 'pipelineValue', isCurrency: true },
+              { icon: '&#128197;', label: 'Jobs Scheduled Today', value: fmtNum(agenda && agenda.length ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0), key: 'scheduledToday' },
+              { icon: '&#128172;', label: 'Outstanding Follow-Ups', value: fmtNum(kpis.overdueTasks || 0), key: 'overdueTasks' },
+              { icon: '&#128200;', label: 'Win Rate', value: pct(kpis.winRate || pipe.winRate || 0), key: 'winRate' },
+              { icon: '&#128153;', label: 'Company Health', value: (kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0) + '', key: 'health', isHealth: true }
+            ];
+            var bgColors = ['var(--cc-kpi-bg-1)','var(--cc-kpi-bg-2)','var(--cc-kpi-bg-3)','var(--cc-kpi-bg-4)','var(--cc-kpi-bg-5)','var(--cc-kpi-bg-6)','var(--cc-kpi-bg-7)','var(--cc-kpi-bg-8)'];
+            kpiGrid.innerHTML = kpiData.map(function(k, i) {
+              return '<div class="cc-kpi" style="background:' + bgColors[i % bgColors.length] + '">' +
+                '<div class="cc-kpi-icon">' + k.icon + '</div>' +
+                '<div class="cc-kpi-value">' + k.value + '</div>' +
+                '<div class="cc-kpi-label">' + k.label + '</div>' +
+                '</div>';
+            }).join('');
+
+            // ── SECTION 3: Today's Priorities ──
+            var priorityEl = document.getElementById('ccPriorities');
+            var priorityItems = [];
+
+            // From alerts
+            if (alerts.alerts && alerts.alerts.length > 0) {
+              alerts.alerts.forEach(function(a) {
+                priorityItems.push({
+                  rank: priorityItems.length + 1,
+                  title: a.type || 'Alert',
+                  badge: a.severity || 'medium',
+                  desc: a.message || 'No details',
+                  impact: a.severity === 'critical' ? 'Critical' : 'Operational'
+                });
+              });
+            }
+
+            // From agenda
+            if (Array.isArray(agenda) && agenda.length > 0) {
+              agenda.slice(0, 3).forEach(function(t) {
+                priorityItems.push({
+                  rank: priorityItems.length + 1,
+                  title: t.title || t.name || 'Task',
+                  badge: t.priority || 'medium',
+                  desc: t.description || t.details || '',
+                  impact: t.impact || 'Task'
+                });
+              });
+            }
+
+            // From exec recommendations
+            if (exec.recommendations && exec.recommendations.length > 0) {
+              exec.recommendations.slice(0, 2).forEach(function(r) {
+                priorityItems.push({
+                  rank: priorityItems.length + 1,
+                  title: r.title || r.action || 'Recommendation',
+                  badge: r.priority || 'medium',
+                  desc: r.explanation || r.reason || '',
+                  impact: r.businessImpact || 'Business'
+                });
+              });
+            }
+
+            if (priorityItems.length > 0) {
+              priorityEl.innerHTML = priorityItems.slice(0, 5).map(function(p) {
+                return '<div class="cc-priority-item">' +
+                  '<div class="cc-priority-rank">' + p.rank + '</div>' +
+                  '<div class="cc-priority-body">' +
+                  '<div class="cc-priority-title">' + p.title + '</div>' +
+                  '<div class="cc-priority-meta">' +
+                  '<span class="cc-priority-badge ' + p.badge + '">' + p.badge + '</span>' +
+                  '<span>' + p.impact + '</span>' +
+                  '</div>' +
+                  (p.desc ? '<div class="cc-priority-desc">' + p.desc + '</div>' : '') +
+                  '</div></div>';
+              }).join('');
+            } else {
+              priorityEl.innerHTML = '<div class="cc-empty">No priorities detected. Use Polaris to generate intelligence.</div>';
+            }
+
+            // ── SECTION 4: Revenue Opportunity ──
+            var revenueEl = document.getElementById('ccRevenue');
+            if (rev.total || kpis.totalRevenue) {
+              revenueEl.innerHTML = '<div class="cc-rev-grid">' +
+                '<div class="cc-rev-stat"><div class="cc-rev-val gold">' + fmtCurr(rev.total || kpis.totalRevenue) + '</div><div class="cc-rev-label">Total Revenue</div></div>' +
+                '<div class="cc-rev-stat"><div class="cc-rev-val orange">' + fmtCurr(rev.outstanding || kpis.outstandingRevenue) + '</div><div class="cc-rev-label">Outstanding</div></div>' +
+                '<div class="cc-rev-stat"><div class="cc-rev-val green">' + fmtCurr(rev.forecast || 0) + '</div><div class="cc-rev-label">Forecast</div></div>' +
+                '<div class="cc-rev-stat"><div class="cc-rev-val">' + (rev.collectionRate || pct(kpis.collectionRate) || '0%') + '</div><div class="cc-rev-label">Collection Rate</div></div>' +
+                '</div>' +
+                '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--cc-border);font-size:12px;color:var(--cc-text-secondary);">' +
+                'Pipeline: <strong>' + fmtCurr(pipe.weightedValue || kpis.weightedPipelineValue) + '</strong> across ' + fmtNum(pipe.activeDeals || kpis.activeDeals) + ' deals' +
+                '</div>';
+            } else {
+              revenueEl.innerHTML = '<div class="cc-empty">Revenue data appears once Polaris processes customer interactions.</div>';
+            }
+
+            // ── SECTION 5: Operational Pipeline ──
+            var pipelineEl = document.getElementById('ccPipeline');
+            var totalJobs = kpis.totalJobs || ops.totalJobs || 0;
+            var inProgress = kpis.inProgressJobs || ops.inProgress || 0;
+            var completedJobs = kpis.completedJobs || ops.completedJobs || 0;
+            var pendingEstimates = kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : 0;
+            var scheduled = (agenda && agenda.length) ? agenda.filter(function(t) { return t.type === 'job' || t.type === 'appointment'; }).length : 0;
+
+            var stages = [
+              { icon: '&#128222;', count: fmtNum(kpis.activeDeals || pipe.activeDeals || 0), label: 'Incoming', pct: 25 },
+              { icon: '&#128203;', count: fmtNum(pendingEstimates), label: 'Estimates', pct: 25 },
+              { icon: '&#128197;', count: fmtNum(scheduled), label: 'Scheduled', pct: 25 },
+              { icon: '&#128188;', count: fmtNum(inProgress), label: 'Active', pct: 50 },
+              { icon: '&#10004;', count: fmtNum(completedJobs), label: 'Completed', pct: totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0 }
+            ];
+            var fillColors = ['var(--cc-info)','var(--cc-warning)','var(--cc-accent)','var(--cc-success)','var(--cc-success)'];
+            pipelineEl.innerHTML = '<div class="cc-pipeline">' +
+              stages.map(function(s, i) {
+                return '<div class="cc-pipe-stage">' +
+                  '<div class="cc-pipe-icon">' + s.icon + '</div>' +
+                  '<div class="cc-pipe-count">' + s.count + '</div>' +
+                  '<div class="cc-pipe-label">' + s.label + '</div>' +
+                  '<div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:' + s.pct + '%;background:' + fillColors[i] + '"></div></div>' +
+                  '</div>';
+              }).join('') +
+              '</div>';
+
+            // ── SECTION 6: Customer Intelligence ──
+            var custEl = document.getElementById('ccCustomers');
+            if (Array.isArray(customers) && customers.length > 0) {
+              var custList = customers.slice(0, 6);
+              custEl.innerHTML = '<div class="cc-cust-list">' +
+                custList.map(function(c) {
+                  var tag = 'new';
+                  var tagLabel = 'New';
+                  if (c.totalJobs > 0 || c.status === 'active') {
+                    tag = 'returning';
+                    tagLabel = 'Returning';
+                  }
+                  if (c.health && c.health < 40) {
+                    tag = 'attention';
+                    tagLabel = 'Attention';
+                  }
+                  return '<a href="/dashboard/polaris" class="cc-cust-item">' +
+                    '<span class="cc-cust-name">' + (c.name || 'Unknown') + '</span>' +
+                    '<span class="cc-cust-tag ' + tag + '">' + tagLabel + '</span>' +
+                    '</a>';
+                }).join('') +
+                '</div>';
+              if (customers.length > 6) {
+                custEl.innerHTML += '<div class="cc-empty" style="padding:6px;font-size:11px;">+' + (customers.length - 6) + ' more customers</div>';
+              }
+            } else {
+              custEl.innerHTML = '<div class="cc-empty">Customer profiles appear as Polaris processes interactions.</div>';
+            }
+
+            // ── SECTION 7: Business Health ──
+            var healthEl = document.getElementById('ccHealth');
+            var overallHealth = kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 50;
+            var collRate = kpis.collectionRate || 0;
+            var revenueHealth = collRate > 90 ? 90 : collRate > 75 ? 75 : collRate > 50 ? 50 : 30;
+            var winRt = kpis.winRate || 0;
+            var salesHealth = winRt > 50 ? 85 : winRt > 30 ? 70 : winRt > 15 ? 55 : 35;
+            var taskComp = kpis.taskCompletionRate || 0;
+            var opsHealth = taskComp > 80 ? 85 : taskComp > 60 ? 70 : taskComp > 40 ? 55 : 30;
+            var custCount = kpis.totalCustomers || (Array.isArray(customers) ? customers.length : 0);
+            var custHealth = custCount > 10 ? 80 : custCount > 5 ? 65 : custCount > 0 ? 50 : 30;
+
+            var healthItems = [
+              { score: overallHealth, label: 'Overall Business', desc: 'Composite of all health dimensions' },
+              { score: revenueHealth, label: 'Revenue Health', desc: 'Based on collection rate: ' + pct(collRate) },
+              { score: salesHealth, label: 'Sales Health', desc: 'Based on win rate: ' + pct(winRt) },
+              { score: opsHealth, label: 'Operations Health', desc: 'Based on task completion: ' + pct(taskComp) },
+              { score: custHealth, label: 'Customer Health', desc: custCount + ' customer' + (custCount !== 1 ? 's' : '') + ' in system' }
+            ];
+            healthEl.innerHTML = healthItems.map(function(h) {
+              return '<div class="cc-health-item">' +
+                '<div class="cc-health-score ' + healthClass(h.score) + '">' + Math.round(h.score) + '</div>' +
+                '<div class="cc-health-label">' + h.label + '</div>' +
+                '<div class="cc-health-desc">' + h.desc + '</div>' +
+                '</div>';
+            }).join('');
+
+            // ── SECTION 8: Quick Actions ──
+            var actionsEl = document.getElementById('ccActions');
+            actionsEl.innerHTML =
+              '<a href="/dashboard/polaris" class="cc-action-btn primary">&#9733; Open Polaris</a>' +
+              '<a href="/dashboard/leads" class="cc-action-btn">&#128100; Review Leads</a>' +
+              '<a href="/dashboard/communications" class="cc-action-btn">&#128172; Communications</a>' +
+              '<a href="/dashboard/calendar" class="cc-action-btn">&#128197; Calendar</a>' +
+              '<a href="/dashboard/executive-brief" class="cc-action-btn">&#128200; Executive Brief</a>' +
+              '<a href="/dashboard/settings" class="cc-action-btn">&#9881; Settings</a>';
+
+          }, delay);
+        }).catch(function(err) {
+          loading.style.display = 'none';
+          content.style.display = '';
+          document.getElementById('ccSummary').textContent = 'Unable to load Command Center. Polaris may be initializing.';
+          document.getElementById('ccKpiGrid').innerHTML = '<div class="cc-empty">' + err.message + '</div>';
+        });
+      }
+
+      // Initial render
+      render();
+
+      // Auto-refresh every 60 seconds
+      setInterval(function() {
+        // Don't re-show loading on auto-refresh — just update silently
+        render();
+      }, 60000);
+    })();
+  </script>
+</body>
+</html>

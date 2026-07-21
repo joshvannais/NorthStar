@@ -593,11 +593,17 @@ function generateAlerts() {
     }
   }
 
-  // Baseline-building info alerts
-  if (kpis.healthStatus === 'baseline') {
+  // Baseline-building info alerts — only when genuinely pre-activity.
+  // A business with customers, deals, or jobs has graduated past the onboarding baseline.
+  // Business guidance evolves with company maturity:
+  //   No data → Onboarding   |  Customers → Engagement
+  //   Active Leads → Sales   |  Jobs → Operations   |  Growing → Optimization
+  var hasActivity = kpis.totalCustomers > 0 || kpis.activeDeals > 0 || kpis.totalDeals > 0 || kpis.totalJobs > 0;
+
+  if (kpis.healthStatus === 'baseline' && !hasActivity) {
     alerts.push({ severity: 'info', category: 'company', message: 'Building baseline metrics — engage with customers to generate actionable intelligence' });
   }
-  if (kpis.activeDeals === 0 && kpis.totalDeals === 0 && kpis.totalCustomers === 0) {
+  if (kpis.activeDeals === 0 && kpis.totalDeals === 0 && kpis.totalCustomers === 0 && kpis.totalJobs === 0) {
     alerts.push({ severity: 'info', category: 'sales', message: 'Building pipeline baseline — your first customer interaction will populate pipeline data' });
   }
 

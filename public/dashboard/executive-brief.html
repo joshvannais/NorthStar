@@ -522,6 +522,7 @@
     </main>
   </div>
 
+  <script src="/js/polaris-api.js"></script>
   <script>
     (function() {
       var eb = document.getElementById('executiveBrief');
@@ -547,17 +548,16 @@
       }
 
       function render() {
-        fetch('/api/v1/analytics/executive')
-          .then(function(r) { return r.json(); })
-          .then(function(exec) {
-            // Fetch additional data in parallel
-            return Promise.all([
-              Promise.resolve(exec),
-              fetch('/api/v1/analytics/dashboard').then(function(r) { return r.json(); }).catch(function() { return {}; }),
-              fetch('/api/v1/customers').then(function(r) { return r.json(); }).catch(function() { return []; }),
-              fetch('/api/v1/opportunities/pipeline').then(function(r) { return r.json(); }).catch(function() { return []; })
-            ]);
-          })
+                  PolarisApi.getExecutiveSummary()
+                    .then(function(exec) {
+                      // Fetch additional data in parallel (canonical Polaris APIs)
+                      return Promise.all([
+                        Promise.resolve(exec),
+                        PolarisApi.getDashboard().catch(function() { return {}; }),
+                        PolarisApi.getCustomers().catch(function() { return []; }),
+                        PolarisApi.getPipeline().catch(function() { return []; })
+                      ]);
+                    })
           .then(function(results) {
             var exec = results[0] || {};
             var dashboard = results[1] || {};
@@ -642,8 +642,8 @@
                 '<div class="eb-stat"><div class="eb-stat-value warning">' + fmtCurrency(outstandingRev) + '</div><div class="eb-stat-label">Outstanding</div></div>' +
                 '<div class="eb-stat"><div class="eb-stat-value positive">' + fmtCurrency(forecastRev) + '</div><div class="eb-stat-label">Forecast</div></div>' +
                 '<div class="eb-stat"><div class="eb-stat-value">' + collectionRate + '</div><div class="eb-stat-label">Collection Rate</div></div>';
-            } else if (dashboard && dashboard.kpis) {
-              var dkpis = dashboard.kpis;
+            } else if (dashboard && dashboard.summary) {
+              var dkpis = dashboard.summary;
               revenueEl.innerHTML =
                 '<div class="eb-stat"><div class="eb-stat-value neutral">' + fmtCurrency(dkpis.totalRevenue || 0) + '</div><div class="eb-stat-label">Total Revenue</div></div>' +
                 '<div class="eb-stat"><div class="eb-stat-value warning">' + fmtCurrency(dkpis.outstandingRevenue || 0) + '</div><div class="eb-stat-label">Outstanding</div></div>' +
@@ -655,8 +655,8 @@
 
             // ── 4. Operational Snapshot ──
             var opsEl = document.getElementById('ebOperational');
-            if (dashboard && dashboard.kpis) {
-              var dkpis = dashboard.kpis;
+            if (dashboard && dashboard.summary) {
+                              var dkpis = dashboard.summary;
               var items = [];
               if (dkpis.activeJobs !== undefined) items.push({ label: 'Active Jobs', value: dkpis.activeJobs, dot: 'active' });
               if (dkpis.pendingEstimates !== undefined) items.push({ label: 'Estimates Awaiting Action', value: dkpis.pendingEstimates, dot: 'pending' });
@@ -713,8 +713,8 @@
                 insightText = 'Polaris has identified <strong>' + total + '</strong> total opportunities. Engaging with leads promptly can increase conversion rates.';
                 insightSource = 'Source: Polaris Opportunity Engine';
               }
-            } else if (dashboard && dashboard.kpis && dashboard.kpis.weightedPipelineValue > 0) {
-              insightText = 'Pipeline value is <strong>' + fmtCurrency(dashboard.kpis.weightedPipelineValue) + '</strong> across ' + (dashboard.kpis.activeDeals || 0) + ' active opportunities.';
+            } else if (dashboard && dashboard.summary && dashboard.summary.weightedPipelineValue > 0) {
+                              insightText = 'Pipeline value is <strong>' + fmtCurrency(dashboard.summary.weightedPipelineValue) + '</strong> across ' + (dashboard.summary.activeDeals || 0) + ' active opportunities.';
               insightSource = 'Source: Polaris Analytics Engine';
             } else {
               insightText = 'Start a conversation with Polaris to generate intelligence. Each call provides operational, customer, and next-step insights that power the Executive Brief.';

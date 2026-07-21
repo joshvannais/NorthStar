@@ -559,10 +559,11 @@ function getPipelineMetrics() {
   var lost = listOpportunities({ status: 'lost', includeArchived: false });
   var active = listOpportunities({ includeArchived: false, status: 'open' });
 
-  var totalValue = all.opportunities.reduce(function (s, o) { return s + o.estimatedValue; }, 0);
-  var weightedValue = all.opportunities.reduce(function (s, o) { return s + o.expectedRevenue; }, 0);
+  var totalValue = active.opportunities.reduce(function (s, o) { return s + o.estimatedValue; }, 0);
+  var weightedValue = active.opportunities.reduce(function (s, o) { return s + o.expectedRevenue; }, 0);
   var wonValue = won.opportunities.reduce(function (s, o) { return s + o.estimatedValue; }, 0);
-  var averageDealValue = all.total > 0 ? Math.round((totalValue / all.total) * 100) / 100 : 0;
+  var allValue = all.opportunities.reduce(function (s, o) { return s + o.estimatedValue; }, 0);
+  var averageDealValue = all.total > 0 ? Math.round((allValue / all.total) * 100) / 100 : 0;
 
   var totalClosed = won.total + lost.total;
   var winRate = totalClosed > 0 ? Math.round((won.total / totalClosed) * 10000) / 100 : 0;

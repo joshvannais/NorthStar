@@ -52,7 +52,7 @@
       font-size: 20px; font-weight: 700; margin: 0; color: var(--neutral-800);
       letter-spacing: -0.2px;
     }
-    [data-theme="dark"] .cc-header-left h1 { color: var(--neutral-100); }
+    [data-theme="dark"] .cc-header-left h1 { color: var(--neutral-800); }
     .cc-header-left .cc-sub { font-size: 12px; color: var(--neutral-500); display: flex; align-items: center; gap: 6px; margin-top: 1px; }
     .cc-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); display: inline-block; animation: cc-pulse 2s infinite; }
     @keyframes cc-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
@@ -74,7 +74,7 @@
 
     /* ── Summary ── */
     .cc-summary-text { font-size: 13px; line-height: 1.55; color: var(--neutral-700); }
-    [data-theme="dark"] .cc-summary-text { color: var(--neutral-300); }
+    [data-theme="dark"] .cc-summary-text { color: var(--neutral-700); }
     .cc-summary-text strong { color: var(--brand-500); font-weight: 600; }
 
     /* ── KPI Grid (PRESERVED from 2.2) ── */
@@ -86,7 +86,6 @@
     .cc-kpi:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     .cc-kpi-icon { font-size: 16px; margin-bottom: 4px; }
     .cc-kpi-value { font-size: 20px; font-weight: 700; color: var(--neutral-800); line-height: 1.15; }
-    [data-theme="dark"] .cc-kpi-value { color: var(--neutral-100); }
     .cc-kpi-label { font-size: 10px; color: var(--neutral-500); margin-top: 2px; font-weight: 500; }
 
     /* ── Priorities ── */
@@ -99,7 +98,7 @@
     .cc-priority-rank { font-size: 14px; font-weight: 700; color: var(--brand-500); min-width: 20px; line-height: 1.4; }
     .cc-priority-body { flex: 1; min-width: 0; }
     .cc-priority-title { font-size: 13px; font-weight: 600; color: var(--neutral-800); }
-    [data-theme="dark"] .cc-priority-title { color: var(--neutral-200); }
+    [data-theme="dark"] .cc-priority-title { color: var(--neutral-800); }
     .cc-priority-meta { font-size: 10px; color: var(--neutral-500); margin-top: 1px; display: flex; gap: 8px; flex-wrap: wrap; }
     .cc-priority-badge { font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; }
     .cc-priority-badge.critical { background: rgba(239,68,68,0.15); color: var(--danger); }
@@ -112,7 +111,6 @@
     .cc-rev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 4px; }
     .cc-rev-stat { text-align: center; padding: 6px 4px; }
     .cc-rev-val { font-size: 18px; font-weight: 700; color: var(--neutral-800); }
-    [data-theme="dark"] .cc-rev-val { color: var(--neutral-100); }
     .cc-rev-val.gold { color: var(--brand-500); }
     .cc-rev-val.green { color: var(--success); }
     .cc-rev-val.orange { color: var(--warning); }
@@ -127,7 +125,6 @@
     }
     .cc-pipe-icon { font-size: 16px; margin-bottom: 1px; }
     .cc-pipe-count { font-size: 18px; font-weight: 700; color: var(--neutral-800); margin: 1px 0; }
-    [data-theme="dark"] .cc-pipe-count { color: var(--neutral-100); }
     .cc-pipe-label { font-size: 9px; color: var(--neutral-500); font-weight: 500; }
     .cc-pipe-bar { height: 3px; border-radius: 2px; margin-top: 5px; background: var(--neutral-200); overflow: hidden; }
     .cc-pipe-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
@@ -141,7 +138,7 @@
     }
     .cc-cust-item:hover { background: var(--neutral-200); }
     .cc-cust-name { font-size: 12px; font-weight: 500; color: var(--neutral-800); flex: 1; }
-    [data-theme="dark"] .cc-cust-name { color: var(--neutral-200); }
+    [data-theme="dark"] .cc-cust-name { color: var(--neutral-800); }
     .cc-cust-tag { font-size: 9px; font-weight: 600; padding: 1px 7px; border-radius: 3px; }
     .cc-cust-tag.new { background: rgba(16,185,129,0.15); color: var(--success); }
     .cc-cust-tag.returning { background: rgba(59,130,246,0.15); color: var(--info); }
@@ -171,7 +168,7 @@
       font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.12s;
       min-height: 38px;
     }
-    [data-theme="dark"] .cc-action-btn { color: var(--neutral-300); }
+    [data-theme="dark"] .cc-action-btn { color: var(--neutral-600); }
     .cc-action-btn:hover { border-color: var(--brand-500); color: var(--brand-500); transform: translateY(-1px); }
 
     /* ── Grid ── */
@@ -287,8 +284,8 @@
         <!-- SIMULATE LEAD -->
         <div class="cc-sim-banner" id="ccSimBanner">
           <div class="cc-sim-text">
-            <div class="cc-sim-heading">Try Polaris Intelligence</div>
-            <p>Generate a realistic customer interaction and watch Polaris process the entire workflow in real time.</p>
+            <div class="cc-sim-heading">Try Polaris\u2122 Intelligence</div>
+            <p>Generate a realistic customer interaction and watch Polaris\u2122 process the entire workflow in real time.</p>
             <div class="cc-sim-status" id="ccSimStatus" style="display:none;"><span>&#9989;</span><span id="ccSimStatusText">Lead generated</span></div>
           </div>
           <button class="cc-sim-btn" id="ccSimBtn" onclick="ccSimulateLead()"><span>&#127917;</span><span>Simulate Lead</span></button>
@@ -297,7 +294,7 @@
         <div class="cc-header">
           <div class="cc-header-left">
             <h1>Command Center</h1>
-            <div class="cc-sub"><span class="cc-live-dot"></span><span>Polaris Intelligence</span><span style="opacity:0.3;">&middot;</span><span id="ccTimestamp">&mdash;</span></div>
+            <div class="cc-sub"><span class="cc-live-dot"></span><span>Polaris\u2122 Intelligence</span><span style="opacity:0.3;">&middot;</span><span id="ccTimestamp">&mdash;</span></div>
           </div>
           <button class="cc-refresh-btn" onclick="ccRefresh()">Refresh</button>
         </div>
@@ -333,6 +330,7 @@
   <script src="/js/simulator.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
+  
   <script>
     (function() {
       var loading = document.getElementById('ccLoading');
@@ -416,7 +414,7 @@
       }
 
       function errState() {
-        return '<div class="cc-empty" style="color:var(--danger);cursor:pointer;" onclick="ccRefresh()">Polaris could not load this section. Tap to retry.</div>';
+        return '<div class="cc-empty" style="color:var(--danger);cursor:pointer;" onclick="ccRefresh()">Polaris\u2122 could not load this section. Tap to retry.</div>';
       }
 
       // ── Helpers ──
@@ -526,12 +524,20 @@
           var parts = [];
           if (ops.inProgress > 0 || pipe.activeDeals > 0 || (rev.total || 0) > 0) {
             if (ops.inProgress > 0) parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
-            if (pipe.activeDeals > 0) parts.push('Polaris identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' worth <strong>' + fmtCurr(pipe.weightedValue) + '</strong>.');
+            if (pipe.activeDeals > 0) {
+              var pipeVal = pipe.totalValue || pipe.pipelineValue || 0;
+              var weightedVal = pipe.weightedValue || pipe.weightedPipelineValue || 0;
+              parts.push('Polaris\u2122 identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' with a combined pipeline value of <strong>' + fmtCurr(pipeVal) + '</strong>.');
+              parts.push('Based on current stage probabilities, the weighted pipeline is <strong>' + fmtCurr(weightedVal) + '</strong>.');
+              if (pipe.averageOpportunityValue > 0 || pipe.avgDealValue > 0) {
+                parts.push('The average opportunity value is <strong>' + fmtCurr(pipe.averageOpportunityValue || pipe.avgDealValue) + '</strong>.');
+              }
+            }
             if (rev.outstanding > 0) parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> outstanding.');
             if (rev.forecast > 0) parts.push('Forecast: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
             if (exec.companyHealth > 0 && parts.length === 0) parts.push('Health score: <strong>' + exec.companyHealth + '/100</strong>.');
           } else {
-            parts.push('Polaris is monitoring your business. Start a simulated or live customer interaction to generate operational intelligence.');
+            parts.push('Polaris\u2122 is monitoring your business. New opportunities will appear here as customer interactions are processed.');
           }
           el.innerHTML = parts.join(' ');
         }
@@ -548,15 +554,15 @@
           if (!el) return;
           var items = [
             { icon: '\uD83D\uDCBC', label: 'Active Jobs', val: fmtNum(kpis.inProgressJobs || ops.inProgress || 0) },
-            { icon: '\uD83D\uDC65', label: 'New Leads', val: fmtNum(kpis.activeDeals || pipe.activeDeals || 0) },
-            { icon: '\uD83D\uDCCB', label: 'Pending Est.', val: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : ((kpis.totalDeals||0) - (kpis.wonDeals||0))) },
-            { icon: '\uD83D\uDCB0', label: 'Pipeline', val: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue || 0) },
+            { icon: '\uD83D\uDC65', label: 'Open Leads', val: fmtNum(kpis.activeDeals || pipe.activeDeals || 0) },
+            { icon: '\uD83D\uDCCB', label: 'Pending Estimates', val: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : ((kpis.totalDeals||0) - (kpis.wonDeals||0))) },
+            { icon: '\uD83D\uDCB0', label: 'Pipeline Value', val: fmtCurr(kpis.pipelineValue || pipe.totalValue || 0), sub: 'Weighted: ' + fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue || 0) },
             { icon: '\uD83D\uDCC5', label: 'Scheduled', val: '0' },
             { icon: '\uD83D\uDCAC', label: 'Follow-Ups', val: fmtNum(kpis.overdueTasks || 0) },
             { icon: '\uD83D\uDCC8', label: 'Win Rate', val: pct(kpis.winRate || pipe.winRate || 0) },
-            { icon: '\uD83D\uDC9A', label: 'Health', val: (kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0) + '' }
+            { icon: '\uD83D\uDC9A', label: 'Business Health', val: (function(){ var hs = kpis.healthStatus || exec.healthStatus || ''; var sc = kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0; if (hs === 'baseline' || (!sc && hs !== 'active')) return 'Baseline'; return sc + ''; })() }
           ];
-          el.innerHTML = items.map(function(k){return '<div class="cc-kpi"><div class="cc-kpi-icon">'+k.icon+'</div><div class="cc-kpi-value">'+k.val+'</div><div class="cc-kpi-label">'+k.label+'</div></div>';}).join('');
+          el.innerHTML = items.map(function(k){return '<div class="cc-kpi"><div class="cc-kpi-icon">'+k.icon+'</div><div class="cc-kpi-value">'+k.val+'</div>'+(k.sub?'<div class="cc-kpi-label" style="font-size:9px;margin-top:0;">'+k.sub+'</div>':'')+'<div class="cc-kpi-label">'+k.label+'</div></div>';}).join('');
         }
 
         function renderRevenue(exec, kpisData, dash) {
@@ -568,9 +574,21 @@
           var pipe = exec.pipeline || {};
           var el = document.getElementById('ccRevenue');
           if (!el) return;
-          el.innerHTML = (rev.total || kpis.totalRevenue) ?
-            '<div class="cc-rev-grid"><div class="cc-rev-stat"><div class="cc-rev-val gold">'+fmtCurr(rev.total||kpis.totalRevenue)+'</div><div class="cc-rev-label">Total</div></div><div class="cc-rev-stat"><div class="cc-rev-val orange">'+fmtCurr(rev.outstanding||kpis.outstandingRevenue)+'</div><div class="cc-rev-label">Outstanding</div></div><div class="cc-rev-stat"><div class="cc-rev-val green">'+fmtCurr(rev.forecast||0)+'</div><div class="cc-rev-label">Forecast</div></div><div class="cc-rev-stat"><div class="cc-rev-val">'+(rev.collectionRate||pct(kpis.collectionRate)||'0%')+'</div><div class="cc-rev-label">Collection</div></div></div><div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--neutral-200);font-size:11px;color:var(--neutral-500);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;"><span>Pipeline: <strong>'+fmtCurr(pipe.weightedValue||kpis.weightedPipelineValue)+'</strong></span><span>Win rate: <strong>'+pct(pipe.winRate||kpis.winRate||0)+'</strong></span></div>' :
-            '<div class="cc-empty">Revenue forecasts appear after Polaris analyzes conversations, estimates, and scheduling.</div>';
+          var hasRevenue = (rev.total || kpis.totalRevenue);
+          var hasPipeline = (pipe.totalValue || pipe.pipelineValue || pipe.activeDeals) > 0;
+          var html = '';
+          if (hasRevenue) {
+            html += '<div class="cc-rev-grid"><div class="cc-rev-stat"><div class="cc-rev-val gold">'+fmtCurr(rev.total||kpis.totalRevenue)+'</div><div class="cc-rev-label">Total</div></div><div class="cc-rev-stat"><div class="cc-rev-val orange">'+fmtCurr(rev.outstanding||kpis.outstandingRevenue)+'</div><div class="cc-rev-label">Outstanding</div></div><div class="cc-rev-stat"><div class="cc-rev-val green">'+fmtCurr(rev.forecast||0)+'</div><div class="cc-rev-label">Forecast</div></div><div class="cc-rev-stat"><div class="cc-rev-val">'+(rev.collectionRate||pct(kpis.collectionRate)||'0%')+'</div><div class="cc-rev-label">Collection</div></div></div>';
+          }
+          if (hasPipeline) {
+            var pipeVal = pipe.totalValue || pipe.pipelineValue || 0;
+            var weightedVal = pipe.weightedValue || pipe.weightedPipelineValue || 0;
+            var activeCount = pipe.activeDeals || 0;
+            html += '<div style="margin-top:'+(hasRevenue?'8px':'0')+';padding-top:'+(hasRevenue?'8px':'0')+';border-top:'+(hasRevenue?'1px solid var(--neutral-200)':'none')+';font-size:11px;color:var(--neutral-500);"><p style="margin:0 0 4px;">You have <strong>'+fmtNum(activeCount)+'</strong> open '+(activeCount===1?'opportunity':'opportunities')+' representing <strong>'+fmtCurr(pipeVal)+'</strong> in pipeline value.</p><p style="margin:0 0 4px;">Weighted: <strong>'+fmtCurr(weightedVal)+'</strong> &middot; Following up on your highest-value estimates could improve booking potential.</p></div>';
+          } else if (!hasRevenue) {
+            html = '<div class="cc-empty">Polaris\u2122 is establishing your revenue baseline.</div>';
+          }
+          el.innerHTML = html;
         }
 
         function renderPriorities(alerts, agenda, exec) {
@@ -583,7 +601,7 @@
           if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
           if (agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
           if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});
-          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris will surface opportunities as activity grows.</div>';
+          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris\u2122 will surface opportunities as activity grows.</div>';
         }
 
         function renderPipeline(kpisData, dash, exec, agenda) {
@@ -600,15 +618,18 @@
           var ij = kpis.inProgressJobs || ops.inProgress || 0;
           var cj = kpis.completedJobs || ops.completedJobs || 0;
           var pe = kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : 0;
+          var ad = kpis.activeDeals || pipe.activeDeals || 0;
           var sch = agenda.filter(function(t){return t.type==='job'||t.type==='appointment'}).length;
+          var counts = [ad, pe, sch, ij, cj];
+          var maxCount = Math.max.apply(null, counts.concat([1]));
           var stages = [
-            {icon:'\uD83D\uDCDE',cnt:fmtNum(kpis.activeDeals||pipe.activeDeals||0),label:'Incoming',pct:25},
-            {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:25},
-            {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:25},
-            {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:50},
-            {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:tj>0?Math.round(cj/tj*100):0}
+            {icon:'\uD83D\uDCDE',cnt:fmtNum(ad),label:'Open Leads',pct:maxCount>0?Math.round(ad/maxCount*100):0,color:'var(--info)'},
+            {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:maxCount>0?Math.round(pe/maxCount*100):0,color:'var(--warning)'},
+            {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:maxCount>0?Math.round(sch/maxCount*100):0,color:'var(--brand-500)'},
+            {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:maxCount>0?Math.round(ij/maxCount*100):0,color:'var(--success)'},
+            {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:maxCount>0?Math.round(cj/maxCount*100):0,color:'var(--success)'}
           ];
-          el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+['var(--info)','var(--warning)','var(--brand-500)','var(--success)','var(--success)'][i]+'"></div></div></div>';}).join('')+'</div>';
+          el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+s.color+'"></div></div></div>';}).join('')+'</div>';
         }
 
         function renderCustomers(customers) {
@@ -617,7 +638,7 @@
           if (!el) return;
           el.innerHTML = customers.length > 0 ?
             '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
-            '<div class="cc-empty">Customer profiles appear as Polaris processes calls. Start a simulation above.</div>';
+            '<div class="cc-empty">Customer profiles appear as Polaris\u2122 processes calls. Start a simulation above.</div>';
         }
 
         function renderHealth(kpisData, dash, exec, customers) {

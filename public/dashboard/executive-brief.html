@@ -22,11 +22,12 @@
       --eb-info: var(--info, #3498db);
     }
     [data-theme="dark"] {
-      --eb-bg: var(--neutral-900, #1a1a2e);
-      --eb-card-bg: var(--neutral-800, #2d2d44);
-      --eb-card-border: var(--neutral-700, #3d3d5c);
-      --eb-text-primary: var(--neutral-100, #f8f9fa);
-      --eb-text-secondary: var(--neutral-400, #adb5bd);
+      --eb-bg: var(--neutral-50, #0B0D17);
+      --eb-card-bg: var(--neutral-100, #131624);
+      --eb-card-border: var(--neutral-200, #1E2235);
+      --eb-text-primary: var(--neutral-800, #E2E4EB);
+      --eb-text-secondary: var(--neutral-500, #7C8298);
+      --eb-text-muted: var(--neutral-500, #7C8298);
     }
 
     .eb-workspace {
@@ -505,7 +506,7 @@
             <div id="ebCustomers">Loading...</div>
           </div>
 
-          <!-- 6. Polaris Insight -->
+          <!-- 6. POLARIS\u2122 Insight -->
           <div class="eb-card eb-card-full">
             <div class="eb-card-title">POLARIS Insight</div>
             <div id="ebInsight">Loading...</div>
@@ -573,17 +574,21 @@
             // ── 1. Executive Summary ──
             var summaryEl = document.getElementById('ebSummary');
             var parts = [];
-            if (exec && exec.revenue) {
-              var totalRev = exec.revenue.total || 0;
-              var outstanding = exec.revenue.outstanding || 0;
-              var forecast = exec.revenue.forecast || 0;
-              var deals = exec.pipeline ? exec.pipeline.activeDeals || 0 : 0;
-              var weightedVal = exec.pipeline ? exec.pipeline.weightedValue || 0 : 0;
+            if (exec) {
+              var totalRev = exec.revenue ? exec.revenue.total || 0 : 0;
+              var outstanding = exec.revenue ? exec.revenue.outstanding || 0 : 0;
+              var forecast = exec.revenue ? exec.revenue.forecast || 0 : 0;
+              var pipe = exec.pipeline || {};
+              var deals = pipe.activeDeals || 0;
+              var pipeVal = pipe.totalValue || pipe.pipelineValue || 0;
+              var weightedVal = pipe.weightedValue || pipe.weightedPipelineValue || 0;
 
-              if (deals > 0 || totalRev > 0) {
-                parts.push('Polaris has identified <strong>' + fmtNumber(deals) + '</strong> active opportunity');
-                if (deals !== 1) parts[parts.length-1] = parts[parts.length-1] + 'ies';
-                parts[parts.length-1] = parts[parts.length-1] + ' with a combined estimated value of <strong>' + fmtCurrency(weightedVal) + '</strong>.';
+              if (deals > 0) {
+                parts.push('Polaris\u2122 identified <strong>' + fmtNumber(deals) + '</strong> active ' + (deals === 1 ? 'opportunity' : 'opportunities') + ' with a combined pipeline value of <strong>' + fmtCurrency(pipeVal) + '</strong>.');
+                parts.push('Based on current stage probabilities, the weighted pipeline is <strong>' + fmtCurrency(weightedVal) + '</strong>.');
+                if (pipe.averageOpportunityValue > 0 || pipe.avgDealValue > 0) {
+                  parts.push('The average opportunity value is <strong>' + fmtCurrency(pipe.averageOpportunityValue || pipe.avgDealValue) + '</strong>.');
+                }
               }
               if (outstanding > 0) {
                 parts.push('<strong>' + fmtCurrency(outstanding) + '</strong> in outstanding revenue requires attention.');
@@ -593,7 +598,7 @@
               }
             }
             if (parts.length === 0) {
-              parts.push('No active opportunities identified. Use Polaris to start a new conversation and generate intelligence.');
+              parts.push('Polaris\u2122 is monitoring your business. New opportunities will appear here as customer interactions are processed.');
             }
             summaryEl.innerHTML = parts.join(' ');
 
@@ -623,11 +628,11 @@
                   '<div class="eb-priority-body">' +
                     '<div class="eb-priority-title">Company Health Score: ' + health + '/100</div>' +
                     '<div class="eb-priority-meta"><span>Status: ' + healthLabel + '</span></div>' +
-                    '<div class="eb-priority-explanation">Polaris monitors operational and customer health to identify the highest-impact actions for your business.</div>' +
+                    '<div class="eb-priority-explanation">Polaris\u2122 monitors operational and customer health to identify the highest-impact actions for your business.</div>' +
                   '</div>' +
                 '</div>';
             } else {
-              priorityEl.innerHTML = '<div class="eb-empty">Generate Polaris intelligence by starting a call or uploading a transcript to see prioritized recommendations.</div>';
+              priorityEl.innerHTML = '<div class="eb-empty">Generate Polaris\u2122 intelligence by starting a call or uploading a transcript to see prioritized recommendations.</div>';
             }
 
             // ── 3. Revenue Snapshot ──
@@ -636,12 +641,18 @@
               var totalRevenue = exec.revenue.total || 0;
               var outstandingRev = exec.revenue.outstanding || 0;
               var forecastRev = exec.revenue.forecast || 0;
-              var collectionRate = exec.revenue.collectionRate || '0%';
+              var collectionRate = exec.revenue.collectionRate;
+              if (!collectionRate || collectionRate === '0%' || collectionRate === 0) {
+                collectionRate = totalRevenue > 0 ? '0%' : 'N/A';
+              }
+              var hasInvoices = totalRevenue > 0 || outstandingRev > 0;
+              var collLabel = hasInvoices ? (collectionRate === 'N/A' ? 'Not Available' : collectionRate) : 'No Billing History';
+              var forecastLabel = forecastRev > 0 && exec.pipeline && (exec.pipeline.weightedValue || exec.pipeline.weightedPipelineValue) > 0 ? 'Weighted Forecast' : 'Forecast';
               revenueEl.innerHTML =
                 '<div class="eb-stat"><div class="eb-stat-value neutral">' + fmtCurrency(totalRevenue) + '</div><div class="eb-stat-label">Total Revenue</div></div>' +
                 '<div class="eb-stat"><div class="eb-stat-value warning">' + fmtCurrency(outstandingRev) + '</div><div class="eb-stat-label">Outstanding</div></div>' +
-                '<div class="eb-stat"><div class="eb-stat-value positive">' + fmtCurrency(forecastRev) + '</div><div class="eb-stat-label">Forecast</div></div>' +
-                '<div class="eb-stat"><div class="eb-stat-value">' + collectionRate + '</div><div class="eb-stat-label">Collection Rate</div></div>';
+                '<div class="eb-stat"><div class="eb-stat-value positive">' + fmtCurrency(forecastRev) + '</div><div class="eb-stat-label">' + forecastLabel + '</div></div>' +
+                '<div class="eb-stat"><div class="eb-stat-value">' + collLabel + '</div><div class="eb-stat-label">Collection Rate</div></div>';
             } else if (dashboard && dashboard.summary) {
               var dkpis = dashboard.summary;
               revenueEl.innerHTML =
@@ -650,7 +661,7 @@
                 '<div class="eb-stat"><div class="eb-stat-value">' + (dkpis.pendingEstimates || 0) + '</div><div class="eb-stat-label">Pending Est.</div></div>' +
                 '<div class="eb-stat"><div class="eb-stat-value">' + (dkpis.activeDeals || 0) + '</div><div class="eb-stat-label">Active Deals</div></div>';
             } else {
-              revenueEl.innerHTML = '<div class="eb-empty">Revenue data will appear once Polaris processes customer interactions.</div>';
+              revenueEl.innerHTML = '<div class="eb-empty">Revenue data will appear once Polaris\u2122 processes customer interactions.</div>';
             }
 
             // ── 4. Operational Snapshot ──
@@ -669,7 +680,7 @@
                   }).join('') +
                   '</div>';
               } else {
-                opsEl.innerHTML = '<div class="eb-empty">Operational data from recent Polaris sessions will appear here.</div>';
+                opsEl.innerHTML = '<div class="eb-empty">Operational data from recent Polaris\u2122 sessions will appear here.</div>';
               }
             } else {
               opsEl.innerHTML = '<div class="eb-empty">Operational snapshot will populate as Polaris processes jobs and estimates.</div>';
@@ -694,7 +705,7 @@
               }
               custEl.innerHTML = customerHtml;
             } else {
-              custEl.innerHTML = '<div class="eb-empty">Customer profiles will appear as Polaris processes incoming calls and interactions.</div>';
+              custEl.innerHTML = '<div class="eb-empty">Customer profiles will appear as Polaris\u2122 processes incoming calls and interactions.</div>';
             }
 
             // ── 6. Polaris Insight ──
@@ -710,14 +721,14 @@
                 insightText = 'Your active pipeline has <strong>' + active + '</strong> opportunities with an average weighted value of <strong>' + fmtCurrency(avgDeal) + '</strong> per deal.';
                 insightSource = 'Source: Polaris Pipeline Intelligence';
               } else {
-                insightText = 'Polaris has identified <strong>' + total + '</strong> total opportunities. Engaging with leads promptly can increase conversion rates.';
+                insightText = 'Polaris\u2122 has identified <strong>' + total + '</strong> total opportunities. Engaging with leads promptly can increase conversion rates.';
                 insightSource = 'Source: Polaris Opportunity Engine';
               }
             } else if (dashboard && dashboard.summary && dashboard.summary.weightedPipelineValue > 0) {
                               insightText = 'Pipeline value is <strong>' + fmtCurrency(dashboard.summary.weightedPipelineValue) + '</strong> across ' + (dashboard.summary.activeDeals || 0) + ' active opportunities.';
               insightSource = 'Source: Polaris Analytics Engine';
             } else {
-              insightText = 'Start a conversation with Polaris to generate intelligence. Each call provides operational, customer, and next-step insights that power the Executive Brief.';
+              insightText = 'Start a conversation with Polaris\u2122 to generate intelligence. Each call provides operational, customer, and next-step insights that power the Executive Brief.';
               insightSource = 'Tip: Use the Polaris workspace to begin';
             }
             insightEl.innerHTML = '<div class="eb-insight-text">' + insightText + '<span class="eb-insight-source">' + insightSource + '</span></div>';
@@ -727,7 +738,7 @@
             if (exec && exec.recommendations && exec.recommendations.length > 0) {
               var top = exec.recommendations[0];
               var actionTitle = top.title || top.action || 'Review Executive Brief';
-              var actionDesc = top.explanation || top.reason || 'Polaris has identified an action that requires your attention.';
+              var actionDesc = top.explanation || top.reason || 'Polaris\u2122 has identified an action that requires your attention.';
               var actionImpact = top.businessImpact || 'Business Impact';
               var actionConfidence = top.confidence || 85;
               actionEl.innerHTML =
@@ -744,8 +755,8 @@
                 '<a href="/dashboard/polaris" class="eb-action-card">' +
                   '<div class="eb-action-icon">&#9733;</div>' +
                   '<div class="eb-action-body">' +
-                    '<div class="eb-action-title">Open Polaris Workspace</div>' +
-                    '<div class="eb-action-meta">Start or review a conversation to generate operational and customer intelligence. Polaris will analyze each interaction and provide actionable recommendations.</div>' +
+                    '<div class="eb-action-title">Open Polaris\u2122 Workspace</div>' +
+                    '<div class="eb-action-meta">Start or review a conversation to generate operational and customer intelligence. Polaris\u2122 will analyze each interaction and provide actionable recommendations.</div>' +
                   '</div>' +
                 '</a>';
             }
@@ -753,7 +764,7 @@
           .catch(function(err) {
             loading.style.display = 'none';
             content.style.display = '';
-            document.getElementById('ebSummary').textContent = 'Unable to load Executive Brief. The Polaris system may be initializing.';
+            document.getElementById('ebSummary').textContent = 'Unable to load Executive Brief. The Polaris\u2122 system may be initializing.';
             document.getElementById('ebPriority').innerHTML = '<div class="eb-error">' + err.message + '</div>';
           });
       }

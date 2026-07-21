@@ -436,380 +436,83 @@
             try { PolarisEngine.analyzeLead(lead); } catch(e) { console.warn('[CC] analyzeLead error:', e); }
           }
 
-          // Chained POSTs to server APIs: create customer first, then use returned ID
-          function doSimulation() {
-            return apiFetch('/api/v1/customers', {
-              method: 'POST',
-              body: JSON.stringify({
-                name: (lead && lead.caller) || leadName,
-                phone: (lead && lead.phone) || '',
-                email: (lead && lead.email) || '',
-                address: (lead && lead.address) || '',
-                source: 'simulation',
-                status: 'active'
-              })
-            }).then(function(r) {
-              if (!r.ok) throw new Error('Customer POST failed');
-              return r.json();
-            }).then(function(cust) {
-              var custId = cust.id;
-              if (!custId) throw new Error('No customer ID returned');
-              var promises = [];
-              // Communication
-              var commBody = {customerId:custId,type:'inbound_call',direction:'inbound',subject:(lead&&lead.service)||'General',content:(lead&&lead.description)||'',status:'completed'}; promises.push(apiFetch('/api/v1/communications', { method: 'POST', body: JSON.stringify(commBody) }).catch(function(e){console.warn('comms:',e);return null;}));
-              // Opportunity
-              if (lead && lead.avgPrice) {
-                var oppTitle = (lead.service||'General') + ' - ' + (lead.caller||''); var oppBody = {customerId:custId,title:oppTitle,estimatedValue:lead.avgPrice,stage:'estimation',probability:70}; promises.push(apiFetch('/api/v1/opportunities', { method: 'POST', body: JSON.stringify(oppBody) }).catch(function(e){console.warn('opp:',e);return null;}));
-              }
-              // Estimate
-              if (lead && lead.avgPrice) {
-                var estTitle = 'Estimate - ' + (lead.service||'General'); var estBody = {customerId:custId,title:estTitle,items:[{description:(lead.service||'General')+' service',quantity:1,unitPrice:lead.avgPrice||500}],status:'pending'}; promises.push(apiFetch('/api/v1/financial/estimates', { method: 'POST', body: JSON.stringify(estBody) }).catch(function(e){console.warn('est:',e);return null;}));
-              }
-              return Promise.all(promises);
-            });
+          // ALSO POST to server APIs so the analytics endpoints return real data
+          var serverPromises = [];
+
+          // POST customer to server-side engine
+          if (lead.caller || lead.name) {
+            var custPayload = {
+              name: lead.caller || lead.name || 'Simulated Customer',
+              phone: lead.phone || '',
+              email: lead.email || '',
+              address: lead.address || '',
+              source: 'simulation',
+              status: 'active'
+            };
+            serverPromises.push(
+              apiFetch('/api/v1/customers', {
+                method: 'POST',
+                body: JSON.stringify(custPayload)
+              }).catch(function(e) { console.warn('[CC] customer POST:', e); })
+            );
           }
-          doSimulation().then(function() {
+
+          // POST a communication record
+          if (lead) {
+            var commPayload = {
+              type: 'inbound_call',
+              caller: lead.caller || 'Simulated Customer',
+              service: lead.service || 'General',
+              description: lead.description || 'Simulated customer interaction',
+              status: 'completed',
+              source: 'simulation'
+            };
+            serverPromises.push(
+              apiFetch('/api/v1/communications', {
+                method: 'POST',
+                body: JSON.stringify(commPayload)
+              }).catch(function(e) { console.warn('[CC] comms POST:', e); })
+            );
+          }
+          // POST an opportunity so pipeline/revenue KPIs update
+          if (lead && lead.avgPrice) {
+            var oppPayload = {
+              title: (lead.service || 'General') + ' - ' + (lead.caller || 'Simulated'),
+              value: lead.avgPrice || 500,
+              stage: 'estimation',
+              probability: 70,
+              source: 'simulation',
+              customerName: lead.caller || 'Simulated Customer'
+            };
+            serverPromises.push(
+              apiFetch('/api/v1/opportunities', {
+                method: 'POST',
+                body: JSON.stringify(oppPayload)
+              }).catch(function(e) { console.warn('[CC] opp POST:', e); })
+            );
+          }
+          // POST a financial estimate to seed revenue data
+          if (lead && lead.avgPrice) {
+            var estPayload = {
+              customerName: lead.caller || 'Simulated Customer',
+              service: lead.service || 'General',
+              amount: lead.avgPrice || 500,
+              status: 'pending',
+              source: 'simulation'
+            };
+            serverPromises.push(
+              apiFetch('/api/v1/financial/estimates', {
+                method: 'POST',
+                body: JSON.stringify(estPayload)
+              }).catch(function(e) { console.warn('[CC] estimate POST:', e); })
+            );
+          }
+
+          // Wait for server writes, then refresh
+          Promise.all(serverPromises).then(function() {
             simStatus.style.display = '';
             simStatus.style.color = 'var(--success)';
             simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
-            render();
-            setTimeout(function() {
-              simBtn.disabled = false;
-              simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-            }, 2000);
-          }).catch(function(err) {
-            console.error('[CC] Simulation error:', err);
-            simBtn.disabled = false;
-            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-            simStatus.style.display = '';
-            simStatusText.textContent = 'Error: ' + (err.message || err);
-            simStatus.style.color = 'var(--danger)';
-          });;$' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
-
-            // Refresh all sections from server APIs
-            render();
-
-            setTimeout(function() {
-              simBtn.disabled = false;
-              simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-            }, 2000);
-          });
-        } catch(e) {
-          console.error('[CC] Simulation error:', e);
-          simBtn.disabled = false;
-          simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-          simStatus.style.display = '';
-          simStatusText.textContent = 'Error: ' + (e.message || e);
-          simStatus.style.color = 'var(--danger)';
-        }
-      };
-
-      window.ccRefresh = function() { loading.style.display = ''; content.style.display = 'none'; render(); };
-
-      function render() {
-        var startTime = Date.now();
-        Promise.all([
-          apiFetch('/api/v1/analytics/executive').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
-          apiFetch('/api/v1/analytics/kpis').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
-          apiFetch('/api/v1/analytics/dashboard').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
-          apiFetch('/api/v1/customers').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }),
-          apiFetch('/api/v1/opportunities/pipeline').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }),
-          apiFetch('/api/v1/workflows/agenda/today').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }),
-          apiFetch('/api/v1/analytics/alerts').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; })
-        ]).then(function(results) {
-          var exec = results[0] || {};
-          var kpisData = results[1] || {};
-          var dash = results[2] || {};
-          var customers = results[3] || [];
-          var pipeline = results[4] || [];
-          var agenda = results[5] || [];
-          var alerts = results[6] || {};
-
-          var delay = Math.max(0, 250 - (Date.now() - startTime));
-          setTimeout(function() {
-            loading.style.display = 'none';
-            content.style.display = '';
-            document.getElementById('ccTimestamp').textContent = new Date().toLocaleString();
-            var kpis = kpisData.kpis || (dash.summary) || {};
-            var rev = exec.revenue || {};
-            var pipe = exec.pipeline || {};
-            var ops = exec.operations || {};
-
-            // Section 1: Executive Summary
-            var summaryEl = document.getElementById('ccSummary');
-            var parts = [];
-            if (ops.inProgress > 0 || pipe.activeDeals > 0 || kpis.totalRevenue > 0) {
-              if (ops.inProgress > 0) parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
-              if (pipe.activeDeals > 0) parts.push('Polaris identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' worth <strong>' + fmtCurr(pipe.weightedValue) + '</strong>.');
-              if (rev.outstanding > 0) parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> outstanding.');
-              if (rev.forecast > 0) parts.push('Forecast: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
-              if (kpis.companyHealthScore > 0 && parts.length === 0) parts.push('Health score: <strong>' + kpis.companyHealthScore + '/100</strong>.');
-            } else {
-              parts.push('Polaris is monitoring your business. Start a simulated or live customer interaction to generate operational intelligence.');
-            }
-            summaryEl.innerHTML = parts.join(' ');
-
-            // Section 2: KPI Grid
-            var kpiGrid = document.getElementById('ccKpiGrid');
-            var items = [
-              { icon: '\uD83D\uDCBC', label: 'Active Jobs', val: fmtNum(kpis.inProgressJobs || ops.inProgress) },
-              { icon: '\uD83D\uDC65', label: 'New Leads', val: fmtNum(kpis.activeDeals || pipe.activeDeals) },
-              { icon: '\uD83D\uDCCB', label: 'Pending Est.', val: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : (kpis.totalDeals||0) - (kpis.wonDeals||0)) },
-              { icon: '\uD83D\uDCB0', label: 'Pipeline', val: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue) },
-              { icon: '\uD83D\uDCC5', label: 'Scheduled', val: fmtNum(agenda&&agenda.length ? agenda.filter(function(t){return t.type==='job'||t.type==='appointment'}).length : 0) },
-              { icon: '\uD83D\uDCAC', label: 'Follow-Ups', val: fmtNum(kpis.overdueTasks||0) },
-              { icon: '\uD83D\uDCC8', label: 'Win Rate', val: pct(kpis.winRate||pipe.winRate||0) },
-              { icon: '\uD83D\uDC9A', label: 'Health', val: (kpis.companyHealthScore||dash.companyHealth||exec.companyHealth||0)+'' }
-            ];
-            kpiGrid.innerHTML = items.map(function(k,i){return '<div class="cc-kpi"><div class="cc-kpi-icon">'+k.icon+'</div><div class="cc-kpi-value">'+k.val+'</div><div class="cc-kpi-label">'+k.label+'</div></div>';}).join('');
-
-            // Section 3: Priorities
-            var priorityEl = document.getElementById('ccPriorities');
-            var pItems = [];
-            if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
-            if (Array.isArray(agenda) && agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
-            if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});
-            priorityEl.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris will surface opportunities as activity grows.</div>';
-
-            // Section 4: Revenue
-            var revenueEl = document.getElementById('ccRevenue');
-            revenueEl.innerHTML = (rev.total || kpis.totalRevenue) ?
-              '<div class="cc-rev-grid"><div class="cc-rev-stat"><div class="cc-rev-val gold">'+fmtCurr(rev.total||kpis.totalRevenue)+'</div><div class="cc-rev-label">Total</div></div><div class="cc-rev-stat"><div class="cc-rev-val orange">'+fmtCurr(rev.outstanding||kpis.outstandingRevenue)+'</div><div class="cc-rev-label">Outstanding</div></div><div class="cc-rev-stat"><div class="cc-rev-val green">'+fmtCurr(rev.forecast||0)+'</div><div class="cc-rev-label">Forecast</div></div><div class="cc-rev-stat"><div class="cc-rev-val">'+(rev.collectionRate||pct(kpis.collectionRate)||'0%')+'</div><div class="cc-rev-label">Collection</div></div></div><div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--neutral-200);font-size:11px;color:var(--neutral-500);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;"><span>Pipeline: <strong>'+fmtCurr(pipe.weightedValue||kpis.weightedPipelineValue)+'</strong></span><span>Win rate: <strong>'+pct(pipe.winRate||kpis.winRate||0)+'</strong></span></div>' :
-              '<div class="cc-empty">Revenue forecasts appear after Polaris analyzes conversations, estimates, and scheduling.</div>';
-
-            // Section 5: Pipeline
-            var pipelineEl = document.getElementById('ccPipeline');
-            var tj = kpis.totalJobs||ops.totalJobs||0, ij = kpis.inProgressJobs||ops.inProgress||0, cj = kpis.completedJobs||ops.completedJobs||0;
-            var pe = kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : 0;
-            var sch = (agenda&&agenda.length) ? agenda.filter(function(t){return t.type==='job'||t.type==='appointment'}).length : 0;
-            var stages = [
-              {icon:'\uD83D\uDCDE',cnt:fmtNum(kpis.activeDeals||pipe.activeDeals||0),label:'Incoming',pct:25},
-              {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:25},
-              {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:25},
-              {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:50},
-              {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:tj>0?Math.round(cj/tj*100):0}
-            ];
-            pipelineEl.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+['var(--info)','var(--warning)','var(--brand-500)','var(--success)','var(--success)'][i]+'"></div></div></div>';}).join('')+'</div>';
-
-            // Section 6: Customers
-            var custEl = document.getElementById('ccCustomers');
-            custEl.innerHTML = (Array.isArray(customers) && customers.length > 0) ?
-              '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
-              '<div class="cc-empty">Customer profiles appear as Polaris processes calls. Start a simulation above.</div>';
-
-            // Section 7: Health
-            var healthEl = document.getElementById('ccHealth');
-            var oh = kpis.companyHealthScore||dash.companyHealth||exec.companyHealth||50;
-            var cr = kpis.collectionRate||0;
-            var rh = cr>90?90:cr>75?75:cr>50?50:30;
-            var wr = kpis.winRate||0;
-            var sh = wr>50?85:wr>30?70:wr>15?55:35;
-            var tc = kpis.taskCompletionRate||0;
-            var oph = tc>80?85:tc>60?70:tc>40?55:30;
-            var cc = kpis.totalCustomers||(Array.isArray(customers)?customers.length:0);
-            var ch = cc>10?80:cc>5?65:cc>0?50:30;
-            healthEl.innerHTML = [
-              {s:oh,l:'Overall',d:'Composite health'},
-              {s:rh,l:'Revenue',d:'Collection: '+pct(cr)},
-              {s:sh,l:'Sales',d:'Win rate: '+pct(wr)},
-              {s:oph,l:'Operations',d:'Completion: '+pct(tc)},
-              {s:ch,l:'Customer',d:cc+' customer'+(cc!==1?'s':'')},
-              {s:oh,l:'Polaris',d:'AI-driven assessment'}
-            ].map(function(h){return '<div class="cc-health-item"><div class="cc-health-score '+healthClass(h.s)+'">'+Math.round(h.s)+'</div><div class="cc-health-label">'+h.l+'</div><div class="cc-health-desc">'+h.d+'</div></div>';}).join('');
-
-            // Section 8: Actions
-            document.getElementById('ccActions').innerHTML =
-              '<a href="/dashboard/polaris" class="cc-action-btn">&#9733; Polaris</a>'+
-              '<a href="/dashboard/leads" class="cc-action-btn">&#128100; Leads</a>'+
-              '<a href="/dashboard/communications" class="cc-action-btn">&#128172; Comms</a>'+
-              '<a href="/dashboard/calendar" class="cc-action-btn">&#128197; Calendar</a>'+
-              '<a href="/dashboard/executive-brief" class="cc-action-btn">&#128200; Brief</a>'+
-              '<a href="/dashboard/settings" class="cc-action-btn">&#9881; Settings</a>';
-
-          }, delay);
-        }).catch(function(err) {
-          loading.style.display = 'none';
-          content.style.display = '';
-          document.getElementById('ccSummary').textContent = 'Command Center is loading — Polaris may be initializing. Please refresh.';
-          document.getElementById('ccKpiGrid').innerHTML = '<div class="cc-empty">' + err.message + '</div>';
-        });
-      }
-
-      render();
-      setInterval(render, 60000);
-    })();
-  </script>
-</body>
-</html> + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';$' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
-
-            // Refresh all sections from server APIs
-            render();
-
-            setTimeout(function() {
-              simBtn.disabled = false;
-              simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-            }, 2000);
-          });
-        } catch(e) {
-          console.error('[CC] Simulation error:', e);
-          simBtn.disabled = false;
-          simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-          simStatus.style.display = '';
-          simStatusText.textContent = 'Error: ' + (e.message || e);
-          simStatus.style.color = 'var(--danger)';
-        }
-      };
-
-      window.ccRefresh = function() { loading.style.display = ''; content.style.display = 'none'; render(); };
-
-      function render() {
-        var startTime = Date.now();
-        Promise.all([
-          apiFetch('/api/v1/analytics/executive').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
-          apiFetch('/api/v1/analytics/kpis').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
-          apiFetch('/api/v1/analytics/dashboard').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; }),
-          apiFetch('/api/v1/customers').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }),
-          apiFetch('/api/v1/opportunities/pipeline').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }),
-          apiFetch('/api/v1/workflows/agenda/today').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }),
-          apiFetch('/api/v1/analytics/alerts').then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; })
-        ]).then(function(results) {
-          var exec = results[0] || {};
-          var kpisData = results[1] || {};
-          var dash = results[2] || {};
-          var customers = results[3] || [];
-          var pipeline = results[4] || [];
-          var agenda = results[5] || [];
-          var alerts = results[6] || {};
-
-          var delay = Math.max(0, 250 - (Date.now() - startTime));
-          setTimeout(function() {
-            loading.style.display = 'none';
-            content.style.display = '';
-            document.getElementById('ccTimestamp').textContent = new Date().toLocaleString();
-            var kpis = kpisData.kpis || (dash.summary) || {};
-            var rev = exec.revenue || {};
-            var pipe = exec.pipeline || {};
-            var ops = exec.operations || {};
-
-            // Section 1: Executive Summary
-            var summaryEl = document.getElementById('ccSummary');
-            var parts = [];
-            if (ops.inProgress > 0 || pipe.activeDeals > 0 || kpis.totalRevenue > 0) {
-              if (ops.inProgress > 0) parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
-              if (pipe.activeDeals > 0) parts.push('Polaris identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' worth <strong>' + fmtCurr(pipe.weightedValue) + '</strong>.');
-              if (rev.outstanding > 0) parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> outstanding.');
-              if (rev.forecast > 0) parts.push('Forecast: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
-              if (kpis.companyHealthScore > 0 && parts.length === 0) parts.push('Health score: <strong>' + kpis.companyHealthScore + '/100</strong>.');
-            } else {
-              parts.push('Polaris is monitoring your business. Start a simulated or live customer interaction to generate operational intelligence.');
-            }
-            summaryEl.innerHTML = parts.join(' ');
-
-            // Section 2: KPI Grid
-            var kpiGrid = document.getElementById('ccKpiGrid');
-            var items = [
-              { icon: '\uD83D\uDCBC', label: 'Active Jobs', val: fmtNum(kpis.inProgressJobs || ops.inProgress) },
-              { icon: '\uD83D\uDC65', label: 'New Leads', val: fmtNum(kpis.activeDeals || pipe.activeDeals) },
-              { icon: '\uD83D\uDCCB', label: 'Pending Est.', val: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : (kpis.totalDeals||0) - (kpis.wonDeals||0)) },
-              { icon: '\uD83D\uDCB0', label: 'Pipeline', val: fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue) },
-              { icon: '\uD83D\uDCC5', label: 'Scheduled', val: fmtNum(agenda&&agenda.length ? agenda.filter(function(t){return t.type==='job'||t.type==='appointment'}).length : 0) },
-              { icon: '\uD83D\uDCAC', label: 'Follow-Ups', val: fmtNum(kpis.overdueTasks||0) },
-              { icon: '\uD83D\uDCC8', label: 'Win Rate', val: pct(kpis.winRate||pipe.winRate||0) },
-              { icon: '\uD83D\uDC9A', label: 'Health', val: (kpis.companyHealthScore||dash.companyHealth||exec.companyHealth||0)+'' }
-            ];
-            kpiGrid.innerHTML = items.map(function(k,i){return '<div class="cc-kpi"><div class="cc-kpi-icon">'+k.icon+'</div><div class="cc-kpi-value">'+k.val+'</div><div class="cc-kpi-label">'+k.label+'</div></div>';}).join('');
-
-            // Section 3: Priorities
-            var priorityEl = document.getElementById('ccPriorities');
-            var pItems = [];
-            if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
-            if (Array.isArray(agenda) && agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
-            if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});
-            priorityEl.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris will surface opportunities as activity grows.</div>';
-
-            // Section 4: Revenue
-            var revenueEl = document.getElementById('ccRevenue');
-            revenueEl.innerHTML = (rev.total || kpis.totalRevenue) ?
-              '<div class="cc-rev-grid"><div class="cc-rev-stat"><div class="cc-rev-val gold">'+fmtCurr(rev.total||kpis.totalRevenue)+'</div><div class="cc-rev-label">Total</div></div><div class="cc-rev-stat"><div class="cc-rev-val orange">'+fmtCurr(rev.outstanding||kpis.outstandingRevenue)+'</div><div class="cc-rev-label">Outstanding</div></div><div class="cc-rev-stat"><div class="cc-rev-val green">'+fmtCurr(rev.forecast||0)+'</div><div class="cc-rev-label">Forecast</div></div><div class="cc-rev-stat"><div class="cc-rev-val">'+(rev.collectionRate||pct(kpis.collectionRate)||'0%')+'</div><div class="cc-rev-label">Collection</div></div></div><div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--neutral-200);font-size:11px;color:var(--neutral-500);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;"><span>Pipeline: <strong>'+fmtCurr(pipe.weightedValue||kpis.weightedPipelineValue)+'</strong></span><span>Win rate: <strong>'+pct(pipe.winRate||kpis.winRate||0)+'</strong></span></div>' :
-              '<div class="cc-empty">Revenue forecasts appear after Polaris analyzes conversations, estimates, and scheduling.</div>';
-
-            // Section 5: Pipeline
-            var pipelineEl = document.getElementById('ccPipeline');
-            var tj = kpis.totalJobs||ops.totalJobs||0, ij = kpis.inProgressJobs||ops.inProgress||0, cj = kpis.completedJobs||ops.completedJobs||0;
-            var pe = kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : 0;
-            var sch = (agenda&&agenda.length) ? agenda.filter(function(t){return t.type==='job'||t.type==='appointment'}).length : 0;
-            var stages = [
-              {icon:'\uD83D\uDCDE',cnt:fmtNum(kpis.activeDeals||pipe.activeDeals||0),label:'Incoming',pct:25},
-              {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:25},
-              {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:25},
-              {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:50},
-              {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:tj>0?Math.round(cj/tj*100):0}
-            ];
-            pipelineEl.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+['var(--info)','var(--warning)','var(--brand-500)','var(--success)','var(--success)'][i]+'"></div></div></div>';}).join('')+'</div>';
-
-            // Section 6: Customers
-            var custEl = document.getElementById('ccCustomers');
-            custEl.innerHTML = (Array.isArray(customers) && customers.length > 0) ?
-              '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
-              '<div class="cc-empty">Customer profiles appear as Polaris processes calls. Start a simulation above.</div>';
-
-            // Section 7: Health
-            var healthEl = document.getElementById('ccHealth');
-            var oh = kpis.companyHealthScore||dash.companyHealth||exec.companyHealth||50;
-            var cr = kpis.collectionRate||0;
-            var rh = cr>90?90:cr>75?75:cr>50?50:30;
-            var wr = kpis.winRate||0;
-            var sh = wr>50?85:wr>30?70:wr>15?55:35;
-            var tc = kpis.taskCompletionRate||0;
-            var oph = tc>80?85:tc>60?70:tc>40?55:30;
-            var cc = kpis.totalCustomers||(Array.isArray(customers)?customers.length:0);
-            var ch = cc>10?80:cc>5?65:cc>0?50:30;
-            healthEl.innerHTML = [
-              {s:oh,l:'Overall',d:'Composite health'},
-              {s:rh,l:'Revenue',d:'Collection: '+pct(cr)},
-              {s:sh,l:'Sales',d:'Win rate: '+pct(wr)},
-              {s:oph,l:'Operations',d:'Completion: '+pct(tc)},
-              {s:ch,l:'Customer',d:cc+' customer'+(cc!==1?'s':'')},
-              {s:oh,l:'Polaris',d:'AI-driven assessment'}
-            ].map(function(h){return '<div class="cc-health-item"><div class="cc-health-score '+healthClass(h.s)+'">'+Math.round(h.s)+'</div><div class="cc-health-label">'+h.l+'</div><div class="cc-health-desc">'+h.d+'</div></div>';}).join('');
-
-            // Section 8: Actions
-            document.getElementById('ccActions').innerHTML =
-              '<a href="/dashboard/polaris" class="cc-action-btn">&#9733; Polaris</a>'+
-              '<a href="/dashboard/leads" class="cc-action-btn">&#128100; Leads</a>'+
-              '<a href="/dashboard/communications" class="cc-action-btn">&#128172; Comms</a>'+
-              '<a href="/dashboard/calendar" class="cc-action-btn">&#128197; Calendar</a>'+
-              '<a href="/dashboard/executive-brief" class="cc-action-btn">&#128200; Brief</a>'+
-              '<a href="/dashboard/settings" class="cc-action-btn">&#9881; Settings</a>';
-
-          }, delay);
-        }).catch(function(err) {
-          loading.style.display = 'none';
-          content.style.display = '';
-          document.getElementById('ccSummary').textContent = 'Command Center is loading — Polaris may be initializing. Please refresh.';
-          document.getElementById('ccKpiGrid').innerHTML = '<div class="cc-empty">' + err.message + '</div>';
-        });
-      }
-
-      render();
-      setInterval(render, 60000);
-    })();
-  </script>
-</body>
-</html> + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
-            render();
-            setTimeout(function() {
-              simBtn.disabled = false;
-              simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-            }, 2000);
-          }).catch(function(err) {
-            console.error('[CC] Simulation error:', err);
-            simBtn.disabled = false;
-            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-            simStatus.style.display = '';
-            simStatusText.textContent = 'Error: ' + (err.message || err);
-            simStatus.style.color = 'var(--danger)';
-          });$' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated)';
 
             // Refresh all sections from server APIs
             render();

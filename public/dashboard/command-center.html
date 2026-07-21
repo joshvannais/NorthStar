@@ -23,7 +23,8 @@
     .cc-sim-text { flex: 1; min-width: 180px; }
     .cc-sim-text p { margin: 0; font-size: 12px; color: var(--neutral-500); line-height: 1.4; }
     .cc-sim-text .cc-sim-heading { font-weight: 600; font-size: 14px; color: var(--neutral-800); margin-bottom: 2px; }
-    [data-theme="dark"] .cc-sim-text .cc-sim-heading { color: var(--neutral-200); }
+    [data-theme="dark"] .cc-sim-text .cc-sim-heading { color: #e8eaed; }
+    [data-theme="dark"] .cc-sim-text p { color: #9aa0a6; }
     .cc-sim-btn {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 8px 20px; border-radius: 7px; border: none;
@@ -481,7 +482,287 @@
           }).then(function(result) {
             simStatus.style.display = '';
             simStatus.style.color = 'var(--success)';
-            simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated) — Synced to all pages';
+            simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> (
+            console.log('[CC] Simulation complete:', result && result.ids);
+            render();
+            // Stage 3: Emit events for notification toasts and cross-page sync
+            if (typeof EventBus !== 'undefined') {
+              EventBus.emit('simulation:completed', result);
+              if (result.records && result.records.lead) {
+                EventBus.emit('lead:created', result.records.lead);
+              }
+              if (result.records && result.records.estimate) {
+                EventBus.emit('estimate:created', result.records.estimate);
+              }
+            }
+            simBtn.disabled = false;
+            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+          }).catch(function(err) {
+            console.error('[CC] Simulation failed:', err && err.message);
+            simStatus.style.display = '';
+            simStatus.style.color = 'var(--danger)';
+            simStatusText.textContent = 'Simulation failed: ' + ((err && err.message) || 'unknown error');
+            simBtn.disabled = false;
+            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+          });
+        } catch(ex) {
+          simBtn.disabled = false;
+          simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
+        }
+      };  // <-- THE MISSING CLOSING BRACE
+
+      window.ccRefresh = function() { loading.style.display = ''; content.style.display = 'none'; render(); };
+
+      function render() {
+        // Track which sections have resolved
+        var resolved = {};
+        function tryHideLoading() {
+          if (resolved.exec && resolved.kpis && resolved.dash) {
+            loading.style.display = 'none';
+            content.style.display = '';
+            document.getElementById('ccTimestamp').textContent = new Date().toLocaleString();
+          }
+        }
+
+        // Section renderers
+        function renderExec(exec) {
+          if (!exec || typeof exec !== 'object') { showSection('ccSummary', errState()); return; }
+          var rev = exec.revenue || {};
+          var pipe = exec.pipeline || {};
+          var ops = exec.operations || {};
+          var el = document.getElementById('ccSummary');
+          if (!el) return;
+          var parts = [];
+          if (ops.inProgress > 0 || pipe.activeDeals > 0 || (rev.total || 0) > 0) {
+            if (ops.inProgress > 0) parts.push(fmtNum(ops.inProgress) + ' ' + (ops.inProgress === 1 ? 'job is' : 'jobs are') + ' currently active.');
+            if (pipe.activeDeals > 0) {
+              var pipeVal = pipe.totalValue || pipe.pipelineValue || 0;
+              var weightedVal = pipe.weightedValue || pipe.weightedPipelineValue || 0;
+              parts.push('Polaris™ identified <strong>' + fmtNum(pipe.activeDeals) + '</strong> active ' + (pipe.activeDeals === 1 ? 'opportunity' : 'opportunities') + ' with a combined pipeline value of <strong>' + fmtCurr(pipeVal) + '</strong>.');
+              parts.push('Based on current stage probabilities, the weighted pipeline is <strong>' + fmtCurr(weightedVal) + '</strong>.');
+              if (pipe.averageOpportunityValue > 0 || pipe.avgDealValue > 0) {
+                parts.push('The average opportunity value is <strong>' + fmtCurr(pipe.averageOpportunityValue || pipe.avgDealValue) + '</strong>.');
+              }
+            }
+            if (rev.outstanding > 0) parts.push('<strong>' + fmtCurr(rev.outstanding) + '</strong> outstanding.');
+            if (rev.forecast > 0) parts.push('Forecast: <strong>' + fmtCurr(rev.forecast) + '</strong>.');
+            if (exec.companyHealth > 0 && parts.length === 0) parts.push('Health score: <strong>' + exec.companyHealth + '/100</strong>.');
+          } else {
+            parts.push('Polaris™ is monitoring your business. New opportunities will appear here as customer interactions are processed.');
+          }
+          el.innerHTML = parts.join(' ');
+        }
+
+        function renderKpis(kpisData, dash, exec) {
+          if (!kpisData && !dash && !exec) { showSection('ccKpiGrid', errState()); return; }
+          kpisData = (kpisData && typeof kpisData === 'object') ? kpisData : {};
+          dash = (dash && typeof dash === 'object') ? dash : {};
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          var kpis = kpisData.kpis || dash.summary || {};
+          var pipe = exec.pipeline || {};
+          var ops = exec.operations || {};
+          var el = document.getElementById('ccKpiGrid');
+          if (!el) return;
+          var items = [
+            { icon: '\uD83D\uDCBC', label: 'Active Jobs', val: fmtNum(kpis.inProgressJobs || ops.inProgress || 0) },
+            { icon: '\uD83D\uDC65', label: 'Open Leads', val: fmtNum(kpis.activeDeals || pipe.activeDeals || 0) },
+            { icon: '\uD83D\uDCCB', label: 'Pending Estimates', val: fmtNum(kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : ((kpis.totalDeals||0) - (kpis.wonDeals||0))) },
+            { icon: '\uD83D\uDCB0', label: 'Pipeline Value', val: fmtCurr(kpis.pipelineValue || pipe.totalValue || 0), sub: 'Weighted: ' + fmtCurr(kpis.weightedPipelineValue || pipe.weightedValue || 0) },
+            { icon: '\uD83D\uDCC5', label: 'Scheduled', val: '0' },
+            { icon: '\uD83D\uDCAC', label: 'Follow-Ups', val: fmtNum(kpis.overdueTasks || 0) },
+            { icon: '\uD83D\uDCC8', label: 'Win Rate', val: pct(kpis.winRate || pipe.winRate || 0) },
+            { icon: '\uD83D\uDC9A', label: 'Business Health', val: (function(){ var hs = kpis.healthStatus || exec.healthStatus || ''; var sc = kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 0; if (hs === 'baseline' || (!sc && hs !== 'active')) return 'Baseline'; return sc + ''; })() }
+          ];
+          el.innerHTML = items.map(function(k){return '<div class="cc-kpi"><div class="cc-kpi-icon">'+k.icon+'</div><div class="cc-kpi-value">'+k.val+'</div>'+(k.sub?'<div class="cc-kpi-label" style="font-size:9px;margin-top:0;">'+k.sub+'</div>':'')+'<div class="cc-kpi-label">'+k.label+'</div></div>';}).join('');
+        }
+
+        function renderRevenue(exec, kpisData, dash) {
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          dash = (dash && typeof dash === 'object') ? dash : {};
+          kpisData = (kpisData && typeof kpisData === 'object') ? kpisData : {};
+          var kpis = kpisData.kpis || dash.summary || {};
+          var rev = exec.revenue || {};
+          var pipe = exec.pipeline || {};
+          var el = document.getElementById('ccRevenue');
+          if (!el) return;
+          var hasRevenue = (rev.total || kpis.totalRevenue);
+          var hasPipeline = (pipe.totalValue || pipe.pipelineValue || pipe.activeDeals) > 0;
+          var html = '';
+          if (hasRevenue) {
+            html += '<div class="cc-rev-grid"><div class="cc-rev-stat"><div class="cc-rev-val gold">'+fmtCurr(rev.total||kpis.totalRevenue)+'</div><div class="cc-rev-label">Total</div></div><div class="cc-rev-stat"><div class="cc-rev-val orange">'+fmtCurr(rev.outstanding||kpis.outstandingRevenue)+'</div><div class="cc-rev-label">Outstanding</div></div><div class="cc-rev-stat"><div class="cc-rev-val green">'+fmtCurr(rev.forecast||0)+'</div><div class="cc-rev-label">Forecast</div></div><div class="cc-rev-stat"><div class="cc-rev-val">'+(rev.collectionRate||pct(kpis.collectionRate)||'0%')+'</div><div class="cc-rev-label">Collection</div></div></div>';
+          }
+          if (hasPipeline) {
+            var pipeVal = pipe.totalValue || pipe.pipelineValue || 0;
+            var weightedVal = pipe.weightedValue || pipe.weightedPipelineValue || 0;
+            var activeCount = pipe.activeDeals || 0;
+            html += '<div style="margin-top:'+(hasRevenue?'8px':'0')+';padding-top:'+(hasRevenue?'8px':'0')+';border-top:'+(hasRevenue?'1px solid var(--neutral-200)':'none')+';font-size:11px;color:var(--neutral-500);"><p style="margin:0 0 4px;">You have <strong>'+fmtNum(activeCount)+'</strong> open '+(activeCount===1?'opportunity':'opportunities')+' representing <strong>'+fmtCurr(pipeVal)+'</strong> in pipeline value.</p><p style="margin:0 0 4px;">Weighted: <strong>'+fmtCurr(weightedVal)+'</strong> &middot; Following up on your highest-value estimates could improve booking potential.</p></div>';
+          } else if (!hasRevenue) {
+            html = '<div class="cc-empty">Polaris™ is establishing your revenue baseline.</div>';
+          }
+          el.innerHTML = html;
+        }
+
+        function renderPriorities(alerts, agenda, exec) {
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          agenda = Array.isArray(agenda) ? agenda : [];
+          alerts = (alerts && typeof alerts === 'object') ? alerts : {};
+          var el = document.getElementById('ccPriorities');
+          if (!el) return;
+          var pItems = [];
+          if (alerts.alerts && alerts.alerts.length > 0) alerts.alerts.forEach(function(a){pItems.push({rank:pItems.length+1,title:a.type||'Alert',badge:a.severity||'medium',desc:a.message||'',impact:a.severity==='critical'?'Critical':'Operational'});});
+          if (agenda.length > 0) agenda.slice(0,3).forEach(function(t){pItems.push({rank:pItems.length+1,title:t.title||t.name||'Task',badge:t.priority||'medium',desc:t.description||t.details||'',impact:t.impact||'Task'});});
+          if (exec.recommendations && exec.recommendations.length > 0) exec.recommendations.slice(0,2).forEach(function(r){pItems.push({rank:pItems.length+1,title:r.title||r.action||'Recommendation',badge:r.priority||'medium',desc:r.explanation||r.reason||'',impact:r.businessImpact||'Business'});});
+          el.innerHTML = pItems.length > 0 ? pItems.slice(0,5).map(function(p){return '<div class="cc-priority-item"><div class="cc-priority-rank">'+p.rank+'</div><div class="cc-priority-body"><div class="cc-priority-title">'+p.title+'</div><div class="cc-priority-meta"><span class="cc-priority-badge '+p.badge+'">'+p.badge+'</span><span>'+p.impact+'</span></div>'+(p.desc?'<div class="cc-priority-desc">'+p.desc+'</div>':'')+'</div></div>';}).join('') : '<div class="cc-empty">You\'re all caught up. Polaris™ will surface opportunities as activity grows.</div>';
+        }
+
+        function renderPipeline(kpisData, dash, exec, agenda) {
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          dash = (dash && typeof dash === 'object') ? dash : {};
+          kpisData = (kpisData && typeof kpisData === 'object') ? kpisData : {};
+          agenda = Array.isArray(agenda) ? agenda : [];
+          var kpis = kpisData.kpis || dash.summary || {};
+          var pipe = exec.pipeline || {};
+          var ops = exec.operations || {};
+          var el = document.getElementById('ccPipeline');
+          if (!el) return;
+          var tj = kpis.totalJobs || ops.totalJobs || 0;
+          var ij = kpis.inProgressJobs || ops.inProgress || 0;
+          var cj = kpis.completedJobs || ops.completedJobs || 0;
+          var pe = kpis.pendingEstimates !== undefined ? kpis.pendingEstimates : 0;
+          var ad = kpis.activeDeals || pipe.activeDeals || 0;
+          var sch = agenda.filter(function(t){return t.type==='job'||t.type==='appointment'}).length;
+          var counts = [ad, pe, sch, ij, cj];
+          var maxCount = Math.max.apply(null, counts.concat([1]));
+          var stages = [
+            {icon:'\uD83D\uDCDE',cnt:fmtNum(ad),label:'Open Leads',pct:maxCount>0?Math.round(ad/maxCount*100):0,color:'var(--info)'},
+            {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:maxCount>0?Math.round(pe/maxCount*100):0,color:'var(--warning)'},
+            {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:maxCount>0?Math.round(sch/maxCount*100):0,color:'var(--brand-500)'},
+            {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:maxCount>0?Math.round(ij/maxCount*100):0,color:'var(--success)'},
+            {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:maxCount>0?Math.round(cj/maxCount*100):0,color:'var(--success)'}
+          ];
+          el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+s.color+'"></div></div></div>';}).join('')+'</div>';
+        }
+
+        function renderCustomers(customers) {
+          customers = Array.isArray(customers) ? customers : [];
+          var el = document.getElementById('ccCustomers');
+          if (!el) return;
+          el.innerHTML = customers.length > 0 ?
+            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<a href="/dashboard/polaris" class="cc-cust-item"><span class="cc-cust-name">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></a>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
+            '<div class="cc-empty">Customer profiles appear as Polaris™ processes calls. Start a simulation above.</div>';
+        }
+
+        function renderHealth(kpisData, dash, exec, customers) {
+          exec = (exec && typeof exec === 'object') ? exec : {};
+          dash = (dash && typeof dash === 'object') ? dash : {};
+          kpisData = (kpisData && typeof kpisData === 'object') ? kpisData : {};
+          customers = Array.isArray(customers) ? customers : [];
+          var kpis = kpisData.kpis || dash.summary || {};
+          var el = document.getElementById('ccHealth');
+          if (!el) return;
+          var oh = kpis.companyHealthScore || dash.companyHealth || exec.companyHealth || 50;
+          var cr = kpis.collectionRate || 0;
+          var rh = cr>90?90:cr>75?75:cr>50?50:30;
+          var wr = kpis.winRate || 0;
+          var sh = wr>50?85:wr>30?70:wr>15?55:35;
+          var tc = kpis.taskCompletionRate || 0;
+          var cc = kpis.totalCustomers || customers.length || 0;
+          var ch = cc>10?80:cc>5?65:cc>0?50:30;
+          el.innerHTML = [
+            {s:oh,l:'Overall',d:'Composite health'},
+            {s:rh,l:'Revenue',d:'Collection: '+pct(cr)},
+            {s:sh,l:'Sales',d:'Win rate: '+pct(wr)},
+            {s:tc||50,l:'Operations',d:'Completion: '+pct(tc)},
+            {s:ch,l:'Customer',d:cc+' customer'+(cc!==1?'s':'')},
+            {s:oh,l:'Polaris',d:'AI-driven assessment'}
+          ].map(function(h){return '<div class="cc-health-item"><div class="cc-health-score '+healthClass(h.s)+'">'+Math.round(h.s)+'</div><div class="cc-health-label">'+h.l+'</div><div class="cc-health-desc">'+h.d+'</div></div>';}).join('');
+        }
+
+        function renderActions() {
+          document.getElementById('ccActions').innerHTML =
+            '<a href="/dashboard/polaris" class="cc-action-btn">&#9733; Polaris</a>'+
+            '<a href="/dashboard/leads" class="cc-action-btn">&#128100; Leads</a>'+
+            '<a href="/dashboard/communications" class="cc-action-btn">&#128172; Comms</a>'+
+            '<a href="/dashboard/calendar" class="cc-action-btn">&#128197; Calendar</a>'+
+            '<a href="/dashboard/executive-brief" class="cc-action-btn">&#128200; Brief</a>'+
+            '<a href="/dashboard/settings" class="cc-action-btn">&#9881; Settings</a>';
+        }
+
+        // ── Fire all section requests independently with timeout ──
+        var execP = fetchSection('executive', '/api/v1/analytics/executive', null);
+        var kpisP = fetchSection('kpis', '/api/v1/analytics/kpis', null);
+        var dashP = fetchSection('dashboard', '/api/v1/analytics/dashboard', null);
+        var custP = fetchSection('customers', '/api/v1/customers', function(d){ return (d && d.customers) || []; });
+        var agendaP = fetchSection('agenda', '/api/v1/workflows/agenda/today', function(d){ return (d && d.tasks) || []; });
+        var alertsP = fetchSection('alerts', '/api/v1/analytics/alerts', null);
+
+        // Shared state for cross-section data
+        var state = { exec:null, kpis:null, dash:null, cust:[], agenda:[], alerts:null };
+
+        // Each section resolves independently — one failure cannot block others
+        execP.then(function(v) {
+          state.exec = v || {};
+          renderExec(state.exec);
+          renderRevenue(state.exec, state.kpis, state.dash);
+          resolved.exec = true;
+          tryHideLoading();
+        });
+
+        kpisP.then(function(v) {
+          state.kpis = v || {};
+          renderKpis(state.kpis, state.dash, state.exec);
+          renderRevenue(state.exec, state.kpis, state.dash);
+          renderPipeline(state.kpis, state.dash, state.exec, state.agenda);
+          renderHealth(state.kpis, state.dash, state.exec, state.cust);
+          resolved.kpis = true;
+          tryHideLoading();
+        });
+
+        dashP.then(function(v) {
+          state.dash = v || {};
+          renderKpis(state.kpis, state.dash, state.exec);
+          renderRevenue(state.exec, state.kpis, state.dash);
+          renderPipeline(state.kpis, state.dash, state.exec, state.agenda);
+          renderHealth(state.kpis, state.dash, state.exec, state.cust);
+          resolved.dash = true;
+          tryHideLoading();
+        });
+
+        custP.then(function(v) {
+          state.cust = Array.isArray(v) ? v : (v && v.customers) ? v.customers : [];
+          renderCustomers(state.cust);
+          renderHealth(state.kpis, state.dash, state.exec, state.cust);
+        });
+
+        agendaP.then(function(v) {
+          state.agenda = Array.isArray(v) ? v : [];
+          renderPriorities(state.alerts, state.agenda, state.exec);
+          renderPipeline(state.kpis, state.dash, state.exec, state.agenda);
+        });
+
+        alertsP.then(function(v) {
+          state.alerts = v || {};
+          renderPriorities(state.alerts, state.agenda, state.exec);
+        });
+
+        // Always render actions immediately
+        renderActions();
+
+        // Safety timer: hide skeleton after 12s no matter what
+        setTimeout(function() {
+          loading.style.display = 'none';
+          content.style.display = '';
+          document.getElementById('ccTimestamp').textContent = new Date().toLocaleString();
+        }, 12000);
+      }
+
+      // ── Initial render ──
+      render();
+      setInterval(render, 60000);
+    })();
+  </script>
+</body>
+</html> + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated) — Lead generated successfully';
             console.log('[CC] Simulation complete:', result && result.ids);
             render();
             // Stage 3: Emit events for notification toasts and cross-page sync

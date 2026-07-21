@@ -18,12 +18,11 @@ window.NotificationService = (function() {
 
   function show(message, type) {
     type = type || 'info';
-    const icons = { success: '✅', info: 'ℹ️', warning: '⚠️', error: '❌' };
     const container = ensureContainer();
     const toast = document.createElement('div');
     toast.className = 'toast-notification ' + type;
     toast.innerHTML = '<span class="toast-body">' + message + '</span>' +
-      '<button class="toast-close" onclick="this.parentElement.remove()">×</button>';
+      '<button class="toast-close" onclick="this.parentElement.remove()">&times;</button>';
     container.appendChild(toast);
     setTimeout(() => {
       toast.style.animation = 'toastOut 0.3s ease-out forwards';
@@ -35,3 +34,29 @@ window.NotificationService = (function() {
 
   return { show };
 })();
+
+// ── Business Event Subscriptions ──
+try {
+  if (typeof EventBus !== 'undefined') {
+    EventBus.on('simulation:completed', function(data) {
+      if (data && data.summary) {
+        window.NotificationService.show(
+          'Lead generated: ' + data.summary.name + ' ($' + (data.summary.estimatedValue || 0).toLocaleString() + ')',
+          'success'
+        );
+      }
+    });
+    EventBus.on('lead:created', function(data) {
+      window.NotificationService.show(
+        'New lead: ' + (data.callerName || data.name || 'Unknown'),
+        'info'
+      );
+    });
+    EventBus.on('estimate:created', function(data) {
+      window.NotificationService.show(
+        'Estimate created: ' + (data.title || 'New estimate') + ' ($' + (data.total || data.estimatedValue || 0).toLocaleString() + ')',
+        'info'
+      );
+    });
+  }
+} catch(e) { console.warn('[NotificationService] EventBus setup:', e.message); }

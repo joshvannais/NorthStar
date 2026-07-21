@@ -169,21 +169,28 @@ router.get('/customers/:id/health', (req, res) => {
  * List communications with filters.
  */
 router.get('/communications', (req, res) => {
-  try {
-    var e = _getEngines().comms;
-    var filters = {};
-    if (req.query.customerId) filters.customerId = req.query.customerId;
-    if (req.query.type) filters.type = req.query.type;
-    if (req.query.status) filters.status = req.query.status;
-    if (req.query.limit) filters.limit = parseInt(req.query.limit);
-    if (req.query.customerId) {
-      var result = e.getCommunications(req.query.customerId, filters);
-      res.json(result);
-    } else {
-      res.json({ communications: [], total: 0 });
-    }
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
+      try {
+        var e = _getEngines().comms;
+        var filters = {};
+        if (req.query.customerId) filters.customerId = req.query.customerId;
+        if (req.query.type) filters.type = req.query.type;
+        if (req.query.direction) filters.direction = req.query.direction;
+        if (req.query.status) filters.status = req.query.status;
+        if (req.query.limit) filters.limit = parseInt(req.query.limit) || 50;
+        if (req.query.offset) filters.offset = parseInt(req.query.offset) || 0;
+        if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
+        if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+
+        if (req.query.customerId) {
+          var result = e.getCommunications(req.query.customerId, filters);
+          res.json(result);
+        } else {
+          // Canonical collection endpoint — return all communications across customers
+          var result = e.getAllCommunications(filters);
+          res.json(result);
+        }
+      } catch (err) { res.status(500).json({ error: err.message }); }
+    });
 
 /**
  * POST /api/v1/communications

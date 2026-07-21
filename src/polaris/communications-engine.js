@@ -269,6 +269,58 @@ function getCommunications(customerId, filters) {
 }
 
 /**
+ * List all communications across all customers, with optional filters.
+ * Canonical collection endpoint — the single source of truth for
+ * communication records across the Polaris platform.
+ *
+ * @param {object} [filters] - Optional filters
+ * @param {string} [filters.type] - Filter by communication type
+ * @param {string} [filters.direction] - Filter by direction
+ * @param {string} [filters.status] - Filter by status
+ * @param {string} [filters.dateFrom] - ISO date string (inclusive)
+ * @param {string} [filters.dateTo] - ISO date string (inclusive)
+ * @param {number} [filters.limit] - Max results to return
+ * @param {number} [filters.offset] - Offset for pagination
+ * @returns {object} { communications, total }
+ */
+function getAllCommunications(filters) {
+  var results = [];
+
+  Object.keys(_communications).forEach(function (k) {
+    var c = _communications[k];
+
+    if (filters) {
+      if (filters.type && c.type !== filters.type) return;
+      if (filters.direction && c.direction !== filters.direction) return;
+      if (filters.status && c.status !== filters.status) return;
+      if (filters.customerId && c.customerId !== filters.customerId) return;
+      if (filters.dateFrom && c.createdAt < filters.dateFrom) return;
+      if (filters.dateTo && c.createdAt > filters.dateTo) return;
+    }
+
+    results.push(c);
+  });
+
+  // Sort by createdAt descending (most recent first)
+  results.sort(function (a, b) {
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  var total = results.length;
+  if (filters && filters.offset && filters.offset > 0) {
+    results = results.slice(filters.offset);
+  }
+  if (filters && filters.limit && filters.limit > 0) {
+    results = results.slice(0, filters.limit);
+  }
+
+  return {
+    communications: results.map(function (c) { return Object.assign({}, c); }),
+    total: total,
+  };
+}
+
+/**
  * Search communications across all customers by keyword.
  * Searches subject, content, and author fields.
  *
@@ -595,11 +647,12 @@ module.exports = {
   init: init,
 
   // Core recording & retrieval
-  recordCommunication: recordCommunication,
-  getCommunication: getCommunication,
-  getCommunications: getCommunications,
-  searchCommunications: searchCommunications,
-  getTimeline: getTimeline,
+        recordCommunication: recordCommunication,
+        getCommunication: getCommunication,
+        getCommunications: getCommunications,
+        getAllCommunications: getAllCommunications,
+        searchCommunications: searchCommunications,
+        getTimeline: getTimeline,
 
   // Status management
   updateCommunicationStatus: updateCommunicationStatus,

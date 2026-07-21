@@ -316,14 +316,42 @@ window.CustomerDetail = (function() {
         _commIdToTranscript[c.id] = c.content;
       }
     }
-    // Pick first communication with content as primary transcript
+    // Transcript selection — strict priority:
+    // 1. Newest type==="call" comm with a valid transcript payload
+    // 2. Newest any-type comm with a valid transcript payload
+    // 3. Otherwise null (empty-state: "No transcript available.")
+    // Internal activity records (estimate created, etc.) are NOT transcript candidates.
     data.primaryTranscript = null;
     data.primaryCommId = null;
+
+    function _isValidTranscript(content) {
+      if (!content) return false;
+      if (typeof content === 'string') {
+        try { var p = JSON.parse(content); if (Array.isArray(p) && p.length > 0 && p[0].speaker) return true; } catch(e){}
+        // Legacy line-based format check
+        if (content.indexOf('\n') >= 0 && (content.indexOf('AI:') >= 0 || content.indexOf('Agent:') >= 0 || content.indexOf('Customer:') >= 0)) return true;
+      } else if (Array.isArray(content) && content.length > 0 && content[0].speaker) {
+        return true;
+      }
+      return false;
+    }
+
+    // Pass 1: type==="call" with valid transcript
     for (var k = 0; k < comms.length; k++) {
-      if (comms[k].content) {
+      if (comms[k].type === 'call' && _isValidTranscript(comms[k].content)) {
         data.primaryTranscript = comms[k].content;
         data.primaryCommId = comms[k].id;
         break;
+      }
+    }
+    // Pass 2: any valid transcript (fallback for legacy/non-call records)
+    if (!data.primaryTranscript) {
+      for (var m = 0; m < comms.length; m++) {
+        if (_isValidTranscript(comms[m].content)) {
+          data.primaryTranscript = comms[m].content;
+          data.primaryCommId = comms[m].id;
+          break;
+        }
       }
     }
 

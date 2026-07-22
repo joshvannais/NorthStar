@@ -873,16 +873,46 @@ function safeNum(v, fallback) {
   return v;
 }
 
-// ===== Fetch communications from canonical Polaris API (server source of truth) =====
+// === Auth helpers (Bearer token from localStorage) ===
+function _authHeaders() {
+  var headers = {};
+  var token = localStorage.getItem('token');
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return headers;
+}
+function _authFetch(url, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign(_authHeaders(), opts.headers || {});
+  return fetch(url, opts).then(function(r) {
+    if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Request failed: ' + url); });
+    return r.json();
+  });
+}
+
+/** Normalize a Polaris communication into a frontend comm model (inlined from PolarisApi) */
+function _normalizeCommunication(comm) {
+  return {
+    id: comm.id,
+    customerId: comm.customerId,
+    callerName: comm.customerName || '',
+    phone: comm.customerPhone || '',
+    type: comm.type || 'call',
+    direction: comm.direction || 'inbound',
+    subject: comm.subject || '',
+    content: comm.content || '',
+    status: comm.status || 'completed',
+    duration: comm.duration,
+    createdAt: comm.createdAt,
+    updatedAt: comm.updatedAt,
+  };
+}
+
+// ===== Fetch communications from canonical Polaris API (server source of truth) using _authFetch =====
 function fetchCommunications() {
-  if (typeof PolarisApi === 'undefined') {
-    pageCalls = [];
-    return Promise.resolve(pageCalls);
-  }
-  return PolarisApi.getCommunications({ limit: 50 }).then(function(result) {
+  return _authFetch('/api/v1/communications?limit=50').then(function(result) {
     if (result && result.communications && result.communications.length > 0) {
       pageCalls = result.communications.map(function(comm) {
-        var normalized = PolarisApi.normalizeCommunication(comm);
+        var normalized = _normalizeCommunication(comm);
         // Map to lead-like object expected by CustomerCard, PolarisEngine, filter logic
         return {
           id: comm.id,

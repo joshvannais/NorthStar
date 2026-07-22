@@ -1128,7 +1128,10 @@ router.get('/jobs/metrics', (req, res) => {
 router.get('/analytics/dashboard', (req, res) => {
   try {
     var e = _getEngines().bi;
-    res.json(e.generateDashboard());
+    var r = e.generateDashboard();
+    if (r && r.customers) r.customers = _filterBySession(r.customers, req.query.sessionId);
+    if (r && r.recentLeads) r.recentLeads = _filterBySession(r.recentLeads, req.query.sessionId);
+    res.json(r);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1139,7 +1142,9 @@ router.get('/analytics/dashboard', (req, res) => {
 router.get('/analytics/executive', (req, res) => {
   try {
     var e = _getEngines().bi;
-    res.json(e.generateExecutiveSummary());
+    var r = e.generateExecutiveSummary();
+    if (r && r.customers) r.customers = _filterBySession(r.customers, req.query.sessionId);
+    res.json(r);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1150,7 +1155,9 @@ router.get('/analytics/executive', (req, res) => {
 router.get('/analytics/kpis', (req, res) => {
   try {
     var e = _getEngines().bi;
-    res.json(e.generateKPIs());
+    var r = e.generateKPIs();
+    if (r && r.customers) r.customers = _filterBySession(r.customers, req.query.sessionId);
+    res.json(r);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

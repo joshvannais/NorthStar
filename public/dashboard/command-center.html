@@ -317,8 +317,7 @@
 
       // ── Demo session lifecycle — clean state on page reload ──
       (function() {
-        var navEntry = performance.getEntriesByType('navigation')[0];
-        var isReload = navEntry && navEntry.type === 'reload';
+        var isReload = performance.navigation && performance.navigation.type === 1;
         if (isReload || !sessionStorage.getItem('northstarSessionId')) {
           sessionStorage.setItem('northstarSessionId', 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
         }

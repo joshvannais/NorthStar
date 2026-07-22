@@ -331,6 +331,13 @@
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initTheme);
       else initTheme();
 
+      // ── Demo session lifecycle — clean state on page reload ──
+      var simulationSessionId = sessionStorage.getItem('simulationSessionId');
+      if (!simulationSessionId) {
+        simulationSessionId = 'sim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        sessionStorage.setItem('simulationSessionId', simulationSessionId);
+      }
+
       // ── Auth-aware fetch with 10s timeout ──
       function apiFetch(url, opts) {
         opts = opts || {};
@@ -338,6 +345,11 @@
         var token = localStorage.getItem('token');
         if (token) opts.headers['Authorization'] = 'Bearer ' + token;
         if (opts.body) opts.headers['Content-Type'] = 'application/json';
+        // Append sessionId for demo lifecycle filtering
+        if (simulationSessionId) {
+          var sep = url.indexOf('?') >= 0 ? '&' : '?';
+          url = url + sep + 'sessionId=' + encodeURIComponent(simulationSessionId);
+        }
         return fetch(url, opts);
       }
 
@@ -428,7 +440,8 @@
               email: lead.email || '',
               service: lead.service || 'General',
               description: lead.description || '',
-              estimatedValue: leadValue
+              estimatedValue: leadValue,
+              sessionId: simulationSessionId
             })
           }).then(function(resp) {
             if (!resp.ok) {
@@ -592,7 +605,7 @@
           var maxCount = Math.max.apply(null, counts.concat([1]));
           var stages = [
             {icon:'\uD83D\uDCDE',cnt:fmtNum(ad),label:'Open Leads',pct:maxCount>0?Math.round(ad/maxCount*100):0,color:'var(--info)'},
-            {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:maxCount>0?Math.round(pe/maxCount*100):0,color:'var(--warning)'},
+            {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:maxCount>0?Math.round(pe/maxCount*100):0,color:'var(--brand-500)'},
             {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:maxCount>0?Math.round(sch/maxCount*100):0,color:'var(--brand-500)'},
             {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:maxCount>0?Math.round(ij/maxCount*100):0,color:'var(--success)'},
             {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:maxCount>0?Math.round(cj/maxCount*100):0,color:'var(--success)'}
@@ -605,7 +618,7 @@
           var el = document.getElementById('ccCustomers');
           if (!el) return;
           el.innerHTML = customers.length > 0 ?
-            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0||c.status==='active'){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" data-customer-id="'+c.id+'" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name" onclick="CustomerDetail.open(\''+c.id+'\')">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
+            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" data-customer-id="'+c.id+'" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name" onclick="CustomerDetail.open(\''+c.id+'\')">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
             '<div class="cc-empty">Customer profiles appear as Polaris™ processes calls. Start a simulation above.</div>';
         }
 

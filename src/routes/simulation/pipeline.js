@@ -14,6 +14,41 @@ const CATALOG = require('./service-catalog');
 // UNIVERSAL PRIMITIVES
 // ═══════════════════════════════════════════════════════
 
+// 50-state location generator — each entry: [stateAbbr, stateName, city, zipLow, zipHigh, areaCode]
+const STATES = [
+  ['AL','Alabama','Birmingham',35000,36999,205],['AK','Alaska','Anchorage',99500,99999,907],
+  ['AZ','Arizona','Phoenix',85000,86999,602],['AR','Arkansas','Little Rock',72000,72999,501],
+  ['CA','California','Los Angeles',90000,96999,310],['CO','Colorado','Denver',80000,81999,303],
+  ['CT','Connecticut','Hartford',6000,6999,860],['DE','Delaware','Wilmington',19800,19999,302],
+  ['FL','Florida','Miami',33000,34999,305],['GA','Georgia','Atlanta',30000,31999,404],
+  ['HI','Hawaii','Honolulu',96700,96899,808],['ID','Idaho','Boise',83700,83999,208],
+  ['IL','Illinois','Chicago',60600,60999,312],['IN','Indiana','Indianapolis',46200,46999,317],
+  ['IA','Iowa','Des Moines',50000,52999,515],['KS','Kansas','Wichita',67200,67999,316],
+  ['KY','Kentucky','Louisville',40200,42999,502],['LA','Louisiana','New Orleans',70100,71499,504],
+  ['ME','Maine','Portland',4000,4999,207],['MD','Maryland','Baltimore',21200,21999,410],
+  ['MA','Massachusetts','Boston',2100,2799,617],['MI','Michigan','Detroit',48200,49999,313],
+  ['MN','Minnesota','Minneapolis',55400,55999,612],['MS','Mississippi','Jackson',39200,39999,601],
+  ['MO','Missouri','Kansas City',64100,64999,816],['MT','Montana','Billings',59100,59999,406],
+  ['NE','Nebraska','Omaha',68100,68999,402],['NV','Nevada','Las Vegas',89100,89999,702],
+  ['NH','New Hampshire','Manchester',3100,3899,603],['NJ','New Jersey','Newark',7000,8999,973],
+  ['NM','New Mexico','Albuquerque',87100,87999,505],['NY','New York','New York City',10000,14999,212],
+  ['NC','North Carolina','Charlotte',28200,28999,704],['ND','North Dakota','Fargo',58100,58999,701],
+  ['OH','Ohio','Columbus',43200,43999,614],['OK','Oklahoma','Oklahoma City',73100,74999,405],
+  ['OR','Oregon','Portland',97200,97999,503],['PA','Pennsylvania','Philadelphia',19100,19999,215],
+  ['RI','Rhode Island','Providence',2900,2999,401],['SC','South Carolina','Columbia',29200,29999,803],
+  ['SD','South Dakota','Sioux Falls',57100,57999,605],['TN','Tennessee','Nashville',37200,37999,615],
+  ['TX','Texas','Houston',77000,77999,713],['UT','Utah','Salt Lake City',84100,84999,801],
+  ['VT','Vermont','Burlington',5400,5999,802],['VA','Virginia','Richmond',23200,23999,804],
+  ['WA','Washington','Seattle',98100,98999,206],['WV','West Virginia','Charleston',25300,25999,304],
+  ['WI','Wisconsin','Milwaukee',53200,53999,414],['WY','Wyoming','Cheyenne',82000,82999,307],
+];
+
+function _randomLocation() {
+  var s = STATES[Math.floor(Math.random() * STATES.length)];
+  var zip = s[3] + Math.floor(Math.random() * (s[4] - s[3]));
+  return { abbr: s[0], state: s[1], city: s[2], zip: zip, areaCode: s[5] };
+}
+
 const CONTACT_TEMPLATES = {
   askPhone: 'What\'s the best phone number to reach you?',
   askEmail: 'And an email address for the estimate?',
@@ -34,11 +69,12 @@ function generateScenario(requestedService, customerName) {
 
   const firstName = customerName.split(' ')[0];
 
-  // Build plausible customer contact
-  const phone = `(${_rand(200,900)}) ${_rand(200,900)}-${_rand(1000,9999)}`;
+  // Build plausible customer contact with nationwide diversity
+  const loc = _randomLocation();
+  const phone = `(${loc.areaCode}) ${_rand(200,900)}-${_rand(1000,9999)}`;
   const streets = ['Oak Creek', 'Maple', 'Hilltop', 'Breeze', 'Elm', 'Cedar', 'Pine', 'Willow'];
   const suffix = ['Drive', 'Lane', 'Way', 'Court', 'Circle', 'Avenue'];
-  const address = `${_rand(100,9999)} ${_pickRandom(streets)} ${_pickRandom(suffix)}, Austin, TX ${_rand(78700,78799)}`;
+  const address = `${_rand(100,9999)} ${_pickRandom(streets)} ${_pickRandom(suffix)}, ${loc.city}, ${loc.abbr} ${loc.zip}`;
 
   const scenario = {
     serviceKey: svcKey,

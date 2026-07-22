@@ -363,53 +363,78 @@
     window.showToast = showNotification;
     window.showNotification = NotificationService.show;
 
+    // ── Demo session lifecycle — clean state on page reload ──
+    (function() {
+      var navEntry = performance.getEntriesByType('navigation')[0];
+      var isReload = navEntry && navEntry.type === 'reload';
+      if (isReload || !sessionStorage.getItem('northstarSessionId')) {
+        sessionStorage.setItem('northstarSessionId', 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
+      }
+      window.SIM_SESSION_ID = sessionStorage.getItem('northstarSessionId');
+    })();
+
     // Page-local leads array — fetched from canonical Polaris API (server source of truth).
-    // No AppStore dependency. Same data source as Command Center.
     var pageLeads = [];
     var pageCustomers = {};
 
     function fmtTime(t) { if (!t) return '-'; try { var d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
 
-    /** Fetch leads from canonical Polaris API (server source of truth) */
-    function fetchLeads() {
-      if (typeof PolarisApi === 'undefined') {
-        pageLeads = [];
-        return Promise.resolve(pageLeads);
+    function _authHeaders() {
+      var h = {}; var t = localStorage.getItem('token');
+      if (t) h['Authorization'] = 'Bearer ' + t;
+      return h;
+    }
+    function _authFetch(url, opts) {
+      opts = opts || {}; opts.headers = Object.assign(_authHeaders(), opts.headers || {});
+      if (window.SIM_SESSION_ID) {
+        var sep = url.indexOf('?') >= 0 ? '&' : '?';
+        url = url + sep + 'sessionId=' + encodeURIComponent(window.SIM_SESSION_ID);
       }
-      return Promise.all([
-        PolarisApi.getOpportunities({ limit: 100 }),
-        PolarisApi.getCustomers()
-      ]).then(function(results) {
-        var opps = results[0];
-        var custData = results[1];
+      return fetch(url, opts).then(function(r) {
+        if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Request failed'); });
+        return r.json();
+      });
+    }
 
+    function _normalizeLead(opp, customer) {
+      return {
+        id: opp.id, customerId: opp.customerId,
+        callerName: customer ? customer.name : (opp.title || '').split(' - ').pop() || 'Unknown',
+        phone: customer ? customer.phone : '', service: opp.title ? opp.title.split(' - ')[0] : 'General',
+        estimatedPrice: opp.estimatedValue || 0, jobDetail: opp.description || '',
+        status: opp.stage === 'lead' ? 'new' : opp.stage,
+        outcome: opp.status === 'won' ? 'appointment-set' : opp.status === 'lost' ? 'no-interest' : 'lead-captured',
+        stage: opp.stage, stageDisplayName: opp.stageDisplayName,
+        probability: opp.probability, expectedRevenue: opp.expectedRevenue,
+        priority: opp.priority, createdAt: opp.createdAt, updatedAt: opp.updatedAt, source: 'polaris',
+      };
+    }
+
+    function fetchLeads() {
+      return Promise.all([
+        _authFetch('/api/v1/opportunities?limit=100'),
+        _authFetch('/api/v1/customers')
+      ]).then(function(results) {
+        var opps = results[0], custData = results[1];
         pageCustomers = {};
         if (custData && custData.customers) {
           custData.customers.forEach(function(c) { pageCustomers[c.id] = c; });
         }
-
         if (opps && opps.opportunities) {
           pageLeads = opps.opportunities.map(function(opp) {
             var customer = opp.customerId ? pageCustomers[opp.customerId] : null;
-            var lead = PolarisApi.normalizeLead(opp, customer);
-            // Add expected field aliases for existing rendering code (CustomerCard, PolarisEngine, etc.)
-            lead.caller = lead.callerName;
-            lead.avgPrice = lead.estimatedPrice;
-            lead.time = lead.createdAt;
-            lead.receivedAt = lead.createdAt;
-            lead.phoneNumber = lead.phone;
-            lead.customerName = lead.callerName;
+            var lead = _normalizeLead(opp, customer);
+            lead.caller = lead.callerName; lead.avgPrice = lead.estimatedPrice;
+            lead.time = lead.createdAt; lead.receivedAt = lead.createdAt;
+            lead.phoneNumber = lead.phone; lead.customerName = lead.callerName;
             lead.description = lead.jobDetail;
             return lead;
           });
-        } else {
-          pageLeads = [];
-        }
+        } else { pageLeads = []; }
         return pageLeads;
       }).catch(function(err) {
-        console.warn('[Leads] Polaris API fetch failed:', err.message);
-        pageLeads = [];
-        return pageLeads;
+        console.warn('[Leads] API fetch failed:', err.message);
+        pageLeads = []; return pageLeads;
       });
     }
 

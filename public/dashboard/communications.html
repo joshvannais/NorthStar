@@ -639,6 +639,16 @@
   <script src="/js/polaris-api.js"></script>
 
 <script>
+// ── Demo session lifecycle — clean state on page reload ──
+(function() {
+  var navEntry = performance.getEntriesByType('navigation')[0];
+  var isReload = navEntry && navEntry.type === 'reload';
+  if (isReload || !sessionStorage.getItem('northstarSessionId')) {
+    sessionStorage.setItem('northstarSessionId', 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
+  }
+  window.SIM_SESSION_ID = sessionStorage.getItem('northstarSessionId');
+})();
+
 // ===== Executive Filter State =====
 var filterState = {
   statuses: {},                // 'booked','estimate','follow-up','voicemail','no-interest' (empty keys = all)
@@ -816,49 +826,62 @@ function safeNum(v, fallback) {
   return v;
 }
 
-// ===== Fetch communications from canonical Polaris API (server source of truth) =====
-function fetchCommunications() {
-  if (typeof PolarisApi === 'undefined') {
-    pageCalls = [];
-    return Promise.resolve(pageCalls);
+// === Auth helpers ===
+function _authHeaders() {
+  var h = {}; var t = localStorage.getItem('token');
+  if (t) h['Authorization'] = 'Bearer ' + t;
+  return h;
+}
+function _authFetch(url, opts) {
+  opts = opts || {}; opts.headers = Object.assign(_authHeaders(), opts.headers || {});
+  if (window.SIM_SESSION_ID) {
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    url = url + sep + 'sessionId=' + encodeURIComponent(window.SIM_SESSION_ID);
   }
-  return PolarisApi.getCommunications({ limit: 50 }).then(function(result) {
+  return fetch(url, opts).then(function(r) {
+    if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Request failed'); });
+    return r.json();
+  });
+}
+
+function _normalizeCommunication(comm) {
+  return {
+    id: comm.id, customerId: comm.customerId,
+    callerName: comm.customerName || '', phone: comm.customerPhone || '',
+    type: comm.type || 'call', direction: comm.direction || 'inbound',
+    subject: comm.subject || '', content: comm.content || '',
+    status: comm.status || 'completed', duration: comm.duration,
+    createdAt: comm.createdAt, updatedAt: comm.updatedAt,
+  };
+}
+
+// ===== Fetch communications from canonical Polaris API (server source of truth) ==== 
+function fetchCommunications() {
+  return _authFetch('/api/v1/communications?limit=50').then(function(result) {
     if (result && result.communications && result.communications.length > 0) {
       pageCalls = result.communications.map(function(comm) {
-        var normalized = PolarisApi.normalizeCommunication(comm);
-        // Map to lead-like object expected by CustomerCard, PolarisEngine, filter logic
+        var n = _normalizeCommunication(comm);
         return {
-          id: comm.id,
-          customerId: comm.customerId,
-          caller: normalized.callerName || comm.customerId || 'Unknown',
-          callerName: normalized.callerName || comm.customerId || 'Unknown',
-          customerName: normalized.callerName || comm.customerId || 'Unknown',
-          phone: normalized.phone || '',
-          phoneNumber: normalized.phone || '',
+          id: comm.id, customerId: comm.customerId,
+          caller: n.callerName || comm.customerId || 'Unknown',
+          callerName: n.callerName || comm.customerId || 'Unknown',
+          customerName: n.callerName || comm.customerId || 'Unknown',
+          phone: n.phone || '', phoneNumber: n.phone || '',
           service: comm.type === 'call' ? (comm.subject || 'Call') : (comm.type || 'call'),
-          avgPrice: 0,
-          estimatedPrice: 0,
+          avgPrice: 0, estimatedPrice: 0,
           jobDetail: comm.content || comm.subject || '',
           description: comm.content || comm.subject || '',
-          status: comm.status || 'completed',
-          outcome: comm.status || 'completed',
-          receivedAt: comm.createdAt,
-          time: comm.createdAt,
-          createdAt: comm.createdAt,
-          duration: comm.duration || '',
-          transcript: comm.content || '',
-          summary: comm.subject || '',
-          source: 'polaris'
+          status: comm.status || 'completed', outcome: comm.status || 'completed',
+          receivedAt: comm.createdAt, time: comm.createdAt, createdAt: comm.createdAt,
+          duration: comm.duration || '', transcript: comm.content || '',
+          summary: comm.subject || '', source: 'polaris'
         };
       });
-    } else {
-      pageCalls = [];
-    }
+    } else { pageCalls = []; }
     return pageCalls;
   }).catch(function(err) {
-    console.warn('[Communications] Polaris API fetch failed:', err.message);
-    pageCalls = [];
-    return pageCalls;
+    console.warn('[Communications] API fetch failed:', err.message);
+    pageCalls = []; return pageCalls;
   });
 }
 

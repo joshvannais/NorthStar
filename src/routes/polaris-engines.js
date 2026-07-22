@@ -19,6 +19,22 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth/middleware');
+const sessionReg = require('./simulation/session-registry');
+
+/**
+ * Filter an array of records by sessionId.
+ * Real records (not in any session) are always included.
+ * Simulated records are included only if they belong to the requested session.
+ */
+function _filterBySession(records, sessionId) {
+  if (!sessionId) return records;
+  const allSessionIds = sessionReg.getAllSessionRecordIds();
+  return records.filter(function(r) {
+    if (!r || !r.id) return true;
+    if (!allSessionIds.has(r.id)) return true;       // real record — always visible
+    return sessionReg.isInSession(r.id, sessionId);   // simulated — only if in this session
+  });
+}
 
 // ── Engine References ──
 let engines = {};
@@ -78,6 +94,9 @@ router.get('/customers', (req, res) => {
     if (req.query.status) filters.status = req.query.status;
     if (req.query.search) filters.search = req.query.search;
     var result = e.listCustomers(filters);
+    if (result && result.customers) {
+      result.customers = _filterBySession(result.customers, req.query.sessionId);
+    }
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -183,10 +202,16 @@ router.get('/communications', (req, res) => {
 
         if (req.query.customerId) {
           var result = e.getCommunications(req.query.customerId, filters);
+          if (result && result.communications) {
+            result.communications = _filterBySession(result.communications, req.query.sessionId);
+          }
           res.json(result);
         } else {
           // Canonical collection endpoint — return all communications across customers
           var result = e.getAllCommunications(filters);
+          if (result && result.communications) {
+            result.communications = _filterBySession(result.communications, req.query.sessionId);
+          }
           res.json(result);
         }
       } catch (err) { res.status(500).json({ error: err.message }); }
@@ -291,6 +316,9 @@ router.get('/opportunities', (req, res) => {
     if (req.query.customerId) filters.customerId = req.query.customerId;
     if (req.query.limit) filters.limit = parseInt(req.query.limit);
     var result = e.listOpportunities(filters);
+    if (result && result.opportunities) {
+      result.opportunities = _filterBySession(result.opportunities, req.query.sessionId);
+    }
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

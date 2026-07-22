@@ -377,6 +377,13 @@
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initTheme);
       else initTheme();
 
+      // ── Demo session lifecycle — clean state on page reload ──
+      var simulationSessionId = sessionStorage.getItem('simulationSessionId');
+      if (!simulationSessionId) {
+        simulationSessionId = 'sim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        sessionStorage.setItem('simulationSessionId', simulationSessionId);
+      }
+
       // ── Auth-aware fetch with 10s timeout ──
       function apiFetch(url, opts) {
         opts = opts || {};
@@ -384,6 +391,11 @@
         var token = localStorage.getItem('token');
         if (token) opts.headers['Authorization'] = 'Bearer ' + token;
         if (opts.body) opts.headers['Content-Type'] = 'application/json';
+        // Append sessionId for demo lifecycle filtering
+        if (simulationSessionId) {
+          var sep = url.indexOf('?') >= 0 ? '&' : '?';
+          url = url + sep + 'sessionId=' + encodeURIComponent(simulationSessionId);
+        }
         return fetch(url, opts);
       }
 
@@ -474,7 +486,8 @@
               email: lead.email || '',
               service: lead.service || 'General',
               description: lead.description || '',
-              estimatedValue: leadValue
+              estimatedValue: leadValue,
+              sessionId: simulationSessionId
             })
           }).then(function(resp) {
             if (!resp.ok) {

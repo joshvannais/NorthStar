@@ -254,7 +254,7 @@ window.CustomerDetail = (function() {
       _authFetch('/api/v1/opportunities?customerId=' + encodeURIComponent(customerId)),
       _authFetch('/api/v1/financial/estimates?customerId=' + encodeURIComponent(customerId)),
       _authFetch('/api/v1/communications?customerId=' + encodeURIComponent(customerId)),
-      _authFetch('/api/v1/customers/' + encodeURIComponent(customerId) + '/intelligence').catch(function() { return null; })
+      _authFetch('/api/v1/leads/' + encodeURIComponent(customerId) + '/intelligence').catch(function() { return null; })
     ]).then(function(results) {
       return {
         customer: results[0],

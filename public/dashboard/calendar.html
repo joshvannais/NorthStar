@@ -15,7 +15,7 @@
    ================================================================ */
 
 /* Page */
-body { background: #02050b; }
+body { background: var(--neutral-50); }
 .cal-layout {
   display: flex;
   flex-direction: column;
@@ -32,34 +32,34 @@ body { background: #02050b; }
   align-items: center;
   justify-content: space-between;
   padding: 10px 18px;
-  background: #05080e;
-  border: 1px solid rgba(255,255,255,0.04);
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
   border-radius: 10px;
 }
 .cal-header-left { display: flex; align-items: center; gap: 10px; }
-.cal-title { font-size: 17px; font-weight: 700; color: #e8eaed; margin: 0; white-space: nowrap; }
+.cal-title { font-size: 17px; font-weight: 700; color: var(--neutral-800); margin: 0; white-space: nowrap; }
 .cal-nav-btns { display: flex; align-items: center; gap: 2px; }
 .cal-nav-btn {
-  width: 28px; height: 28px; border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 6px; background: #0c1017; color: #9aa0a6; font-size: 15px;
+  width: 28px; height: 28px; border: 1px solid var(--neutral-200);
+  border-radius: 6px; background: var(--neutral-100); color: var(--neutral-400); font-size: 15px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
-.cal-nav-btn:hover { background: #1a1f28; color: #e8eaed; }
+.cal-nav-btn:hover { background: var(--neutral-200); color: var(--neutral-800); }
 .cal-today-btn {
-  padding: 4px 10px; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px;
-  background: #0c1017; color: #9aa0a6; font-size: 11px; font-weight: 600;
+  padding: 4px 10px; border: 1px solid var(--neutral-200); border-radius: 6px;
+  background: var(--neutral-100); color: var(--neutral-400); font-size: 11px; font-weight: 600;
   cursor: pointer; margin-left: 4px; letter-spacing: 0.02em;
 }
-.cal-today-btn:hover { background: #1a1f28; color: #e8eaed; }
+.cal-today-btn:hover { background: var(--neutral-200); color: var(--neutral-800); }
 .cal-header-right { display: flex; align-items: center; gap: 6px; }
-.cal-view-tabs { display: flex; background: #0c1017; border-radius: 8px; padding: 2px; }
+.cal-view-tabs { display: flex; background: var(--neutral-100); border-radius: 8px; padding: 2px; }
 .cal-view-tab {
   padding: 4px 10px; border: none; border-radius: 6px; background: transparent;
-  color: #6c7278; font-size: 11px; font-weight: 600; cursor: pointer;
+  color: var(--neutral-500); font-size: 11px; font-weight: 600; cursor: pointer;
   white-space: nowrap; letter-spacing: 0.02em;
 }
-.cal-view-tab.active { background: #1a1f28; color: #e8eaed; }
-.cal-view-tab:hover:not(.active) { color: #9aa0a6; }
+.cal-view-tab.active { background: var(--neutral-200); color: var(--neutral-800); }
+.cal-view-tab:hover:not(.active) { color: var(--neutral-400); }
 
 /* KPI Bar — 2x2 grid, compact, left-aligned */
 .cal-kpi-bar {
@@ -73,11 +73,11 @@ body { background: #02050b; }
   justify-content: flex-start;
   gap: 5px;
   padding: 5px 10px;
-  background: #0c1017;
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
   border-radius: 8px;
   font-size: 12px;
-  color: #9aa0a6;
+  color: var(--neutral-400);
   white-space: nowrap;
   line-height: 1;
   min-width: 0;
@@ -90,13 +90,13 @@ body { background: #02050b; }
 }
 .cal-kpi-pill .cal-kpi-num {
   font-weight: 700;
-  color: #e8eaed;
+  color: var(--neutral-800);
   font-size: 12px;
   line-height: 1;
   flex-shrink: 0;
 }
 .cal-kpi-pill .cal-kpi-label {
-  color: #6c7278;
+  color: var(--neutral-500);
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
@@ -109,8 +109,8 @@ body { background: #02050b; }
 .cal-grid-container {
   width: 100%;
   overflow: auto;
-  background: #11151b;
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
   border-radius: 10px;
   padding: 16px;
   box-sizing: border-box;
@@ -121,84 +121,84 @@ body { background: #02050b; }
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 1px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.04);
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
   border-radius: 8px;
   overflow: hidden;
 }
 .cal-month-day-header {
-  background: #0d1118; padding: 6px 8px; text-align: center;
-  font-size: 11px; font-weight: 600; color: #6c7278;
+  background: var(--neutral-100); padding: 6px 8px; text-align: center;
+  font-size: 11px; font-weight: 600; color: var(--neutral-500);
   text-transform: uppercase; letter-spacing: 0.05em;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--neutral-200);
 }
 .cal-month-cell {
-  background: #11151b; min-height: 80px; padding: 4px 6px;
+  background: var(--neutral-100); min-height: 80px; padding: 4px 6px;
   cursor: pointer; position: relative;
 }
-.cal-month-cell:hover { background: #1a1f28; }
-.cal-month-cell-empty { background: #0d1118; cursor: default; }
+.cal-month-cell:hover { background: var(--neutral-200); }
+.cal-month-cell-empty { background: var(--neutral-100); cursor: default; }
 .cal-month-cell-today { background: rgba(99,149,255,0.06); }
 .cal-month-cell-today:hover { background: rgba(99,149,255,0.10); }
 .cal-month-cell-selected { outline: 1px solid #6395ff; outline-offset: -1px; z-index: 1; }
-.cal-month-cell-day { font-size: 18px; font-weight: 600; color: #e8eaed; margin-bottom: 2px; line-height: 1.2; }
+.cal-month-cell-day { font-size: 18px; font-weight: 600; color: var(--neutral-800); margin-bottom: 2px; line-height: 1.2; }
 .cal-month-cell-today .cal-month-cell-day { color: #6395ff; }
 .cal-month-cell-events { display: flex; flex-direction: column; gap: 3px; }
 .cal-month-event-dot { width: 100%; height: 3px; border-radius: 1px; }
-.cal-month-event-more { font-size: 10px; color: #6c7278; font-weight: 500; }
+.cal-month-event-more { font-size: 10px; color: var(--neutral-500); font-weight: 500; }
 
 /* Week View */
 .cal-week-view { overflow: auto; }
-.cal-week-grid { border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow: hidden; }
-.cal-week-row { display: grid; grid-template-columns: 50px repeat(7, 1fr); border-bottom: 1px solid rgba(255,255,255,0.04); }
+.cal-week-grid { border: 1px solid var(--neutral-200); border-radius: 8px; overflow: hidden; }
+.cal-week-row { display: grid; grid-template-columns: 50px repeat(7, 1fr); border-bottom: 1px solid var(--neutral-200); }
 .cal-week-row:last-child { border-bottom: none; }
-.cal-week-header { background: #0d1118; }
-.cal-week-day-header { padding: 6px; text-align: center; font-size: 11px; color: #6c7278; border-right: 1px solid rgba(255,255,255,0.04); }
+.cal-week-header { background: var(--neutral-100); }
+.cal-week-day-header { padding: 6px; text-align: center; font-size: 11px; color: var(--neutral-500); border-right: 1px solid var(--neutral-200); }
 .cal-week-day-header:last-child { border-right: none; }
 .cal-week-day-header-today { color: #6395ff; }
-.cal-week-time { padding: 6px 8px; font-size: 10px; color: #6c7278; text-align: right; border-right: 1px solid rgba(255,255,255,0.04); }
-.cal-week-cell { min-height: 36px; padding: 1px; border-right: 1px solid rgba(255,255,255,0.04); cursor: pointer; }
+.cal-week-time { padding: 6px 8px; font-size: 10px; color: var(--neutral-500); text-align: right; border-right: 1px solid var(--neutral-200); }
+.cal-week-cell { min-height: 36px; padding: 1px; border-right: 1px solid var(--neutral-200); cursor: pointer; }
 .cal-week-cell:last-child { border-right: none; }
-.cal-week-cell:hover { background: rgba(255,255,255,0.04); }
+.cal-week-cell:hover { background: var(--neutral-100); }
 .cal-week-event { font-size: 10px; color: #fff; padding: 1px 4px; border-radius: 2px; margin-bottom: 1px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Day View */
 .cal-day-view { max-width: 500px; margin: 0 auto; }
-.cal-day-title { font-size: 16px; font-weight: 600; color: #e8eaed; margin: 0 0 12px; }
-.cal-day-row { display: flex; border-bottom: 1px solid rgba(255,255,255,0.04); min-height: 44px; }
-.cal-day-time { width: 50px; padding: 6px 8px; font-size: 10px; color: #6c7278; text-align: right; flex-shrink: 0; }
+.cal-day-title { font-size: 16px; font-weight: 600; color: var(--neutral-800); margin: 0 0 12px; }
+.cal-day-row { display: flex; border-bottom: 1px solid var(--neutral-200); min-height: 44px; }
+.cal-day-time { width: 50px; padding: 6px 8px; font-size: 10px; color: var(--neutral-500); text-align: right; flex-shrink: 0; }
 .cal-day-content { flex: 1; padding: 2px 8px; }
-.cal-day-event-card { padding: 6px 10px; margin-bottom: 3px; background: #1a1f28; border-radius: 6px; cursor: pointer; }
-.cal-day-event-card:hover { background: #222833; }
-.cal-day-event-time { font-size: 10px; color: #9aa0a6; }
-.cal-day-event-title { font-size: 13px; font-weight: 600; color: #e8eaed; }
-.cal-day-event-desc { font-size: 11px; color: #6c7278; margin-top: 2px; }
+.cal-day-event-card { padding: 6px 10px; margin-bottom: 3px; background: var(--neutral-200); border-radius: 6px; cursor: pointer; }
+.cal-day-event-card:hover { background: var(--neutral-300); }
+.cal-day-event-time { font-size: 10px; color: var(--neutral-400); }
+.cal-day-event-title { font-size: 13px; font-weight: 600; color: var(--neutral-800); }
+.cal-day-event-desc { font-size: 11px; color: var(--neutral-500); margin-top: 2px; }
 
 /* Agenda View */
 .cal-agenda-view { max-width: 600px; margin: 0 auto; }
-.cal-agenda-empty { text-align: center; padding: 60px 20px; color: #6c7278; font-size: 14px; }
-.cal-agenda-date { font-size: 13px; font-weight: 600; color: #9aa0a6; padding: 10px 0 6px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 6px; }
+.cal-agenda-empty { text-align: center; padding: 60px 20px; color: var(--neutral-500); font-size: 14px; }
+.cal-agenda-date { font-size: 13px; font-weight: 600; color: var(--neutral-400); padding: 10px 0 6px; border-bottom: 1px solid var(--neutral-200); margin-bottom: 6px; }
 .cal-agenda-date-today { color: #6395ff; }
 .cal-agenda-events { margin-bottom: 12px; }
 .cal-agenda-event { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
-.cal-agenda-event:hover { background: rgba(255,255,255,0.04); }
+.cal-agenda-event:hover { background: var(--neutral-100); }
 .cal-agenda-event-color { width: 3px; height: 36px; border-radius: 2px; flex-shrink: 0; }
 .cal-agenda-event-info { flex: 1; }
-.cal-agenda-event-title { font-size: 13px; font-weight: 600; color: #e8eaed; }
-.cal-agenda-event-time { font-size: 11px; color: #9aa0a6; }
-.cal-agenda-event-desc { font-size: 11px; color: #6c7278; margin-top: 2px; }
+.cal-agenda-event-title { font-size: 13px; font-weight: 600; color: var(--neutral-800); }
+.cal-agenda-event-time { font-size: 11px; color: var(--neutral-400); }
+.cal-agenda-event-desc { font-size: 11px; color: var(--neutral-500); margin-top: 2px; }
 
 /* Event List — below calendar */
 .cal-event-list {
   width: 100%;
   padding: 12px 16px;
-  background: #05080e;
-  border: 1px solid rgba(255,255,255,0.04);
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
   border-radius: 10px;
   box-sizing: border-box;
 }
-.cal-event-list-header { font-size: 11px; font-weight: 700; color: #6c7278; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 8px; }
-.cal-event-list-empty { font-size: 12px; color: #6c7278; }
+.cal-event-list-header { font-size: 11px; font-weight: 700; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 8px; }
+.cal-event-list-empty { font-size: 12px; color: var(--neutral-500); }
 .cal-event-list-item {
   display: flex;
   align-items: center;
@@ -207,14 +207,14 @@ body { background: #02050b; }
   border-radius: 6px;
   cursor: pointer;
 }
-.cal-event-list-item:hover { background: rgba(255,255,255,0.04); }
+.cal-event-list-item:hover { background: var(--neutral-100); }
 .cal-event-list-dot {
   width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
 }
 .cal-event-list-info { flex: 1; min-width: 0; }
-.cal-event-list-title { font-size: 12px; font-weight: 500; color: #e8eaed; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cal-event-list-time { font-size: 10px; color: #9aa0a6; }
-.cal-event-list-value { font-size: 11px; font-weight: 600; color: #e8eaed; white-space: nowrap; }
+.cal-event-list-title { font-size: 12px; font-weight: 500; color: var(--neutral-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-event-list-time { font-size: 10px; color: var(--neutral-400); }
+.cal-event-list-value { font-size: 11px; font-weight: 600; color: var(--neutral-800); white-space: nowrap; }
 
 /* New Event Button — full-width, centered */
 .cal-new-event-area { margin-top: 8px; }
@@ -222,8 +222,8 @@ body { background: #02050b; }
 /* Polaris — Calendar-specific executive intelligence */
 .cal-polaris-section {
   width: 100%;
-  background: #11151b;
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
   border-radius: 10px;
   padding: 18px 20px;
   box-sizing: border-box;
@@ -244,34 +244,34 @@ body { background: #02050b; }
   align-items: center;
   padding: 6px 0;
 }
-.cal-polaris-row + .cal-polaris-row { border-top: 1px solid rgba(255,255,255,0.04); }
-.cal-polaris-label { font-size: 11px; font-weight: 500; color: #9aa0a6; flex-shrink: 0; }
-.cal-polaris-value { font-size: 12px; font-weight: 600; color: #e8eaed; text-align: right; margin-left: 12px; }
+.cal-polaris-row + .cal-polaris-row { border-top: 1px solid var(--neutral-200); }
+.cal-polaris-label { font-size: 11px; font-weight: 500; color: var(--neutral-400); flex-shrink: 0; }
+.cal-polaris-value { font-size: 12px; font-weight: 600; color: var(--neutral-800); text-align: right; margin-left: 12px; }
 
 /* Modal */
 .cal-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.cal-modal { background: #11151b; border-radius: 12px; width: 480px; max-width: 90vw; max-height: 80vh; overflow-y: auto; }
-.cal-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06); }
-.cal-modal-header h2 { margin: 0; font-size: 16px; font-weight: 700; color: #e8eaed; }
-.cal-modal-close { background: none; border: none; font-size: 20px; color: #6c7278; cursor: pointer; padding: 4px; }
-.cal-modal-close:hover { color: #9aa0a6; }
+.cal-modal { background: var(--neutral-100); border-radius: 12px; width: 480px; max-width: 90vw; max-height: 80vh; overflow-y: auto; }
+.cal-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--neutral-200); }
+.cal-modal-header h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--neutral-800); }
+.cal-modal-close { background: none; border: none; font-size: 20px; color: var(--neutral-500); cursor: pointer; padding: 4px; }
+.cal-modal-close:hover { color: var(--neutral-400); }
 .cal-modal-body { padding: 16px 18px; }
 .cal-modal-field { margin-bottom: 12px; }
-.cal-modal-field label { display: block; font-size: 11px; font-weight: 600; color: #9aa0a6; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
-.cal-modal-field input, .cal-modal-field textarea { width: 100%; padding: 7px 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; font-size: 13px; color: #e8eaed; background: #0c1017; box-sizing: border-box; }
+.cal-modal-field label { display: block; font-size: 11px; font-weight: 600; color: var(--neutral-400); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
+.cal-modal-field input, .cal-modal-field textarea { width: 100%; padding: 7px 10px; border: 1px solid var(--neutral-200); border-radius: 6px; font-size: 13px; color: var(--neutral-800); background: var(--neutral-100); box-sizing: border-box; }
 .cal-modal-field input:focus, .cal-modal-field textarea:focus { outline: none; border-color: #6395ff; }
 .cal-modal-row { display: flex; gap: 10px; }
 .cal-modal-row .cal-modal-field { flex: 1; }
 .cal-color-picker { display: flex; gap: 6px; }
 .cal-color-option { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
 .cal-color-option:hover { transform: scale(1.15); }
-.cal-color-option.selected { border-color: #e8eaed; }
-.cal-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 18px; border-top: 1px solid rgba(255,255,255,0.06); }
+.cal-color-option.selected { border-color: var(--neutral-800); }
+.cal-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 18px; border-top: 1px solid var(--neutral-200); }
 .cal-modal-btn { padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; }
 .cal-modal-save { background: #6395ff; color: #fff; }
 .cal-modal-save:hover { background: #7ba7ff; }
-.cal-modal-cancel { background: #1a1f28; color: #9aa0a6; }
-.cal-modal-cancel:hover { background: #222833; }
+.cal-modal-cancel { background: var(--neutral-200); color: var(--neutral-400); }
+.cal-modal-cancel:hover { background: var(--neutral-300); }
 .cal-modal-delete { background: rgba(239,68,68,0.15); color: #ef4444; margin-right: auto; }
 .cal-modal-delete:hover { background: rgba(239,68,68,0.25); }
 
@@ -306,62 +306,7 @@ body { background: #02050b; }
 </style>
 </head>
 <body>
-<a href="#mainContent" class="skip-link">Skip to main content</a>
-<div class="mobile-header">
-  <button class="hamburger-btn" onclick="toggleMobileMenu()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    NorthStar
-  </button>
-  <img src="/assets/northstar-logo.png" alt="NorthStar" class="mobile-logo">
-</div>
-<div class="mobile-overlay" id="mobileOverlay" onclick="toggleMobileMenu()"></div>
-<div class="mobile-menu" id="mobileMenu">
-  <div class="mobile-menu-header">
-    <a href="/dashboard" style="font-size:17px;font-weight:700;color:var(--brand-600);text-decoration:none;display:flex;align-items:center;gap:8px;"><img src="/assets/logo.png" alt="NorthStar" style="height:22px;"> NorthStar</a>
-    <button class="mobile-menu-close" onclick="toggleMobileMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-  </div>
-  <nav class="mobile-menu-nav">
-    <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Command Center</a>
-    <a href="/dashboard/polaris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>POLARIS</a>
-    <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
-    <a href="/dashboard/communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Communications</a>
-    <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>My Number</a>
-    <a href="/dashboard/calendar" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Calendar</a>
-    <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>AI Settings</a>
-    <a href="/dashboard/business-profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Business Profile</a>
-<a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Settings</a>
-  </nav>
-  <div class="mobile-menu-footer">
-    <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>
-    <button onclick="NorthStarTheme.toggleTheme()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--neutral-500);width:100%;text-align:left;">🌙 Toggle Theme</button>
-  </div>
-</div>
-<script>
-function toggleMobileMenu() {
-  document.getElementById('mobileOverlay').style.display = document.getElementById('mobileOverlay').style.display === 'block' ? 'none' : 'block';
-  document.getElementById('mobileMenu').classList.toggle('open');
-}
-</script>
-<div class="dashboard-layout">
-  <aside class="sidebar">
-    <a href="/dashboard" class="sidebar-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a>
-    <nav class="sidebar-nav">
-      <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Command Center</span></a>
-        <a href="/dashboard/polaris">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-          <span>POLARIS</span>
-        </a>
-      <a href="/dashboard/leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Leads</span></a>
-      <a href="/dashboard/communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Communications</span></a>
-      <a href="/dashboard/my-number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>My Number</span></a>
-      <a href="/dashboard/calendar" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg><span>Calendar</span></a>
-      <a href="/dashboard/ai-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7.05 7.05 0 0 1 17 21h-1.5a2 2 0 0 1-1-1.73V18h-5v1.27c0 .8-.64 1.5-1.44 1.5H7a7.05 7.05 0 0 1-2.73-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg><span>AI Settings</span></a>
-      <a href="/dashboard/business-profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Business Profile</span></a>
-      <a href="/dashboard/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></a>
-    </nav>
-    <a href="/" onclick="localStorage.removeItem('user');localStorage.removeItem('northstar_token')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>
-    <button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">🌙</button>
-  </aside>
+<a href="#mainContent" class="skip-link">Skip to main content</a><div class="dashboard-layout">
   <main class="main-content" id="mainContent">
     <div class="cal-layout">
       <!-- Header -->
@@ -451,5 +396,7 @@ function initCalendar() {
   });
 }
 </script>
+  <script src="/js/nav-component.js"></script>
+  <script>NavComponent.init("calendar");</script>
 </body>
 </html>

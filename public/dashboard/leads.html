@@ -365,7 +365,13 @@
 
     // ── Demo session lifecycle — clean state on page reload ──
     (function() {
-      var isReload = performance.navigation && performance.navigation.type === 1;
+      var isReload = false;
+      if (performance && performance.getEntriesByType) {
+        try { var navs = performance.getEntriesByType('navigation'); isReload = navs.length > 0 && navs[0].type === 'reload'; } catch(e) {}
+      }
+      if (!isReload && performance && performance.navigation) {
+        isReload = performance.navigation.type === 1;
+      }
       if (isReload || !sessionStorage.getItem('northstarSessionId')) {
         sessionStorage.setItem('northstarSessionId', 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
       }

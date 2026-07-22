@@ -24,6 +24,18 @@
  */
 
 const store = require('./store');
+const sessionReg = require('../routes/simulation/session-registry');
+
+// ── Session-aware filtering ──
+function _filterBySession(records, sessionId) {
+  if (!sessionId) return records;
+  var allSessionIds = sessionReg.getAllSessionRecordIds();
+  return records.filter(function(r) {
+    if (!r || !r.id) return true;
+    if (!allSessionIds.has(r.id)) return true;
+    return sessionReg.isInSession(r.id, sessionId);
+  });
+}
 
 // ── In-memory report cache ──
 var _reportCache = {};
@@ -80,7 +92,7 @@ function init() {
 
 // ── KPI Aggregation ──
 
-function generateKPIs() {
+function generateKPIs(sessionId) {
   var kpis = {};
 
   // Revenue KPIs
@@ -91,16 +103,29 @@ function generateKPIs() {
   kpis.averageInvoiceValue = _safe(function () { return fin.getFinancialMetrics().averageInvoiceValue; }, 0);
   kpis.collectionRate = _safe(function () { return fin.getFinancialMetrics().collectionRate; }, 0);
 
-  // Opportunity KPIs
+  // Opportunity KPIs — session-filtered when sessionId provided
     var opp = _getOppEngine();
-    var oppMetrics = _safe(function () { return opp.getPipelineMetrics(); }, {});
-    kpis.totalDeals = oppMetrics.totalDeals || 0;
-    kpis.activeDeals = oppMetrics.activeDeals || 0;
-    kpis.wonDeals = oppMetrics.wonDeals || 0;
-    kpis.winRate = oppMetrics.winRate || 0;
-    kpis.pipelineValue = oppMetrics.totalPipelineValue || 0;
-    kpis.weightedPipelineValue = oppMetrics.weightedPipelineValue || 0;
-    kpis.averageOpportunityValue = oppMetrics.averageOpportunityValue || 0;
+    if (sessionId) {
+      var allOpps = _safe(function () { return opp.listOpportunities({ includeArchived: false }); }, { opportunities: [], total: 0 });
+      var filteredOpps = _filterBySession(allOpps.opportunities || [], sessionId);
+      var activeOpps = filteredOpps.filter(function(o) { return o.status === 'open'; });
+      kpis.totalDeals = filteredOpps.length;
+      kpis.activeDeals = activeOpps.length;
+      kpis.wonDeals = filteredOpps.filter(function(o) { return o.stage === 'closed-won'; }).length;
+      kpis.winRate = kpis.totalDeals > 0 ? Math.round(kpis.wonDeals / kpis.totalDeals * 100) : 0;
+      kpis.pipelineValue = activeOpps.reduce(function(s, o) { return s + (parseFloat(o.estimatedValue) || 0); }, 0);
+      kpis.weightedPipelineValue = activeOpps.reduce(function(s, o) { return s + (parseFloat(o.expectedRevenue) || 0); }, 0);
+      kpis.averageOpportunityValue = activeOpps.length > 0 ? Math.round(kpis.pipelineValue / activeOpps.length) : 0;
+    } else {
+      var oppMetrics = _safe(function () { return opp.getPipelineMetrics(); }, {});
+      kpis.totalDeals = oppMetrics.totalDeals || 0;
+      kpis.activeDeals = oppMetrics.activeDeals || 0;
+      kpis.wonDeals = oppMetrics.wonDeals || 0;
+      kpis.winRate = oppMetrics.winRate || 0;
+      kpis.pipelineValue = oppMetrics.totalPipelineValue || 0;
+      kpis.weightedPipelineValue = oppMetrics.weightedPipelineValue || 0;
+      kpis.averageOpportunityValue = oppMetrics.averageOpportunityValue || 0;
+    }
 
     // Estimate-based pipeline indicators (NOT revenue — future potential)
     kpis.pendingEstimates = _safe(function () { return fin.getFinancialMetrics().pendingEstimateCount; }, 0);
@@ -149,10 +174,16 @@ function generateKPIs() {
   kpis.healthMessage = healthResult.message;
   kpis.cashFlow = kpis.totalRevenue - kpis.totalLaborCost;
 
-  // Customer KPIs
+  // Customer KPIs — session-filtered when sessionId provided
   var cust = _getCustomerEngine();
-  var custList = _safe(function () { return cust.listCustomers(); }, { customers: [], total: 0 });
-  kpis.totalCustomers = custList.total || 0;
+  if (sessionId) {
+    var allCusts = _safe(function () { return cust.listCustomers(); }, { customers: [], total: 0 });
+    var filteredCusts = _filterBySession(allCusts.customers || [], sessionId);
+    kpis.totalCustomers = filteredCusts.length;
+  } else {
+    var custList = _safe(function () { return cust.listCustomers(); }, { customers: [], total: 0 });
+    kpis.totalCustomers = custList.total || 0;
+  }
 
   _lastRefresh = _now();
   return { kpis: kpis, calculatedAt: _lastRefresh };
@@ -229,8 +260,8 @@ function _calculateHealthScore(kpis) {
 
 // ── Dashboards ──
 
-function generateDashboard() {
-  var kpis = generateKPIs();
+function generateDashboard(sessionId) {
+  var kpis = generateKPIs(sessionId);
   return {
     summary: kpis.kpis,
     companyHealth: kpis.kpis.companyHealthScore,
@@ -238,8 +269,8 @@ function generateDashboard() {
   };
 }
 
-function generateExecutiveSummary() {
-  var kpis = generateKPIs().kpis;
+function generateExecutiveSummary(sessionId) {
+  var kpis = generateKPIs(sessionId).kpis;
   var fin = _getFinEngine();
   var opp = _getOppEngine();
 

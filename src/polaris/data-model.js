@@ -134,6 +134,10 @@ const EstimateSchema = {
     variables:       { type: 'JSONB', description: 'All variables used in estimation' },
     actualTotal:     { type: 'DECIMAL(10,2)', description: 'Actual total (set when job completes)' },
     variance:        { type: 'DECIMAL(10,2)', description: 'actualTotal - totalEstimated' },
+    predictionVersion: { type: 'VARCHAR(10)', default: 'v2', description: 'Polaris engine version that generated this estimate' },
+    userScheduledDuration:  { type: 'DECIMAL(5,2)', description: 'Human override: contractor-adjusted duration' },
+    userScheduledRevenue:   { type: 'DECIMAL(10,2)', description: 'Human override: contractor-adjusted total' },
+    userOverrideReason:     { type: 'TEXT', description: 'Free-text reason for human override' },
     createdAt:       { type: 'TIMESTAMP', default: 'NOW()' },
   },
   createTable: `
@@ -154,6 +158,10 @@ const EstimateSchema = {
       variables JSONB,
       actual_total DECIMAL(10,2),
       variance DECIMAL(10,2),
+      prediction_version VARCHAR(10) DEFAULT 'v2',
+      user_scheduled_duration DECIMAL(5,2),
+      user_scheduled_revenue DECIMAL(10,2),
+      user_override_reason TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     );
   `,

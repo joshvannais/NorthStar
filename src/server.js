@@ -249,6 +249,32 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 /**
+ * POST /api/auth/demo
+ * Issue a demo contractor token — used by the login page fallback
+ * so that demo users receive a valid JWT for API calls.
+ */
+app.post('/api/auth/demo', (req, res) => {
+  const demoUser = {
+    id: 'demo-' + Date.now(),
+    email: req.body.email || 'demo@northstar.solutions',
+    name: req.body.name || 'Demo Contractor',
+    businessName: 'NorthStar Demo',
+  };
+  const token = generateToken(demoUser);
+  res.json({
+    success: true,
+    token,
+    user: {
+      id: demoUser.id,
+      name: demoUser.name,
+      businessName: demoUser.businessName,
+      email: demoUser.email,
+      role: 'contractor',
+    },
+  });
+});
+
+/**
  * POST /api/auth/refresh
  * Exchange a refresh token for a new access + refresh token pair.
  */
@@ -494,8 +520,9 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
   }
 });
 
-// API routes
-app.use('/api', apiRoutes);
+// ── /api/v1/* routes — registered BEFORE /api to avoid interception by apiRoutes' global requireAuth
+const simulationsRoutes = require('./routes/simulations');
+app.use('/api/v1', simulationsRoutes);
 app.use('/api/v1', dashboardRoutes);
 app.use('/api/v1', publicApiRoutes);
 app.use('/api/v1/polaris', polarisRoutes);
@@ -503,8 +530,9 @@ app.use('/api/v1', polarisEnginesRoutes);
 app.use('/api/v1/leads', customerIntelligenceRoutes);
 app.use('/api/v1/business-profile', businessProfileRoutes);
 app.use('/api/v1/voice', voiceRoutes);
-const simulationsRoutes = require('./routes/simulations');
-app.use('/api/v1', simulationsRoutes);
+
+// API routes (global requireAuth applies to all /api/* routes EXCEPT /api/v1/* handled above)
+app.use('/api', apiRoutes);
 
 // 404 + error handler (single instances)
 app.use(notFound);

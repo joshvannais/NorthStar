@@ -79,8 +79,23 @@
         localStorage.setItem('user', JSON.stringify(data.user));
         window.location.href = '/dashboard';
       } catch (err) {
-        // Demo fallback
-        localStorage.setItem('user', JSON.stringify({ name: 'Demo Contractor', email, role: 'admin' }));
+        // Demo fallback — get a valid demo token so API calls don't fail with 401
+        try {
+          const demoRes = await fetch('/api/auth/demo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email || 'demo@northstar.solutions', name: 'Demo Contractor' }),
+          });
+          const demoData = await demoRes.json();
+          if (demoData.token) {
+            localStorage.setItem('token', demoData.token);
+            localStorage.setItem('user', JSON.stringify(demoData.user));
+          }
+        } catch (demoErr) {
+          // Last resort: store minimal demo info without token
+          console.warn('[Login] Demo token unavailable:', demoErr.message);
+          localStorage.setItem('user', JSON.stringify({ name: 'Demo Contractor', email, role: 'admin' }));
+        }
         window.location.href = '/dashboard';
       }
     });

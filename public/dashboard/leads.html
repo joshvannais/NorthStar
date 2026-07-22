@@ -180,7 +180,7 @@
     <button class="mobile-menu-close" onclick="toggleMobileMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   </div>
   <nav class="mobile-menu-nav">
-        <a href="/dashboard" id="mnav-dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+        <a href="/dashboard" id="mnav-dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Command Center</a>
     <a href="/dashboard/polaris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>POLARIS</a>
     <a href="/dashboard/leads" id="mnav-leads" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Leads</a>
     <a href="/dashboard/communications" id="mnav-communications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Communications</a>
@@ -209,7 +209,7 @@ function toggleMobileMenu() {
         NorthStar
       </a>
       <nav class="sidebar-nav">
-        <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
+        <a href="/dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Command Center</span></a>
         <a href="/dashboard/polaris">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           <span>POLARIS</span>
@@ -421,16 +421,62 @@ function toggleMobileMenu() {
   <script src="/js/polaris-api.js"></script>
   <script>
     // Premium notification toasts
-    
     window.showToast = showNotification;
     window.showNotification = NotificationService.show;
 
-    // In-memory leads (live reference to AppStore)
-    let allLeads = (typeof CommunicationsEngine !== 'undefined' && CommunicationsEngine.getConversations) ? CommunicationsEngine.getConversations() : AppStore.getLeads();
+    // Page-local leads array — fetched from canonical Polaris API (server source of truth).
+    // No AppStore dependency. Same data source as Command Center.
+    var pageLeads = [];
+    var pageCustomers = {};
+
+    function fmtTime(t) { if (!t) return '-'; try { var d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
+
+    /** Fetch leads from canonical Polaris API (server source of truth) */
+    function fetchLeads() {
+      if (typeof PolarisApi === 'undefined') {
+        pageLeads = [];
+        return Promise.resolve(pageLeads);
+      }
+      return Promise.all([
+        PolarisApi.getOpportunities({ limit: 100 }),
+        PolarisApi.getCustomers()
+      ]).then(function(results) {
+        var opps = results[0];
+        var custData = results[1];
+
+        pageCustomers = {};
+        if (custData && custData.customers) {
+          custData.customers.forEach(function(c) { pageCustomers[c.id] = c; });
+        }
+
+        if (opps && opps.opportunities) {
+          pageLeads = opps.opportunities.map(function(opp) {
+            var customer = opp.customerId ? pageCustomers[opp.customerId] : null;
+            var lead = PolarisApi.normalizeLead(opp, customer);
+            // Add expected field aliases for existing rendering code (CustomerCard, PolarisEngine, etc.)
+            lead.caller = lead.callerName;
+            lead.avgPrice = lead.estimatedPrice;
+            lead.time = lead.createdAt;
+            lead.receivedAt = lead.createdAt;
+            lead.phoneNumber = lead.phone;
+            lead.customerName = lead.callerName;
+            lead.description = lead.jobDetail;
+            return lead;
+          });
+        } else {
+          pageLeads = [];
+        }
+        return pageLeads;
+      }).catch(function(err) {
+        console.warn('[Leads] Polaris API fetch failed:', err.message);
+        pageLeads = [];
+        return pageLeads;
+      });
+    }
+
     function openLeadDrawer(el) {
       var idx = parseInt(el.getAttribute('data-lead-index'), 10);
-      const leads = CommunicationsEngine.getConversations ? CommunicationsEngine.getConversations() : AppStore.getLeads();
-      var lead = leads[idx];
+      var lead = pageLeads[idx];
       if (!lead) return;
       if (lead.customerId && typeof CustomerDetail !== 'undefined') {
         CustomerDetail.open(lead.customerId);
@@ -438,30 +484,36 @@ function toggleMobileMenu() {
         CustomerDrawer.open(lead);
       }
     }
-    function fmtTime(t) { if (!t) return '-'; try { const d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
-    // Subscribe to store changes for auto-refresh
-    EventBus.on('store:changed', function() { loadLeads(); });
-    function loadLeads() {
-      // Always read fresh from shared AppStore
-      const leads = CommunicationsEngine.getConversations ? CommunicationsEngine.getConversations() : AppStore.getLeads();
-      document.getElementById('leadCount').textContent = leads.length + ' leads';
-      renderLeads(leads);
-      renderKpiCards(leads);
-      renderPolarisCard(leads);
+
+    // Listen for simulation events to auto-refresh
+    if (typeof EventBus !== 'undefined') {
+      EventBus.on('simulation:completed', function() { loadLeads(); });
     }
 
-    // === 6 Executive KPI Cards (via shared AnalyticsEngine) ===
+    function loadLeads() {
+      fetchLeads().then(function() {
+        document.getElementById('leadCount').textContent = pageLeads.length + ' leads';
+        renderLeads(pageLeads);
+        renderKpiCards(pageLeads);
+        renderPolarisCard(pageLeads);
+      });
+    }
+
+    // === 6 Executive KPI Cards (computed directly from canonical page data) ===
     function renderKpiCards(leads) {
-      const total = AnalyticsEngine.total();
-      const qualified = AnalyticsEngine.qualified();
-      const won = AnalyticsEngine.won();
-      const totalRevenue = AnalyticsEngine.totalRevenue();
-      const conversionRate = AnalyticsEngine.conversionRateNumeric();
-      const avgValue = AnalyticsEngine.avgJobValue();
+      var total = leads.length;
+      var qualified = leads.filter(function(l) {
+        return l.status === 'scheduled' || l.status === 'contacted' || l.status === 'new';
+      }).length;
+      var won = leads.filter(function(l) {
+        return l.status === 'completed' || l.outcome === 'appointment-set';
+      }).length;
+      var totalRevenue = leads.reduce(function(s, l) { return s + (l.estimatedPrice || l.avgPrice || 0); }, 0);
+      var conversionRate = qualified > 0 ? Math.round((won / qualified) * 100) : 0;
+      var avgValue = total > 0 ? Math.round(totalRevenue / total) : 0;
 
       document.getElementById('kpiTotalLeads').textContent = total;
       document.getElementById('kpiTotalLeadChange').textContent = total > 0 ? total + ' total leads' : 'All time';
-
       document.getElementById('kpiQualified').textContent = qualified;
       document.getElementById('kpiWon').textContent = won;
       document.getElementById('kpiRevenue').textContent = '$' + Math.round(totalRevenue).toLocaleString();
@@ -471,35 +523,22 @@ function toggleMobileMenu() {
     }
 
     // === Polaris Revenue Intelligence Card ===
-        function renderPolarisCard(leads) {
-      PolarisEngine.renderPolarisCard(leads);
-    }    // === Customer Detail Drawer ===
-    
-
-    
-
-
+    function renderPolarisCard(leads) {
+      if (typeof PolarisEngine !== 'undefined' && PolarisEngine.renderPolarisCard) {
+        PolarisEngine.renderPolarisCard(leads);
+      }
+    }
 
     // === Leads Table ===
     function renderLeads(leads) {
       if (leads.length === 0) {
-        document.getElementById('leadsContent').innerHTML = `
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <h3>No leads yet</h3>
-            <p>Connect your phone number to start receiving calls.</p>
-          </div>`;
+        document.getElementById('leadsContent').innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><h3>No leads yet</h3><p>Connect your phone number to start receiving calls.</p></div>';
         return;
       }
-
-      let html = `<table class="leads-table"><thead><tr>
-        <th>Customer</th><th>Phone</th><th>Service</th><th>Est. Value</th><th>Date</th><th>Status</th><th></th>
-      </tr></thead><tbody>`;
-
-      leads.slice().forEach((c, idx) => {
-        html += CustomerCard.render(c, {layout: "row", index: idx});
+      var html = '<table class="leads-table"><thead><tr><th>Customer</th><th>Phone</th><th>Service</th><th>Est. Value</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody>';
+      leads.slice().forEach(function(c, idx) {
+        html += CustomerCard.render(c, {layout: 'row', index: idx});
       });
-
       html += '</tbody></table>';
       document.getElementById('leadsContent').innerHTML = html;
     }
@@ -507,122 +546,36 @@ function toggleMobileMenu() {
     // === More Action Menu ===
     function toggleMoreMenu(btn) {
       closeAllMenus();
-      const dropdown = btn.parentElement.querySelector('.more-dropdown');
+      var dropdown = btn.parentElement.querySelector('.more-dropdown');
       if (dropdown) dropdown.classList.add('open');
     }
-
     function closeAllMenus() {
-      document.querySelectorAll('.more-dropdown.open').forEach(m => m.classList.remove('open'));
+      document.querySelectorAll('.more-dropdown.open').forEach(function(m) { m.classList.remove('open'); });
     }
-
-    // Close menus on outside click
     document.addEventListener('click', function(e) {
-      if (!e.target.closest('.more-menu-container')) {
-        closeAllMenus();
-      }
+      if (!e.target.closest('.more-menu-container')) { closeAllMenus(); }
     });
 
-    // === Lead Actions ===
+    // === Lead Actions (operate on page-local data) ===
     function updateLeadStatus(idx, newStatus) {
-      const leads = CommunicationsEngine.getConversations ? CommunicationsEngine.getConversations() : AppStore.getLeads();
-      if (!leads[idx]) return;
-      AppStore.updateLead(leads[idx].id, { status: newStatus });
-      syncSessionStorage();
-      showNotification('✅ ' + (leads[idx].caller || 'Lead') + ' marked as ' + newStatus, 'success');
+      if (!pageLeads[idx]) return;
+      pageLeads[idx].status = newStatus;
+      showNotification('\u2705 ' + (pageLeads[idx].caller || 'Lead') + ' marked as ' + newStatus, 'success');
       loadLeads();
     }
 
     function removeLead(idx) {
-      const leads = CommunicationsEngine.getConversations ? CommunicationsEngine.getConversations() : AppStore.getLeads();
-      if (!leads[idx]) return;
-      const name = leads[idx].caller || 'Lead';
-      AppStore.removeLead(leads[idx].id);
-      showNotification('🗑️ ' + name + ' removed', 'warning');
+      if (!pageLeads[idx]) return;
+      var name = pageLeads[idx].caller || 'Lead';
+      pageLeads.splice(idx, 1);
+      showNotification('\uD83D\uDDD1\uFE0F ' + name + ' removed', 'warning');
       loadLeads();
     }
 
-    function syncSessionStorage() {
-      try {
-        sessionStorage.setItem('northstar_calls', JSON.stringify(AppStore.getLeads()));
-      } catch(e) {}
-    }
-
-    /**
-     * Seed AppStore from canonical Polaris API (server source of truth).
-     * Fetches opportunities at stage 'lead' from the Polaris engine,
-     * normalizes them via the shared adapter, and merges into AppStore.
-     *
-     * Does NOT overwrite existing records — skips duplicates by ID.
-     * The shared adapter (PolarisApi.normalizeLead) is used across all pages.
-     */
-    function _seedFromPolaris() {
-      if (typeof PolarisApi === 'undefined' || typeof AppStore === 'undefined') return;
-
-      Promise.all([
-        PolarisApi.getOpportunities({ stage: 'lead', limit: 100 }),
-        PolarisApi.getCustomers()
-      ]).then(function(results) {
-        var opps = results[0];
-        var custData = results[1];
-
-        if (!opps || !opps.opportunities || opps.opportunities.length === 0) return;
-
-        var customerMap = {};
-        if (custData && custData.customers) {
-          custData.customers.forEach(function(c) { customerMap[c.id] = c; });
-        }
-
-        var existingIds = {};
-        AppStore.getLeads().forEach(function(l) { existingIds[l.id] = true; });
-
-        opps.opportunities.forEach(function(opp) {
-          if (existingIds[opp.id]) return;
-          var customer = opp.customerId ? customerMap[opp.customerId] : null;
-          var leadData = PolarisApi.normalizeLead(opp, customer);
-          AppStore.addLead(leadData);
-        });
-      }).catch(function(err) {
-        console.warn('[Leads] Polaris API seed failed (non-fatal):', err.message);
-      });
-    }
-
-    // Initial load
-            if (typeof AppStore !== 'undefined') {
-              if (AppStore.loadFromSession) AppStore.loadFromSession();
-              loadLeads();
-              // Seed AppStore from canonical Polaris API (server source of truth)
-              _seedFromPolaris();
-            } else {
-              // AppStore not ready yet - retry after script loads
-              document.addEventListener('DOMContentLoaded', function() {
-                if (typeof AppStore !== 'undefined') {
-                  if (AppStore.loadFromSession) AppStore.loadFromSession();
-                  loadLeads();
-                  _seedFromPolaris();
-                }
-              });
-            }
-          </script>
-          <script>
-            // Fallback: ensure leads render even if main script had issues
-            if (typeof AppStore !== 'undefined' && typeof loadLeads !== 'undefined') {
-              if (AppStore.loadFromSession) AppStore.loadFromSession();
-              loadLeads();
-              _seedFromPolaris();
-            } else {
-      // Wait for everything to be ready
-      setTimeout(function() {
-        if (typeof AppStore !== 'undefined' && AppStore.loadFromSession) AppStore.loadFromSession();
-        if (typeof loadLeads !== 'undefined') loadLeads();
-        else if (typeof AppStore !== 'undefined') {
-          var lc = document.getElementById('leadCount');
-          if (lc) lc.textContent = AppStore.getLeads().length + ' leads';
-          // Trigger any available render
-          if (window.renderLeads) window.renderLeads(AppStore.getLeads());
-        }
-      }, 500);
-    }
+    // Initial load — fetch from canonical API, no AppStore or sessionStorage dependency
+    loadLeads();
   </script>
+
   <script src="/js/tooltip-service.js"></script>
 <script src="/js/theme.js"></script>
 </body>

@@ -14,6 +14,7 @@ const { requireAuth } = require('../auth/middleware');
 const { addLead } = require('../leads/store');
 const db = require('../db');
 const pipeline = require('./simulation/pipeline');
+const sessionReg = require('./simulation/session-registry');
 
 // ── Polaris Engine Loaders ──
 let _engines = {};
@@ -31,6 +32,8 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Customer name is required', stage: 'validation' });
     }
+
+    const sessionId = req.body.sessionId || ('sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
 
     const requestedService = (service || 'general').toLowerCase();
 
@@ -75,6 +78,7 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
       address: cust.address || '', status: 'active',
     });
     if (custResult.error) return res.status(400).json({ error: 'Customer creation failed: ' + custResult.error, stage: 'customer' });
+    if (custResult.id) sessionReg.register(sessionId, custResult.id);
 
     // Communication
     const commResult = e.comms.recordCommunication({
@@ -82,6 +86,7 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
       subject: 'Simulated call from ' + cust.name,
       content: JSON.stringify(transcript), status: 'completed',
     });
+    if (commResult && commResult.id) sessionReg.register(sessionId, commResult.id);
 
     // Opportunity — clean service name, no customer name appended
     const oppResult = e.opps.createOpportunity({
@@ -92,6 +97,7 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
       stage: 'lead',
       priority: recommendedAction.priority || 'medium',
     });
+    if (oppResult && oppResult.id) sessionReg.register(sessionId, oppResult.id);
 
     // Estimate
     const estItems = (pricingResult.breakdown || []).map(b => ({
@@ -113,6 +119,7 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
       items: estItems,
       status: 'draft',
     });
+    if (estResult && estResult.id) sessionReg.register(sessionId, estResult.id);
 
     // Legacy lead
     const leadEntry = addLead({
@@ -121,6 +128,7 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
       estimatedPrice: total, jobDetail: scopeEvidence.description || '',
       source: 'simulation', status: 'new', callOutcome: 'Lead captured',
     });
+    if (leadEntry && leadEntry.id) sessionReg.register(sessionId, leadEntry.id);
 
     // PostgreSQL
     let callRecordId = null;
@@ -167,6 +175,7 @@ router.post('/simulations/leads', requireAuth, async (req, res) => {
 
     res.status(201).json({
       success: true,
+      sessionId: sessionId,
       summary: { name: cust.name, service: classification.service, estimatedValue: total },
       ids: {
         customer: custResult.id, communication: commResult ? commResult.id : null,

@@ -248,18 +248,20 @@ window.CustomerDetail = (function() {
   }
 
   function fetchAll(customerId) {
-    // Fetch all 4 endpoints in parallel
+    // Fetch all 5 endpoints in parallel — includes canonical Polaris intelligence
     return Promise.all([
       _authFetch('/api/v1/customers/' + encodeURIComponent(customerId)),
       _authFetch('/api/v1/opportunities?customerId=' + encodeURIComponent(customerId)),
       _authFetch('/api/v1/financial/estimates?customerId=' + encodeURIComponent(customerId)),
-      _authFetch('/api/v1/communications?customerId=' + encodeURIComponent(customerId))
+      _authFetch('/api/v1/communications?customerId=' + encodeURIComponent(customerId)),
+      _authFetch('/api/v1/leads/' + encodeURIComponent(customerId) + '/intelligence').catch(function() { return null; })
     ]).then(function(results) {
       return {
         customer: results[0],
         opportunities: results[1],
         estimates: results[2],
-        communications: results[3]
+        communications: results[3],
+        intelligence: results[4]
       };
     });
   }
@@ -366,15 +368,46 @@ window.CustomerDetail = (function() {
       }
     }
 
+    // Canonical Polaris Intelligence — from pipeline
+    data.intelligence = null;
+    if (raw.intelligence && !raw.intelligence.error) {
+      data.intelligence = raw.intelligence;
+    }
+
     return data;
   }
 
   // ── POLARIS Intelligence ──
 
   function generatePolarisIntel(data) {
+    // Use canonical Polaris intelligence from API when available
+    var canon = data.intelligence;
+    if (canon && canon.polaris) canon = canon.polaris;
+
+    if (canon && (canon.service || canon.pricing || canon.confidence)) {
+      var svc = canon.service || data.service || 'General';
+      var price = canon.pricing ? (canon.pricing.range || fmtCurrency(canon.pricing.estimated || 0)) : fmtCurrency(data.estimatedValue || 0);
+      var confPct = canon.confidence ? (canon.confidence.score || canon.confidence.pct || 0) : (data.closeProbability || 0);
+      var confLabel = canon.confidence ? (canon.confidence.label || (confPct >= 80 ? 'High' : confPct >= 50 ? 'Medium' : 'Low')) : 'Low';
+      var action = canon.action || canon.recommendedAction || '';
+      var summary = canon.summary || canon.classification || '';
+
+      return {
+        summary: summary || capitalizeFirst((data.description || svc).substring(0, 80)),
+        price: price,
+        confidenceLabel: confLabel,
+        confidenceClass: confLabel.toLowerCase(),
+        confidencePct: (typeof confPct === 'number' ? confPct : parseInt(confPct) || 0) + '%',
+        revenue: price + ' \u2014 ' + svc,
+        action: action || (confPct >= 70 ? 'Prioritize immediate follow-up' : confPct >= 40 ? 'Schedule estimate visit' : 'Nurture with follow-up call'),
+        isCanonical: true
+      };
+    }
+
+    // Fallback: compute from available data (legacy — no $500/5%/30% hardcoded defaults)
     var svc = data.service || 'General';
-    var estVal = data.estimatedValue || 500;
-    var prob = data.closeProbability || 30;
+    var estVal = data.estimatedValue || 0;
+    var prob = data.closeProbability || 0;
     var summary = 'New lead for ' + svc + '.';
     if (data.description) {
       summary = capitalizeFirst(data.description.substring(0, 80)) + (data.description.length > 80 ? '\u2026' : '');
@@ -391,7 +424,8 @@ window.CustomerDetail = (function() {
       confidenceClass: confClass,
       confidencePct: prob + '%',
       revenue: price + ' \u2014 ' + svc,
-      action: action
+      action: action,
+      isCanonical: false
     };
   }
 

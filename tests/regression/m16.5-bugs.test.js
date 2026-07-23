@@ -20,6 +20,8 @@ const intelligence = require('../../src/services/intelligence');
 const decisionEngine = require('../../src/services/decisionEngine');
 const customerIntelligence = require('../../src/services/customerIntelligence');
 const { buildCompactContext, buildBusinessContext } = require('../../src/context/business');
+const dataLoader = require('../../src/services/dataLoader');
+const polarisContextBuilder = require('../../src/services/polarisContextBuilder');
 const fixtures = require('../helpers/fixtures');
 
 // ────────────────────────────────────────────────────────
@@ -200,9 +202,19 @@ describe('M16.5 Bug 3 — Duplicate Orchestration: single orchestrator', () => {
 
   test('Each engine call produces stable output across multiple invocations', () => {
     // Build context 3 times — aggregate values remain identical (single orchestrator)
-    const ctx1 = buildCompactContext({});
-    const ctx2 = buildCompactContext({});
-    const ctx3 = buildCompactContext({});
+    // Exercise the single orchestrator; business.js is only a formatter.
+    const ctx1 = polarisContextBuilder.buildPolarisContext({
+      page: 'dashboard',
+      correlationId: 'm16-stability-1',
+    }).compactContext;
+    const ctx2 = polarisContextBuilder.buildPolarisContext({
+      page: 'dashboard',
+      correlationId: 'm16-stability-2',
+    }).compactContext;
+    const ctx3 = polarisContextBuilder.buildPolarisContext({
+      page: 'dashboard',
+      correlationId: 'm16-stability-3',
+    }).compactContext;
     
     const ci1 = ctx1.calculatedIntelligence;
     const ci2 = ctx2.calculatedIntelligence;
@@ -259,8 +271,8 @@ describe('M16.5 Bug 5 — Aggregate Consistency: 6 metrics match', () => {
   
   test('6 core metrics match across compactContext, direct aggregate, and executive briefing', () => {
     // Load data
-    const { loadData } = require('../../src/context/business');
-    const data = loadData();
+    // Use the same canonical tenant/session view consumed by the orchestrator.
+    const data = dataLoader.loadCanonicalData(null);
     const leads = data.leads;
     
     if (leads.length === 0) {
@@ -268,8 +280,11 @@ describe('M16.5 Bug 5 — Aggregate Consistency: 6 metrics match', () => {
       return;
     }
     
-    // Path 1: buildCompactContext
-    const ctx = buildCompactContext({});
+    // Path 1: universal Polaris orchestration feeding the compact formatter
+    const ctx = polarisContextBuilder.buildPolarisContext({
+      page: 'dashboard',
+      correlationId: 'm16-aggregate-consistency',
+    }).compactContext;
     
     // Path 2: Direct aggregate
     const agg = intelligence.calculateAggregateIntelligence(leads);
@@ -374,7 +389,13 @@ describe('M16.5 Bug 8 — Prompt Consistency: same context → same prompt', () 
   });
 
   test('Business context contains expected sections', () => {
-    const text = buildBusinessContext({});
+    // Prompt-ready text comes from the orchestrator so the formatter receives
+    // the computed intelligence sections.
+    const unifiedContext = polarisContextBuilder.buildPolarisContext({
+      page: 'dashboard',
+      correlationId: 'm16-context-sections',
+    });
+    const text = unifiedContext.contextText;
     
     // Should contain standard sections
     const expectedSections = [
@@ -386,7 +407,7 @@ describe('M16.5 Bug 8 — Prompt Consistency: same context → same prompt', () 
       expect(text).toContain(section);
     });
     
-    if (buildCompactContext({}).leads.length > 0) {
+    if (unifiedContext.compactContext.leads.length > 0) {
       expect(text).toContain('Pipeline Health');
       expect(text).toContain('Calculated Intelligence');
     }

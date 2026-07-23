@@ -112,7 +112,14 @@ describe('Phase 4 — API: Health & Generic Routes', () => {
     const res = await request(app).get('/api/health');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/json/);
-    expect(res.body.status).toBe('ok');
+    // Health remains reachable while accurately reporting unavailable
+    // optional dependencies in isolated test environments.
+    expect(['ok', 'degraded']).toContain(res.body.status);
+    expect(res.body.components).toEqual(expect.objectContaining({
+      dataDirectory: expect.any(String),
+      leadsFile: expect.any(String),
+      database: expect.any(String),
+    }));
   });
 
   test('GET /api/leads — rejects unauthenticated', async () => {

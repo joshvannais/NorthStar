@@ -12,6 +12,13 @@ const router = express.Router();
 const polaris = require('../polaris/engine');
 const https = require('https');
 const { requireAuth } = require('../auth/middleware');
+const demoScope = require('../services/demoRecordScope');
+
+function filterScopedRecords(records, sessionId) {
+  return (Array.isArray(records) ? records : []).filter(function (record) {
+    return demoScope.canAccess(record && (record.data || record), sessionId);
+  });
+}
 
 // ── Middleware ──
 router.use((req, res, next) => {
@@ -51,6 +58,7 @@ router.get('/intelligence', (req, res) => {
     const jobs = polaris.getCompletedJobs();
 
     const intelligence = polaris.getDashboardIntelligence(leads, events, jobs);
+    intelligence.recommendations = filterScopedRecords(intelligence.recommendations, req.query.sessionId);
     res.json(intelligence);
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
@@ -129,7 +137,7 @@ router.post('/recommendations/generate', (req, res) => {
 router.get('/recommendations', (req, res) => {
   try {
     const resolved = req.query.resolved === 'true' ? true : req.query.resolved === 'all' ? undefined : false;
-    const recs = polaris.getRecommendations(resolved);
+    const recs = filterScopedRecords(polaris.getRecommendations(resolved), req.query.sessionId);
     res.json({ count: recs.length, recommendations: recs });
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
@@ -142,6 +150,12 @@ router.get('/recommendations', (req, res) => {
  */
 router.put('/recommendations/:id/resolve', (req, res) => {
   try {
+    const existing = polaris.getRecommendations(undefined).find(function (recommendation) {
+      return recommendation.id === req.params.id;
+    });
+    if (existing && !demoScope.canAccess(existing.data || existing, req.query.sessionId)) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Recommendation not found' } });
+    }
     const result = polaris.resolveRecommendation(req.params.id);
     if (!result) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Recommendation not found' } });
     res.json({ resolved: true, recommendation: result });
@@ -156,7 +170,7 @@ router.put('/recommendations/:id/resolve', (req, res) => {
  */
 router.get('/jobs', (req, res) => {
   try {
-    const jobs = polaris.getCompletedJobs();
+    const jobs = filterScopedRecords(polaris.getCompletedJobs(), req.query.sessionId);
     res.json({ count: jobs.length, jobs });
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
@@ -169,7 +183,7 @@ router.get('/jobs', (req, res) => {
  */
 router.get('/estimates', (req, res) => {
   try {
-    const estimates = polaris.getHistoricalEstimates();
+    const estimates = filterScopedRecords(polaris.getHistoricalEstimates(), req.query.sessionId);
     res.json({ count: estimates.length, estimates });
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
@@ -186,6 +200,12 @@ router.post('/query', (req, res) => {
     const { query, context } = req.body;
     if (!query) return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'query is required' } });
     const result = polaris.prepareQueryContext(query, context || {});
+    if (Array.isArray(result.recommendations)) {
+      result.recommendations = filterScopedRecords(result.recommendations, req.query.sessionId);
+    }
+    if (Array.isArray(result.historicalEstimates)) {
+      result.historicalEstimates = filterScopedRecords(result.historicalEstimates, req.query.sessionId);
+    }
     res.json({ query, result });
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
@@ -256,12 +276,29 @@ router.post('/config', (req, res) => {
  */
 router.get('/business-context', (req, res) => {
   try {
-    const ctx = require('../context/business');
-    const pageContext = {
+    const contextBuilder = require('../services/polarisContextBuilder');
+    const unified = contextBuilder.buildPolarisContext({
       page: req.query.page || 'dashboard',
       leadId: req.query.leadId || null,
+      sessionId: req.query.sessionId || null,
+      correlationId: req.correlationId || 'unknown',
+    });
+    const compact = unified.compactContext;
+    const context = {
+      overview: compact.overview,
+      leads: compact.leads,
+      recommendations: compact.recommendations,
+      pageContext: compact.pageContext,
+      metrics: compact.metrics,
+      dashboardCustomerIntelligence: compact.dashboardCustomerIntelligence,
     };
-    const context = ctx.buildCompactContext(pageContext);
+    if (req.query.leadId) {
+      context.activeLead = compact.activeLead;
+      context.activeLeadIntelligence = compact.activeLeadIntelligence;
+      context.activeLeadDecision = compact.activeLeadDecision;
+      context.activeLeadNextAction = compact.activeLeadNextAction;
+      context.activeLeadCustomerIntelligence = compact.activeLeadCustomerIntelligence;
+    }
     res.json({ success: true, context });
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: err.message } });
@@ -297,6 +334,7 @@ router.post('/chat', (req, res) => {
     const unifiedContext = contextBuilder.buildPolarisContext({
       page: pageContext.page || 'dashboard',
       leadId: pageContext.leadId || null,
+      sessionId: pageContext.sessionId || null,
       userMessage: message,
       correlationId: req.correlationId || 'unknown',
     });
@@ -388,6 +426,7 @@ router.get('/unified-context', (req, res) => {
     const context = contextBuilder.buildPolarisContext({
       page: req.query.page || 'dashboard',
       leadId: req.query.leadId || null,
+      sessionId: req.query.sessionId || null,
     });
     res.json({ success: true, context });
   } catch (err) {

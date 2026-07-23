@@ -330,6 +330,7 @@
   <script src="/js/theme.js"></script>
   <script src="/js/event-bus.js"></script>
   <script src="/js/app-store.js"></script>
+  <script src="/js/demo-session.js"></script>
   <script src="/js/simulator.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
@@ -381,6 +382,7 @@
         var token = localStorage.getItem('token');
         if (token) opts.headers['Authorization'] = 'Bearer ' + token;
         if (opts.body) opts.headers['Content-Type'] = 'application/json';
+        if (window.NorthStarDemoSession) url = window.NorthStarDemoSession.appendToUrl(url);
         return fetch(url, opts);
       }
 
@@ -445,7 +447,7 @@
         simStatus.style.display = 'none';
 
         try {
-          if (typeof genCall !== 'function') {
+          if (typeof window.genCallDraft !== 'function') {
             simBtn.disabled = false;
             simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
             simStatus.style.display = '';
@@ -455,7 +457,7 @@
           }
 
           console.log('[CC] Simulating lead...');
-          var lead = genCall();
+          var lead = window.genCallDraft();
           var leadName = lead && lead.caller ? lead.caller : 'Customer';
           var leadValue = lead && lead.avgPrice ? lead.avgPrice : 0;
 
@@ -471,7 +473,8 @@
               email: lead.email || '',
               service: lead.service || 'General',
               description: lead.description || '',
-              estimatedValue: leadValue
+              estimatedValue: leadValue,
+              sessionId: window.SIM_SESSION_ID
             })
           }).then(function(resp) {
             if (!resp.ok) {
@@ -484,6 +487,9 @@
             simStatus.style.display = '';
             simStatus.style.color = 'var(--success)';
             simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated) — Synced to all pages';
+            var canonicalPrice = result && result.polaris ? result.polaris.customerFacingPrice : null;
+            var priceText = canonicalPrice == null ? 'assessment required' : '$' + canonicalPrice.toLocaleString() + ' estimated';
+            simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> (' + priceText + ') - Synced to this demo session';
             console.log('[CC] Simulation complete:', result && result.ids);
             render();
             simBtn.disabled = false;
@@ -608,7 +614,7 @@
             {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:50},
             {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:tj>0?Math.round(cj/tj*100):0}
           ];
-          el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+['var(--info)','var(--warning)','var(--brand-500)','var(--success)','var(--success)'][i]+'"></div></div></div>';}).join('')+'</div>';
+          el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:var(--neutral-400)"></div></div></div>';}).join('')+'</div>';
         }
 
         function renderCustomers(customers) {

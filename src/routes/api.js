@@ -64,6 +64,16 @@ router.get('/health', (req, res) => {
 });
 
 /**
+ * GET /api/version
+ * Minimal production build identifier for deployed-SHA verification.
+ */
+router.get('/version', (req, res) => {
+  res.json({
+    buildSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
+  });
+});
+
+/**
  * POST /api/retell/webhook
  * Receive call events from Retell AI. PUBLIC — external webhook.
  */

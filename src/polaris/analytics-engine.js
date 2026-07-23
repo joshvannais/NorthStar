@@ -24,17 +24,12 @@
  */
 
 const store = require('./store');
-const sessionReg = require('../routes/simulation/session-registry');
+const demoScope = require('../services/demoRecordScope');
+const sessionScopedOpportunity = require('../services/sessionScopedOpportunity');
 
 // ── Session-aware filtering ──
 function _filterBySession(records, sessionId) {
-  if (!sessionId) return records;
-  var allSessionIds = sessionReg.getAllSessionRecordIds();
-  return records.filter(function(r) {
-    if (!r || !r.id) return true;
-    if (!allSessionIds.has(r.id)) return true;
-    return sessionReg.isInSession(r.id, sessionId);
-  });
+  return demoScope.filterRecords(records, sessionId);
 }
 
 // ── In-memory report cache ──
@@ -103,33 +98,38 @@ function generateKPIs(sessionId) {
   kpis.averageInvoiceValue = _safe(function () { return fin.getFinancialMetrics().averageInvoiceValue; }, 0);
   kpis.collectionRate = _safe(function () { return fin.getFinancialMetrics().collectionRate; }, 0);
 
-  // Opportunity KPIs — session-filtered when sessionId provided
-    var opp = _getOppEngine();
-    if (sessionId) {
-      var allOpps = _safe(function () { return opp.listOpportunities({ includeArchived: false }); }, { opportunities: [], total: 0 });
-      var filteredOpps = _filterBySession(allOpps.opportunities || [], sessionId);
-      var activeOpps = filteredOpps.filter(function(o) { return o.status === 'open'; });
-      kpis.totalDeals = filteredOpps.length;
-      kpis.activeDeals = activeOpps.length;
-      kpis.wonDeals = filteredOpps.filter(function(o) { return o.stage === 'closed-won'; }).length;
-      kpis.winRate = kpis.totalDeals > 0 ? Math.round(kpis.wonDeals / kpis.totalDeals * 100) : 0;
-      kpis.pipelineValue = activeOpps.reduce(function(s, o) { return s + (parseFloat(o.estimatedValue) || 0); }, 0);
-      kpis.weightedPipelineValue = activeOpps.reduce(function(s, o) { return s + (parseFloat(o.expectedRevenue) || 0); }, 0);
-      kpis.averageOpportunityValue = activeOpps.length > 0 ? Math.round(kpis.pipelineValue / activeOpps.length) : 0;
-    } else {
-      var oppMetrics = _safe(function () { return opp.getPipelineMetrics(); }, {});
-      kpis.totalDeals = oppMetrics.totalDeals || 0;
-      kpis.activeDeals = oppMetrics.activeDeals || 0;
-      kpis.wonDeals = oppMetrics.wonDeals || 0;
-      kpis.winRate = oppMetrics.winRate || 0;
-      kpis.pipelineValue = oppMetrics.totalPipelineValue || 0;
-      kpis.weightedPipelineValue = oppMetrics.weightedPipelineValue || 0;
-      kpis.averageOpportunityValue = oppMetrics.averageOpportunityValue || 0;
-    }
+  // Opportunity KPIs — real records plus the requested demo session.
+  var opp = _getOppEngine();
+  var allOpps = _safe(function () {
+    return opp.listOpportunities({ includeArchived: false });
+  }, { opportunities: [], total: 0 });
+  var filteredOpps = _filterBySession(allOpps.opportunities || [], sessionId);
+  var activeOpps = filteredOpps.filter(function (o) { return o.status === 'open'; });
+  var wonOpps = filteredOpps.filter(function (o) { return o.status === 'won'; });
+  var lostOpps = filteredOpps.filter(function (o) { return o.status === 'lost'; });
+  var closedCount = wonOpps.length + lostOpps.length;
+  kpis.totalDeals = filteredOpps.length;
+  kpis.activeDeals = activeOpps.length;
+  kpis.wonDeals = wonOpps.length;
+  kpis.winRate = closedCount > 0 ? Math.round((wonOpps.length / closedCount) * 10000) / 100 : 0;
+  kpis.pipelineValue = activeOpps.reduce(function (sum, opportunity) {
+    return sum + (parseFloat(opportunity.estimatedValue) || 0);
+  }, 0);
+  kpis.weightedPipelineValue = activeOpps.reduce(function (sum, opportunity) {
+    return sum + (parseFloat(opportunity.expectedRevenue) || 0);
+  }, 0);
+  kpis.averageOpportunityValue = activeOpps.length > 0
+    ? Math.round((kpis.pipelineValue / activeOpps.length) * 100) / 100 : 0;
 
-    // Estimate-based pipeline indicators (NOT revenue — future potential)
-    kpis.pendingEstimates = _safe(function () { return fin.getFinancialMetrics().pendingEstimateCount; }, 0);
-    kpis.estimatedPipelineValue = _safe(function () { return fin.getFinancialMetrics().pendingEstimateTotal; }, 0);
+  // Estimate-based pipeline indicators (NOT revenue — future potential)
+  var allEstimates = _safe(function () { return fin.listEstimates({}); }, { estimates: [], total: 0 });
+  var visibleEstimates = _filterBySession(allEstimates.estimates || [], sessionId).filter(function (estimate) {
+    return estimate.status !== 'archived' && estimate.status !== 'rejected';
+  });
+  kpis.pendingEstimates = visibleEstimates.length;
+  kpis.estimatedPipelineValue = visibleEstimates.reduce(function (sum, estimate) {
+    return sum + (Number(estimate.total) || 0);
+  }, 0);
 
   // Workflow KPIs
   var wf = _getWfEngine();
@@ -174,16 +174,14 @@ function generateKPIs(sessionId) {
   kpis.healthMessage = healthResult.message;
   kpis.cashFlow = kpis.totalRevenue - kpis.totalLaborCost;
 
-  // Customer KPIs — session-filtered when sessionId provided
+  // Customer KPIs — list results omit metadata, so resolve full records first.
   var cust = _getCustomerEngine();
-  if (sessionId) {
-    var allCusts = _safe(function () { return cust.listCustomers(); }, { customers: [], total: 0 });
-    var filteredCusts = _filterBySession(allCusts.customers || [], sessionId);
-    kpis.totalCustomers = filteredCusts.length;
-  } else {
-    var custList = _safe(function () { return cust.listCustomers(); }, { customers: [], total: 0 });
-    kpis.totalCustomers = custList.total || 0;
-  }
+  var allCusts = _safe(function () { return cust.listCustomers(); }, { customers: [], total: 0 });
+  var customerRecords = (allCusts.customers || []).map(function (customer) {
+    return _safe(function () { return cust.getCustomer(customer.id); }, customer);
+  });
+  var filteredCusts = _filterBySession(customerRecords, sessionId);
+  kpis.totalCustomers = filteredCusts.length;
 
   _lastRefresh = _now();
   return { kpis: kpis, calculatedAt: _lastRefresh };
@@ -316,56 +314,67 @@ function generateExecutiveSummary(sessionId) {
   };
 }
 
-function generateFinancialDashboard() {
+function generateFinancialDashboard(sessionId) {
   var fin = _getFinEngine();
+  var metrics = _safe(function () { return fin.getFinancialMetrics(); }, {});
+  var estimates = _safe(function () { return fin.listEstimates(); }, { estimates: [] });
+  var visiblePending = _filterBySession(estimates.estimates || [], sessionId).filter(function (estimate) {
+    return estimate.status !== 'archived' && estimate.status !== 'rejected';
+  });
+  metrics.pendingEstimateCount = visiblePending.length;
+  metrics.pendingEstimateTotal = Math.round(visiblePending.reduce(function (sum, estimate) {
+    return sum + (Number(estimate.total) || 0);
+  }, 0) * 100) / 100;
   return {
     title: 'Financial Dashboard',
-    metrics: _safe(function () { return fin.getFinancialMetrics(); }, {}),
+    metrics: metrics,
     profitability: _safe(function () { return fin.calculateProfitability(); }, {}),
     forecast: _safe(function () { return fin.calculateRevenueForecast(3); }, {}),
     generatedAt: _now(),
   };
 }
 
-function generateSalesDashboard() {
+function generateSalesDashboard(sessionId) {
   var opp = _getOppEngine();
-  var pipeline = _safe(function () { return opp.getPipeline(); }, {});
-  var metrics = _safe(function () { return opp.getPipelineMetrics(); }, {});
-  var stages = _safe(function () { return opp.getStageTotals(); }, {});
+  var snapshot = _safe(function () {
+    return sessionScopedOpportunity.buildSnapshot(opp, sessionId);
+  }, { pipeline: {}, metrics: {}, stages: {} });
 
   return {
     title: 'Sales Dashboard',
-    pipeline: pipeline,
-    metrics: metrics,
-    stageTotals: stages,
+    pipeline: snapshot.pipeline,
+    metrics: snapshot.metrics,
+    stageTotals: snapshot.stages,
     generatedAt: _now(),
   };
 }
 
-function generateCustomerDashboard() {
+function generateCustomerDashboard(sessionId) {
   var cust = _getCustomerEngine();
   var all = _safe(function () { return cust.listCustomers(); }, { customers: [], total: 0 });
+  var customers = _filterBySession((all.customers || []).map(function (customer) {
+    return _safe(function () { return cust.getCustomer(customer.id); }, customer);
+  }), sessionId);
 
   var activeCustomers = 0;
-  if (all.customers) {
-    all.customers.forEach(function (c) { if (c.status === 'active') activeCustomers++; });
-  }
+  customers.forEach(function (customer) {
+    if (customer.status === 'active') activeCustomers++;
+  });
 
   var fin = _getFinEngine();
   var totalRevenue = 0;
-  if (all.customers) {
-    all.customers.forEach(function (c) {
-      var cr = _safe(function () { return fin.calculateCustomerRevenue(c.id); }, {});
-      totalRevenue += cr.totalRevenue || 0;
-    });
-  }
+  customers.forEach(function (customer) {
+    var cr = _safe(function () { return fin.calculateCustomerRevenue(customer.id); }, {});
+    totalRevenue += cr.totalRevenue || 0;
+  });
 
   return {
     title: 'Customer Dashboard',
-    totalCustomers: all.total || 0,
+    totalCustomers: customers.length,
     activeCustomers: activeCustomers,
     totalRevenue: Math.round(totalRevenue * 100) / 100,
-    avgRevenuePerCustomer: all.total > 0 ? Math.round((totalRevenue / all.total) * 100) / 100 : 0,
+    avgRevenuePerCustomer: customers.length > 0
+      ? Math.round((totalRevenue / customers.length) * 100) / 100 : 0,
     generatedAt: _now(),
   };
 }
@@ -449,12 +458,14 @@ function generateProfitReport() {
   };
 }
 
-function generateForecast() {
+function generateForecast(sessionId) {
   var fin = _getFinEngine();
   var opp = _getOppEngine();
 
   var revenueForecast = _safe(function () { return fin.calculateRevenueForecast(12); }, {});
-  var pipelineForecast = _safe(function () { return opp.calculateForecastRevenue(); }, {});
+  var pipelineForecast = _safe(function () {
+    return sessionScopedOpportunity.buildSnapshot(opp, sessionId).forecast;
+  }, {});
 
   return {
     title: 'Company Forecast',
@@ -575,9 +586,9 @@ function generateRetentionMetrics() {
   };
 }
 
-function generateAlerts() {
+function generateAlerts(sessionId) {
   var alerts = [];
-  var kpis = generateKPIs().kpis;
+  var kpis = generateKPIs(sessionId).kpis;
 
   // Financial alerts — only if actual invoicing activity exists
   if (kpis.totalInvoiced > 0) {
@@ -650,21 +661,21 @@ function generateAlerts() {
 
 // ── Generic Access ──
 
-function getAnalytics(category) {
+function getAnalytics(category, sessionId) {
   switch (category) {
-    case 'executive': return generateExecutiveSummary();
-    case 'financial': return generateFinancialDashboard();
-    case 'sales': return generateSalesDashboard();
-    case 'customer': return generateCustomerDashboard();
+    case 'executive': return generateExecutiveSummary(sessionId);
+    case 'financial': return generateFinancialDashboard(sessionId);
+    case 'sales': return generateSalesDashboard(sessionId);
+    case 'customer': return generateCustomerDashboard(sessionId);
     case 'crew': return generateCrewDashboard();
     case 'asset': return generateAssetDashboard();
     case 'job': return generateJobDashboard();
     case 'workflow': return generateWorkflowDashboard();
     case 'operations': return generateOperationsDashboard();
-    case 'kpis': return generateKPIs();
-    case 'alerts': return generateAlerts();
-    case 'forecast': return generateForecast();
-    default: return generateDashboard();
+    case 'kpis': return generateKPIs(sessionId);
+    case 'alerts': return generateAlerts(sessionId);
+    case 'forecast': return generateForecast(sessionId);
+    default: return generateDashboard(sessionId);
   }
 }
 

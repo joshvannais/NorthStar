@@ -247,6 +247,7 @@ function createEstimate(data) {
     statusDisplayName: ESTIMATE_STATUSES[status].displayName,
     validUntil: data.validUntil || null,
     notes: data.notes || null,
+    metadata: data.metadata ? Object.assign({}, data.metadata) : {},
     approvedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -257,7 +258,7 @@ function createEstimate(data) {
 
   _recordActivity(data.customerId, 'Estimate Created: ' + data.title,
     'Estimate #' + id + ' created for $' + totals.total.toFixed(2),
-    { estimateId: id, total: totals.total, status: status });
+    Object.assign({}, data.metadata || {}, { estimateId: id, total: totals.total, status: status }));
 
   return {
     id: est.id,

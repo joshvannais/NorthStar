@@ -6,6 +6,10 @@
  * No UI changes. Augments existing data streams.
  */
 window.PolarisM13Bridge = (function() {
+  function scopedUrl(url) {
+    return window.NorthStarDemoSession ? window.NorthStarDemoSession.appendToUrl(url) : url;
+  }
+
   /**
    * Fetch customer intelligence data.
    * @param {string} customerId
@@ -15,7 +19,7 @@ window.PolarisM13Bridge = (function() {
     return new Promise(function(resolve) {
       if (!customerId) { resolve(null); return; }
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', '/api/v1/customers/' + encodeURIComponent(customerId) + '/health', true);
+      xhr.open('GET', scopedUrl('/api/v1/customers/' + encodeURIComponent(customerId) + '/health'), true);
       var token = localStorage.getItem('token');
       if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onload = function() {
@@ -38,7 +42,7 @@ window.PolarisM13Bridge = (function() {
     return new Promise(function(resolve) {
       if (!customerId) { resolve(null); return; }
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', '/api/v1/communications/intelligence/' + encodeURIComponent(customerId), true);
+      xhr.open('GET', scopedUrl('/api/v1/communications/intelligence/' + encodeURIComponent(customerId)), true);
       var token = localStorage.getItem('token');
       if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onload = function() {
@@ -75,7 +79,7 @@ window.PolarisM13Bridge = (function() {
       if (lead.assetIds && Array.isArray(lead.assetIds)) body.assetIds = lead.assetIds;
 
       var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/v1/polaris/intelligence', true);
+      xhr.open('POST', scopedUrl('/api/v1/polaris/intelligence'), true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       var token = localStorage.getItem('token');
       if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);

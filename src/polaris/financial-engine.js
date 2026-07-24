@@ -474,6 +474,7 @@ function createInvoice(data) {
     paidDate: null,
     sentDate: null,
     notes: data.notes || null,
+    metadata: data.metadata ? Object.assign({}, data.metadata) : {},
     createdAt: now,
     updatedAt: now,
   };
@@ -650,6 +651,9 @@ function recordPayment(data) {
     method: method,
     methodDisplayName: PAYMENT_METHODS[method].displayName,
     reference: data.reference || null,
+    metadata: data.metadata
+      ? Object.assign({}, data.metadata)
+      : (inv.metadata ? Object.assign({}, inv.metadata) : {}),
     status: 'completed',
     receivedAt: now,
     createdAt: now,

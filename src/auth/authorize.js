@@ -50,6 +50,12 @@ const contractorPermissions = {
   },
   organization: {
     delete: ['owner']
+  },
+  polaris: {
+    view: ['owner', 'admin', 'member', 'viewer'],
+    mutate: ['owner', 'admin', 'member'],
+    delete: ['owner', 'admin'],
+    configure: ['owner', 'admin']
   }
 };
 

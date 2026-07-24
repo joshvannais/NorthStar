@@ -266,7 +266,7 @@ describe('browser request propagation', function () {
     return window;
   }
 
-  test('AppStore and Calendar merge only real tenant records plus the active session partition', async function () {
+  test('AppStore may hold server records but Calendar supplements only the active simulation partition', async function () {
     const storage = new Map();
     storage.set('northstar_calls', JSON.stringify([
       { id: 'legacy-stale', source: 'simulation', simulationSessionId: 'old-session', outcome: 'appointment-set' },
@@ -315,7 +315,7 @@ describe('browser request propagation', function () {
       parseFloat: parseFloat,
     });
     expect(window.syncCalendarFromAppStore().map(function (event) { return event.leadId; }).sort())
-      .toEqual(['session-a-lead', 'tenant-real']);
+      .toEqual(['session-a-lead']);
   });
 
   test('reload rotation cannot resurrect the prior session cache', async function () {
@@ -358,7 +358,11 @@ describe('browser request propagation', function () {
       localStorage: { getItem: function () { return 'test-token'; } },
       fetch: function (url, options) {
         requests.push({ url: url, options: options });
-        return Promise.resolve({ json: function () { return Promise.resolve({ events: [] }); } });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: function () { return Promise.resolve({ events: [] }); },
+        });
       },
       console: console,
       Object: Object,
@@ -416,10 +420,13 @@ describe('browser request propagation', function () {
     expect(requests[0].headers.Authorization).toBe('Bearer test-token');
 
     const leadHtml = fs.readFileSync(path.join(__dirname, '../../public/dashboard/lead.html'), 'utf8');
-    expect(leadHtml).toContain('PolarisM13Bridge.fetchLeadIntelligence(leadId)');
-    expect(leadHtml).not.toContain("fetch('/api/v1/leads/' + encodeURIComponent(leadId) + '/intelligence')");
-    expect(leadHtml).toContain('API.getLead(leadId)');
-    expect(leadHtml).not.toContain('AppStore.getLead(leadId)');
+    const leadController = fs.readFileSync(path.join(__dirname, '../../public/js/lead-detail.js'), 'utf8');
+    expect(leadHtml).toContain('<script src="/js/lead-detail.js"></script>');
+    expect(leadHtml).not.toContain('<script src="/js/polaris-m13-bridge.js"></script>');
+    expect(leadController).toContain('window.API.getLead(leadId)');
+    expect(leadController).not.toContain('window.AppStore');
+    expect(leadController).not.toContain('AppStore.getLead');
+    expect(leadController).not.toContain('PolarisM13Bridge');
   });
 
   test('initial lead-detail API request carries the active session and preserves a server 404', async function () {

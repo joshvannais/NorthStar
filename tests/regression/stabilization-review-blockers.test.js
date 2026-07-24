@@ -38,6 +38,9 @@ describe('independent-review stabilization blockers', function () {
     test.each([
       ['Water is rising and the room is flooding right now.', 'active flooding'],
       ['The pipe burst and it is gushing everywhere.', 'uncontrolled leak'],
+      ['There is an uncontrolled leak right now.', 'uncontrolled leak'],
+      ["We can't stop the leak.", 'uncontrolled leak'],
+      ['We cannot stop the leak.', 'uncontrolled leak'],
       ['The outlet is sparking when I touch the switch.', 'electrical sparking'],
       ['I smell something burning and there is smoke.', 'burning or smoke'],
       ['This is unsafe right now and someone could be in danger.', 'immediate danger'],
@@ -64,6 +67,51 @@ describe('independent-review stabilization blockers', function () {
       expect(pipeline.detectEmergencyEvidence(transcript)).toMatchObject({
         isEmergency: true,
         signal: signal,
+      });
+    });
+
+    test.each([
+      ["The outlet isn't sparking."],
+      ['The outlet isn’t sparking.'],
+      ["The basement isn't flooding."],
+      ['The basement isn’t flooding.'],
+      ["The outlets aren't sparking."],
+      ["The outlet wasn't sparking."],
+      ["The basement wasn't flooding."],
+      ["The outlets weren't sparking."],
+      ['It was sparking yesterday but was repaired.'],
+      ['This is not an emergency.'],
+      ['It is a slow drip and next-day scheduling is fine.'],
+    ])('handles local contractions and historical or slow conditions: %s', function (statement) {
+      expect(actionFor(statement).evidence).toEqual({
+        isEmergency: false,
+        signal: null,
+        evidence: null,
+      });
+    });
+
+    test.each(['customer', 'Customer', 'CUSTOMER'])(
+      'preserves exact affirmative clause for %s speaker labels',
+      function (speaker) {
+        const transcript = [
+          { speaker: 'agent', text: 'Emergency, smoke, flooding, sparking, leak, and danger?' },
+          { speaker: speaker, text: 'No smoke, but the outlet is sparking right now.' },
+        ];
+        expect(pipeline.detectEmergencyEvidence(transcript)).toEqual({
+          isEmergency: true,
+          signal: 'electrical sparking',
+          evidence: 'the outlet is sparking right now',
+        });
+      }
+    );
+
+    test('resolved contrast clause does not suppress a current flooding clause', function () {
+      expect(pipeline.detectEmergencyEvidence([
+        { speaker: 'customer', text: 'The leak stopped briefly, but the basement is flooding again.' },
+      ])).toEqual({
+        isEmergency: true,
+        signal: 'active flooding',
+        evidence: 'the basement is flooding again',
       });
     });
 

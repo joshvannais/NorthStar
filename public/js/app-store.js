@@ -119,11 +119,25 @@ window.AppStore = (function() {
     return sessionId ? 'northstar_calls:' + sessionId : null;
   }
 
+  function removeInactiveSessionEnvelopes(activeKey) {
+    try {
+      var staleKeys = [];
+      for (var i = 0; i < sessionStorage.length; i++) {
+        var candidate = sessionStorage.key(i);
+        if (candidate && candidate.indexOf('northstar_calls:') === 0 && candidate !== activeKey) {
+          staleKeys.push(candidate);
+        }
+      }
+      staleKeys.forEach(function(key) { sessionStorage.removeItem(key); });
+    } catch (_error) {}
+  }
+
   function saveToSession() {
     try {
       var sessionId = activeSessionId();
       var key = sessionStorageKey();
       if (!sessionId || !key) return;
+      removeInactiveSessionEnvelopes(key);
       var sessionLeads = state.leads.filter(function(lead) {
         return isSimulationLead(lead) && leadSessionId(lead) === sessionId;
       });
@@ -142,6 +156,7 @@ window.AppStore = (function() {
       const key = sessionStorageKey();
       if (!sessionId || !key) return [];
       sessionStorage.removeItem('northstar_calls');
+      removeInactiveSessionEnvelopes(key);
       const saved = sessionStorage.getItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);

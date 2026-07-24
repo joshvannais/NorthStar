@@ -15,6 +15,7 @@ class CalendarState {
     this.events = [];
     this.selectedDate = null;
     this.selectedEvent = null;
+    this.serverState = { kind: 'loading', status: null };
     this.listeners = [];
   }
 
@@ -94,6 +95,10 @@ class CalendarState {
 
   // Get live leads from AppStore (single source of truth)
   getLiveLeads() {
+    // Browser state is never an authorization source. It may supplement a
+    // successful authoritative response, but is unavailable to every loading
+    // and rejection state.
+    if (!this.serverState || this.serverState.kind !== 'ready') return [];
     try {
       if (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) {
         return window.AppStore.getLeads();
@@ -358,6 +363,20 @@ class CalendarRenderer {
   // ═══════════════════════════════════════════════════════════════
   renderEventList() {
     if (!this.eventList) return;
+    if (this.state.serverState && this.state.serverState.kind !== 'ready') {
+      var stateMessages = {
+        loading: 'Loading calendar…',
+        authentication_required: 'Sign in again to view your calendar.',
+        access_denied: 'Calendar access is not available for this account.',
+        not_found: 'Calendar data is unavailable.',
+        unavailable: 'Calendar is temporarily unavailable. Please try again.',
+      };
+      var stateMessage = stateMessages[this.state.serverState.kind] || stateMessages.unavailable;
+      this.eventList.innerHTML = '<div class="cal-event-list-header">Calendar Status</div>' +
+        '<div class="cal-event-list-empty" data-calendar-server-state="' +
+        this.state.serverState.kind + '">' + stateMessage + '</div>';
+      return;
+    }
     const todayStr = this.state._formatDate(new Date());
     const todayEvents = this.state.events.filter(e => e.date === todayStr);
     let html = `<div class="cal-event-list-header">Today\u2019s Schedule</div>`;
@@ -478,36 +497,75 @@ class CalendarData {
         return window.NorthStarDemoSession ? window.NorthStarDemoSession.appendToUrl(url) : url;
       }
 
+      _requestError(response) {
+        const error = new Error('Calendar request rejected');
+        error.name = 'CalendarRequestError';
+        error.status = response && response.status ? response.status : 0;
+        return error;
+      }
+
       async fetchEvents() {
-        try { const r = await fetch(this._url('/events'), { headers: this._authHeaders() }); const d = await r.json(); return d.events || []; }
-        catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); return []; }
+        const response = await fetch(this._url('/events'), { headers: this._authHeaders() });
+        if (!response.ok) throw this._requestError(response);
+        const data = await response.json();
+        return data && Array.isArray(data.events) ? data.events : [];
       }
 
       async createEvent(data) {
-        try { const r = await fetch(this._url('/events'), { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify(data) }); const d = await r.json(); return d.event; }
-        catch(e) { console.warn('[CalendarData] createEvent:', e.message); return null; }
+        const response = await fetch(this._url('/events'), { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify(data) });
+        if (!response.ok) throw this._requestError(response);
+        const result = await response.json();
+        return result.event;
       }
 
       async updateEvent(id, data) {
-        try { const r = await fetch(this._url('/events/' + encodeURIComponent(id)), { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify(data) }); const d = await r.json(); return d.event; }
-        catch(e) { console.warn('[CalendarData] updateEvent:', e.message); return null; }
+        const response = await fetch(this._url('/events/' + encodeURIComponent(id)), { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify(data) });
+        if (!response.ok) throw this._requestError(response);
+        const result = await response.json();
+        return result.event;
       }
 
       async deleteEvent(id) {
-        try { const r = await fetch(this._url('/events/' + encodeURIComponent(id)), { method:'DELETE', headers: this._authHeaders() }); return r.ok; }
-        catch(e) { console.warn('[CalendarData] deleteEvent:', e.message); return false; }
+        const response = await fetch(this._url('/events/' + encodeURIComponent(id)), { method:'DELETE', headers: this._authHeaders() });
+        if (!response.ok) throw this._requestError(response);
+        return true;
       }
 
       async exportICS() {
-        try { const r = await fetch(this._url('/export/ics'), { headers: this._authHeaders() }); const blob = await r.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'calendar.ics'; a.click(); URL.revokeObjectURL(url); }
-        catch(e) { console.warn('[CalendarData] exportICS:', e.message); }
+        const response = await fetch(this._url('/export/ics'), { headers: this._authHeaders() });
+        if (!response.ok) throw this._requestError(response);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'calendar.ics';
+        a.click();
+        URL.revokeObjectURL(url);
       }
 
       async importICS(icsContent) {
-        try { const r = await fetch(this._url('/import/ics'), { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify({icsContent}) }); return await r.json(); }
-        catch(e) { console.warn('[CalendarData] importICS:', e.message); return null; }
+        const response = await fetch(this._url('/import/ics'), { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify({icsContent}) });
+        if (!response.ok) throw this._requestError(response);
+        return response.json();
       }
     }
+
+function calendarServerStateForError(error) {
+  const status = error && Number(error.status);
+  return {
+    kind: status === 401 ? 'authentication_required'
+      : status === 403 ? 'access_denied'
+      : status === 404 ? 'not_found'
+      : 'unavailable',
+    status: status || null,
+  };
+}
+
+function handleCalendarMutationError(error) {
+  calState.events = [];
+  calState.serverState = calendarServerStateForError(error);
+  calRenderer.render();
+}
 
 // ================================================================
 // CalendarModal
@@ -599,18 +657,24 @@ class CalendarModal {
   saveEvent() {
     const data = this._getFormData();
     if (!data) return;
-    window.calData.createEvent(data).then(() => { window.calModal.close(); window.refreshCalendar(); });
+    window.calData.createEvent(data)
+      .then(() => { window.calModal.close(); window.refreshCalendar(); })
+      .catch(handleCalendarMutationError);
   }
 
   saveEdit(id) {
     const data = this._getFormData();
     if (!data) return;
-    window.calData.updateEvent(id, data).then(() => { window.calModal.close(); window.refreshCalendar(); });
+    window.calData.updateEvent(id, data)
+      .then(() => { window.calModal.close(); window.refreshCalendar(); })
+      .catch(handleCalendarMutationError);
   }
 
   deleteEvent(id) {
     if (!confirm('Delete this event?')) return;
-    window.calData.deleteEvent(id).then(() => { window.calModal.close(); window.refreshCalendar(); });
+    window.calData.deleteEvent(id)
+      .then(() => { window.calModal.close(); window.refreshCalendar(); })
+      .catch(handleCalendarMutationError);
   }
 }
 
@@ -640,7 +704,7 @@ window.syncCalendarFromAppStore = function() {
     var simulated = metadata.recordScope === 'simulation' || metadata.source === 'simulation' ||
       (lead && (lead.recordScope === 'simulation' || lead.source === 'simulation')) ||
       Boolean(sessionId);
-    return !simulated || Boolean(activeSessionId && sessionId === activeSessionId);
+    return Boolean(simulated && activeSessionId && sessionId === activeSessionId);
   });
   // Generate events from leads that have appointment-ready outcomes
   // Also use all leads with avgPrice so pipeline values are complete
@@ -678,15 +742,15 @@ window.syncCalendarFromAppStore = function() {
 
 window.refreshCalendar = async function() {
   try {
-    const [apiEvents, leadEvents] = await Promise.all([
-      calData.fetchEvents().catch(() => []),
-      Promise.resolve(window.syncCalendarFromAppStore())
-    ]);
+    const apiEvents = await calData.fetchEvents();
+    calState.serverState = { kind: 'ready', status: 200 };
+    const leadEvents = window.syncCalendarFromAppStore();
     const existingIds = new Set(apiEvents.map(e => e.id));
     const newLeadEvents = leadEvents.filter(e => !existingIds.has(e.id));
     calState.events = [...apiEvents, ...newLeadEvents];
   } catch(e) {
-    calState.events = window.syncCalendarFromAppStore();
+    calState.events = [];
+    calState.serverState = calendarServerStateForError(e);
   }
   calRenderer.render();
 };

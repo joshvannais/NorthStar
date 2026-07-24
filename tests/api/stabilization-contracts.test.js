@@ -919,9 +919,10 @@ describe('stabilization public API contracts', function () {
     injectFailure();
     const response = await postSimulation('failure-' + stage);
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({
+    expect(response.body).toMatchObject({
       error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' },
     });
+    expect(response.body.error.requestId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(JSON.stringify(response.body)).not.toContain('forced');
   });
 
@@ -937,9 +938,10 @@ describe('stabilization public API contracts', function () {
     try {
       const response = await postSimulation('failure-postgres');
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' },
       });
+      expect(response.body.error.requestId).toMatch(/^[0-9a-f-]{36}$/i);
       expect(JSON.stringify(response.body)).not.toContain('PostgreSQL');
     } finally {
       db.query.mockImplementation(original);
@@ -1038,12 +1040,13 @@ describe('stabilization public API contracts', function () {
     try {
       const response = await postSimulation('preflight-unavailable');
       expect(response.status).toBe(503);
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         error: {
           code: 'persistence_unavailable',
           message: 'Required persistence is temporarily unavailable.',
         },
       });
+      expect(response.body.error.requestId).toMatch(/^[0-9a-f-]{36}$/i);
       expect(customersEngine.createCustomer).not.toHaveBeenCalled();
       expect(communicationsEngine.recordCommunication).not.toHaveBeenCalled();
       expect(opportunitiesEngine.createOpportunity).not.toHaveBeenCalled();

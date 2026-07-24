@@ -25,6 +25,7 @@ const coach = require('../coach/engine');
 const brief = require('../coach/brief');
 const { getOrCompute, loadAllSnapshots, computePeriodSummary } = require('../analytics/dailySnapshots');
 const { seedDemoData } = require('../analytics/seeder');
+const { createAnalyticsIdentity, cacheKey: analyticsCacheKey } = require('../analytics/cacheIdentity');
 const demoScope = require('../services/demoRecordScope');
 
 const router = express.Router();
@@ -500,51 +501,50 @@ router.get('/dashboard/status', requireAuth, requireOrgMembership, requirePermis
  */
 router.get('/dashboard/overview', requireAuth, requireOrgMembership, requirePermission('dashboard', 'view'), async (req, res, next) => {
   try {
-    const cacheKey = cache.buildKey('dashboard:overview', req.orgId);
-    const cached = await cache.get(cacheKey);
-    if (cached) return res.json(cached);
+    const identity = createAnalyticsIdentity(req, 'dashboard:overview', {
+      periods: ['current_day', 'current_week', 'current_month'],
+      query: req.query
+    });
+    const key = analyticsCacheKey(cache, 'dashboard:overview', identity);
+    const overview = await cache.wrap(key, async function () {
+      const leads = demoScope.filterTenantRecords(getAllLeads(), demoScope.createAccessContext(req));
+      const today = new Date().toISOString().slice(0, 10);
 
-    const leads = demoScope.filterTenantRecords(getAllLeads(), demoScope.createAccessContext(req));
-    const today = new Date().toISOString().slice(0, 10);
+      const todaySnap = await getOrCompute(identity, today, leads);
+      const allSnaps = loadAllSnapshots(identity);
+      const todaySummary = computePeriodSummary(req.orgId, 'current_day', allSnaps.length > 0 ? allSnaps : [todaySnap]);
+      const weekSummary = computePeriodSummary(req.orgId, 'current_week', allSnaps);
+      const monthSummary = computePeriodSummary(req.orgId, 'current_month', allSnaps);
 
-    // Get or compute snapshots for today, last 7 days, last 30 days
-    const todaySnap = await getOrCompute(req.orgId, today, leads);
-    const allSnaps = loadAllSnapshots(req.orgId);
-
-    const todaySummary = computePeriodSummary(req.orgId, 'current_day', allSnaps.length > 0 ? allSnaps : [todaySnap]);
-    const weekSummary = computePeriodSummary(req.orgId, 'current_week', allSnaps);
-    const monthSummary = computePeriodSummary(req.orgId, 'current_month', allSnaps);
-
-    const overview = {
-      today: {
-        callsReceived: todaySummary.callsReceived,
-        callsAnswered: todaySummary.callsAnswered,
-        leadsCaptured: todaySummary.leadsCaptured,
-        appointmentsScheduled: todaySummary.appointmentsScheduled,
-        missedCallsSaved: todaySummary.missedCallsSaved,
-        estimatedRevenue: todaySummary.estimatedRevenue,
-        avgCallLength: todaySummary.totalCallDurationSecs > 0 && todaySummary.callsReceived > 0
-          ? Math.round(todaySummary.totalCallDurationSecs / todaySummary.callsReceived) : 0
-      },
-      thisWeek: {
-        callsReceived: weekSummary.callsReceived,
-        leadsCaptured: weekSummary.leadsCaptured,
-        appointmentsScheduled: weekSummary.appointmentsScheduled,
-        revenueWon: weekSummary.revenueWon,
-        estimatedRevenue: weekSummary.estimatedRevenue,
-        conversionRate: weekSummary.conversionRate
-      },
-      thisMonth: {
-        callsReceived: monthSummary.callsReceived,
-        leadsCaptured: monthSummary.leadsCaptured,
-        appointmentsScheduled: monthSummary.appointmentsScheduled,
-        revenueWon: monthSummary.revenueWon,
-        estimatedRevenue: monthSummary.estimatedRevenue,
-        conversionRate: monthSummary.conversionRate
-      }
-    };
-
-    await cache.set(cacheKey, overview, 120);
+      return {
+        today: {
+          callsReceived: todaySummary.callsReceived,
+          callsAnswered: todaySummary.callsAnswered,
+          leadsCaptured: todaySummary.leadsCaptured,
+          appointmentsScheduled: todaySummary.appointmentsScheduled,
+          missedCallsSaved: todaySummary.missedCallsSaved,
+          estimatedRevenue: todaySummary.estimatedRevenue,
+          avgCallLength: todaySummary.totalCallDurationSecs > 0 && todaySummary.callsReceived > 0
+            ? Math.round(todaySummary.totalCallDurationSecs / todaySummary.callsReceived) : 0
+        },
+        thisWeek: {
+          callsReceived: weekSummary.callsReceived,
+          leadsCaptured: weekSummary.leadsCaptured,
+          appointmentsScheduled: weekSummary.appointmentsScheduled,
+          revenueWon: weekSummary.revenueWon,
+          estimatedRevenue: weekSummary.estimatedRevenue,
+          conversionRate: weekSummary.conversionRate
+        },
+        thisMonth: {
+          callsReceived: monthSummary.callsReceived,
+          leadsCaptured: monthSummary.leadsCaptured,
+          appointmentsScheduled: monthSummary.appointmentsScheduled,
+          revenueWon: monthSummary.revenueWon,
+          estimatedRevenue: monthSummary.estimatedRevenue,
+          conversionRate: monthSummary.conversionRate
+        }
+      };
+    }, 120);
     res.json({ data: overview });
   } catch (err) { next(err); }
 });
@@ -555,24 +555,24 @@ router.get('/dashboard/overview', requireAuth, requireOrgMembership, requirePerm
  */
 router.get('/dashboard/revenue-trends', requireAuth, requireOrgMembership, requirePermission('dashboard', 'view'), async (req, res, next) => {
   try {
-    const cacheKey = cache.buildKey('dashboard:revenue', req.orgId);
-    const cached = await cache.get(cacheKey);
-    if (cached) return res.json(cached);
-
-    const leads = demoScope.filterTenantRecords(getAllLeads(), demoScope.createAccessContext(req));
-    const revOverview = await revenue.computeRevenueOverview(req.orgId, leads);
-
-    const result = {
-      pipelineValue: revOverview.pipelineValue,
-      activeLeads: revOverview.activeLeads,
-      averageLeadValue: revOverview.averageLeadValue,
-      todayRevenue: revOverview.todayRevenue,
-      yesterdayRevenue: revOverview.yesterdayRevenue,
-      trend: revOverview.trend,
-      topLead: revOverview.topLead
-    };
-
-    await cache.set(cacheKey, result, 300);
+    const identity = createAnalyticsIdentity(req, 'dashboard:revenue-trends', { query: req.query });
+    const key = analyticsCacheKey(cache, 'dashboard:revenue', identity);
+    const result = await cache.wrap(key, async function () {
+      const leads = demoScope.filterTenantRecords(getAllLeads(), demoScope.createAccessContext(req));
+      const revOverview = await revenue.computeRevenueOverview(req, leads, {
+        report: 'dashboard:revenue-trends',
+        query: req.query
+      });
+      return {
+        pipelineValue: revOverview.pipelineValue,
+        activeLeads: revOverview.activeLeads,
+        averageLeadValue: revOverview.averageLeadValue,
+        todayRevenue: revOverview.todayRevenue,
+        yesterdayRevenue: revOverview.yesterdayRevenue,
+        trend: revOverview.trend,
+        topLead: revOverview.topLead
+      };
+    }, 300);
     res.json({ data: result });
   } catch (err) { next(err); }
 });

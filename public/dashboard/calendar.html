@@ -352,20 +352,8 @@ body { background: var(--neutral-50); }
 })();
 
 function initCalendar() {
-  Promise.all([
-    window.calData.fetchEvents().catch(function() { return []; }),
-    Promise.resolve(window.syncCalendarFromAppStore())
-  ]).then(function(results) {
-    var apiEvents = results[0];
-    var leadEvents = results[1];
-    var existingIds = new Set(apiEvents.map(function(e) { return e.id; }));
-    var newLeadEvents = leadEvents.filter(function(e) { return !existingIds.has(e.id); });
-    window.calState.events = apiEvents.concat(newLeadEvents);
-    window.calState.onChange(function() { window.calRenderer.render(); });
-    window.calRenderer.render();
-  }).catch(function() {
-    window.calRenderer.render();
-  });
+  window.calState.onChange(function() { window.calRenderer.render(); });
+  window.refreshCalendar();
 }
 </script>
   <script src="/js/nav-component.js"></script>

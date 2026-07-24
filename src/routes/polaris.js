@@ -13,7 +13,12 @@ const polaris = require('../polaris/engine');
 const https = require('https');
 const { requireAuth } = require('../auth/middleware');
 const { requireOrgMembership } = require('../auth/permissions');
+const { permissionFor } = require('../auth/polarisRoutePermissions');
 const demoScope = require('../services/demoRecordScope');
+
+function mutationPermission(method, path) {
+  return permissionFor('polaris', method, path);
+}
 
 function filterScopedRecords(records, sessionId) {
   const access = demoScope.resolveAccess(sessionId);
@@ -118,8 +123,14 @@ router.get('/intelligence', (req, res) => {
  * Generate a multi-variable estimate.
  * Body: { serviceType, description, squareFootage, crewSize, equipmentRequired, travelDistance, ... }
  */
-router.post('/estimate', (req, res) => {
+router.post('/estimate', mutationPermission('POST', '/estimate'), (req, res) => {
   try {
+    if (req.body && req.body.leadId) {
+      const lead = require('../leads/store').getLead(req.body.leadId);
+      if (!demoScope.canAccessTenant(lead, demoScope.resolveAccess(req.query.sessionId))) {
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Record not found' } });
+      }
+    }
     const estimate = polaris.generateEstimate(req.body);
     if (!estimate) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Could not generate estimate. serviceType is required.' } });
@@ -135,7 +146,7 @@ router.post('/estimate', (req, res) => {
  * Record a completed job for learning.
  * Body: { serviceType, estimatedDuration, actualDuration, estimatedRevenue, actualRevenue, ... }
  */
-router.post('/complete', (req, res) => {
+router.post('/complete', mutationPermission('POST', '/complete'), (req, res) => {
   try {
     const result = polaris.recordCompletion(req.body);
     res.json(result);
@@ -168,9 +179,14 @@ router.get('/learning', (req, res) => {
  * Trigger recommendation generation.
  * Body: { leads, events, jobs }
  */
-router.post('/recommendations/generate', (req, res) => {
+router.post('/recommendations/generate', mutationPermission('POST', '/recommendations/generate'), (req, res) => {
   try {
-    const recs = polaris.generateRecommendations(req.body);
+    const access = demoScope.resolveAccess(req.query.sessionId);
+    const body = Object.assign({}, req.body);
+    ['leads', 'events', 'jobs', 'crews'].forEach(function (key) {
+      if (Array.isArray(body[key])) body[key] = demoScope.filterTenantRecords(body[key], access);
+    });
+    const recs = polaris.generateRecommendations(body);
     res.json({ generated: recs.length, recommendations: recs });
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
@@ -196,12 +212,12 @@ router.get('/recommendations', (req, res) => {
  * PUT /api/v1/polaris/recommendations/:id/resolve
  * Mark a recommendation as resolved.
  */
-router.put('/recommendations/:id/resolve', (req, res) => {
+router.put('/recommendations/:id/resolve', mutationPermission('PUT', '/recommendations/:id/resolve'), (req, res) => {
   try {
     const existing = polaris.getRecommendations(undefined).find(function (recommendation) {
       return recommendation.id === req.params.id;
     });
-    if (existing && !demoScope.canAccess(existing.data || existing, req.query.sessionId)) {
+    if (!existing || !demoScope.canAccessTenant(existing.data || existing, demoScope.resolveAccess(req.query.sessionId))) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Recommendation not found' } });
     }
     const result = polaris.resolveRecommendation(req.params.id);
@@ -243,7 +259,7 @@ router.get('/estimates', (req, res) => {
  * Future ChatGPT integration interface.
  * Body: { query: "What jobs will run late?", context: { leads, events, jobs } }
  */
-router.post('/query', (req, res) => {
+router.post('/query', mutationPermission('POST', '/query'), (req, res) => {
   try {
     const { query, context } = req.body;
     if (!query) return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'query is required' } });
@@ -294,7 +310,7 @@ router.get('/pipeline', (req, res) => {
  * Analyze pipeline from leads in body.
  * Body: { leads: [...] }
  */
-router.post('/pipeline', (req, res) => {
+router.post('/pipeline', mutationPermission('POST', '/pipeline'), (req, res) => {
   try {
     const analysis = polaris.analyzePipeline(req.body.leads || []);
     res.json(analysis);
@@ -308,9 +324,11 @@ router.post('/pipeline', (req, res) => {
  * Update estimation configuration at runtime.
  * Body: { laborRates: {...}, baseHours: {...}, ... }
  */
-router.post('/config', (req, res) => {
+router.post('/config', mutationPermission('POST', '/config'), (req, res) => {
   try {
-    polaris.loadEstimationConfig(req.body);
+    const config = Object.assign({}, req.body);
+    delete config.metadata;
+    polaris.loadEstimationConfig(config);
     res.json({ status: 'configuration updated' });
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
@@ -360,7 +378,7 @@ router.get('/business-context', (req, res) => {
  * Body: { message: "...", context: { page: "dashboard", leadId: "..." } }
  * Response: { success: true, response: "...", meta: { ... } }
  */
-router.post('/chat', (req, res) => {
+router.post('/chat', mutationPermission('POST', '/chat'), (req, res) => {
   try {
     const message = req.body && req.body.message;
     if (!message || typeof message !== 'string' || message.trim().length === 0) {

@@ -5,15 +5,9 @@
 const { getAllLeads } = require('../leads/store');
 const cache = require('../cache/client');
 const demoScope = require('../services/demoRecordScope');
+const { createAnalyticsIdentity, cacheKey: analyticsCacheKey } = require('./cacheIdentity');
 
 const AVG_JOB_VALUE = 450;
-
-function accessIdentity(context) {
-  if (!context || typeof context !== 'object' || !context.orgId) {
-    throw new Error('Validated organization context is required');
-  }
-  return String(context.orgId);
-}
 
 async function collectData(context) {
   const access = demoScope.createAccessContext(context);
@@ -45,48 +39,46 @@ function filterByRange(items, dateField, range) {
 }
 
 async function computeOverview(context, range) {
-  const cacheKey = cache.buildKey('analytics:overview', `${accessIdentity(context)}:${range}`);
-  const cached = await cache.get(cacheKey);
-  if (cached) return cached;
+  const identity = createAnalyticsIdentity(context, 'analytics:overview', {
+    range: range || 'all',
+    query: context.query || {}
+  });
+  const key = analyticsCacheKey(cache, 'analytics:overview', identity);
+  return cache.wrap(key, async function () {
+    const { leads } = await collectData(context);
+    const filtered = filterByRange(leads, 'receivedAt', range);
+    const byOutcome = {};
+    filtered.forEach(l => { const o = l.callOutcome || l.status || 'new'; byOutcome[o] = (byOutcome[o] || 0) + 1; });
 
-  const { leads } = await collectData(context);
-  const filtered = filterByRange(leads, 'receivedAt', range);
-  const byOutcome = {};
-  filtered.forEach(l => { const o = l.callOutcome || l.status || 'new'; byOutcome[o] = (byOutcome[o] || 0) + 1; });
+    const callsCaptured = byOutcome['appointment-set'] || 0;
+    const estimatesBooked = (byOutcome['lead-captured'] || 0) + callsCaptured;
+    const newLeads = filtered.length;
+    const voicemails = byOutcome['voicemail'] || 0;
+    const totalCalls = filtered.filter(l => (l.source || 'phone_call') === 'phone_call').length + voicemails;
+    const estimatedRevenue = callsCaptured * AVG_JOB_VALUE;
+    const totalLeadsValue = newLeads * AVG_JOB_VALUE;
+    const missedRevenuePrevented = Math.round(totalLeadsValue * 0.15);
+    const answerRate = totalCalls > 0 ? Math.round(((totalCalls - voicemails) / totalCalls) * 100) : 0;
 
-  const callsCaptured = byOutcome['appointment-set'] || 0;
-  const estimatesBooked = (byOutcome['lead-captured'] || 0) + callsCaptured;
-  const newLeads = filtered.length;
-  const voicemails = byOutcome['voicemail'] || 0;
-  const totalCalls = filtered.filter(l => (l.source || 'phone_call') === 'phone_call').length + voicemails;
-  const estimatedRevenue = callsCaptured * AVG_JOB_VALUE;
-  const totalLeadsValue = newLeads * AVG_JOB_VALUE;
-  const missedRevenuePrevented = Math.round(totalLeadsValue * 0.15);
-  const answerRate = totalCalls > 0 ? Math.round(((totalCalls - voicemails) / totalCalls) * 100) : 0;
-
-  const result = { callsToday: totalCalls, newLeads, appointmentsBooked: estimatesBooked, estimatedRevenue, missedRevenuePrevented, answerRate: answerRate + '%', avgResponseTime: '2.4s', conversionRate: newLeads > 0 ? Math.round((estimatesBooked / newLeads) * 100) + '%' : '0%' };
-  await cache.set(cacheKey, result, 120);
-  return result;
+    return { callsToday: totalCalls, newLeads, appointmentsBooked: estimatesBooked, estimatedRevenue, missedRevenuePrevented, answerRate: answerRate + '%', avgResponseTime: '2.4s', conversionRate: newLeads > 0 ? Math.round((estimatesBooked / newLeads) * 100) + '%' : '0%' };
+  }, 120);
 }
 
 async function computeTrends(context) {
-  const cacheKey = cache.buildKey('analytics:trends', accessIdentity(context));
-  const cached = await cache.get(cacheKey);
-  if (cached) return cached;
-
-  const { leads } = await collectData(context);
-  const now = new Date();
-  const days = [];
-  for (let i = 29; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); days.push(d.toISOString().slice(0, 10)); }
-  const daily = days.map(dateStr => {
-    const dayLeads = leads.filter(l => (l.receivedAt || '').startsWith(dateStr));
-    const booked = dayLeads.filter(l => l.callOutcome === 'appointment-set').length;
-    return { date: dateStr, calls: dayLeads.filter(l => (l.source || 'phone_call') === 'phone_call').length, leads: dayLeads.length, bookings: booked, revenue: booked * AVG_JOB_VALUE };
-  });
-
-  const result = { daily };
-  await cache.set(cacheKey, result, 300);
-  return result;
+  const identity = createAnalyticsIdentity(context, 'analytics:trends', { query: context.query || {} });
+  const key = analyticsCacheKey(cache, 'analytics:trends', identity);
+  return cache.wrap(key, async function () {
+    const { leads } = await collectData(context);
+    const now = new Date();
+    const days = [];
+    for (let i = 29; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); days.push(d.toISOString().slice(0, 10)); }
+    const daily = days.map(dateStr => {
+      const dayLeads = leads.filter(l => (l.receivedAt || '').startsWith(dateStr));
+      const booked = dayLeads.filter(l => l.callOutcome === 'appointment-set').length;
+      return { date: dateStr, calls: dayLeads.filter(l => (l.source || 'phone_call') === 'phone_call').length, leads: dayLeads.length, bookings: booked, revenue: booked * AVG_JOB_VALUE };
+    });
+    return { daily };
+  }, 300);
 }
 
 async function computePipeline(context) {

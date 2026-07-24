@@ -23,6 +23,7 @@ jest.mock('../../../src/voice/businessEvents', () => ({
 }));
 
 const webhook = require('../../../src/voice/webhook');
+const businessEvents = require('../../../src/voice/businessEvents');
 
 describe('Voice Webhook Framework', () => {
   // ── Signature Validation ──────────────────────────────────
@@ -199,6 +200,27 @@ describe('Voice Webhook Framework', () => {
       });
       expect(result.received).toBe(true);
       expect(result.routed).toBe(true);
+    });
+
+    test.each([
+      ['success', function () { return Promise.resolve({ emitted: true }); }],
+      ['failure', function () { return Promise.reject(new Error('test handler failure')); }],
+    ])('clears losing timeout handles on handler %s', async function (_name, implementation) {
+      jest.useFakeTimers();
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(function () {});
+      businessEvents.emit.mockImplementationOnce(implementation);
+      try {
+        const result = await webhook.routeEvent({
+          event: 'call_started',
+          event_id: 'timer-' + _name,
+          call_id: 'timer-call-' + _name,
+        });
+        expect(result.routed).toBe(true);
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        errorSpy.mockRestore();
+        jest.useRealTimers();
+      }
     });
   });
 

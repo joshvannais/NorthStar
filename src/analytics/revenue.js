@@ -4,6 +4,7 @@
  */
 
 const cache = require('../cache/client');
+const { createAnalyticsIdentity, cacheKey: analyticsCacheKey } = require('./cacheIdentity');
 
 const AVG_JOB_VALUE = 450;
 const SERVICE_BASE_PRICES = {
@@ -60,38 +61,36 @@ function calculateTrend(currentValue, previousValue) {
   };
 }
 
-async function computeRevenueOverview(userId, leads) {
-  const cacheKey = `revenue:overview:${userId}`;
-  const cached = await cache.get(cacheKey);
-  if (cached) return cached;
+async function computeRevenueOverview(context, leads, filters) {
+  const identity = createAnalyticsIdentity(context, 'analytics:revenue', filters || { query: context.query || {} });
+  const key = analyticsCacheKey(cache, 'revenue:overview', identity);
+  return cache.wrap(key, async function () {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const pipeline = calculatePipelineValue(leads);
+    const todayLeads = leads.filter(l => (l.receivedAt || '').startsWith(today));
+    const todayRevenue = todayLeads.reduce((sum, l) => sum + estimateLeadValue(l), 0);
+    const yesterdayLeads = leads.filter(l => (l.receivedAt || '').startsWith(yesterday));
+    const yesterdayRevenue = yesterdayLeads.reduce((sum, l) => sum + estimateLeadValue(l), 0);
+    const trend = calculateTrend(todayRevenue, yesterdayRevenue);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  const pipeline = calculatePipelineValue(leads);
-  const todayLeads = leads.filter(l => (l.receivedAt || '').startsWith(today));
-  const todayRevenue = todayLeads.reduce((sum, l) => sum + estimateLeadValue(l), 0);
-  const yesterdayLeads = leads.filter(l => (l.receivedAt || '').startsWith(yesterday));
-  const yesterdayRevenue = yesterdayLeads.reduce((sum, l) => sum + estimateLeadValue(l), 0);
-  const trend = calculateTrend(todayRevenue, yesterdayRevenue);
+    const thisWeekLeads = leads.filter(l => {
+      const d = new Date(l.receivedAt || Date.now());
+      const weekAgo = new Date(Date.now() - 7 * 86400000);
+      return d >= weekAgo;
+    });
+    const topLead = thisWeekLeads.reduce((best, l) => {
+      const val = estimateLeadValue(l);
+      return val > (best ? estimateLeadValue(best) : 0) ? l : best;
+    }, null);
 
-  const thisWeekLeads = leads.filter(l => {
-    const d = new Date(l.receivedAt || Date.now());
-    const weekAgo = new Date(Date.now() - 7 * 86400000);
-    return d >= weekAgo;
-  });
-  const topLead = thisWeekLeads.reduce((best, l) => {
-    const val = estimateLeadValue(l);
-    return val > (best ? estimateLeadValue(best) : 0) ? l : best;
-  }, null);
-
-  const result = {
-    pipelineValue: pipeline.totalValue, activeLeads: pipeline.activeCount,
-    averageLeadValue: pipeline.averageValue, todayRevenue, yesterdayRevenue,
-    trend, topLead: topLead ? { id: topLead.id, name: topLead.customerName || 'Unknown', service: topLead.serviceRequested || 'General', value: estimateLeadValue(topLead), status: topLead.callOutcome || topLead.status || 'new' } : null,
-    confidenceLevel: pipeline.confidenceLevel
-  };
-  await cache.set(cacheKey, result, 300);
-  return result;
+    return {
+      pipelineValue: pipeline.totalValue, activeLeads: pipeline.activeCount,
+      averageLeadValue: pipeline.averageValue, todayRevenue, yesterdayRevenue,
+      trend, topLead: topLead ? { id: topLead.id, name: topLead.customerName || 'Unknown', service: topLead.serviceRequested || 'General', value: estimateLeadValue(topLead), status: topLead.callOutcome || topLead.status || 'new' } : null,
+      confidenceLevel: pipeline.confidenceLevel
+    };
+  }, 300);
 }
 
 module.exports = { estimateLeadValue, calculatePipelineValue, calculateTrend, computeRevenueOverview, SERVICE_BASE_PRICES };

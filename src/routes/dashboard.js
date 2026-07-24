@@ -348,7 +348,7 @@ router.get('/dashboard/brief', requirePermission('dashboard', 'view'), async (re
     };
 
     const leads = demoScope.filterTenantRecords(getAllLeads(), calendarAccess(req));
-    const revOverview = await computeRevenueOverview(req.orgId, leads);
+    const revOverview = await computeRevenueOverview(req, leads, { report: 'dashboard:brief', query: req.query });
 
     const name = req.user?.name || 'there';
     const briefText = brief.generate(metrics, revOverview, name);
@@ -509,7 +509,9 @@ router.get('/leads', requirePermission('leads', 'view'), async (req, res) => {
     const offset = parseInt(req.query.offset || '0', 10);
 
     if (!db.isAvailable()) {
-      return res.json({ leads: [], total: 0 });
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     const result = await db.query(`
@@ -554,7 +556,9 @@ router.get('/leads', requirePermission('leads', 'view'), async (req, res) => {
 router.get('/leads/:id', requirePermission('leads', 'view'), async (req, res) => {
   try {
     if (!db.isAvailable()) {
-      return res.status(404).json({ error: 'Lead not found' });
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     const result = await db.query(`
@@ -643,7 +647,9 @@ router.get('/calls', requirePermission('calls', 'view'), async (req, res) => {
     const offset = parseInt(req.query.offset || '0', 10);
 
     if (!db.isAvailable()) {
-      return res.json({ calls: [], total: 0 });
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     const result = await db.query(`
@@ -695,7 +701,9 @@ router.get('/calendar/upcoming', requirePermission('calendar', 'view'), async (r
     const now = new Date();
 
     if (!db.isAvailable()) {
-      return res.json({ appointments: [] });
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     const result = await db.query(`

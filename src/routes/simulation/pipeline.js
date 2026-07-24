@@ -561,24 +561,32 @@ function detectEmergencyEvidence(transcript) {
   });
   const patterns = [
     { signal: 'active flooding', regex: /\b(?:flooding|room is filling with water|water is (?:rising|pouring)|water keeps (?:rising|pouring))\b/i },
-    { signal: 'uncontrolled leak', regex: /\b(?:gushing|burst pipe|pipe (?:has )?burst|active leak|leak(?:ing)? and (?:i |we )?(?:can'?t|cannot|couldn'?t|could not) (?:get it to )?stop)\b/i },
+    { signal: 'uncontrolled leak', regex: /\b(?:uncontrolled leak|gushing|burst pipe|pipe (?:has )?burst|active leak|(?:i |we )?(?:can't|cannot|couldn't|could not) (?:get (?:it|the leak) to stop|stop the leak)|leak(?:ing)? (?:and )?(?:i |we )?(?:can't|cannot|couldn't|could not) (?:get it to )?stop)\b/i },
     { signal: 'electrical sparking', regex: /\b(?:sparking|throwing sparks|seeing sparks)\b/i },
     { signal: 'burning or smoke', regex: /\b(?:burning smell|smell(?:s|ing)? (?:like |something )?burning|smoke|smoking)\b/i },
     { signal: 'immediate danger', regex: /\b(?:immediate danger|danger right now|unsafe right now|someone (?:is|could be) in danger)\b/i },
   ];
-  const denied = /\b(?:not an emergency|no emergency|not (?:currently |now )?(?:flooding|leaking|sparking|smoking|burning)|no (?:burning smell|smoke|sparks?|flooding|active leak)|without (?:smoke|sparks?|a burning smell)|stopped|resolved|already fixed|fixed now|under control|shut (?:it|the (?:water|valve)) off|no longer|used to|previously|last (?:week|month|year)|yesterday(?: only)?|can wait|tomorrow is fine|next day is fine|no present danger|not (?:urgent|dangerous)|slow (?:drip|leak)|minor (?:drip|leak)|seeping)\b/i;
+  const nonCurrent = /\b(?:stopped|resolved|already fixed|fixed now|repaired|under control|shut (?:it|the (?:water|valve)) off|no longer|used to|previously|last (?:week|month|year)|yesterday(?: only)?|can wait|tomorrow is fine|next day is fine|slow (?:drip|leak)|minor (?:drip|leak)|seeping)\b/i;
+  const localNegation = /(?:(?:\bnot|\bnothing (?:is|was)|\bwithout|\bisn't|\baren't|\bwasn't|\bweren't|\bis not|\bare not|\bwas not|\bwere not)(?:\s+\w+){0,3}|\bno(?:\s+\w+)?)[\s,]*$/i;
+
+  function isDenied(clause, match) {
+    const before = clause.slice(0, match.index);
+    if (localNegation.test(before)) return true;
+    return nonCurrent.test(clause);
+  }
 
   for (const turn of customerTurns) {
+    const normalizedText = turn.text.replace(/[\u2018\u2019]/g, "'");
     // Contrast words define independent evidence clauses. A negation in one
     // clause must not suppress a different, current affirmative hazard.
-    const clauses = turn.text
+    const clauses = normalizedText
       .split(/[.!?;]+|\b(?:but|however|although|yet)\b/i)
       .map(function (value) { return value.trim().replace(/^,+|,+$/g, '').trim(); })
       .filter(Boolean);
     for (const clause of clauses) {
       for (const pattern of patterns) {
         const match = clause.match(pattern.regex);
-        if (match && !denied.test(clause)) {
+        if (match && !isDenied(clause, match)) {
           return {
             isEmergency: true,
             signal: pattern.signal,

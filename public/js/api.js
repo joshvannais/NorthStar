@@ -58,6 +58,10 @@ const API = {
   async health() { return this.get('/health'); },
 };
 
+// Explicitly expose the shared client to external page controllers. Classic
+// top-level `const` bindings are not properties on `window`.
+window.API = API;
+
 /**
  * Toast notification helper.
  */

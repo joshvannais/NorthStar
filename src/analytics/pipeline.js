@@ -4,16 +4,28 @@
 
 const { getAllLeads } = require('../leads/store');
 const cache = require('../cache/client');
+const demoScope = require('../services/demoRecordScope');
 
 const AVG_JOB_VALUE = 450;
 
-async function collectData(userId) {
-  const leads = getAllLeads();
+function accessIdentity(context) {
+  if (!context || typeof context !== 'object' || !context.orgId) {
+    throw new Error('Validated organization context is required');
+  }
+  return String(context.orgId);
+}
+
+async function collectData(context) {
+  const access = demoScope.createAccessContext(context);
+  const leads = demoScope.filterTenantRecords(getAllLeads(), access);
   let dbCalls = [];
   const db = require('../db');
   if (db.isAvailable()) {
     try {
-      const r = await db.query('SELECT id, caller_name, service_type, estimated_price, outcome, created_at FROM call_records ORDER BY created_at DESC');
+      const r = await db.query(
+        'SELECT id, caller_name, service_type, estimated_price, outcome, created_at FROM call_records WHERE organization_id = $1 ORDER BY created_at DESC',
+        [context.orgId]
+      );
       dbCalls = r.rows || [];
     } catch (err) { console.warn('[Analytics] DB query failed:', err.message); }
   }
@@ -32,12 +44,12 @@ function filterByRange(items, dateField, range) {
   return items.filter(item => new Date(item[dateField]) >= start);
 }
 
-async function computeOverview(userId, range) {
-  const cacheKey = cache.buildKey('analytics:overview', `${userId}:${range}`);
+async function computeOverview(context, range) {
+  const cacheKey = cache.buildKey('analytics:overview', `${accessIdentity(context)}:${range}`);
   const cached = await cache.get(cacheKey);
   if (cached) return cached;
 
-  const { leads } = await collectData(userId);
+  const { leads } = await collectData(context);
   const filtered = filterByRange(leads, 'receivedAt', range);
   const byOutcome = {};
   filtered.forEach(l => { const o = l.callOutcome || l.status || 'new'; byOutcome[o] = (byOutcome[o] || 0) + 1; });
@@ -57,12 +69,12 @@ async function computeOverview(userId, range) {
   return result;
 }
 
-async function computeTrends(userId) {
-  const cacheKey = cache.buildKey('analytics:trends', userId);
+async function computeTrends(context) {
+  const cacheKey = cache.buildKey('analytics:trends', accessIdentity(context));
   const cached = await cache.get(cacheKey);
   if (cached) return cached;
 
-  const { leads } = await collectData(userId);
+  const { leads } = await collectData(context);
   const now = new Date();
   const days = [];
   for (let i = 29; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); days.push(d.toISOString().slice(0, 10)); }
@@ -77,8 +89,8 @@ async function computeTrends(userId) {
   return result;
 }
 
-async function computePipeline(userId) {
-  const { leads } = await collectData(userId);
+async function computePipeline(context) {
+  const { leads } = await collectData(context);
   const stages = { new: 0, contacted: 0, estimateScheduled: 0, estimateCompleted: 0, jobWon: 0, jobLost: 0, workCompleted: 0 };
   leads.forEach(l => {
     const o = (l.callOutcome || l.status || 'new').toLowerCase();
@@ -91,8 +103,8 @@ async function computePipeline(userId) {
   return Object.entries(stages).map(([key, value]) => ({ stage: key, value }));
 }
 
-async function computeByService(userId, range) {
-  const { leads } = await collectData(userId);
+async function computeByService(context, range) {
+  const { leads } = await collectData(context);
   const filtered = filterByRange(leads, 'receivedAt', range);
   const counts = {}, revenue = {};
   filtered.forEach(l => { const s = l.serviceRequested || 'Other'; counts[s] = (counts[s] || 0) + 1; revenue[s] = (revenue[s] || 0) + (l.estimatedPrice || AVG_JOB_VALUE); });

@@ -12,17 +12,39 @@ const router = express.Router();
 const polaris = require('../polaris/engine');
 const https = require('https');
 const { requireAuth } = require('../auth/middleware');
+const { requireOrgMembership } = require('../auth/permissions');
 const demoScope = require('../services/demoRecordScope');
 
 function filterScopedRecords(records, sessionId) {
+  const access = demoScope.resolveAccess(sessionId);
   return (Array.isArray(records) ? records : []).filter(function (record) {
-    return demoScope.canAccess(record && (record.data || record), sessionId);
+    return demoScope.canAccessTenant(record && (record.data || record), access);
   });
 }
 
 // ── Middleware ──
 router.use((req, res, next) => {
   res.setHeader('X-Polaris-Version', '2.0');
+  const sendJson = res.json.bind(res);
+  res.json = function (body) {
+    const rawError = body && body.error;
+    const rawMessage = typeof rawError === 'string'
+      ? rawError
+      : rawError && typeof rawError.message === 'string' ? rawError.message : null;
+    if (res.statusCode >= 500 && rawMessage) {
+      console.error('[Polaris] Internal route failure:', {
+        method: req.method,
+        path: req.path,
+        message: rawMessage,
+      });
+      const safe = {
+        error: { code: 'internal_error', message: 'An unexpected error occurred. Please try again.' },
+      };
+      if (body && body.success === false) safe.success = false;
+      return sendJson(safe);
+    }
+    return sendJson(body);
+  };
   next();
 });
 
@@ -45,8 +67,31 @@ router.get('/status', (req, res) => {
 
 // ── All routes below this point require authentication ──
 router.use(requireAuth);
+router.use(requireOrgMembership);
 router.use(function (req, res, next) {
   demoScope.runWithAccess(req, next);
+});
+router.use(function (req, _res, next) {
+  if (/^(?:POST|PUT|PATCH)$/.test(req.method) && req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+    const clean = Object.assign({}, req.body);
+    delete clean.organizationId;
+    delete clean.ownerUserId;
+    delete clean.simulationSessionId;
+    delete clean.demoSessionId;
+    delete clean.recordScope;
+    const metadata = Object.assign({}, clean.metadata || {});
+    delete metadata.organizationId;
+    delete metadata.ownerUserId;
+    delete metadata.simulationSessionId;
+    delete metadata.recordScope;
+    const access = demoScope.resolveAccess();
+    clean.metadata = Object.assign(metadata, {
+      organizationId: access.organizationId,
+      ownerUserId: access.userId,
+    });
+    req.body = clean;
+  }
+  next();
 });
 
 /**

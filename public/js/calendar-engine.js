@@ -631,7 +631,17 @@ window.openEventModal = function() { calModal.openCreateEvent(calState.selectedD
 
 // Build events from AppStore leads + API events
 window.syncCalendarFromAppStore = function() {
-  var allLeads = calState.getLiveLeads();
+  var activeSessionId = (window.NorthStarDemoSession && window.NorthStarDemoSession.id) ||
+    window.SIM_SESSION_ID || null;
+  var allLeads = calState.getLiveLeads().filter(function(lead) {
+    var metadata = (lead && lead.metadata) || {};
+    var sessionId = metadata.simulationSessionId ||
+      (lead && (lead.simulationSessionId || lead.demoSessionId)) || null;
+    var simulated = metadata.recordScope === 'simulation' || metadata.source === 'simulation' ||
+      (lead && (lead.recordScope === 'simulation' || lead.source === 'simulation')) ||
+      Boolean(sessionId);
+    return !simulated || Boolean(activeSessionId && sessionId === activeSessionId);
+  });
   // Generate events from leads that have appointment-ready outcomes
   // Also use all leads with avgPrice so pipeline values are complete
   var today = new Date();

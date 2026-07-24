@@ -8,6 +8,28 @@
 const path = require('path');
 process.chdir(path.resolve(__dirname, '../..'));
 
+jest.mock('../../src/db', function () {
+  return {
+    initDatabase: jest.fn(function () { return Promise.resolve(true); }),
+    isAvailable: jest.fn(function () { return true; }),
+    query: jest.fn(function (sql, params) {
+      if (/FROM users WHERE id/.test(String(sql))) {
+        return Promise.resolve({ rows: [{
+          id: params[0],
+          organization_id: 'org-health-test',
+          role: 'owner',
+          status: 'active',
+        }] });
+      }
+      if (/FROM call_records/.test(String(sql))) {
+        return Promise.resolve({ rows: [{ calls: 0, revenue: 0, appointments: 0 }] });
+      }
+      return Promise.resolve({ rows: [] });
+    }),
+    getPool: jest.fn(function () { return null; }),
+  };
+});
+
 const request = require('supertest');
 const { app } = require('../../src/server');
 const { generateToken } = require('../../src/auth/middleware');

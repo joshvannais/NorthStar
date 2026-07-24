@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth/middleware');
 const { requireOrgMembership } = require('../auth/permissions');
+const { requirePermission } = require('../auth/authorize');
 const { addLead } = require('../leads/store');
 const db = require('../db');
 const pipeline = require('./simulation/pipeline');
@@ -26,9 +27,34 @@ function persistenceError(stage, result) {
   return error;
 }
 
+function clientFailure(error) {
+  if (error && error.code === 'idempotency_conflict') {
+    return {
+      status: 409,
+      body: { error: { code: 'idempotency_conflict', message: 'The idempotency key was already used with a different request.' } },
+    };
+  }
+  if (error && (error.code === 'persistence_unavailable' || error.stage === 'persistence_preflight')) {
+    return {
+      status: 503,
+      body: { error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' } },
+    };
+  }
+  return {
+    status: error && error.status === 400 ? 400 : 500,
+    body: { error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' } },
+  };
+}
+
 function requirePersisted(stage, result) {
   if (!result || result.error || !result.id) throw persistenceError(stage, result);
   return result;
+}
+
+function isPersistenceUnavailable(error) {
+  const code = String((error && error.code) || '');
+  return /^08/.test(code) ||
+    ['57P01', '57P02', '57P03', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE'].includes(code);
 }
 
 let _engines = {};
@@ -40,7 +66,7 @@ function _getEngines() {
   return _engines;
 }
 
-router.post('/simulations/leads', requireAuth, requireOrgMembership, async (req, res) => {
+router.post('/simulations/leads', requireAuth, requireOrgMembership, requirePermission('leads', 'create'), async (req, res) => {
   let requestIdentity = null;
   let requestClaim = null;
   try {
@@ -49,10 +75,64 @@ router.post('/simulations/leads', requireAuth, requireOrgMembership, async (req,
       return res.status(400).json({ error: 'Customer name is required', stage: 'validation' });
     }
 
-    const sessionId = req.body.sessionId || ('sim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+    const suppliedKey = req.get('Idempotency-Key') || req.body.idempotencyKey;
     const requestedService = (service || 'general').toLowerCase();
+
+    // A successful response requires PostgreSQL. Probe it before any file
+    // engine is invoked so an unavailable required boundary leaves no new file
+    // records behind.
+    if (!db.isAvailable()) {
+      const unavailable = new Error('Required persistence is unavailable');
+      unavailable.code = 'persistence_unavailable';
+      unavailable.stage = 'persistence_preflight';
+      throw unavailable;
+    }
+    try {
+      await db.query('SELECT 1');
+    } catch (preflightError) {
+      preflightError.code = 'persistence_unavailable';
+      preflightError.stage = 'persistence_preflight';
+      throw preflightError;
+    }
+
+    const fingerprint = idempotency.payloadFingerprint({
+      name: name.trim(),
+      phone: phone || '',
+      email: email || '',
+      service: requestedService,
+      sessionId: req.body.sessionId || null,
+    });
+    requestIdentity = idempotency.requestKey(req.orgId, suppliedKey);
+    requestClaim = idempotency.claim(requestIdentity, fingerprint);
+    if (requestClaim.conflict) {
+      const conflict = new Error('Idempotency key payload mismatch');
+      conflict.code = 'idempotency_conflict';
+      throw conflict;
+    }
+    if (requestClaim.capacity) {
+      const capacity = new Error('Idempotency containment capacity unavailable');
+      capacity.code = 'persistence_unavailable';
+      capacity.stage = 'persistence_preflight';
+      throw capacity;
+    }
+    if (!requestClaim.owner) {
+      try {
+        const replay = await requestClaim.promise;
+        return res.status(replay.status).json(replay.body);
+      } catch (replayError) {
+        const failure = clientFailure(replayError);
+        return res.status(failure.status).json(failure.body);
+      }
+    }
+
+    const sessionId = req.body.sessionId || ('sim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
     const scenario = pipeline.generateScenario(requestedService, name.trim());
-    if (!scenario) return res.status(400).json({ error: 'Could not generate scenario for service: ' + service });
+    if (!scenario) {
+      const scenarioError = new Error('Unsupported simulation service');
+      scenarioError.status = 400;
+      scenarioError.stage = 'validation';
+      throw scenarioError;
+    }
 
     const serviceDefinition = pipeline.CATALOG[scenario.serviceKey];
     if (phone) scenario.customer.phone = phone;
@@ -91,25 +171,11 @@ router.post('/simulations/leads', requireAuth, requireOrgMembership, async (req,
 
     const e = _getEngines();
     if (!e.customers || !e.comms || !e.opps || !e.fin) {
-      return res.status(503).json({ error: 'Polaris engines not available', stage: 'engine_init' });
-    }
-
-    requestIdentity = idempotency.requestKey(
-      req.user && (req.user.sub || req.user.id),
-      sessionId,
-      req.get('Idempotency-Key') || req.body.idempotencyKey
-    );
-    requestClaim = idempotency.claim(requestIdentity);
-    if (!requestClaim.owner) {
-      try {
-        const replay = await requestClaim.promise;
-        return res.status(replay.status).json(replay.body);
-      } catch (replayError) {
-        return res.status(replayError.status || 500).json({
-          error: replayError.message,
-          stage: replayError.stage || 'unexpected',
-        });
-      }
+      const engineError = new Error('Required file persistence engine is unavailable');
+      engineError.code = 'persistence_unavailable';
+      engineError.status = 503;
+      engineError.stage = 'engine_init';
+      throw engineError;
     }
 
     const customer = scenario.customer;
@@ -194,8 +260,7 @@ router.post('/simulations/leads', requireAuth, requireOrgMembership, async (req,
     sessionReg.register(sessionId, leadEntry.id);
 
     let callRecordId = null;
-    if (db.isAvailable()) {
-      try {
+    try {
       const postgresIdentity = idempotency.postgresIdentity(sessionId, requestIdentity);
       const existingCall = await db.query(
         'SELECT id FROM call_records WHERE organization_id = $1 AND retell_call_id = $2 LIMIT 1',
@@ -225,11 +290,15 @@ router.post('/simulations/leads', requireAuth, requireOrgMembership, async (req,
         }
       }
       if (!callRecordId) throw persistenceError('call_record', null);
-      } catch (databaseError) {
-        databaseError.stage = 'call_record';
+    } catch (databaseError) {
+      databaseError.stage = 'call_record';
+      if (isPersistenceUnavailable(databaseError)) {
+        databaseError.code = 'persistence_unavailable';
+        databaseError.status = 503;
+      } else {
         databaseError.status = 500;
-        throw databaseError;
       }
+      throw databaseError;
     }
 
     console.log('[Simulations] Complete:', JSON.stringify({
@@ -277,11 +346,19 @@ router.post('/simulations/leads', requireAuth, requireOrgMembership, async (req,
     idempotency.resolve(requestIdentity, { status: 201, body: responseBody });
     return res.status(201).json(responseBody);
   } catch (err) {
-    console.error('[Simulations] Error:', err.message);
+    console.error('[Simulations] Persistence error:', {
+      requestId: req.id || null,
+      organizationId: req.orgId || null,
+      stage: err.stage || 'unexpected',
+      code: err.code || null,
+      message: err.message,
+      stack: err.stack,
+    });
     err.status = err.status || 500;
     err.stage = err.stage || 'unexpected';
     if (requestClaim && requestClaim.owner && requestIdentity) idempotency.reject(requestIdentity, err);
-    res.status(err.status).json({ error: 'Simulation failed: ' + err.message, stage: err.stage });
+    const failure = clientFailure(err);
+    res.status(failure.status).json(failure.body);
   }
 });
 

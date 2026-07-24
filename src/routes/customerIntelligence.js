@@ -11,8 +11,12 @@ const customerIntelligence = require('../services/customerIntelligence');
 const dataLoader = require('../services/dataLoader');
 const demoScope = require('../services/demoRecordScope');
 const { requireAuth } = require('../auth/middleware');
+const { requireOrgMembership } = require('../auth/permissions');
+const { requirePermission } = require('../auth/authorize');
 
 router.use(requireAuth);
+router.use(requireOrgMembership);
+router.use(requirePermission('leads', 'view'));
 
 function _visibleLeads(req) {
   const loaded = dataLoader.loadData();

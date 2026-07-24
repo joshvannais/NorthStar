@@ -74,43 +74,17 @@ function hasPermission(role, resource, action) {
  * Usage: requirePermission('leads', 'read')
  */
 function requirePermission(resource, action) {
-  return async (req, res, next) => {
-    try {
-      const userId = req.user?.sub;
-      const orgId = req.user?.orgId;
-
-      if (!userId) {
-        return res.status(401).json({ error: 'Authentication required' });
-      }
-
-      // Resolve role from DB
-      let role = 'viewer';
-      if (db.isAvailable()) {
-        const result = await db.query(
-          'SELECT role FROM users WHERE id = $1',
-          [userId]
-        );
-        if (result.rows.length > 0) {
-          role = result.rows[0].role;
-        }
-      }
-
-      if (!hasPermission(role, resource, action)) {
-        return res.status(403).json({
-          error: 'Insufficient permissions',
-          required: { resource, action },
-          role,
-        });
-      }
-
-      // Attach orgId for data isolation
-      req.orgId = orgId;
-      req.userRole = role;
-      next();
-    } catch (err) {
-      console.error('[Auth] Permission check error:', err.message);
-      res.status(500).json({ error: 'Authorization check failed' });
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
     }
+    if (!req.tenantContext || !req.orgId || !req.userRole) {
+      return res.status(403).json({ error: 'Active organization membership required' });
+    }
+    if (!hasPermission(req.userRole, resource, action)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
   };
 }
 
@@ -120,38 +94,60 @@ function requirePermission(resource, action) {
  */
 async function requireOrgMembership(req, res, next) {
   try {
-    const userId = req.user?.sub;
+    const userId = req.user?.sub || req.user?.id;
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    if (req.orgId) {
+    if (req.tenantContext && req.orgId && req.userRole) {
       return next();
     }
 
-    // File-mode development has no organization table. User ownership still
-    // protects simulated records; database-backed routes must resolve a real
-    // organization below.
     if (!db.isAvailable()) {
-      req.orgId = req.user?.orgId || null;
-      return next();
+      return res.status(503).json({
+        error: {
+          code: 'authorization_unavailable',
+          message: 'Organization authorization is temporarily unavailable.',
+        },
+      });
     }
 
-    if (db.isAvailable()) {
-      const result = await db.query(
-        'SELECT organization_id FROM users WHERE id = $1',
-        [userId]
-      );
-      if (result.rows.length > 0) {
-        req.orgId = result.rows[0].organization_id;
-        return next();
-      }
+    const result = await db.query(
+      'SELECT id, organization_id, role, status FROM users WHERE id = $1',
+      [userId]
+    );
+    if (!result.rows || result.rows.length !== 1) {
+      return res.status(403).json({ error: 'Active organization membership required' });
     }
 
-    return res.status(403).json({ error: 'No organization membership found' });
+    const membership = result.rows[0];
+    const allowedRoles = new Set(['owner', 'admin', 'member', 'viewer']);
+    if (!membership.organization_id ||
+        membership.status !== 'active' ||
+        !allowedRoles.has(membership.role)) {
+      return res.status(403).json({ error: 'Active organization membership required' });
+    }
+
+    req.orgId = membership.organization_id;
+    req.userRole = membership.role;
+    req.tenantContext = Object.freeze({
+      userId: membership.id,
+      organizationId: membership.organization_id,
+      role: membership.role,
+    });
+    return next();
   } catch (err) {
-    console.error('[Auth] Org membership error:', err.message);
-    res.status(500).json({ error: 'Authorization check failed' });
+    console.error('[Auth] Organization membership lookup failed:', {
+      userId: req.user && (req.user.sub || req.user.id),
+      message: err.message,
+      stack: err.stack,
+    });
+    return res.status(503).json({
+      error: {
+        code: 'authorization_unavailable',
+        message: 'Organization authorization is temporarily unavailable.',
+      },
+    });
   }
 }
 

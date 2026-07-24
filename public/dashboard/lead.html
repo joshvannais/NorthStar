@@ -98,12 +98,9 @@
           return;
         }
 
-        // Try AppStore first, then API
-        var lead = (typeof AppStore !== 'undefined' && AppStore.getLead) ? AppStore.getLead(leadId) : null;
-
-        if (lead) {
-          renderLead(lead);
-        } else if (typeof API !== 'undefined' && API.getLead) {
+        // Direct navigation is server-first. A local cache entry is never
+        // authoritative after the server rejects this session or tenant.
+        if (typeof API !== 'undefined' && API.getLead) {
           API.getLead(leadId).then(function(data) {
             renderLead(data);
           }).catch(function() {

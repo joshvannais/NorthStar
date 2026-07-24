@@ -26,6 +26,9 @@ describe('independent-review stabilization blockers', function () {
       'There is no burning smell or smoke, just a breaker that tripped.',
       'It was flooding yesterday but stopped after I shut the valve.',
       'The old pipe used to leak, but it was already fixed.',
+      'The sink has a slow leak. Tomorrow is fine.',
+      'The outlet sparked last week and has already been fixed.',
+      'There is no present danger and nothing is sparking.',
     ])('does not dispatch on negated, resolved, or history-only evidence: %s', function (statement) {
       const result = actionFor(statement);
       expect(result.evidence).toEqual({ isEmergency: false, signal: null, evidence: null });
@@ -47,6 +50,32 @@ describe('independent-review stabilization blockers', function () {
       });
       expect(result.action).toMatchObject({ action: 'Dispatch immediately', priority: 'critical' });
     });
+
+    test.each([
+      ['CUSTOMER', 'The sink is not leaking, but the outlet is sparking right now.', 'electrical sparking'],
+      ['Caller', 'There is no smoke; however, I smell something burning now.', 'burning or smoke'],
+      ['CLIENT', 'The old leak is resolved, yet a pipe burst and water is gushing everywhere.', 'uncontrolled leak'],
+      ['HomeOwner', 'It was flooding yesterday, but water is rising in the room right now.', 'active flooding'],
+    ])('normalizes customer aliases and evaluates mixed clauses independently', function (speaker, statement, signal) {
+      const transcript = [
+        { speaker: 'AI', text: 'Is this an emergency or is anything sparking?' },
+        { speaker: speaker, text: statement },
+      ];
+      expect(pipeline.detectEmergencyEvidence(transcript)).toMatchObject({
+        isEmergency: true,
+        signal: signal,
+      });
+    });
+
+    test.each(['AI', 'agent', 'assistant', 'system'])(
+      'never treats a %s prompt as customer evidence',
+      function (speaker) {
+        expect(pipeline.detectEmergencyEvidence([
+          { speaker: speaker, text: 'This is an emergency: the outlet is sparking and the room is flooding.' },
+          { speaker: 'customer', text: 'No present danger. Tomorrow is fine.' },
+        ])).toEqual({ isEmergency: false, signal: null, evidence: null });
+      }
+    );
 
     test('canonical pricing uses the same evidence decision instead of urgency keywords', function () {
       function build(emergencyEvidence) {
@@ -106,6 +135,41 @@ describe('independent-review stabilization blockers', function () {
       expect(demoScope.getSessionId(real)).toBeNull();
       expect(demoScope.isSimulation(real)).toBe(false);
       expect(demoScope.canAccess(real, null)).toBe(true);
+    });
+
+    test('tenant access defaults deny for unowned and other-organization file records', function () {
+      const access = {
+        organizationId: 'org-a',
+        userId: 'owner-a',
+        sessionId: 'session-a',
+        enforceOwner: true,
+      };
+      expect(demoScope.canAccessTenant(
+        { id: 'tenant-a', organizationId: 'org-a', subject: 'Simulated call from a real customer' },
+        access
+      )).toBe(true);
+      expect(demoScope.canAccessTenant({ id: 'unowned' }, access)).toBe(false);
+      expect(demoScope.canAccessTenant({ id: 'tenant-b', organization_id: 'org-b' }, access)).toBe(false);
+      expect(demoScope.canAccessTenant(
+        {
+          id: 'session-a',
+          source: 'simulation',
+          simulationSessionId: 'session-a',
+          ownerUserId: 'owner-a',
+          organizationId: 'org-a',
+        },
+        access
+      )).toBe(true);
+      expect(demoScope.canAccessTenant(
+        {
+          id: 'wrong-session',
+          source: 'simulation',
+          simulationSessionId: 'session-b',
+          ownerUserId: 'owner-a',
+          organizationId: 'org-a',
+        },
+        access
+      )).toBe(false);
     });
 
     test('the exact committed legacy fixtures remain narrowly classified', function () {

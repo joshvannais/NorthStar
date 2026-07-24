@@ -88,13 +88,15 @@ function isSimulation(record) {
 function getOwnerUserId(record) {
   if (!record) return null;
   const metadata = record.metadata || {};
-  return metadata.ownerUserId || record.ownerUserId || null;
+  return metadata.ownerUserId || metadata.owner_user_id ||
+    record.ownerUserId || record.owner_user_id || null;
 }
 
 function getOrganizationId(record) {
   if (!record) return null;
   const metadata = record.metadata || {};
-  return metadata.organizationId || record.organizationId || null;
+  return metadata.organizationId || metadata.organization_id ||
+    record.organizationId || record.organization_id || null;
 }
 
 function createAccessContext(req, selectedSessionId) {
@@ -124,23 +126,26 @@ function resolveAccess(selector) {
 }
 
 function canAccess(record, selector) {
-  if (!isSimulation(record)) return true;
   const context = resolveAccess(selector);
+  if (context.enforceOwner) {
+    const organizationId = getOrganizationId(record);
+    if (!context.organizationId || !organizationId ||
+        String(organizationId) !== String(context.organizationId)) return false;
+  }
+  if (!isSimulation(record)) return true;
   if (!context.sessionId || getSessionId(record) !== context.sessionId) return false;
   if (!context.enforceOwner) return true;
   const ownerUserId = getOwnerUserId(record);
   if (!ownerUserId || !context.userId || String(ownerUserId) !== String(context.userId)) return false;
-  const organizationId = getOrganizationId(record);
-  if (organizationId && (!context.organizationId || String(organizationId) !== String(context.organizationId))) return false;
   return true;
 }
 
 function canAccessTenant(record, selector) {
   const context = resolveAccess(selector);
-  const ownerUserId = getOwnerUserId(record);
-  if (ownerUserId && (!context.userId || String(ownerUserId) !== String(context.userId))) return false;
+  if (!context.organizationId) return false;
   const organizationId = getOrganizationId(record);
-  if (organizationId && (!context.organizationId || String(organizationId) !== String(context.organizationId))) return false;
+  if (!organizationId ||
+      String(organizationId) !== String(context.organizationId)) return false;
   return canAccess(record, selector);
 }
 

@@ -49,13 +49,26 @@ const mockCanonicalCustomer = {
   pipelineVersion: 'canonical-polaris-v1',
 };
 
+const mockMembershipOverrides = Object.create(null);
+
 jest.mock('../../src/db', function () {
   return {
     initDatabase: jest.fn(function () { return Promise.resolve(true); }),
     isAvailable: jest.fn(function () { return true; }),
-    query: jest.fn(function (sql) {
-      if (/SELECT organization_id FROM users/.test(String(sql))) {
-        return Promise.resolve({ rows: [{ organization_id: 'org-test-owner' }] });
+    query: jest.fn(function (sql, params) {
+      if (/FROM users WHERE id/.test(String(sql))) {
+        const userId = params && params[0];
+        const fallback = {
+          id: userId,
+          organization_id: userId === 'other-owner' ? 'org-other-owner' : 'org-test-owner',
+          role: 'owner',
+          status: 'active',
+        };
+        const override = mockMembershipOverrides[userId];
+        if (override && Array.isArray(override.rows)) {
+          return Promise.resolve({ rows: override.rows });
+        }
+        return Promise.resolve({ rows: [Object.assign(fallback, override || {})] });
       }
       if (/SELECT id FROM call_records/.test(String(sql))) {
         return Promise.resolve({ rows: [] });
@@ -138,6 +151,7 @@ jest.mock('../../src/polaris/customer-engine', function () {
       id: 'cust-tenant',
       name: 'Tenant Customer',
       status: 'active',
+      metadata: { organizationId: 'org-test-owner' },
     },
     'cust-a': {
       id: 'cust-a',
@@ -149,6 +163,7 @@ jest.mock('../../src/polaris/customer-engine', function () {
         source: 'simulation',
         simulationSessionId: 'session-a',
         ownerUserId: 'test-owner',
+        organizationId: 'org-test-owner',
         polarisIntelligence: mockCanonicalCustomer,
       },
     },
@@ -161,6 +176,7 @@ jest.mock('../../src/polaris/customer-engine', function () {
         source: 'simulation',
         simulationSessionId: 'session-b',
         ownerUserId: 'other-owner',
+        organizationId: 'org-other-owner',
       },
     },
   };
@@ -193,20 +209,20 @@ jest.mock('../../src/polaris/communications-engine', function () {
   const communications = [
     {
       id: 'comm-hidden-1', customerId: 'cust-b', type: 'call',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner', organizationId: 'org-other-owner' },
     },
     {
       id: 'comm-hidden-2', customerId: 'cust-b', type: 'call',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner', organizationId: 'org-other-owner' },
     },
-    { id: 'comm-tenant', customerId: 'cust-tenant', type: 'call' },
+    { id: 'comm-tenant', customerId: 'cust-tenant', type: 'call', metadata: { organizationId: 'org-test-owner' } },
     {
       id: 'comm-a-1', customerId: 'cust-a', type: 'call',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a', ownerUserId: 'test-owner' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a', ownerUserId: 'test-owner', organizationId: 'org-test-owner' },
     },
     {
       id: 'comm-a-2', customerId: 'cust-a', type: 'call',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a', ownerUserId: 'test-owner' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a', ownerUserId: 'test-owner', organizationId: 'org-test-owner' },
     },
   ];
 
@@ -237,6 +253,7 @@ jest.mock('../../src/polaris/opportunity-engine', function () {
       id: 'opp-tenant-open', customerId: 'cust-tenant', title: 'Tenant Lead',
       stage: 'lead', status: 'open', estimatedValue: 1000, expectedRevenue: 50,
       lastActivity: '2099-01-01T00:00:00.000Z',
+      metadata: { organizationId: 'org-test-owner' },
     },
     {
       id: 'opp-a-open', customerId: 'cust-a', title: 'Session A Negotiation',
@@ -245,6 +262,7 @@ jest.mock('../../src/polaris/opportunity-engine', function () {
       metadata: {
         recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a',
         ownerUserId: 'test-owner',
+        organizationId: 'org-test-owner',
         polarisIntelligence: mockCanonicalCustomer,
       },
     },
@@ -252,18 +270,19 @@ jest.mock('../../src/polaris/opportunity-engine', function () {
       id: 'opp-a-won', customerId: 'cust-a', title: 'Session A Won',
       stage: 'won', status: 'won', estimatedValue: 3000, expectedRevenue: 3000,
       lastActivity: '2099-01-01T00:00:00.000Z',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a', ownerUserId: 'test-owner' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a', ownerUserId: 'test-owner', organizationId: 'org-test-owner' },
     },
     {
       id: 'opp-tenant-lost', customerId: 'cust-tenant', title: 'Tenant Lost',
       stage: 'lost', status: 'lost', estimatedValue: 500, expectedRevenue: 0,
       lastActivity: '2099-01-01T00:00:00.000Z',
+      metadata: { organizationId: 'org-test-owner' },
     },
     {
       id: 'opp-hidden', customerId: 'cust-b', title: 'Hidden Session B',
       stage: 'qualified', status: 'open', estimatedValue: 9000, expectedRevenue: 1350,
       lastActivity: '2099-01-01T00:00:00.000Z',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner', organizationId: 'org-other-owner' },
     },
   ];
 
@@ -298,18 +317,19 @@ jest.mock('../../src/polaris/opportunity-engine', function () {
 
 jest.mock('../../src/polaris/financial-engine', function () {
   const estimates = [
-    { id: 'est-tenant', customerId: 'cust-tenant', total: 1000 },
+    { id: 'est-tenant', customerId: 'cust-tenant', total: 1000, metadata: { organizationId: 'org-test-owner' } },
     {
       id: 'est-a', customerId: 'cust-a', opportunityId: 'opp-a-open', total: 1200,
       metadata: {
         recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a',
         ownerUserId: 'test-owner',
+        organizationId: 'org-test-owner',
         polarisIntelligence: mockCanonicalCustomer,
       },
     },
     {
       id: 'est-b', customerId: 'cust-b', total: 9000,
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner', organizationId: 'org-other-owner' },
     },
   ];
 
@@ -339,16 +359,16 @@ jest.mock('../../src/polaris/financial-engine', function () {
 
 jest.mock('../../src/services/dataLoader', function () {
   const leads = [
-    { id: 'lead-tenant', caller: 'Tenant Lead', service: 'Tenant Service' },
+    { id: 'lead-tenant', caller: 'Tenant Lead', service: 'Tenant Service', organizationId: 'org-test-owner' },
     {
       id: 'lead-a', caller: 'Session A Lead', service: 'Concrete',
       recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a',
-        ownerUserId: 'test-owner',
+        ownerUserId: 'test-owner', organizationId: 'org-test-owner',
     },
     {
       id: 'lead-b', caller: 'Session B Lead', service: 'Roofing',
       recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b',
-        ownerUserId: 'other-owner',
+        ownerUserId: 'other-owner', organizationId: 'org-other-owner',
     },
   ];
 
@@ -421,11 +441,53 @@ const otherToken = generateToken({
   name: 'Other Owner',
 });
 
+const nullOrgToken = generateToken({ id: 'null-org-user', role: 'owner' });
+const inactiveToken = generateToken({ id: 'inactive-user', role: 'owner' });
+const viewerToken = generateToken({ id: 'viewer-user', role: 'owner' });
+const ambiguousToken = generateToken({ id: 'ambiguous-user', role: 'owner' });
+
 function authorized(testRequest) {
   return testRequest.set('Authorization', 'Bearer ' + token);
 }
 
 describe('stabilization public API contracts', function () {
+  beforeAll(function () {
+    mockMembershipOverrides['null-org-user'] = { organization_id: null, role: 'owner', status: 'active' };
+    mockMembershipOverrides['inactive-user'] = { organization_id: 'org-test-owner', role: 'owner', status: 'inactive' };
+    mockMembershipOverrides['viewer-user'] = { organization_id: 'org-test-owner', role: 'viewer', status: 'active' };
+    mockMembershipOverrides['ambiguous-user'] = {
+      rows: [
+        { id: 'ambiguous-user', organization_id: 'org-test-owner', role: 'owner', status: 'active' },
+        { id: 'ambiguous-user', organization_id: 'org-other-owner', role: 'owner', status: 'active' },
+      ],
+    };
+  });
+
+  test('null, inactive, and ambiguous persisted membership are rejected identically', async function () {
+    for (const tokenValue of [nullOrgToken, inactiveToken, ambiguousToken]) {
+      const response = await request(app).get('/api/leads')
+        .set('Authorization', 'Bearer ' + tokenValue);
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({ error: 'Active organization membership required' });
+    }
+  });
+
+  test('persisted viewer role overrides token claims and blocks tenant mutations', async function () {
+    const list = await request(app).get('/api/leads')
+      .set('Authorization', 'Bearer ' + viewerToken);
+    const create = await request(app).post('/api/leads')
+      .set('Authorization', 'Bearer ' + viewerToken)
+      .send({ customerName: 'Forbidden' });
+    const simulation = await request(app).post('/api/v1/simulations/leads')
+      .set('Authorization', 'Bearer ' + viewerToken)
+      .send({ name: 'Forbidden', service: 'concrete', idempotencyKey: 'viewer-forbidden' });
+    expect(list.status).toBe(200);
+    expect(create.status).toBe(403);
+    expect(simulation.status).toBe(403);
+    expect(create.body.error.code).toBe('forbidden');
+    expect(simulation.body.error.code).toBe('forbidden');
+  });
+
   test('permissioned public v1 leads handler is not shadowed by dashboard routes', async function () {
     const unauthenticated = await request(app).get('/api/v1/leads');
     expect(unauthenticated.status).toBe(401);
@@ -721,7 +783,23 @@ describe('stabilization public API contracts', function () {
   });
 
   test('raw lead list, detail, transcript export, update, and delete enforce owner plus active session', async function () {
-    const realLead = { id: 'raw-real', customerName: 'Durable Raw Lead', transcript: 'durable transcript' };
+    const realLead = {
+      id: 'raw-real',
+      customerName: 'Durable Raw Lead',
+      transcript: 'durable transcript',
+      organizationId: 'org-test-owner',
+    };
+    const otherTenantLead = {
+      id: 'raw-other-tenant',
+      customerName: 'Other Tenant Lead',
+      transcript: 'other tenant secret',
+      organizationId: 'org-other-owner',
+    };
+    const unownedLead = {
+      id: 'raw-unowned',
+      customerName: 'Quarantined Historical Lead',
+      transcript: 'unowned historical secret',
+    };
     const ownedLead = {
       id: 'raw-owned',
       customerName: 'Owned Raw Simulation',
@@ -730,6 +808,7 @@ describe('stabilization public API contracts', function () {
       source: 'simulation',
       simulationSessionId: 'raw-session',
       ownerUserId: 'test-owner',
+      organizationId: 'org-test-owner',
     };
     const foreignLead = {
       id: 'raw-foreign',
@@ -739,8 +818,9 @@ describe('stabilization public API contracts', function () {
       source: 'simulation',
       simulationSessionId: 'raw-session',
       ownerUserId: 'other-owner',
+      organizationId: 'org-other-owner',
     };
-    const records = [realLead, ownedLead, foreignLead];
+    const records = [realLead, otherTenantLead, unownedLead, ownedLead, foreignLead];
     leadsStore.getAllLeads.mockImplementation(function () { return records.slice(); });
     leadsStore.getLead.mockImplementation(function (id) {
       return records.find(function (record) { return record.id === id; }) || null;
@@ -764,21 +844,31 @@ describe('stabilization public API contracts', function () {
       const wrongOwnerList = await request(app).get('/api/leads?sessionId=raw-session')
         .set('Authorization', 'Bearer ' + otherToken);
       expect(wrongOwnerList.body.items.map(function (lead) { return lead.id; }))
-        .toEqual(['raw-real', 'raw-foreign']);
+        .toEqual(['raw-other-tenant', 'raw-foreign']);
 
       expect((await authorized(request(app).get('/api/leads/raw-owned?sessionId=raw-session'))).status).toBe(200);
       expect((await authorized(request(app).get('/api/leads/raw-owned'))).status).toBe(404);
       expect((await request(app).get('/api/leads/raw-owned?sessionId=raw-session')
         .set('Authorization', 'Bearer ' + otherToken)).status).toBe(404);
+      expect((await authorized(request(app).get('/api/leads/raw-other-tenant?sessionId=raw-session'))).status).toBe(404);
+      expect((await authorized(request(app).get('/api/leads/raw-unowned?sessionId=raw-session'))).status).toBe(404);
 
       const csv = await authorized(request(app).get('/api/leads/export?sessionId=raw-session'));
       expect(csv.status).toBe(200);
       expect(csv.text).toContain('owned transcript');
       expect(csv.text).not.toContain('foreign transcript secret');
+      expect(csv.text).not.toContain('other tenant secret');
+      expect(csv.text).not.toContain('unowned historical secret');
 
       expect((await authorized(request(app).put('/api/leads/raw-owned')
         .send({ customerName: 'Blocked' }))).status).toBe(404);
       expect((await authorized(request(app).delete('/api/leads/raw-owned'))).status).toBe(404);
+      expect((await authorized(request(app).put('/api/leads/raw-unowned?sessionId=raw-session')
+        .send({ customerName: 'Claimed' }))).status).toBe(404);
+      expect((await authorized(request(app).delete('/api/leads/raw-unowned?sessionId=raw-session'))).status).toBe(404);
+      expect((await authorized(request(app).put('/api/leads/raw-other-tenant?sessionId=raw-session')
+        .send({ customerName: 'Cross tenant' }))).status).toBe(404);
+      expect((await authorized(request(app).delete('/api/leads/raw-other-tenant?sessionId=raw-session'))).status).toBe(404);
       expect(leadsStore.updateLead).not.toHaveBeenCalled();
       expect(leadsStore.removeLead).not.toHaveBeenCalled();
 
@@ -829,8 +919,10 @@ describe('stabilization public API contracts', function () {
     injectFailure();
     const response = await postSimulation('failure-' + stage);
     expect(response.status).toBe(500);
-    expect(response.body.stage).toBe(stage);
-    expect(response.body.success).not.toBe(true);
+    expect(response.body).toEqual({
+      error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' },
+    });
+    expect(JSON.stringify(response.body)).not.toContain('forced');
   });
 
   test('never returns 201 when PostgreSQL persistence fails', async function () {
@@ -845,8 +937,10 @@ describe('stabilization public API contracts', function () {
     try {
       const response = await postSimulation('failure-postgres');
       expect(response.status).toBe(500);
-      expect(response.body.stage).toBe('call_record');
-      expect(response.body.success).not.toBe(true);
+      expect(response.body).toEqual({
+        error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' },
+      });
+      expect(JSON.stringify(response.body)).not.toContain('PostgreSQL');
     } finally {
       db.query.mockImplementation(original);
     }
@@ -871,6 +965,117 @@ describe('stabilization public API contracts', function () {
     expect(opportunitiesEngine.createOpportunity).toHaveBeenCalledTimes(1);
     expect(financialEngine.createEstimate).toHaveBeenCalledTimes(1);
     expect(leadsStore.addLead).toHaveBeenCalledTimes(1);
+  });
+
+  test('a failed idempotent operation is removed so the same request can retry', async function () {
+    simulationIdempotency.resetForTests();
+    customersEngine.createCustomer.mockClear();
+    customersEngine.createCustomer.mockReturnValueOnce({ error: 'transient customer failure' });
+
+    const first = await postSimulation('retry-after-failure');
+    const second = await postSimulation('retry-after-failure');
+
+    expect(first.status).toBe(500);
+    expect(second.status).toBe(201);
+    expect(customersEngine.createCustomer).toHaveBeenCalledTimes(2);
+  });
+
+  test('an early validation failure does not leave the idempotency key permanently in progress', async function () {
+    simulationIdempotency.resetForTests();
+    const pipeline = require('../../src/routes/simulation/pipeline');
+    const scenarioSpy = jest.spyOn(pipeline, 'generateScenario')
+      .mockReturnValueOnce(null);
+    try {
+      const first = await postSimulation('retry-after-scenario-failure');
+      const second = await postSimulation('retry-after-scenario-failure');
+
+      expect(first.status).toBe(400);
+      expect(first.body).toEqual({
+        error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' },
+      });
+      expect(second.status).toBe(201);
+    } finally {
+      scenarioSpy.mockRestore();
+    }
+  });
+
+  test('the same organization key with a different canonical payload returns 409 without writing', async function () {
+    simulationIdempotency.resetForTests();
+    customersEngine.createCustomer.mockClear();
+    const first = await postSimulation('payload-bound-key');
+    const second = await authorized(request(app)
+      .post('/api/v1/simulations/leads')
+      .send({
+        name: 'Different Payload Customer',
+        phone: '(555) 222-3333',
+        email: 'persistence@test.local',
+        service: 'concrete',
+        sessionId: 'session-persistence',
+        idempotencyKey: 'payload-bound-key',
+      }));
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(409);
+    expect(second.body).toEqual({
+      error: {
+        code: 'idempotency_conflict',
+        message: 'The idempotency key was already used with a different request.',
+      },
+    });
+    expect(customersEngine.createCustomer).toHaveBeenCalledTimes(1);
+  });
+
+  test('required PostgreSQL unavailability is detected before any file engine writes', async function () {
+    simulationIdempotency.resetForTests();
+    customersEngine.createCustomer.mockClear();
+    communicationsEngine.recordCommunication.mockClear();
+    opportunitiesEngine.createOpportunity.mockClear();
+    financialEngine.createEstimate.mockClear();
+    leadsStore.addLead.mockClear();
+    db.isAvailable.mockReset()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false);
+    try {
+      const response = await postSimulation('preflight-unavailable');
+      expect(response.status).toBe(503);
+      expect(response.body).toEqual({
+        error: {
+          code: 'persistence_unavailable',
+          message: 'Required persistence is temporarily unavailable.',
+        },
+      });
+      expect(customersEngine.createCustomer).not.toHaveBeenCalled();
+      expect(communicationsEngine.recordCommunication).not.toHaveBeenCalled();
+      expect(opportunitiesEngine.createOpportunity).not.toHaveBeenCalled();
+      expect(financialEngine.createEstimate).not.toHaveBeenCalled();
+      expect(leadsStore.addLead).not.toHaveBeenCalled();
+    } finally {
+      db.isAvailable.mockReset().mockReturnValue(true);
+    }
+  });
+
+  test('temporary process-local idempotency entries use bounded completed-entry eviction and TTL', function () {
+    simulationIdempotency.resetForTests();
+    simulationIdempotency.configureForTests({ maxEntries: 2, ttlMs: 60000 });
+    const fingerprint = simulationIdempotency.payloadFingerprint({ name: 'same' });
+    const keyA = simulationIdempotency.requestKey('org-test-owner', 'a');
+    const keyB = simulationIdempotency.requestKey('org-test-owner', 'b');
+    const keyC = simulationIdempotency.requestKey('org-test-owner', 'c');
+    simulationIdempotency.claim(keyA, fingerprint);
+    simulationIdempotency.resolve(keyA, { status: 201, body: {} });
+    simulationIdempotency.claim(keyB, fingerprint);
+    simulationIdempotency.resolve(keyB, { status: 201, body: {} });
+    expect(simulationIdempotency.sizeForTests()).toBe(2);
+    expect(simulationIdempotency.claim(keyC, fingerprint).owner).toBe(true);
+    expect(simulationIdempotency.sizeForTests()).toBe(2);
+    expect(simulationIdempotency.claim(keyA, fingerprint).owner).toBe(true);
+
+    simulationIdempotency.resetForTests();
+    simulationIdempotency.configureForTests({ maxEntries: 2, ttlMs: 0 });
+    simulationIdempotency.claim(keyA, fingerprint);
+    simulationIdempotency.resolve(keyA, { status: 201, body: {} });
+    expect(simulationIdempotency.claim(keyB, fingerprint).owner).toBe(true);
+    expect(simulationIdempotency.sizeForTests()).toBe(1);
   });
 
   test('concurrent duplicate keys coalesce before PostgreSQL completes', async function () {

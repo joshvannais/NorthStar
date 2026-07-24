@@ -28,7 +28,13 @@ const API = {
 
     const res = await fetch(`${this.base}${path}`, options);
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
+    if (!res.ok) {
+      const payload = data && data.error;
+      const error = new Error(payload && payload.message ? payload.message : 'Request failed');
+      error.status = res.status;
+      error.code = payload && payload.code ? payload.code : 'request_failed';
+      throw error;
+    }
     return data;
   },
 
@@ -38,7 +44,13 @@ const API = {
   del(path) { return this.request('DELETE', path); },
 
   async getLeads() { return this.get('/leads'); },
-  async getLead(id) { return this.get(`/leads/${id}`); },
+  async getLead(id) {
+    const sessionId = (window.NorthStarDemoSession && window.NorthStarDemoSession.id) ||
+      window.SIM_SESSION_ID || null;
+    const path = `/leads/${encodeURIComponent(id)}` +
+      (sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : '');
+    return this.get(path);
+  },
   async createLead(data) { return this.post('/leads', data); },
   async updateLead(id, data) { return this.put(`/leads/${id}`, data); },
   async deleteLead(id) { return this.del(`/leads/${id}`); },

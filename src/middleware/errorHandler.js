@@ -16,7 +16,15 @@ function createError(code, message, details = {}, statusCode = 400) {
  * Express middleware: catches errors and returns consistent format.
  */
 function errorHandler(err, req, res, _next) {
-  console.error(`[Error] ${req.method} ${req.path}:`, err.message);
+  console.error('[Error] Request failed:', {
+    requestId: req.id || null,
+    method: req.method,
+    path: req.path,
+    code: err.code || null,
+    statusCode: err.statusCode || null,
+    message: err.message,
+    stack: err.stack,
+  });
 
   // Handle known error types
   if (err.statusCode) {

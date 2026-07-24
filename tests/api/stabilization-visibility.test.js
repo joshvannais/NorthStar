@@ -35,6 +35,23 @@ jest.mock('../../src/auth/middleware', function () {
     },
   };
 });
+jest.mock('../../src/db', function () {
+  return {
+    isAvailable: jest.fn(function () { return true; }),
+    query: jest.fn(function (sql, params) {
+      if (/FROM users WHERE id/.test(String(sql))) {
+        const userId = params[0];
+        return Promise.resolve({ rows: [{
+          id: userId,
+          organization_id: userId === 'owner-b' ? 'org-b' : 'org-a',
+          role: 'owner',
+          status: 'active',
+        }] });
+      }
+      return Promise.resolve({ rows: [] });
+    }),
+  };
+});
 jest.mock('../../src/polaris/store', function () {
   return { getAllRecommendations: jest.fn(function () { return []; }) };
 });
@@ -53,11 +70,13 @@ const engineRoutes = require('../../src/routes/polaris-engines');
 const polarisRoutes = require('../../src/routes/polaris');
 
 function simulationMetadata(sessionId, ownerUserId) {
+  const owner = ownerUserId || 'owner-a';
   return {
     recordScope: 'simulation',
     source: 'simulation',
     simulationSessionId: sessionId,
-    ownerUserId: ownerUserId || 'owner-a',
+    ownerUserId: owner,
+    organizationId: owner === 'owner-b' ? 'org-b' : 'org-a',
   };
 }
 
@@ -72,17 +91,17 @@ function buildApp() {
 describe('stabilization session visibility guards', function () {
   const app = buildApp();
   const customers = {
-    real: { id: 'customer-real', name: 'Durable Tenant Customer', metadata: {} },
+    real: { id: 'customer-real', name: 'Durable Tenant Customer', metadata: { organizationId: 'org-a' } },
     sessionA: { id: 'customer-a', name: 'Session A Customer', metadata: simulationMetadata('session-a') },
     sessionB: { id: 'customer-b', name: 'Session B Customer', metadata: simulationMetadata('session-b', 'owner-b') },
   };
   const opportunities = {
-    real: { id: 'opportunity-real', customerId: customers.real.id, title: 'Durable Opportunity', metadata: {} },
+    real: { id: 'opportunity-real', customerId: customers.real.id, title: 'Durable Opportunity', metadata: { organizationId: 'org-a' } },
     sessionA: { id: 'opportunity-a', customerId: customers.sessionA.id, title: 'Session A Opportunity', metadata: simulationMetadata('session-a') },
     sessionB: { id: 'opportunity-b', customerId: customers.sessionB.id, title: 'Session B Opportunity', metadata: simulationMetadata('session-b', 'owner-b') },
   };
   const recommendations = [
-    { id: 'recommendation-real', type: 'recommendation', data: { id: 'real-data', message: 'Durable recommendation' } },
+    { id: 'recommendation-real', type: 'recommendation', data: { id: 'real-data', message: 'Durable recommendation', organizationId: 'org-a' } },
     { id: 'recommendation-a', type: 'opportunity', data: opportunities.sessionA },
     { id: 'recommendation-b', type: 'opportunity', data: opportunities.sessionB },
   ];
@@ -218,6 +237,8 @@ describe('stabilization session visibility guards', function () {
         expect(body.metadata.recordScope).toBeUndefined();
         expect(body.metadata.source).toBeUndefined();
         expect(body.metadata.simulationSessionId).toBeUndefined();
+        expect(body.metadata.organizationId).toBe('org-a');
+        expect(body.metadata.ownerUserId).toBe('owner-a');
       });
   });
 

@@ -19,6 +19,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth/middleware');
+const { requireOrgMembership } = require('../auth/permissions');
 const demoScope = require('../services/demoRecordScope');
 const canonicalPolaris = require('../services/canonicalPolaris');
 const sessionScopedOpportunity = require('../services/sessionScopedOpportunity');
@@ -50,7 +51,8 @@ function _filterThenPaginate(result, key, sessionId, limit, offset) {
 }
 
 function _denyHiddenSimulation(record, sessionId, res) {
-  if (!record || record.error || demoScope.canAccess(record, sessionId)) return false;
+  if (record && !record.error &&
+      demoScope.canAccessTenant(record, demoScope.resolveAccess(sessionId))) return false;
   res.status(404).json({ error: 'Record not found' });
   return true;
 }
@@ -70,6 +72,13 @@ function _sanitizePublicBody(body) {
     delete clean.metadata.simulationSessionId;
     delete clean.metadata.ownerUserId;
     delete clean.metadata.organizationId;
+  }
+  var context = demoScope.resolveAccess();
+  if (context && context.enforceOwner && context.organizationId) {
+    clean.metadata = Object.assign({}, clean.metadata || {}, {
+      ownerUserId: context.userId,
+      organizationId: context.organizationId,
+    });
   }
   return clean;
 }
@@ -120,13 +129,40 @@ function _getEngines() {
 // ── Middleware ──
 router.use((req, res, next) => {
   res.setHeader('X-Polaris-Engines-Version', '13.0');
+  const sendJson = res.json.bind(res);
+  res.json = function (body) {
+    const rawError = body && body.error;
+    const rawMessage = typeof rawError === 'string'
+      ? rawError
+      : rawError && typeof rawError.message === 'string' ? rawError.message : null;
+    if (res.statusCode >= 500 && rawMessage) {
+      console.error('[Polaris Engines] Internal route failure:', {
+        method: req.method,
+        path: req.path,
+        message: rawMessage,
+      });
+      const safe = {
+        error: { code: 'internal_error', message: 'An unexpected error occurred. Please try again.' },
+      };
+      if (body && body.success === false) safe.success = false;
+      return sendJson(safe);
+    }
+    return sendJson(body);
+  };
   next();
 });
 
 // All engine routes require authentication
 router.use(requireAuth);
+router.use(requireOrgMembership);
 router.use(function (req, res, next) {
   demoScope.runWithAccess(req, next);
+});
+router.use(function (req, _res, next) {
+  if (/^(?:POST|PUT|PATCH)$/.test(req.method) && req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+    req.body = _sanitizePublicBody(req.body);
+  }
+  next();
 });
 
 // ══════════════════════════════════════════════
@@ -179,7 +215,6 @@ router.get('/customers/:id', (req, res) => {
   try {
     var e = _getEngines().customers;
     var result = e.getCustomer(req.params.id);
-    if (result.error) return res.status(404).json(result);
     if (_denyHiddenSimulation(result, req.query.sessionId, res)) return;
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -343,7 +378,6 @@ router.get('/communications/:id', (req, res) => {
   try {
     var e = _getEngines().comms;
     var result = e.getCommunication(req.params.id);
-    if (result.error) return res.status(404).json(result);
     if (_denyHiddenSimulation(result, req.query.sessionId, res)) return;
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -474,7 +508,6 @@ router.get('/opportunities/:id', (req, res) => {
   try {
     var e = _getEngines().opps;
     var result = e.getOpportunity(req.params.id);
-    if (result.error) return res.status(404).json(result);
     if (_denyHiddenSimulation(result, req.query.sessionId, res)) return;
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -732,7 +765,6 @@ router.get('/financial/estimates/:id', (req, res) => {
   try {
     var e = _getEngines().fin;
     var result = e.getEstimate(req.params.id);
-    if (result.error) return res.status(404).json(result);
     if (_denyHiddenSimulation(result, req.query.sessionId, res)) return;
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }

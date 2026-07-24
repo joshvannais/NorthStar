@@ -554,29 +554,35 @@ function calculateConfidence(extractedScope, missingInfo, serviceKey) {
  * conditions are not sufficient.
  */
 function detectEmergencyEvidence(transcript) {
+  const customerRoles = new Set(['customer', 'caller', 'client', 'homeowner']);
   const customerTurns = (Array.isArray(transcript) ? transcript : []).filter(function (turn) {
-    return turn && turn.speaker === 'customer' && typeof turn.text === 'string';
+    const role = turn && typeof turn.speaker === 'string' ? turn.speaker.trim().toLowerCase() : '';
+    return turn && customerRoles.has(role) && typeof turn.text === 'string';
   });
   const patterns = [
     { signal: 'active flooding', regex: /\b(?:flooding|room is filling with water|water is (?:rising|pouring)|water keeps (?:rising|pouring))\b/i },
     { signal: 'uncontrolled leak', regex: /\b(?:gushing|burst pipe|pipe (?:has )?burst|active leak|leak(?:ing)? and (?:i |we )?(?:can'?t|cannot|couldn'?t|could not) (?:get it to )?stop)\b/i },
     { signal: 'electrical sparking', regex: /\b(?:sparking|throwing sparks|seeing sparks)\b/i },
-    { signal: 'burning or smoke', regex: /\b(?:burning smell|smell(?:s|ing)? (?:like )?burning|smoke|smoking)\b/i },
+    { signal: 'burning or smoke', regex: /\b(?:burning smell|smell(?:s|ing)? (?:like |something )?burning|smoke|smoking)\b/i },
     { signal: 'immediate danger', regex: /\b(?:immediate danger|danger right now|unsafe right now|someone (?:is|could be) in danger)\b/i },
   ];
-  const negatedOrResolved = /\b(?:not an emergency|no emergency|not (?:currently |now )?(?:flooding|leaking|sparking|smoking)|no (?:burning smell|smoke|sparks?|flooding)|stopped|resolved|already fixed|no longer|used to|last (?:week|month|year)|yesterday but|can wait)\b/i;
+  const denied = /\b(?:not an emergency|no emergency|not (?:currently |now )?(?:flooding|leaking|sparking|smoking|burning)|no (?:burning smell|smoke|sparks?|flooding|active leak)|without (?:smoke|sparks?|a burning smell)|stopped|resolved|already fixed|fixed now|under control|shut (?:it|the (?:water|valve)) off|no longer|used to|previously|last (?:week|month|year)|yesterday(?: only)?|can wait|tomorrow is fine|next day is fine|no present danger|not (?:urgent|dangerous)|slow (?:drip|leak)|minor (?:drip|leak)|seeping)\b/i;
 
   for (const turn of customerTurns) {
-    const statements = turn.text.split(/[.!?]+/).map(function (value) { return value.trim(); }).filter(Boolean);
-    for (const statement of statements) {
-      if (negatedOrResolved.test(statement)) continue;
+    // Contrast words define independent evidence clauses. A negation in one
+    // clause must not suppress a different, current affirmative hazard.
+    const clauses = turn.text
+      .split(/[.!?;]+|\b(?:but|however|although|yet)\b/i)
+      .map(function (value) { return value.trim().replace(/^,+|,+$/g, '').trim(); })
+      .filter(Boolean);
+    for (const clause of clauses) {
       for (const pattern of patterns) {
-        const match = statement.match(pattern.regex);
-        if (match) {
+        const match = clause.match(pattern.regex);
+        if (match && !denied.test(clause)) {
           return {
             isEmergency: true,
             signal: pattern.signal,
-            evidence: statement,
+            evidence: clause,
           };
         }
       }

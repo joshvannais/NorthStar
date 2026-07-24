@@ -2,23 +2,68 @@
 
 const crypto = require('crypto');
 
-// Process-local coalescing is intentionally bounded. PostgreSQL call reuse
-// supplies a durable guard for that store; the file-backed Polaris engines do
-// not have a shared transaction or unique-key facility.
+// Temporary, process-local containment only. This does not coordinate multiple
+// processes, survive restarts, or make the cross-store operation transactional.
 const entries = new Map();
+let ttlMs = 10 * 60 * 1000;
+let maxEntries = 1000;
 
 function digest(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex');
 }
 
-function requestKey(userId, sessionId, suppliedKey) {
-  const raw = suppliedKey || ('unkeyed:' + Date.now() + ':' + Math.random());
-  return digest(String(userId || '') + '|' + String(sessionId || '') + '|' + String(raw));
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce(function (result, key) {
+      result[key] = canonicalize(value[key]);
+      return result;
+    }, {});
+  }
+  return value;
 }
 
-function claim(key) {
-  if (entries.has(key)) {
-    return { owner: false, promise: entries.get(key).promise };
+function payloadFingerprint(payload) {
+  return digest(JSON.stringify(canonicalize(payload || {})));
+}
+
+function requestKey(organizationId, suppliedKey) {
+  const raw = suppliedKey || ('unkeyed:' + Date.now() + ':' + Math.random());
+  return digest(String(organizationId || '') + '|' + String(raw));
+}
+
+function evictExpired(now) {
+  for (const [key, entry] of entries) {
+    if (entry.state !== 'in_progress' && now - entry.updatedAt >= ttlMs) {
+      entries.delete(key);
+    }
+  }
+}
+
+function evictToCapacity() {
+  if (entries.size < maxEntries) return;
+  const completed = Array.from(entries.entries())
+    .filter(function (pair) { return pair[1].state !== 'in_progress'; })
+    .sort(function (a, b) { return a[1].updatedAt - b[1].updatedAt; });
+  while (entries.size >= maxEntries && completed.length > 0) {
+    entries.delete(completed.shift()[0]);
+  }
+}
+
+function claim(key, fingerprint) {
+  const now = Date.now();
+  evictExpired(now);
+  const existing = entries.get(key);
+  if (existing) {
+    if (existing.fingerprint !== fingerprint) {
+      return { owner: false, conflict: true };
+    }
+    return { owner: false, promise: existing.promise };
+  }
+
+  evictToCapacity();
+  if (entries.size >= maxEntries) {
+    return { owner: false, capacity: true };
   }
 
   let resolveEntry;
@@ -34,18 +79,30 @@ function claim(key) {
     promise: promise,
     resolve: resolveEntry,
     reject: rejectEntry,
+    fingerprint: fingerprint,
+    state: 'in_progress',
+    updatedAt: now,
   });
   return { owner: true, promise: promise };
 }
 
 function resolve(key, result) {
   const entry = entries.get(key);
-  if (entry) entry.resolve(result);
+  if (entry) {
+    entry.state = 'complete';
+    entry.updatedAt = Date.now();
+    entry.resolve(result);
+  }
 }
 
 function reject(key, error) {
   const entry = entries.get(key);
-  if (entry) entry.reject(error);
+  if (entry) {
+    // Failed operations must be retryable. Delete before notifying waiters so
+    // a new request can immediately become the owner.
+    entries.delete(key);
+    entry.reject(error);
+  }
 }
 
 function postgresIdentity(sessionId, key) {
@@ -55,13 +112,27 @@ function postgresIdentity(sessionId, key) {
 
 function resetForTests() {
   entries.clear();
+  ttlMs = 10 * 60 * 1000;
+  maxEntries = 1000;
+}
+
+function configureForTests(options) {
+  if (options && Number.isFinite(options.ttlMs)) ttlMs = Math.max(0, options.ttlMs);
+  if (options && Number.isFinite(options.maxEntries)) maxEntries = Math.max(1, options.maxEntries);
+}
+
+function sizeForTests() {
+  return entries.size;
 }
 
 module.exports = {
+  payloadFingerprint,
   requestKey,
   claim,
   resolve,
   reject,
   postgresIdentity,
   resetForTests,
+  configureForTests,
+  sizeForTests,
 };

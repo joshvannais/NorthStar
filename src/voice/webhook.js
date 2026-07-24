@@ -222,11 +222,15 @@ async function routeEvent(payload) {
 
       // Emit with timeout
       const emitPromise = businessEvents.emit(bizEvent);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Handler timeout')), HANDLER_TIMEOUT_MS)
-      );
-
-      await Promise.race([emitPromise, timeoutPromise]);
+      let timeoutId;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Handler timeout')), HANDLER_TIMEOUT_MS);
+      });
+      try {
+        await Promise.race([emitPromise, timeoutPromise]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
     } catch (err) {
       console.error(`[Voice:Webhook] Event handler error for ${event}:`, err.message);
       // Don't fail the webhook response — Retell will retry if we 500

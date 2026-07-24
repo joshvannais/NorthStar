@@ -71,7 +71,7 @@ function buildPolarisContext(options) {
   let data;
   try {
     console.time(`[polaris:${correlationId}] dataLoader.loadData`);
-    data = dataLoader.loadData();
+    data = dataLoader.loadCanonicalData(opts.sessionId || null);
     console.timeEnd(`[polaris:${correlationId}] dataLoader.loadData`);
   } catch (err) {
     console.error(`[polaris:${correlationId}] dataLoader.loadData FAILED:`, err.message);
@@ -183,11 +183,11 @@ function buildPolarisContext(options) {
   // ── 9. Business Context (text + compact) — pure formatting ──
   const pageContext = { page, leadId };
   console.time(`[polaris:${correlationId}] businessContext.buildBusinessContext`);
-  const contextText = businessContext.buildBusinessContext(pageContext, computed);
+  const contextText = businessContext.buildBusinessContext(pageContext, computed, data);
   console.timeEnd(`[polaris:${correlationId}] businessContext.buildBusinessContext`);
 
   console.time(`[polaris:${correlationId}] businessContext.buildCompactContext`);
-  const compactContext = businessContext.buildCompactContext(pageContext, computed);
+  const compactContext = businessContext.buildCompactContext(pageContext, computed, data);
   console.timeEnd(`[polaris:${correlationId}] businessContext.buildCompactContext`);
 
   // ── 10. Build unified context ──

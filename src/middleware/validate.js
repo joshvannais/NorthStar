@@ -22,7 +22,7 @@ function validateBody(schema) {
 
       // Check required
       if (rules.required && (value === undefined || value === null || value === '')) {
-        errors.push({ field, message: `${field} is required` });
+        errors.push({ field, code: 'required' });
         continue;
       }
 
@@ -30,28 +30,28 @@ function validateBody(schema) {
 
       // Type checks
       if (rules.type === 'string' && typeof value !== 'string') {
-        errors.push({ field, message: `${field} must be a string` });
+        errors.push({ field, code: 'type_string' });
       } else if (rules.type === 'number') {
         const num = Number(value);
-        if (isNaN(num)) errors.push({ field, message: `${field} must be a number` });
+        if (isNaN(num)) errors.push({ field, code: 'type_number' });
       } else if (rules.type === 'boolean' && typeof value !== 'boolean') {
-        errors.push({ field, message: `${field} must be a boolean` });
+        errors.push({ field, code: 'type_boolean' });
       } else if (rules.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-        errors.push({ field, message: `${field} must be a valid email` });
+        errors.push({ field, code: 'format_email' });
       } else if (rules.type === 'phone' && !/^[\d\s\-().+]{7,20}$/.test(String(value))) {
-        errors.push({ field, message: `${field} must be a valid phone number` });
+        errors.push({ field, code: 'format_phone' });
       }
 
       // String-specific checks
       if (typeof value === 'string') {
         if (rules.min && value.length < rules.min) {
-          errors.push({ field, message: `${field} must be at least ${rules.min} characters` });
+          errors.push({ field, code: 'min_length' });
         }
         if (rules.max && value.length > rules.max) {
-          errors.push({ field, message: `${field} must be at most ${rules.max} characters` });
+          errors.push({ field, code: 'max_length' });
         }
         if (rules.pattern && !rules.pattern.test(value)) {
-          errors.push({ field, message: `${field} has an invalid format` });
+          errors.push({ field, code: 'invalid_format' });
         }
       }
 
@@ -59,10 +59,10 @@ function validateBody(schema) {
       if (rules.type === 'number') {
         const num = Number(value);
         if (rules.min !== undefined && num < rules.min) {
-          errors.push({ field, message: `${field} must be at least ${rules.min}` });
+          errors.push({ field, code: 'min_value' });
         }
         if (rules.max !== undefined && num > rules.max) {
-          errors.push({ field, message: `${field} must be at most ${rules.max}` });
+          errors.push({ field, code: 'max_value' });
         }
       }
     }

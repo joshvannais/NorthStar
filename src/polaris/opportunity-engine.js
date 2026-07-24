@@ -187,6 +187,7 @@ function createOpportunity(data) {
     lastActivity: now,
     tags: Array.isArray(data.tags) ? data.tags.slice() : [],
     notes: data.notes || null,
+    metadata: data.metadata ? Object.assign({}, data.metadata) : {},
     archived: false,
   };
 
@@ -204,7 +205,7 @@ function createOpportunity(data) {
       content: 'New opportunity created in stage "' + PIPELINE_STAGES[stage].displayName + '" with value $' + estimatedValue.toFixed(2),
       status: 'completed',
       author: data.owner || 'System',
-      metadata: { opportunityId: id, stage: stage, value: estimatedValue },
+      metadata: Object.assign({}, data.metadata || {}, { opportunityId: id, stage: stage, value: estimatedValue }),
     });
   } catch (e) {
     // Non-critical.

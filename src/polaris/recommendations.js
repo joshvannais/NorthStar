@@ -151,6 +151,7 @@ function generateRecommendations(data) {
   // Persist recommendations
   recommendations.forEach(r => {
     try {
+      r.metadata = data.metadata ? Object.assign({}, data.metadata) : {};
       store.addRecommendation(r);
     } catch (e) {
       console.warn('[PolarisRecommendations] Failed to persist:', e.message);

@@ -18,6 +18,10 @@
 'use strict';
 
 const { EVENT_TYPES, on } = require('./businessEvents');
+const {
+  detectEmergencyEvidence,
+  normalizeSpeakerRole,
+} = require('../services/emergencyEvidence');
 
 // ── Cached Executive Context ───────────────────────────────────
 
@@ -195,30 +199,19 @@ function handleCallCompleted(event) {
  * @param {string} text — Transcript segment text
  * @returns {Object|null} Guidance event or null if no match
  */
-function detectEmergency(text) {
+function detectEmergency(text, speaker = 'customer') {
   if (!text) return null;
-
-  const t = text.toLowerCase();
-  const highKeywords = /\b(emergency|flood|fire|leak|storm damage|broken pipe|water damage|collapse)\b/i;
-  const mediumKeywords = /\b(urgent|asap|right away|immediately|tonight|today|can't wait)\b/i;
-  const lowKeywords = /\b(broken|damaged|not working|needs repair|fix)\b/i;
-
-  let severity = null;
-  if (highKeywords.test(t)) severity = 'high';
-  else if (mediumKeywords.test(t)) severity = 'medium';
-  else if (lowKeywords.test(t)) severity = 'low';
-
-  if (severity) {
-    return {
-      type: 'emergency_detected',
-      severity,
-      detail: `Emergency keyword detected in customer transcript: "${text.substring(0, 100)}"`,
-      timestamp: new Date().toISOString(),
-      internal: true,
-    };
-  }
-
-  return null;
+  const evidence = detectEmergencyEvidence([{ speaker, text }]);
+  if (!evidence.isEmergency) return null;
+  return {
+    type: 'emergency_detected',
+    severity: 'high',
+    signal: evidence.signal,
+    evidence: evidence.evidence,
+    detail: `Current customer hazard detected: "${evidence.evidence.substring(0, 100)}"`,
+    timestamp: new Date().toISOString(),
+    internal: true,
+  };
 }
 
 /**
@@ -424,13 +417,16 @@ function detectEscalationNeed(text) {
 function handleTranscriptSegment(event) {
   const sessionId = event.sessionId;
   const text = event.data?.text || event.data?.segment?.text || '';
+  const speaker = normalizeSpeakerRole(
+    event.data?.segment?.speaker || event.data?.speaker || event.speaker
+  );
 
   if (!text || !sessionId) return;
 
   const detections = [];
 
   // Run all detectors
-  const emergency = detectEmergency(text);
+  const emergency = detectEmergency(text, speaker);
   if (emergency) detections.push(emergency);
 
   const highValue = detectHighValue(text);

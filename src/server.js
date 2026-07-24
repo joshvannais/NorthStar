@@ -31,7 +31,7 @@ const {
   revokeAllUserTokens, generateResetToken, validateResetToken,
   checkRateLimit, recordLoginAttempt, requireAuth, requireAdmin
 } = require('./auth/middleware');
-const { errorHandler, notFound } = require('./middleware/errorHandler');
+const { errorHandler, notFound, normalizeErrorResponses } = require('./middleware/errorHandler');
 const { rateLimit, authRateLimit, trackFailedAttempt } = require('./middleware/rateLimit');
 const { securityHeaders, corsOptions } = require('./middleware/security');
 const { correlationId, auditLogger } = require('./middleware/auditLog');
@@ -45,6 +45,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(securityHeaders);
 app.use(correlationId);
 app.use(auditLogger);
+app.use(normalizeErrorResponses);
 
 // Static assets (CSS, JS)
 app.use('/css', express.static('public/css'));
@@ -523,8 +524,8 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 // ── /api/v1/* routes — registered BEFORE /api to avoid interception by apiRoutes' global requireAuth
 const simulationsRoutes = require('./routes/simulations');
 app.use('/api/v1', simulationsRoutes);
-app.use('/api/v1', dashboardRoutes);
 app.use('/api/v1', publicApiRoutes);
+app.use('/api/v1', dashboardRoutes);
 app.use('/api/v1/polaris', polarisRoutes);
 app.use('/api/v1', polarisEnginesRoutes);
 app.use('/api/v1/leads', customerIntelligenceRoutes);

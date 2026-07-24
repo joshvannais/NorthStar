@@ -1017,6 +1017,9 @@ function isThisWeek(d){const t=new Date();const w=t.getTime()-t.getDay()*8640000
 // ════════════════════════════════════════════════════════════════════════════
 (function () {
   var originalGenCall = genCall;
+  // Canonical pages can request a pure identity seed without writing the
+  // legacy AppStore. The server owns transcript, scope, pricing, and IDs.
+  if (typeof window !== 'undefined') window.genCallDraft = originalGenCall;
   function routedGenCall() {
     var call = originalGenCall();
     try {

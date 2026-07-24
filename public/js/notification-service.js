@@ -39,9 +39,13 @@ window.NotificationService = (function() {
 try {
   if (typeof EventBus !== 'undefined') {
     EventBus.on('simulation:completed', function(data) {
-      if (data && data.summary) {
+      if (data && data.summary && data.polaris) {
+        var price = data.polaris.customerFacingPrice;
+        var priceLabel = price == null
+          ? 'pricing requires assessment'
+          : '$' + Number(price).toLocaleString();
         window.NotificationService.show(
-          'Lead generated: ' + data.summary.name + ' ($' + (data.summary.estimatedValue || 0).toLocaleString() + ')',
+          'Lead generated: ' + data.summary.name + ' (' + priceLabel + ')',
           'success'
         );
       }

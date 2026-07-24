@@ -264,6 +264,7 @@
 
   <!-- Shared JS — load order matters -->
   <script src="/js/theme.js"></script>
+  <script src="/js/demo-session.js"></script>
   <script src="/js/event-bus.js"></script>
   <script src="/js/app-store.js"></script>
   <script src="/js/simulator.js"></script>
@@ -317,20 +318,7 @@
 
       // ── Demo session lifecycle — clean state on page reload ──
       (function() {
-        var isReload = false;
-        // Try modern Navigation API
-        if (performance && performance.getEntriesByType) {
-          try { var navs = performance.getEntriesByType('navigation'); isReload = navs.length > 0 && navs[0].type === 'reload'; } catch(e) {}
-        }
-        // Fallback: legacy navigation.type (1=TYPE_RELOAD)
-        if (!isReload && performance && performance.navigation) {
-          isReload = performance.navigation.type === 1;
-        }
-        // Last resort: treat as reload if no prior session exists (first visit = fresh)
-        if (isReload || !sessionStorage.getItem('northstarSessionId')) {
-          sessionStorage.setItem('northstarSessionId', 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
-        }
-        window.SIM_SESSION_ID = sessionStorage.getItem('northstarSessionId');
+        window.SIM_SESSION_ID = window.NorthStarDemoSession.id;
       })();
 
       // ── Auth-aware fetch with 10s timeout ──
@@ -408,7 +396,7 @@
         simStatus.style.display = 'none';
 
         try {
-          if (typeof genCall !== 'function') {
+          if (typeof window.genCallDraft !== 'function') {
             simBtn.disabled = false;
             simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
             simStatus.style.display = '';
@@ -418,13 +406,10 @@
           }
 
           console.log('[CC] Simulating lead...');
-          var lead = genCall();
+          var lead = window.genCallDraft();
+          var canonicalServices = ['fence', 'roofing', 'hvac', 'plumbing', 'electrical', 'concrete'];
+          var canonicalService = canonicalServices[Math.floor(Math.random() * canonicalServices.length)];
           var leadName = lead && lead.caller ? lead.caller : 'Customer';
-          var leadValue = lead && lead.avgPrice ? lead.avgPrice : 0;
-
-          if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
-            try { PolarisEngine.analyzeLead(lead); } catch(e) { console.warn('[CC] analyzeLead error:', e); }
-          }
 
           apiFetch('/api/v1/simulations/leads', {
             method: 'POST',
@@ -432,9 +417,7 @@
               name: leadName,
               phone: lead.phone || '',
               email: lead.email || '',
-              service: lead.service || 'General',
-              description: lead.description || '',
-              estimatedValue: leadValue,
+              service: canonicalService,
               sessionId: window.SIM_SESSION_ID
             })
           }).then(function(resp) {
@@ -445,9 +428,25 @@
             }
             return resp.json();
           }).then(function(result) {
+            var summary = result && result.summary ? result.summary : {};
+            var canonical = result && result.polaris ? result.polaris : {};
+            var canonicalValue = canonical.customerFacingPrice == null
+              ? null
+              : Number(canonical.customerFacingPrice);
+            var pricingText = canonicalValue != null && canonicalValue > 0
+              ? ' ($' + canonicalValue.toLocaleString() + ' preliminary)'
+              : ' (pricing requires assessment)';
+            var action = canonical.recommendedAction && canonical.recommendedAction.action
+              ? canonical.recommendedAction.action
+              : 'Review required';
+            var confidence = canonical.confidenceScore == null
+              ? 'confidence pending'
+              : canonical.confidenceScore + '% confidence';
             simStatus.style.display = '';
             simStatus.style.color = 'var(--success)';
-            simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated) — Synced to all pages';
+            simStatusText.textContent = 'Lead generated: ' + (summary.name || leadName) +
+              ' — ' + (canonical.service || 'Unclassified service') + pricingText +
+              ' — ' + confidence + ' — ' + action + ' — Synced to all pages';
             console.log('[CC] Simulation complete:', result && result.ids);
             render();
             // Stage 3: Emit simulation:completed for notification toasts and cross-page sync
@@ -598,13 +597,13 @@
           var counts = [ad, pe, sch, ij, cj];
           var maxCount = Math.max.apply(null, counts.concat([1]));
           var stages = [
-            {icon:'\uD83D\uDCDE',cnt:fmtNum(ad),label:'Open Leads',pct:maxCount>0?Math.round(ad/maxCount*100):0,color:'var(--info)'},
-            {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:maxCount>0?Math.round(pe/maxCount*100):0,color:'var(--brand-500)'},
-            {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:maxCount>0?Math.round(sch/maxCount*100):0,color:'var(--brand-500)'},
-            {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:maxCount>0?Math.round(ij/maxCount*100):0,color:'var(--success)'},
-            {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:maxCount>0?Math.round(cj/maxCount*100):0,color:'var(--success)'}
+            {icon:'\uD83D\uDCDE',cnt:fmtNum(ad),label:'Open Leads',pct:maxCount>0?Math.round(ad/maxCount*100):0},
+            {icon:'\uD83D\uDCCB',cnt:fmtNum(pe),label:'Estimates',pct:maxCount>0?Math.round(pe/maxCount*100):0},
+            {icon:'\uD83D\uDCC5',cnt:fmtNum(sch),label:'Scheduled',pct:maxCount>0?Math.round(sch/maxCount*100):0},
+            {icon:'\uD83D\uDCBC',cnt:fmtNum(ij),label:'Active',pct:maxCount>0?Math.round(ij/maxCount*100):0},
+            {icon:'\u2705',cnt:fmtNum(cj),label:'Completed',pct:maxCount>0?Math.round(cj/maxCount*100):0}
           ];
-          el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s,i){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:'+s.color+'"></div></div></div>';}).join('')+'</div>';
+          el.innerHTML = '<div class="cc-pipeline">'+stages.map(function(s){return '<div class="cc-pipe-stage"><div class="cc-pipe-icon">'+s.icon+'</div><div class="cc-pipe-count">'+s.cnt+'</div><div class="cc-pipe-label">'+s.label+'</div><div class="cc-pipe-bar"><div class="cc-pipe-fill" style="width:'+s.pct+'%;background:var(--neutral-400)"></div></div></div>';}).join('')+'</div>';
         }
 
         function renderCustomers(customers) {

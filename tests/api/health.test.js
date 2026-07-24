@@ -8,8 +8,31 @@
 const path = require('path');
 process.chdir(path.resolve(__dirname, '../..'));
 
+jest.mock('../../src/db', function () {
+  return {
+    initDatabase: jest.fn(function () { return Promise.resolve(true); }),
+    isAvailable: jest.fn(function () { return true; }),
+    query: jest.fn(function (sql, params) {
+      if (/FROM users WHERE id/.test(String(sql))) {
+        return Promise.resolve({ rows: [{
+          id: params[0],
+          organization_id: 'org-health-test',
+          role: 'owner',
+          status: 'active',
+        }] });
+      }
+      if (/FROM call_records/.test(String(sql))) {
+        return Promise.resolve({ rows: [{ calls: 0, revenue: 0, appointments: 0 }] });
+      }
+      return Promise.resolve({ rows: [] });
+    }),
+    getPool: jest.fn(function () { return null; }),
+  };
+});
+
 const request = require('supertest');
 const { app } = require('../../src/server');
+const { generateToken } = require('../../src/auth/middleware');
 
 describe('Phase 4 — API: Health Check System', () => {
 
@@ -19,13 +42,58 @@ describe('Phase 4 — API: Health Check System', () => {
       expect(res.status).toBe(200);
       expect(res.type).toMatch(/json/);
       expect(res.body).toBeDefined();
-      expect(res.body.status).toBe('ok');
+      // A reachable API can intentionally be degraded when an optional
+      // dependency (for example PostgreSQL) is unavailable in the test env.
+      expect(['ok', 'degraded']).toContain(res.body.status);
+      expect(res.body.components).toEqual(expect.objectContaining({
+        dataDirectory: expect.any(String),
+        leadsFile: expect.any(String),
+        database: expect.any(String),
+      }));
+      const allHealthy = Object.values(res.body.components)
+        .every(status => status === 'healthy' || status === 'unconfigured');
+      expect(res.body.status).toBe(allHealthy ? 'ok' : 'degraded');
     });
 
-    test('GET /api/stats returns JSON response', async () => {
+    test('GET /api/version returns the public build identity shape', async () => {
+      const res = await request(app).get('/api/version');
+
+      expect(res.status).toBe(200);
+      expect(res.type).toMatch(/json/);
+      expect(Object.keys(res.body)).toEqual(['buildSha']);
+      expect(res.body.buildSha === null || typeof res.body.buildSha === 'string').toBe(true);
+      if (typeof res.body.buildSha === 'string') {
+        expect(res.body.buildSha.trim().length).toBeGreaterThan(0);
+      }
+    });
+
+    test('GET /api/stats rejects unauthenticated requests', async () => {
       const res = await request(app).get('/api/stats');
       expect(res.type).toMatch(/json/);
-      expect([200, 500]).toContain(res.status);
+      // Stats moved behind the API authentication boundary.
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual(expect.objectContaining({
+        error: expect.stringMatching(/authentication required/i),
+      }));
+    });
+
+    test('GET /api/stats returns aggregate JSON for an authenticated user', async () => {
+      const token = generateToken({
+        id: 'health-test-user',
+        email: 'health-test@northstar.invalid',
+        name: 'Health Test User',
+      });
+      const res = await request(app)
+        .get('/api/stats')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.type).toMatch(/json/);
+      expect(res.body).toEqual(expect.objectContaining({
+        totalCalls: expect.any(Number),
+        totalRevenue: expect.any(Number),
+        appointmentsBooked: expect.any(Number),
+      }));
     });
   });
 

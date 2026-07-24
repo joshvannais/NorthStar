@@ -22,7 +22,9 @@ window.PolarisApi = (function() {
     var token = localStorage.getItem('token');
     if (token) opts.headers['Authorization'] = 'Bearer ' + token;
     if (opts.body) opts.headers['Content-Type'] = 'application/json';
-    return fetch(API_PREFIX + path, opts);
+    var url = API_PREFIX + path;
+    if (window.NorthStarDemoSession) url = window.NorthStarDemoSession.appendToUrl(url);
+    return fetch(url, opts);
   }
 
   /**
@@ -210,6 +212,12 @@ window.PolarisApi = (function() {
    * POST /api/v1/simulations/leads
    */
   function simulateLead(data) {
+    data = data || {};
+    // Keep the key on the caller's object so a UI retry replays the same
+    // request instead of creating a second canonical graph.
+    if (!data.idempotencyKey) {
+      data.idempotencyKey = 'simreq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 12);
+    }
     return _post('/simulations/leads', data);
   }
 
@@ -226,13 +234,15 @@ window.PolarisApi = (function() {
    * @returns {object} Normalized lead object
    */
   function normalizeLead(opp, customer) {
+    var metadata = opp.metadata || {};
+    var canonical = metadata.polarisIntelligence || null;
     return {
       id: opp.id,
       customerId: opp.customerId,
       callerName: customer ? customer.name : (opp.title || '').split(' - ').pop() || 'Unknown',
       phone: customer ? customer.phone : '',
-      service: opp.title ? opp.title.split(' - ')[0] : 'General',
-      estimatedPrice: opp.estimatedValue || 0,
+      service: canonical && canonical.service ? canonical.service : (opp.title ? opp.title.split(' - ')[0] : 'General'),
+      estimatedPrice: canonical ? canonical.customerFacingPrice : (opp.estimatedValue || 0),
       jobDetail: opp.description || '',
       status: opp.stage === 'lead' ? 'new' : opp.stage,
       outcome: opp.status === 'won' ? 'appointment-set' : opp.status === 'lost' ? 'no-interest' : 'lead-captured',
@@ -244,6 +254,10 @@ window.PolarisApi = (function() {
       createdAt: opp.createdAt,
       updatedAt: opp.updatedAt,
       source: 'polaris',
+      metadata: metadata,
+      canonicalPolaris: canonical,
+      confidenceScore: canonical ? canonical.confidenceScore : null,
+      recommendedAction: canonical ? canonical.recommendedAction : null,
     };
   }
 
@@ -254,6 +268,8 @@ window.PolarisApi = (function() {
    * @returns {object} Normalized communication object
    */
   function normalizeCommunication(comm) {
+    var metadata = comm.metadata || {};
+    var canonical = metadata.polarisIntelligence || null;
     return {
       id: comm.id,
       customerId: comm.customerId,
@@ -267,6 +283,12 @@ window.PolarisApi = (function() {
       duration: comm.duration,
       createdAt: comm.createdAt,
       updatedAt: comm.updatedAt,
+      metadata: metadata,
+      canonicalPolaris: canonical,
+      service: canonical && canonical.service ? canonical.service : (comm.subject || 'Call'),
+      estimatedPrice: canonical ? canonical.customerFacingPrice : null,
+      confidenceScore: canonical ? canonical.confidenceScore : null,
+      recommendedAction: canonical ? canonical.recommendedAction : null,
     };
   }
 

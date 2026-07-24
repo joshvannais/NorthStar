@@ -11,11 +11,15 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../db');
 const { requireAuth } = require('../auth/middleware');
+const { requireOrgMembership } = require('../auth/permissions');
+const { requirePermission } = require('../auth/authorize');
 const { computeOverview, computeTrends, computePipeline, computeByService } = require('../analytics/pipeline');
 const { computeRevenueOverview, calculatePipelineValue } = require('../analytics/revenue');
 const coach = require('../coach/engine');
 const brief = require('../coach/brief');
 const { getAllLeads } = require('../leads/store');
+const demoScope = require('../services/demoRecordScope');
+const { dataPath } = require('../services/dataPaths');
 
 // Stage probability weights for weighted pipeline
 const STAGE_PROBABILITIES = {
@@ -34,8 +38,9 @@ const STAGE_PROBABILITIES = {
   'voicemail': 0.10,
 };
 
-// All dashboard routes require authentication
+// All dashboard routes require authenticated, persisted tenant context.
 router.use(requireAuth);
+router.use(requireOrgMembership);
 
 /**
  * Helper: Calculate date range bounds.
@@ -86,7 +91,7 @@ function getPreviousPeriod(period, start, end) {
 // GET /api/v1/dashboard/summary
 // Hero KPI — Estimated Revenue Opportunity
 // ================================================================
-router.get('/dashboard/summary', async (req, res) => {
+router.get('/dashboard/summary', requirePermission('dashboard', 'view'), async (req, res) => {
   try {
     const period = req.query.period || 'month';
     const { start, end } = getDateRange(period);
@@ -103,9 +108,10 @@ router.get('/dashboard/summary', async (req, res) => {
         SELECT COALESCE(SUM(estimated_price), 0) as revenue,
                COUNT(*) as count
         FROM call_records
-        WHERE outcome IN ('appointment-set', 'job-won')
-          AND created_at >= $1 AND created_at <= $2
-      `, [start, end]);
+        WHERE organization_id = $1
+          AND outcome IN ('appointment-set', 'job-won')
+          AND created_at >= $2 AND created_at <= $3
+      `, [req.orgId, start, end]);
       totalRevenue = parseFloat(currentResult.rows[0].revenue);
       totalLeads = parseInt(currentResult.rows[0].count);
 
@@ -113,18 +119,24 @@ router.get('/dashboard/summary', async (req, res) => {
       const prevResult = await db.query(`
         SELECT COALESCE(SUM(estimated_price), 0) as revenue
         FROM call_records
-        WHERE outcome IN ('appointment-set', 'job-won')
-          AND created_at >= $1 AND created_at <= $2
-      `, [prev.start, prev.end]);
+        WHERE organization_id = $1
+          AND outcome IN ('appointment-set', 'job-won')
+          AND created_at >= $2 AND created_at <= $3
+      `, [req.orgId, prev.start, prev.end]);
       prevRevenue = parseFloat(prevResult.rows[0].revenue);
 
       // Distinct service types
       const svcResult = await db.query(`
         SELECT DISTINCT service_type FROM call_records
-        WHERE created_at >= $1 AND created_at <= $2
+        WHERE organization_id = $1
+          AND created_at >= $2 AND created_at <= $3
           AND service_type IS NOT NULL AND service_type != ''
-      `, [start, end]);
+      `, [req.orgId, start, end]);
       serviceTypes = svcResult.rows.map(r => r.service_type).filter(Boolean);
+    } else {
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     // Calculate trend
@@ -154,18 +166,17 @@ router.get('/dashboard/summary', async (req, res) => {
 // GET /api/v1/dashboard/overview
 // Aggregate overview combining pipeline, revenue, trends, service breakdown
 // ================================================================
-router.get('/dashboard/overview', async (req, res) => {
+router.get('/dashboard/overview', requirePermission('dashboard', 'view'), async (req, res) => {
   try {
-    const userId = req.user?.id || 'demo';
     const range = req.query.period || 'today';
 
-    const overview = await computeOverview(userId, range);
-    const trends = await computeTrends(userId);
-    const pipeline = await computePipeline(userId);
-    const services = await computeByService(userId, range);
+    const overview = await computeOverview(req, range);
+    const trends = await computeTrends(req);
+    const pipeline = await computePipeline(req);
+    const services = await computeByService(req, range);
 
     // Get leads for revenue calculation
-    const leads = getAllLeads();
+    const leads = demoScope.filterTenantRecords(getAllLeads(), calendarAccess(req));
 
     // Weighted pipeline value
     let weightedPipelineValue = 0;
@@ -185,7 +196,7 @@ router.get('/dashboard/overview', async (req, res) => {
 
     // Trend from previous period
     var prevRange = range === 'today' ? 'week' : range;
-    var prevOverview = await computeOverview(userId, prevRange);
+    var prevOverview = await computeOverview(req, prevRange);
 
     var trendDirection = 'flat';
     var trendPct = 0;
@@ -228,14 +239,13 @@ router.get('/dashboard/overview', async (req, res) => {
 // GET /api/v1/dashboard/revenue
 // Enhanced Revenue — weighted pipeline, confidence, period filter
 // ================================================================
-router.get('/dashboard/revenue', async (req, res) => {
+router.get('/dashboard/revenue', requirePermission('dashboard', 'view'), async (req, res) => {
   try {
-    const userId = req.user?.id || 'demo';
     const period = req.query.period || 'month';
     const { start, end } = getDateRange(period);
     const prev = getPreviousPeriod(period, start, end);
 
-    const leads = getAllLeads();
+    const leads = demoScope.filterTenantRecords(getAllLeads(), calendarAccess(req));
 
     // Current period leads
     var currentLeads = leads.filter(function(l) {
@@ -322,10 +332,9 @@ router.get('/dashboard/revenue', async (req, res) => {
 // GET /api/v1/dashboard/brief
 // Daily Brief — server-generated with coach evaluation
 // ================================================================
-router.get('/dashboard/brief', async (req, res) => {
+router.get('/dashboard/brief', requirePermission('dashboard', 'view'), async (req, res) => {
   try {
-    const userId = req.user?.id || 'demo';
-    const overview = await computeOverview(userId, 'today');
+    const overview = await computeOverview(req, 'today');
 
     const metrics = {
       callsToday: overview.callsToday,
@@ -338,8 +347,8 @@ router.get('/dashboard/brief', async (req, res) => {
       avgCallLength: 0,
     };
 
-    const leads = getAllLeads();
-    const revOverview = await computeRevenueOverview(userId, leads);
+    const leads = demoScope.filterTenantRecords(getAllLeads(), calendarAccess(req));
+    const revOverview = await computeRevenueOverview(req, leads, { report: 'dashboard:brief', query: req.query });
 
     const name = req.user?.name || 'there';
     const briefText = brief.generate(metrics, revOverview, name);
@@ -374,10 +383,9 @@ router.get('/dashboard/brief', async (req, res) => {
 // GET /api/v1/dashboard/coach
 // NorthStar Coach — data-driven recommendations
 // ================================================================
-router.get('/dashboard/coach', async (req, res) => {
+router.get('/dashboard/coach', requirePermission('dashboard', 'view'), async (req, res) => {
   try {
-    const userId = req.user?.id || 'demo';
-    const overview = await computeOverview(userId, 'today');
+    const overview = await computeOverview(req, 'today');
 
     const metrics = {
       callsToday: overview.callsToday,
@@ -432,7 +440,7 @@ router.get('/dashboard/coach', async (req, res) => {
 // GET /api/v1/dashboard/kpis
 // KPI Grid — calls today, leads, appointments, answer rate, missed revenue
 // ================================================================
-router.get('/dashboard/kpis', async (req, res) => {
+router.get('/dashboard/kpis', requirePermission('dashboard', 'view'), async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -446,13 +454,13 @@ router.get('/dashboard/kpis', async (req, res) => {
 
     if (db.isAvailable()) {
       var promises = [
-        db.query('SELECT COUNT(*) as c FROM call_records WHERE created_at >= $1', [today]),
-        db.query('SELECT COUNT(*) as c FROM call_records WHERE created_at >= $1 AND outcome IN ($2,$3,$4)', [today, 'lead-captured', 'appointment-set', 'follow-up']),
-        db.query('SELECT COUNT(*) as c FROM call_records WHERE created_at >= $1 AND outcome = $2', [today, 'appointment-set']),
-        db.query('SELECT COUNT(*) as total, SUM(CASE WHEN outcome IN ($1,$2) THEN 1 ELSE 0 END) as won FROM call_records WHERE created_at >= $3', ['appointment-set', 'job-won', monthStart]),
-        db.query("SELECT COALESCE(AVG(estimated_price),0) as avg FROM call_records WHERE estimated_price > 0 AND created_at >= $1", [monthStart]),
-        db.query("SELECT COALESCE(AVG(duration_seconds),0) as avg FROM call_records WHERE duration_seconds > 0 AND created_at >= $1", [monthStart]),
-        db.query('SELECT COUNT(*) as total, SUM(CASE WHEN status = $1 THEN 1 ELSE 0 END) as answered FROM call_records', ['answered']),
+        db.query('SELECT COUNT(*) as c FROM call_records WHERE organization_id = $1 AND created_at >= $2', [req.orgId, today]),
+        db.query('SELECT COUNT(*) as c FROM call_records WHERE organization_id = $1 AND created_at >= $2 AND outcome IN ($3,$4,$5)', [req.orgId, today, 'lead-captured', 'appointment-set', 'follow-up']),
+        db.query('SELECT COUNT(*) as c FROM call_records WHERE organization_id = $1 AND created_at >= $2 AND outcome = $3', [req.orgId, today, 'appointment-set']),
+        db.query('SELECT COUNT(*) as total, SUM(CASE WHEN outcome IN ($2,$3) THEN 1 ELSE 0 END) as won FROM call_records WHERE organization_id = $1 AND created_at >= $4', [req.orgId, 'appointment-set', 'job-won', monthStart]),
+        db.query("SELECT COALESCE(AVG(estimated_price),0) as avg FROM call_records WHERE organization_id = $1 AND estimated_price > 0 AND created_at >= $2", [req.orgId, monthStart]),
+        db.query("SELECT COALESCE(AVG(duration_seconds),0) as avg FROM call_records WHERE organization_id = $1 AND duration_seconds > 0 AND created_at >= $2", [req.orgId, monthStart]),
+        db.query('SELECT COUNT(*) as total, SUM(CASE WHEN status = $2 THEN 1 ELSE 0 END) as answered FROM call_records WHERE organization_id = $1', [req.orgId, 'answered']),
       ];
       var r = await Promise.all(promises);
 
@@ -468,6 +476,10 @@ router.get('/dashboard/kpis', async (req, res) => {
       data.avgResponseTime = totalCallsAll > 0 ? Math.round(answeredCalls / totalCallsAll * 100) : 0;
       data.missedCallsPrevented = data.callsToday;
       data.aiTransferRate = Math.round(Math.random() * 15);
+    } else {
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     // Tier gating: Starter = 7 KPIs, Pro/Enterprise = 9 KPIs
@@ -491,24 +503,27 @@ router.get('/dashboard/kpis', async (req, res) => {
 // GET /api/v1/leads
 // Recent leads list
 // ================================================================
-router.get('/leads', async (req, res) => {
+router.get('/leads', requirePermission('leads', 'view'), async (req, res) => {
   try {
     const limit = parseInt(req.query.limit || '20', 10);
     const offset = parseInt(req.query.offset || '0', 10);
 
     if (!db.isAvailable()) {
-      return res.json({ leads: [], total: 0 });
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     const result = await db.query(`
       SELECT id, caller_name, phone, service_type, estimated_price,
              job_detail, status, source, created_at
       FROM leads
+      WHERE organization_id = $1
       ORDER BY created_at DESC
-      LIMIT $1 OFFSET $2
-    `, [limit, offset]);
+      LIMIT $2 OFFSET $3
+    `, [req.orgId, limit, offset]);
 
-    const countResult = await db.query('SELECT COUNT(*) as total FROM leads');
+    const countResult = await db.query('SELECT COUNT(*) as total FROM leads WHERE organization_id = $1', [req.orgId]);
 
     const leads = result.rows.map(r => ({
       id: r.id,
@@ -538,19 +553,24 @@ router.get('/leads', async (req, res) => {
 // GET /api/v1/leads/:id
 // Lead detail
 // ================================================================
-router.get('/leads/:id', async (req, res) => {
+router.get('/leads/:id', requirePermission('leads', 'view'), async (req, res) => {
   try {
     if (!db.isAvailable()) {
-      return res.status(404).json({ error: 'Lead not found' });
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     const result = await db.query(`
       SELECT l.*, cr.transcript, cr.summary as call_summary, cr.duration_seconds,
              cr.recording_url
       FROM leads l
-      LEFT JOIN call_records cr ON l.id = cr.lead_id
-      WHERE l.id = $1
-    `, [req.params.id]);
+      LEFT JOIN call_records cr
+        ON l.id = cr.lead_id
+       AND cr.organization_id = $1
+      WHERE l.organization_id = $1
+        AND l.id = $2
+    `, [req.orgId, req.params.id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Lead not found' });
@@ -585,16 +605,17 @@ router.get('/leads/:id', async (req, res) => {
 // POST /api/v1/leads/simulate
 // Simulate a new lead (for demo/testing)
 // ================================================================
-router.post('/leads/simulate', async (req, res) => {
+router.post('/leads/simulate', requirePermission('leads', 'create'), async (req, res) => {
   try {
     const { callerName, phone, service, estimatedPrice, jobDetail } = req.body;
 
     if (db.isAvailable()) {
       const result = await db.query(`
-        INSERT INTO leads (caller_name, phone, service_type, estimated_price, job_detail, status, source)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO leads (organization_id, caller_name, phone, service_type, estimated_price, job_detail, status, source)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id
       `, [
+        req.orgId,
         callerName || 'Simulated Caller',
         phone || '(555) 000-0000',
         service || 'General',
@@ -607,7 +628,9 @@ router.post('/leads/simulate', async (req, res) => {
       return res.json({ success: true, id: result.rows[0].id });
     }
 
-    res.json({ success: true, id: 'simulated-' + Date.now() });
+    res.status(503).json({
+      error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+    });
   } catch (err) {
     console.error('[API] Simulate lead error:', err.message);
     res.status(500).json({ error: 'Failed to simulate lead' });
@@ -618,13 +641,15 @@ router.post('/leads/simulate', async (req, res) => {
 // GET /api/v1/calls
 // Recent call records
 // ================================================================
-router.get('/calls', async (req, res) => {
+router.get('/calls', requirePermission('calls', 'view'), async (req, res) => {
   try {
     const limit = parseInt(req.query.limit || '20', 10);
     const offset = parseInt(req.query.offset || '0', 10);
 
     if (!db.isAvailable()) {
-      return res.json({ calls: [], total: 0 });
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     const result = await db.query(`
@@ -632,11 +657,12 @@ router.get('/calls', async (req, res) => {
              job_detail, duration_seconds, status, outcome, summary,
              is_known_contact, created_at
       FROM call_records
+      WHERE organization_id = $1
       ORDER BY created_at DESC
-      LIMIT $1 OFFSET $2
-    `, [limit, offset]);
+      LIMIT $2 OFFSET $3
+    `, [req.orgId, limit, offset]);
 
-    const countResult = await db.query('SELECT COUNT(*) as total FROM call_records');
+    const countResult = await db.query('SELECT COUNT(*) as total FROM call_records WHERE organization_id = $1', [req.orgId]);
 
     const calls = result.rows.map(r => ({
       id: r.id,
@@ -669,24 +695,27 @@ router.get('/calls', async (req, res) => {
 // GET /api/v1/calendar/upcoming
 // Upcoming appointments
 // ================================================================
-router.get('/calendar/upcoming', async (req, res) => {
+router.get('/calendar/upcoming', requirePermission('calendar', 'view'), async (req, res) => {
   try {
     const limit = parseInt(req.query.limit || '10', 10);
     const now = new Date();
 
     if (!db.isAvailable()) {
-      return res.json({ appointments: [] });
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
 
     const result = await db.query(`
       SELECT l.id, l.caller_name, l.phone, l.address, l.service_type,
              l.estimated_price, l.preferred_time, l.created_at
       FROM leads l
-      WHERE l.status = 'estimate-scheduled'
-        AND l.created_at >= $1
+      WHERE l.organization_id = $1
+        AND l.status = 'estimate-scheduled'
+        AND l.created_at >= $2
       ORDER BY l.created_at ASC
-      LIMIT $2
-    `, [now, limit]);
+      LIMIT $3
+    `, [req.orgId, now, limit]);
 
     const appointments = result.rows.map(r => ({
       id: r.id,
@@ -710,7 +739,7 @@ router.get('/calendar/upcoming', async (req, res) => {
 // PATCH /api/v1/leads/:id/status
 // Update lead status
 // ================================================================
-router.patch('/leads/:id/status', async (req, res) => {
+router.patch('/leads/:id/status', requirePermission('leads', 'edit'), async (req, res) => {
   try {
     const { status } = req.body;
     if (!status) {
@@ -722,8 +751,17 @@ router.patch('/leads/:id/status', async (req, res) => {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
-    if (db.isAvailable()) {
-      await db.query('UPDATE leads SET status = $1, updated_at = NOW() WHERE id = $2', [status, req.params.id]);
+    if (!db.isAvailable()) {
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
+    }
+    const result = await db.query(
+      'UPDATE leads SET status = $1, updated_at = NOW() WHERE id = $2 AND organization_id = $3 RETURNING id',
+      [status, req.params.id, req.orgId]
+    );
+    if (!result.rows || result.rows.length !== 1) {
+      return res.status(404).json({ error: 'Lead not found' });
     }
 
     res.json({ success: true });
@@ -737,24 +775,28 @@ router.patch('/leads/:id/status', async (req, res) => {
 // POST /api/v1/calls/:id/mark-known
 // Mark a caller as a known contact
 // ================================================================
-router.post('/calls/:id/mark-known', async (req, res) => {
+router.post('/calls/:id/mark-known', requirePermission('calls', 'flag'), async (req, res) => {
   try {
-    if (db.isAvailable()) {
-      const result = await db.query(`
-        UPDATE call_records SET is_known_contact = TRUE WHERE id = $1
-        RETURNING caller_name, caller_phone
-      `, [req.params.id]);
-
-      if (result.rows.length > 0) {
-        const r = result.rows[0];
-        // Also create/update CRM contact
-        await db.query(`
-          INSERT INTO crm_contacts (organization_id, name, phone, phone_e164, is_known)
-          VALUES (NULL, $1, $2, $2, TRUE)
-          ON CONFLICT DO NOTHING
-        `, [r.caller_name, r.caller_phone]);
-      }
+    if (!db.isAvailable()) {
+      return res.status(503).json({
+        error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+      });
     }
+    const result = await db.query(`
+        UPDATE call_records SET is_known_contact = TRUE
+        WHERE id = $1 AND organization_id = $2
+        RETURNING caller_name, caller_phone
+      `, [req.params.id, req.orgId]);
+
+    if (!result.rows || result.rows.length !== 1) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+    const r = result.rows[0];
+    await db.query(`
+          INSERT INTO crm_contacts (organization_id, name, phone, phone_e164, is_known)
+          VALUES ($1, $2, $3, $3, TRUE)
+          ON CONFLICT DO NOTHING
+        `, [req.orgId, r.caller_name, r.caller_phone]);
 
     res.json({ success: true });
   } catch (err) {
@@ -767,7 +809,7 @@ router.post('/calls/:id/mark-known', async (req, res) => {
 // Calendar API — Phase 1
 // ================================================================
 
-const CALENDAR_DATA_FILE = path.join(__dirname, '..', '..', 'data', 'events.json');
+const CALENDAR_DATA_FILE = dataPath('events.json');
 
 function loadCalendarEvents() {
   try {
@@ -791,42 +833,69 @@ function saveCalendarEvents(events) {
   }
 }
 
+function calendarAccess(req) {
+  return demoScope.createAccessContext(req);
+}
+
+function leadToCalendarEvent(lead) {
+  return {
+    id: 'lead-' + lead.id,
+    title: lead.caller_name || lead.callerName || lead.customerName || 'Lead Appointment',
+    date: lead.preferred_time ? lead.preferred_time.split('T')[0] : new Date().toISOString().split('T')[0],
+    time: lead.preferred_time ? lead.preferred_time.split('T')[1]?.substring(0, 5) || '09:00' : '09:00',
+    endTime: null,
+    description: lead.service_type ? `${lead.service_type} service` : 'Appointment',
+    color: '#3b82f6',
+    type: 'lead',
+    leadId: lead.id,
+    status: lead.status || 'scheduled',
+    callerName: lead.caller_name || lead.callerName || lead.customerName,
+    phone: lead.phone || lead.phoneNumber,
+    address: lead.address,
+    serviceType: lead.service_type || lead.serviceRequested,
+    estimatedPrice: lead.estimated_price || lead.estimatedPrice,
+    createdAt: lead.created_at || lead.createdAt || lead.receivedAt
+  };
+}
+
+function visibleCalendarEvents(req) {
+  const access = calendarAccess(req);
+  const customEvents = loadCalendarEvents().filter(function (event) {
+    return demoScope.canAccessTenant(event, access);
+  });
+  const leadEvents = demoScope.filterTenantRecords(getAllLeads ? getAllLeads() : [], access)
+    .filter(function (lead) {
+      return lead.outcome === 'appointment-set' || lead.callOutcome === 'appointment-set' ||
+        lead.status === 'estimate-scheduled' || lead.preferred_time;
+    })
+    .map(leadToCalendarEvent);
+  return customEvents.concat(leadEvents);
+}
+
 // GET /api/v1/calendar/events — returns custom events + lead-sourced events
-router.get('/calendar/events', (req, res) => {
+router.get('/calendar/events', requirePermission('calendar', 'view'), (req, res) => {
   try {
-    const customEvents = loadCalendarEvents();
-    // Get lead events from the store
-    const leads = getAllLeads ? getAllLeads() : [];
-    const leadEvents = leads
-      .filter(l => l.outcome === 'appointment-set' || l.status === 'estimate-scheduled' || l.preferred_time)
-      .map(l => ({
-        id: 'lead-' + l.id,
-        title: l.caller_name || 'Lead Appointment',
-        date: l.preferred_time ? l.preferred_time.split('T')[0] : new Date().toISOString().split('T')[0],
-        time: l.preferred_time ? l.preferred_time.split('T')[1]?.substring(0, 5) || '09:00' : '09:00',
-        endTime: null,
-        description: l.service_type ? `${l.service_type} service` : 'Appointment',
-        color: '#3b82f6',
-        type: 'lead',
-        leadId: l.id,
-        status: l.status || 'scheduled',
-        callerName: l.caller_name,
-        phone: l.phone,
-        address: l.address,
-        serviceType: l.service_type,
-        estimatedPrice: l.estimated_price,
-        createdAt: l.created_at
-      }));
-    const events = [...customEvents, ...leadEvents];
-    res.json({ events });
+    res.json({ events: visibleCalendarEvents(req) });
   } catch (err) {
     console.error('[API] Calendar events error:', err.message);
     res.status(500).json({ error: 'Failed to load events' });
   }
 });
 
+// GET /api/v1/calendar/events/:id — detail with the same visibility rules
+router.get('/calendar/events/:id', requirePermission('calendar', 'view'), (req, res) => {
+  try {
+    const event = visibleCalendarEvents(req).find(function (item) { return item.id === req.params.id; });
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+    res.json({ event: event });
+  } catch (err) {
+    console.error('[API] Calendar event detail error:', err.message);
+    res.status(500).json({ error: 'Failed to load event' });
+  }
+});
+
 // POST /api/v1/calendar/events — create custom event
-router.post('/calendar/events', (req, res) => {
+router.post('/calendar/events', requirePermission('calendar', 'schedule'), (req, res) => {
   try {
     const { title, date, time, endTime, description, color, type } = req.body;
     if (!title || !date) {
@@ -853,7 +922,9 @@ router.post('/calendar/events', (req, res) => {
         profitScore: null,
         confidenceScore: null
       },
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      ownerUserId: req.user && (req.user.sub || req.user.id),
+      organizationId: req.orgId || (req.user && (req.user.organizationId || req.user.orgId)) || null
     };
     events.push(event);
     saveCalendarEvents(events);
@@ -865,11 +936,12 @@ router.post('/calendar/events', (req, res) => {
 });
 
 // PUT /api/v1/calendar/events/:id — update event
-router.put('/calendar/events/:id', (req, res) => {
+router.put('/calendar/events/:id', requirePermission('calendar', 'edit'), (req, res) => {
   try {
     const events = loadCalendarEvents();
     const idx = events.findIndex(e => e.id === req.params.id);
-    if (idx === -1) {
+    const access = calendarAccess(req);
+    if (idx === -1 || !demoScope.canAccessTenant(events[idx], access)) {
       return res.status(404).json({ error: 'Event not found' });
     }
     const { title, date, time, endTime, description, color, status } = req.body;
@@ -891,11 +963,12 @@ router.put('/calendar/events/:id', (req, res) => {
 });
 
 // DELETE /api/v1/calendar/events/:id — delete event
-router.delete('/calendar/events/:id', (req, res) => {
+router.delete('/calendar/events/:id', requirePermission('calendar', 'delete'), (req, res) => {
   try {
     const events = loadCalendarEvents();
     const idx = events.findIndex(e => e.id === req.params.id);
-    if (idx === -1) {
+    const access = calendarAccess(req);
+    if (idx === -1 || !demoScope.canAccessTenant(events[idx], access)) {
       return res.status(404).json({ error: 'Event not found' });
     }
     events.splice(idx, 1);
@@ -908,19 +981,9 @@ router.delete('/calendar/events/:id', (req, res) => {
 });
 
 // GET /api/v1/calendar/export/ics — ICS export
-router.get('/calendar/export/ics', (req, res) => {
+router.get('/calendar/export/ics', requirePermission('calendar', 'view'), (req, res) => {
   try {
-    const customEvents = loadCalendarEvents();
-    const leads = getAllLeads ? getAllLeads() : [];
-    const leadEvents = leads
-      .filter(l => l.outcome === 'appointment-set' || l.status === 'estimate-scheduled' || l.preferred_time)
-      .map(l => ({
-        title: l.caller_name || 'Lead Appointment',
-        date: l.preferred_time ? l.preferred_time.split('T')[0] : new Date().toISOString().split('T')[0],
-        time: l.preferred_time ? l.preferred_time.split('T')[1]?.substring(0, 5) || '09:00' : '09:00',
-        description: l.service_type ? `${l.service_type} service` : 'Appointment'
-      }));
-    const allEvents = [...customEvents, ...leadEvents];
+    const allEvents = visibleCalendarEvents(req);
     let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//NorthStar//Calendar//EN\r\n';
     allEvents.forEach(evt => {
       const startDate = evt.date.replace(/-/g, '');
@@ -942,7 +1005,7 @@ router.get('/calendar/export/ics', (req, res) => {
 });
 
 // POST /api/v1/calendar/import/ics — ICS import
-router.post('/calendar/import/ics', (req, res) => {
+router.post('/calendar/import/ics', requirePermission('calendar', 'schedule'), (req, res) => {
   try {
     const { icsContent } = req.body;
     if (!icsContent) {
@@ -988,7 +1051,9 @@ router.post('/calendar/import/ics', (req, res) => {
               profitScore: null,
               confidenceScore: null
             },
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            ownerUserId: req.user && (req.user.sub || req.user.id),
+            organizationId: req.orgId || (req.user && (req.user.organizationId || req.user.orgId)) || null
           });
         }
         inEvent = false;

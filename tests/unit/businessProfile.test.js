@@ -1,5 +1,17 @@
 'use strict';
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const originalDataDir = process.env.NORTHSTAR_DATA_DIR;
+const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-business-profile-'));
+fs.copyFileSync(
+  path.resolve(__dirname, '../../data/business-profile.json'),
+  path.join(testDataDir, 'business-profile.json')
+);
+process.env.NORTHSTAR_DATA_DIR = testDataDir;
+
 const {
   getProfile,
   updateProfile,
@@ -20,6 +32,12 @@ const {
   getIntegrations,
   updateSection,
 } = require('../../src/services/businessProfile');
+
+afterAll(() => {
+  fs.rmSync(testDataDir, { recursive: true, force: true });
+  if (originalDataDir === undefined) delete process.env.NORTHSTAR_DATA_DIR;
+  else process.env.NORTHSTAR_DATA_DIR = originalDataDir;
+});
 
 // ====================================================================
 // getProfile

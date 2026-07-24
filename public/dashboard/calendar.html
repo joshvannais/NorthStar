@@ -21,7 +21,7 @@ body { background: var(--neutral-50); }
   flex-direction: column;
   gap: 12px;
   padding: 24px 32px 32px;
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 .main-content { height: calc(100vh - 80px); overflow: auto; }
@@ -324,6 +324,7 @@ body { background: var(--neutral-50); }
   </main>
 </div>
 <div id="toast" class="toast"></div>
+<script src="/js/demo-session.js"></script>
 <script src="/js/polaris-api.js"></script>
 <script src="/js/simulator.js"></script>
 <script src="/js/api.js"></script>
@@ -337,38 +338,9 @@ body { background: var(--neutral-50); }
 <script>
 // Ensure AppStore has data — seed demo leads if empty (same as Dashboard)
 (function ensureAppStoreData() {
-  try {
-    var existing = (window.AppStore && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
-    if (!existing || existing.length === 0) {
-      // Try loading from API first
-      if (typeof API !== 'undefined' && API.getLeads) {
-        API.getLeads().then(function(result) {
-          if (!result || !result.items || result.items.length === 0) {
-            seedDemoLeads();
-          }
-          runInit();
-        }).catch(function() {
-          seedDemoLeads();
-          runInit();
-        });
-      } else {
-        seedDemoLeads();
-        runInit();
-      }
-    } else {
-      runInit();
-    }
-  } catch(e) {
-    runInit();
-  }
-
-  function seedDemoLeads() {
-    if (typeof genCall === 'function') {
-      for (var i = 0; i < 3; i++) {
-        try { genCall(); } catch(e) {}
-      }
-    }
-  }
+  // Empty API/AppStore state is a valid fresh session. Do not manufacture
+  // local leads that cannot reconcile with the canonical server graph.
+  runInit();
 
   function runInit() {
     if (document.readyState === 'loading') {
@@ -380,20 +352,8 @@ body { background: var(--neutral-50); }
 })();
 
 function initCalendar() {
-  Promise.all([
-    window.calData.fetchEvents().catch(function() { return []; }),
-    Promise.resolve(window.syncCalendarFromAppStore())
-  ]).then(function(results) {
-    var apiEvents = results[0];
-    var leadEvents = results[1];
-    var existingIds = new Set(apiEvents.map(function(e) { return e.id; }));
-    var newLeadEvents = leadEvents.filter(function(e) { return !existingIds.has(e.id); });
-    window.calState.events = apiEvents.concat(newLeadEvents);
-    window.calState.onChange(function() { window.calRenderer.render(); });
-    window.calRenderer.render();
-  }).catch(function() {
-    window.calRenderer.render();
-  });
+  window.calState.onChange(function() { window.calRenderer.render(); });
+  window.refreshCalendar();
 }
 </script>
   <script src="/js/nav-component.js"></script>

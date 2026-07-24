@@ -247,6 +247,7 @@ function createEstimate(data) {
     statusDisplayName: ESTIMATE_STATUSES[status].displayName,
     validUntil: data.validUntil || null,
     notes: data.notes || null,
+    metadata: data.metadata ? Object.assign({}, data.metadata) : {},
     approvedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -257,7 +258,7 @@ function createEstimate(data) {
 
   _recordActivity(data.customerId, 'Estimate Created: ' + data.title,
     'Estimate #' + id + ' created for $' + totals.total.toFixed(2),
-    { estimateId: id, total: totals.total, status: status });
+    Object.assign({}, data.metadata || {}, { estimateId: id, total: totals.total, status: status }));
 
   return {
     id: est.id,
@@ -473,6 +474,7 @@ function createInvoice(data) {
     paidDate: null,
     sentDate: null,
     notes: data.notes || null,
+    metadata: data.metadata ? Object.assign({}, data.metadata) : {},
     createdAt: now,
     updatedAt: now,
   };
@@ -649,6 +651,9 @@ function recordPayment(data) {
     method: method,
     methodDisplayName: PAYMENT_METHODS[method].displayName,
     reference: data.reference || null,
+    metadata: data.metadata
+      ? Object.assign({}, data.metadata)
+      : (inv.metadata ? Object.assign({}, inv.metadata) : {}),
     status: 'completed',
     receivedAt: now,
     createdAt: now,

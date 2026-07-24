@@ -17,6 +17,9 @@ window.AppStore = (function() {
     polarisHistory: [],
     notifications: [],
     settings: { theme: localStorage.getItem('northstar-theme') || 'light' },
+    authoritativeSources: {
+      leads: { kind: 'loading', status: null }
+    },
     ui: {
       selectedLeadId: null,
       drawerOpen: false,
@@ -95,42 +98,141 @@ window.AppStore = (function() {
   function getUi(key) { return state.ui[key]; }
 
   // --- Persistence ---
+  function activeSessionId() {
+    return (window.NorthStarDemoSession && window.NorthStarDemoSession.id) ||
+      window.SIM_SESSION_ID || null;
+  }
+
+  function leadSessionId(lead) {
+    if (!lead) return null;
+    var metadata = lead.metadata || {};
+    return metadata.simulationSessionId || lead.simulationSessionId || lead.demoSessionId || null;
+  }
+
+  function isSimulationLead(lead) {
+    if (!lead) return false;
+    var metadata = lead.metadata || {};
+    return metadata.recordScope === 'simulation' || metadata.source === 'simulation' ||
+      lead.recordScope === 'simulation' || lead.source === 'simulation' ||
+      Boolean(leadSessionId(lead));
+  }
+
+  function sessionStorageKey() {
+    var sessionId = activeSessionId();
+    return sessionId ? 'northstar_calls:' + sessionId : null;
+  }
+
+  function removeInactiveSessionEnvelopes(activeKey) {
+    try {
+      var staleKeys = [];
+      for (var i = 0; i < sessionStorage.length; i++) {
+        var candidate = sessionStorage.key(i);
+        if (candidate && candidate.indexOf('northstar_calls:') === 0 && candidate !== activeKey) {
+          staleKeys.push(candidate);
+        }
+      }
+      staleKeys.forEach(function(key) { sessionStorage.removeItem(key); });
+    } catch (_error) {}
+  }
+
   function saveToSession() {
-    try { sessionStorage.setItem('northstar_calls', JSON.stringify(state.leads)); } catch(e) {}
+    try {
+      var sessionId = activeSessionId();
+      var key = sessionStorageKey();
+      if (!sessionId || !key) return;
+      removeInactiveSessionEnvelopes(key);
+      var sessionLeads = state.leads.filter(function(lead) {
+        return isSimulationLead(lead) && leadSessionId(lead) === sessionId;
+      });
+      sessionStorage.setItem(key, JSON.stringify({
+        version: 2,
+        sessionId: sessionId,
+        leads: sessionLeads,
+      }));
+      sessionStorage.removeItem('northstar_calls');
+    } catch(e) {}
   }
 
   function loadFromSession() {
     try {
-      const saved = sessionStorage.getItem('northstar_calls');
+      const sessionId = activeSessionId();
+      const key = sessionStorageKey();
+      if (!sessionId || !key) return [];
+      sessionStorage.removeItem('northstar_calls');
+      removeInactiveSessionEnvelopes(key);
+      const saved = sessionStorage.getItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          state.leads = parsed;
-          bus.emit('store:loaded', { from: 'session', count: parsed.length });
+        if (parsed && parsed.version === 2 && parsed.sessionId === sessionId && Array.isArray(parsed.leads)) {
+          var scoped = parsed.leads.filter(function(lead) {
+            return isSimulationLead(lead) && leadSessionId(lead) === sessionId;
+          });
+          state.leads = scoped;
+          bus.emit('store:loaded', { from: 'session', count: scoped.length });
+          return scoped;
         }
       }
     } catch(e) {}
+    return [];
   }
 
   // --- Backend Sync ---
-  var syncInProgress = false;
+  var syncPromise = null;
+
+  function sourceStateForError(error) {
+    var status = error && Number(error.status);
+    return {
+      kind: error && error.kind === 'malformed' ? 'malformed'
+        : status === 401 ? 'authentication_required'
+        : status === 403 ? 'access_denied'
+        : status === 404 ? 'not_found'
+        : 'unavailable',
+      status: status || null,
+    };
+  }
 
   async function loadFromServer() {
-    if (syncInProgress) return;
-    syncInProgress = true;
-    try {
-      if (typeof API !== 'undefined' && API.getLeads) {
-        const result = await API.getLeads();
-        if (result && Array.isArray(result.items)) {
-          state.leads = result.items;
-          bus.emit('store:loaded', { from: 'server', count: result.items.length });
+    if (syncPromise) return syncPromise;
+    state.authoritativeSources.leads = { kind: 'loading', status: null };
+    syncPromise = (async function () {
+      try {
+        if (typeof API === 'undefined' || !API.getLeads) {
+          throw new Error('Authoritative leads client is unavailable');
         }
+        const result = await API.getLeads();
+        if (!result || !Array.isArray(result.items)) {
+          const malformed = new Error('Malformed authoritative leads response');
+          malformed.kind = 'malformed';
+          malformed.status = 200;
+          throw malformed;
+        }
+        var sessionLeads = state.leads.filter(function(lead) {
+          return isSimulationLead(lead) && leadSessionId(lead) === activeSessionId();
+        });
+        var byId = new Map();
+        var serverLeads = result.items.filter(function(lead) {
+          return !isSimulationLead(lead) || leadSessionId(lead) === activeSessionId();
+        });
+        serverLeads.concat(sessionLeads).forEach(function(lead) {
+          if (lead && lead.id !== undefined && lead.id !== null) byId.set(String(lead.id), lead);
+        });
+        state.leads = Array.from(byId.values());
+        state.authoritativeSources.leads = { kind: 'ready', status: 200 };
+        bus.emit('store:loaded', { from: 'server', count: state.leads.length });
+      } catch(e) {
+        state.authoritativeSources.leads = sourceStateForError(e);
+        bus.emit('store:load-failed', {
+          from: 'server',
+          source: 'leads',
+          state: state.authoritativeSources.leads,
+        });
+      } finally {
+        var resultState = state.authoritativeSources.leads;
+        syncPromise = null;
+        return resultState;
       }
-    } catch(e) {
-      // Backend not available — use session data
-      loadFromSession();
-    }
-    syncInProgress = false;
+    })();
+    return syncPromise;
   }
 
   function wrapWithBackend(fn, apiCall) {
@@ -177,9 +279,7 @@ window.AppStore = (function() {
 
   // Initialize — try session first (preserves simulated data across pages), fall back to server
   loadFromSession();
-  if (state.leads.length === 0) {
-    loadFromServer();
-  }
+  loadFromServer();
 
   bus.on('lead:created', () => { /* trigger recalculations */ });
 

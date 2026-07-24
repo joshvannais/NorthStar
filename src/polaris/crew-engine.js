@@ -180,6 +180,7 @@ function createEmployee(data) {
     certifications: [],
     skills: Array.isArray(data.skills) ? data.skills.slice() : [],
     notes: data.notes || null,
+    metadata: data.metadata ? Object.assign({}, data.metadata) : {},
     createdAt: now,
     updatedAt: now,
   };
@@ -204,6 +205,7 @@ function updateEmployee(id, updates) {
   if (updates.overtimeRate !== undefined) emp.overtimeRate = updates.overtimeRate;
   if (updates.notes !== undefined) emp.notes = updates.notes;
   if (Array.isArray(updates.skills)) emp.skills = updates.skills.slice();
+  if (updates.metadata !== undefined) emp.metadata = Object.assign({}, updates.metadata);
 
   if (updates.role !== undefined) {
     var roleCheck = _validateRole(updates.role);
@@ -291,6 +293,7 @@ function createCrew(data) {
     assignedWorkflowId: data.assignedWorkflowId || null,
     assignedOpportunityId: data.assignedOpportunityId || null,
     assignedCustomerId: data.assignedCustomerId || null,
+    metadata: data.metadata ? Object.assign({}, data.metadata) : {},
     createdAt: now,
     updatedAt: now,
   };
@@ -314,6 +317,7 @@ function updateCrew(id, updates) {
   if (updates.assignedWorkflowId !== undefined) crew.assignedWorkflowId = updates.assignedWorkflowId;
   if (updates.assignedOpportunityId !== undefined) crew.assignedOpportunityId = updates.assignedOpportunityId;
   if (updates.assignedCustomerId !== undefined) crew.assignedCustomerId = updates.assignedCustomerId;
+  if (updates.metadata !== undefined) crew.metadata = Object.assign({}, updates.metadata);
 
   if (updates.status !== undefined) {
     var sc = _validateCrewStatus(updates.status);

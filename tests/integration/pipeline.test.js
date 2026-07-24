@@ -20,7 +20,8 @@ process.chdir(path.resolve(__dirname, '../..'));
 const intelligence = require('../../src/services/intelligence');
 const decisionEngine = require('../../src/services/decisionEngine');
 const customerIntelligence = require('../../src/services/customerIntelligence');
-const { buildCompactContext, buildBusinessContext, loadData } = require('../../src/context/business');
+const dataLoader = require('../../src/services/dataLoader');
+const polarisContextBuilder = require('../../src/services/polarisContextBuilder');
 const fixtures = require('../helpers/fixtures');
 
 describe('Phase 3 — Integration: Full Engine Pipeline', () => {
@@ -34,7 +35,7 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
     beforeAll(() => {
       // Use real data files from the project
       try {
-        leads = loadData().leads;
+        leads = dataLoader.loadData().leads;
       } catch (e) {
         // Fall back to fixtures if data files not available
         leads = fixtures.fullTestSet;
@@ -83,7 +84,12 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
     });
 
     test('Step 4: Business Context builder produces valid context', () => {
-      const context = buildCompactContext({});
+      // polarisContextBuilder is the single intelligence orchestrator;
+      // business.js only formats the computed values it receives.
+      const context = polarisContextBuilder.buildPolarisContext({
+        page: 'dashboard',
+        correlationId: 'pipeline-step-4',
+      }).compactContext;
       
       expect(context).not.toBeNull();
       expect(context.overview).toBeDefined();
@@ -99,7 +105,10 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
     });
 
     test('Step 5: Text context builder produces non-empty string', () => {
-      const text = buildBusinessContext({});
+      const text = polarisContextBuilder.buildPolarisContext({
+        page: 'dashboard',
+        correlationId: 'pipeline-step-5',
+      }).contextText;
       expect(typeof text).toBe('string');
       expect(text.length).toBeGreaterThan(100);
       expect(text).toContain('NORTHSTAR BUSINESS CONTEXT');
@@ -107,7 +116,11 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
 
     test('Step 6: Full pipeline with active lead context works', () => {
       const firstLead = leads[0];
-      const context = buildCompactContext({ leadId: firstLead.id });
+      const context = polarisContextBuilder.buildPolarisContext({
+        page: 'leads',
+        leadId: firstLead.id,
+        correlationId: 'pipeline-step-6',
+      }).compactContext;
       
       expect(context.activeLead).not.toBeNull();
       expect(context.activeLeadIntelligence).not.toBeNull();
@@ -132,10 +145,16 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
   // Test 2: No duplicate orchestration
   // ──────────────────────────────────────────────
   describe('No Duplicate Calculations (Single Orchestrator)', () => {
-    test('buildCompactContext calls intelligence once for aggregate', () => {
+    test('Polaris context builder produces stable aggregate intelligence', () => {
       // Build context twice — same object structure each time
-      const ctx1 = buildCompactContext({});
-      const ctx2 = buildCompactContext({});
+      const ctx1 = polarisContextBuilder.buildPolarisContext({
+        page: 'dashboard',
+        correlationId: 'pipeline-stability-1',
+      }).compactContext;
+      const ctx2 = polarisContextBuilder.buildPolarisContext({
+        page: 'dashboard',
+        correlationId: 'pipeline-stability-2',
+      }).compactContext;
       
       // Both produce same aggregate values (deterministic)
       expect(ctx1.calculatedIntelligence.totalEstimatedLabor)
@@ -147,10 +166,14 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
     });
 
     test('Aggregate consistency across 3 execution paths', () => {
-      const leads = loadData().leads;
+      // Use the same canonical tenant/session view consumed by the orchestrator.
+      const leads = dataLoader.loadCanonicalData(null).leads;
       
-      // Path 1: buildCompactContext
-      const ctx = buildCompactContext({});
+      // Path 1: universal Polaris orchestration feeding the compact formatter
+      const ctx = polarisContextBuilder.buildPolarisContext({
+        page: 'dashboard',
+        correlationId: 'pipeline-aggregate-consistency',
+      }).compactContext;
       
       // Path 2: Direct aggregate call
       const agg = intelligence.calculateAggregateIntelligence(leads);
@@ -287,8 +310,7 @@ describe('M16.6 Integrity', () => {
     expect(intelligence).toBeDefined();
     expect(decisionEngine).toBeDefined();
     expect(customerIntelligence).toBeDefined();
-    expect(buildCompactContext).toBeDefined();
-    expect(buildBusinessContext).toBeDefined();
-    expect(loadData).toBeDefined();
+    expect(polarisContextBuilder.buildPolarisContext).toBeDefined();
+    expect(dataLoader.loadData).toBeDefined();
   });
 });

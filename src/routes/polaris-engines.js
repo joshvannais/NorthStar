@@ -60,12 +60,16 @@ function _sanitizePublicBody(body) {
   delete clean.recordScope;
   delete clean.simulationSessionId;
   delete clean.demoSessionId;
+  delete clean.ownerUserId;
+  delete clean.organizationId;
   if (clean.source === 'simulation') delete clean.source;
   if (clean.metadata && typeof clean.metadata === 'object') {
     clean.metadata = Object.assign({}, clean.metadata);
     delete clean.metadata.recordScope;
     delete clean.metadata.source;
     delete clean.metadata.simulationSessionId;
+    delete clean.metadata.ownerUserId;
+    delete clean.metadata.organizationId;
   }
   return clean;
 }
@@ -121,6 +125,9 @@ router.use((req, res, next) => {
 
 // All engine routes require authentication
 router.use(requireAuth);
+router.use(function (req, res, next) {
+  demoScope.runWithAccess(req, next);
+});
 
 // ══════════════════════════════════════════════
 // CUSTOMER ENGINE

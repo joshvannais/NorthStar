@@ -7,6 +7,7 @@
   if (window.NorthStarDemoSession) return;
 
   var storageKey = 'northstarSessionId';
+  var tabStorageKey = 'northstarTabId';
   var isReload = false;
   try {
     var navigationEntries = window.performance && window.performance.getEntriesByType
@@ -23,30 +24,54 @@
     return 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
   }
 
-  function readId() {
-    try { return window.sessionStorage.getItem(storageKey); } catch (err) {}
+  function newTabId() {
+    return 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function readStorage(key) {
+    try { return window.sessionStorage.getItem(key); } catch (err) { return null; }
+  }
+
+  function readName(key) {
     try {
-      var match = String(window.name || '').match(/(?:^|;)northstarSessionId=([^;]+)/);
+      var pattern = new RegExp('(?:^|;)' + key + '=([^;]+)');
+      var match = String(window.name || '').match(pattern);
       return match ? decodeURIComponent(match[1]) : null;
     } catch (err) { return null; }
   }
 
-  function writeId(value) {
+  function writeName(key, value) {
     try {
-      window.sessionStorage.setItem(storageKey, value);
-      return;
-    } catch (err) {}
-    try {
-      var retained = String(window.name || '').replace(/(?:^|;)northstarSessionId=[^;]*/g, '');
-      window.name = (retained ? retained + ';' : '') + 'northstarSessionId=' + encodeURIComponent(value);
+      var pattern = new RegExp('(?:^|;)' + key + '=[^;]*', 'g');
+      var retained = String(window.name || '').replace(pattern, '').replace(/^;+|;+$/g, '');
+      window.name = (retained ? retained + ';' : '') + key + '=' + encodeURIComponent(value);
     } catch (err) {}
   }
 
-  var id = readId();
+  function writeState(sessionId, tabId) {
+    try {
+      window.sessionStorage.setItem(storageKey, sessionId);
+      window.sessionStorage.setItem(tabStorageKey, tabId);
+    } catch (err) {}
+    // window.name is browsing-context state. Unlike sessionStorage, it is not
+    // cloned into a normal opener-created tab, so the paired tab ID detects a
+    // cloned parent session without breaking same-tab or restored-tab flows.
+    writeName('northstarSessionId', sessionId);
+    writeName('northstarTabId', tabId);
+  }
+
+  var storedId = readStorage(storageKey);
+  var namedId = readName('northstarSessionId');
+  var storedTabId = readStorage(tabStorageKey);
+  var namedTabId = readName('northstarTabId');
+  var inheritedFromOpener = Boolean(storedTabId && storedTabId !== namedTabId);
+  var tabId = inheritedFromOpener ? newTabId() : (storedTabId || namedTabId || newTabId());
+  var id = inheritedFromOpener ? null : (storedId || namedId);
+
   if (isReload || !id) {
     id = newId();
-    writeId(id);
   }
+  writeState(id, tabId);
 
   function appendToUrl(url) {
     if (!id) return url;
@@ -57,6 +82,7 @@
   window.SIM_SESSION_ID = id;
   window.NorthStarDemoSession = Object.freeze({
     id: id,
+    tabId: tabId,
     isReload: isReload,
     appendToUrl: appendToUrl,
   });

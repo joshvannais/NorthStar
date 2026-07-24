@@ -97,7 +97,10 @@ function requirePermission(resource, action) {
       return res.status(401).json({ error: { code: 'unauthorized', message: 'Authentication required.' } });
     }
 
-    const role = user.role || 'member';
+    // Contractor JWTs identify the token class as "contractor"; until a
+    // persisted organization role is attached, retain the established member
+    // capabilities instead of denying every permissioned v1 route.
+    const role = user.role === 'contractor' ? 'member' : (user.role || 'member');
 
     if (!hasContractorPermission(role, resource, action)) {
       return res.status(403).json({

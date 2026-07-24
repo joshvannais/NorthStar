@@ -55,9 +55,7 @@ function build(options) {
   const financial = profile.financial || {};
   const configuredMarkup = Number(financial.markup);
   const markupMultiplier = configuredMarkup > 0 ? configuredMarkup : 1;
-  const emergency = /emergency|urgent|asap|gushing|flood|burst/i.test(
-    String(scope.urgency || '') + ' ' + String(scope.jobType || '') + ' ' + String(scope.leakSeverity || '')
-  );
+  const emergency = Boolean(opts.emergencyEvidence && opts.emergencyEvidence.isEmergency === true);
   const emergencyMultiplier = emergency && Number(financial.emergencyMarkup) > 1
     ? Number(financial.emergencyMarkup) : 1;
 
@@ -131,7 +129,9 @@ function build(options) {
       ? ['Preliminary pricing uses the configured service catalog and Business Profile pricing settings.']
       : [],
     qualification: missingRequired.length ? 'Needs assessment' : 'Qualified for preliminary review',
-    urgency: scope.urgency || (emergency ? 'emergency' : 'not established'),
+    urgency: emergency
+      ? 'emergency'
+      : (/emergency/i.test(String(scope.urgency || '')) ? 'not established' : (scope.urgency || 'not established')),
     customerIntent: 'Requesting ' + label.toLowerCase() + ' service',
     bookingIntent: action.action || action.label || 'Not established',
     customerSentiment: 'Not reliably determined',

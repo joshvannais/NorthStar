@@ -523,8 +523,8 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 // ── /api/v1/* routes — registered BEFORE /api to avoid interception by apiRoutes' global requireAuth
 const simulationsRoutes = require('./routes/simulations');
 app.use('/api/v1', simulationsRoutes);
-app.use('/api/v1', dashboardRoutes);
 app.use('/api/v1', publicApiRoutes);
+app.use('/api/v1', dashboardRoutes);
 app.use('/api/v1/polaris', polarisRoutes);
 app.use('/api/v1', polarisEnginesRoutes);
 app.use('/api/v1/leads', customerIntelligenceRoutes);

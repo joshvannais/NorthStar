@@ -34,6 +34,30 @@ window.PolarisM13Bridge = (function() {
   }
 
   /**
+   * Fetch legacy lead intelligence with the same auth and demo-session
+   * propagation used by every other M13 request.
+   */
+  function fetchLeadIntelligence(leadId) {
+    return new Promise(function(resolve) {
+      if (!leadId) { resolve(null); return; }
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', scopedUrl('/api/v1/leads/' + encodeURIComponent(leadId) + '/intelligence'), true);
+      var token = localStorage.getItem('token');
+      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch(e) { resolve(null); }
+        } else {
+          resolve(null);
+        }
+      };
+      xhr.onerror = function() { resolve(null); };
+      xhr.send();
+    });
+  }
+
+  /**
    * Fetch communications intelligence data.
    * @param {string} customerId
    * @returns {Promise<object|null>}
@@ -182,6 +206,7 @@ window.PolarisM13Bridge = (function() {
 
   return {
     fetchCustomerIntelligence: fetchCustomerIntelligence,
+    fetchLeadIntelligence: fetchLeadIntelligence,
     fetchCommsIntelligence: fetchCommsIntelligence,
     fetchFullIntelligence: fetchFullIntelligence,
     augmentLead: augmentLead

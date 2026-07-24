@@ -28,7 +28,12 @@ const mockPolarisEngine = {
 };
 
 jest.mock('../../src/auth/middleware', function () {
-  return { requireAuth: function (req, res, next) { next(); } };
+  return {
+    requireAuth: function (req, res, next) {
+      req.user = { sub: req.headers['x-test-user'] || 'owner-a', role: 'contractor' };
+      next();
+    },
+  };
 });
 jest.mock('../../src/polaris/store', function () {
   return { getAllRecommendations: jest.fn(function () { return []; }) };
@@ -47,11 +52,12 @@ jest.mock('../../src/polaris/engine', function () { return mockPolarisEngine; })
 const engineRoutes = require('../../src/routes/polaris-engines');
 const polarisRoutes = require('../../src/routes/polaris');
 
-function simulationMetadata(sessionId) {
+function simulationMetadata(sessionId, ownerUserId) {
   return {
     recordScope: 'simulation',
     source: 'simulation',
     simulationSessionId: sessionId,
+    ownerUserId: ownerUserId || 'owner-a',
   };
 }
 
@@ -68,12 +74,12 @@ describe('stabilization session visibility guards', function () {
   const customers = {
     real: { id: 'customer-real', name: 'Durable Tenant Customer', metadata: {} },
     sessionA: { id: 'customer-a', name: 'Session A Customer', metadata: simulationMetadata('session-a') },
-    sessionB: { id: 'customer-b', name: 'Session B Customer', metadata: simulationMetadata('session-b') },
+    sessionB: { id: 'customer-b', name: 'Session B Customer', metadata: simulationMetadata('session-b', 'owner-b') },
   };
   const opportunities = {
     real: { id: 'opportunity-real', customerId: customers.real.id, title: 'Durable Opportunity', metadata: {} },
     sessionA: { id: 'opportunity-a', customerId: customers.sessionA.id, title: 'Session A Opportunity', metadata: simulationMetadata('session-a') },
-    sessionB: { id: 'opportunity-b', customerId: customers.sessionB.id, title: 'Session B Opportunity', metadata: simulationMetadata('session-b') },
+    sessionB: { id: 'opportunity-b', customerId: customers.sessionB.id, title: 'Session B Opportunity', metadata: simulationMetadata('session-b', 'owner-b') },
   };
   const recommendations = [
     { id: 'recommendation-real', type: 'recommendation', data: { id: 'real-data', message: 'Durable recommendation' } },
@@ -127,9 +133,12 @@ describe('stabilization session visibility guards', function () {
     test('a missing or wrong session receives 404 without calling the mutator', async function () {
       const noSession = await request(app).put('/api/v1/customers/customer-a').send({ name: 'Blocked' });
       const wrongSession = await request(app).put('/api/v1/customers/customer-a?sessionId=session-b').send({ name: 'Blocked' });
+      const wrongOwner = await request(app).put('/api/v1/customers/customer-a?sessionId=session-a')
+        .set('X-Test-User', 'owner-b').send({ name: 'Blocked' });
 
       expect(noSession.status).toBe(404);
       expect(wrongSession.status).toBe(404);
+      expect(wrongOwner.status).toBe(404);
       expect(noSession.body).toEqual({ error: 'Record not found' });
       expect(mockCustomerEngine.updateCustomer).not.toHaveBeenCalled();
     });

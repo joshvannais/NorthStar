@@ -45,6 +45,7 @@ describe('NorthStar stabilization mission', function () {
     function runDemoSession(navigationType, storage) {
       const code = fs.readFileSync(path.join(__dirname, '../../public/js/demo-session.js'), 'utf8');
       const window = {
+        name: storage.windowName || '',
         performance: {
           getEntriesByType: function (type) {
             return type === 'navigation' ? [{ type: navigationType }] : [];
@@ -56,6 +57,7 @@ describe('NorthStar stabilization mission', function () {
         },
       };
       vm.runInNewContext(code, { window: window, Date: Date, Math: Math, encodeURIComponent: encodeURIComponent });
+      storage.windowName = window.name;
       return window.NorthStarDemoSession;
     }
 
@@ -184,11 +186,16 @@ describe('NorthStar stabilization mission', function () {
         jobType: 'emergency', fixture: 'burst pipe', leakSeverity: 'gushing',
         waterShutoff: false, emergency: true, urgency: 'emergency',
       };
-      const action = pipeline.selectAction([
-        { text: 'A pipe burst and the active leak is flooding the room. I cannot get it to stop.' },
-        { text: 'Please come out today.' },
-      ], 'Emergency Customer', scope);
-      const result = buildService('plumbing', scope, [], { recommendedAction: action });
+      const transcript = [
+        { speaker: 'customer', text: 'A pipe burst and the active leak is flooding the room. I cannot get it to stop.' },
+        { speaker: 'customer', text: 'Please come out today.' },
+      ];
+      const emergencyEvidence = pipeline.detectEmergencyEvidence(transcript);
+      const action = pipeline.selectAction(transcript, 'Emergency Customer', scope, emergencyEvidence);
+      const result = buildService('plumbing', scope, [], {
+        emergencyEvidence: emergencyEvidence,
+        recommendedAction: action,
+      });
       expect(result.pricingStrategy).toBe('diagnosticFee');
       expect(result.pricingBreakdown.some(function (item) { return item.category === 'emergencyAdjustment'; })).toBe(true);
       expect(result.pricingBreakdown.every(function (item) { return item.amount > 0; })).toBe(true);

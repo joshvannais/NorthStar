@@ -14,9 +14,9 @@ const { requireAuth } = require('../auth/middleware');
 
 router.use(requireAuth);
 
-function _visibleLeads(sessionId) {
+function _visibleLeads(req) {
   const loaded = dataLoader.loadData();
-  return demoScope.filterRecords(loaded.leads || [], sessionId);
+  return demoScope.filterTenantRecords(loaded.leads || [], demoScope.createAccessContext(req));
 }
 
 /**
@@ -25,7 +25,7 @@ function _visibleLeads(sessionId) {
  */
 router.get('/intelligence/dashboard', (req, res) => {
   try {
-    const leads = _visibleLeads(req.query.sessionId);
+    const leads = _visibleLeads(req);
     const dashboard = customerIntelligence.generateDashboardCustomerIntelligence(leads);
     return res.json({ success: true, data: dashboard });
   } catch (err) {
@@ -43,7 +43,7 @@ router.get('/:id/intelligence', (req, res) => {
     const leadId = req.params.id;
     if (!leadId) return res.status(400).json({ success: false, error: 'Lead ID is required' });
 
-    const leads = _visibleLeads(req.query.sessionId);
+    const leads = _visibleLeads(req);
     const lead = leads.find(function (item) { return item.id === leadId; });
     if (!lead) return res.status(404).json({ success: false, error: 'Lead not found' });
 

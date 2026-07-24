@@ -13,6 +13,7 @@
 const express = require('express');
 const { requireAuth } = require('../auth/middleware');
 const { requirePermission } = require('../auth/authorize');
+const { requireOrgMembership } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
 const { ApiError } = require('../middleware/errorHandler');
 const cache = require('../cache/client');
@@ -24,6 +25,7 @@ const coach = require('../coach/engine');
 const brief = require('../coach/brief');
 const { getOrCompute, loadAllSnapshots, computePeriodSummary } = require('../analytics/dailySnapshots');
 const { seedDemoData } = require('../analytics/seeder');
+const demoScope = require('../services/demoRecordScope');
 
 const router = express.Router();
 
@@ -57,11 +59,13 @@ router.get('/leads', requireAuth, requirePermission('leads', 'view'), async (req
   try {
     const { cursor, limit: limitParam, status, search } = req.query;
     const limit = Math.min(parseInt(limitParam) || 20, 100);
-    const cacheKey = cache.buildKey('leads:list', req.user.id + ':' + (cursor || '') + ':' + limit + ':' + (status || '') + ':' + (search || ''));
+    const access = demoScope.createAccessContext(req);
+    const userId = req.user.sub || req.user.id;
+    const cacheKey = cache.buildKey('leads:list', userId + ':' + (access.sessionId || '') + ':' + (cursor || '') + ':' + limit + ':' + (status || '') + ':' + (search || ''));
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    let leads = getAllLeads();
+    let leads = demoScope.filterTenantRecords(getAllLeads(), access);
     if (status) leads = leads.filter(function(l) { return l.status === status; });
     if (search) {
       var q = search.toLowerCase();
@@ -112,7 +116,8 @@ router.get('/leads', requireAuth, requirePermission('leads', 'view'), async (req
 router.get('/leads/:id', requireAuth, requirePermission('leads', 'view'), async (req, res, next) => {
   try {
     const lead = getLead(req.params.id);
-    if (!lead) throw new ApiError(404, 'not_found', 'Lead not found.');
+    const access = demoScope.createAccessContext(req);
+    if (!lead || !demoScope.canAccessTenant(lead, access)) throw new ApiError(404, 'not_found', 'Lead not found.');
     res.json({
       data: {
         id: lead.id, name: lead.customerName, phone: lead.phoneNumber, email: lead.email || '',
@@ -131,7 +136,7 @@ router.get('/leads/:id', requireAuth, requirePermission('leads', 'view'), async 
  * GET /api/v1/calls
  * List calls with pagination and search from database.
  */
-router.get('/calls', requireAuth, requirePermission('calls', 'view'), async (req, res, next) => {
+router.get('/calls', requireAuth, requirePermission('calls', 'view'), requireOrgMembership, async (req, res, next) => {
   try {
     const { cursor, limit: limitParam, status, search } = req.query;
     const limit = Math.min(parseInt(limitParam) || 20, 100);
@@ -143,6 +148,16 @@ router.get('/calls', requireAuth, requirePermission('calls', 'view'), async (req
     var q = 'SELECT id, caller_name, caller_phone, service_type, estimated_price, job_detail, duration_seconds, status, outcome, summary, is_known_contact, created_at FROM call_records WHERE 1=1';
     var p = [];
     var idx = 1;
+    q += ' AND organization_id = $' + idx;
+    p.push(req.orgId);
+    idx++;
+    if (req.query.sessionId) {
+      q += ' AND (source IS DISTINCT FROM $' + idx + ' OR retell_call_id LIKE $' + (idx + 1) + ')';
+      p.push('simulation', 'northstar-sim:' + req.query.sessionId + ':%');
+      idx += 2;
+    } else {
+      q += ' AND source IS DISTINCT FROM $' + idx; p.push('simulation'); idx++;
+    }
 
     if (status) { q += ' AND outcome = $' + idx; p.push(status); idx++; }
     if (search) { q += ' AND (caller_name ILIKE $' + idx + ' OR caller_phone ILIKE $' + idx + ' OR service_type ILIKE $' + idx + ')'; p.push('%' + search + '%'); idx++; }

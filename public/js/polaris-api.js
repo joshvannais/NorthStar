@@ -212,6 +212,12 @@ window.PolarisApi = (function() {
    * POST /api/v1/simulations/leads
    */
   function simulateLead(data) {
+    data = data || {};
+    // Keep the key on the caller's object so a UI retry replays the same
+    // request instead of creating a second canonical graph.
+    if (!data.idempotencyKey) {
+      data.idempotencyKey = 'simreq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 12);
+    }
     return _post('/simulations/leads', data);
   }
 

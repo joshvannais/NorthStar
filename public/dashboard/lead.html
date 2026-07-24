@@ -287,10 +287,13 @@
         var ciContainer = document.getElementById('customerIntelligenceContainer');
         if (!ciContainer) return;
 
-        fetch('/api/v1/leads/' + encodeURIComponent(leadId) + '/intelligence')
-          .then(function(r) { return r.json(); })
+        if (!window.PolarisM13Bridge || typeof window.PolarisM13Bridge.fetchLeadIntelligence !== 'function') {
+          ciContainer.innerHTML = '<div class="ci-placeholder">Customer intelligence unavailable.</div>';
+          return;
+        }
+        window.PolarisM13Bridge.fetchLeadIntelligence(leadId)
           .then(function(resp) {
-            if (resp.success && resp.data) {
+            if (resp && resp.success && resp.data) {
               renderCustomerIntelligence(ciContainer, resp.data);
             } else {
               ciContainer.innerHTML = '<div class="ci-placeholder">Customer intelligence unavailable.</div>';

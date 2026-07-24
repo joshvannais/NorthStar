@@ -13,6 +13,7 @@ const db = require('../db');
 const jobber = require('../integrations/jobber');
 const config = require('../config');
 const { requireAuth } = require('../auth/middleware');
+const demoScope = require('../services/demoRecordScope');
 
 const router = express.Router();
 
@@ -177,6 +178,43 @@ router.use('/v1/voice', voiceRouter);
 // ══════════════════════════════════════════════
 router.use(requireAuth);
 
+function leadAccess(req) {
+  return demoScope.createAccessContext(req);
+}
+
+function visibleLeads(req) {
+  return demoScope.filterTenantRecords(getAllLeads(), leadAccess(req));
+}
+
+function visibleLead(req, id) {
+  const lead = getLead(id);
+  return lead && demoScope.canAccessTenant(lead, leadAccess(req)) ? lead : null;
+}
+
+function ownedLeadInput(req, input) {
+  const body = Object.assign({}, input || {});
+  delete body.recordScope;
+  delete body.source;
+  delete body.simulationSessionId;
+  delete body.demoSessionId;
+  delete body.ownerUserId;
+  delete body.organizationId;
+  delete body.metadata;
+  body.ownerUserId = req.user && (req.user.sub || req.user.id);
+  body.organizationId = req.orgId || (req.user && (req.user.organizationId || req.user.orgId)) || null;
+  return body;
+}
+
+function simulatedLeadInput(req, input) {
+  const body = ownedLeadInput(req, input);
+  const sessionId = req.body && req.body.sessionId;
+  if (!sessionId) return body;
+  return Object.assign(body, demoScope.createMetadata(sessionId, {
+    ownerUserId: body.ownerUserId,
+    organizationId: body.organizationId,
+  }));
+}
+
     /**
      * GET /api/stats
      * Return aggregate stats: total calls, total revenue, served from database.
@@ -224,8 +262,8 @@ router.use(requireAuth);
  * Return all leads (for testing/demo purposes).
  */
 router.get('/leads', (req, res) => {
-  const leads = getAllLeads();
-  res.json({ items: leads, count: leads.length });
+  const items = visibleLeads(req);
+  res.json({ items: items, count: items.length });
 });
 
 /**
@@ -234,7 +272,7 @@ router.get('/leads', (req, res) => {
  */
 router.get('/leads/export', (req, res) => {
   const { getAllLeads } = require('../leads/store');
-  const leads = getAllLeads();
+  const leads = demoScope.filterTenantRecords(getAllLeads(), leadAccess(req));
   const fields = ['id','caller','customerName','phone','phoneNumber','service','serviceRequested','status','avgPrice','address','jobAddress','receivedAt','updatedAt','duration','outcome','summary','transcript'];
   const header = fields.join(',');
   const rows = leads.map(function(l) {
@@ -257,7 +295,7 @@ router.get('/leads/export', (req, res) => {
  * Return a single lead by ID.
  */
 router.get('/leads/:id', (req, res) => {
-  const lead = getLead(req.params.id);
+  const lead = visibleLead(req, req.params.id);
   if (!lead) {
     return res.status(404).json({ error: 'Lead not found' });
   }
@@ -270,7 +308,7 @@ router.get('/leads/:id', (req, res) => {
  */
 router.post('/leads', (req, res) => {
   const { addLead } = require('../leads/store');
-  const lead = addLead(req.body);
+  const lead = addLead(ownedLeadInput(req, req.body));
   res.json({ success: true, lead });
 });
 
@@ -279,8 +317,12 @@ router.post('/leads', (req, res) => {
  * Update an existing lead.
  */
 router.put('/leads/:id', (req, res) => {
+  if (!visibleLead(req, req.params.id)) {
+    return res.status(404).json({ error: 'Lead not found' });
+  }
   const { updateLead } = require('../leads/store');
-  const updated = updateLead(req.params.id, req.body);
+  const updates = ownedLeadInput(req, req.body);
+  const updated = updateLead(req.params.id, updates);
   if (!updated) {
     return res.status(404).json({ error: 'Lead not found' });
   }
@@ -292,6 +334,9 @@ router.put('/leads/:id', (req, res) => {
  * Delete a lead.
  */
 router.delete('/leads/:id', (req, res) => {
+  if (!visibleLead(req, req.params.id)) {
+    return res.status(404).json({ error: 'Lead not found' });
+  }
   const { removeLead } = require('../leads/store');
   const removed = removeLead(req.params.id);
   if (!removed) {
@@ -339,7 +384,7 @@ router.post('/leads/import', upload.single('file'), (req, res) => {
           if (vals[j]) lead[headers[j]] = vals[j];
         }
         if (lead.caller || lead.customerName || lead.phone || lead.phoneNumber) {
-          addLead(lead);
+          addLead(ownedLeadInput(req, lead));
           imported++;
         } else {
           skipped++;
@@ -364,7 +409,7 @@ router.post('/leads/simulate', async (req, res) => {
   const { sendLeadNotification: sendSms } = require('../notifications/sms');
   const { sendLeadNotification: sendEmail } = require('../notifications/email');
 
-  const lead = addLead({
+  const lead = addLead(simulatedLeadInput(req, {
     customerName: req.body.customerName || 'John Smith',
     phoneNumber: req.body.phoneNumber || '(555) 123-4567',
     address: req.body.address || '123 Oak Street',
@@ -373,7 +418,7 @@ router.post('/leads/simulate', async (req, res) => {
     urgency: req.body.urgency || '',
     callOutcome: 'Lead captured',
     notes: req.body.notes || 'Simulated lead for testing',
-  });
+  }));
 
   await appendLead(lead);
   await Promise.allSettled([sendSms(lead), sendEmail(lead)]);

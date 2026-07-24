@@ -54,6 +54,12 @@ jest.mock('../../src/db', function () {
     initDatabase: jest.fn(function () { return Promise.resolve(true); }),
     isAvailable: jest.fn(function () { return true; }),
     query: jest.fn(function (sql) {
+      if (/SELECT organization_id FROM users/.test(String(sql))) {
+        return Promise.resolve({ rows: [{ organization_id: 'org-test-owner' }] });
+      }
+      if (/SELECT id FROM call_records/.test(String(sql))) {
+        return Promise.resolve({ rows: [] });
+      }
       if (/INSERT INTO call_records/.test(String(sql))) {
         return Promise.resolve({ rows: [{ id: 'db-call-created' }] });
       }
@@ -68,6 +74,18 @@ jest.mock('../../src/audit/client', function () {
     record: jest.fn(function () { return Promise.resolve(); }),
     query: jest.fn(function () { return Promise.resolve({ items: [], pagination: {} }); }),
     ensureTable: jest.fn(function () { return Promise.resolve(); }),
+  };
+});
+
+jest.mock('../../src/cache/client', function () {
+  return {
+    buildKey: jest.fn(function () {
+      return Array.prototype.slice.call(arguments).join(':');
+    }),
+    get: jest.fn(function () { return Promise.resolve(null); }),
+    set: jest.fn(function () { return Promise.resolve(true); }),
+    isAvailable: jest.fn(function () { return false; }),
+    incr: jest.fn(function () { return Promise.resolve(1); }),
   };
 });
 
@@ -130,6 +148,7 @@ jest.mock('../../src/polaris/customer-engine', function () {
         recordScope: 'simulation',
         source: 'simulation',
         simulationSessionId: 'session-a',
+        ownerUserId: 'test-owner',
         polarisIntelligence: mockCanonicalCustomer,
       },
     },
@@ -141,6 +160,7 @@ jest.mock('../../src/polaris/customer-engine', function () {
         recordScope: 'simulation',
         source: 'simulation',
         simulationSessionId: 'session-b',
+        ownerUserId: 'other-owner',
       },
     },
   };
@@ -173,20 +193,20 @@ jest.mock('../../src/polaris/communications-engine', function () {
   const communications = [
     {
       id: 'comm-hidden-1', customerId: 'cust-b', type: 'call',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner' },
     },
     {
       id: 'comm-hidden-2', customerId: 'cust-b', type: 'call',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner' },
     },
     { id: 'comm-tenant', customerId: 'cust-tenant', type: 'call' },
     {
       id: 'comm-a-1', customerId: 'cust-a', type: 'call',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a', ownerUserId: 'test-owner' },
     },
     {
       id: 'comm-a-2', customerId: 'cust-a', type: 'call',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a', ownerUserId: 'test-owner' },
     },
   ];
 
@@ -224,6 +244,7 @@ jest.mock('../../src/polaris/opportunity-engine', function () {
       lastActivity: '2099-01-01T00:00:00.000Z',
       metadata: {
         recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a',
+        ownerUserId: 'test-owner',
         polarisIntelligence: mockCanonicalCustomer,
       },
     },
@@ -231,7 +252,7 @@ jest.mock('../../src/polaris/opportunity-engine', function () {
       id: 'opp-a-won', customerId: 'cust-a', title: 'Session A Won',
       stage: 'won', status: 'won', estimatedValue: 3000, expectedRevenue: 3000,
       lastActivity: '2099-01-01T00:00:00.000Z',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a', ownerUserId: 'test-owner' },
     },
     {
       id: 'opp-tenant-lost', customerId: 'cust-tenant', title: 'Tenant Lost',
@@ -242,7 +263,7 @@ jest.mock('../../src/polaris/opportunity-engine', function () {
       id: 'opp-hidden', customerId: 'cust-b', title: 'Hidden Session B',
       stage: 'qualified', status: 'open', estimatedValue: 9000, expectedRevenue: 1350,
       lastActivity: '2099-01-01T00:00:00.000Z',
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner' },
     },
   ];
 
@@ -282,12 +303,13 @@ jest.mock('../../src/polaris/financial-engine', function () {
       id: 'est-a', customerId: 'cust-a', opportunityId: 'opp-a-open', total: 1200,
       metadata: {
         recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a',
+        ownerUserId: 'test-owner',
         polarisIntelligence: mockCanonicalCustomer,
       },
     },
     {
       id: 'est-b', customerId: 'cust-b', total: 9000,
-      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b' },
+      metadata: { recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b', ownerUserId: 'other-owner' },
     },
   ];
 
@@ -321,10 +343,12 @@ jest.mock('../../src/services/dataLoader', function () {
     {
       id: 'lead-a', caller: 'Session A Lead', service: 'Concrete',
       recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-a',
+        ownerUserId: 'test-owner',
     },
     {
       id: 'lead-b', caller: 'Session B Lead', service: 'Roofing',
       recordScope: 'simulation', source: 'simulation', simulationSessionId: 'session-b',
+        ownerUserId: 'other-owner',
     },
   ];
 
@@ -383,6 +407,7 @@ const customersEngine = require('../../src/polaris/customer-engine');
 const communicationsEngine = require('../../src/polaris/communications-engine');
 const opportunitiesEngine = require('../../src/polaris/opportunity-engine');
 const financialEngine = require('../../src/polaris/financial-engine');
+const simulationIdempotency = require('../../src/services/simulationIdempotency');
 
 const token = generateToken({
   id: 'test-owner',
@@ -390,11 +415,56 @@ const token = generateToken({
   name: 'Test Owner',
 });
 
+const otherToken = generateToken({
+  id: 'other-owner',
+  email: 'other@test.local',
+  name: 'Other Owner',
+});
+
 function authorized(testRequest) {
   return testRequest.set('Authorization', 'Bearer ' + token);
 }
 
 describe('stabilization public API contracts', function () {
+  test('permissioned public v1 leads handler is not shadowed by dashboard routes', async function () {
+    const unauthenticated = await request(app).get('/api/v1/leads');
+    expect(unauthenticated.status).toBe(401);
+
+    const response = await authorized(request(app).get('/api/v1/leads'));
+    expect(response.status).toBe(200);
+    expect(Object.keys(response.body).sort()).toEqual(['data', 'pagination']);
+    expect(response.body).toEqual({
+      data: [],
+      pagination: { cursor: null, hasMore: false },
+    });
+    expect(response.body).not.toHaveProperty('leads');
+  });
+
+  test('permissioned public v1 calls handler applies organization and demo-session predicates', async function () {
+    expect((await request(app).get('/api/v1/calls?sessionId=session-a')).status).toBe(401);
+    db.query.mockClear();
+
+    const response = await authorized(request(app).get('/api/v1/calls?sessionId=session-a'));
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      data: [],
+      pagination: { cursor: null, hasMore: false },
+    });
+
+    const callQuery = db.query.mock.calls.find(function (call) {
+      return /FROM call_records WHERE/.test(String(call[0]));
+    });
+    expect(callQuery).toBeDefined();
+    expect(callQuery[0]).toContain('organization_id');
+    expect(callQuery[0]).toContain('retell_call_id LIKE');
+    expect(callQuery[0]).toContain('source IS DISTINCT FROM');
+    expect(callQuery[1]).toEqual(expect.arrayContaining([
+      'org-test-owner',
+      'simulation',
+      'northstar-sim:session-a:%',
+    ]));
+  });
+
   test('actual server mount enforces auth and filters customer summaries by full-record session ownership', async function () {
     const unauthenticated = await request(app).get('/api/v1/customers?sessionId=session-a');
     expect(unauthenticated.status).toBe(401);
@@ -453,6 +523,16 @@ describe('stabilization public API contracts', function () {
       .get('/api/v1/leads/lead-a/intelligence'));
     expect(hiddenWithoutSession.status).toBe(404);
     expect(hiddenWithoutSession.body).toEqual({ success: false, error: 'Lead not found' });
+
+    const wrongOwner = await request(app)
+      .get('/api/v1/leads/lead-a/intelligence?sessionId=session-a')
+      .set('Authorization', 'Bearer ' + otherToken);
+    expect(wrongOwner.status).toBe(404);
+    expect(wrongOwner.body).toEqual({ success: false, error: 'Lead not found' });
+
+    const unauthenticated = await request(app)
+      .get('/api/v1/leads/lead-a/intelligence?sessionId=session-a');
+    expect(unauthenticated.status).toBe(401);
   });
 
   test('canonical customer Polaris endpoint returns exactly the public canonical fields', async function () {
@@ -539,6 +619,7 @@ describe('stabilization public API contracts', function () {
           email: 'contract@test.local',
           service: 'concrete',
           sessionId: 'session-a',
+          idempotencyKey: 'contract-request-1',
         }));
     } finally {
       random.mockRestore();
@@ -589,6 +670,7 @@ describe('stabilization public API contracts', function () {
       recordScope: 'simulation',
       source: 'simulation',
       simulationSessionId: 'session-a',
+        ownerUserId: 'test-owner',
       demoSessionId: 'session-a',
       canonicalCustomerId: 'cust-created',
       canonicalCommunicationId: 'comm-created',
@@ -624,6 +706,8 @@ describe('stabilization public API contracts', function () {
     });
     expect(dbInsert).toBeDefined();
     expect(dbInsert[1]).toEqual([
+      'org-test-owner',
+      expect.stringMatching(/^northstar-sim:session-a:/),
       'Contract Test Customer',
       '(555) 111-2222',
       response.body.summary.service,
@@ -634,5 +718,216 @@ describe('stabilization public API contracts', function () {
       'simulation',
       false,
     ]);
+  });
+
+  test('raw lead list, detail, transcript export, update, and delete enforce owner plus active session', async function () {
+    const realLead = { id: 'raw-real', customerName: 'Durable Raw Lead', transcript: 'durable transcript' };
+    const ownedLead = {
+      id: 'raw-owned',
+      customerName: 'Owned Raw Simulation',
+      transcript: 'owned transcript',
+      recordScope: 'simulation',
+      source: 'simulation',
+      simulationSessionId: 'raw-session',
+      ownerUserId: 'test-owner',
+    };
+    const foreignLead = {
+      id: 'raw-foreign',
+      customerName: 'Foreign Raw Simulation',
+      transcript: 'foreign transcript secret',
+      recordScope: 'simulation',
+      source: 'simulation',
+      simulationSessionId: 'raw-session',
+      ownerUserId: 'other-owner',
+    };
+    const records = [realLead, ownedLead, foreignLead];
+    leadsStore.getAllLeads.mockImplementation(function () { return records.slice(); });
+    leadsStore.getLead.mockImplementation(function (id) {
+      return records.find(function (record) { return record.id === id; }) || null;
+    });
+    leadsStore.updateLead.mockImplementation(function (id, updates) {
+      return Object.assign({}, records.find(function (record) { return record.id === id; }), updates);
+    });
+    leadsStore.removeLead.mockImplementation(function (id) {
+      return records.find(function (record) { return record.id === id; }) || null;
+    });
+
+    try {
+      expect((await request(app).get('/api/leads?sessionId=raw-session')).status).toBe(401);
+
+      const list = await authorized(request(app).get('/api/leads?sessionId=raw-session'));
+      expect(list.body.items.map(function (lead) { return lead.id; })).toEqual(['raw-real', 'raw-owned']);
+
+      const missingSession = await authorized(request(app).get('/api/leads'));
+      expect(missingSession.body.items.map(function (lead) { return lead.id; })).toEqual(['raw-real']);
+
+      const wrongOwnerList = await request(app).get('/api/leads?sessionId=raw-session')
+        .set('Authorization', 'Bearer ' + otherToken);
+      expect(wrongOwnerList.body.items.map(function (lead) { return lead.id; }))
+        .toEqual(['raw-real', 'raw-foreign']);
+
+      expect((await authorized(request(app).get('/api/leads/raw-owned?sessionId=raw-session'))).status).toBe(200);
+      expect((await authorized(request(app).get('/api/leads/raw-owned'))).status).toBe(404);
+      expect((await request(app).get('/api/leads/raw-owned?sessionId=raw-session')
+        .set('Authorization', 'Bearer ' + otherToken)).status).toBe(404);
+
+      const csv = await authorized(request(app).get('/api/leads/export?sessionId=raw-session'));
+      expect(csv.status).toBe(200);
+      expect(csv.text).toContain('owned transcript');
+      expect(csv.text).not.toContain('foreign transcript secret');
+
+      expect((await authorized(request(app).put('/api/leads/raw-owned')
+        .send({ customerName: 'Blocked' }))).status).toBe(404);
+      expect((await authorized(request(app).delete('/api/leads/raw-owned'))).status).toBe(404);
+      expect(leadsStore.updateLead).not.toHaveBeenCalled();
+      expect(leadsStore.removeLead).not.toHaveBeenCalled();
+
+      expect((await authorized(request(app).put('/api/leads/raw-owned?sessionId=raw-session')
+        .send({ customerName: 'Allowed' }))).status).toBe(200);
+      expect((await authorized(request(app).delete('/api/leads/raw-owned?sessionId=raw-session'))).status).toBe(200);
+      expect(leadsStore.updateLead).toHaveBeenCalledTimes(1);
+      expect(leadsStore.removeLead).toHaveBeenCalledTimes(1);
+    } finally {
+      leadsStore.getAllLeads.mockImplementation(function () { return []; });
+      leadsStore.getLead.mockImplementation(function () { return null; });
+      leadsStore.updateLead.mockImplementation(function () { return null; });
+      leadsStore.removeLead.mockImplementation(function () { return null; });
+    }
+  });
+
+  function postSimulation(key) {
+    return authorized(request(app)
+      .post('/api/v1/simulations/leads')
+      .send({
+        name: 'Persistence Boundary Customer',
+        phone: '(555) 222-3333',
+        email: 'persistence@test.local',
+        service: 'concrete',
+        sessionId: 'session-persistence',
+        idempotencyKey: key,
+      }));
+  }
+
+  test.each([
+    ['customer', function () {
+      customersEngine.createCustomer.mockReturnValueOnce({ error: 'forced customer failure' });
+    }],
+    ['communication', function () {
+      communicationsEngine.recordCommunication.mockReturnValueOnce({ error: 'forced communication failure' });
+    }],
+    ['opportunity', function () {
+      opportunitiesEngine.createOpportunity.mockReturnValueOnce({ error: 'forced opportunity failure' });
+    }],
+    ['estimate', function () {
+      financialEngine.createEstimate.mockReturnValueOnce({ error: 'forced estimate failure' });
+    }],
+    ['lead', function () {
+      leadsStore.addLead.mockReturnValueOnce(null);
+    }],
+  ])('never returns 201 when the %s persistence boundary fails', async function (stage, injectFailure) {
+    simulationIdempotency.resetForTests();
+    injectFailure();
+    const response = await postSimulation('failure-' + stage);
+    expect(response.status).toBe(500);
+    expect(response.body.stage).toBe(stage);
+    expect(response.body.success).not.toBe(true);
+  });
+
+  test('never returns 201 when PostgreSQL persistence fails', async function () {
+    simulationIdempotency.resetForTests();
+    const original = db.query.getMockImplementation();
+    db.query.mockImplementation(function (sql) {
+      if (/INSERT INTO call_records/.test(String(sql))) {
+        return Promise.reject(new Error('forced PostgreSQL failure'));
+      }
+      return original(sql);
+    });
+    try {
+      const response = await postSimulation('failure-postgres');
+      expect(response.status).toBe(500);
+      expect(response.body.stage).toBe('call_record');
+      expect(response.body.success).not.toBe(true);
+    } finally {
+      db.query.mockImplementation(original);
+    }
+  });
+
+  test('sequential duplicate keys replay one canonical graph', async function () {
+    simulationIdempotency.resetForTests();
+    customersEngine.createCustomer.mockClear();
+    communicationsEngine.recordCommunication.mockClear();
+    opportunitiesEngine.createOpportunity.mockClear();
+    financialEngine.createEstimate.mockClear();
+    leadsStore.addLead.mockClear();
+
+    const first = await postSimulation('duplicate-sequential');
+    const second = await postSimulation('duplicate-sequential');
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body.ids).toEqual(first.body.ids);
+    expect(customersEngine.createCustomer).toHaveBeenCalledTimes(1);
+    expect(communicationsEngine.recordCommunication).toHaveBeenCalledTimes(1);
+    expect(opportunitiesEngine.createOpportunity).toHaveBeenCalledTimes(1);
+    expect(financialEngine.createEstimate).toHaveBeenCalledTimes(1);
+    expect(leadsStore.addLead).toHaveBeenCalledTimes(1);
+  });
+
+  test('concurrent duplicate keys coalesce before PostgreSQL completes', async function () {
+    simulationIdempotency.resetForTests();
+    customersEngine.createCustomer.mockClear();
+    const original = db.query.getMockImplementation();
+    let releaseSelect;
+    let markSelectStarted;
+    const selectStarted = new Promise(function (resolve) { markSelectStarted = resolve; });
+    const selectGate = new Promise(function (resolve) { releaseSelect = resolve; });
+    db.query.mockImplementation(function (sql) {
+      if (/SELECT id FROM call_records/.test(String(sql))) {
+        markSelectStarted();
+        return selectGate;
+      }
+      return original(sql);
+    });
+
+    try {
+      const firstPromise = postSimulation('duplicate-concurrent').then(function (response) { return response; });
+      await selectStarted;
+      const secondPromise = postSimulation('duplicate-concurrent').then(function (response) { return response; });
+      releaseSelect({ rows: [] });
+      const results = await Promise.all([firstPromise, secondPromise]);
+      expect(results.map(function (response) { return response.status; })).toEqual([201, 201]);
+      expect(results[1].body.ids).toEqual(results[0].body.ids);
+      expect(customersEngine.createCustomer).toHaveBeenCalledTimes(1);
+    } finally {
+      db.query.mockImplementation(original);
+    }
+  });
+
+  test('PostgreSQL retry identity reuses an existing organization-owned call record', async function () {
+    simulationIdempotency.resetForTests();
+    db.query.mockClear();
+    const original = db.query.getMockImplementation();
+    db.query.mockImplementation(function (sql) {
+      if (/SELECT id FROM call_records/.test(String(sql))) {
+        return Promise.resolve({ rows: [{ id: 'db-call-reused' }] });
+      }
+      return original(sql);
+    });
+    try {
+      const response = await postSimulation('postgres-reuse');
+      expect(response.status).toBe(201);
+      expect(response.body.ids.callRecord).toBe('db-call-reused');
+      const select = db.query.mock.calls.find(function (call) {
+        return /SELECT id FROM call_records/.test(String(call[0]));
+      });
+      expect(select[1][0]).toBe('org-test-owner');
+      expect(select[1][1]).toMatch(/^northstar-sim:session-persistence:/);
+      const inserts = db.query.mock.calls.filter(function (call) {
+        return /INSERT INTO call_records/.test(String(call[0]));
+      });
+      expect(inserts).toHaveLength(0);
+    } finally {
+      db.query.mockImplementation(original);
+    }
   });
 });

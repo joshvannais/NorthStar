@@ -45,6 +45,9 @@ router.get('/status', (req, res) => {
 
 // ── All routes below this point require authentication ──
 router.use(requireAuth);
+router.use(function (req, res, next) {
+  demoScope.runWithAccess(req, next);
+});
 
 /**
  * GET /api/v1/polaris/intelligence

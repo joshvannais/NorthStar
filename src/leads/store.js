@@ -21,12 +21,15 @@ function loadLeads() {
 }
 
 function saveLeads(leads) {
+  const dir = path.dirname(DATA_FILE);
+  const tempFile = DATA_FILE + '.tmp-' + process.pid;
   try {
-    const dir = path.dirname(DATA_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(leads, null, 2));
+    fs.writeFileSync(tempFile, JSON.stringify(leads, null, 2));
+    fs.renameSync(tempFile, DATA_FILE);
   } catch(e) {
-    console.warn('[Leads] Failed to save leads file:', e.message);
+    try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch (cleanupError) {}
+    throw e;
   }
 }
 
@@ -40,7 +43,12 @@ function addLead(lead) {
     status: lead.status || 'new',
   };
   leads.push(entry);
-  saveLeads(leads);
+  try {
+    saveLeads(leads);
+  } catch (error) {
+    leads.pop();
+    throw error;
+  }
   return entry;
 }
 
@@ -55,8 +63,14 @@ function getLead(id) {
 function updateLead(id, updates) {
   const idx = leads.findIndex(l => l.id === id);
   if (idx === -1) return null;
+  const previous = leads[idx];
   leads[idx] = { ...leads[idx], ...updates, updatedAt: new Date().toISOString() };
-  saveLeads(leads);
+  try {
+    saveLeads(leads);
+  } catch (error) {
+    leads[idx] = previous;
+    throw error;
+  }
   return leads[idx];
 }
 
@@ -64,7 +78,12 @@ function removeLead(id) {
   const idx = leads.findIndex(l => l.id === id);
   if (idx === -1) return;
   const removed = leads.splice(idx, 1)[0];
-  saveLeads(leads);
+  try {
+    saveLeads(leads);
+  } catch (error) {
+    leads.splice(idx, 0, removed);
+    throw error;
+  }
   return removed;
 }
 

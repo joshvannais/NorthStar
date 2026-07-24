@@ -129,6 +129,14 @@ async function requireOrgMembership(req, res, next) {
       return next();
     }
 
+    // File-mode development has no organization table. User ownership still
+    // protects simulated records; database-backed routes must resolve a real
+    // organization below.
+    if (!db.isAvailable()) {
+      req.orgId = req.user?.orgId || null;
+      return next();
+    }
+
     if (db.isAvailable()) {
       const result = await db.query(
         'SELECT organization_id FROM users WHERE id = $1',

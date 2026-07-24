@@ -16,6 +16,7 @@ const { computeRevenueOverview, calculatePipelineValue } = require('../analytics
 const coach = require('../coach/engine');
 const brief = require('../coach/brief');
 const { getAllLeads } = require('../leads/store');
+const demoScope = require('../services/demoRecordScope');
 
 // Stage probability weights for weighted pipeline
 const STAGE_PROBABILITIES = {
@@ -791,37 +792,64 @@ function saveCalendarEvents(events) {
   }
 }
 
+function calendarAccess(req) {
+  return demoScope.createAccessContext(req);
+}
+
+function leadToCalendarEvent(lead) {
+  return {
+    id: 'lead-' + lead.id,
+    title: lead.caller_name || lead.callerName || lead.customerName || 'Lead Appointment',
+    date: lead.preferred_time ? lead.preferred_time.split('T')[0] : new Date().toISOString().split('T')[0],
+    time: lead.preferred_time ? lead.preferred_time.split('T')[1]?.substring(0, 5) || '09:00' : '09:00',
+    endTime: null,
+    description: lead.service_type ? `${lead.service_type} service` : 'Appointment',
+    color: '#3b82f6',
+    type: 'lead',
+    leadId: lead.id,
+    status: lead.status || 'scheduled',
+    callerName: lead.caller_name || lead.callerName || lead.customerName,
+    phone: lead.phone || lead.phoneNumber,
+    address: lead.address,
+    serviceType: lead.service_type || lead.serviceRequested,
+    estimatedPrice: lead.estimated_price || lead.estimatedPrice,
+    createdAt: lead.created_at || lead.createdAt || lead.receivedAt
+  };
+}
+
+function visibleCalendarEvents(req) {
+  const access = calendarAccess(req);
+  const customEvents = loadCalendarEvents().filter(function (event) {
+    return demoScope.canAccessTenant(event, access);
+  });
+  const leadEvents = demoScope.filterTenantRecords(getAllLeads ? getAllLeads() : [], access)
+    .filter(function (lead) {
+      return lead.outcome === 'appointment-set' || lead.callOutcome === 'appointment-set' ||
+        lead.status === 'estimate-scheduled' || lead.preferred_time;
+    })
+    .map(leadToCalendarEvent);
+  return customEvents.concat(leadEvents);
+}
+
 // GET /api/v1/calendar/events — returns custom events + lead-sourced events
 router.get('/calendar/events', (req, res) => {
   try {
-    const customEvents = loadCalendarEvents();
-    // Get lead events from the store
-    const leads = getAllLeads ? getAllLeads() : [];
-    const leadEvents = leads
-      .filter(l => l.outcome === 'appointment-set' || l.status === 'estimate-scheduled' || l.preferred_time)
-      .map(l => ({
-        id: 'lead-' + l.id,
-        title: l.caller_name || 'Lead Appointment',
-        date: l.preferred_time ? l.preferred_time.split('T')[0] : new Date().toISOString().split('T')[0],
-        time: l.preferred_time ? l.preferred_time.split('T')[1]?.substring(0, 5) || '09:00' : '09:00',
-        endTime: null,
-        description: l.service_type ? `${l.service_type} service` : 'Appointment',
-        color: '#3b82f6',
-        type: 'lead',
-        leadId: l.id,
-        status: l.status || 'scheduled',
-        callerName: l.caller_name,
-        phone: l.phone,
-        address: l.address,
-        serviceType: l.service_type,
-        estimatedPrice: l.estimated_price,
-        createdAt: l.created_at
-      }));
-    const events = [...customEvents, ...leadEvents];
-    res.json({ events });
+    res.json({ events: visibleCalendarEvents(req) });
   } catch (err) {
     console.error('[API] Calendar events error:', err.message);
     res.status(500).json({ error: 'Failed to load events' });
+  }
+});
+
+// GET /api/v1/calendar/events/:id — detail with the same visibility rules
+router.get('/calendar/events/:id', (req, res) => {
+  try {
+    const event = visibleCalendarEvents(req).find(function (item) { return item.id === req.params.id; });
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+    res.json({ event: event });
+  } catch (err) {
+    console.error('[API] Calendar event detail error:', err.message);
+    res.status(500).json({ error: 'Failed to load event' });
   }
 });
 
@@ -853,7 +881,9 @@ router.post('/calendar/events', (req, res) => {
         profitScore: null,
         confidenceScore: null
       },
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      ownerUserId: req.user && (req.user.sub || req.user.id),
+      organizationId: req.orgId || (req.user && (req.user.organizationId || req.user.orgId)) || null
     };
     events.push(event);
     saveCalendarEvents(events);
@@ -869,7 +899,8 @@ router.put('/calendar/events/:id', (req, res) => {
   try {
     const events = loadCalendarEvents();
     const idx = events.findIndex(e => e.id === req.params.id);
-    if (idx === -1) {
+    const access = calendarAccess(req);
+    if (idx === -1 || !demoScope.canAccessTenant(events[idx], access)) {
       return res.status(404).json({ error: 'Event not found' });
     }
     const { title, date, time, endTime, description, color, status } = req.body;
@@ -895,7 +926,8 @@ router.delete('/calendar/events/:id', (req, res) => {
   try {
     const events = loadCalendarEvents();
     const idx = events.findIndex(e => e.id === req.params.id);
-    if (idx === -1) {
+    const access = calendarAccess(req);
+    if (idx === -1 || !demoScope.canAccessTenant(events[idx], access)) {
       return res.status(404).json({ error: 'Event not found' });
     }
     events.splice(idx, 1);
@@ -910,17 +942,7 @@ router.delete('/calendar/events/:id', (req, res) => {
 // GET /api/v1/calendar/export/ics — ICS export
 router.get('/calendar/export/ics', (req, res) => {
   try {
-    const customEvents = loadCalendarEvents();
-    const leads = getAllLeads ? getAllLeads() : [];
-    const leadEvents = leads
-      .filter(l => l.outcome === 'appointment-set' || l.status === 'estimate-scheduled' || l.preferred_time)
-      .map(l => ({
-        title: l.caller_name || 'Lead Appointment',
-        date: l.preferred_time ? l.preferred_time.split('T')[0] : new Date().toISOString().split('T')[0],
-        time: l.preferred_time ? l.preferred_time.split('T')[1]?.substring(0, 5) || '09:00' : '09:00',
-        description: l.service_type ? `${l.service_type} service` : 'Appointment'
-      }));
-    const allEvents = [...customEvents, ...leadEvents];
+    const allEvents = visibleCalendarEvents(req);
     let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//NorthStar//Calendar//EN\r\n';
     allEvents.forEach(evt => {
       const startDate = evt.date.replace(/-/g, '');
@@ -988,7 +1010,9 @@ router.post('/calendar/import/ics', (req, res) => {
               profitScore: null,
               confidenceScore: null
             },
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            ownerUserId: req.user && (req.user.sub || req.user.id),
+            organizationId: req.orgId || (req.user && (req.user.organizationId || req.user.orgId)) || null
           });
         }
         inEvent = false;

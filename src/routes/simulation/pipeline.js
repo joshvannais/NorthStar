@@ -548,18 +548,53 @@ function calculateConfidence(extractedScope, missingInfo, serviceKey) {
 // ACTION SELECTION
 // ═══════════════════════════════════════════════════════
 
-function selectAction(transcript, customerName, scope) {
+/**
+ * Emergency dispatch requires affirmative, current customer evidence. Agent
+ * prompts, bare scope labels, negated statements, and resolved/history-only
+ * conditions are not sufficient.
+ */
+function detectEmergencyEvidence(transcript) {
+  const customerTurns = (Array.isArray(transcript) ? transcript : []).filter(function (turn) {
+    return turn && turn.speaker === 'customer' && typeof turn.text === 'string';
+  });
+  const patterns = [
+    { signal: 'active flooding', regex: /\b(?:flooding|room is filling with water|water is (?:rising|pouring)|water keeps (?:rising|pouring))\b/i },
+    { signal: 'uncontrolled leak', regex: /\b(?:gushing|burst pipe|pipe (?:has )?burst|active leak|leak(?:ing)? and (?:i |we )?(?:can'?t|cannot|couldn'?t|could not) (?:get it to )?stop)\b/i },
+    { signal: 'electrical sparking', regex: /\b(?:sparking|throwing sparks|seeing sparks)\b/i },
+    { signal: 'burning or smoke', regex: /\b(?:burning smell|smell(?:s|ing)? (?:like )?burning|smoke|smoking)\b/i },
+    { signal: 'immediate danger', regex: /\b(?:immediate danger|danger right now|unsafe right now|someone (?:is|could be) in danger)\b/i },
+  ];
+  const negatedOrResolved = /\b(?:not an emergency|no emergency|not (?:currently |now )?(?:flooding|leaking|sparking|smoking)|no (?:burning smell|smoke|sparks?|flooding)|stopped|resolved|already fixed|no longer|used to|last (?:week|month|year)|yesterday but|can wait)\b/i;
+
+  for (const turn of customerTurns) {
+    const statements = turn.text.split(/[.!?]+/).map(function (value) { return value.trim(); }).filter(Boolean);
+    for (const statement of statements) {
+      if (negatedOrResolved.test(statement)) continue;
+      for (const pattern of patterns) {
+        const match = statement.match(pattern.regex);
+        if (match) {
+          return {
+            isEmergency: true,
+            signal: pattern.signal,
+            evidence: statement,
+          };
+        }
+      }
+    }
+  }
+  return {
+    isEmergency: false,
+    signal: null,
+    evidence: null,
+  };
+}
+
+function selectAction(transcript, customerName, scope, emergencyEvidence) {
   const text = transcript.map(t => (t && t.text ? t.text : '')).join(' ').toLowerCase();
   const name = customerName.split(' ')[0];
-  const emergencyScope = scope && (
-    scope.emergency === true ||
-    scope.urgency === 'emergency' ||
-    scope.safetyConcern === true ||
-    (scope.waterShutoff === false && /gushing|active|burst|flood/i.test(String(scope.leakSeverity || '') + ' ' + String(scope.fixture || '')))
-  );
-  const emergencyLanguage = /burst pipe|active leak|can't get it to stop|cannot get it to stop|flooding|sparking|burning smell|immediate danger/.test(text);
+  const emergency = emergencyEvidence || detectEmergencyEvidence(transcript);
 
-  if (text.includes('emergency') || emergencyScope || emergencyLanguage) {
+  if (emergency.isEmergency) {
     return { action: 'Dispatch immediately', description: 'Emergency situation reported. Dispatch technician and notify on-call team.', priority: 'critical' };
   }
   if (text.includes('schedule') || text.includes('set up') || text.includes('come out') || text.includes('appointment') || text.includes('morning') || text.includes('afternoon') || text.includes('tomorrow')) {
@@ -594,4 +629,5 @@ module.exports = {
   calculatePricing,
   calculateConfidence,
   selectAction,
+  detectEmergencyEvidence,
 };

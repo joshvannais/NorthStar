@@ -142,6 +142,7 @@ router.use((req, res, next) => {
       : rawError && typeof rawError.message === 'string' ? rawError.message : null;
     if (res.statusCode >= 500 && rawMessage) {
       console.error('[Polaris Engines] Internal route failure:', {
+        correlationId: req.correlationId,
         method: req.method,
         path: req.path,
         message: rawMessage,

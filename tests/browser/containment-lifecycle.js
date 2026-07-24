@@ -26,7 +26,7 @@ function monitor(page, label) {
   });
   page.on('console', function (message) {
     if (message.type() !== 'error') return;
-    if (/^Failed to load resource: the server responded with a status of (?:401|403|404|500)/.test(message.text())) {
+    if (/^Failed to load resource: (?:the server responded with a status of (?:401|403|404|500)|net::ERR_CONNECTION_FAILED)/.test(message.text())) {
       expectedHttpRejections.push(message.text());
       return;
     }
@@ -171,9 +171,27 @@ async function exerciseCalendar(browser, baseUrl, label) {
   const page = await context.newPage();
   const assertClean = monitor(page, label + ' calendar');
   let calendarStatus = 200;
+  let leadsMode = 'success';
   const calendarRequests = [];
+  const leadsRequests = [];
 
   await page.route('**/api/leads', function (route) {
+    leadsRequests.push(route.request().url());
+    if (leadsMode === 'network') return route.abort('connectionfailed');
+    if (leadsMode === 'malformed') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: { unexpected: true } })
+      });
+    }
+    if (typeof leadsMode === 'number') {
+      return route.fulfill({
+        status: leadsMode,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'request_rejected' } })
+      });
+    }
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -223,7 +241,27 @@ async function exerciseCalendar(browser, baseUrl, label) {
   }), null);
   assert.equal(calendarRequests[0].authorization, 'Bearer browser-containment-token');
   assert.equal(calendarRequests[0].sessionId, 'session-a');
+  assert.ok(leadsRequests.length > 0, label + ' did not request authoritative leads');
 
+  for (const mode of [401, 403, 404, 500, 'malformed', 'network']) {
+    leadsMode = mode;
+    await page.evaluate(function () { return window.refreshCalendar(); });
+    await page.waitForFunction(function () {
+      return window.calState && window.calState.serverState.kind === 'ready' &&
+        window.calState.leadsState.kind !== 'loading';
+    });
+    body = await page.locator('body').innerText();
+    assert.match(body, /Authorized Real Appointment/);
+    assert.doesNotMatch(body, /Same Session Cached Event|Wrong Session Cached Event|Unowned Cached Event|Stale Cached Event/);
+    assert.equal(await page.evaluate(function () {
+      return window.calState.events.some(function (event) {
+        return event.id === 'lead-same-session-cache';
+      });
+    }), false);
+    assert.ok(await page.locator('[data-calendar-leads-state]').count(), label + ' hid leads source failure for ' + mode);
+  }
+
+  leadsMode = 'success';
   for (const status of [404, 401, 403, 500]) {
     calendarStatus = status;
     await page.evaluate(function () { return window.refreshCalendar(); });

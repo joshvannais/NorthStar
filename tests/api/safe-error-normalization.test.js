@@ -80,8 +80,9 @@ describe('safe public error normalization', function () {
   ])('%s returns only allowlisted public data', async function (path, status, code) {
     const response = await request(app).get(path).set('X-Correlation-ID', 'opaque-request-123');
     expect(response.status).toBe(status);
-    expect(response.headers['x-correlation-id']).toBe('opaque-request-123');
-    expect(response.body.error.requestId).toBe('opaque-request-123');
+    expect(response.headers['x-correlation-id']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(response.body.error.requestId).toBe(response.headers['x-correlation-id']);
+    expect(response.body.error.requestId).not.toBe('opaque-request-123');
     expect(response.body.error.code).toBe(code);
     const serialized = JSON.stringify(response.body);
     expect(serialized).not.toMatch(/SELECT|postgres|db\.internal|C:\\|stack|23505|users_email|10\.0\.0\.8|script|cookie|ECONN|ENOENT/i);
@@ -94,7 +95,7 @@ describe('safe public error normalization', function () {
       error: {
         code: 'validation_error',
         message: 'Invalid request data.',
-        requestId: 'validation-request',
+        requestId: response.headers['x-correlation-id'],
         details: {
           errors: [
             { field: 'customer.email', code: 'string.email' },
@@ -107,14 +108,60 @@ describe('safe public error normalization', function () {
   });
 
   test('protected logs retain correlation and detailed internal context', async function () {
-    await request(app).get('/sql').set('X-Correlation-ID', 'logged-request-456');
-    await request(app).get('/direct-500').set('X-Correlation-ID', 'direct-request-789');
+    const sqlResponse = await request(app).get('/sql').set('X-Correlation-ID', 'logged-request-456');
+    const directResponse = await request(app).get('/direct-500').set('X-Correlation-ID', 'direct-request-789');
     expect(logSpy).toHaveBeenCalled();
     const logText = JSON.stringify(logSpy.mock.calls);
-    expect(logText).toContain('logged-request-456');
+    expect(logText).toContain(sqlResponse.body.error.requestId);
     expect(logText).toContain('SELECT secret FROM users');
     expect(logText).toContain('db.internal.example');
-    expect(logText).toContain('direct-request-789');
+    expect(logText).toContain(directResponse.body.error.requestId);
     expect(logText).toContain('C:\\\\secrets\\\\app.js');
+  });
+
+  test.each([
+    ['filesystem-and-sql', 'C:\\prod\\secrets\\db.sql SELECT * FROM users'],
+    ['database-host', 'postgres.internal.example:5432'],
+    ['extremely-long', 'x'.repeat(10000)],
+    ['empty', '   '],
+    ['valid-uuid', '123e4567-e89b-42d3-a456-426614174000'],
+    ['conflicting', '123e4567-e89b-42d3-a456-426614174000, 123e4567-e89b-42d3-a456-426614174001'],
+  ])('uses one server-controlled opaque ID for adversarial header %s', async function (_label, supplied) {
+    logSpy.mockClear();
+    const response = await request(app)
+      .get('/sql')
+      .set('X-Correlation-ID', supplied);
+    const requestId = response.headers['x-correlation-id'];
+    expect(response.status).toBe(500);
+    expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(response.body.error.requestId).toBe(requestId);
+    expect(requestId).not.toBe(supplied.trim().toLowerCase());
+    const publicBody = JSON.stringify(response.body);
+    expect(publicBody).not.toContain(supplied);
+    expect(publicBody).not.toMatch(/SELECT|postgres|db\.internal|C:\\|stack|users|forged|X-Fake/i);
+    expect(logSpy).toHaveBeenCalled();
+    for (const call of logSpy.mock.calls) {
+      expect(JSON.stringify(call)).toContain(requestId);
+    }
+  });
+
+  test.each([
+    ['log-forging', 'safe\nERROR forged=true\r\nX-Fake: value'],
+    ['unicode-controls', 'trace-\u202E\u2066\u0007-hidden'],
+  ])('default-denies %s values even when supplied directly by an upstream runtime', function (_label, supplied) {
+    const req = { headers: { 'x-correlation-id': supplied } };
+    const responseHeaders = {};
+    const res = {
+      setHeader: function (name, value) {
+        responseHeaders[String(name).toLowerCase()] = value;
+      },
+    };
+    let nextCalled = false;
+    correlationId(req, res, function () { nextCalled = true; });
+    expect(nextCalled).toBe(true);
+    expect(req.correlationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(req.upstreamTraceId).toBeNull();
+    expect(responseHeaders['x-correlation-id']).toBe(req.correlationId);
+    expect(req.correlationId).not.toContain(supplied);
   });
 });

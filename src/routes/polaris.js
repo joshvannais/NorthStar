@@ -16,6 +16,14 @@ const { requireOrgMembership } = require('../auth/permissions');
 const { permissionFor } = require('../auth/polarisRoutePermissions');
 const demoScope = require('../services/demoRecordScope');
 
+function logPolarisError(req, label, details) {
+  console.error(label, Object.assign({
+    correlationId: req.correlationId,
+    method: req.method,
+    path: req.path,
+  }, details || {}));
+}
+
 function mutationPermission(method, path) {
   return permissionFor('polaris', method, path);
 }
@@ -38,6 +46,7 @@ router.use((req, res, next) => {
       : rawError && typeof rawError.message === 'string' ? rawError.message : null;
     if (res.statusCode >= 500 && rawMessage) {
       console.error('[Polaris] Internal route failure:', {
+        correlationId: req.correlationId,
         method: req.method,
         path: req.path,
         message: rawMessage,
@@ -387,7 +396,9 @@ router.post('/chat', mutationPermission('POST', '/chat'), (req, res) => {
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      console.error('[Polaris Chat] OPENAI_API_KEY not configured');
+      logPolarisError(req, '[Polaris Chat] Configuration error:', {
+        code: 'OPENAI_API_KEY_NOT_CONFIGURED',
+      });
       return res.status(500).json({ success: false, error: { code: 'CONFIGURATION_ERROR', message: 'Polaris is not configured for chat yet.' } });
     }
 
@@ -442,7 +453,10 @@ router.post('/chat', mutationPermission('POST', '/chat'), (req, res) => {
             res.json(structured);
           } else {
             const errMsg = parsed.error ? parsed.error.message : 'Unknown error';
-            console.error('[Polaris Chat] OpenAI error:', resIn.statusCode, errMsg);
+            logPolarisError(req, '[Polaris Chat] OpenAI error:', {
+              providerStatus: resIn.statusCode,
+              message: errMsg,
+            });
             if (resIn.statusCode === 401) {
               return res.status(500).json({ success: false, error: { code: 'CONFIGURATION_ERROR', message: 'Polaris chat is not properly configured.' } });
             }
@@ -452,14 +466,19 @@ router.post('/chat', mutationPermission('POST', '/chat'), (req, res) => {
             res.status(500).json({ success: false, error: { code: 'AI_SERVICE_ERROR', message: 'Polaris couldn\'t complete that request. Please try again.' } });
           }
         } catch (e) {
-          console.error('[Polaris Chat] Parse error:', e.message);
+          logPolarisError(req, '[Polaris Chat] Parse error:', {
+            message: e.message,
+          });
           res.status(500).json({ success: false, error: { code: 'AI_SERVICE_ERROR', message: 'Polaris couldn\'t complete that request. Please try again.' } });
         }
       });
     });
 
     reqOut.on('error', (e) => {
-      console.error('[Polaris Chat] Request error:', e.message);
+      logPolarisError(req, '[Polaris Chat] Request error:', {
+        code: e.code || null,
+        message: e.message,
+      });
       if (e.code === 'ETIMEDOUT' || e.code === 'ECONNRESET') {
         return res.status(504).json({ success: false, error: { code: 'TIMEOUT', message: 'Polaris took too long to respond. Please try again.' } });
       }
@@ -474,8 +493,10 @@ router.post('/chat', mutationPermission('POST', '/chat'), (req, res) => {
     reqOut.write(payload);
     reqOut.end();
   } catch (err) {
-    console.error('[Polaris Chat] Handler error:', err.message);
-    console.error('[Polaris Chat] Stack:', err.stack);
+    logPolarisError(req, '[Polaris Chat] Handler error:', {
+      message: err.message,
+      stack: err.stack,
+    });
     res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Polaris chat encountered an error. Please try again.' } });
   }
 });

@@ -16,6 +16,7 @@ class CalendarState {
     this.selectedDate = null;
     this.selectedEvent = null;
     this.serverState = { kind: 'loading', status: null };
+    this.leadsState = { kind: 'loading', status: null };
     this.listeners = [];
   }
 
@@ -98,7 +99,8 @@ class CalendarState {
     // Browser state is never an authorization source. It may supplement a
     // successful authoritative response, but is unavailable to every loading
     // and rejection state.
-    if (!this.serverState || this.serverState.kind !== 'ready') return [];
+    if (!this.serverState || this.serverState.kind !== 'ready' ||
+        !this.leadsState || this.leadsState.kind !== 'ready') return [];
     try {
       if (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) {
         return window.AppStore.getLeads();
@@ -369,6 +371,7 @@ class CalendarRenderer {
         authentication_required: 'Sign in again to view your calendar.',
         access_denied: 'Calendar access is not available for this account.',
         not_found: 'Calendar data is unavailable.',
+        malformed: 'Calendar data is temporarily unavailable.',
         unavailable: 'Calendar is temporarily unavailable. Please try again.',
       };
       var stateMessage = stateMessages[this.state.serverState.kind] || stateMessages.unavailable;
@@ -376,6 +379,20 @@ class CalendarRenderer {
         '<div class="cal-event-list-empty" data-calendar-server-state="' +
         this.state.serverState.kind + '">' + stateMessage + '</div>';
       return;
+    }
+    var leadStateMessage = '';
+    if (this.state.leadsState && this.state.leadsState.kind !== 'ready') {
+      var leadMessages = {
+        loading: 'Loading authorized lead appointments\u2026',
+        authentication_required: 'Sign in again to view lead-derived appointments.',
+        access_denied: 'Lead-derived appointments are not available for this account.',
+        not_found: 'Lead-derived appointments are unavailable.',
+        malformed: 'Lead-derived appointments are temporarily unavailable.',
+        unavailable: 'Lead-derived appointments are temporarily unavailable. Please try again.',
+      };
+      leadStateMessage = '<div class="cal-event-list-empty" data-calendar-leads-state="' +
+        this.state.leadsState.kind + '">' +
+        (leadMessages[this.state.leadsState.kind] || leadMessages.unavailable) + '</div>';
     }
     const todayStr = this.state._formatDate(new Date());
     const todayEvents = this.state.events.filter(e => e.date === todayStr);
@@ -394,7 +411,7 @@ class CalendarRenderer {
         html += '</div>';
       });
     }
-    this.eventList.innerHTML = html;
+    this.eventList.innerHTML = leadStateMessage + html;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -508,7 +525,14 @@ class CalendarData {
         const response = await fetch(this._url('/events'), { headers: this._authHeaders() });
         if (!response.ok) throw this._requestError(response);
         const data = await response.json();
-        return data && Array.isArray(data.events) ? data.events : [];
+        if (!data || !Array.isArray(data.events)) {
+          const error = new Error('Malformed calendar response');
+          error.name = 'CalendarRequestError';
+          error.kind = 'malformed';
+          error.status = 200;
+          throw error;
+        }
+        return data.events;
       }
 
       async createEvent(data) {
@@ -553,7 +577,8 @@ class CalendarData {
 function calendarServerStateForError(error) {
   const status = error && Number(error.status);
   return {
-    kind: status === 401 ? 'authentication_required'
+    kind: error && error.kind === 'malformed' ? 'malformed'
+      : status === 401 ? 'authentication_required'
       : status === 403 ? 'access_denied'
       : status === 404 ? 'not_found'
       : 'unavailable',
@@ -741,16 +766,34 @@ window.syncCalendarFromAppStore = function() {
 };
 
 window.refreshCalendar = async function() {
-  try {
-    const apiEvents = await calData.fetchEvents();
+  const results = await Promise.allSettled([
+    calData.fetchEvents(),
+    window.AppStore && window.AppStore.loadFromServer
+      ? window.AppStore.loadFromServer()
+      : Promise.resolve({ kind: 'unavailable', status: null }),
+  ]);
+  if (results[0].status === 'fulfilled') {
+    const apiEvents = results[0].value;
     calState.serverState = { kind: 'ready', status: 200 };
+    const appState = window.AppStore && window.AppStore.getState
+      ? window.AppStore.getState()
+      : null;
+    calState.leadsState = appState && appState.authoritativeSources
+      ? appState.authoritativeSources.leads
+      : results[1].value;
     const leadEvents = window.syncCalendarFromAppStore();
     const existingIds = new Set(apiEvents.map(e => e.id));
     const newLeadEvents = leadEvents.filter(e => !existingIds.has(e.id));
     calState.events = [...apiEvents, ...newLeadEvents];
-  } catch(e) {
+  } else {
     calState.events = [];
-    calState.serverState = calendarServerStateForError(e);
+    calState.serverState = calendarServerStateForError(results[0].reason);
+    const appState = window.AppStore && window.AppStore.getState
+      ? window.AppStore.getState()
+      : null;
+    calState.leadsState = appState && appState.authoritativeSources
+      ? appState.authoritativeSources.leads
+      : { kind: 'unavailable', status: null };
   }
   calRenderer.render();
 };

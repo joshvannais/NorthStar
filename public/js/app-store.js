@@ -17,6 +17,9 @@ window.AppStore = (function() {
     polarisHistory: [],
     notifications: [],
     settings: { theme: localStorage.getItem('northstar-theme') || 'light' },
+    authoritativeSources: {
+      leads: { kind: 'loading', status: null }
+    },
     ui: {
       selectedLeadId: null,
       drawerOpen: false,
@@ -174,34 +177,62 @@ window.AppStore = (function() {
   }
 
   // --- Backend Sync ---
-  var syncInProgress = false;
+  var syncPromise = null;
+
+  function sourceStateForError(error) {
+    var status = error && Number(error.status);
+    return {
+      kind: error && error.kind === 'malformed' ? 'malformed'
+        : status === 401 ? 'authentication_required'
+        : status === 403 ? 'access_denied'
+        : status === 404 ? 'not_found'
+        : 'unavailable',
+      status: status || null,
+    };
+  }
 
   async function loadFromServer() {
-    if (syncInProgress) return;
-    syncInProgress = true;
-    try {
-      if (typeof API !== 'undefined' && API.getLeads) {
-        const result = await API.getLeads();
-        if (result && Array.isArray(result.items)) {
-          var sessionLeads = state.leads.filter(function(lead) {
-            return isSimulationLead(lead) && leadSessionId(lead) === activeSessionId();
-          });
-          var byId = new Map();
-          var serverLeads = result.items.filter(function(lead) {
-            return !isSimulationLead(lead) || leadSessionId(lead) === activeSessionId();
-          });
-          serverLeads.concat(sessionLeads).forEach(function(lead) {
-            if (lead && lead.id !== undefined && lead.id !== null) byId.set(String(lead.id), lead);
-          });
-          state.leads = Array.from(byId.values());
-          bus.emit('store:loaded', { from: 'server', count: state.leads.length });
+    if (syncPromise) return syncPromise;
+    state.authoritativeSources.leads = { kind: 'loading', status: null };
+    syncPromise = (async function () {
+      try {
+        if (typeof API === 'undefined' || !API.getLeads) {
+          throw new Error('Authoritative leads client is unavailable');
         }
+        const result = await API.getLeads();
+        if (!result || !Array.isArray(result.items)) {
+          const malformed = new Error('Malformed authoritative leads response');
+          malformed.kind = 'malformed';
+          malformed.status = 200;
+          throw malformed;
+        }
+        var sessionLeads = state.leads.filter(function(lead) {
+          return isSimulationLead(lead) && leadSessionId(lead) === activeSessionId();
+        });
+        var byId = new Map();
+        var serverLeads = result.items.filter(function(lead) {
+          return !isSimulationLead(lead) || leadSessionId(lead) === activeSessionId();
+        });
+        serverLeads.concat(sessionLeads).forEach(function(lead) {
+          if (lead && lead.id !== undefined && lead.id !== null) byId.set(String(lead.id), lead);
+        });
+        state.leads = Array.from(byId.values());
+        state.authoritativeSources.leads = { kind: 'ready', status: 200 };
+        bus.emit('store:loaded', { from: 'server', count: state.leads.length });
+      } catch(e) {
+        state.authoritativeSources.leads = sourceStateForError(e);
+        bus.emit('store:load-failed', {
+          from: 'server',
+          source: 'leads',
+          state: state.authoritativeSources.leads,
+        });
+      } finally {
+        var resultState = state.authoritativeSources.leads;
+        syncPromise = null;
+        return resultState;
       }
-    } catch(e) {
-      // Backend not available — use session data
-      loadFromSession();
-    }
-    syncInProgress = false;
+    })();
+    return syncPromise;
   }
 
   function wrapWithBackend(fn, apiCall) {

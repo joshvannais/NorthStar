@@ -12,8 +12,29 @@ const audit = require('../audit/client');
  * Middleware: attach a correlation ID to every request.
  */
 function correlationId(req, res, next) {
-  req.correlationId = req.headers['x-correlation-id'] || uuidv4();
-  res.setHeader('X-Correlation-ID', req.correlationId);
+  const rawUpstream = req.headers['x-correlation-id'];
+  const upstreamValue = Array.isArray(rawUpstream) ? null : String(rawUpstream || '').trim();
+  const safeUpstream = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(upstreamValue)
+    ? upstreamValue.toLowerCase()
+    : null;
+  const requestId = uuidv4();
+
+  // The public request identifier is always server-controlled. A strictly
+  // formatted upstream UUID may be retained separately for trace joins, but
+  // is never reflected as the NorthStar request ID.
+  Object.defineProperty(req, 'correlationId', {
+    value: requestId,
+    enumerable: true,
+    configurable: false,
+    writable: false,
+  });
+  Object.defineProperty(req, 'id', {
+    enumerable: false,
+    configurable: false,
+    get: function () { return requestId; },
+  });
+  req.upstreamTraceId = safeUpstream;
+  res.setHeader('X-Correlation-ID', requestId);
   next();
 }
 

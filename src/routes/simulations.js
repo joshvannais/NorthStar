@@ -302,6 +302,7 @@ router.post('/simulations/leads', requireAuth, requireOrgMembership, requirePerm
     }
 
     console.log('[Simulations] Complete:', JSON.stringify({
+      correlationId: req.correlationId,
       sessionId: sessionId,
       customerId: custResult.id,
       opportunityId: oppResult && oppResult.id,
@@ -347,7 +348,7 @@ router.post('/simulations/leads', requireAuth, requireOrgMembership, requirePerm
     return res.status(201).json(responseBody);
   } catch (err) {
     console.error('[Simulations] Persistence error:', {
-      requestId: req.id || null,
+      correlationId: req.correlationId,
       organizationId: req.orgId || null,
       stage: err.stage || 'unexpected',
       code: err.code || null,

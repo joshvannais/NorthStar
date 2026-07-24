@@ -53,6 +53,7 @@ const {
   getSessionGuidance,
   clearSessionGuidance,
 } = require('../../../src/voice/eventIntelligence');
+const simulationPipeline = require('../../../src/routes/simulation/pipeline');
 
 describe('Pattern Detection — detectEmergency', () => {
   test('detects high severity: flood', () => {
@@ -68,24 +69,20 @@ describe('Pattern Detection — detectEmergency', () => {
     expect(result.severity).toBe('high');
   });
 
-  test('detects high severity: emergency', () => {
-    const result = detectEmergency('This is an emergency, please help');
-    expect(result.severity).toBe('high');
+  test('does not treat a generic use of emergency as hazard evidence', () => {
+    expect(detectEmergency('This is an emergency, please help')).toBeNull();
   });
 
-  test('detects medium severity: urgent', () => {
-    const result = detectEmergency('I need this done urgent');
-    expect(result.severity).toBe('medium');
+  test('does not treat urgency alone as emergency evidence', () => {
+    expect(detectEmergency('I need this done urgent')).toBeNull();
   });
 
-  test('detects medium severity: ASAP', () => {
-    const result = detectEmergency('Can you come ASAP?');
-    expect(result.severity).toBe('medium');
+  test('does not treat ASAP alone as emergency evidence', () => {
+    expect(detectEmergency('Can you come ASAP?')).toBeNull();
   });
 
-  test('detects low severity: broken', () => {
-    const result = detectEmergency('My gutter is broken');
-    expect(result.severity).toBe('low');
+  test('does not treat an ordinary broken item as emergency evidence', () => {
+    expect(detectEmergency('My gutter is broken')).toBeNull();
   });
 
   test('returns null for non-emergency text', () => {
@@ -354,7 +351,7 @@ describe('handleTranscriptSegment', () => {
     const event = {
       type: 'transcript_segment',
       sessionId: 'test-session',
-      data: { text: 'I have a flood in my basement and how much does it cost?' },
+      data: { text: 'I have a flood in my basement and how much does it cost?', speaker: 'customer' },
     };
 
     handleTranscriptSegment(event);
@@ -407,6 +404,76 @@ describe('handleTranscriptSegment', () => {
   });
 });
 
+describe('live and simulation emergency parity', () => {
+  const positives = [
+    'There is an uncontrolled leak right now.',
+    'No smoke, but the outlet is sparking right now.',
+    'The leak stopped for a minute, but the basement is flooding again right now.',
+    'Water keeps rising in the basement.',
+    'I smell burning right now.',
+    'The pipe burst and we cannot stop it.',
+  ];
+  const negatives = [
+    'This is not an emergency.',
+    'The outlet isn’t sparking.',
+    "The outlet isn't sparking.",
+    'The basement isn’t flooding.',
+    'The leak stopped and has not returned.',
+    'It sparked yesterday but was repaired.',
+    'There is no smoke or burning smell.',
+    'It is a slow drip; tomorrow is fine.',
+  ];
+
+  function liveClassification(text, speaker, index) {
+    const sessionId = 'emergency-parity-' + index;
+    clearSessionGuidance(sessionId);
+    handleTranscriptSegment({
+      type: 'transcript_segment',
+      sessionId,
+      data: {
+        text,
+        speaker,
+        segment: { text, speaker },
+      },
+    });
+    return getSessionGuidance(sessionId).some(function (item) {
+      return item.type === 'emergency_detected';
+    });
+  }
+
+  test.each(positives)('classifies current customer evidence consistently: %s', (text) => {
+    expect(liveClassification(text, 'customer', positives.indexOf(text))).toBe(true);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(true);
+  });
+
+  test.each(negatives)('rejects non-current or negated customer evidence consistently: %s', (text) => {
+    expect(liveClassification(text, 'customer', negatives.indexOf(text))).toBe(false);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(false);
+  });
+
+  test.each([' customer ', 'Customer', 'CALLER', ' client ', 'HomeOwner', ' USER '])(
+    'normalizes supported customer role alias %s',
+    (speaker) => {
+      const text = 'There is an uncontrolled leak right now.';
+      expect(liveClassification(text, speaker, speaker)).toBe(true);
+      expect(simulationPipeline.detectEmergencyEvidence([{ speaker, text }]).isEmergency).toBe(true);
+    }
+  );
+
+  test.each(['agent', 'AI', 'system', 'assistant', 'bot', 'unknown', '', null, undefined])(
+    'default-denies non-customer speaker %s',
+    (speaker) => {
+      const text = 'Emergency fire smoke flooding sparking uncontrolled leak danger right now.';
+      expect(liveClassification(text, speaker, String(speaker))).toBe(false);
+      expect(simulationPipeline.detectEmergencyEvidence([{ speaker, text }]).isEmergency).toBe(false);
+    }
+  );
+});
+
 describe('getSessionGuidance / clearSessionGuidance', () => {
   test('returns empty array for unknown session', () => {
     expect(getSessionGuidance('nonexistent')).toEqual([]);
@@ -415,7 +482,7 @@ describe('getSessionGuidance / clearSessionGuidance', () => {
   test('clears guidance for a session', () => {
     handleTranscriptSegment({
       sessionId: 'clear-test',
-      data: { text: 'This is an emergency!' },
+      data: { text: 'The basement is flooding right now.', speaker: 'customer' },
     });
     expect(getSessionGuidance('clear-test').length).toBeGreaterThan(0);
 

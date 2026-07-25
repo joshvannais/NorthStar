@@ -72,9 +72,13 @@ describe('Phase 4 — API: Health Check System', () => {
       expect(res.type).toMatch(/json/);
       // Stats moved behind the API authentication boundary.
       expect(res.status).toBe(401);
-      expect(res.body).toEqual(expect.objectContaining({
-        error: expect.stringMatching(/authentication required/i),
-      }));
+      expect(res.body).toMatchObject({
+        error: {
+          code: 'unauthorized',
+          message: expect.stringMatching(/authentication required/i),
+        },
+      });
+      expect(res.body.error.requestId).toBe(res.headers['x-correlation-id']);
     });
 
     test('GET /api/stats returns aggregate JSON for an authenticated user', async () => {

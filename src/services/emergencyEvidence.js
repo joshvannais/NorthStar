@@ -33,6 +33,7 @@ const HAZARD_PATTERNS = [
 
 const NON_CURRENT = /\b(?:stopped|resolved|already fixed|fixed now|repaired|under control|shut (?:it|the (?:water|valve)) off|no longer|used to|previously|last (?:week|month|year)|yesterday(?: only)?|can wait|tomorrow is fine|next day is fine|slow (?:drip|leak)|minor (?:drip|leak)|seeping|has not returned|hasn't returned)\b/i;
 const LOCAL_NEGATION = /\b(?:no|not|nothing|isn't|aren't|wasn't|weren't|is not|are not|was not|were not|without)\b[^,.;!?]*$/i;
+const INDEPENDENT_AND_SUBJECT = /\band\b(?=\s+(?:(?:the|a|an|i|we|there|it|this|that|my|our|your|old|water|basement|outlet|pipe|breaker|panel|room|floor)\b|no\b))/i;
 
 function normalizeSpeakerRole(value) {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -45,7 +46,10 @@ function isCustomerSpeaker(value) {
 function splitClauses(text) {
   return String(text || '')
     .replace(/[\u2018\u2019]/g, "'")
-    .split(/[.!?;]+|\b(?:but|however|although|yet)\b/i)
+    .split(/[.!?;,]+|\b(?:but|however|although|yet)\b/i)
+    .reduce(function (parts, value) {
+      return parts.concat(String(value || '').split(INDEPENDENT_AND_SUBJECT));
+    }, [])
     .map(function (value) {
       return value.trim().replace(/^,+|,+$/g, '').trim();
     })

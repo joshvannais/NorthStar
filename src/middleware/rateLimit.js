@@ -45,7 +45,7 @@ function getLimitConfig(group, plan = 'starter') {
 /**
  * Rate limit a key. Returns { allowed, remaining, resetTime }.
  */
-async function checkRateLimit(key, limit, windowMs) {
+async function checkRateLimit(key, limit, windowMs, requestId) {
   const now = Date.now();
   const resetTime = now + windowMs;
 
@@ -62,7 +62,10 @@ async function checkRateLimit(key, limit, windowMs) {
       };
     } catch (err) {
       // Fall through to memory store
-      console.warn('[RateLimit] Redis error, falling back to memory:', err.message);
+      console.warn('[RateLimit] Persistence warning:', {
+        correlationId: requestId || 'unavailable',
+        event: 'rate_limit_persistence_unavailable',
+      });
     }
   }
 
@@ -118,7 +121,7 @@ function rateLimit(group, getKey) {
     const config = getLimitConfig(group, plan);
     const fullKey = `rate_limit:${group}:${key}`;
 
-    const result = await checkRateLimit(fullKey, config.limit, config.window);
+    const result = await checkRateLimit(fullKey, config.limit, config.window, req.correlationId);
 
     // Set rate limit headers
     res.setHeader('X-RateLimit-Limit', config.limit);

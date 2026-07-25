@@ -29,6 +29,11 @@ window.AppStore = (function() {
       mobileMenuOpen: false
     }
   };
+  var leadAuthorization = {
+    contextKey: null,
+    allowed: false,
+    version: 0,
+  };
 
   // --- Leads ---
   function addLead(leadData) {
@@ -60,17 +65,20 @@ window.AppStore = (function() {
   }
 
   function getLeads(filter) {
-    if (!filter) return state.leads;
-    return state.leads.filter(filter);
+    refreshAuthorizationContext();
+    if (!leadAuthorization.allowed) return [];
+    var visible = state.leads.slice();
+    if (!filter) return visible;
+    return visible.filter(filter);
   }
 
   function getLead(id) {
-    return state.leads.find(l => l.id === id) || null;
+    return getLeads().find(l => l.id === id) || null;
   }
 
   // --- KPIs (computed from leads) ---
   function getKpis() {
-    const leads = state.leads;
+    const leads = getLeads();
     const total = leads.length;
     const qualified = leads.filter(l => l.status === 'scheduled' || l.status === 'contacted' || l.status === 'new' || l.status === 'qualified').length;
     const scheduled = leads.filter(l => l.status === 'scheduled').length;
@@ -101,6 +109,32 @@ window.AppStore = (function() {
   function activeSessionId() {
     return (window.NorthStarDemoSession && window.NorthStarDemoSession.id) ||
       window.SIM_SESSION_ID || null;
+  }
+
+  function storageValue(key) {
+    try { return localStorage.getItem(key) || ''; } catch (_error) { return ''; }
+  }
+
+  function authorizationContextKey() {
+    return JSON.stringify({
+      sessionId: activeSessionId() || '',
+      token: storageValue('token'),
+      legacyToken: storageValue('northstar_token'),
+      user: storageValue('user'),
+      organization: storageValue('organization') || storageValue('organizationId'),
+    });
+  }
+
+  function refreshAuthorizationContext() {
+    var contextKey = authorizationContextKey();
+    if (leadAuthorization.contextKey !== contextKey) {
+      leadAuthorization.contextKey = contextKey;
+      leadAuthorization.allowed = false;
+      leadAuthorization.version += 1;
+      state.authoritativeSources.leads = { kind: 'loading', status: null };
+      syncRequest = null;
+    }
+    return contextKey;
   }
 
   function leadSessionId(lead) {
@@ -155,6 +189,7 @@ window.AppStore = (function() {
 
   function loadFromSession() {
     try {
+      refreshAuthorizationContext();
       const sessionId = activeSessionId();
       const key = sessionStorageKey();
       if (!sessionId || !key) return [];
@@ -177,7 +212,8 @@ window.AppStore = (function() {
   }
 
   // --- Backend Sync ---
-  var syncPromise = null;
+  var syncRequest = null;
+  var AUTHORITATIVE_TIMEOUT_MS = 15000;
 
   function sourceStateForError(error) {
     var status = error && Number(error.status);
@@ -192,14 +228,32 @@ window.AppStore = (function() {
   }
 
   async function loadFromServer() {
-    if (syncPromise) return syncPromise;
+    var contextKey = refreshAuthorizationContext();
+    if (syncRequest && syncRequest.contextKey === contextKey) return syncRequest.promise;
+    var requestVersion = leadAuthorization.version + 1;
+    leadAuthorization.version = requestVersion;
+    leadAuthorization.allowed = false;
     state.authoritativeSources.leads = { kind: 'loading', status: null };
-    syncPromise = (async function () {
+    var timer = null;
+    var promise = (async function () {
       try {
         if (typeof API === 'undefined' || !API.getLeads) {
           throw new Error('Authoritative leads client is unavailable');
         }
-        const result = await API.getLeads();
+        const result = await Promise.race([
+          Promise.resolve().then(function () { return API.getLeads(); }),
+          new Promise(function (_resolve, reject) {
+            timer = setTimeout(function () {
+              var timeout = new Error('Authoritative leads request timed out');
+              timeout.kind = 'timeout';
+              reject(timeout);
+            }, AUTHORITATIVE_TIMEOUT_MS);
+          }),
+        ]);
+        if (requestVersion !== leadAuthorization.version ||
+            contextKey !== authorizationContextKey()) {
+          return { kind: 'superseded', status: null };
+        }
         if (!result || !Array.isArray(result.items)) {
           const malformed = new Error('Malformed authoritative leads response');
           malformed.kind = 'malformed';
@@ -217,22 +271,41 @@ window.AppStore = (function() {
           if (lead && lead.id !== undefined && lead.id !== null) byId.set(String(lead.id), lead);
         });
         state.leads = Array.from(byId.values());
+        leadAuthorization.allowed = true;
         state.authoritativeSources.leads = { kind: 'ready', status: 200 };
         bus.emit('store:loaded', { from: 'server', count: state.leads.length });
       } catch(e) {
-        state.authoritativeSources.leads = sourceStateForError(e);
-        bus.emit('store:load-failed', {
-          from: 'server',
-          source: 'leads',
-          state: state.authoritativeSources.leads,
-        });
+        if (requestVersion === leadAuthorization.version &&
+            contextKey === authorizationContextKey()) {
+          leadAuthorization.allowed = false;
+          state.authoritativeSources.leads = sourceStateForError(e);
+          bus.emit('store:load-failed', {
+            from: 'server',
+            source: 'leads',
+            state: state.authoritativeSources.leads,
+          });
+        }
       } finally {
-        var resultState = state.authoritativeSources.leads;
-        syncPromise = null;
-        return resultState;
+        if (timer) clearTimeout(timer);
+        if (syncRequest && syncRequest.version === requestVersion) syncRequest = null;
       }
+      return requestVersion === leadAuthorization.version
+        ? state.authoritativeSources.leads
+        : { kind: 'superseded', status: null };
     })();
-    return syncPromise;
+    syncRequest = { contextKey: contextKey, version: requestVersion, promise: promise };
+    return promise;
+  }
+
+  function getState() {
+    refreshAuthorizationContext();
+    return Object.assign({}, state, {
+      leads: getLeads(),
+      authoritativeSources: {
+        leads: Object.assign({}, state.authoritativeSources.leads),
+      },
+      ui: Object.assign({}, state.ui),
+    });
   }
 
   function wrapWithBackend(fn, apiCall) {
@@ -283,5 +356,5 @@ window.AppStore = (function() {
 
   bus.on('lead:created', () => { /* trigger recalculations */ });
 
-  return { addLead, updateLead, removeLead, getLeads, getLead, getKpis, setSetting, getSetting, setUi, getUi, getState: () => state, loadFromSession, saveToSession, loadFromServer };
+  return { addLead, updateLead, removeLead, getLeads, getLead, getKpis, setSetting, getSetting, setUi, getUi, getState, loadFromSession, saveToSession, loadFromServer };
 })();

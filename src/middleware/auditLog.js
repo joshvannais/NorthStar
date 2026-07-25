@@ -68,7 +68,10 @@ function auditLogger(req, res, next) {
         userAgent: req.headers['user-agent'] || null,
         correlationId: req.correlationId,
         afterState: { method: req.method, path: req.path, status: res.statusCode, duration }
-      }).catch(err => console.warn('[Audit] Log error:', err.message));
+      }).catch(() => console.warn('[Audit] Persistence warning:', {
+        correlationId: req.correlationId,
+        event: 'audit_persistence_failed',
+      }));
     }
   });
 

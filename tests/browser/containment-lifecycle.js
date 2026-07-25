@@ -1,7 +1,14 @@
 'use strict';
 
 const assert = require('assert/strict');
-const { chromium, webkit } = require('playwright');
+let playwright;
+try {
+  playwright = require('playwright');
+} catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+  playwright = require('playwright-core');
+}
+const { chromium, webkit } = playwright;
 const { app } = require('../../src/server');
 
 const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
@@ -26,7 +33,7 @@ function monitor(page, label) {
   });
   page.on('console', function (message) {
     if (message.type() !== 'error') return;
-    if (/^Failed to load resource: (?:the server responded with a status of (?:401|403|404|500)|net::ERR_CONNECTION_FAILED)/.test(message.text())) {
+    if (/^Failed to load resource: (?:the server responded with a status of (?:401|403|404|409|429|500)|net::ERR_CONNECTION_FAILED)/.test(message.text())) {
       expectedHttpRejections.push(message.text());
       return;
     }
@@ -232,10 +239,23 @@ async function exerciseCalendar(browser, baseUrl, label) {
   await page.waitForFunction(function () {
     return window.calState && window.calState.serverState && window.calState.serverState.kind === 'ready';
   });
+  await page.addScriptTag({ url: baseUrl + '/js/communications-engine.js' });
+  await page.addScriptTag({ url: baseUrl + '/js/analytics-engine.js' });
   let body = await page.locator('body').innerText();
   assert.match(body, /Authorized Real Appointment/);
   assert.match(body, /Same Session Cached Event/);
   assert.doesNotMatch(body, /Wrong Session Cached Event|Unowned Cached Event|Stale Cached Event/);
+  assert.deepEqual(await page.evaluate(function () {
+    return {
+      store: window.AppStore.getLeads().map(function (lead) { return lead.id; }),
+      communications: window.CommunicationsEngine.getConversations().map(function (lead) { return lead.id; }),
+      analytics: window.AnalyticsEngine.total(),
+    };
+  }), {
+    store: ['same-session-cache'],
+    communications: ['same-session-cache'],
+    analytics: 1,
+  });
   assert.equal(await page.evaluate(function () {
     return sessionStorage.getItem('northstar_calls:session-old');
   }), null);
@@ -243,7 +263,7 @@ async function exerciseCalendar(browser, baseUrl, label) {
   assert.equal(calendarRequests[0].sessionId, 'session-a');
   assert.ok(leadsRequests.length > 0, label + ' did not request authoritative leads');
 
-  for (const mode of [401, 403, 404, 500, 'malformed', 'network']) {
+  for (const mode of [401, 403, 404, 409, 429, 500, 'malformed', 'network']) {
     leadsMode = mode;
     await page.evaluate(function () { return window.refreshCalendar(); });
     await page.waitForFunction(function () {
@@ -258,6 +278,17 @@ async function exerciseCalendar(browser, baseUrl, label) {
         return event.id === 'lead-same-session-cache';
       });
     }), false);
+    assert.deepEqual(await page.evaluate(function () {
+      return {
+        store: window.AppStore.getLeads(),
+        communications: window.CommunicationsEngine.getConversations(),
+        analytics: window.AnalyticsEngine.total(),
+      };
+    }), {
+      store: [],
+      communications: [],
+      analytics: 0,
+    });
     assert.ok(await page.locator('[data-calendar-leads-state]').count(), label + ' hid leads source failure for ' + mode);
   }
 
@@ -287,11 +318,24 @@ async function exerciseCalendar(browser, baseUrl, label) {
   await page.waitForFunction(function () {
     return window.calState && window.calState.serverState && window.calState.serverState.kind === 'ready';
   });
+  await page.addScriptTag({ url: baseUrl + '/js/communications-engine.js' });
+  await page.addScriptTag({ url: baseUrl + '/js/analytics-engine.js' });
   const rotatedSession = await page.evaluate(function () { return window.NorthStarDemoSession.id; });
   assert.notEqual(rotatedSession, priorSession);
   body = await page.locator('body').innerText();
   assert.match(body, /Authorized Real Appointment/);
   assert.doesNotMatch(body, /Same Session Cached Event/);
+  assert.deepEqual(await page.evaluate(function () {
+    return {
+      store: window.AppStore.getLeads(),
+      communications: window.CommunicationsEngine.getConversations(),
+      analytics: window.AnalyticsEngine.total(),
+    };
+  }), {
+    store: [],
+    communications: [],
+    analytics: 0,
+  });
   assert.equal(await page.evaluate(function (oldSession) {
     return sessionStorage.getItem('northstar_calls:' + oldSession);
   }, priorSession), null);

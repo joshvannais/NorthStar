@@ -260,6 +260,8 @@ describe('browser request propagation', function () {
       JSON: JSON,
       String: String,
       Boolean: Boolean,
+      setTimeout: setTimeout,
+      clearTimeout: clearTimeout,
     };
     vm.runInNewContext(code, context);
     await new Promise(function (resolve) { setImmediate(resolve); });

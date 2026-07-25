@@ -27,6 +27,11 @@ function req(options) {
 }
 
 describe('analytics cache identity containment', function () {
+  beforeEach(function () {
+    expect(snapshots._pendingSnapshots.size).toBe(0);
+    fs.rmSync(path.join(testDataDir, 'analytics'), { recursive: true, force: true });
+  });
+
   afterAll(function () {
     if (priorDataDir === undefined) delete process.env.NORTHSTAR_DATA_DIR;
     else process.env.NORTHSTAR_DATA_DIR = priorDataDir;

@@ -36,20 +36,20 @@ describe('independent-review stabilization blockers', function () {
     });
 
     test.each([
-      ['Water is rising and the room is flooding right now.', 'active flooding'],
-      ['The pipe burst and it is gushing everywhere.', 'uncontrolled leak'],
-      ['There is an uncontrolled leak right now.', 'uncontrolled leak'],
-      ["We can't stop the leak.", 'uncontrolled leak'],
-      ['We cannot stop the leak.', 'uncontrolled leak'],
-      ['The outlet is sparking when I touch the switch.', 'electrical sparking'],
-      ['I smell something burning and there is smoke.', 'burning or smoke'],
-      ['This is unsafe right now and someone could be in danger.', 'immediate danger'],
-    ])('dispatches only on supported current customer evidence: %s', function (statement, signal) {
+      ['Water is rising and the room is flooding right now.', 'active flooding', 'Water is rising'],
+      ['The pipe burst and it is gushing everywhere.', 'uncontrolled leak', 'The pipe burst'],
+      ['There is an uncontrolled leak right now.', 'uncontrolled leak', 'There is an uncontrolled leak right now'],
+      ["We can't stop the leak.", 'uncontrolled leak', "We can't stop the leak"],
+      ['We cannot stop the leak.', 'uncontrolled leak', 'We cannot stop the leak'],
+      ['The outlet is sparking when I touch the switch.', 'electrical sparking', 'The outlet is sparking when I touch the switch'],
+      ['I smell something burning and there is smoke.', 'burning or smoke', 'I smell something burning'],
+      ['This is unsafe right now and someone could be in danger.', 'immediate danger', 'This is unsafe right now and someone could be in danger'],
+    ])('dispatches only on supported current customer evidence: %s', function (statement, signal, evidence) {
       const result = actionFor(statement, 'Please describe the problem.');
       expect(result.evidence).toMatchObject({
         isEmergency: true,
         signal: signal,
-        evidence: statement.replace(/[.!?]+$/, ''),
+        evidence: evidence,
       });
       expect(result.action).toMatchObject({ action: 'Dispatch immediately', priority: 'critical' });
     });

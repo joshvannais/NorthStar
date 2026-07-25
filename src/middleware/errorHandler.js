@@ -12,7 +12,9 @@ const PUBLIC_ERRORS = Object.freeze({
   not_found: { status: 404, message: 'Record not found.' },
   rate_limited: { status: 429, message: 'Too many requests. Please try again later.' },
   idempotency_conflict: { status: 409, message: 'The idempotency key was already used with a different request.' },
+  conflict: { status: 409, message: 'The request conflicts with the current resource state.' },
   persistence_unavailable: { status: 503, message: 'Required persistence is temporarily unavailable.' },
+  service_unavailable: { status: 503, message: 'The requested service is temporarily unavailable.' },
   provider_error: { status: 502, message: 'The upstream provider is temporarily unavailable.' },
   configuration_error: { status: 503, message: 'The requested service is temporarily unavailable.' },
   ai_service_error: { status: 502, message: 'The requested service could not complete the request.' },
@@ -24,6 +26,21 @@ const PUBLIC_ERRORS = Object.freeze({
 function normalizeCode(code) {
   const normalized = String(code || '').trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(PUBLIC_ERRORS, normalized) ? normalized : 'internal_error';
+}
+
+function codeForStatus(statusCode) {
+  return statusCode === 400 ? 'bad_request'
+    : statusCode === 401 ? 'unauthorized'
+    : statusCode === 403 ? 'forbidden'
+    : statusCode === 404 ? 'not_found'
+    : statusCode === 409 ? 'conflict'
+    : statusCode === 422 ? 'validation_error'
+    : statusCode === 429 ? 'rate_limited'
+    : statusCode === 502 ? 'provider_error'
+    : statusCode === 503 ? 'service_unavailable'
+    : statusCode === 504 ? 'timeout'
+    : statusCode >= 500 ? 'internal_error'
+    : 'bad_request';
 }
 
 function normalizeValidationDetails(details) {
@@ -51,12 +68,7 @@ function publicError(req, statusCode, code, details) {
   // A caller cannot turn an allowlisted client error into a status-bearing
   // server failure (or vice versa) to bypass the public normalization policy.
   if (!Number.isInteger(requestedStatus) || requestedStatus !== descriptor.status) {
-    safeCode = requestedStatus >= 500 && requestedStatus < 600 ? 'internal_error' : (
-      requestedStatus === 404 ? 'not_found' :
-      requestedStatus === 403 ? 'forbidden' :
-      requestedStatus === 401 ? 'unauthorized' :
-      requestedStatus === 422 ? 'validation_error' : 'bad_request'
-    );
+    safeCode = codeForStatus(requestedStatus);
     descriptor = PUBLIC_ERRORS[safeCode];
   }
 
@@ -80,8 +92,22 @@ function createError(code, _message, details = {}, statusCode = 400) {
 
 function normalizeErrorResponses(req, res, next) {
   const sendJson = res.json.bind(res);
+  const sendBody = res.send.bind(res);
+  let sendingNormalizedJson = false;
+
+  function normalizedBody(body) {
+    const raw = body && body.error;
+    const code = typeof raw === 'object' && raw
+      ? raw.code
+      : body && typeof body.code === 'string' ? body.code : null;
+    const details = typeof raw === 'object' && raw ? raw.details : null;
+    const normalized = publicError(req, res.statusCode, code, details);
+    if (body && body.success === false) normalized.body.success = false;
+    return normalized;
+  }
+
   res.json = function (body) {
-    if (res.statusCode < 500 || !body || !body.error) return sendJson(body);
+    if (res.statusCode < 400) return sendJson(body);
     console.error('[Error] Direct error response:', {
       correlationId: req.correlationId || 'unavailable',
       method: req.method,
@@ -89,13 +115,19 @@ function normalizeErrorResponses(req, res, next) {
       statusCode: res.statusCode,
       body
     });
-    const raw = body.error;
-    const code = typeof raw === 'object' && raw ? raw.code : null;
-    const normalized = publicError(req, res.statusCode, code);
-    if (body.success === false) normalized.body.success = false;
+    const normalized = normalizedBody(body);
     res.status(normalized.statusCode);
     res.setHeader('X-Correlation-ID', normalized.body.error.requestId);
-    return sendJson(normalized.body);
+    sendingNormalizedJson = true;
+    try {
+      return sendJson(normalized.body);
+    } finally {
+      sendingNormalizedJson = false;
+    }
+  };
+  res.send = function (body) {
+    if (sendingNormalizedJson || res.statusCode < 400) return sendBody(body);
+    return res.json({ error: body });
   };
   next();
 }

@@ -417,17 +417,23 @@ jest.mock('../../src/services/businessProfile', function () {
   };
 });
 
-const request = require('supertest');
+const supertest = require('supertest');
 const { app } = require('../../src/server');
 const { generateToken } = require('../../src/auth/middleware');
 const canonicalPolaris = require('../../src/services/canonicalPolaris');
 const db = require('../../src/db');
+const audit = require('../../src/audit/client');
 const leadsStore = require('../../src/leads/store');
 const customersEngine = require('../../src/polaris/customer-engine');
 const communicationsEngine = require('../../src/polaris/communications-engine');
 const opportunitiesEngine = require('../../src/polaris/opportunity-engine');
 const financialEngine = require('../../src/polaris/financial-engine');
 const simulationIdempotency = require('../../src/services/simulationIdempotency');
+let activeServer;
+
+function request() {
+  return supertest(activeServer);
+}
 
 const token = generateToken({
   id: 'test-owner',
@@ -463,12 +469,46 @@ describe('stabilization public API contracts', function () {
     };
   });
 
+  beforeEach(async function () {
+    db.query.mockClear();
+    activeServer = await new Promise(function (resolve, reject) {
+      const listener = app.listen(0, '127.0.0.1', function () { resolve(listener); });
+      listener.once('error', reject);
+    });
+  });
+
+  afterEach(async function () {
+    if (activeServer && typeof activeServer.closeAllConnections === 'function') {
+      activeServer.closeAllConnections();
+    }
+    if (activeServer) {
+      await new Promise(function (resolve, reject) {
+        activeServer.close(function (error) {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+    }
+    await new Promise(function (resolve) { setImmediate(resolve); });
+    const completedSqlCalls = db.query.mock.calls.length;
+    await new Promise(function (resolve) { setImmediate(resolve); });
+    await new Promise(function (resolve) { setImmediate(resolve); });
+    expect(db.query.mock.calls).toHaveLength(completedSqlCalls);
+    activeServer = null;
+  });
+
   test('null, inactive, and ambiguous persisted membership are rejected identically', async function () {
     for (const tokenValue of [nullOrgToken, inactiveToken, ambiguousToken]) {
       const response = await request(app).get('/api/leads')
         .set('Authorization', 'Bearer ' + tokenValue);
       expect(response.status).toBe(403);
-      expect(response.body).toEqual({ error: 'Active organization membership required' });
+      expect(response.body).toMatchObject({
+        error: {
+          code: 'forbidden',
+          message: 'You do not have permission to perform this action.',
+        },
+      });
+      expect(response.body.error.requestId).toBe(response.headers['x-correlation-id']);
     }
   });
 
@@ -486,6 +526,69 @@ describe('stabilization public API contracts', function () {
     expect(simulation.status).toBe(403);
     expect(create.body.error.code).toBe('forbidden');
     expect(simulation.body.error.code).toBe('forbidden');
+  });
+
+  test('full server 400, 401, 403, and 404 responses share one canonical request ID with their logs', async function () {
+    const logSpy = jest.spyOn(console, 'error').mockImplementation(function () {});
+    try {
+      const supplied = '123e4567-e89b-42d3-a456-426614174000';
+      const probes = [
+        await request(app).post('/api/auth/signup')
+          .set('X-Correlation-ID', supplied)
+          .send({}),
+        await request(app).get('/api/v1/leads')
+          .set('X-Correlation-ID', supplied),
+        await request(app).post('/api/leads')
+          .set('Authorization', 'Bearer ' + viewerToken)
+          .set('X-Correlation-ID', supplied)
+          .send({ callerName: 'Forbidden fixture' }),
+        await authorized(request(app).get('/api/leads/missing-request-id-fixture'))
+          .set('X-Correlation-ID', supplied),
+      ];
+      expect(probes.map(function (response) { return response.status; }))
+        .toEqual([400, 401, 403, 404]);
+      probes.forEach(function (response) {
+        const requestId = response.headers['x-correlation-id'];
+        expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+        expect(response.body.error.requestId).toBe(requestId);
+        expect(requestId).not.toBe(supplied);
+        expect(JSON.stringify(response.body)).not.toMatch(/SELECT|postgres|C:\\|stack|internal endpoint/i);
+        expect(logSpy.mock.calls.some(function (call) {
+          return JSON.stringify(call).includes(requestId);
+        })).toBe(true);
+      });
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test('full server audit-persistence warning is correlated and sanitized after a public error', async function () {
+    const warning = jest.spyOn(console, 'warn').mockImplementation(function () {});
+    audit.record.mockImplementation(function () {
+      return Promise.reject(new Error(
+        'postgres://secret@db.internal C:\\private\\audit.sql SELECT * FROM audit_logs'
+      ));
+    });
+    try {
+      const response = await request(app).post('/api/auth/signup').send({});
+      await new Promise(function (resolve) { setImmediate(resolve); });
+      await new Promise(function (resolve) { setImmediate(resolve); });
+      const requestId = response.headers['x-correlation-id'];
+      expect(response.status).toBe(400);
+      expect(response.body.error.requestId).toBe(requestId);
+      const calls = warning.mock.calls.filter(function (call) {
+        return JSON.stringify(call).includes('audit_persistence_failed');
+      });
+      expect(calls.length).toBeGreaterThan(0);
+      calls.forEach(function (call) {
+        const serialized = JSON.stringify(call);
+        expect(serialized).toContain(requestId);
+        expect(serialized).not.toMatch(/postgres|db\.internal|C:\\|SELECT|audit_logs|secret/i);
+      });
+    } finally {
+      audit.record.mockReset().mockResolvedValue();
+      warning.mockRestore();
+    }
   });
 
   test('permissioned public v1 leads handler is not shadowed by dashboard routes', async function () {
@@ -584,13 +687,22 @@ describe('stabilization public API contracts', function () {
     const hiddenWithoutSession = await authorized(request(app)
       .get('/api/v1/leads/lead-a/intelligence'));
     expect(hiddenWithoutSession.status).toBe(404);
-    expect(hiddenWithoutSession.body).toEqual({ success: false, error: 'Lead not found' });
+    expect(hiddenWithoutSession.body).toMatchObject({
+      success: false,
+      error: { code: 'not_found', message: 'Record not found.' },
+    });
+    expect(hiddenWithoutSession.body.error.requestId)
+      .toBe(hiddenWithoutSession.headers['x-correlation-id']);
 
     const wrongOwner = await request(app)
       .get('/api/v1/leads/lead-a/intelligence?sessionId=session-a')
       .set('Authorization', 'Bearer ' + otherToken);
     expect(wrongOwner.status).toBe(404);
-    expect(wrongOwner.body).toEqual({ success: false, error: 'Lead not found' });
+    expect(wrongOwner.body).toMatchObject({
+      success: false,
+      error: { code: 'not_found', message: 'Record not found.' },
+    });
+    expect(wrongOwner.body.error.requestId).toBe(wrongOwner.headers['x-correlation-id']);
 
     const unauthenticated = await request(app)
       .get('/api/v1/leads/lead-a/intelligence?sessionId=session-a');
@@ -992,9 +1104,10 @@ describe('stabilization public API contracts', function () {
       const second = await postSimulation('retry-after-scenario-failure');
 
       expect(first.status).toBe(400);
-      expect(first.body).toEqual({
-        error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' },
+      expect(first.body).toMatchObject({
+        error: { code: 'bad_request', message: 'Invalid request.' },
       });
+      expect(first.body.error.requestId).toBe(first.headers['x-correlation-id']);
       expect(second.status).toBe(201);
     } finally {
       scenarioSpy.mockRestore();
@@ -1018,12 +1131,13 @@ describe('stabilization public API contracts', function () {
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(409);
-    expect(second.body).toEqual({
+    expect(second.body).toMatchObject({
       error: {
         code: 'idempotency_conflict',
         message: 'The idempotency key was already used with a different request.',
       },
     });
+    expect(second.body.error.requestId).toBe(second.headers['x-correlation-id']);
     expect(customersEngine.createCustomer).toHaveBeenCalledTimes(1);
   });
 

@@ -2,7 +2,13 @@
 
 const express = require('express');
 const request = require('supertest');
-const { correlationId } = require('../../src/middleware/auditLog');
+jest.mock('../../src/audit/client', function () {
+  return {
+    record: jest.fn(function () { return Promise.resolve(); }),
+  };
+});
+const audit = require('../../src/audit/client');
+const { correlationId, auditLogger } = require('../../src/middleware/auditLog');
 const {
   ApiError,
   errorHandler,
@@ -13,6 +19,7 @@ function buildApp() {
   const app = express();
   app.use(express.json());
   app.use(correlationId);
+  app.use(auditLogger);
   app.use(normalizeErrorResponses);
   app.get('/sql', function (_req, _res, next) {
     const error = new Error('SELECT secret FROM users at db.internal.example');
@@ -53,6 +60,26 @@ function buildApp() {
       }
     });
   });
+  [
+    [400, 'bad_request'],
+    [401, 'unauthorized'],
+    [403, 'forbidden'],
+    [404, 'not_found'],
+    [409, 'conflict'],
+    [422, 'validation_error'],
+    [429, 'rate_limited'],
+    [500, 'internal_error'],
+    [503, 'service_unavailable'],
+  ].forEach(function (fixture) {
+    app.get(['/status-' + fixture[0], '/api/status-' + fixture[0]], function (_req, res) {
+      res.status(fixture[0]).json({
+        error: {
+          code: fixture[1],
+          message: 'raw internal endpoint /private SELECT secret C:\\hidden\\file.js',
+        },
+      });
+    });
+  });
   app.use(errorHandler);
   return app;
 }
@@ -62,6 +89,7 @@ describe('safe public error normalization', function () {
   let logSpy;
 
   beforeEach(function () {
+    audit.record.mockReset().mockResolvedValue();
     logSpy = jest.spyOn(console, 'error').mockImplementation(function () {});
   });
 
@@ -105,6 +133,58 @@ describe('safe public error normalization', function () {
       }
     });
     expect(JSON.stringify(response.body)).not.toMatch(/hunter2|private@example|raw validator|secret/i);
+  });
+
+  test.each([
+    [400, 'bad_request'],
+    [401, 'unauthorized'],
+    [403, 'forbidden'],
+    [404, 'not_found'],
+    [409, 'conflict'],
+    [422, 'validation_error'],
+    [429, 'rate_limited'],
+    [500, 'internal_error'],
+    [503, 'service_unavailable'],
+  ])('normalizes a direct %i with one canonical request ID', async function (status, code) {
+    logSpy.mockClear();
+    const supplied = '123e4567-e89b-42d3-a456-426614174000';
+    const response = await request(app)
+      .get('/status-' + status)
+      .set('X-Correlation-ID', supplied);
+    const requestId = response.headers['x-correlation-id'];
+    expect(response.status).toBe(status);
+    expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(response.body.error.requestId).toBe(requestId);
+    expect(response.body.error.code).toBe(code);
+    expect(requestId).not.toBe(supplied);
+    expect(JSON.stringify(response.body)).not.toMatch(/private|SELECT|C:\\|hidden|endpoint/i);
+    expect(logSpy).toHaveBeenCalled();
+    logSpy.mock.calls.forEach(function (call) {
+      expect(JSON.stringify(call)).toContain(requestId);
+    });
+  });
+
+  test('audit persistence failure warning is correlated and contains no raw failure details', async function () {
+    const warning = jest.spyOn(console, 'warn').mockImplementation(function () {});
+    audit.record.mockRejectedValueOnce(
+      new Error('postgres://secret@db.internal C:\\private\\audit.sql SELECT * FROM audit_logs')
+    );
+    try {
+      const response = await request(app).get('/api/status-400');
+      await new Promise(function (resolve) { setImmediate(resolve); });
+      await new Promise(function (resolve) { setImmediate(resolve); });
+      const requestId = response.headers['x-correlation-id'];
+      expect(response.body.error.requestId).toBe(requestId);
+      expect(warning).toHaveBeenCalled();
+      const serialized = JSON.stringify(warning.mock.calls);
+      expect(serialized).toContain(requestId);
+      expect(serialized).not.toMatch(/postgres|db\.internal|C:\\|SELECT|audit_logs|secret/i);
+      warning.mock.calls.forEach(function (call) {
+        expect(JSON.stringify(call)).toContain(requestId);
+      });
+    } finally {
+      warning.mockRestore();
+    }
   });
 
   test('protected logs retain correlation and detailed internal context', async function () {

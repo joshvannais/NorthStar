@@ -138,6 +138,7 @@ async function requireOrgMembership(req, res, next) {
     return next();
   } catch (err) {
     console.error('[Auth] Organization membership lookup failed:', {
+      correlationId: req.correlationId || 'unavailable',
       userId: req.user && (req.user.sub || req.user.id),
       message: err.message,
       stack: err.stack,

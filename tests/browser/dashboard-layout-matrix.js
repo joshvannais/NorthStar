@@ -3,7 +3,14 @@
 const assert = require('assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { chromium, webkit } = require('playwright');
+let playwright;
+try {
+  playwright = require('playwright');
+} catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+  playwright = require('playwright-core');
+}
+const { chromium, webkit } = playwright;
 const { app } = require('../../src/server');
 
 const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
@@ -53,6 +60,10 @@ const VIEWPORTS = [
 ];
 
 const now = '2026-07-24T14:00:00.000Z';
+const businessProfileFixture = JSON.parse(fs.readFileSync(
+  path.join(__dirname, '../../data/business-profile.json'),
+  'utf8'
+));
 const customers = [
   { id: 'customer-1', name: 'Morgan Lee', phone: '(555) 010-1001', email: 'morgan@example.test', health: 88, totalJobs: 3, status: 'active' },
   { id: 'customer-2', name: 'Taylor Reed', phone: '(555) 010-1002', email: 'taylor@example.test', health: 64, totalJobs: 1, status: 'active' },
@@ -211,19 +222,8 @@ function fixtureFor(url) {
   }
   if (pathname === '/api/v1/business-profile') {
     return {
-      businessName: 'NorthStar Solutions',
-      companyName: 'NorthStar Solutions',
-      phone: '(555) 010-2000',
-      email: 'office@northstar.example',
-      website: 'https://northstar.example',
-      address: '100 NorthStar Way',
-      city: 'Charlotte',
-      state: 'NC',
-      zip: '28202',
-      timezone: 'America/New_York',
-      services: ['Electrical', 'Plumbing', 'HVAC'],
-      businessHours: {},
-      financial: { hourlyRate: 125, minimumJobAmount: 195 },
+      success: true,
+      data: businessProfileFixture,
     };
   }
   if (pathname === '/api/integrations/jobber/status') return { connected: true, accountName: 'NorthStar Test Account' };
@@ -257,6 +257,12 @@ function fixtureFor(url) {
 }
 
 async function installFixtures(context) {
+  const businessProfileResponse = fixtureFor(new URL('http://fixture.test/api/v1/business-profile'));
+  assert.equal(businessProfileResponse.success, true, 'Business Profile fixture omitted success=true');
+  assert.ok(businessProfileResponse.data && businessProfileResponse.data.company,
+    'Business Profile fixture omitted the production data envelope');
+  assert.equal(typeof businessProfileResponse.data.company.name, 'string',
+    'Business Profile fixture omitted company.name');
   await context.addInitScript(function () {
     localStorage.setItem('token', 'visual-layout-token');
     localStorage.setItem('northstar_token', 'visual-layout-token');
@@ -294,6 +300,27 @@ async function waitForStableReady(page, route) {
       const content = document.getElementById('ccContent');
       return content && getComputedStyle(content).display !== 'none';
     });
+  } else if (route.name === 'business-profile') {
+    await page.waitForFunction(function (expectedName) {
+      const companyName = document.getElementById('company-name');
+      return companyName && companyName.value === expectedName;
+    }, businessProfileFixture.company.name);
+    const profileState = await page.evaluate(function () {
+      const toast = document.getElementById('toast');
+      return {
+        companyName: document.getElementById('company-name').value,
+        companyEmail: document.getElementById('company-email').value,
+        serviceRows: document.querySelectorAll('.bp-service-row').length,
+        errorToastVisible: Boolean(toast && toast.classList.contains('show') &&
+          toast.classList.contains('error')),
+        toastText: toast ? toast.textContent : '',
+      };
+    });
+    assert.equal(profileState.companyName, businessProfileFixture.company.name);
+    assert.equal(profileState.companyEmail, businessProfileFixture.company.email);
+    assert.equal(profileState.serviceRows, businessProfileFixture.services.length);
+    assert.equal(profileState.errorToastVisible, false,
+      'Business Profile populated fixture rendered an error toast: ' + profileState.toastText);
   }
   await page.evaluate(function () {
     return document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
@@ -420,34 +447,103 @@ async function legacyLeadMeasurement(page, baseUrl) {
   });
 }
 
+async function withCasePage(context, baseUrl, label, work) {
+  const page = await withTimeout(context.newPage(), 15000, label + ' page creation');
+  const browserErrors = [];
+  page.setDefaultTimeout(20000);
+  page.setDefaultNavigationTimeout(30000);
+  page.on('pageerror', function (error) {
+    browserErrors.push('pageerror: ' + error.message);
+  });
+  page.on('console', function (message) {
+    if (message.type() === 'error') browserErrors.push('console: ' + message.text());
+  });
+  page.on('response', function (response) {
+    const url = new URL(response.url());
+    if (url.origin === baseUrl && response.status() >= 400) {
+      browserErrors.push('first-party response ' + response.status() + ': ' + url.pathname);
+    }
+  });
+  page.on('requestfailed', function (request) {
+    const url = new URL(request.url());
+    if (url.origin === baseUrl) {
+      browserErrors.push('first-party request failed: ' + url.pathname + ' ' +
+        (request.failure() ? request.failure().errorText : 'unknown'));
+    }
+  });
+  try {
+    return await withTimeout(
+      Promise.resolve().then(function () { return work(page, browserErrors); }),
+      90000,
+      label
+    );
+  } finally {
+    page.removeAllListeners();
+    await withTimeout(page.close({ runBeforeUnload: false }), 15000, label + ' page close');
+  }
+}
+
+async function withIsolatedCase(target, baseUrl, label, work) {
+  const ownsBrowser = Boolean(target.isolateBrowserPerCase);
+  if (!ownsBrowser && !target.activeBrowser) {
+    target.activeBrowser = await withTimeout(target.launch(), 60000, label + ' shared browser launch');
+  }
+  const browser = ownsBrowser
+    ? await withTimeout(target.launch(), 60000, label + ' browser launch')
+    : target.activeBrowser;
+  let context;
+  let primaryError;
+  try {
+    context = await withTimeout(browser.newContext(), 30000, label + ' context creation');
+    await installFixtures(context);
+    const result = await withCasePage(context, baseUrl, label, work);
+    assert.equal(context.pages().length, 0, label + ' leaked a page');
+    return result;
+  } catch (error) {
+    primaryError = error;
+    throw error;
+  } finally {
+    const cleanupErrors = [];
+    if (context) {
+      try {
+        await withTimeout(context.close(), 30000, label + ' context close');
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    }
+    if (ownsBrowser) {
+      try {
+        await withTimeout(browser.close(), 15000, label + ' browser close');
+      } catch (error) {
+        process.stderr.write(label + ': graceful browser close failed; process supervisor will dispose it\n');
+      }
+    }
+    if (primaryError) {
+      cleanupErrors.forEach(function (error) {
+        process.stderr.write(label + ': cleanup after primary failure: ' + error.message + '\n');
+      });
+    } else if (cleanupErrors.length > 0) {
+      throw cleanupErrors[0];
+    }
+  }
+}
+
 async function runTarget(target, baseUrl) {
   fs.mkdirSync(screenshotRoot, { recursive: true });
-  const browser = await target.launch();
+  target.activeBrowser = null;
   const results = [];
+  let primaryError;
   try {
-    const context = await browser.newContext();
-    await installFixtures(context);
-    const page = await context.newPage();
-    page.setDefaultTimeout(20000);
-    page.setDefaultNavigationTimeout(30000);
-    const browserErrors = [];
-    page.on('pageerror', function (error) {
-      browserErrors.push('pageerror: ' + error.message);
-    });
-    page.on('console', function (message) {
-      if (message.type() === 'error') browserErrors.push('console: ' + message.text());
-    });
-    page.on('response', function (response) {
-      const url = new URL(response.url());
-      if (url.origin === baseUrl && response.status() >= 400) {
-        browserErrors.push('first-party response ' + response.status() + ': ' + url.pathname);
-      }
-    });
+  const beforeLead = await withIsolatedCase(
+    target,
+    baseUrl,
+    target.name + ' legacy lead diagnostic',
+    function (page) { return legacyLeadMeasurement(page, baseUrl); }
+  );
+  assert.ok(beforeLead.main.top >= beforeLead.sidebar.bottom - 2,
+    'legacy lead diagnostic did not reproduce below-sidebar layout');
 
-    const beforeLead = await legacyLeadMeasurement(page, baseUrl);
-    assert.ok(beforeLead.main.top >= beforeLead.sidebar.bottom - 2, 'legacy lead diagnostic did not reproduce below-sidebar layout');
-
-    browserErrors.length = 0;
+  await withIsolatedCase(target, baseUrl, target.name + ' legacy dashboard', async function (page, browserErrors) {
     await page.goto(baseUrl + '/dashboard/legacy', { waitUntil: 'load' });
     const legacyDocument = await page.evaluate(function () {
       return {
@@ -466,16 +562,18 @@ async function runTarget(target, baseUrl) {
         JSON.stringify({ legacyDocument, browserErrors })
     );
     assert.deepEqual(browserErrors, [], target.name + ' legacy dashboard browser errors');
+  });
 
-    for (const viewport of VIEWPORTS.filter(function (item) {
-      return selected(item.name, 'NORTHSTAR_VIEWPORTS');
+  for (const viewport of VIEWPORTS.filter(function (item) {
+    return selected(item.name, 'NORTHSTAR_VIEWPORTS');
+  })) {
+    for (const route of ROUTES.filter(function (item) {
+      return selected(item.name, 'NORTHSTAR_ROUTES');
     })) {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      for (const route of ROUTES.filter(function (item) {
-        return selected(item.name, 'NORTHSTAR_ROUTES');
-      })) {
-        process.stdout.write(target.name + ': ' + viewport.name + ' ' + route.name + '\n');
-        browserErrors.length = 0;
+      const label = target.name + ' ' + viewport.name + ' ' + route.name;
+      process.stdout.write(label + '\n');
+      const result = await withIsolatedCase(target, baseUrl, label, async function (page, browserErrors) {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await page.goto(baseUrl + route.path, { waitUntil: 'domcontentloaded' });
         await page.addStyleTag({
           content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}',
@@ -483,38 +581,41 @@ async function runTarget(target, baseUrl) {
         await waitForStableReady(page, route);
         const geometry = await measure(page, route.primary);
         assertGeometry(geometry, route, viewport, target.name);
-        assert.deepEqual(browserErrors, [], target.name + ' ' + viewport.name + ' ' + route.name + ' browser errors');
+        assert.deepEqual(browserErrors, [], label + ' browser errors');
 
         const stem = [target.name, viewport.name, route.name, 'populated'].join('-');
         const viewportPath = path.join(screenshotRoot, stem + '-viewport.png');
         const fullPath = path.join(screenshotRoot, stem + '-full.png');
         await withTimeout(page.screenshot({ path: viewportPath }), 30000, stem + ' viewport screenshot');
         await withTimeout(page.screenshot({ path: fullPath, fullPage: true }), 30000, stem + ' full screenshot');
-        process.stdout.write(target.name + ': ' + viewport.name + ' ' + route.name + ' captured\n');
-        results.push({
+        process.stdout.write(label + ' captured\n');
+        return {
           engine: target.name,
           viewport: viewport.name,
           route: route.name,
           state: 'populated',
           geometry,
           screenshots: { viewport: viewportPath, full: fullPath },
-        });
-      }
+        };
+      });
+      results.push(result);
     }
+  }
 
-    for (const viewport of [VIEWPORTS[1], VIEWPORTS[4]].filter(function (item) {
-      return selected(item.name, 'NORTHSTAR_VIEWPORTS') &&
-        selected('lead-detail', 'NORTHSTAR_ROUTES');
-    })) {
+  for (const viewport of [VIEWPORTS[1], VIEWPORTS[4]].filter(function (item) {
+    return selected(item.name, 'NORTHSTAR_VIEWPORTS') &&
+      selected('lead-detail', 'NORTHSTAR_ROUTES');
+  })) {
+    const label = target.name + ' ' + viewport.name + ' lead-detail safe-error';
+    const result = await withIsolatedCase(target, baseUrl, label, async function (page) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await context.route('**/api/leads/visual-missing**', function (route) {
+      await page.route('**/api/leads/visual-missing**', function (route) {
         return route.fulfill({
           status: 404,
           contentType: 'application/json',
           body: JSON.stringify({ error: { code: 'not_found', message: 'Record not found.' } }),
         });
       });
-      browserErrors.length = 0;
       await page.goto(baseUrl + '/dashboard/lead?id=visual-missing', { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(function () {
         return window.__northstarLeadDetailState &&
@@ -527,19 +628,32 @@ async function runTarget(target, baseUrl) {
       const fullPath = path.join(screenshotRoot, stem + '-full.png');
       await withTimeout(page.screenshot({ path: viewportPath }), 30000, stem + ' viewport screenshot');
       await withTimeout(page.screenshot({ path: fullPath, fullPage: true }), 30000, stem + ' full screenshot');
-      results.push({
+      return {
         engine: target.name,
         viewport: viewport.name,
         route: 'lead-detail',
         state: 'safe-error',
         geometry,
         screenshots: { viewport: viewportPath, full: fullPath },
-      });
-    }
-    await context.close();
+      };
+    });
+    results.push(result);
+  }
     return { engine: target.name, beforeLead, results };
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
-    await withTimeout(browser.close(), 30000, target.name + ' browser close');
+    if (target.activeBrowser) {
+      try {
+        await withTimeout(target.activeBrowser.close(), 15000, target.name + ' shared browser close');
+      } catch (error) {
+        if (!primaryError) throw error;
+        process.stderr.write(target.name + ': shared browser cleanup after primary failure: ' + error.message + '\n');
+      } finally {
+        target.activeBrowser = null;
+      }
+    }
   }
 }
 
@@ -555,12 +669,14 @@ async function main() {
       launch: function () {
         return chromium.launch({ headless: true, executablePath: chromePath });
       },
+      isolateBrowserPerCase: false,
     },
     {
       name: 'playwright-webkit',
       launch: function () {
         return webkit.launch({ headless: true });
       },
+      isolateBrowserPerCase: true,
     },
   ].filter(function (target) {
     return !process.env.NORTHSTAR_BROWSER_TARGET ||
@@ -581,7 +697,10 @@ async function main() {
     }
   } finally {
     if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
-    await new Promise(function (resolve) { server.close(resolve); });
+    await withTimeout(new Promise(function (resolve, reject) {
+      server.close(function (error) { if (error) reject(error); else resolve(); });
+    }), 30000, 'dashboard matrix server close');
+    server.removeAllListeners();
   }
   fs.writeFileSync(
     path.join(
@@ -596,7 +715,13 @@ async function main() {
   );
 }
 
-main().catch(function (error) {
+main().then(function () {
+  process.stdout.write('', function () {
+    process.stderr.write('', function () { process.exit(0); });
+  });
+}, function (error) {
   console.error(error.stack || error);
-  process.exitCode = 1;
+  process.stdout.write('', function () {
+    process.stderr.write('', function () { process.exit(1); });
+  });
 });

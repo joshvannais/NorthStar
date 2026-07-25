@@ -1,5 +1,7 @@
 'use strict';
 
+require('../helpers/loopbackConcurrencyGuard').install();
+
 const express = require('express');
 const request = require('supertest');
 jest.mock('../../src/audit/client', function () {
@@ -17,10 +19,17 @@ const {
 
 function buildApp() {
   const app = express();
-  app.use(express.json());
   app.use(correlationId);
   app.use(auditLogger);
   app.use(normalizeErrorResponses);
+  app.use(express.json({ limit: '1mb' }));
+  app.post('/required-json', function (req, res) {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) ||
+        Object.keys(req.body).length === 0) {
+      return res.status(400).json({ error: 'A JSON object is required' });
+    }
+    return res.json({ success: true });
+  });
   app.get('/sql', function (_req, _res, next) {
     const error = new Error('SELECT secret FROM users at db.internal.example');
     error.code = '42601';
@@ -109,9 +118,10 @@ describe('safe public error normalization', function () {
     const response = await request(app).get(path).set('X-Correlation-ID', 'opaque-request-123');
     expect(response.status).toBe(status);
     expect(response.headers['x-correlation-id']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-    expect(response.body.error.requestId).toBe(response.headers['x-correlation-id']);
-    expect(response.body.error.requestId).not.toBe('opaque-request-123');
-    expect(response.body.error.code).toBe(code);
+    expect(response.body.requestId).toBe(response.headers['x-correlation-id']);
+    expect(response.body.requestId).not.toBe('opaque-request-123');
+    expect(response.body.code).toBe(code);
+    expect(typeof response.body.error).toBe('string');
     const serialized = JSON.stringify(response.body);
     expect(serialized).not.toMatch(/SELECT|postgres|db\.internal|C:\\|stack|23505|users_email|10\.0\.0\.8|script|cookie|ECONN|ENOENT/i);
   });
@@ -120,16 +130,14 @@ describe('safe public error normalization', function () {
     const response = await request(app).get('/validation').set('X-Correlation-ID', 'validation-request');
     expect(response.status).toBe(422);
     expect(response.body).toEqual({
-      error: {
-        code: 'validation_error',
-        message: 'Invalid request data.',
-        requestId: response.headers['x-correlation-id'],
-        details: {
-          errors: [
-            { field: 'customer.email', code: 'string.email' },
-            { field: 'request', code: 'any.required' }
-          ]
-        }
+      error: 'Invalid request data.',
+      code: 'validation_error',
+      requestId: response.headers['x-correlation-id'],
+      details: {
+        errors: [
+          { field: 'customer.email', code: 'string.email' },
+          { field: 'request', code: 'any.required' }
+        ]
       }
     });
     expect(JSON.stringify(response.body)).not.toMatch(/hunter2|private@example|raw validator|secret/i);
@@ -154,8 +162,9 @@ describe('safe public error normalization', function () {
     const requestId = response.headers['x-correlation-id'];
     expect(response.status).toBe(status);
     expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-    expect(response.body.error.requestId).toBe(requestId);
-    expect(response.body.error.code).toBe(code);
+    expect(response.body.requestId).toBe(requestId);
+    expect(response.body.code).toBe(code);
+    expect(typeof response.body.error).toBe('string');
     expect(requestId).not.toBe(supplied);
     expect(JSON.stringify(response.body)).not.toMatch(/private|SELECT|C:\\|hidden|endpoint/i);
     expect(logSpy).toHaveBeenCalled();
@@ -174,7 +183,7 @@ describe('safe public error normalization', function () {
       await new Promise(function (resolve) { setImmediate(resolve); });
       await new Promise(function (resolve) { setImmediate(resolve); });
       const requestId = response.headers['x-correlation-id'];
-      expect(response.body.error.requestId).toBe(requestId);
+      expect(response.body.requestId).toBe(requestId);
       expect(warning).toHaveBeenCalled();
       const serialized = JSON.stringify(warning.mock.calls);
       expect(serialized).toContain(requestId);
@@ -187,16 +196,16 @@ describe('safe public error normalization', function () {
     }
   });
 
-  test('protected logs retain correlation and detailed internal context', async function () {
+  test('protected exception logs retain internal context but direct route payloads are not logged raw', async function () {
     const sqlResponse = await request(app).get('/sql').set('X-Correlation-ID', 'logged-request-456');
     const directResponse = await request(app).get('/direct-500').set('X-Correlation-ID', 'direct-request-789');
     expect(logSpy).toHaveBeenCalled();
     const logText = JSON.stringify(logSpy.mock.calls);
-    expect(logText).toContain(sqlResponse.body.error.requestId);
+    expect(logText).toContain(sqlResponse.body.requestId);
     expect(logText).toContain('SELECT secret FROM users');
     expect(logText).toContain('db.internal.example');
-    expect(logText).toContain(directResponse.body.error.requestId);
-    expect(logText).toContain('C:\\\\secrets\\\\app.js');
+    expect(logText).toContain(directResponse.body.requestId);
+    expect(logText).not.toContain('C:\\\\secrets\\\\app.js');
   });
 
   test.each([
@@ -214,7 +223,7 @@ describe('safe public error normalization', function () {
     const requestId = response.headers['x-correlation-id'];
     expect(response.status).toBe(500);
     expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-    expect(response.body.error.requestId).toBe(requestId);
+    expect(response.body.requestId).toBe(requestId);
     expect(requestId).not.toBe(supplied.trim().toLowerCase());
     const publicBody = JSON.stringify(response.body);
     expect(publicBody).not.toContain(supplied);
@@ -243,5 +252,81 @@ describe('safe public error normalization', function () {
     expect(req.upstreamTraceId).toBeNull();
     expect(responseHeaders['x-correlation-id']).toBe(req.correlationId);
     expect(req.correlationId).not.toContain(supplied);
+  });
+
+  test.each([
+    ['truncated JSON', '{"name":"fixture"'],
+    ['invalid token', '{"name": nope}'],
+    ['trailing comma', '{"name":"fixture",}'],
+    ['invalid nesting', '{"name":[1,2}'],
+  ])('%s receives one canonical UUID and no parser internals', async function (_label, payload) {
+    logSpy.mockClear();
+    const response = await request(app)
+      .post('/required-json')
+      .set('Content-Type', 'application/json')
+      .send(payload);
+    const requestId = response.headers['x-correlation-id'];
+    expect(response.status).toBe(400);
+    expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(response.body).toEqual({
+      error: 'Invalid request.',
+      code: 'bad_request',
+      requestId,
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/SyntaxError|Unexpected|position|body-parser|stack|fixture|nope/i);
+    expect(logSpy).toHaveBeenCalled();
+    logSpy.mock.calls.forEach(function (call) {
+      const serialized = JSON.stringify(call);
+      expect(serialized).toContain(requestId);
+      expect(serialized).not.toMatch(/SyntaxError|Unexpected|position|body-parser|fixture|nope/i);
+    });
+  });
+
+  test('empty JSON body and wrong content type fail safely with canonical IDs', async function () {
+    const probes = [
+      await request(app).post('/required-json').set('Content-Type', 'application/json').send(''),
+      await request(app).post('/required-json').set('Content-Type', 'text/plain').send('not-json'),
+    ];
+    probes.forEach(function (response) {
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Invalid request.');
+      expect(response.body.code).toBe('bad_request');
+      expect(response.body.requestId).toBe(response.headers['x-correlation-id']);
+    });
+  });
+
+  test('oversized JSON preserves the parser limit and returns a safe correlated 413', async function () {
+    logSpy.mockClear();
+    const response = await request(app)
+      .post('/required-json')
+      .set('Content-Type', 'application/json')
+      .send('{"value":"' + 'x'.repeat(1024 * 1024) + '"}');
+    const requestId = response.headers['x-correlation-id'];
+    expect(response.status).toBe(413);
+    expect(response.body).toEqual({
+      error: 'The request body is too large.',
+      code: 'payload_too_large',
+      requestId,
+    });
+    expect(logSpy).toHaveBeenCalled();
+    expect(JSON.stringify(logSpy.mock.calls)).toContain(requestId);
+    expect(JSON.stringify(logSpy.mock.calls)).not.toContain('x'.repeat(100));
+  });
+
+  test('a reproducible unsupported encoding failure is rejected safely', async function () {
+    logSpy.mockClear();
+    const response = await request(app)
+      .post('/required-json')
+      .set('Content-Type', 'application/json; charset=koi8-r')
+      .send('{"name":"fixture"}');
+    expect(response.status).toBe(415);
+    expect(response.body).toEqual({
+      error: 'The request encoding is not supported.',
+      code: 'unsupported_media_type',
+      requestId: response.headers['x-correlation-id'],
+    });
+    expect(logSpy).toHaveBeenCalled();
+    expect(JSON.stringify(logSpy.mock.calls)).toContain(response.body.requestId);
+    expect(JSON.stringify(logSpy.mock.calls)).not.toMatch(/koi8|charset|body-parser|stack|fixture/i);
   });
 });

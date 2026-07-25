@@ -409,8 +409,16 @@ describe('handleTranscriptSegment', () => {
 
 describe('live and simulation emergency parity', () => {
   const positives = [
+    'No smoke or the basement is flooding right now.',
+    'The old outlet was repaired or the basement is flooding right now.',
+    'The basement is flooding right now or the old outlet was repaired.',
+    'No smoke the basement is flooding right now.',
+    "The outlet isn't sparking I smell burning right now.",
+    'The old leak stopped the basement is flooding again.',
+    "The outlet isn't not sparking right now.",
     'No smoke and the outlet is sparking right now.',
     "The outlet isn't sparking and I smell burning right now.",
+    'The outlet isn\u2019t sparking and I smell burning right now.',
     'The old leak stopped and the basement is flooding right now.',
     'The basement is flooding right now and the old outlet was repaired.',
     'There is no fire, and water keeps rising in the basement.',
@@ -420,14 +428,19 @@ describe('live and simulation emergency parity', () => {
     'The basement is flooding and still rising.',
   ];
   const negatives = [
+    'There was a burning smell before the repair.',
     'There is no smoke or burning smell.',
     'There is no smoke and no burning smell.',
     "The outlet isn't sparking and there is no burning smell.",
+    'The outlet isn\u2019t sparking and there is no burning smell.',
     'The old leak stopped and has not returned.',
     'The basement flooded yesterday and was repaired.',
     'This is not an emergency.',
     'It is a slow drip and tomorrow is fine.',
     'The pipe stopped leaking and the floor is drying.',
+    'The outlet sparked yesterday, but it is fine now.',
+    'There was a burning smell before the repair and no problem remains.',
+    'There is no present danger and nothing is sparking.',
   ];
   const permutations = [
     'The outlet is sparking right now and there is no smoke.',
@@ -441,6 +454,16 @@ describe('live and simulation emergency parity', () => {
     'The old leak stopped, yet water keeps rising in the basement.',
     "The outlet isn’t sparking, but I smell burning right now.",
     "The outlet isn't sparking, but I smell burning right now.",
+    'The old outlet was repaired, but it is sparking again right now.',
+    'There is no smoke or fire but the basement is flooding and still rising.',
+    'No smoke or burning smell the old leak stopped the breaker panel is sparking.',
+    'The basement is flooding right now no smoke no burning smell.',
+    'No smoke no fire no sparking but water keeps rising in the basement.',
+    'The outlet is sparking the panel is smoking water is rising in the basement.',
+  ];
+  const allNegated = [
+    'No smoke, no burning smell, no sparks, and no flooding.',
+    'The outlet is not sparking or smoking and the basement is not flooding.',
   ];
 
   function liveClassification(text, speaker, index) {
@@ -492,6 +515,14 @@ describe('live and simulation emergency parity', () => {
     expect(simulationPipeline.detectEmergencyEvidence([
       { speaker: 'CuStOmEr', text },
     ]).isEmergency).toBe(true);
+  });
+
+  test.each(allNegated)('keeps every coordinated hazard negative: %s', (text) => {
+    expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(false);
+    expect(liveClassification(text, 'customer', allNegated.indexOf(text))).toBe(false);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(false);
   });
 
   test.each(['Agent', 'AI', 'Assistant', 'Bot', 'System', 'Unknown', '', null, undefined])(

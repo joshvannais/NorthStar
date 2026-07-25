@@ -25,6 +25,27 @@ function withTimeout(promise, timeoutMs, label) {
   });
 }
 
+function localDateInTimeZone(instant, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant);
+  const values = {};
+  parts.forEach(function (part) {
+    if (part.type !== 'literal') values[part.type] = part.value;
+  });
+  return values.year + '-' + values.month + '-' + values.day;
+}
+
+function assertTimezoneFixtureContract() {
+  const boundary = new Date('2026-07-25T00:30:00.000Z');
+  assert.equal(localDateInTimeZone(boundary, 'UTC'), '2026-07-25');
+  assert.equal(localDateInTimeZone(boundary, 'America/New_York'), '2026-07-24');
+  assert.equal(localDateInTimeZone(boundary, 'Pacific/Auckland'), '2026-07-25');
+}
+
 function monitor(page, label) {
   const failures = [];
   const expectedHttpRejections = [];
@@ -48,17 +69,20 @@ function monitor(page, label) {
 async function setToken(context) {
   await context.addInitScript(function () {
     localStorage.setItem('token', 'browser-containment-token');
+    localStorage.setItem('user', JSON.stringify({ id: 'browser-owner', organizationId: 'browser-org' }));
+    localStorage.setItem('organization', 'browser-org');
   });
 }
 
 async function exerciseLeadDetail(browser, baseUrl, label) {
   const context = await browser.newContext();
-  await setToken(context);
-  const page = await context.newPage();
-  const assertClean = monitor(page, label + ' lead detail');
-  const bootstrapRequests = [];
+  try {
+    await setToken(context);
+    const page = await context.newPage();
+    const assertClean = monitor(page, label + ' lead detail');
+    const bootstrapRequests = [];
 
-  await page.route('**/api/leads/**', async function (route) {
+    await page.route('**/api/leads/**', async function (route) {
     const request = route.request();
     const url = new URL(request.url());
     bootstrapRequests.push({
@@ -88,9 +112,9 @@ async function exerciseLeadDetail(browser, baseUrl, label) {
       contentType: 'application/json',
       body: JSON.stringify({ error: { code: 'not_found', message: 'Record not found.' } })
     });
-  });
+    });
 
-  await page.goto(baseUrl + '/dashboard/lead?id=authorized-lead', { waitUntil: 'networkidle' });
+    await page.goto(baseUrl + '/dashboard/lead?id=authorized-lead', { waitUntil: 'networkidle' });
   await page.waitForFunction(function () {
     return window.__northstarLeadDetailState && window.__northstarLeadDetailState.status === 'ready';
   });
@@ -113,14 +137,19 @@ async function exerciseLeadDetail(browser, baseUrl, label) {
     assert.notEqual(text, '');
   }
   assert.equal(new Set(safeStates).size, 1, label + ' lead rejection states disclosed identifier class');
-  assertClean();
-  await context.close();
+    assertClean();
+  } finally {
+    await withTimeout(context.close(), 30000, label + ' lead-detail context close');
+  }
 }
 
-async function exerciseCalendar(browser, baseUrl, label) {
-  const context = await browser.newContext();
-  await context.addInitScript(function () {
+async function exerciseCalendar(browser, baseUrl, label, timeZone) {
+  const context = await browser.newContext({ timezoneId: timeZone });
+  try {
+    await context.addInitScript(function () {
     localStorage.setItem('token', 'browser-containment-token');
+    localStorage.setItem('user', JSON.stringify({ id: 'browser-owner', organizationId: 'browser-org' }));
+    localStorage.setItem('organization', 'browser-org');
     if (localStorage.getItem('calendarFixtureSeeded')) return;
     localStorage.setItem('calendarFixtureSeeded', 'true');
     sessionStorage.setItem('northstarSessionId', 'session-a');
@@ -173,16 +202,16 @@ async function exerciseCalendar(browser, baseUrl, label) {
         }
       }]
     }));
-  });
+    });
 
-  const page = await context.newPage();
-  const assertClean = monitor(page, label + ' calendar');
-  let calendarStatus = 200;
-  let leadsMode = 'success';
-  const calendarRequests = [];
-  const leadsRequests = [];
+    const page = await context.newPage();
+    const assertClean = monitor(page, label + ' calendar ' + timeZone);
+    let calendarStatus = 200;
+    let leadsMode = 'success';
+    const calendarRequests = [];
+    const leadsRequests = [];
 
-  await page.route('**/api/leads', function (route) {
+    await page.route('**/api/leads', function (route) {
     leadsRequests.push(route.request().url());
     if (leadsMode === 'network') return route.abort('connectionfailed');
     if (leadsMode === 'malformed') {
@@ -204,8 +233,8 @@ async function exerciseCalendar(browser, baseUrl, label) {
       contentType: 'application/json',
       body: JSON.stringify({ items: [], count: 0 })
     });
-  });
-  await page.route('**/api/v1/calendar/**', function (route) {
+    });
+    await page.route('**/api/v1/calendar/**', function (route) {
     const request = route.request();
     const url = new URL(request.url());
     calendarRequests.push({
@@ -227,13 +256,13 @@ async function exerciseCalendar(browser, baseUrl, label) {
         ? JSON.stringify({ events: [{
           id: 'server-authorized',
           title: 'Authorized Real Appointment',
-          date: new Date().toISOString().slice(0, 10),
+          date: localDateInTimeZone(new Date(), timeZone),
           time: '10:00 AM',
           type: 'appointment'
         }] })
         : JSON.stringify({ error: { code: 'request_rejected' } })
     });
-  });
+    });
 
   await page.goto(baseUrl + '/dashboard/calendar', { waitUntil: 'networkidle' });
   await page.waitForFunction(function () {
@@ -243,8 +272,53 @@ async function exerciseCalendar(browser, baseUrl, label) {
   await page.addScriptTag({ url: baseUrl + '/js/analytics-engine.js' });
   let body = await page.locator('body').innerText();
   assert.match(body, /Authorized Real Appointment/);
-  assert.match(body, /Same Session Cached Event/);
-  assert.doesNotMatch(body, /Wrong Session Cached Event|Unowned Cached Event|Stale Cached Event/);
+  assert.doesNotMatch(body, /Same Session Cached Event|Wrong Session Cached Event|Unowned Cached Event|Stale Cached Event/);
+  assert.deepEqual(await page.evaluate(function () {
+    return window.AppStore.getLeads();
+  }), [], label + ' trusted an arbitrary same-session cache entry in ' + timeZone);
+
+  const runtimeAuthorization = await page.evaluate(function () {
+    const added = window.AppStore.addLead({
+      id: 'current-runtime-simulation',
+      caller: 'Current Runtime Appointment',
+      outcome: 'appointment-set',
+      avgPrice: 350,
+      metadata: {
+        recordScope: 'simulation',
+        source: 'simulation',
+        simulationSessionId: window.NorthStarDemoSession.id
+      }
+    });
+    const apiEvents = window.calState.events.filter(function (event) {
+      return event.type !== 'lead';
+    });
+    window.calState.events = apiEvents.concat(window.syncCalendarFromAppStore());
+    window.calRenderer.render();
+    return {
+      added: {
+        id: added.id,
+        source: added.source,
+        recordScope: added.recordScope,
+        simulationSessionId: added.simulationSessionId,
+        metadata: added.metadata,
+      },
+      activeSessionId: window.NorthStarDemoSession.id,
+      token: localStorage.getItem('token'),
+      user: localStorage.getItem('user'),
+      organization: localStorage.getItem('organization'),
+      sourceState: window.AppStore.getState().authoritativeSources.leads,
+      visibleIds: window.AppStore.getLeads().map(function (lead) { return lead.id; }),
+      calendarIds: window.syncCalendarFromAppStore().map(function (event) { return event.leadId; }),
+    };
+  });
+  assert.deepEqual(
+    runtimeAuthorization.visibleIds,
+    ['current-runtime-simulation'],
+    label + ' did not authorize the current runtime record in ' + timeZone +
+      ': ' + JSON.stringify(runtimeAuthorization)
+  );
+  body = await page.locator('body').innerText();
+  assert.match(body, /Current Runtime Appointment/);
   assert.deepEqual(await page.evaluate(function () {
     return {
       store: window.AppStore.getLeads().map(function (lead) { return lead.id; }),
@@ -252,8 +326,8 @@ async function exerciseCalendar(browser, baseUrl, label) {
       analytics: window.AnalyticsEngine.total(),
     };
   }), {
-    store: ['same-session-cache'],
-    communications: ['same-session-cache'],
+    store: ['current-runtime-simulation'],
+    communications: ['current-runtime-simulation'],
     analytics: 1,
   });
   assert.equal(await page.evaluate(function () {
@@ -272,7 +346,7 @@ async function exerciseCalendar(browser, baseUrl, label) {
     });
     body = await page.locator('body').innerText();
     assert.match(body, /Authorized Real Appointment/);
-    assert.doesNotMatch(body, /Same Session Cached Event|Wrong Session Cached Event|Unowned Cached Event|Stale Cached Event/);
+    assert.doesNotMatch(body, /Current Runtime Appointment|Same Session Cached Event|Wrong Session Cached Event|Unowned Cached Event|Stale Cached Event/);
     assert.equal(await page.evaluate(function () {
       return window.calState.events.some(function (event) {
         return event.id === 'lead-same-session-cache';
@@ -305,16 +379,35 @@ async function exerciseCalendar(browser, baseUrl, label) {
     assert.equal(await page.evaluate(function () { return window.calState.events.length; }), 0);
   }
 
-  calendarStatus = 200;
-  await page.evaluate(function () { return window.refreshCalendar(); });
-  await page.evaluate(function () { return window.calData.exportICS(); });
-  await page.waitForTimeout(50);
+    calendarStatus = 200;
+    await page.evaluate(function () { return window.refreshCalendar(); });
+    process.stderr.write(label + ': calendar ' + timeZone + ' export\n');
+    if (timeZone === 'UTC') {
+      const downloadPromise = page.waitForEvent('download');
+      const download = await Promise.all([
+        downloadPromise,
+        page.evaluate(function () { return window.calData.exportICS(); }),
+      ]).then(function (values) { return values[0]; });
+      await download.path();
+      await download.delete();
+    } else {
+      await page.evaluate(async function () {
+        const click = HTMLAnchorElement.prototype.click;
+        HTMLAnchorElement.prototype.click = function () {};
+        try {
+          await window.calData.exportICS();
+        } finally {
+          HTMLAnchorElement.prototype.click = click;
+        }
+      });
+    }
   assert.ok(calendarRequests.some(function (item) {
     return item.path.endsWith('/export/ics') && item.sessionId;
   }), label + ' ICS export omitted active session');
 
-  const priorSession = await page.evaluate(function () { return window.NorthStarDemoSession.id; });
-  await page.reload({ waitUntil: 'networkidle' });
+    process.stderr.write(label + ': calendar ' + timeZone + ' reload\n');
+    const priorSession = await page.evaluate(function () { return window.NorthStarDemoSession.id; });
+    await page.reload({ waitUntil: 'networkidle' });
   await page.waitForFunction(function () {
     return window.calState && window.calState.serverState && window.calState.serverState.kind === 'ready';
   });
@@ -339,11 +432,15 @@ async function exerciseCalendar(browser, baseUrl, label) {
   assert.equal(await page.evaluate(function (oldSession) {
     return sessionStorage.getItem('northstar_calls:' + oldSession);
   }, priorSession), null);
-  assertClean();
-  await context.close();
+    assertClean();
+    process.stderr.write(label + ': calendar ' + timeZone + ' complete\n');
+  } finally {
+    await withTimeout(context.close(), 30000, label + ' calendar ' + timeZone + ' context close');
+  }
 }
 
 async function main() {
+  assertTimezoneFixtureContract();
   const server = await new Promise(function (resolve, reject) {
     const listener = app.listen(0, '127.0.0.1', function () { resolve(listener); });
     listener.once('error', reject);
@@ -368,18 +465,37 @@ async function main() {
     });
 
     for (const target of targets) {
-      process.stderr.write(target.label + ': launching\n');
-      const browser = await withTimeout(target.launch(), 60000, target.label + ' launch');
-      try {
-        process.stderr.write(target.label + ': lead-detail\n');
-        await withTimeout(exerciseLeadDetail(browser, baseUrl, target.label), 120000, target.label + ' lead-detail');
-        process.stderr.write(target.label + ': calendar\n');
-        await withTimeout(exerciseCalendar(browser, baseUrl, target.label), 180000, target.label + ' calendar');
-        results.push(target.label + ': PASS');
-        process.stdout.write(target.label + ': PASS\n');
-      } finally {
-        await withTimeout(browser.close(), 30000, target.label + ' close');
+      async function runIsolatedCase(caseLabel, action, timeoutMs) {
+        process.stderr.write(target.label + ': launching ' + caseLabel + '\n');
+        const browser = await withTimeout(
+          target.launch(),
+          60000,
+          target.label + ' ' + caseLabel + ' launch'
+        );
+        try {
+          await withTimeout(
+            action(browser),
+            timeoutMs,
+            target.label + ' ' + caseLabel
+          );
+        } finally {
+          await withTimeout(
+            browser.close(),
+            30000,
+            target.label + ' ' + caseLabel + ' close'
+          );
+        }
       }
+      await runIsolatedCase('lead-detail', function (browser) {
+        return exerciseLeadDetail(browser, baseUrl, target.label);
+      }, 120000);
+      for (const timeZone of ['UTC', 'America/New_York', 'Pacific/Auckland']) {
+        await runIsolatedCase('calendar ' + timeZone, function (browser) {
+          return exerciseCalendar(browser, baseUrl, target.label, timeZone);
+        }, 180000);
+      }
+      results.push(target.label + ': PASS');
+      process.stdout.write(target.label + ': PASS\n');
     }
   } finally {
     if (typeof server.closeAllConnections === 'function') server.closeAllConnections();

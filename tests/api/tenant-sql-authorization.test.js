@@ -1,5 +1,7 @@
 'use strict';
 
+require('../helpers/loopbackConcurrencyGuard').install();
+
 const express = require('express');
 const request = require('supertest');
 const { AsyncLocalStorage } = require('async_hooks');
@@ -177,8 +179,10 @@ describe('tenant SQL route authorization matrix', function () {
   beforeEach(async function () {
     owner = {
       id: expect.getState().currentTestName,
+      startedAt: Date.now(),
       calls: [],
       pending: new Set(),
+      sockets: new Set(),
       lateCalls: [],
       closing: false,
       closed: false,
@@ -189,22 +193,38 @@ describe('tenant SQL route authorization matrix', function () {
     server = await new Promise(function (resolve, reject) {
       const listener = app.listen(0, '127.0.0.1', function () { resolve(listener); });
       listener.once('error', reject);
+      listener.on('connection', function (socket) {
+        owner.sockets.add(socket);
+        socket.once('close', function () { owner.sockets.delete(socket); });
+      });
     });
   });
 
   afterEach(async function () {
     owner.closing = true;
     if (owner.delay && owner.delay.release) owner.delay.release();
+    await Promise.allSettled(Array.from(owner.pending));
+    if (typeof server.closeIdleConnections === 'function') server.closeIdleConnections();
     if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+    owner.sockets.forEach(function (socket) { socket.destroy(); });
     await new Promise(function (resolve, reject) {
       server.close(function (error) { if (error) reject(error); else resolve(); });
     });
-    await Promise.allSettled(Array.from(owner.pending));
     owner.closed = true;
     await new Promise(function (resolve) { setImmediate(resolve); });
     await new Promise(function (resolve) { setImmediate(resolve); });
     expect(owner.pending.size).toBe(0);
     expect(owner.lateCalls).toEqual([]);
+    if (process.env.NORTHSTAR_TEST_LIFECYCLE_DIAGNOSTICS === '1') {
+      console.log('[tenant-sql-lifecycle]', JSON.stringify({
+        test: owner.id,
+        durationMs: Date.now() - owner.startedAt,
+        sqlCalls: owner.calls.length,
+        lateCalls: owner.lateCalls.length,
+        pending: owner.pending.size,
+        sockets: owner.sockets.size,
+      }));
+    }
   });
 
   test.each([
@@ -414,6 +434,52 @@ describe('tenant SQL route authorization matrix', function () {
     releaseDelay();
     await completion;
     await Promise.allSettled(Array.from(owner.pending));
+    expect(owner.pending.size).toBe(0);
+  });
+
+  test('a client-side timeout aborts and fully drains the request before cleanup', async function () {
+    const http = require('http');
+    let markStarted;
+    let releaseDelay;
+    const started = new Promise(function (resolve) { markStarted = resolve; });
+    const gate = new Promise(function (resolve) { releaseDelay = resolve; });
+    owner.delay = {
+      matches: function (sql, params) {
+        return /FROM users WHERE id = \$1/.test(sql) && params[0] === 'owner-b';
+      },
+      started: markStarted,
+      gate: gate,
+      release: releaseDelay,
+    };
+    const address = server.address();
+    let clientRequest;
+    let timeoutFired = false;
+    const completion = new Promise(function (resolve) {
+      clientRequest = http.request({
+        host: '127.0.0.1',
+        port: address.port,
+        path: '/api/v1/dashboard/kpis',
+        headers: {
+          Authorization: 'Bearer ' + tokenB,
+          'X-Test-Request-Owner': 'timed-out-org-b',
+        },
+      }, function (response) {
+        response.resume();
+        response.on('end', resolve);
+      });
+      clientRequest.on('error', resolve);
+      clientRequest.end();
+    });
+    await started;
+    const timeout = setTimeout(function () {
+      timeoutFired = true;
+      clientRequest.destroy(new Error('bounded test request timeout'));
+      releaseDelay();
+    }, 10);
+    await completion;
+    clearTimeout(timeout);
+    await Promise.allSettled(Array.from(owner.pending));
+    expect(timeoutFired).toBe(true);
     expect(owner.pending.size).toBe(0);
   });
 

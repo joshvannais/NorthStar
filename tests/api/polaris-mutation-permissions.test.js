@@ -1,5 +1,7 @@
 'use strict';
 
+require('../helpers/loopbackConcurrencyGuard').install();
+
 const fs = require('fs');
 const path = require('path');
 
@@ -64,6 +66,8 @@ const { generateToken } = require('../../src/auth/middleware');
 const polarisRouter = require('../../src/routes/polaris');
 const engineRouter = require('../../src/routes/polaris-engines');
 const { routes } = require('../../src/auth/polarisRoutePermissions');
+const { correlationId } = require('../../src/middleware/auditLog');
+const { normalizeErrorResponses } = require('../../src/middleware/errorHandler');
 
 function tokenFor(userId) {
   return generateToken({ id: userId, email: userId + '@test.local' });
@@ -80,6 +84,8 @@ function actualPath(route) {
 
 function buildApp() {
   const app = express();
+  app.use(correlationId);
+  app.use(normalizeErrorResponses);
   app.use(express.json());
   app.use('/api/v1/polaris', polarisRouter);
   app.use('/api/v1', engineRouter);
@@ -135,7 +141,7 @@ describe('Polaris mutation permission inventory', function () {
     const response = await authenticated(request(app)[method](actualPath(route)), 'viewer')
       .send({ name: 'Viewer cannot mutate' });
     expect(response.status).toBe(403);
-    expect(response.body.error.code).toBe('forbidden');
+    expect(response.body.code).toBe('forbidden');
   });
 
   test('persisted viewer can read without receiving mutation authority', async function () {
@@ -157,7 +163,11 @@ describe('Polaris mutation permission inventory', function () {
     const response = await authenticated(request(app).put('/api/v1/customers/cross-org'), 'member')
       .send({ name: 'Forbidden update' });
     expect(response.status).toBe(404);
-    expect(response.body).toEqual({ error: 'Record not found' });
+    expect(response.body).toEqual({
+      error: 'Record not found.',
+      code: 'not_found',
+      requestId: response.headers['x-correlation-id'],
+    });
     expect(mockUpdateCustomer).not.toHaveBeenCalled();
   });
 

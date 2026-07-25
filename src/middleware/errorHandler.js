@@ -3,6 +3,8 @@
 const PUBLIC_ERRORS = Object.freeze({
   invalid_cursor: { status: 400, message: 'Invalid pagination cursor.' },
   bad_request: { status: 400, message: 'Invalid request.' },
+  payload_too_large: { status: 413, message: 'The request body is too large.' },
+  unsupported_media_type: { status: 415, message: 'The request encoding is not supported.' },
   validation_error: { status: 422, message: 'Invalid request data.' },
   unauthorized: { status: 401, message: 'Authentication required.' },
   invalid_token: { status: 401, message: 'Invalid or expired token.' },
@@ -34,6 +36,8 @@ function codeForStatus(statusCode) {
     : statusCode === 403 ? 'forbidden'
     : statusCode === 404 ? 'not_found'
     : statusCode === 409 ? 'conflict'
+    : statusCode === 413 ? 'payload_too_large'
+    : statusCode === 415 ? 'unsupported_media_type'
     : statusCode === 422 ? 'validation_error'
     : statusCode === 429 ? 'rate_limited'
     : statusCode === 502 ? 'provider_error'
@@ -73,16 +77,16 @@ function publicError(req, statusCode, code, details) {
   }
 
   const correlationId = req && req.correlationId ? String(req.correlationId) : 'unavailable';
-  const error = {
+  const body = {
+    error: descriptor.message,
     code: safeCode,
-    message: descriptor.message,
     requestId: correlationId
   };
   if (safeCode === 'validation_error') {
     const safeDetails = normalizeValidationDetails(details);
-    if (Object.keys(safeDetails).length) error.details = safeDetails;
+    if (Object.keys(safeDetails).length) body.details = safeDetails;
   }
-  return { statusCode: descriptor.status, body: { error } };
+  return { statusCode: descriptor.status, body };
 }
 
 function createError(code, _message, details = {}, statusCode = 400) {
@@ -100,7 +104,7 @@ function normalizeErrorResponses(req, res, next) {
     const code = typeof raw === 'object' && raw
       ? raw.code
       : body && typeof body.code === 'string' ? body.code : null;
-    const details = typeof raw === 'object' && raw ? raw.details : null;
+    const details = typeof raw === 'object' && raw ? raw.details : body && body.details;
     const normalized = publicError(req, res.statusCode, code, details);
     if (body && body.success === false) normalized.body.success = false;
     return normalized;
@@ -113,11 +117,14 @@ function normalizeErrorResponses(req, res, next) {
       method: req.method,
       path: req.path,
       statusCode: res.statusCode,
-      body
+      code: typeof body === 'object' && body
+        ? (typeof body.code === 'string' ? body.code
+          : body.error && typeof body.error === 'object' ? body.error.code : null)
+        : null
     });
     const normalized = normalizedBody(body);
     res.status(normalized.statusCode);
-    res.setHeader('X-Correlation-ID', normalized.body.error.requestId);
+    res.setHeader('X-Correlation-ID', normalized.body.requestId);
     sendingNormalizedJson = true;
     try {
       return sendJson(normalized.body);
@@ -134,7 +141,21 @@ function normalizeErrorResponses(req, res, next) {
 
 function errorHandler(err, req, res, _next) {
   const correlationId = req.correlationId || 'unavailable';
-  console.error('[Error] Request failed:', {
+  const parserFailure = err && (
+    err.type === 'entity.parse.failed' ||
+    err.type === 'entity.too.large' ||
+    err.type === 'charset.unsupported' ||
+    err.type === 'encoding.unsupported' ||
+    (err instanceof SyntaxError && Number(err.status || err.statusCode) === 400)
+  );
+  console.error('[Error] Request failed:', parserFailure ? {
+    correlationId,
+    event: err.type === 'entity.too.large' ? 'request_body_too_large'
+      : err.type === 'charset.unsupported' || err.type === 'encoding.unsupported'
+        ? 'request_encoding_unsupported'
+        : 'request_body_malformed',
+    statusCode: Number(err.status || err.statusCode) || 400,
+  } : {
     correlationId,
     method: req.method,
     path: req.path,
@@ -146,10 +167,19 @@ function errorHandler(err, req, res, _next) {
     stack: err.stack
   });
 
-  let statusCode = Number(err.statusCode);
+  let statusCode = Number(err.statusCode || err.status);
   let code = err.code;
   let details = err.details;
-  if (err.name === 'ValidationError') {
+  if (parserFailure) {
+    statusCode = err.type === 'entity.too.large' ? 413
+      : err.type === 'charset.unsupported' || err.type === 'encoding.unsupported' ? 415
+        : 400;
+    code = err.type === 'entity.too.large' ? 'payload_too_large'
+      : err.type === 'charset.unsupported' || err.type === 'encoding.unsupported'
+        ? 'unsupported_media_type'
+        : 'bad_request';
+    details = null;
+  } else if (err.name === 'ValidationError') {
     statusCode = 422;
     code = 'validation_error';
     details = err.errors || err.details;
@@ -162,13 +192,13 @@ function errorHandler(err, req, res, _next) {
   }
 
   const normalized = publicError(req, statusCode, code, details);
-  res.setHeader('X-Correlation-ID', normalized.body.error.requestId);
+  res.setHeader('X-Correlation-ID', normalized.body.requestId);
   return res.status(normalized.statusCode).json(normalized.body);
 }
 
 function notFound(req, res) {
   const normalized = publicError(req, 404, 'not_found');
-  res.setHeader('X-Correlation-ID', normalized.body.error.requestId);
+  res.setHeader('X-Correlation-ID', normalized.body.requestId);
   res.status(normalized.statusCode).json(normalized.body);
 }
 

@@ -27,6 +27,12 @@ window.Models = (function() {
     this.pricingBreakdown = data.pricingBreakdown || [];
     this.priceBreakdown = data.priceBreakdown || '';
     this.source = data.source || 'simulator';
+    this.recordScope = data.recordScope || (data.metadata && data.metadata.recordScope) || '';
+    this.simulationSessionId = data.simulationSessionId ||
+      (data.metadata && data.metadata.simulationSessionId) || '';
+    this.metadata = data.metadata && typeof data.metadata === 'object'
+      ? Object.assign({}, data.metadata)
+      : {};
     this.outcome = data.outcome || '';
     this.polarisAnalysis = data.polarisAnalysis || null;
     this.createdAt = data.createdAt || new Date().toISOString();

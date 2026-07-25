@@ -105,7 +105,7 @@ class CalendarState {
       if (typeof window.AppStore !== 'undefined' && window.AppStore.getLeads) {
         return window.AppStore.getLeads();
       }
-      return window.__leads || [];
+      return [];
     } catch(e) { return []; }
   }
 }

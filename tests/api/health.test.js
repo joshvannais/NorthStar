@@ -5,6 +5,8 @@
  */
 'use strict';
 
+require('../helpers/loopbackConcurrencyGuard').install();
+
 const path = require('path');
 process.chdir(path.resolve(__dirname, '../..'));
 
@@ -73,12 +75,10 @@ describe('Phase 4 — API: Health Check System', () => {
       // Stats moved behind the API authentication boundary.
       expect(res.status).toBe(401);
       expect(res.body).toMatchObject({
-        error: {
-          code: 'unauthorized',
-          message: expect.stringMatching(/authentication required/i),
-        },
+        error: expect.stringMatching(/authentication required/i),
+        code: 'unauthorized',
       });
-      expect(res.body.error.requestId).toBe(res.headers['x-correlation-id']);
+      expect(res.body.requestId).toBe(res.headers['x-correlation-id']);
     });
 
     test('GET /api/stats returns aggregate JSON for an authenticated user', async () => {

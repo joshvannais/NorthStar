@@ -30,9 +30,17 @@ const API = {
     const data = await res.json();
     if (!res.ok) {
       const payload = data && data.error;
-      const error = new Error(payload && payload.message ? payload.message : 'Request failed');
+      const message = typeof payload === 'string'
+        ? payload
+        : payload && payload.message ? payload.message : 'Request failed';
+      const error = new Error(message);
       error.status = res.status;
-      error.code = payload && payload.code ? payload.code : 'request_failed';
+      error.code = data && data.code
+        ? data.code
+        : payload && payload.code ? payload.code : 'request_failed';
+      error.requestId = data && data.requestId
+        ? data.requestId
+        : payload && payload.requestId ? payload.requestId : null;
       throw error;
     }
     return data;

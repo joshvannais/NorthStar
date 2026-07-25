@@ -8,6 +8,8 @@
 
 const express = require('express');
 const demoRouter = require('../src/routes/demo');
+const { correlationId } = require('../src/middleware/auditLog');
+const { errorHandler, normalizeErrorResponses } = require('../src/middleware/errorHandler');
 
 let passed = 0;
 let failed = 0;
@@ -45,8 +47,11 @@ function assertContains(haystack, needle, message) {
 // ── Setup minimal Express app for testing routes ──
 function createTestApp() {
   const app = express();
+  app.use(correlationId);
+  app.use(normalizeErrorResponses);
   app.use(express.json());
   app.use('/api/demo', demoRouter);
+  app.use(errorHandler);
   return app;
 }
 
@@ -167,8 +172,9 @@ async function runTests() {
       // missing industry and phoneNumber
     });
     assertEqual(invalidRes.status, 400, 'Returns 400 for missing fields');
-    assert(invalidRes.body.error !== undefined, 'Returns error object');
-    assertEqual(invalidRes.body.error.code, 'VALIDATION', 'Error code is VALIDATION');
+    assert(typeof invalidRes.body.error === 'string', 'Returns backward-compatible error string');
+    assertEqual(invalidRes.body.code, 'bad_request', 'Returns normalized validation code');
+    assert(/^[0-9a-f-]{36}$/i.test(invalidRes.body.requestId), 'Returns canonical request ID');
 
     // ── Test: POST /call — invalid industry ──
     console.log('\n📋 Test: POST /api/demo/call — invalid industry');

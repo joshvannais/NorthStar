@@ -1,5 +1,7 @@
 'use strict';
 
+require('../helpers/loopbackConcurrencyGuard').install();
+
 const path = require('path');
 process.chdir(path.resolve(__dirname, '../..'));
 
@@ -430,6 +432,8 @@ const opportunitiesEngine = require('../../src/polaris/opportunity-engine');
 const financialEngine = require('../../src/polaris/financial-engine');
 const simulationIdempotency = require('../../src/services/simulationIdempotency');
 let activeServer;
+let activeSockets;
+let testStartedAt;
 
 function request() {
   return supertest(activeServer);
@@ -471,44 +475,69 @@ describe('stabilization public API contracts', function () {
 
   beforeEach(async function () {
     db.query.mockClear();
+    testStartedAt = Date.now();
+    activeSockets = new Set();
     activeServer = await new Promise(function (resolve, reject) {
       const listener = app.listen(0, '127.0.0.1', function () { resolve(listener); });
       listener.once('error', reject);
+      listener.on('connection', function (socket) {
+        activeSockets.add(socket);
+        socket.once('close', function () { activeSockets.delete(socket); });
+      });
     });
   });
 
   afterEach(async function () {
-    if (activeServer && typeof activeServer.closeAllConnections === 'function') {
-      activeServer.closeAllConnections();
-    }
-    if (activeServer) {
-      await new Promise(function (resolve, reject) {
-        activeServer.close(function (error) {
-          if (error) reject(error);
-          else resolve();
-        });
-      });
-    }
     await new Promise(function (resolve) { setImmediate(resolve); });
     const completedSqlCalls = db.query.mock.calls.length;
     await new Promise(function (resolve) { setImmediate(resolve); });
     await new Promise(function (resolve) { setImmediate(resolve); });
     expect(db.query.mock.calls).toHaveLength(completedSqlCalls);
+    if (typeof activeServer.closeIdleConnections === 'function') activeServer.closeIdleConnections();
+    if (typeof activeServer.closeAllConnections === 'function') activeServer.closeAllConnections();
+    activeSockets.forEach(function (socket) { socket.destroy(); });
+    await new Promise(function (resolve, reject) {
+      activeServer.close(function (error) { if (error) reject(error); else resolve(); });
+    });
+    if (process.env.NORTHSTAR_TEST_LIFECYCLE_DIAGNOSTICS === '1') {
+      console.log('[stabilization-contract-lifecycle]', JSON.stringify({
+        test: expect.getState().currentTestName,
+        durationMs: Date.now() - testStartedAt,
+        sqlCalls: db.query.mock.calls.length,
+      }));
+    }
     activeServer = null;
+    activeSockets = null;
   });
 
   test('null, inactive, and ambiguous persisted membership are rejected identically', async function () {
-    for (const tokenValue of [nullOrgToken, inactiveToken, ambiguousToken]) {
-      const response = await request(app).get('/api/leads')
-        .set('Authorization', 'Bearer ' + tokenValue);
+    const requestStartedAt = Date.now();
+    const responses = [];
+    const membershipPairs = [
+      [nullOrgToken, inactiveToken],
+      [inactiveToken, ambiguousToken],
+      [ambiguousToken, nullOrgToken],
+    ];
+    for (const pair of membershipPairs) {
+      const pairResponses = await Promise.all(pair.map(function (tokenValue) {
+        return request(app).get('/api/leads')
+          .set('Authorization', 'Bearer ' + tokenValue);
+      }));
+      responses.push(...pairResponses);
+    }
+    responses.forEach(function (response) {
       expect(response.status).toBe(403);
       expect(response.body).toMatchObject({
-        error: {
-          code: 'forbidden',
-          message: 'You do not have permission to perform this action.',
-        },
+        error: 'You do not have permission to perform this action.',
+        code: 'forbidden',
       });
-      expect(response.body.error.requestId).toBe(response.headers['x-correlation-id']);
+      expect(response.body.requestId).toBe(response.headers['x-correlation-id']);
+    });
+    if (process.env.NORTHSTAR_TEST_LIFECYCLE_DIAGNOSTICS === '1') {
+      process.stderr.write('[membership-denial-lifecycle] ' + JSON.stringify({
+        durationMs: Date.now() - requestStartedAt,
+        statuses: responses.map(function (response) { return response.status; }),
+      }) + '\n');
     }
   });
 
@@ -524,8 +553,8 @@ describe('stabilization public API contracts', function () {
     expect(list.status).toBe(200);
     expect(create.status).toBe(403);
     expect(simulation.status).toBe(403);
-    expect(create.body.error.code).toBe('forbidden');
-    expect(simulation.body.error.code).toBe('forbidden');
+    expect(create.body.code).toBe('forbidden');
+    expect(simulation.body.code).toBe('forbidden');
   });
 
   test('full server 400, 401, 403, and 404 responses share one canonical request ID with their logs', async function () {
@@ -550,7 +579,7 @@ describe('stabilization public API contracts', function () {
       probes.forEach(function (response) {
         const requestId = response.headers['x-correlation-id'];
         expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-        expect(response.body.error.requestId).toBe(requestId);
+        expect(response.body.requestId).toBe(requestId);
         expect(requestId).not.toBe(supplied);
         expect(JSON.stringify(response.body)).not.toMatch(/SELECT|postgres|C:\\|stack|internal endpoint/i);
         expect(logSpy.mock.calls.some(function (call) {
@@ -575,7 +604,7 @@ describe('stabilization public API contracts', function () {
       await new Promise(function (resolve) { setImmediate(resolve); });
       const requestId = response.headers['x-correlation-id'];
       expect(response.status).toBe(400);
-      expect(response.body.error.requestId).toBe(requestId);
+      expect(response.body.requestId).toBe(requestId);
       const calls = warning.mock.calls.filter(function (call) {
         return JSON.stringify(call).includes('audit_persistence_failed');
       });
@@ -689,9 +718,10 @@ describe('stabilization public API contracts', function () {
     expect(hiddenWithoutSession.status).toBe(404);
     expect(hiddenWithoutSession.body).toMatchObject({
       success: false,
-      error: { code: 'not_found', message: 'Record not found.' },
+      error: 'Record not found.',
+      code: 'not_found',
     });
-    expect(hiddenWithoutSession.body.error.requestId)
+    expect(hiddenWithoutSession.body.requestId)
       .toBe(hiddenWithoutSession.headers['x-correlation-id']);
 
     const wrongOwner = await request(app)
@@ -700,9 +730,10 @@ describe('stabilization public API contracts', function () {
     expect(wrongOwner.status).toBe(404);
     expect(wrongOwner.body).toMatchObject({
       success: false,
-      error: { code: 'not_found', message: 'Record not found.' },
+      error: 'Record not found.',
+      code: 'not_found',
     });
-    expect(wrongOwner.body.error.requestId).toBe(wrongOwner.headers['x-correlation-id']);
+    expect(wrongOwner.body.requestId).toBe(wrongOwner.headers['x-correlation-id']);
 
     const unauthenticated = await request(app)
       .get('/api/v1/leads/lead-a/intelligence?sessionId=session-a');
@@ -1032,9 +1063,10 @@ describe('stabilization public API contracts', function () {
     const response = await postSimulation('failure-' + stage);
     expect(response.status).toBe(500);
     expect(response.body).toMatchObject({
-      error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' },
+      error: 'The simulation could not be persisted.',
+      code: 'simulation_failed',
     });
-    expect(response.body.error.requestId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(response.body.requestId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(JSON.stringify(response.body)).not.toContain('forced');
   });
 
@@ -1051,9 +1083,10 @@ describe('stabilization public API contracts', function () {
       const response = await postSimulation('failure-postgres');
       expect(response.status).toBe(500);
       expect(response.body).toMatchObject({
-        error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' },
+        error: 'The simulation could not be persisted.',
+        code: 'simulation_failed',
       });
-      expect(response.body.error.requestId).toMatch(/^[0-9a-f-]{36}$/i);
+      expect(response.body.requestId).toMatch(/^[0-9a-f-]{36}$/i);
       expect(JSON.stringify(response.body)).not.toContain('PostgreSQL');
     } finally {
       db.query.mockImplementation(original);
@@ -1105,9 +1138,10 @@ describe('stabilization public API contracts', function () {
 
       expect(first.status).toBe(400);
       expect(first.body).toMatchObject({
-        error: { code: 'bad_request', message: 'Invalid request.' },
+        error: 'Invalid request.',
+        code: 'bad_request',
       });
-      expect(first.body.error.requestId).toBe(first.headers['x-correlation-id']);
+      expect(first.body.requestId).toBe(first.headers['x-correlation-id']);
       expect(second.status).toBe(201);
     } finally {
       scenarioSpy.mockRestore();
@@ -1132,12 +1166,10 @@ describe('stabilization public API contracts', function () {
     expect(first.status).toBe(201);
     expect(second.status).toBe(409);
     expect(second.body).toMatchObject({
-      error: {
-        code: 'idempotency_conflict',
-        message: 'The idempotency key was already used with a different request.',
-      },
+      error: 'The idempotency key was already used with a different request.',
+      code: 'idempotency_conflict',
     });
-    expect(second.body.error.requestId).toBe(second.headers['x-correlation-id']);
+    expect(second.body.requestId).toBe(second.headers['x-correlation-id']);
     expect(customersEngine.createCustomer).toHaveBeenCalledTimes(1);
   });
 
@@ -1155,12 +1187,10 @@ describe('stabilization public API contracts', function () {
       const response = await postSimulation('preflight-unavailable');
       expect(response.status).toBe(503);
       expect(response.body).toMatchObject({
-        error: {
-          code: 'persistence_unavailable',
-          message: 'Required persistence is temporarily unavailable.',
-        },
+        error: 'Required persistence is temporarily unavailable.',
+        code: 'persistence_unavailable',
       });
-      expect(response.body.error.requestId).toMatch(/^[0-9a-f-]{36}$/i);
+      expect(response.body.requestId).toMatch(/^[0-9a-f-]{36}$/i);
       expect(customersEngine.createCustomer).not.toHaveBeenCalled();
       expect(communicationsEngine.recordCommunication).not.toHaveBeenCalled();
       expect(opportunitiesEngine.createOpportunity).not.toHaveBeenCalled();

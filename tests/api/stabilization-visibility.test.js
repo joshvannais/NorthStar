@@ -1,5 +1,7 @@
 'use strict';
 
+require('../helpers/loopbackConcurrencyGuard').install();
+
 const express = require('express');
 const request = require('supertest');
 

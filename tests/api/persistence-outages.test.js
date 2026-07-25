@@ -1,5 +1,7 @@
 'use strict';
 
+require('../helpers/loopbackConcurrencyGuard').install();
+
 jest.mock('../../src/db', function () {
   return {
     isAvailable: jest.fn(function () { return false; }),
@@ -47,8 +49,8 @@ function appFor(router) {
 
 function expectOutage(response) {
   expect(response.status).toBe(503);
-  expect(response.body.error.code).toBe('persistence_unavailable');
-  expect(response.body.error.message).toBe('Required persistence is temporarily unavailable.');
+  expect(response.body.code).toBe('persistence_unavailable');
+  expect(response.body.error).toBe('Required persistence is temporarily unavailable.');
   expect(JSON.stringify(response.body)).not.toMatch(/\[\]|total.?0|zero records/i);
 }
 

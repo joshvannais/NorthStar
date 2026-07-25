@@ -1,5 +1,7 @@
 'use strict';
 
+require('../helpers/loopbackConcurrencyGuard').install();
+
 const express = require('express');
 const fs = require('fs');
 const os = require('os');
@@ -247,7 +249,15 @@ describe('browser request propagation', function () {
         setItem: function (key, value) { storage.set(key, value); },
         removeItem: function (key) { storage.delete(key); },
       },
-      localStorage: { getItem: function () { return null; }, setItem: function () {} },
+      localStorage: {
+        getItem: function (key) {
+          if (key === 'token') return 'authorized-token';
+          if (key === 'user') return JSON.stringify({ id: 'owner-a', organizationId: 'org-a' });
+          if (key === 'organization') return 'org-a';
+          return null;
+        },
+        setItem: function () {},
+      },
       API: {
         getLeads: function () { return Promise.resolve({ items: serverLeads }); },
       },
@@ -268,7 +278,7 @@ describe('browser request propagation', function () {
     return window;
   }
 
-  test('AppStore may hold server records but Calendar supplements only the active simulation partition', async function () {
+  test('AppStore denies injected cache and Calendar supplements only current-runtime simulation records', async function () {
     const storage = new Map();
     storage.set('northstar_calls', JSON.stringify([
       { id: 'legacy-stale', source: 'simulation', simulationSessionId: 'old-session', outcome: 'appointment-set' },
@@ -299,8 +309,17 @@ describe('browser request propagation', function () {
       },
     ]);
     expect(window.AppStore.getLeads().map(function (lead) { return lead.id; }).sort())
-      .toEqual(['session-a-lead', 'tenant-real']);
+      .toEqual(['tenant-real']);
     expect(storage.has('northstar_calls')).toBe(false);
+    window.AppStore.addLead({
+      id: 'current-runtime-session-a',
+      caller: 'Current Runtime Appointment',
+      source: 'simulation',
+      recordScope: 'simulation',
+      simulationSessionId: 'session-a',
+      outcome: 'appointment-set',
+      appointment_date: '2026-08-10',
+    });
 
     const calendarCode = fs.readFileSync(path.join(__dirname, '../../public/js/calendar-engine.js'), 'utf8');
     const start = calendarCode.indexOf('window.syncCalendarFromAppStore = function()');
@@ -317,7 +336,7 @@ describe('browser request propagation', function () {
       parseFloat: parseFloat,
     });
     expect(window.syncCalendarFromAppStore().map(function (event) { return event.leadId; }).sort())
-      .toEqual(['session-a-lead']);
+      .toEqual(['current-runtime-session-a']);
   });
 
   test('reload rotation cannot resurrect the prior session cache', async function () {

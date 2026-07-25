@@ -24,6 +24,10 @@ const calendarSyncCode = calendarCode.slice(
   calendarCode.indexOf('window.syncCalendarFromAppStore = function()'),
   calendarCode.indexOf('window.refreshCalendar = async function()')
 );
+const businessModelsCode = fs.readFileSync(
+  path.join(__dirname, '../../public/js/business-models.js'),
+  'utf8'
+);
 
 function deferred() {
   let resolve;
@@ -51,18 +55,63 @@ function createHarness(responses) {
   sessionStorageValues.set('northstar_calls:session-a', JSON.stringify({
     version: 2,
     sessionId: 'session-a',
-    leads: [{
-      id: 'same-session-cache',
-      caller: 'Protected Cached Lead',
-      status: 'scheduled',
-      outcome: 'appointment-set',
-      avgPrice: 600,
-      metadata: {
-        recordScope: 'simulation',
-        source: 'simulation',
-        simulationSessionId: 'session-a',
+    leads: [
+      {
+        id: 'same-session-injected',
+        caller: 'Injected Cached Lead',
+        status: 'scheduled',
+        avgPrice: 600,
+        metadata: {
+          recordScope: 'simulation',
+          source: 'simulation',
+          simulationSessionId: 'session-a',
+          ownerUserId: 'owner-a',
+          organizationId: 'org-a',
+        },
       },
-    }],
+      {
+        id: 'unowned-cache',
+        metadata: { source: 'simulation', simulationSessionId: 'session-a' },
+      },
+      {
+        id: 'wrong-user-cache',
+        metadata: {
+          source: 'simulation',
+          simulationSessionId: 'session-a',
+          ownerUserId: 'owner-b',
+          organizationId: 'org-a',
+        },
+      },
+      {
+        id: 'wrong-organization-cache',
+        metadata: {
+          source: 'simulation',
+          simulationSessionId: 'session-a',
+          ownerUserId: 'owner-a',
+          organizationId: 'org-b',
+        },
+      },
+      {
+        id: 'stale-cache',
+        createdAt: '2020-01-01T00:00:00.000Z',
+        metadata: {
+          source: 'simulation',
+          simulationSessionId: 'session-a',
+          ownerUserId: 'owner-a',
+          organizationId: 'org-a',
+        },
+      },
+      {
+        id: 'pre-auth-cache',
+        metadata: {
+          source: 'simulation',
+          simulationSessionId: 'session-a',
+          ownerUserId: 'owner-a',
+          organizationId: 'org-a',
+          authorizationGeneration: 999,
+        },
+      },
+    ],
   }));
   sessionStorageValues.set('northstar_calls:session-old', JSON.stringify({
     version: 2,
@@ -115,6 +164,9 @@ function createHarness(responses) {
         if (!responseQueue.length) throw new Error('No authoritative fixture response remains');
         return responseQueue.shift()();
       }),
+      createLead: jest.fn(function () { return Promise.resolve({ success: true }); }),
+      updateLead: jest.fn(function () { return Promise.resolve({ success: true }); }),
+      deleteLead: jest.fn(function () { return Promise.resolve({ success: true }); }),
     },
     Map,
     Set,
@@ -154,7 +206,7 @@ function consumerSnapshot(harness) {
   const store = harness.window.AppStore;
   return {
     shared: store.getLeads().map(function (lead) { return lead.id; }).sort(),
-    sharedDetail: store.getLead('same-session-cache'),
+    sharedDetail: store.getLead('same-session-injected'),
     sharedKpiTotal: store.getKpis().total,
     publicState: store.getState().leads.map(function (lead) { return lead.id; }).sort(),
     analyticsTotal: harness.window.AnalyticsEngine.total(),
@@ -179,12 +231,26 @@ function expectDeniedEverywhere(harness) {
 
 const validResponse = function () {
   return Promise.resolve({
-    items: [{
-      id: 'server-owned',
-      caller: 'Organization-owned Lead',
-      status: 'new',
-      avgPrice: 900,
-    }],
+    items: [
+      {
+        id: 'server-owned',
+        caller: 'Organization-owned Lead',
+        status: 'new',
+        avgPrice: 900,
+      },
+      {
+        id: 'server-simulation',
+        caller: 'Server-authorized Simulation',
+        status: 'scheduled',
+        outcome: 'appointment-set',
+        avgPrice: 700,
+        metadata: {
+          source: 'simulation',
+          recordScope: 'simulation',
+          simulationSessionId: 'session-a',
+        },
+      },
+    ],
   });
 };
 
@@ -196,19 +262,88 @@ describe('shared AppStore authoritative lead gate', function () {
     pending.reject(new Error('test cleanup'));
   });
 
-  test('a valid authorized response enables only server-owned and active-session records', async function () {
+  test('a valid response authorizes only server-returned records and current-runtime additions', async function () {
     const harness = createHarness([validResponse]);
     await harness.window.AppStore.loadFromServer();
     expect(consumerSnapshot(harness)).toEqual({
-      shared: ['same-session-cache', 'server-owned'],
-      sharedDetail: expect.objectContaining({ id: 'same-session-cache' }),
+      shared: ['server-owned', 'server-simulation'],
+      sharedDetail: null,
       sharedKpiTotal: 2,
-      publicState: ['same-session-cache', 'server-owned'],
+      publicState: ['server-owned', 'server-simulation'],
       analyticsTotal: 2,
-      communications: ['same-session-cache', 'server-owned'],
-      calendar: ['same-session-cache'],
+      communications: ['server-owned', 'server-simulation'],
+      calendar: ['server-simulation'],
+    });
+    harness.window.AppStore.addLead({
+      id: 'current-runtime-local',
+      caller: 'Current Runtime Local',
+      status: 'scheduled',
+      outcome: 'appointment-set',
+      metadata: {
+        source: 'simulation',
+        recordScope: 'simulation',
+        simulationSessionId: 'session-a',
+      },
+    });
+    expect(consumerSnapshot(harness)).toMatchObject({
+      shared: ['current-runtime-local', 'server-owned', 'server-simulation'],
+      sharedKpiTotal: 3,
+      publicState: ['current-runtime-local', 'server-owned', 'server-simulation'],
+      analyticsTotal: 3,
+      communications: ['current-runtime-local', 'server-owned', 'server-simulation'],
+      calendar: ['current-runtime-local', 'server-simulation'],
     });
     expect(harness.sessionStorageValues.has('northstar_calls:session-old')).toBe(false);
+
+    harness.window.AppStore.addLead({
+      id: 'wrong-session-runtime',
+      metadata: {
+        source: 'simulation',
+        recordScope: 'simulation',
+        simulationSessionId: 'session-b',
+      },
+    });
+    harness.window.AppStore.addLead({
+      id: 'non-simulation-runtime',
+      status: 'new',
+    });
+    expect(consumerSnapshot(harness).shared).not.toContain('wrong-session-runtime');
+    expect(consumerSnapshot(harness).shared).not.toContain('non-simulation-runtime');
+  });
+
+  test('raw session cache accessors are not part of the public AppStore API', function () {
+    const pending = deferred();
+    const harness = createHarness([function () { return pending.promise; }]);
+    expect(harness.window.AppStore.loadFromSession).toBeUndefined();
+    expect(harness.window.AppStore.saveToSession).toBeUndefined();
+    pending.reject(new Error('test cleanup'));
+  });
+
+  test('the production Lead model retains only the provenance AppStore needs to validate runtime simulations', async function () {
+    const harness = createHarness([validResponse]);
+    vm.runInNewContext(businessModelsCode, harness.context);
+    await harness.window.AppStore.loadFromServer();
+    harness.window.AppStore.addLead({
+      id: 'real-model-runtime',
+      source: 'simulation',
+      recordScope: 'simulation',
+      simulationSessionId: 'session-a',
+      outcome: 'appointment-set',
+      metadata: {
+        source: 'simulation',
+        recordScope: 'simulation',
+        simulationSessionId: 'session-a',
+      },
+    });
+    expect(consumerSnapshot(harness).shared).toContain('real-model-runtime');
+    expect(harness.window.AppStore.getLead('real-model-runtime')).toMatchObject({
+      recordScope: 'simulation',
+      simulationSessionId: 'session-a',
+      metadata: {
+        recordScope: 'simulation',
+        simulationSessionId: 'session-a',
+      },
+    });
   });
 
   test.each([
@@ -286,6 +421,70 @@ describe('shared AppStore authoritative lead gate', function () {
     await harness.window.AppStore.loadFromServer();
     expectDeniedEverywhere(harness);
     await harness.window.AppStore.loadFromServer();
-    expect(consumerSnapshot(harness).shared).toEqual(['same-session-cache', 'server-owned']);
+    expect(consumerSnapshot(harness).shared).toEqual(['server-owned', 'server-simulation']);
+  });
+
+  test('a local record from an older authoritative generation is not reauthorized', async function () {
+    const harness = createHarness([validResponse, validResponse]);
+    await harness.window.AppStore.loadFromServer();
+    harness.window.AppStore.addLead({
+      id: 'older-generation-local',
+      metadata: { source: 'simulation', simulationSessionId: 'session-a' },
+    });
+    expect(consumerSnapshot(harness).shared).toContain('older-generation-local');
+    const refresh = harness.window.AppStore.loadFromServer();
+    expectDeniedEverywhere(harness);
+    await refresh;
+    expect(consumerSnapshot(harness).shared).toEqual(['server-owned', 'server-simulation']);
+  });
+
+  test('logout prevents later local creation and stale success from reopening access', async function () {
+    const stale = deferred();
+    const harness = createHarness([function () { return stale.promise; }]);
+    harness.localStorageValues.delete('token');
+    harness.localStorageValues.delete('user');
+    harness.window.AppStore.addLead({
+      id: 'after-logout',
+      metadata: { source: 'simulation', simulationSessionId: 'session-a' },
+    });
+    stale.resolve({ items: [{ id: 'stale-success' }] });
+    await harness.window.AppStore.loadFromServer();
+    expectDeniedEverywhere(harness);
+  });
+
+  test('a stale success cannot override a newer rejection completed out of order', async function () {
+    const older = deferred();
+    const newer = deferred();
+    const harness = createHarness([
+      function () { return older.promise; },
+      function () { return newer.promise; },
+    ]);
+    const olderRequest = harness.window.AppStore.loadFromServer();
+    harness.localStorageValues.set('token', 'rotated-token');
+    const newerRequest = harness.window.AppStore.loadFromServer();
+    const denied = new Error('newer request denied');
+    denied.status = 403;
+    newer.reject(denied);
+    await newerRequest;
+    older.resolve({ items: [{ id: 'stale-success' }] });
+    await olderRequest;
+    expectDeniedEverywhere(harness);
+  });
+
+  test('a stale rejection cannot override a newer legitimate success completed out of order', async function () {
+    const older = deferred();
+    const newer = deferred();
+    const harness = createHarness([
+      function () { return older.promise; },
+      function () { return newer.promise; },
+    ]);
+    const olderRequest = harness.window.AppStore.loadFromServer();
+    harness.localStorageValues.set('token', 'rotated-token');
+    const newerRequest = harness.window.AppStore.loadFromServer();
+    newer.resolve({ items: [{ id: 'new-context-server' }] });
+    await newerRequest;
+    older.reject(new Error('stale rejection'));
+    await olderRequest;
+    expect(consumerSnapshot(harness).shared).toEqual(['new-context-server']);
   });
 });

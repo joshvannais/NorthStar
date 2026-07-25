@@ -34,11 +34,46 @@ window.AppStore = (function() {
     allowed: false,
     version: 0,
   };
+  var serverAuthorizedRecords = [];
+  var runtimeAuthorizedRecords = [];
+
+  function isSameRecord(collection, record) {
+    return collection.some(function (candidate) { return candidate === record; });
+  }
+
+  function isRuntimeAuthorized(record) {
+    return runtimeAuthorizedRecords.some(function (entry) {
+      return entry.record === record &&
+        entry.contextKey === leadAuthorization.contextKey &&
+        entry.version === leadAuthorization.version;
+    });
+  }
+
+  function isAuthorizedRecord(record) {
+    return leadAuthorization.allowed &&
+      (isSameRecord(serverAuthorizedRecords, record) || isRuntimeAuthorized(record));
+  }
+
+  function markRuntimeAuthorized(record) {
+    if (!leadAuthorization.allowed ||
+        !state.authoritativeSources.leads ||
+        state.authoritativeSources.leads.kind !== 'ready' ||
+        !hasAuthenticatedRuntimeContext() ||
+        !isSimulationLead(record) ||
+        leadSessionId(record) !== activeSessionId()) return;
+    runtimeAuthorizedRecords.push({
+      record: record,
+      contextKey: leadAuthorization.contextKey,
+      version: leadAuthorization.version,
+    });
+  }
 
   // --- Leads ---
   function addLead(leadData) {
+    refreshAuthorizationContext();
     const lead = leadData instanceof window.Models.Lead ? leadData : new window.Models.Lead(leadData);
     state.leads.unshift(lead);
+    markRuntimeAuthorized(lead);
     bus.emit('lead:created', lead);
     bus.emit('store:changed', { type: 'lead', action: 'created', data: lead });
     saveToSession();
@@ -46,7 +81,8 @@ window.AppStore = (function() {
   }
 
   function updateLead(id, updates) {
-    const idx = state.leads.findIndex(l => l.id === id);
+    const authorized = getLeads().find(function (lead) { return lead.id === id; });
+    const idx = state.leads.findIndex(function (lead) { return lead === authorized; });
     if (idx === -1) return null;
     Object.assign(state.leads[idx], updates, { updatedAt: new Date().toISOString() });
     bus.emit('lead:updated', state.leads[idx]);
@@ -56,7 +92,8 @@ window.AppStore = (function() {
   }
 
   function removeLead(id) {
-    const idx = state.leads.findIndex(l => l.id === id);
+    const authorized = getLeads().find(function (lead) { return lead.id === id; });
+    const idx = state.leads.findIndex(function (lead) { return lead === authorized; });
     if (idx === -1) return;
     const removed = state.leads.splice(idx, 1)[0];
     bus.emit('lead:deleted', removed);
@@ -67,7 +104,7 @@ window.AppStore = (function() {
   function getLeads(filter) {
     refreshAuthorizationContext();
     if (!leadAuthorization.allowed) return [];
-    var visible = state.leads.slice();
+    var visible = state.leads.filter(isAuthorizedRecord);
     if (!filter) return visible;
     return visible.filter(filter);
   }
@@ -115,6 +152,29 @@ window.AppStore = (function() {
     try { return localStorage.getItem(key) || ''; } catch (_error) { return ''; }
   }
 
+  function authenticatedIdentity() {
+    var rawUser = storageValue('user');
+    var user = {};
+    try { user = rawUser ? JSON.parse(rawUser) : {}; } catch (_error) {}
+    return {
+      token: storageValue('token') || storageValue('northstar_token'),
+      userId: String(user.id || user.userId || ''),
+      organizationId: String(
+        storageValue('organization') ||
+        storageValue('organizationId') ||
+        user.organizationId ||
+        user.organization_id ||
+        ''
+      ),
+    };
+  }
+
+  function hasAuthenticatedRuntimeContext() {
+    var identity = authenticatedIdentity();
+    return Boolean(activeSessionId() && identity.token &&
+      identity.userId && identity.organizationId);
+  }
+
   function authorizationContextKey() {
     return JSON.stringify({
       sessionId: activeSessionId() || '',
@@ -131,6 +191,9 @@ window.AppStore = (function() {
       leadAuthorization.contextKey = contextKey;
       leadAuthorization.allowed = false;
       leadAuthorization.version += 1;
+      serverAuthorizedRecords = [];
+      runtimeAuthorizedRecords = [];
+      state.leads = [];
       state.authoritativeSources.leads = { kind: 'loading', status: null };
       syncRequest = null;
     }
@@ -175,7 +238,7 @@ window.AppStore = (function() {
       var key = sessionStorageKey();
       if (!sessionId || !key) return;
       removeInactiveSessionEnvelopes(key);
-      var sessionLeads = state.leads.filter(function(lead) {
+      var sessionLeads = getLeads().filter(function(lead) {
         return isSimulationLead(lead) && leadSessionId(lead) === sessionId;
       });
       sessionStorage.setItem(key, JSON.stringify({
@@ -233,6 +296,8 @@ window.AppStore = (function() {
     var requestVersion = leadAuthorization.version + 1;
     leadAuthorization.version = requestVersion;
     leadAuthorization.allowed = false;
+    serverAuthorizedRecords = [];
+    runtimeAuthorizedRecords = [];
     state.authoritativeSources.leads = { kind: 'loading', status: null };
     var timer = null;
     var promise = (async function () {
@@ -260,17 +325,11 @@ window.AppStore = (function() {
           malformed.status = 200;
           throw malformed;
         }
-        var sessionLeads = state.leads.filter(function(lead) {
-          return isSimulationLead(lead) && leadSessionId(lead) === activeSessionId();
-        });
-        var byId = new Map();
         var serverLeads = result.items.filter(function(lead) {
           return !isSimulationLead(lead) || leadSessionId(lead) === activeSessionId();
         });
-        serverLeads.concat(sessionLeads).forEach(function(lead) {
-          if (lead && lead.id !== undefined && lead.id !== null) byId.set(String(lead.id), lead);
-        });
-        state.leads = Array.from(byId.values());
+        serverAuthorizedRecords = serverLeads.slice();
+        state.leads = serverLeads.slice();
         leadAuthorization.allowed = true;
         state.authoritativeSources.leads = { kind: 'ready', status: 200 };
         bus.emit('store:loaded', { from: 'server', count: state.leads.length });
@@ -356,5 +415,5 @@ window.AppStore = (function() {
 
   bus.on('lead:created', () => { /* trigger recalculations */ });
 
-  return { addLead, updateLead, removeLead, getLeads, getLead, getKpis, setSetting, getSetting, setUi, getUi, getState, loadFromSession, saveToSession, loadFromServer };
+  return { addLead, updateLead, removeLead, getLeads, getLead, getKpis, setSetting, getSetting, setUi, getUi, getState, loadFromServer };
 })();

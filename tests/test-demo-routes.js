@@ -112,7 +112,7 @@ async function runTests() {
     assert(res.body.status !== undefined, 'Returns status');
     assert(typeof res.body.demoSessionId === 'string', 'demoSessionId is string');
     assert(res.body.demoSessionId.length > 0, 'demoSessionId is non-empty');
-    assertContains(['simulated', 'queued', 'in-progress'].join(','), res.body.status, 'status is valid');
+    assertContains(['idle', 'call_created'].join(','), res.body.status, 'status matches the supported ready state');
 
     var demoId = res.body.demoSessionId;
 
@@ -133,15 +133,15 @@ async function runTests() {
       assertContains(['ai', 'customer', 'system'].join(','), line.speaker, 'Speaker is valid');
     }
 
-    // ── Test: GET /:id/guidance ──
-    console.log('\n📋 Test: GET /api/demo/:id/guidance');
-    const guidanceRes = await request(app, 'GET', '/api/demo/' + demoId + '/guidance');
-    assertEqual(guidanceRes.status, 200, 'Returns 200 OK');
-    assert(guidanceRes.body.customerIntent !== undefined, 'Has customerIntent');
-    assert(guidanceRes.body.leadQualification !== undefined, 'Has leadQualification');
-    assert(guidanceRes.body.bookingProbability !== undefined, 'Has bookingProbability');
-    assert(Array.isArray(guidanceRes.body.recommendedActions), 'recommendedActions is array');
-    assert(guidanceRes.body.executiveSummary !== undefined, 'Has executiveSummary');
+    // ── Test: GET /:id/polaris-estimate ──
+    // The retired /guidance route was replaced by the status AI panels and
+    // the canonical Polaris estimate endpoint.
+    console.log('\n📋 Test: GET /api/demo/:id/polaris-estimate');
+    const estimateRes = await request(app, 'GET', '/api/demo/' + demoId + '/polaris-estimate');
+    assertEqual(estimateRes.status, 200, 'Returns 200 OK');
+    assertEqual(estimateRes.body.polairsState, 'waiting', 'Pre-live Polaris state is waiting');
+    assertEqual(estimateRes.body.confidence, 0, 'Pre-live confidence is zero');
+    assert(Array.isArray(estimateRes.body.reasoning), 'Pre-live reasoning is an array');
 
     // ── Test: GET /:id/status ──
     console.log('\n📋 Test: GET /api/demo/:id/status');
@@ -154,7 +154,8 @@ async function runTests() {
     assert(statusRes.body.businessName !== undefined, 'Has businessName');
     assert(statusRes.body.industry !== undefined, 'Has industry');
     assert(statusRes.body.customerIntent !== undefined, 'Has customerIntent');
-    assert(statusRes.body.estimatedJobValue !== undefined, 'Has estimatedJobValue');
+    assert(statusRes.body.polarisEstimate !== undefined, 'Has canonical Polaris estimate');
+    assert(statusRes.body.polarisState !== undefined, 'Has canonical Polaris state');
     assert(statusRes.body.leadQualification !== undefined, 'Has leadQualification');
     assert(statusRes.body.bookingProbability !== undefined, 'Has bookingProbability');
     assert(Array.isArray(statusRes.body.recommendedActions), 'Has recommendedActions array');
@@ -195,8 +196,8 @@ async function runTests() {
     assertEqual(res2.status, 200, 'Second session created');
     assert(res2.body.demoSessionId !== demoId, 'Second session has different ID');
 
-    // ── Test: Cross-industry guidance ──
-    console.log('\n📋 Test: Industry-specific guidance');
+    // ── Test: Cross-industry status intelligence ──
+    console.log('\n📋 Test: Industry-specific status intelligence');
     const industries = ['Roofing', 'Plumbing', 'HVAC', 'Electrical', 'Landscaping', 'Home Security', 'General Contracting'];
     for (const ind of industries) {
       const indRes = await request(app, 'POST', '/api/demo/call', {
@@ -205,9 +206,11 @@ async function runTests() {
         phoneNumber: '(555) 000-' + (1000 + industries.indexOf(ind)).toString(),
       });
       assertEqual(indRes.status, 200, ind + ' session created OK');
-      const gRes = await request(app, 'GET', '/api/demo/' + indRes.body.demoSessionId + '/guidance');
-      assertEqual(gRes.status, 200, ind + ' guidance OK');
-      assert(typeof gRes.body.customerIntent === 'string', ind + ' has customerIntent string');
+      const status = await request(app, 'GET', '/api/demo/' + indRes.body.demoSessionId + '/status');
+      assertEqual(status.status, 200, ind + ' status intelligence OK');
+      assertEqual(status.body.industry, ind, ind + ' preserves industry');
+      assert(typeof status.body.customerIntent === 'string', ind + ' has customerIntent string');
+      assert(status.body.polarisEstimate !== undefined, ind + ' has Polaris estimate');
     }
 
     // ── Test: Transcript progression ──
@@ -218,8 +221,15 @@ async function runTests() {
       phoneNumber: '(555) 999-0000',
     });
     const t1 = await request(app, 'GET', '/api/demo/' + progRes.body.demoSessionId + '/transcript');
-    const count1 = t1.body.lines.length;
-    assert(count1 >= 1, 'Initial transcript has at least 1 line');
+    assertEqual(t1.body.lines.length, 0, 'Ready-state transcript is empty');
+    assertEqual(t1.body.conversationState, 'waiting', 'Ready-state transcript reports waiting');
+    const simulate = await request(app, 'POST', '/api/demo/' + progRes.body.demoSessionId + '/simulate');
+    assertEqual(simulate.status, 200, 'Simulation starts from idle');
+    assertEqual(simulate.body.status, 'simulation', 'Simulation enters simulation state');
+    await new Promise(resolve => setTimeout(resolve, 3200));
+    const t2 = await request(app, 'GET', '/api/demo/' + progRes.body.demoSessionId + '/transcript');
+    assert(t2.body.lines.length >= 1, 'Transcript grows after simulation enters live state');
+    assertEqual(t2.body.conversationState, 'live', 'Progressed transcript reports live state');
 
   } catch (err) {
     failed++;

@@ -408,6 +408,20 @@ describe('handleTranscriptSegment', () => {
 });
 
 describe('live and simulation emergency parity', () => {
+  const requiredPositives = [
+    'No water is leaking upstairs the basement keeps filling.',
+    "It isn't true that the outlet is not sparking.",
+    'I do not deny that the outlet is not sparking.',
+    'The fire is out but the electrical panel is sparking.',
+    'The old flooding was fixed the water is rising again.',
+  ];
+  const requiredNegatives = [
+    'It is not sparking, smoking, or hot.',
+    'The leak was fixed and tomorrow’s visit is fine.',
+    'The technician asked whether the old outlet had sparked.',
+    'There was smoke before the electrician repaired it.',
+    'Nothing is flooding now and the old leak has been repaired.',
+  ];
   const positives = [
     'No smoke or the basement is flooding right now.',
     'The old outlet was repaired or the basement is flooding right now.',
@@ -482,6 +496,47 @@ describe('live and simulation emergency parity', () => {
       return item.type === 'emergency_detected';
     });
   }
+
+  test.each(requiredPositives)('classifies required positive through all three paths exactly: %s', (text) => {
+    expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(true);
+    expect(liveClassification(text, 'customer', 'required-positive-' + requiredPositives.indexOf(text))).toBe(true);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(true);
+  });
+
+  test.each(requiredNegatives)('classifies required negative through all three paths exactly: %s', (text) => {
+    expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(false);
+    expect(liveClassification(text, 'customer', 'required-negative-' + requiredNegatives.indexOf(text))).toBe(false);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(false);
+  });
+
+  const generatedPermutations = [
+    ['No smoke', 'the basement keeps filling', true],
+    ['The repaired leak is dry', 'the panel is sparking again', true],
+    ['The outlet is not sparking', 'there was smoke before repair', false],
+    ['The technician asked whether the pipe had leaked', 'nothing is flooding now', false],
+  ].flatMap(function (parts) {
+    const left = parts[0];
+    const right = parts[1];
+    const expected = parts[2];
+    return [' but ', ' however ', ' yet ', '. ', '; ', ' and '].map(function (connector) {
+      return { text: left + connector + right + '.', expected };
+    });
+  });
+
+  test.each(generatedPermutations)(
+    'keeps independently generated clause permutations in three-path parity: $text',
+    ({ text, expected }) => {
+      expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(expected);
+      expect(liveClassification(text, 'customer', 'generated-' + generatedPermutations.findIndex(item => item.text === text))).toBe(expected);
+      expect(simulationPipeline.detectEmergencyEvidence([
+        { speaker: 'customer', text },
+      ]).isEmergency).toBe(expected);
+    }
+  );
 
   test.each(positives)('classifies current customer evidence consistently: %s', (text) => {
     expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(true);

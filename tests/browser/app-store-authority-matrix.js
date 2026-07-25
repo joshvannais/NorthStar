@@ -17,6 +17,11 @@ const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const appStoreCode = fs.readFileSync(path.join(__dirname, '../../public/js/app-store.js'), 'utf8');
 const analyticsCode = fs.readFileSync(path.join(__dirname, '../../public/js/analytics-engine.js'), 'utf8');
 const communicationsCode = fs.readFileSync(path.join(__dirname, '../../public/js/communications-engine.js'), 'utf8');
+const dashboardInitCode = fs.readFileSync(path.join(__dirname, '../../public/js/dashboard-init.js'), 'utf8');
+const dashboardAccessorStart = dashboardInitCode.indexOf('function getLiveLeads()');
+const dashboardAccessorEnd = dashboardInitCode.indexOf('function fmtTime', dashboardAccessorStart);
+const dashboardAccessorCode = dashboardInitCode.slice(dashboardAccessorStart, dashboardAccessorEnd) +
+  '\nwindow.__northstarDashboardGetLiveLeads = getLiveLeads;';
 const apiCode = fs.readFileSync(path.join(__dirname, '../../public/js/api.js'), 'utf8');
 const polarisApiCode = fs.readFileSync(path.join(__dirname, '../../public/js/polaris-api.js'), 'utf8');
 const calendarCode = fs.readFileSync(path.join(__dirname, '../../public/js/calendar-engine.js'), 'utf8');
@@ -35,6 +40,10 @@ function withTimeout(promise, timeoutMs, label) {
   return Promise.race([promise, timeout]).finally(function () {
     clearTimeout(timeoutId);
   });
+}
+
+function progress(label, scenario) {
+  process.stderr.write(label + ': ' + scenario + '\n');
 }
 
 function validItems(idPrefix) {
@@ -70,6 +79,7 @@ function expectedDenied() {
     analytics: 0,
     communications: [],
     calendar: [],
+    dashboard: [],
   };
 }
 
@@ -210,6 +220,7 @@ async function installHarness(context, baseUrl, specs) {
   await page.addScriptTag({ content: appStoreCode });
   await page.addScriptTag({ content: analyticsCode });
   await page.addScriptTag({ content: communicationsCode });
+  await page.addScriptTag({ content: dashboardAccessorCode });
   await page.evaluate(function () {
     window.calState = {
       getLiveLeads: function () { return window.AppStore.getLeads(); },
@@ -238,6 +249,8 @@ async function snapshot(page, detailId) {
         .map(function (lead) { return lead.id; }).sort(),
       calendar: window.syncCalendarFromAppStore()
         .map(function (event) { return event.leadId; }).sort(),
+      dashboard: window.__northstarDashboardGetLiveLeads()
+        .map(function (lead) { return lead.id; }).sort(),
     };
   }, detailId || 'same-session-injected');
 }
@@ -251,6 +264,7 @@ async function waitForAuthoritativeSettlement(page) {
 }
 
 async function runSimpleScenario(browser, baseUrl, label, spec, expectedState, detailId) {
+  progress(label, 'start');
   const context = await browser.newContext();
   let harness;
   try {
@@ -261,6 +275,7 @@ async function runSimpleScenario(browser, baseUrl, label, spec, expectedState, d
   } finally {
     await context.close();
   }
+  progress(label, 'complete');
 }
 
 async function runMatrix(browser, baseUrl, label) {
@@ -273,6 +288,7 @@ async function runMatrix(browser, baseUrl, label) {
     analytics: 2,
     communications: ['server-owned', 'server-simulation'],
     calendar: ['server-simulation'],
+    dashboard: ['server-owned', 'server-simulation'],
   };
   await runSimpleScenario(
     browser,
@@ -282,6 +298,167 @@ async function runMatrix(browser, baseUrl, label) {
     expectedServer,
     'server-owned'
   );
+
+  progress(label, 'conflicting server duplicate start');
+  const duplicateContext = await browser.newContext();
+  try {
+    const duplicateHarness = await installHarness(duplicateContext, baseUrl, [{
+      type: 'valid',
+      items: [
+        { id: 'duplicate-id', caller: 'First Server Value', avgPrice: 900 },
+        { id: 'duplicate-id', caller: 'Conflicting Server Value', avgPrice: 1200 },
+      ],
+    }]);
+    await waitForAuthoritativeSettlement(duplicateHarness.page);
+    assert.deepEqual(await snapshot(duplicateHarness.page), expectedDenied(), label + ' conflicting server duplicate');
+    duplicateHarness.assertClean(label + ' conflicting server duplicate');
+  } finally {
+    await duplicateContext.close();
+  }
+  progress(label, 'conflicting server duplicate complete');
+
+  const collisionItems = [{
+    id: 'collision-id',
+    caller: 'Server Authorized Collision',
+    status: 'scheduled',
+    outcome: 'appointment-set',
+    avgPrice: 900,
+    metadata: {
+      source: 'simulation',
+      recordScope: 'simulation',
+      simulationSessionId: 'session-a',
+    },
+  }];
+  progress(label, 'collision start');
+  const collisionContext = await browser.newContext();
+  try {
+    const collisionHarness = await installHarness(collisionContext, baseUrl, [{
+      type: 'valid',
+      items: collisionItems,
+    }]);
+    await waitForAuthoritativeSettlement(collisionHarness.page);
+    const collision = await collisionHarness.page.evaluate(function () {
+      const returned = window.AppStore.addLead({
+        id: 'collision-id',
+        caller: 'Forged Browser Collision',
+        status: 'completed',
+        outcome: 'appointment-set',
+        avgPrice: 999999,
+        metadata: {
+          source: 'simulation',
+          recordScope: 'simulation',
+          simulationSessionId: 'session-a',
+          ownerUserId: 'owner-a',
+          organizationId: 'org-a',
+          authorizationGeneration: 999999,
+        },
+      });
+      localStorage.setItem('northstar-arbitrary-cache', JSON.stringify({
+        id: 'collision-id',
+        avgPrice: 999999999,
+      }));
+      const store = window.AppStore;
+      return {
+        returned: { caller: returned && returned.caller, avgPrice: returned && returned.avgPrice },
+        leads: store.getLeads().map(function (lead) {
+          return { id: lead.id, caller: lead.caller, avgPrice: lead.avgPrice };
+        }),
+        detail: store.getLead('collision-id'),
+        kpis: store.getKpis(),
+        state: store.getState().leads,
+        analytics: {
+          total: window.AnalyticsEngine.total(),
+          revenue: window.AnalyticsEngine.totalRevenue(),
+        },
+        communications: window.CommunicationsEngine.getConversations(),
+        calendar: window.syncCalendarFromAppStore(),
+        dashboard: window.__northstarDashboardGetLiveLeads(),
+      };
+    });
+    assert.deepEqual(collision.returned, {
+      caller: 'Server Authorized Collision',
+      avgPrice: 900,
+    }, label + ' addLead collision return');
+    assert.equal(collision.leads.length, 1, label + ' visible collision count');
+    assert.equal(collision.leads[0].caller, 'Server Authorized Collision', label + ' getLeads collision');
+    assert.equal(collision.detail.avgPrice, 900, label + ' getLead collision');
+    assert.equal(collision.kpis.total, 1, label + ' KPI collision count');
+    assert.equal(collision.kpis.avgLeadValue, 900, label + ' KPI collision value');
+    assert.equal(collision.state.length, 1, label + ' getState collision count');
+    assert.deepEqual(collision.analytics, { total: 1, revenue: 900 }, label + ' analytics collision');
+    assert.equal(collision.communications.length, 1, label + ' communications collision count');
+    assert.equal(collision.communications[0].avgPrice, 900, label + ' communications collision value');
+    assert.equal(collision.calendar.length, 1, label + ' calendar collision count');
+    assert.equal(collision.calendar[0].leadId, 'collision-id', label + ' calendar collision identity');
+    assert.equal(collision.dashboard.length, 1, label + ' dashboard-init collision count');
+    assert.equal(collision.dashboard[0].avgPrice, 900, label + ' dashboard-init collision value');
+
+    await collisionHarness.page.evaluate(function () {
+      localStorage.setItem('user', JSON.stringify({
+        id: 'owner-a',
+        organizationId: 'org-a',
+        authorizationGeneration: 999999,
+      }));
+    });
+    assert.deepEqual(await snapshot(collisionHarness.page, 'collision-id'), expectedDenied(),
+      label + ' identity localStorage mutation closes visibility');
+    collisionHarness.assertClean(label + ' collision');
+  } finally {
+    await collisionContext.close();
+  }
+  progress(label, 'collision complete');
+
+  progress(label, 'tab and restart lifecycle start');
+  const lifecycleContext = await browser.newContext();
+  let lifecycleStorage;
+  try {
+    const first = await installHarness(lifecycleContext, baseUrl, [{
+      type: 'valid',
+      items: collisionItems,
+    }]);
+    await waitForAuthoritativeSettlement(first.page);
+    await first.page.evaluate(function () {
+      window.AppStore.addLead({
+        id: 'runtime-only-current-page',
+        status: 'scheduled',
+        metadata: {
+          source: 'simulation',
+          recordScope: 'simulation',
+          simulationSessionId: 'session-a',
+        },
+      });
+    });
+    assert.deepEqual((await snapshot(first.page, 'runtime-only-current-page')).leads,
+      ['collision-id', 'runtime-only-current-page'], label + ' current page runtime record');
+
+    const otherTab = await installHarness(lifecycleContext, baseUrl, [{
+      type: 'valid',
+      items: collisionItems,
+    }]);
+    await waitForAuthoritativeSettlement(otherTab.page);
+    assert.deepEqual((await snapshot(otherTab.page, 'runtime-only-current-page')).leads,
+      ['collision-id'], label + ' another tab defaults closed');
+    lifecycleStorage = await lifecycleContext.storageState();
+    first.assertClean(label + ' lifecycle source page');
+    otherTab.assertClean(label + ' lifecycle other tab');
+  } finally {
+    await lifecycleContext.close();
+  }
+
+  const restartContext = await browser.newContext({ storageState: lifecycleStorage });
+  try {
+    const restarted = await installHarness(restartContext, baseUrl, [{
+      type: 'valid',
+      items: collisionItems,
+    }]);
+    await waitForAuthoritativeSettlement(restarted.page);
+    assert.deepEqual((await snapshot(restarted.page, 'runtime-only-current-page')).leads,
+      ['collision-id'], label + ' browser restart defaults closed');
+    restarted.assertClean(label + ' browser restart');
+  } finally {
+    await restartContext.close();
+  }
+  progress(label, 'tab and restart lifecycle complete');
 
   for (const spec of [
     { label: 'malformed 200', type: 'malformed' },
@@ -303,6 +480,7 @@ async function runMatrix(browser, baseUrl, label) {
     );
   }
 
+  progress(label, 'AppStore timeout start');
   const timeoutContext = await browser.newContext();
   try {
     const timeoutHarness = await installHarness(timeoutContext, baseUrl, [{ type: 'pending' }]);
@@ -316,7 +494,9 @@ async function runMatrix(browser, baseUrl, label) {
   } finally {
     await timeoutContext.close();
   }
+  progress(label, 'AppStore timeout complete');
 
+  progress(label, 'runtime recovery start');
   const runtimeContext = await browser.newContext();
   try {
     const harness = await installHarness(runtimeContext, baseUrl, [
@@ -356,6 +536,7 @@ async function runMatrix(browser, baseUrl, label) {
   } finally {
     await runtimeContext.close();
   }
+  progress(label, 'runtime recovery complete');
 
   for (const mutation of [
     {
@@ -390,6 +571,7 @@ async function runMatrix(browser, baseUrl, label) {
       },
     },
   ]) {
+    progress(label, mutation.label + ' stale response start');
     const context = await browser.newContext();
     try {
       const harness = await installHarness(context, baseUrl, [{ type: 'deferred' }]);
@@ -406,9 +588,11 @@ async function runMatrix(browser, baseUrl, label) {
     } finally {
       await context.close();
     }
+    progress(label, mutation.label + ' stale response complete');
   }
 
   for (const order of ['stale-success-after-denial', 'stale-rejection-after-success']) {
+    progress(label, order + ' start');
     const context = await browser.newContext();
     try {
       const harness = await installHarness(context, baseUrl, [
@@ -449,6 +633,7 @@ async function runMatrix(browser, baseUrl, label) {
     } finally {
       await context.close();
     }
+    progress(label, order + ' complete');
   }
 }
 

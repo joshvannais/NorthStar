@@ -11,7 +11,7 @@ const CUSTOMER_ROLES = new Set([
 const HAZARD_PATTERNS = [
   {
     signal: 'active flooding',
-    regex: /\b(?:flood|flooded|flooding|room is filling with water|water is (?:rising|pouring)|water keeps (?:rising|pouring))\b/i,
+    regex: /\b(?:flood|flooded|flooding|(?:basement|room|floor|garage|crawl ?space) (?:is |keeps? )?filling(?: with water)?|water is (?:rising|pouring)|water keeps (?:rising|pouring))\b/i,
   },
   {
     signal: 'uncontrolled leak',
@@ -32,11 +32,12 @@ const HAZARD_PATTERNS = [
 ];
 
 const NEGATION = /\b(?:no|not|never|nothing|without|isn't|aren't|wasn't|weren't|hasn't|haven't|cannot|can't|couldn't)\b/gi;
-const NON_CURRENT = /\b(?:stopped|resolved|already fixed|fixed now|repaired|before (?:the )?repair|under control|shut (?:it|the (?:water|valve)) off|no longer|used to|previously|last (?:week|month|year)|yesterday(?: only)?|can wait|tomorrow is fine|next[- ]day (?:scheduling )?is fine|slow (?:drip|leak)|minor (?:drip|leak)|seeping|has not returned|hasn't returned|floor is drying|is fine now|it is fine now|no problem remains)\b/i;
+const NON_CURRENT = /\b(?:stopped|resolved|(?:already |was |were |has been |have been |had been |got )?fixed|repaired|before (?:the )?repair|under control|shut (?:it|the (?:water|valve)) off|no longer|used to|previously|last (?:week|month|year)|yesterday(?: only)?|can wait|tomorrow(?:'s|\s+is) fine|next[- ]day (?:scheduling )?is fine|slow (?:drip|leak)|minor (?:drip|leak)|seeping|has not returned|hasn't returned|floor is drying|is fine now|it is fine now|no problem remains)\b/i;
 const HISTORICAL_PREFIX = /\b(?:there (?:was|were)|was|were|had been|used to|previously)\b/i;
+const REPORTED_OR_PAST_PREFIX = /\b(?:asked (?:whether|if)|wondered (?:whether|if)|said (?:that )?|reported (?:that )?|told (?:us|me|them) (?:that )?|had)\b/i;
 const CURRENT_RECURRENCE = /\b(?:right now|currently|still|keeps?|again|back|returned)\b/i;
 const INDEPENDENT_AND_SUBJECT = /\band\b(?=\s+(?:(?:the|a|an|i|we|there|it|this|that|my|our|your|old|water|basement|outlet|pipe|breaker|panel|room|floor|nothing)\b|no\b))/i;
-const SUBJECT_START = /\b(?:the|i|we|there|it|this|that|my|our|your|nothing)\b/gi;
+const SUBJECT_START = /\b(?:(?:the|a|an|my|our|your|that|no)\s+(?:old\s+)?(?:water|basement|outlet|pipe|breaker|panel|room|floor|garage|crawl ?space|technician|electrician)|i|we|there|it|this|nothing|water|basement|outlet|pipe|breaker|panel|room|floor|garage|crawl ?space|technician|electrician)\b/gi;
 const INDEPENDENT_CONNECTOR = /\b(?:and|or)\b(?=\s+(?:the|i|we|there|it|this|that|my|our|your|old|nothing)\b)/i;
 
 function normalizeSpeakerRole(value) {
@@ -50,7 +51,7 @@ function isCustomerSpeaker(value) {
 function splitClauses(text) {
   return String(text || '')
     .replace(/[\u2018\u2019]/g, "'")
-    .split(/[.!?;,]+|\b(?:but|however|although|yet)\b/i)
+    .split(/[.!?;]+|\b(?:but|however|although|yet)\b/i)
     .reduce(function (parts, value) {
       return parts.concat(String(value || '').split(INDEPENDENT_AND_SUBJECT));
     }, [])
@@ -83,18 +84,32 @@ function allHazardMentions(clause) {
   });
 }
 
-function afterLastSubject(text) {
+function afterLastIndependentSubject(text) {
   SUBJECT_START.lastIndex = 0;
   let lastIndex = -1;
   let match;
-  while ((match = SUBJECT_START.exec(text)) !== null) lastIndex = match.index;
+  while ((match = SUBJECT_START.exec(text)) !== null) {
+    const prefix = text.slice(0, match.index);
+    if (/\b(?:that|whether|if)\s*$/i.test(prefix)) continue;
+    lastIndex = match.index;
+  }
   SUBJECT_START.lastIndex = 0;
   return lastIndex >= 0 ? text.slice(lastIndex) : text;
 }
 
 function beforeIndependentSubject(text) {
-  const match = text.match(INDEPENDENT_CONNECTOR);
-  return match ? text.slice(0, match.index) : text;
+  const connector = text.match(INDEPENDENT_CONNECTOR);
+  const connectorIndex = connector ? connector.index : text.length;
+  SUBJECT_START.lastIndex = 0;
+  let match;
+  while ((match = SUBJECT_START.exec(text)) !== null) {
+    const prefix = text.slice(0, match.index);
+    if (/\b(?:that|whether|if)\s*$/i.test(prefix)) continue;
+    SUBJECT_START.lastIndex = 0;
+    return text.slice(0, Math.min(match.index, connectorIndex));
+  }
+  SUBJECT_START.lastIndex = 0;
+  return text.slice(0, connectorIndex);
 }
 
 function negationCount(text) {
@@ -116,7 +131,7 @@ function analyzeMentions(clause) {
     const next = index + 1 < mentions.length ? mentions[index + 1] : null;
     const rawBefore = clause.slice(previous ? previous.end : 0, mention.start);
     const rawAfter = clause.slice(mention.end, next ? next.start : clause.length);
-    const localBefore = afterLastSubject(rawBefore);
+    const localBefore = afterLastIndependentSubject(rawBefore);
     const localAfter = beforeIndependentSubject(rawAfter);
     const localContext = localBefore + mention.text + localAfter;
     const explicitNegations = negationCount(localBefore);
@@ -125,11 +140,13 @@ function analyzeMentions(clause) {
       previous &&
       priorDecision &&
       priorDecision.negated &&
-      /^\s*(?:and|or)\s*$/i.test(rawBefore)
+      /^\s*(?:,\s*)?(?:(?:and|or)\s*)?$/i.test(rawBefore)
     );
     const negated = explicitNegations % 2 === 1 || (explicitNegations === 0 && coordinated);
     const historical = !hasCurrentRecurrence(localContext) &&
-      (NON_CURRENT.test(localContext) || HISTORICAL_PREFIX.test(localBefore));
+      (NON_CURRENT.test(localContext) ||
+        HISTORICAL_PREFIX.test(localBefore) ||
+        REPORTED_OR_PAST_PREFIX.test(localBefore));
     decisions.push({
       mention,
       negated,

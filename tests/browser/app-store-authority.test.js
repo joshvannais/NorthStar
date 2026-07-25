@@ -311,6 +311,82 @@ describe('shared AppStore authoritative lead gate', function () {
     expect(consumerSnapshot(harness).shared).not.toContain('non-simulation-runtime');
   });
 
+  test('server payload wins an authorized-ID collision across every AppStore consumer', async function () {
+    const serverLead = {
+      id: 'collision-id',
+      caller: 'Server Authorized',
+      status: 'completed',
+      outcome: 'appointment-set',
+      avgPrice: 900,
+      metadata: { source: 'server' },
+    };
+    const harness = createHarness([function () {
+      return Promise.resolve({ items: [serverLead] });
+    }]);
+    await harness.window.AppStore.loadFromServer();
+
+    const returned = harness.window.AppStore.addLead({
+      id: 'collision-id',
+      caller: 'Forged Browser Lead',
+      status: 'completed',
+      outcome: 'appointment-set',
+      avgPrice: 999999,
+      metadata: {
+        source: 'simulation',
+        recordScope: 'simulation',
+        simulationSessionId: 'session-a',
+        ownerUserId: 'owner-a',
+        organizationId: 'org-a',
+        authorizationGeneration: 999999,
+      },
+    });
+
+    expect(returned).toEqual(serverLead);
+    expect(harness.context.API.createLead).not.toHaveBeenCalled();
+    expect(harness.window.AppStore.getLeads()).toEqual([serverLead]);
+    expect(harness.window.AppStore.getLead('collision-id')).toEqual(serverLead);
+    expect(harness.window.AppStore.getKpis()).toMatchObject({
+      total: 1,
+      revenue: 900,
+      avgLeadValue: 900,
+      topOpportunity: serverLead,
+    });
+    expect(harness.window.AppStore.getState().leads).toEqual([serverLead]);
+    expect(harness.window.AnalyticsEngine.total()).toBe(1);
+    expect(harness.window.CommunicationsEngine.getConversations()).toEqual([serverLead]);
+    expect(harness.window.syncCalendarFromAppStore().map(function (event) {
+      return event.leadId;
+    })).toEqual([]);
+
+    harness.localStorageValues.set('northstar_calls:session-a', JSON.stringify({
+      leads: [{ id: 'collision-id', avgPrice: 999999999 }],
+    }));
+    expect(harness.window.AppStore.getLead('collision-id')).toEqual(serverLead);
+    expect(harness.window.AppStore.getKpis().avgLeadValue).toBe(900);
+  });
+
+  test('conflicting duplicate IDs in one server response default deny', async function () {
+    const harness = createHarness([function () {
+      return Promise.resolve({
+        items: [
+          { id: 'duplicate-id', caller: 'First Server Value', avgPrice: 900 },
+          { id: 'duplicate-id', caller: 'Conflicting Server Value', avgPrice: 1200 },
+        ],
+      });
+    }]);
+    await harness.window.AppStore.loadFromServer();
+    expectDeniedEverywhere(harness);
+    expect(harness.window.AppStore.addLead({
+      id: 'duplicate-id',
+      metadata: {
+        source: 'simulation',
+        recordScope: 'simulation',
+        simulationSessionId: 'session-a',
+      },
+    })).toBeNull();
+    expectDeniedEverywhere(harness);
+  });
+
   test('raw session cache accessors are not part of the public AppStore API', function () {
     const pending = deferred();
     const harness = createHarness([function () { return pending.promise; }]);

@@ -34,24 +34,31 @@ window.AppStore = (function() {
     allowed: false,
     version: 0,
   };
-  var serverAuthorizedRecords = [];
-  var runtimeAuthorizedRecords = [];
+  var serverAuthorizedById = new Map();
+  var serverDeniedIds = new Set();
+  var runtimeAuthorizedById = new Map();
 
-  function isSameRecord(collection, record) {
-    return collection.some(function (candidate) { return candidate === record; });
+  function recordId(recordOrId) {
+    var value = recordOrId && typeof recordOrId === 'object'
+      ? recordOrId.id
+      : recordOrId;
+    if (value === null || value === undefined || String(value).trim() === '') return null;
+    return String(value);
   }
 
   function isRuntimeAuthorized(record) {
-    return runtimeAuthorizedRecords.some(function (entry) {
-      return entry.record === record &&
-        entry.contextKey === leadAuthorization.contextKey &&
-        entry.version === leadAuthorization.version;
-    });
+    var id = recordId(record);
+    var entry = id ? runtimeAuthorizedById.get(id) : null;
+    return Boolean(entry &&
+      entry.record === record &&
+      entry.contextKey === leadAuthorization.contextKey &&
+      entry.version === leadAuthorization.version);
   }
 
-  function isAuthorizedRecord(record) {
-    return leadAuthorization.allowed &&
-      (isSameRecord(serverAuthorizedRecords, record) || isRuntimeAuthorized(record));
+  function clearAuthorizedRecords() {
+    serverAuthorizedById = new Map();
+    serverDeniedIds = new Set();
+    runtimeAuthorizedById = new Map();
   }
 
   function markRuntimeAuthorized(record) {
@@ -60,11 +67,60 @@ window.AppStore = (function() {
         state.authoritativeSources.leads.kind !== 'ready' ||
         !hasAuthenticatedRuntimeContext() ||
         !isSimulationLead(record) ||
-        leadSessionId(record) !== activeSessionId()) return;
-    runtimeAuthorizedRecords.push({
+        leadSessionId(record) !== activeSessionId()) return false;
+    var id = recordId(record);
+    if (!id || serverAuthorizedById.has(id) || serverDeniedIds.has(id) ||
+        runtimeAuthorizedById.has(id)) return false;
+    var identity = authenticatedIdentity();
+    runtimeAuthorizedById.set(id, {
       record: record,
       contextKey: leadAuthorization.contextKey,
       version: leadAuthorization.version,
+      sessionId: activeSessionId(),
+      userId: identity.userId,
+      organizationId: identity.organizationId,
+    });
+    return true;
+  }
+
+  function visibleAuthorizedRecords() {
+    if (!leadAuthorization.allowed) return [];
+    var visible = [];
+    serverAuthorizedById.forEach(function (record, id) {
+      if (!serverDeniedIds.has(id)) visible.push(record);
+    });
+    runtimeAuthorizedById.forEach(function (entry, id) {
+      if (!serverAuthorizedById.has(id) &&
+          !serverDeniedIds.has(id) &&
+          entry.contextKey === leadAuthorization.contextKey &&
+          entry.version === leadAuthorization.version) {
+        visible.push(entry.record);
+      }
+    });
+    return visible;
+  }
+
+  function recordsConflict(first, second) {
+    try {
+      return JSON.stringify(first) !== JSON.stringify(second);
+    } catch (_error) {
+      return true;
+    }
+  }
+
+  function authorizeServerRecords(records) {
+    clearAuthorizedRecords();
+    records.forEach(function (record) {
+      var id = recordId(record);
+      if (!id || serverDeniedIds.has(id)) return;
+      if (serverAuthorizedById.has(id)) {
+        if (recordsConflict(serverAuthorizedById.get(id), record)) {
+          serverAuthorizedById.delete(id);
+          serverDeniedIds.add(id);
+        }
+        return;
+      }
+      serverAuthorizedById.set(id, record);
     });
   }
 
@@ -72,8 +128,13 @@ window.AppStore = (function() {
   function addLead(leadData) {
     refreshAuthorizationContext();
     const lead = leadData instanceof window.Models.Lead ? leadData : new window.Models.Lead(leadData);
-    state.leads.unshift(lead);
-    markRuntimeAuthorized(lead);
+    var id = recordId(lead);
+    if (!id || serverDeniedIds.has(id)) return null;
+    if (serverAuthorizedById.has(id)) return serverAuthorizedById.get(id);
+    var existing = runtimeAuthorizedById.get(id);
+    if (existing) return existing.record;
+    if (!markRuntimeAuthorized(lead)) return null;
+    state.leads = visibleAuthorizedRecords();
     bus.emit('lead:created', lead);
     bus.emit('store:changed', { type: 'lead', action: 'created', data: lead });
     saveToSession();
@@ -104,7 +165,7 @@ window.AppStore = (function() {
   function getLeads(filter) {
     refreshAuthorizationContext();
     if (!leadAuthorization.allowed) return [];
-    var visible = state.leads.filter(isAuthorizedRecord);
+    var visible = visibleAuthorizedRecords();
     if (!filter) return visible;
     return visible.filter(filter);
   }
@@ -191,8 +252,7 @@ window.AppStore = (function() {
       leadAuthorization.contextKey = contextKey;
       leadAuthorization.allowed = false;
       leadAuthorization.version += 1;
-      serverAuthorizedRecords = [];
-      runtimeAuthorizedRecords = [];
+      clearAuthorizedRecords();
       state.leads = [];
       state.authoritativeSources.leads = { kind: 'loading', status: null };
       syncRequest = null;
@@ -238,8 +298,14 @@ window.AppStore = (function() {
       var key = sessionStorageKey();
       if (!sessionId || !key) return;
       removeInactiveSessionEnvelopes(key);
-      var sessionLeads = getLeads().filter(function(lead) {
-        return isSimulationLead(lead) && leadSessionId(lead) === sessionId;
+      var sessionLeads = [];
+      runtimeAuthorizedById.forEach(function(entry) {
+        if (entry.contextKey === leadAuthorization.contextKey &&
+            entry.version === leadAuthorization.version &&
+            isSimulationLead(entry.record) &&
+            leadSessionId(entry.record) === sessionId) {
+          sessionLeads.push(entry.record);
+        }
       });
       sessionStorage.setItem(key, JSON.stringify({
         version: 2,
@@ -258,18 +324,11 @@ window.AppStore = (function() {
       if (!sessionId || !key) return [];
       sessionStorage.removeItem('northstar_calls');
       removeInactiveSessionEnvelopes(key);
-      const saved = sessionStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.version === 2 && parsed.sessionId === sessionId && Array.isArray(parsed.leads)) {
-          var scoped = parsed.leads.filter(function(lead) {
-            return isSimulationLead(lead) && leadSessionId(lead) === sessionId;
-          });
-          state.leads = scoped;
-          bus.emit('store:loaded', { from: 'session', count: scoped.length });
-          return scoped;
-        }
-      }
+      // Restored browser storage is not an authorization source. Runtime
+      // records are visible only in the exact in-memory request generation
+      // that created them; navigation, restart, and tab restoration default
+      // closed until the server authorizes a fresh payload.
+      sessionStorage.removeItem(key);
     } catch(e) {}
     return [];
   }
@@ -296,8 +355,7 @@ window.AppStore = (function() {
     var requestVersion = leadAuthorization.version + 1;
     leadAuthorization.version = requestVersion;
     leadAuthorization.allowed = false;
-    serverAuthorizedRecords = [];
-    runtimeAuthorizedRecords = [];
+    clearAuthorizedRecords();
     state.authoritativeSources.leads = { kind: 'loading', status: null };
     var timer = null;
     var promise = (async function () {
@@ -328,9 +386,9 @@ window.AppStore = (function() {
         var serverLeads = result.items.filter(function(lead) {
           return !isSimulationLead(lead) || leadSessionId(lead) === activeSessionId();
         });
-        serverAuthorizedRecords = serverLeads.slice();
-        state.leads = serverLeads.slice();
+        authorizeServerRecords(serverLeads);
         leadAuthorization.allowed = true;
+        state.leads = visibleAuthorizedRecords();
         state.authoritativeSources.leads = { kind: 'ready', status: 200 };
         bus.emit('store:loaded', { from: 'server', count: state.leads.length });
       } catch(e) {
@@ -385,7 +443,8 @@ window.AppStore = (function() {
   var _origAddLead = addLead;
   addLead = function(leadData) {
     var lead = _origAddLead(leadData);
-    if (typeof API !== 'undefined' && API.createLead) {
+    if (lead && isRuntimeAuthorized(lead) &&
+        typeof API !== 'undefined' && API.createLead) {
       API.createLead(leadData).catch(function() {});
     }
     return lead;

@@ -1,76 +1,61 @@
 /**
  * Customer Intelligence API Route
- * Serves per-customer intelligence data to the frontend.
- * READ-ONLY: No edits, no mutations, no writes.
+ * Serves legacy per-lead intelligence without changing the public v1 contract.
+ * READ-ONLY: No edits, mutations, or writes.
  */
 'use strict';
 
 const express = require('express');
 const router = express.Router();
 const customerIntelligence = require('../services/customerIntelligence');
-const fs = require('fs');
-const path = require('path');
+const dataLoader = require('../services/dataLoader');
+const demoScope = require('../services/demoRecordScope');
 const { requireAuth } = require('../auth/middleware');
+const { requireOrgMembership } = require('../auth/permissions');
+const { requirePermission } = require('../auth/authorize');
 
-// All customer intelligence routes require authentication
 router.use(requireAuth);
+router.use(requireOrgMembership);
+router.use(requirePermission('leads', 'view'));
 
-const DATA_DIR = path.resolve(__dirname, '../../data');
-
-/**
- * GET /api/v1/leads/:id/intelligence
- * Returns the full customer intelligence object for a lead.
- */
-router.get('/:id/intelligence', (req, res) => {
-  try {
-    const leadId = req.params.id;
-    if (!leadId) {
-      return res.status(400).json({ success: false, error: 'Lead ID is required' });
-    }
-
-    // Load leads data
-    let leads = [];
-    try {
-      leads = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'leads.json'), 'utf8'));
-    } catch (e) {
-      return res.status(500).json({ success: false, error: 'Failed to load leads data' });
-    }
-
-    const lead = leads.find(l => l.id === leadId);
-    if (!lead) {
-      return res.status(404).json({ success: false, error: 'Lead not found' });
-    }
-
-    // Generate customer intelligence
-    const intelligence = customerIntelligence.generateCustomerSnapshot(lead, {
-      totalLeads: leads.length,
-    });
-
-    return res.json({ success: true, data: intelligence });
-  } catch (err) {
-    console.error('Customer Intelligence API error:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to generate customer intelligence' });
-  }
-});
+function _visibleLeads(req) {
+  const loaded = dataLoader.loadData();
+  return demoScope.filterTenantRecords(loaded.leads || [], demoScope.createAccessContext(req));
+}
 
 /**
  * GET /api/v1/leads/intelligence/dashboard
- * Returns dashboard-level customer intelligence summaries.
+ * Returns the existing dashboard-level customer intelligence envelope.
  */
 router.get('/intelligence/dashboard', (req, res) => {
   try {
-    let leads = [];
-    try {
-      leads = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'leads.json'), 'utf8'));
-    } catch (e) {
-      return res.status(500).json({ success: false, error: 'Failed to load leads data' });
-    }
-
+    const leads = _visibleLeads(req);
     const dashboard = customerIntelligence.generateDashboardCustomerIntelligence(leads);
     return res.json({ success: true, data: dashboard });
   } catch (err) {
     console.error('Dashboard Customer Intelligence API error:', err.message);
     return res.status(500).json({ success: false, error: 'Failed to generate dashboard customer intelligence' });
+  }
+});
+
+/**
+ * GET /api/v1/leads/:id/intelligence
+ * Preserves lead-ID semantics for the legacy lead-detail page.
+ */
+router.get('/:id/intelligence', (req, res) => {
+  try {
+    const leadId = req.params.id;
+    if (!leadId) return res.status(400).json({ success: false, error: 'Lead ID is required' });
+
+    const leads = _visibleLeads(req);
+    const lead = leads.find(function (item) { return item.id === leadId; });
+    if (!lead) return res.status(404).json({ success: false, error: 'Lead not found' });
+
+    const intelligence = customerIntelligence.generateCustomerSnapshot(lead, { totalLeads: leads.length });
+    return res.json({ success: true, data: intelligence });
+  } catch (err) {
+    console.error('Customer Intelligence API error:', err.message);
+    return res.status(500).json({ success: false, error: 'Failed to generate customer intelligence' });
   }
 });
 

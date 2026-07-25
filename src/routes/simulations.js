@@ -1,195 +1,365 @@
 /**
- * Simulation Endpoint — Universal Polaris Intelligence Pipeline
+ * Simulation Endpoint - Universal Polaris Intelligence Pipeline
  *
  * POST /api/v1/simulations/leads
- *
- * Architecture: scenario → transcript → scope → classification → pricing → confidence → action
- *
- * Service-agnostic. New services added to service-catalog.js without modifying this file.
+ * scenario -> transcript -> scope -> classification -> pricing -> confidence -> action
  */
 
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth/middleware');
+const { requireOrgMembership } = require('../auth/permissions');
+const { requirePermission } = require('../auth/authorize');
 const { addLead } = require('../leads/store');
 const db = require('../db');
 const pipeline = require('./simulation/pipeline');
 const sessionReg = require('./simulation/session-registry');
+const demoScope = require('../services/demoRecordScope');
+const canonicalPolaris = require('../services/canonicalPolaris');
+const businessProfile = require('../services/businessProfile');
+const idempotency = require('../services/simulationIdempotency');
 
-// ── Polaris Engine Loaders ──
+function persistenceError(stage, result) {
+  const detail = result && result.error ? ': ' + result.error : '';
+  const error = new Error('Persistence failed at ' + stage + detail);
+  error.stage = stage;
+  error.status = 500;
+  return error;
+}
+
+function clientFailure(error) {
+  if (error && error.code === 'idempotency_conflict') {
+    return {
+      status: 409,
+      body: { error: { code: 'idempotency_conflict', message: 'The idempotency key was already used with a different request.' } },
+    };
+  }
+  if (error && (error.code === 'persistence_unavailable' || error.stage === 'persistence_preflight')) {
+    return {
+      status: 503,
+      body: { error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' } },
+    };
+  }
+  return {
+    status: error && error.status === 400 ? 400 : 500,
+    body: { error: { code: 'simulation_failed', message: 'The simulation could not be persisted.' } },
+  };
+}
+
+function requirePersisted(stage, result) {
+  if (!result || result.error || !result.id) throw persistenceError(stage, result);
+  return result;
+}
+
+function isPersistenceUnavailable(error) {
+  const code = String((error && error.code) || '');
+  return /^08/.test(code) ||
+    ['57P01', '57P02', '57P03', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE'].includes(code);
+}
+
 let _engines = {};
 function _getEngines() {
   if (!_engines.customers) try { _engines.customers = require('../polaris/customer-engine'); } catch (e) {}
-  if (!_engines.comms)    try { _engines.comms    = require('../polaris/communications-engine'); } catch (e) {}
-  if (!_engines.opps)     try { _engines.opps     = require('../polaris/opportunity-engine'); } catch (e) {}
-  if (!_engines.fin)      try { _engines.fin      = require('../polaris/financial-engine'); } catch (e) {}
+  if (!_engines.comms) try { _engines.comms = require('../polaris/communications-engine'); } catch (e) {}
+  if (!_engines.opps) try { _engines.opps = require('../polaris/opportunity-engine'); } catch (e) {}
+  if (!_engines.fin) try { _engines.fin = require('../polaris/financial-engine'); } catch (e) {}
   return _engines;
 }
 
-router.post('/simulations/leads', requireAuth, async (req, res) => {
+router.post('/simulations/leads', requireAuth, requireOrgMembership, requirePermission('leads', 'create'), async (req, res) => {
+  let requestIdentity = null;
+  let requestClaim = null;
   try {
     const { name, phone, email, service } = req.body;
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Customer name is required', stage: 'validation' });
     }
 
-    // ── Session ID for demo lifecycle (clean on page reload) ──
-    const sessionId = req.body.sessionId || ('sim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
-
+    const suppliedKey = req.get('Idempotency-Key') || req.body.idempotencyKey;
     const requestedService = (service || 'general').toLowerCase();
 
-    // ── 1. Generate scenario ──
-    const scenario = pipeline.generateScenario(requestedService, name.trim());
-    if (!scenario) return res.status(400).json({ error: 'Could not generate scenario for service: ' + service });
+    // A successful response requires PostgreSQL. Probe it before any file
+    // engine is invoked so an unavailable required boundary leaves no new file
+    // records behind.
+    if (!db.isAvailable()) {
+      const unavailable = new Error('Required persistence is unavailable');
+      unavailable.code = 'persistence_unavailable';
+      unavailable.stage = 'persistence_preflight';
+      throw unavailable;
+    }
+    try {
+      await db.query('SELECT 1');
+    } catch (preflightError) {
+      preflightError.code = 'persistence_unavailable';
+      preflightError.stage = 'persistence_preflight';
+      throw preflightError;
+    }
 
-    const svc = pipeline.CATALOG[scenario.serviceKey];
+    const fingerprint = idempotency.payloadFingerprint({
+      name: name.trim(),
+      phone: phone || '',
+      email: email || '',
+      service: requestedService,
+      sessionId: req.body.sessionId || null,
+    });
+    requestIdentity = idempotency.requestKey(req.orgId, suppliedKey);
+    requestClaim = idempotency.claim(requestIdentity, fingerprint);
+    if (requestClaim.conflict) {
+      const conflict = new Error('Idempotency key payload mismatch');
+      conflict.code = 'idempotency_conflict';
+      throw conflict;
+    }
+    if (requestClaim.capacity) {
+      const capacity = new Error('Idempotency containment capacity unavailable');
+      capacity.code = 'persistence_unavailable';
+      capacity.stage = 'persistence_preflight';
+      throw capacity;
+    }
+    if (!requestClaim.owner) {
+      try {
+        const replay = await requestClaim.promise;
+        return res.status(replay.status).json(replay.body);
+      } catch (replayError) {
+        const failure = clientFailure(replayError);
+        return res.status(failure.status).json(failure.body);
+      }
+    }
+
+    const sessionId = req.body.sessionId || ('sim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+    const scenario = pipeline.generateScenario(requestedService, name.trim());
+    if (!scenario) {
+      const scenarioError = new Error('Unsupported simulation service');
+      scenarioError.status = 400;
+      scenarioError.stage = 'validation';
+      throw scenarioError;
+    }
+
+    const serviceDefinition = pipeline.CATALOG[scenario.serviceKey];
     if (phone) scenario.customer.phone = phone;
     if (email) scenario.customer.email = email;
 
-    // ── 2. Generate adaptive transcript ──
-    const transcript = pipeline.generateTranscript(scenario, svc);
-
-    // ── 3. Extract scope from transcript ──
-    const { extracted: scopeEvidence, evidence, missing: missingInfo } = pipeline.extractScope(transcript, scenario);
-
-    // ── 4. Classify service ──
+    const transcript = pipeline.generateTranscript(scenario, serviceDefinition);
+    const extraction = pipeline.extractScope(transcript, scenario);
+    const scopeEvidence = extraction.extracted;
+    const evidence = extraction.evidence;
+    const missingInfo = extraction.missing;
     const classification = pipeline.classifyService(transcript);
-
-    // ── 5. Calculate pricing ──
     const pricingResult = pipeline.calculatePricing(scopeEvidence, classification.service);
-
-    // ── 6. Score confidence ──
     const confidence = pipeline.calculateConfidence(scopeEvidence, missingInfo, scenario.serviceKey);
+    const emergencyEvidence = pipeline.detectEmergencyEvidence(transcript);
+    const recommendedAction = pipeline.selectAction(
+      transcript, scenario.customer.name, scopeEvidence, emergencyEvidence
+    );
 
-    // ── 7. Select action ──
-    const recommendedAction = pipeline.selectAction(transcript, scenario.customer.name, scopeEvidence);
+    const polarisIntel = canonicalPolaris.build({
+      serviceKey: scenario.serviceKey,
+      classification: classification,
+      scope: scopeEvidence,
+      evidence: evidence,
+      missingInformation: missingInfo,
+      pricing: pricingResult,
+      confidence: confidence,
+      recommendedAction: recommendedAction,
+      emergencyEvidence: emergencyEvidence,
+      businessProfile: businessProfile.getProfile(),
+    });
+    const metadata = demoScope.createMetadata(sessionId, {
+      ownerUserId: req.user && (req.user.sub || req.user.id),
+      organizationId: req.orgId || (req.user && (req.user.organizationId || req.user.orgId)) || null,
+      polarisIntelligence: polarisIntel,
+    });
 
-    // ── Create canonical records ──
     const e = _getEngines();
     if (!e.customers || !e.comms || !e.opps || !e.fin) {
-      return res.status(503).json({ error: 'Polaris engines not available', stage: 'engine_init' });
+      const engineError = new Error('Required file persistence engine is unavailable');
+      engineError.code = 'persistence_unavailable';
+      engineError.status = 503;
+      engineError.stage = 'engine_init';
+      throw engineError;
     }
 
-    const cust = scenario.customer;
-    const total = pricingResult.total || 500;
+    const customer = scenario.customer;
+    const supportedTotal = typeof polarisIntel.customerFacingPrice === 'number'
+      ? polarisIntel.customerFacingPrice : 0;
 
-    // Customer
     const custResult = e.customers.createCustomer({
-      name: cust.name, phone: cust.phone || '', email: cust.email || '',
-      address: cust.address || '', status: 'active',
+      name: customer.name,
+      phone: customer.phone || '',
+      email: customer.email || '',
+      address: customer.address || '',
+      status: 'active',
+      metadata: metadata,
     });
-    if (custResult.error) return res.status(400).json({ error: 'Customer creation failed: ' + custResult.error, stage: 'customer' });
-    if (custResult.id) sessionReg.register(sessionId, custResult.id);
+    requirePersisted('customer', custResult);
+    sessionReg.register(sessionId, custResult.id);
 
-    // Communication
     const commResult = e.comms.recordCommunication({
-      customerId: custResult.id, type: 'call', direction: 'inbound',
-      subject: 'Simulated call from ' + cust.name,
-      content: JSON.stringify(transcript), status: 'completed',
+      customerId: custResult.id,
+      type: 'call',
+      direction: 'inbound',
+      subject: 'Simulated call from ' + customer.name,
+      content: JSON.stringify(transcript),
+      status: 'completed',
+      metadata: metadata,
     });
-    if (commResult && commResult.id) sessionReg.register(sessionId, commResult.id);
+    requirePersisted('communication', commResult);
+    sessionReg.register(sessionId, commResult.id);
 
-    // Opportunity — clean service name, no customer name appended
     const oppResult = e.opps.createOpportunity({
       customerId: custResult.id,
       title: classification.service,
       description: scopeEvidence.description || '',
-      estimatedValue: total,
+      estimatedValue: supportedTotal,
       stage: 'lead',
       priority: recommendedAction.priority || 'medium',
+      metadata: metadata,
     });
-    if (oppResult && oppResult.id) sessionReg.register(sessionId, oppResult.id);
+    requirePersisted('opportunity', oppResult);
+    sessionReg.register(sessionId, oppResult.id);
 
-    // Estimate
-    const estItems = (pricingResult.breakdown || []).map(b => ({
-      description: b.label || b.description, quantity: 1, unitPrice: b.amount, total: b.amount,
-    }));
-    if (estItems.length === 0) {
-      estItems.push(
-        { description: 'Materials', quantity: 1, unitPrice: Math.round(total * 0.35) },
-        { description: 'Labor', quantity: 1, unitPrice: Math.round(total * 0.40) },
-        { description: 'Equipment', quantity: 1, unitPrice: Math.round(total * 0.15) },
-        { description: 'Permits & fees', quantity: 1, unitPrice: Math.round(total * 0.10) },
-      );
-    }
+    const estimateItems = (polarisIntel.pricingBreakdown || []).filter(function (item) {
+      return Number(item.amount) > 0;
+    }).map(function (item) {
+      return { description: item.label, quantity: 1, unitPrice: item.amount };
+    });
 
     const estResult = e.fin.createEstimate({
       customerId: custResult.id,
-      title: classification.service + ' Estimate',
-      description: JSON.stringify({ scope: scopeEvidence, evidence, missing: missingInfo, confidence, recommendedAction }),
-      items: estItems,
+      opportunityId: oppResult && oppResult.id,
+      title: classification.service + ' Preliminary Estimate',
+      items: estimateItems,
       status: 'draft',
+      notes: polarisIntel.pricingRecommendation,
+      metadata: metadata,
     });
-    if (estResult && estResult.id) sessionReg.register(sessionId, estResult.id);
+    requirePersisted('estimate', estResult);
+    sessionReg.register(sessionId, estResult.id);
 
-    // Legacy lead
     const leadEntry = addLead({
-      customerName: cust.name, callerName: cust.name,
-      phone: cust.phone || '', serviceRequested: classification.service,
-      estimatedPrice: total, jobDetail: scopeEvidence.description || '',
-      source: 'simulation', status: 'new', callOutcome: 'Lead captured',
+      customerName: customer.name,
+      callerName: customer.name,
+      phone: customer.phone || '',
+      serviceRequested: classification.service,
+      estimatedPrice: supportedTotal,
+      jobDetail: scopeEvidence.description || '',
+      source: 'simulation',
+      recordScope: 'simulation',
+      simulationSessionId: sessionId,
+      demoSessionId: sessionId,
+      canonicalCustomerId: custResult.id,
+      canonicalOpportunityId: oppResult && oppResult.id,
+      canonicalEstimateId: estResult && estResult.id,
+      canonicalCommunicationId: commResult && commResult.id,
+      ownerUserId: metadata.ownerUserId,
+      organizationId: metadata.organizationId,
+      idempotencyKey: requestIdentity,
+      status: 'new',
+      callOutcome: 'Lead captured',
     });
-    if (leadEntry && leadEntry.id) sessionReg.register(sessionId, leadEntry.id);
+    requirePersisted('lead', leadEntry);
+    sessionReg.register(sessionId, leadEntry.id);
 
-    // PostgreSQL
     let callRecordId = null;
-    if (db.isAvailable()) {
-      try {
-        const cr = await db.query(
-          `INSERT INTO call_records (caller_name, caller_phone, service_type, estimated_price, job_detail, status, outcome, source, is_known_contact) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-          [cust.name, cust.phone || '(555) 000-0000', classification.service, total, '', 'completed', 'lead-captured', 'simulation', false]
+    try {
+      const postgresIdentity = idempotency.postgresIdentity(sessionId, requestIdentity);
+      const existingCall = await db.query(
+        'SELECT id FROM call_records WHERE organization_id = $1 AND retell_call_id = $2 LIMIT 1',
+        [req.orgId, postgresIdentity]
+      );
+      if (existingCall.rows && existingCall.rows.length > 0) {
+        callRecordId = existingCall.rows[0].id;
+      } else {
+        const callRecord = await db.query(
+          `INSERT INTO call_records (organization_id, retell_call_id, caller_name, caller_phone, service_type, estimated_price, job_detail, status, outcome, source, is_known_contact) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+          [
+            req.orgId,
+            postgresIdentity,
+            customer.name,
+            customer.phone || '(555) 000-0000',
+            classification.service,
+            supportedTotal,
+            scopeEvidence.description || '',
+            'completed',
+            'lead-captured',
+            'simulation',
+            false,
+          ]
         );
-        if (cr.rows && cr.rows.length > 0) callRecordId = cr.rows[0].id;
-      } catch (e) { console.warn('[Sim] DB:', e.message); }
+        if (callRecord.rows && callRecord.rows.length > 0) {
+          callRecordId = callRecord.rows[0].id;
+        }
+      }
+      if (!callRecordId) throw persistenceError('call_record', null);
+    } catch (databaseError) {
+      databaseError.stage = 'call_record';
+      if (isPersistenceUnavailable(databaseError)) {
+        databaseError.code = 'persistence_unavailable';
+        databaseError.status = 503;
+      } else {
+        databaseError.status = 500;
+      }
+      throw databaseError;
     }
 
-    // Polaris intelligence object
-    const priceDisplay = confidence.score >= 80
-      ? '$' + total.toLocaleString()
-      : (confidence.score >= 50
-        ? '$' + (pricingResult.range ? pricingResult.range.low.toLocaleString() : '?') + '–$' + (pricingResult.range ? pricingResult.range.high.toLocaleString() : '?')
-        : 'Insufficient information — schedule on-site assessment');
-
-    const polarisIntel = {
-      detectedIntent: 'Customer requests ' + classification.service.toLowerCase(),
-      classifiedService: classification.service,
-      classificationConfidence: classification.confidence,
-      alternatives: classification.alternatives,
-      evidence: Object.values(evidence),
-      extractedScope: Object.keys(scopeEvidence).map(k => k + ': ' + scopeEvidence[k]),
-      missingInformation: missingInfo,
-      assumptions: missingInfo.length > 0 ? missingInfo.map(m => 'Assume typical ' + m + ' for preliminary range') : [],
-      qualificationStatus: missingInfo.length <= 2 ? 'Qualified' : 'Needs assessment',
-      urgency: scopeEvidence.urgency || 'moderate',
-      customerSentiment: 'Positive — ready to schedule',
-      bookingIntent: 'Yes — requested on-site visit',
-      recommendedAction,
-      pricingRecommendation: priceDisplay,
-      pricingBreakdown: pricingResult.breakdown || [],
-      confidence,
-      operationalReasoning: confidence.score >= 80 ? 'Sufficient scope for reliable estimate.' : 'Incomplete scope — recommend on-site assessment.',
-    };
-
     console.log('[Simulations] Complete:', JSON.stringify({
-      service: classification.service, total, confidence: confidence.score, turns: transcript.length,
+      correlationId: req.correlationId,
+      sessionId: sessionId,
+      customerId: custResult.id,
+      opportunityId: oppResult && oppResult.id,
+      estimateId: estResult && estResult.id,
+      communicationId: commResult && commResult.id,
+      service: classification.service,
+      supportedTotal: supportedTotal,
+      confidence: polarisIntel.confidenceScore,
     }));
 
-    res.status(201).json({
+    // Keep the v1 transport backward-compatible while the persisted object
+    // remains the canonical Polaris schema used by every destination page.
+    const responsePolaris = Object.assign(canonicalPolaris.sanitize(polarisIntel), {
+      detectedIntent: polarisIntel.customerIntent,
+      classifiedService: polarisIntel.service,
+      classificationConfidence: polarisIntel.serviceClassification.confidence,
+      alternatives: polarisIntel.serviceClassification.alternatives,
+      evidence: Object.values(polarisIntel.supportingEvidence || {}),
+      extractedScope: Object.keys(polarisIntel.scope || {}).map(function (key) {
+        return key + ': ' + polarisIntel.scope[key];
+      }),
+      qualificationStatus: polarisIntel.qualification,
+      confidence: confidence,
+    });
+
+    const responseBody = {
       success: true,
       sessionId: sessionId,
-      summary: { name: cust.name, service: classification.service, estimatedValue: total },
+      summary: { name: customer.name, service: classification.service, estimatedValue: supportedTotal },
       ids: {
-        customer: custResult.id, communication: commResult ? commResult.id : null,
-        opportunity: oppResult ? oppResult.id : null, estimate: estResult ? estResult.id : null,
-        lead: leadEntry ? leadEntry.id : null, callRecord: callRecordId,
+        customer: custResult.id,
+        communication: commResult ? commResult.id : null,
+        opportunity: oppResult ? oppResult.id : null,
+        estimate: estResult ? estResult.id : null,
+        lead: leadEntry ? leadEntry.id : null,
+        callRecord: callRecordId,
       },
       records: { customer: custResult, communication: commResult, opportunity: oppResult, estimate: estResult, lead: leadEntry },
-      transcript,
-      polaris: polarisIntel,
-    });
+      transcript: transcript,
+      polaris: responsePolaris,
+    };
+    idempotency.resolve(requestIdentity, { status: 201, body: responseBody });
+    return res.status(201).json(responseBody);
   } catch (err) {
-    console.error('[Simulations] Error:', err.message);
-    res.status(500).json({ error: 'Simulation failed: ' + err.message, stage: 'unexpected' });
+    console.error('[Simulations] Persistence error:', {
+      correlationId: req.correlationId,
+      organizationId: req.orgId || null,
+      stage: err.stage || 'unexpected',
+      code: err.code || null,
+      message: err.message,
+      stack: err.stack,
+    });
+    err.status = err.status || 500;
+    err.stage = err.stage || 'unexpected';
+    if (requestClaim && requestClaim.owner && requestIdentity) idempotency.reject(requestIdentity, err);
+    const failure = clientFailure(err);
+    res.status(failure.status).json(failure.body);
   }
 });
 

@@ -13,6 +13,18 @@
  */
 
 const store = require('./store');
+const demoScope = require('../services/demoRecordScope');
+
+function visible(records) {
+  const access = demoScope.resolveAccess();
+  return access && access.enforceOwner
+    ? demoScope.filterTenantRecords(records, access)
+    : (Array.isArray(records) ? records : []);
+}
+
+function scopedMetadata(source) {
+  return source && source.metadata ? Object.assign({}, source.metadata) : {};
+}
 
 /**
  * Record a completed job and compute its learning signals.
@@ -54,11 +66,11 @@ function recordCompletion(job) {
 
   // Update learning metrics
   try {
-    _updateDurationMetrics(job.serviceType, durationVariance, durationAccuracy);
-    _updateRevenueMetrics(job.serviceType, revenueVariance, revenueAccuracy);
+    _updateDurationMetrics(job.serviceType, durationVariance, durationAccuracy, scopedMetadata(job));
+    _updateRevenueMetrics(job.serviceType, revenueVariance, revenueAccuracy, scopedMetadata(job));
 
     if (job.crewId) {
-      _updateCrewEfficiency(job.crewId, durationVariance);
+      _updateCrewEfficiency(job.crewId, durationVariance, scopedMetadata(job));
     }
   } catch (e) {
     console.warn('[PolarisLearning] Metrics update error:', e.message);
@@ -76,8 +88,8 @@ function recordCompletion(job) {
 /**
  * Internal: Update duration accuracy metrics.
  */
-function _updateDurationMetrics(serviceType, variance, accuracy) {
-  const metrics = store.getAllMetrics();
+function _updateDurationMetrics(serviceType, variance, accuracy, metadata) {
+  const metrics = visible(store.getAllMetrics());
   const existing = metrics.find(m =>
     m.metricType === 'duration_accuracy' &&
     m.serviceType === serviceType
@@ -96,6 +108,7 @@ function _updateDurationMetrics(serviceType, variance, accuracy) {
       meanVariance: Math.round(newMean * 10000) / 10000,
       meanAbsoluteError: Math.round(newMAE * 10000) / 10000,
       accuracyPct: Math.round(((existing.accuracyPct || 0) * (existing.sampleSize || 1) + accuracy) / newSampleSize * 100) / 100,
+      metadata,
     });
   } else {
     store.addMetric({
@@ -105,6 +118,7 @@ function _updateDurationMetrics(serviceType, variance, accuracy) {
       meanVariance: variance,
       meanAbsoluteError: Math.abs(variance),
       accuracyPct: Math.round(accuracy * 100) / 100,
+      metadata,
     });
   }
 }
@@ -112,8 +126,8 @@ function _updateDurationMetrics(serviceType, variance, accuracy) {
 /**
  * Internal: Update revenue accuracy metrics.
  */
-function _updateRevenueMetrics(serviceType, variance, accuracy) {
-  const metrics = store.getAllMetrics();
+function _updateRevenueMetrics(serviceType, variance, accuracy, metadata) {
+  const metrics = visible(store.getAllMetrics());
   const existing = metrics.find(m =>
     m.metricType === 'revenue_accuracy' &&
     m.serviceType === serviceType
@@ -129,6 +143,7 @@ function _updateRevenueMetrics(serviceType, variance, accuracy) {
       sampleSize: newSampleSize,
       meanVariance: Math.round(newMean * 10000) / 10000,
       accuracyPct: Math.round(((existing.accuracyPct || 0) * (existing.sampleSize || 1) + accuracy) / newSampleSize * 100) / 100,
+      metadata,
     });
   } else {
     store.addMetric({
@@ -137,6 +152,7 @@ function _updateRevenueMetrics(serviceType, variance, accuracy) {
       sampleSize: 1,
       meanVariance: variance,
       accuracyPct: Math.round(accuracy * 100) / 100,
+      metadata,
     });
   }
 }
@@ -144,8 +160,8 @@ function _updateRevenueMetrics(serviceType, variance, accuracy) {
 /**
  * Internal: Update crew efficiency based on duration variance.
  */
-function _updateCrewEfficiency(crewId, durationVariance) {
-  const crews = store.getAllCrews();
+function _updateCrewEfficiency(crewId, durationVariance, metadata) {
+  const crews = visible(store.getAllCrews());
   const crew = crews.find(c => c.id === crewId);
   if (!crew) return;
 
@@ -161,6 +177,7 @@ function _updateCrewEfficiency(crewId, durationVariance) {
     serviceType: crewId,
     sampleSize: sampleSize + 1,
     meanVariance: Math.round(newEff * 10000) / 10000,
+    metadata,
   });
 }
 
@@ -172,7 +189,7 @@ function _updateCrewEfficiency(crewId, durationVariance) {
  * @returns {object[]} List of { serviceType, avgVariance, accuracy, sampleSize }
  */
 function getDurationPredictions(serviceType) {
-  const metrics = store.getAllMetrics();
+  const metrics = visible(store.getAllMetrics());
   const durationMetrics = metrics.filter(m =>
     m.metricType === 'duration_accuracy' &&
     (!serviceType || m.serviceType === serviceType)
@@ -232,8 +249,8 @@ function applyLearningToEstimate(estimate, serviceType) {
  * Get overall learning summary.
  */
 function getLearningSummary() {
-  const metrics = store.getAllMetrics();
-  const jobs = store.getAllJobs();
+  const metrics = visible(store.getAllMetrics());
+  const jobs = visible(store.getAllJobs());
 
   return {
     totalCompletedJobs: jobs.length,

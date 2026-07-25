@@ -17,6 +17,7 @@ let redisCheckDone = false;
 
 // In-memory store fallback
 const memoryCache = new Map();
+const pendingComputations = new Map();
 const KEY_PREFIX = 'northstar:development:';
 
 // Default TTLs per item type (in seconds)
@@ -212,11 +213,18 @@ async function wrap(key, fetchFn, ttlSeconds = null) {
   const cached = await get(key);
   if (cached !== null) return cached;
 
-  const value = await fetchFn();
-  if (value !== null && value !== undefined) {
-    await set(key, value, ttlSeconds);
-  }
-  return value;
+  if (pendingComputations.has(key)) return pendingComputations.get(key);
+  const computation = Promise.resolve()
+    .then(fetchFn)
+    .then(async function (value) {
+      if (value !== null && value !== undefined) await set(key, value, ttlSeconds);
+      return value;
+    })
+    .finally(function () {
+      if (pendingComputations.get(key) === computation) pendingComputations.delete(key);
+    });
+  pendingComputations.set(key, computation);
+  return computation;
 }
 
 module.exports = {
@@ -228,5 +236,6 @@ module.exports = {
   incr,
   wrap,
   invalidateOrg,
-  buildKey
+  buildKey,
+  _pendingComputations: pendingComputations
 };

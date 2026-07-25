@@ -53,6 +53,10 @@ const {
   getSessionGuidance,
   clearSessionGuidance,
 } = require('../../../src/voice/eventIntelligence');
+const {
+  detectEmergencyEvidence,
+} = require('../../../src/services/emergencyEvidence');
+const simulationPipeline = require('../../../src/routes/simulation/pipeline');
 
 describe('Pattern Detection — detectEmergency', () => {
   test('detects high severity: flood', () => {
@@ -68,24 +72,20 @@ describe('Pattern Detection — detectEmergency', () => {
     expect(result.severity).toBe('high');
   });
 
-  test('detects high severity: emergency', () => {
-    const result = detectEmergency('This is an emergency, please help');
-    expect(result.severity).toBe('high');
+  test('does not treat a generic use of emergency as hazard evidence', () => {
+    expect(detectEmergency('This is an emergency, please help')).toBeNull();
   });
 
-  test('detects medium severity: urgent', () => {
-    const result = detectEmergency('I need this done urgent');
-    expect(result.severity).toBe('medium');
+  test('does not treat urgency alone as emergency evidence', () => {
+    expect(detectEmergency('I need this done urgent')).toBeNull();
   });
 
-  test('detects medium severity: ASAP', () => {
-    const result = detectEmergency('Can you come ASAP?');
-    expect(result.severity).toBe('medium');
+  test('does not treat ASAP alone as emergency evidence', () => {
+    expect(detectEmergency('Can you come ASAP?')).toBeNull();
   });
 
-  test('detects low severity: broken', () => {
-    const result = detectEmergency('My gutter is broken');
-    expect(result.severity).toBe('low');
+  test('does not treat an ordinary broken item as emergency evidence', () => {
+    expect(detectEmergency('My gutter is broken')).toBeNull();
   });
 
   test('returns null for non-emergency text', () => {
@@ -354,7 +354,7 @@ describe('handleTranscriptSegment', () => {
     const event = {
       type: 'transcript_segment',
       sessionId: 'test-session',
-      data: { text: 'I have a flood in my basement and how much does it cost?' },
+      data: { text: 'I have a flood in my basement and how much does it cost?', speaker: 'customer' },
     };
 
     handleTranscriptSegment(event);
@@ -407,6 +407,190 @@ describe('handleTranscriptSegment', () => {
   });
 });
 
+describe('live and simulation emergency parity', () => {
+  const requiredPositives = [
+    'No water is leaking upstairs the basement keeps filling.',
+    "It isn't true that the outlet is not sparking.",
+    'I do not deny that the outlet is not sparking.',
+    'The fire is out but the electrical panel is sparking.',
+    'The old flooding was fixed the water is rising again.',
+  ];
+  const requiredNegatives = [
+    'It is not sparking, smoking, or hot.',
+    'The leak was fixed and tomorrow’s visit is fine.',
+    'The technician asked whether the old outlet had sparked.',
+    'There was smoke before the electrician repaired it.',
+    'Nothing is flooding now and the old leak has been repaired.',
+  ];
+  const positives = [
+    'No smoke or the basement is flooding right now.',
+    'The old outlet was repaired or the basement is flooding right now.',
+    'The basement is flooding right now or the old outlet was repaired.',
+    'No smoke the basement is flooding right now.',
+    "The outlet isn't sparking I smell burning right now.",
+    'The old leak stopped the basement is flooding again.',
+    "The outlet isn't not sparking right now.",
+    'No smoke and the outlet is sparking right now.',
+    "The outlet isn't sparking and I smell burning right now.",
+    'The outlet isn\u2019t sparking and I smell burning right now.',
+    'The old leak stopped and the basement is flooding right now.',
+    'The basement is flooding right now and the old outlet was repaired.',
+    'There is no fire, and water keeps rising in the basement.',
+    'The pipe stopped leaking upstairs, and the basement is flooding again.',
+    'No burning smell, but the breaker panel is sparking right now.',
+    'The outlet is sparking and smoking right now.',
+    'The basement is flooding and still rising.',
+  ];
+  const negatives = [
+    'There was a burning smell before the repair.',
+    'There is no smoke or burning smell.',
+    'There is no smoke and no burning smell.',
+    "The outlet isn't sparking and there is no burning smell.",
+    'The outlet isn\u2019t sparking and there is no burning smell.',
+    'The old leak stopped and has not returned.',
+    'The basement flooded yesterday and was repaired.',
+    'This is not an emergency.',
+    'It is a slow drip and tomorrow is fine.',
+    'The pipe stopped leaking and the floor is drying.',
+    'The outlet sparked yesterday, but it is fine now.',
+    'There was a burning smell before the repair and no problem remains.',
+    'There is no present danger and nothing is sparking.',
+  ];
+  const permutations = [
+    'The outlet is sparking right now and there is no smoke.',
+    'There is no smoke, but the outlet is sparking right now.',
+    'There is no smoke; the outlet is sparking right now.',
+    'There is no smoke. The outlet is sparking right now.',
+    'There is no smoke however the outlet is sparking right now.',
+    'There is no smoke yet the outlet is sparking right now.',
+    'The outlet is not sparking, but the basement is flooding right now.',
+    'The old leak was repaired; however, the basement is flooding again.',
+    'The old leak stopped, yet water keeps rising in the basement.',
+    "The outlet isn’t sparking, but I smell burning right now.",
+    "The outlet isn't sparking, but I smell burning right now.",
+    'The old outlet was repaired, but it is sparking again right now.',
+    'There is no smoke or fire but the basement is flooding and still rising.',
+    'No smoke or burning smell the old leak stopped the breaker panel is sparking.',
+    'The basement is flooding right now no smoke no burning smell.',
+    'No smoke no fire no sparking but water keeps rising in the basement.',
+    'The outlet is sparking the panel is smoking water is rising in the basement.',
+  ];
+  const allNegated = [
+    'No smoke, no burning smell, no sparks, and no flooding.',
+    'The outlet is not sparking or smoking and the basement is not flooding.',
+  ];
+
+  function liveClassification(text, speaker, index) {
+    const sessionId = 'emergency-parity-' + index;
+    clearSessionGuidance(sessionId);
+    handleTranscriptSegment({
+      type: 'transcript_segment',
+      sessionId,
+      data: {
+        text,
+        speaker,
+        segment: { text, speaker },
+      },
+    });
+    return getSessionGuidance(sessionId).some(function (item) {
+      return item.type === 'emergency_detected';
+    });
+  }
+
+  test.each(requiredPositives)('classifies required positive through all three paths exactly: %s', (text) => {
+    expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(true);
+    expect(liveClassification(text, 'customer', 'required-positive-' + requiredPositives.indexOf(text))).toBe(true);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(true);
+  });
+
+  test.each(requiredNegatives)('classifies required negative through all three paths exactly: %s', (text) => {
+    expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(false);
+    expect(liveClassification(text, 'customer', 'required-negative-' + requiredNegatives.indexOf(text))).toBe(false);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(false);
+  });
+
+  const generatedPermutations = [
+    ['No smoke', 'the basement keeps filling', true],
+    ['The repaired leak is dry', 'the panel is sparking again', true],
+    ['The outlet is not sparking', 'there was smoke before repair', false],
+    ['The technician asked whether the pipe had leaked', 'nothing is flooding now', false],
+  ].flatMap(function (parts) {
+    const left = parts[0];
+    const right = parts[1];
+    const expected = parts[2];
+    return [' but ', ' however ', ' yet ', '. ', '; ', ' and '].map(function (connector) {
+      return { text: left + connector + right + '.', expected };
+    });
+  });
+
+  test.each(generatedPermutations)(
+    'keeps independently generated clause permutations in three-path parity: $text',
+    ({ text, expected }) => {
+      expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(expected);
+      expect(liveClassification(text, 'customer', 'generated-' + generatedPermutations.findIndex(item => item.text === text))).toBe(expected);
+      expect(simulationPipeline.detectEmergencyEvidence([
+        { speaker: 'customer', text },
+      ]).isEmergency).toBe(expected);
+    }
+  );
+
+  test.each(positives)('classifies current customer evidence consistently: %s', (text) => {
+    expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(true);
+    expect(liveClassification(text, 'customer', positives.indexOf(text))).toBe(true);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(true);
+  });
+
+  test.each(negatives)('rejects non-current or negated customer evidence consistently: %s', (text) => {
+    expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(false);
+    expect(liveClassification(text, 'customer', negatives.indexOf(text))).toBe(false);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(false);
+  });
+
+  test.each([' customer ', 'Customer', 'CALLER', ' client ', 'HomeOwner', ' USER '])(
+    'normalizes supported customer role alias %s',
+    (speaker) => {
+      const text = 'There is an uncontrolled leak right now.';
+      expect(detectEmergencyEvidence([{ speaker, text }]).isEmergency).toBe(true);
+      expect(liveClassification(text, speaker, speaker)).toBe(true);
+      expect(simulationPipeline.detectEmergencyEvidence([{ speaker, text }]).isEmergency).toBe(true);
+    }
+  );
+
+  test.each(permutations)('preserves hazard-local evidence across grammatical permutations: %s', (text) => {
+    expect(detectEmergencyEvidence([{ speaker: 'CuStOmEr', text }]).isEmergency).toBe(true);
+    expect(liveClassification(text, 'CuStOmEr', permutations.indexOf(text))).toBe(true);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'CuStOmEr', text },
+    ]).isEmergency).toBe(true);
+  });
+
+  test.each(allNegated)('keeps every coordinated hazard negative: %s', (text) => {
+    expect(detectEmergencyEvidence([{ speaker: 'customer', text }]).isEmergency).toBe(false);
+    expect(liveClassification(text, 'customer', allNegated.indexOf(text))).toBe(false);
+    expect(simulationPipeline.detectEmergencyEvidence([
+      { speaker: 'customer', text },
+    ]).isEmergency).toBe(false);
+  });
+
+  test.each(['Agent', 'AI', 'Assistant', 'Bot', 'System', 'Unknown', '', null, undefined])(
+    'default-denies non-customer speaker %s',
+    (speaker) => {
+      const text = 'Emergency fire smoke flooding sparking uncontrolled leak danger right now.';
+      expect(detectEmergencyEvidence([{ speaker, text }]).isEmergency).toBe(false);
+      expect(liveClassification(text, speaker, String(speaker))).toBe(false);
+      expect(simulationPipeline.detectEmergencyEvidence([{ speaker, text }]).isEmergency).toBe(false);
+    }
+  );
+});
+
 describe('getSessionGuidance / clearSessionGuidance', () => {
   test('returns empty array for unknown session', () => {
     expect(getSessionGuidance('nonexistent')).toEqual([]);
@@ -415,7 +599,7 @@ describe('getSessionGuidance / clearSessionGuidance', () => {
   test('clears guidance for a session', () => {
     handleTranscriptSegment({
       sessionId: 'clear-test',
-      data: { text: 'This is an emergency!' },
+      data: { text: 'The basement is flooding right now.', speaker: 'customer' },
     });
     expect(getSessionGuidance('clear-test').length).toBeGreaterThan(0);
 

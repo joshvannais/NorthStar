@@ -23,8 +23,8 @@ const dataLoader = require('../services/dataLoader');
  * @param {Object} [computed.leadIntelMap] - Map of leadId → intelligence result
  * @returns {string} Formatted business context text
  */
-function buildBusinessContext(pageContext, computed) {
-  const data = dataLoader.loadData();
+function buildBusinessContext(pageContext, computed, scopedData) {
+  const data = scopedData || dataLoader.loadData();
   const parts = [];
 
   // ── Business Overview ──
@@ -211,8 +211,8 @@ function buildBusinessContext(pageContext, computed) {
  * @param {Object} [computed.dashboardIntel] - Dashboard customer intelligence
  * @returns {Object} Compact context JSON
  */
-function buildCompactContext(pageContext, computed) {
-  const data = dataLoader.loadData();
+function buildCompactContext(pageContext, computed, scopedData) {
+  const data = scopedData || dataLoader.loadData();
   const context = {
     overview: {
       totalLeads: data.leads.length,

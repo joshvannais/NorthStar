@@ -24,9 +24,9 @@
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
+const { dataPath } = require('./dataPaths');
 
-const PROFILE_PATH = path.resolve(__dirname, '../../data/business-profile.json');
+const PROFILE_PATH = dataPath('business-profile.json');
 
 // In-memory cache
 let _profile = null;

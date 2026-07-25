@@ -195,6 +195,7 @@ function createJob(data) {
     location: data.location || null,
     notes: data.notes || null,
     tags: Array.isArray(data.tags) ? data.tags.slice() : [],
+    metadata: data.metadata ? Object.assign({}, data.metadata) : {},
     createdAt: now,
     updatedAt: now,
   };
@@ -223,6 +224,7 @@ function updateJob(id, updates) {
   if (updates.tags !== undefined) job.tags = updates.tags.slice();
   if (updates.estimatedCost !== undefined) job.costs.estimatedCost = updates.estimatedCost;
   if (updates.totalUnits !== undefined) job.production.totalUnits = updates.totalUnits;
+  if (updates.metadata !== undefined) job.metadata = Object.assign({}, updates.metadata);
 
   if (updates.priority !== undefined) {
     var pc = _validatePriority(updates.priority);

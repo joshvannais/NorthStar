@@ -381,16 +381,31 @@ function getTimeline(customerId, filters) {
 
 // ── Communication Intelligence ──
 
+function _communicationsForIntelligence(customerId, filters, records) {
+  if (!Array.isArray(records)) return getCommunications(customerId, filters);
+  var results = records.filter(function (communication) {
+    if (communication.customerId !== customerId) return false;
+    if (filters && filters.status && communication.status !== filters.status) return false;
+    if (filters && filters.dateFrom && communication.createdAt < filters.dateFrom) return false;
+    return true;
+  }).sort(function (a, b) {
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+  var total = results.length;
+  if (filters && filters.limit && filters.limit > 0) results = results.slice(0, filters.limit);
+  return { communications: results, total: total };
+}
+
 /**
  * Get the last contact timestamp for a customer.
  *
  * @param {string} customerId - Customer ID
  * @returns {object} { customerId, lastContactAt, daysSince }
  */
-function getLastContact(customerId) {
+function getLastContact(customerId, records) {
   if (!customerId) return { error: 'Customer ID is required' };
 
-  var comms = getCommunications(customerId, { limit: 1 });
+  var comms = _communicationsForIntelligence(customerId, { limit: 1 }, records);
   if (comms.total === 0) {
     return { customerId: customerId, lastContactAt: null, daysSince: null };
   }
@@ -414,12 +429,12 @@ function getLastContact(customerId) {
  * @param {number} [days=30] - Number of days to analyze
  * @returns {object} Frequency analysis
  */
-function getCommunicationFrequency(customerId, days) {
+function getCommunicationFrequency(customerId, days, records) {
   if (!customerId) return { error: 'Customer ID is required' };
   days = days || 30;
 
   var dateFrom = new Date(Date.now() - days * 86400000).toISOString();
-  var comms = getCommunications(customerId, { dateFrom: dateFrom });
+  var comms = _communicationsForIntelligence(customerId, { dateFrom: dateFrom }, records);
 
   var byType = {};
   var byDirection = {};
@@ -446,14 +461,14 @@ function getCommunicationFrequency(customerId, days) {
  * @param {string} customerId - Customer ID
  * @returns {object} Engagement score
  */
-function getEngagementScore(customerId) {
+function getEngagementScore(customerId, records) {
   if (!customerId) return { error: 'Customer ID is required' };
 
   var score = 50; // Base score
   var factors = {};
 
   // Factor 1: Recency (0–25 points)
-  var lastContact = getLastContact(customerId);
+  var lastContact = getLastContact(customerId, records);
   if (lastContact.daysSince !== null) {
     var recencyScore = 0;
     if (lastContact.daysSince < 3) recencyScore = 25;
@@ -468,7 +483,7 @@ function getEngagementScore(customerId) {
   }
 
   // Factor 2: Volume (0–15 points)
-  var freq = getCommunicationFrequency(customerId, 90);
+  var freq = getCommunicationFrequency(customerId, 90, records);
   var volumeScore = 0;
   if (freq.totalCommunications >= 20) volumeScore = 15;
   else if (freq.totalCommunications >= 10) volumeScore = 10;
@@ -515,13 +530,13 @@ function getEngagementScore(customerId) {
  * @param {string} customerId - Customer ID
  * @returns {object} Follow-up recommendations
  */
-function getFollowUpRecommendations(customerId) {
+function getFollowUpRecommendations(customerId, records) {
   if (!customerId) return { error: 'Customer ID is required' };
 
   var recommendations = [];
   var reasons = [];
 
-  var lastContact = getLastContact(customerId);
+  var lastContact = getLastContact(customerId, records);
 
   // Check for long gap since last contact
   if (lastContact.daysSince !== null) {
@@ -538,14 +553,14 @@ function getFollowUpRecommendations(customerId) {
   }
 
   // Check for missed communications
-  var missed = getCommunications(customerId, { status: 'missed' });
+  var missed = _communicationsForIntelligence(customerId, { status: 'missed' }, records);
   if (missed.total > 0) {
     recommendations.push('Return ' + missed.total + ' missed communication(s)');
     reasons.push('missed');
   }
 
   // Check for pending communications
-  var pending = getCommunications(customerId, { status: 'pending' });
+  var pending = _communicationsForIntelligence(customerId, { status: 'pending' }, records);
   if (pending.total > 0) {
     recommendations.push('Resolve ' + pending.total + ' pending communication(s)');
     reasons.push('pending');

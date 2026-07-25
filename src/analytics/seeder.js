@@ -34,7 +34,10 @@ function genTranscript(service, name) {
   return `AI: NorthStar Solutions, this is your AI receptionist. How can I help?\nCustomer: I need help with ${service}.\nAI: I can definitely help you with that. May I have your name?\nCustomer: ${name}.\nAI: What's your address?\nCustomer: ${rand(100,9999)} ${STREETS[rand(0,STREETS.length-1)]}, ${CITIES[rand(0,CITIES.length-1)]}.\nAI: Great, I have you down for ${service}. We'll have an estimator contact you shortly. Thank you!\nCustomer: Thanks!`;
 }
 
-async function seedDemoData(userId) {
+async function seedDemoData(userId, organizationId) {
+  if (!organizationId) throw new Error('Validated organization context is required');
+  if (!db.isAvailable()) throw new Error('Required persistence is unavailable');
+  await db.query('SELECT 1');
   const numRecords = rand(15, 30);
   const seeded = [];
   for (let i = 0; i < numRecords; i++) {
@@ -52,14 +55,17 @@ async function seedDemoData(userId) {
       serviceRequested: service, preferredTime: ['Morning','Afternoon','Anytime'][rand(0,2)],
       notes: `Demo call about ${service}`, callOutcome: outcome, estimatedPrice: price,
       source: 'phone_call', receivedAt, transcript: genTranscript(service, name),
-      summary: `Customer called about ${service}. Estimated value: $${price.toLocaleString()}. Outcome: ${outcome}.`
+      summary: `Customer called about ${service}. Estimated value: $${price.toLocaleString()}. Outcome: ${outcome}.`,
+      ownerUserId: userId,
+      organizationId: organizationId,
     });
-    if (db.isAvailable()) {
-      try { await db.query('INSERT INTO call_records (caller_name, service_type, estimated_price, outcome, source, created_at) VALUES ($1,$2,$3,$4,$5,$6)', [name, service, price, outcome, 'demo', receivedAt]); } catch {}
-    }
+    await db.query(
+      'INSERT INTO call_records (organization_id, caller_name, service_type, estimated_price, outcome, source, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [organizationId, name, service, price, outcome, 'demo', receivedAt]
+    );
     seeded.push(lead);
   }
-  console.log(`[Seeder] Seeded ${seeded.length} demo records for user ${userId}`);
+  console.log(`[Seeder] Seeded ${seeded.length} demo records for organization ${organizationId}`);
   return seeded;
 }
 

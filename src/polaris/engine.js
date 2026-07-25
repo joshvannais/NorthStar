@@ -22,6 +22,14 @@ const store = require('./store');
 const estimation = require('./estimation');
 const learning = require('./learning');
 const recommendations = require('./recommendations');
+const demoScope = require('../services/demoRecordScope');
+
+function visible(records) {
+  const access = demoScope.resolveAccess();
+  return access && access.enforceOwner
+    ? demoScope.filterTenantRecords(records, access)
+    : (Array.isArray(records) ? records : []);
+}
 
 /**
  * Initialize Polaris — load all data stores.
@@ -71,7 +79,7 @@ function generateRecommendations(data) {
 }
 
 function getRecommendations(resolved) {
-  return recommendations.getRecommendations(resolved);
+  return visible(recommendations.getRecommendations(resolved));
 }
 
 function resolveRecommendation(id) {
@@ -81,15 +89,15 @@ function resolveRecommendation(id) {
 // ── Store Access ──
 
 function getCompletedJobs() {
-  return store.getAllJobs();
+  return visible(store.getAllJobs());
 }
 
 function getHistoricalEstimates() {
-  return store.getAllEstimates();
+  return visible(store.getAllEstimates());
 }
 
 function getLearningMetrics() {
-  return store.getAllMetrics();
+  return visible(store.getAllMetrics());
 }
 
 // ── Analytics Queries ──

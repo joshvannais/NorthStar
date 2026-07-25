@@ -7,7 +7,25 @@
  */
 'use strict';
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const originalDataDir = process.env.NORTHSTAR_DATA_DIR;
+const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-phase-f-next-step-'));
+fs.copyFileSync(
+  path.resolve(__dirname, '../../data/business-profile.json'),
+  path.join(testDataDir, 'business-profile.json')
+);
+process.env.NORTHSTAR_DATA_DIR = testDataDir;
+
 const { buildPolarisIntelligence } = require('../../src/routes/demo');
+
+afterAll(function () {
+  fs.rmSync(testDataDir, { recursive: true, force: true });
+  if (originalDataDir === undefined) delete process.env.NORTHSTAR_DATA_DIR;
+  else process.env.NORTHSTAR_DATA_DIR = originalDataDir;
+});
 
 // ── Fixtures ──
 

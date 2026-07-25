@@ -31,7 +31,12 @@ function securityHeaders(req, res, next) {
   // Content Security Policy
   const csp = getCspDirectives();
   const cspString = Object.entries(csp)
-    .map(([key, values]) => `${key} ${values.join(' ')}`)
+    .map(([key, values]) => {
+      const directive = key.replace(/[A-Z]/g, function (character) {
+        return '-' + character.toLowerCase();
+      });
+      return `${directive} ${values.join(' ')}`;
+    })
     .join('; ');
   res.setHeader('Content-Security-Policy', cspString);
 

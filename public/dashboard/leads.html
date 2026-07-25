@@ -344,6 +344,7 @@
 
   
 
+  <script src="/js/demo-session.js"></script>
   <script src="/js/event-bus.js"></script>
   <script src="/js/communications-engine.js"></script>
   <script src="/js/business-models.js"></script>
@@ -360,22 +361,12 @@
   <script src="/js/polaris-api.js"></script>
   <script>
     // Premium notification toasts
-    window.showToast = showNotification;
     window.showNotification = NotificationService.show;
+    window.showToast = window.showNotification;
 
     // ── Demo session lifecycle — clean state on page reload ──
     (function() {
-      var isReload = false;
-      if (performance && performance.getEntriesByType) {
-        try { var navs = performance.getEntriesByType('navigation'); isReload = navs.length > 0 && navs[0].type === 'reload'; } catch(e) {}
-      }
-      if (!isReload && performance && performance.navigation) {
-        isReload = performance.navigation.type === 1;
-      }
-      if (isReload || !sessionStorage.getItem('northstarSessionId')) {
-        sessionStorage.setItem('northstarSessionId', 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
-      }
-      window.SIM_SESSION_ID = sessionStorage.getItem('northstarSessionId');
+      window.SIM_SESSION_ID = window.NorthStarDemoSession.id;
     })();
 
     // Page-local leads array — fetched from canonical Polaris API (server source of truth).
@@ -402,17 +393,7 @@
     }
 
     function _normalizeLead(opp, customer) {
-      return {
-        id: opp.id, customerId: opp.customerId,
-        callerName: customer ? customer.name : (opp.title || '').split(' - ').pop() || 'Unknown',
-        phone: customer ? customer.phone : '', service: opp.title ? opp.title.split(' - ')[0] : 'General',
-        estimatedPrice: opp.estimatedValue || 0, jobDetail: opp.description || '',
-        status: opp.stage === 'lead' ? 'new' : opp.stage,
-        outcome: opp.status === 'won' ? 'appointment-set' : opp.status === 'lost' ? 'no-interest' : 'lead-captured',
-        stage: opp.stage, stageDisplayName: opp.stageDisplayName,
-        probability: opp.probability, expectedRevenue: opp.expectedRevenue,
-        priority: opp.priority, createdAt: opp.createdAt, updatedAt: opp.updatedAt, source: 'polaris',
-      };
+      return PolarisApi.normalizeLead(opp, customer);
     }
 
     function fetchLeads() {
@@ -433,6 +414,8 @@
             lead.time = lead.createdAt; lead.receivedAt = lead.createdAt;
             lead.phoneNumber = lead.phone; lead.customerName = lead.callerName;
             lead.description = lead.jobDetail;
+            lead.metadata = lead.metadata || opp.metadata || {};
+            lead.canonicalPolaris = lead.canonicalPolaris || lead.metadata.polarisIntelligence || null;
             return lead;
           });
         } else { pageLeads = []; }

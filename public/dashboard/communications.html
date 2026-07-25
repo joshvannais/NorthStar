@@ -623,6 +623,7 @@
     </div>
   </div>
 </div>
+<script src="/js/demo-session.js"></script>
 <script src="/js/event-bus.js"></script>
   <script src="/js/communications-engine.js"></script>
 <script src="/js/business-models.js"></script>
@@ -641,17 +642,7 @@
 <script>
 // ── Demo session lifecycle — clean state on page reload ──
 (function() {
-  var isReload = false;
-  if (performance && performance.getEntriesByType) {
-    try { var navs = performance.getEntriesByType('navigation'); isReload = navs.length > 0 && navs[0].type === 'reload'; } catch(e) {}
-  }
-  if (!isReload && performance && performance.navigation) {
-    isReload = performance.navigation.type === 1;
-  }
-  if (isReload || !sessionStorage.getItem('northstarSessionId')) {
-    sessionStorage.setItem('northstarSessionId', 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
-  }
-  window.SIM_SESSION_ID = sessionStorage.getItem('northstarSessionId');
+  window.SIM_SESSION_ID = window.NorthStarDemoSession.id;
 })();
 
 // ===== Executive Filter State =====
@@ -850,19 +841,12 @@ function _authFetch(url, opts) {
 }
 
 function _normalizeCommunication(comm) {
-  return {
-    id: comm.id, customerId: comm.customerId,
-    callerName: comm.customerName || '', phone: comm.customerPhone || '',
-    type: comm.type || 'call', direction: comm.direction || 'inbound',
-    subject: comm.subject || '', content: comm.content || '',
-    status: comm.status || 'completed', duration: comm.duration,
-    createdAt: comm.createdAt, updatedAt: comm.updatedAt,
-  };
+  return PolarisApi.normalizeCommunication(comm);
 }
 
 // ===== Fetch communications from canonical Polaris API (server source of truth) ==== 
 function fetchCommunications() {
-  return _authFetch('/api/v1/communications?limit=50').then(function(result) {
+  return _authFetch('/api/v1/communications?type=call&limit=50').then(function(result) {
     if (result && result.communications && result.communications.length > 0) {
       pageCalls = result.communications.map(function(comm) {
         var n = _normalizeCommunication(comm);
@@ -872,14 +856,16 @@ function fetchCommunications() {
           callerName: n.callerName || comm.customerId || 'Unknown',
           customerName: n.callerName || comm.customerId || 'Unknown',
           phone: n.phone || '', phoneNumber: n.phone || '',
-          service: comm.type === 'call' ? (comm.subject || 'Call') : (comm.type || 'call'),
-          avgPrice: 0, estimatedPrice: 0,
+          service: n.service,
+          avgPrice: n.estimatedPrice || 0, estimatedPrice: n.estimatedPrice,
           jobDetail: comm.content || comm.subject || '',
           description: comm.content || comm.subject || '',
           status: comm.status || 'completed', outcome: comm.status || 'completed',
           receivedAt: comm.createdAt, time: comm.createdAt, createdAt: comm.createdAt,
           duration: comm.duration || '', transcript: comm.content || '',
-          summary: comm.subject || '', source: 'polaris'
+          summary: comm.subject || '', source: 'polaris',
+          metadata: n.metadata, canonicalPolaris: n.canonicalPolaris,
+          confidenceScore: n.confidenceScore, recommendedAction: n.recommendedAction
         };
       });
     } else { pageCalls = []; }

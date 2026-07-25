@@ -13,6 +13,9 @@ const db = require('../db');
 const jobber = require('../integrations/jobber');
 const config = require('../config');
 const { requireAuth } = require('../auth/middleware');
+const { requireOrgMembership } = require('../auth/permissions');
+const { requirePermission } = require('../auth/authorize');
+const demoScope = require('../services/demoRecordScope');
 
 const router = express.Router();
 
@@ -60,6 +63,16 @@ router.get('/health', (req, res) => {
     timestamp: now,
     uptime: process.uptime(),
     components,
+  });
+});
+
+/**
+ * GET /api/version
+ * Minimal production build identifier for deployed-SHA verification.
+ */
+router.get('/version', (req, res) => {
+  res.json({
+    buildSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
   });
 });
 
@@ -167,16 +180,58 @@ router.use('/v1/voice', voiceRouter);
 // ══════════════════════════════════════════════
 router.use(requireAuth);
 
+function leadAccess(req) {
+  return demoScope.createAccessContext(req);
+}
+
+function visibleLeads(req) {
+  return demoScope.filterTenantRecords(getAllLeads(), leadAccess(req));
+}
+
+function visibleLead(req, id) {
+  const lead = getLead(id);
+  return lead && demoScope.canAccessTenant(lead, leadAccess(req)) ? lead : null;
+}
+
+function ownedLeadInput(req, input) {
+  const body = Object.assign({}, input || {});
+  delete body.recordScope;
+  delete body.source;
+  delete body.simulationSessionId;
+  delete body.demoSessionId;
+  delete body.ownerUserId;
+  delete body.organizationId;
+  delete body.metadata;
+  body.ownerUserId = req.user && (req.user.sub || req.user.id);
+  body.organizationId = req.orgId || (req.user && (req.user.organizationId || req.user.orgId)) || null;
+  return body;
+}
+
+function simulatedLeadInput(req, input) {
+  const body = ownedLeadInput(req, input);
+  const sessionId = req.body && req.body.sessionId;
+  if (!sessionId) return body;
+  return Object.assign(body, demoScope.createMetadata(sessionId, {
+    ownerUserId: body.ownerUserId,
+    organizationId: body.organizationId,
+  }));
+}
+
     /**
      * GET /api/stats
      * Return aggregate stats: total calls, total revenue, served from database.
      */
-    router.get('/stats', async (req, res) => {
+    router.get('/stats', requireOrgMembership, requirePermission('dashboard', 'view'), async (req, res) => {
       if (!db.isAvailable()) {
-        return res.json({ totalCalls: 0, totalRevenue: 0, appointmentsBooked: 0 });
+        return res.status(503).json({
+          error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+        });
       }
       try {
-        const result = await db.query("SELECT COUNT(*)::int AS calls, COALESCE(SUM(estimated_price), 0)::float AS revenue, COUNT(*) FILTER (WHERE outcome = 'appointment-set')::int AS appointments FROM call_records WHERE source = 'real'");
+        const result = await db.query(
+          "SELECT COUNT(*)::int AS calls, COALESCE(SUM(estimated_price), 0)::float AS revenue, COUNT(*) FILTER (WHERE outcome = 'appointment-set')::int AS appointments FROM call_records WHERE organization_id = $1 AND source = 'real'",
+          [req.orgId]
+        );
         res.json({
           totalCalls: result.rows[0].calls,
           totalRevenue: Math.round(result.rows[0].revenue),
@@ -184,7 +239,7 @@ router.use(requireAuth);
         });
       } catch (err) {
         console.error('[API] Stats error:', err.message);
-        res.json({ totalCalls: 0, totalRevenue: 0 });
+        res.status(500).json({ error: 'Failed to load stats' });
       }
     });
 
@@ -192,17 +247,22 @@ router.use(requireAuth);
      * POST /api/calls/record
      * Record a simulated call with pricing data from the engine.
      */
-    router.post('/calls/record', async (req, res) => {
+    router.post('/calls/record', requireOrgMembership, requirePermission('calls', 'create'), async (req, res) => {
       if (!db.isAvailable()) {
-        return res.json({ success: true, note: 'DB not available, call not persisted' });
+        return res.status(503).json({
+          error: { code: 'persistence_unavailable', message: 'Required persistence is temporarily unavailable.' },
+        });
       }
       try {
         const { callerName, serviceType, estimatedPrice, jobDetail, source } = req.body;
-        await db.query(
-          'INSERT INTO call_records (caller_name, service_type, estimated_price, job_detail, source) VALUES ($1, $2, $3, $4, $5)',
-          [callerName || '', serviceType || 'Unknown', estimatedPrice || 0, jobDetail || '', source || 'simulator']
+        const result = await db.query(
+          'INSERT INTO call_records (organization_id, caller_name, service_type, estimated_price, job_detail, source) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+          [req.orgId, callerName || '', serviceType || 'Unknown', estimatedPrice || 0, jobDetail || '', source || 'simulator']
         );
-        res.json({ success: true });
+        if (!result.rows || result.rows.length !== 1) {
+          throw new Error('Call record insert returned no row');
+        }
+        res.json({ success: true, id: result.rows[0].id });
       } catch (err) {
         console.error('[API] Record call error:', err.message);
         res.status(500).json({ error: 'Failed to record call' });
@@ -213,18 +273,18 @@ router.use(requireAuth);
  * GET /api/leads
  * Return all leads (for testing/demo purposes).
  */
-router.get('/leads', (req, res) => {
-  const leads = getAllLeads();
-  res.json({ items: leads, count: leads.length });
+router.get('/leads', requireOrgMembership, requirePermission('leads', 'view'), (req, res) => {
+  const items = visibleLeads(req);
+  res.json({ items: items, count: items.length });
 });
 
 /**
  * GET /api/leads/export
  * Export all leads as CSV.
  */
-router.get('/leads/export', (req, res) => {
+router.get('/leads/export', requireOrgMembership, requirePermission('leads', 'view'), (req, res) => {
   const { getAllLeads } = require('../leads/store');
-  const leads = getAllLeads();
+  const leads = demoScope.filterTenantRecords(getAllLeads(), leadAccess(req));
   const fields = ['id','caller','customerName','phone','phoneNumber','service','serviceRequested','status','avgPrice','address','jobAddress','receivedAt','updatedAt','duration','outcome','summary','transcript'];
   const header = fields.join(',');
   const rows = leads.map(function(l) {
@@ -246,8 +306,8 @@ router.get('/leads/export', (req, res) => {
  * GET /api/leads/:id
  * Return a single lead by ID.
  */
-router.get('/leads/:id', (req, res) => {
-  const lead = getLead(req.params.id);
+router.get('/leads/:id', requireOrgMembership, requirePermission('leads', 'view'), (req, res) => {
+  const lead = visibleLead(req, req.params.id);
   if (!lead) {
     return res.status(404).json({ error: 'Lead not found' });
   }
@@ -258,9 +318,9 @@ router.get('/leads/:id', (req, res) => {
  * POST /api/leads
  * Create a new lead.
  */
-router.post('/leads', (req, res) => {
+router.post('/leads', requireOrgMembership, requirePermission('leads', 'create'), (req, res) => {
   const { addLead } = require('../leads/store');
-  const lead = addLead(req.body);
+  const lead = addLead(ownedLeadInput(req, req.body));
   res.json({ success: true, lead });
 });
 
@@ -268,9 +328,13 @@ router.post('/leads', (req, res) => {
  * PUT /api/leads/:id
  * Update an existing lead.
  */
-router.put('/leads/:id', (req, res) => {
+router.put('/leads/:id', requireOrgMembership, requirePermission('leads', 'edit'), (req, res) => {
+  if (!visibleLead(req, req.params.id)) {
+    return res.status(404).json({ error: 'Lead not found' });
+  }
   const { updateLead } = require('../leads/store');
-  const updated = updateLead(req.params.id, req.body);
+  const updates = ownedLeadInput(req, req.body);
+  const updated = updateLead(req.params.id, updates);
   if (!updated) {
     return res.status(404).json({ error: 'Lead not found' });
   }
@@ -281,7 +345,10 @@ router.put('/leads/:id', (req, res) => {
  * DELETE /api/leads/:id
  * Delete a lead.
  */
-router.delete('/leads/:id', (req, res) => {
+router.delete('/leads/:id', requireOrgMembership, requirePermission('leads', 'delete'), (req, res) => {
+  if (!visibleLead(req, req.params.id)) {
+    return res.status(404).json({ error: 'Lead not found' });
+  }
   const { removeLead } = require('../leads/store');
   const removed = removeLead(req.params.id);
   if (!removed) {
@@ -296,7 +363,7 @@ router.delete('/leads/:id', (req, res) => {
  */
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
-router.post('/leads/import', upload.single('file'), (req, res) => {
+router.post('/leads/import', requireOrgMembership, requirePermission('leads', 'create'), upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const { addLead } = require('../leads/store');
@@ -329,18 +396,20 @@ router.post('/leads/import', upload.single('file'), (req, res) => {
           if (vals[j]) lead[headers[j]] = vals[j];
         }
         if (lead.caller || lead.customerName || lead.phone || lead.phoneNumber) {
-          addLead(lead);
+          addLead(ownedLeadInput(req, lead));
           imported++;
         } else {
           skipped++;
         }
       } catch(e) {
-        errors.push({ row: i + 1, error: e.message });
+        console.error('[API] CSV import row failed:', { row: i + 1, message: e.message, stack: e.stack });
+        errors.push({ row: i + 1, error: 'Invalid row data' });
       }
     }
     res.json({ success: true, imported: imported, skipped: skipped, errors: errors.length > 0 ? errors : undefined });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[API] Lead import failed:', { message: err.message, stack: err.stack });
+    res.status(500).json({ error: 'Failed to import leads' });
   }
 });
 
@@ -348,13 +417,13 @@ router.post('/leads/import', upload.single('file'), (req, res) => {
  * POST /api/leads/simulate
  * Simulate a lead for testing (without needing a real phone call).
  */
-router.post('/leads/simulate', async (req, res) => {
+router.post('/leads/simulate', requireOrgMembership, requirePermission('leads', 'create'), async (req, res) => {
   const { addLead } = require('../leads/store');
   const { appendLead } = require('../sheets/client');
   const { sendLeadNotification: sendSms } = require('../notifications/sms');
   const { sendLeadNotification: sendEmail } = require('../notifications/email');
 
-  const lead = addLead({
+  const lead = addLead(simulatedLeadInput(req, {
     customerName: req.body.customerName || 'John Smith',
     phoneNumber: req.body.phoneNumber || '(555) 123-4567',
     address: req.body.address || '123 Oak Street',
@@ -363,7 +432,7 @@ router.post('/leads/simulate', async (req, res) => {
     urgency: req.body.urgency || '',
     callOutcome: 'Lead captured',
     notes: req.body.notes || 'Simulated lead for testing',
-  });
+  }));
 
   await appendLead(lead);
   await Promise.allSettled([sendSms(lead), sendEmail(lead)]);
@@ -375,8 +444,8 @@ router.post('/leads/simulate', async (req, res) => {
  * POST /api/calendar/schedule
  * Schedule an estimate appointment from a lead.
  */
-router.post('/calendar/schedule', async (req, res) => {
-  const lead = getLead(req.body.leadId);
+router.post('/calendar/schedule', requireOrgMembership, requirePermission('calendar', 'schedule'), async (req, res) => {
+  const lead = visibleLead(req, req.body.leadId);
   if (!lead) {
     return res.status(404).json({ error: 'Lead not found' });
   }
@@ -404,7 +473,7 @@ router.post('/retell/create-agent', async (req, res) => {
  * POST /api/retell/create-call
  * Initiate an outbound call via the active Retell AI agent.
  */
-router.post('/retell/create-call', async (req, res) => {
+router.post('/retell/create-call', requireOrgMembership, requirePermission('calls', 'create'), async (req, res) => {
   try {
     const { createCall } = require('../retell/client');
     const result = await createCall(req.body.phoneNumber, config.retell.agentId, {
@@ -417,7 +486,7 @@ router.post('/retell/create-call', async (req, res) => {
     }
     const { addLead } = require('../leads/store');
     const { appendLead } = require('../sheets/client');
-    const lead = addLead({
+    const lead = addLead(ownedLeadInput(req, {
       caller: req.body.caller || 'Outbound Call',
       phone: req.body.phoneNumber,
       phoneNumber: req.body.phoneNumber,
@@ -427,12 +496,12 @@ router.post('/retell/create-call', async (req, res) => {
       outcome: 'outbound_call',
       receivedAt: new Date().toISOString(),
       summary: 'Outbound call via Retell AI',
-    });
+    }));
     await appendLead(lead).catch(function() {});
     res.json({ success: true, callId: result.call_id, status: result.call_status, lead });
   } catch (err) {
-    console.error('[API] Retell create-call error:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('[API] Retell create-call error:', { message: err.message, stack: err.stack });
+    res.status(500).json({ error: { code: 'provider_error', message: 'The outbound call could not be created.' } });
   }
 });
 
@@ -446,7 +515,8 @@ router.post('/retell/verify', async (req, res) => {
     const result = await verifyApiKey();
     res.json(result);
   } catch (err) {
-    res.json({ success: false, error: err.message });
+    console.error('[API] Retell verification failed:', { message: err.message, stack: err.stack });
+    res.status(502).json({ success: false, error: { code: 'provider_error', message: 'Retell verification failed.' } });
   }
 });
 
@@ -460,7 +530,8 @@ router.post('/retell/send-sms', async (req, res) => {
     const result = await sendSMS(req.body.phoneNumber, req.body.message);
     res.json(result);
   } catch (err) {
-    res.json({ success: false, error: err.message });
+    console.error('[API] SMS delivery failed:', { message: err.message, stack: err.stack });
+    res.status(502).json({ success: false, error: { code: 'provider_error', message: 'The message could not be sent.' } });
   }
 });
 

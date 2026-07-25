@@ -19,8 +19,9 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { getDataDir } = require('../services/dataPaths');
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = getDataDir();
 const FILE_PATH = path.join(DATA_DIR, 'polaris-customers.json');
 
 // ── In-memory cache ──

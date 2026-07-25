@@ -16,6 +16,7 @@
  */
 
 const store = require('./store');
+const demoScope = require('../services/demoRecordScope');
 
 // ── Base Configuration ──
 // These are seeded defaults. Companies can override via loadEstimationConfig().
@@ -91,28 +92,50 @@ const DEFAULT_CONFIG = {
   taxRate: 0.07,
 };
 
-let _config = { ...DEFAULT_CONFIG };
+let _config = deepMerge({}, DEFAULT_CONFIG);
+const organizationConfigs = new Map();
+
+function currentOrganizationId() {
+  const access = demoScope.resolveAccess();
+  return access && access.enforceOwner && access.organizationId
+    ? String(access.organizationId)
+    : null;
+}
+
+function currentConfig() {
+  const organizationId = currentOrganizationId();
+  if (!organizationId) return _config;
+  if (!organizationConfigs.has(organizationId)) {
+    organizationConfigs.set(organizationId, deepMerge({}, DEFAULT_CONFIG));
+  }
+  return organizationConfigs.get(organizationId);
+}
 
 /**
  * Load a custom estimation configuration (merges with defaults).
  */
 function loadConfig(customConfig) {
   if (!customConfig) return;
-  _config = deepMerge(_config, customConfig);
+  const organizationId = currentOrganizationId();
+  const merged = deepMerge(currentConfig(), customConfig);
+  if (organizationId) organizationConfigs.set(organizationId, merged);
+  else _config = merged;
 }
 
 /**
  * Get the current configuration.
  */
 function getConfig() {
-  return { ..._config };
+  return deepMerge({}, currentConfig());
 }
 
 /**
  * Reset configuration to defaults.
  */
 function resetConfig() {
-  _config = { ...DEFAULT_CONFIG };
+  const organizationId = currentOrganizationId();
+  if (organizationId) organizationConfigs.delete(organizationId);
+  else _config = deepMerge({}, DEFAULT_CONFIG);
 }
 
 /**
@@ -140,7 +163,7 @@ function assessComplexity(jobData) {
  * Determine property size tier from square footage.
  */
 function getPropertySizeTier(sqft) {
-  const tiers = _config.propertySize;
+  const tiers = currentConfig().propertySize;
   if (!sqft || sqft <= 0) return tiers.medium;
   for (const key of ['small', 'medium', 'large', 'xlarge']) {
     if (sqft <= tiers[key].maxSqft) return tiers[key];
@@ -152,7 +175,7 @@ function getPropertySizeTier(sqft) {
  * Get the seasonality multiplier for a given month.
  */
 function getSeasonalityMultiplier(month) {
-  return _config.seasonality[month] || 1.0;
+  return currentConfig().seasonality[month] || 1.0;
 }
 
 /**
@@ -164,11 +187,12 @@ function getSeasonalityMultiplier(month) {
 function generateEstimate(data) {
   if (!data || !data.serviceType) return null;
 
+  const config = currentConfig();
   const svc = data.serviceType;
   const complexity = assessComplexity(data);
-  const comp = _config.complexity[complexity] || _config.complexity.low;
-  const baseHours = data.estimatedHours || _config.baseHours[svc] || _config.baseHours['General'];
-  const hourlyRate = _config.laborRates[svc] || _config.laborRates['General'];
+  const comp = config.complexity[complexity] || config.complexity.low;
+  const baseHours = data.estimatedHours || config.baseHours[svc] || config.baseHours['General'];
+  const hourlyRate = config.laborRates[svc] || config.laborRates['General'];
   const propertyTier = getPropertySizeTier(data.squareFootage);
   const seasonality = getSeasonalityMultiplier(data.month !== undefined ? data.month : new Date().getMonth());
   const travelDistance = data.travelDistance || 0;
@@ -179,14 +203,14 @@ function generateEstimate(data) {
 
   const materialCost = data.materialCost || Math.round(baseHours * 45 * comp.material * propertyTier.multiplier * 100) / 100;
   const equipmentCost = data.equipmentCost || 0;
-  const travelCost = Math.round(travelDistance * _config.travelCostPerMile * 100) / 100;
+  const travelCost = Math.round(travelDistance * config.travelCostPerMile * 100) / 100;
 
   const directCosts = laborCost + materialCost + equipmentCost + travelCost;
-  const overhead = Math.round(directCosts * _config.overheadPct * 100) / 100;
+  const overhead = Math.round(directCosts * config.overheadPct * 100) / 100;
   const subtotal = directCosts + overhead;
-  const profit = Math.round(subtotal * (data.profitMargin !== undefined ? data.profitMargin : _config.profitMargin) * 100) / 100;
+  const profit = Math.round(subtotal * (data.profitMargin !== undefined ? data.profitMargin : config.profitMargin) * 100) / 100;
   const beforeTax = subtotal + profit;
-  const tax = Math.round(beforeTax * (data.taxRate !== undefined ? data.taxRate : _config.taxRate) * 100) / 100;
+  const tax = Math.round(beforeTax * (data.taxRate !== undefined ? data.taxRate : config.taxRate) * 100) / 100;
   const total = beforeTax + tax;
 
   // ── Confidence scoring ──
@@ -208,8 +232,8 @@ function generateEstimate(data) {
     { type: 'labor',     label: 'Labor — ' + svc,                hours: Math.round(adjustedHours * 10) / 10, rate: hourlyRate, amount: laborCost },
     { type: 'materials', label: 'Materials & Supplies',          amount: materialCost },
     { type: 'equipment', label: 'Equipment',                     amount: equipmentCost },
-    { type: 'travel',    label: 'Travel (' + travelDistance + ' mi @ $' + _config.travelCostPerMile + '/mi)', amount: travelCost },
-    { type: 'overhead',  label: 'Overhead (' + Math.round(_config.overheadPct * 100) + '%)', amount: overhead },
+    { type: 'travel',    label: 'Travel (' + travelDistance + ' mi @ $' + config.travelCostPerMile + '/mi)', amount: travelCost },
+    { type: 'overhead',  label: 'Overhead (' + Math.round(config.overheadPct * 100) + '%)', amount: overhead },
     { type: 'profit',    label: 'Profit Margin',                  amount: profit },
     { type: 'tax',       label: 'Sales Tax',                      amount: tax },
   ].filter(item => item.amount > 0);
@@ -262,6 +286,7 @@ function generateEstimate(data) {
       totalEstimated: total,
       confidence: confidence,
       variables: estimate.variables,
+      metadata: data.metadata ? Object.assign({}, data.metadata) : {},
     });
   } catch (e) {
     console.warn('[PolarisEstimation] Failed to persist estimate:', e.message);

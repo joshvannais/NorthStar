@@ -19,7 +19,15 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth/middleware');
-const sessionReg = require('./simulation/session-registry');
+const { requireOrgMembership } = require('../auth/permissions');
+const { permissionFor } = require('../auth/polarisRoutePermissions');
+const demoScope = require('../services/demoRecordScope');
+const canonicalPolaris = require('../services/canonicalPolaris');
+const sessionScopedOpportunity = require('../services/sessionScopedOpportunity');
+
+function mutationPermission(method, path) {
+  return permissionFor('polaris-engines', method, path);
+}
 
 /**
  * Filter an array of records by sessionId.
@@ -27,13 +35,66 @@ const sessionReg = require('./simulation/session-registry');
  * Simulated records are included only if they belong to the requested session.
  */
 function _filterBySession(records, sessionId) {
-  if (!sessionId) return records;
-  const allSessionIds = sessionReg.getAllSessionRecordIds();
-  return records.filter(function(r) {
-    if (!r || !r.id) return true;
-    if (!allSessionIds.has(r.id)) return true;       // real record — always visible
-    return sessionReg.isInSession(r.id, sessionId);   // simulated — only if in this session
-  });
+  return demoScope.filterRecords(records, sessionId);
+}
+
+function _filterCollection(result, key, sessionId) {
+  if (!result || !Array.isArray(result[key])) return result;
+  result[key] = _filterBySession(result[key], sessionId);
+  result.total = result[key].length;
+  return result;
+}
+
+function _filterThenPaginate(result, key, sessionId, limit, offset) {
+  if (!result || !Array.isArray(result[key])) return result;
+  var visible = _filterBySession(result[key], sessionId);
+  var start = Number(offset) > 0 ? Number(offset) : 0;
+  var maximum = Number(limit) > 0 ? Number(limit) : null;
+  result.total = visible.length;
+  result[key] = maximum == null ? visible.slice(start) : visible.slice(start, start + maximum);
+  return result;
+}
+
+function _denyHiddenSimulation(record, sessionId, res) {
+  if (record && !record.error &&
+      demoScope.canAccessTenant(record, demoScope.resolveAccess(sessionId))) return false;
+  res.status(404).json({ error: 'Record not found' });
+  return true;
+}
+
+function _sanitizePublicBody(body) {
+  var clean = Object.assign({}, body || {});
+  delete clean.recordScope;
+  delete clean.simulationSessionId;
+  delete clean.demoSessionId;
+  delete clean.ownerUserId;
+  delete clean.organizationId;
+  if (clean.source === 'simulation') delete clean.source;
+  if (clean.metadata && typeof clean.metadata === 'object') {
+    clean.metadata = Object.assign({}, clean.metadata);
+    delete clean.metadata.recordScope;
+    delete clean.metadata.source;
+    delete clean.metadata.simulationSessionId;
+    delete clean.metadata.ownerUserId;
+    delete clean.metadata.organizationId;
+  }
+  var context = demoScope.resolveAccess();
+  if (context && context.enforceOwner && context.organizationId) {
+    clean.metadata = Object.assign({}, clean.metadata || {}, {
+      ownerUserId: context.userId,
+      organizationId: context.organizationId,
+    });
+  }
+  return clean;
+}
+
+function _bodyWithInheritedScope(body, parent) {
+  var clean = _sanitizePublicBody(body);
+  if (parent && demoScope.isSimulation(parent)) {
+    var inherited = Object.assign({}, clean.metadata || {}, parent.metadata || {});
+    clean.metadata = demoScope.createMetadata(demoScope.getSessionId(parent), inherited);
+  }
+  return clean;
 }
 
 // ── Engine References ──
@@ -73,11 +134,42 @@ function _getEngines() {
 // ── Middleware ──
 router.use((req, res, next) => {
   res.setHeader('X-Polaris-Engines-Version', '13.0');
+  const sendJson = res.json.bind(res);
+  res.json = function (body) {
+    const rawError = body && body.error;
+    const rawMessage = typeof rawError === 'string'
+      ? rawError
+      : rawError && typeof rawError.message === 'string' ? rawError.message : null;
+    if (res.statusCode >= 500 && rawMessage) {
+      console.error('[Polaris Engines] Internal route failure:', {
+        correlationId: req.correlationId,
+        method: req.method,
+        path: req.path,
+        message: rawMessage,
+      });
+      const safe = {
+        error: { code: 'internal_error', message: 'An unexpected error occurred. Please try again.' },
+      };
+      if (body && body.success === false) safe.success = false;
+      return sendJson(safe);
+    }
+    return sendJson(body);
+  };
   next();
 });
 
 // All engine routes require authentication
 router.use(requireAuth);
+router.use(requireOrgMembership);
+router.use(function (req, res, next) {
+  demoScope.runWithAccess(req, next);
+});
+router.use(function (req, _res, next) {
+  if (/^(?:POST|PUT|PATCH)$/.test(req.method) && req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+    req.body = _sanitizePublicBody(req.body);
+  }
+  next();
+});
 
 // ══════════════════════════════════════════════
 // CUSTOMER ENGINE
@@ -94,8 +186,15 @@ router.get('/customers', (req, res) => {
     if (req.query.status) filters.status = req.query.status;
     if (req.query.search) filters.search = req.query.search;
     var result = e.listCustomers(filters);
-    if (result && result.customers) {
-      result.customers = _filterBySession(result.customers, req.query.sessionId);
+    if (result && Array.isArray(result.customers)) {
+      var visibleIds = demoScope.filterRecords(result.customers.map(function (summary) {
+        return e.getCustomer(summary.id) || summary;
+      }), req.query.sessionId).reduce(function (ids, customer) {
+        ids[customer.id] = true;
+        return ids;
+      }, {});
+      result.customers = result.customers.filter(function (summary) { return visibleIds[summary.id]; });
+      result.total = result.customers.length;
     }
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -105,10 +204,10 @@ router.get('/customers', (req, res) => {
  * POST /api/v1/customers
  * Create a new customer.
  */
-router.post('/customers', (req, res) => {
+router.post('/customers', mutationPermission('POST', '/customers'), (req, res) => {
   try {
     var e = _getEngines().customers;
-    var result = e.createCustomer(req.body);
+    var result = e.createCustomer(_sanitizePublicBody(req.body));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -122,19 +221,52 @@ router.get('/customers/:id', (req, res) => {
   try {
     var e = _getEngines().customers;
     var result = e.getCustomer(req.params.id);
-    if (result.error) return res.status(404).json(result);
+    if (_denyHiddenSimulation(result, req.query.sessionId, res)) return;
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * GET /api/v1/customers/:id/polaris
+ * Return the canonical Polaris object without changing the legacy lead-intelligence API.
+ */
+router.get('/customers/:id/polaris', (req, res) => {
+  try {
+    var e = _getEngines();
+    var customer = e.customers.getCustomer(req.params.id);
+    if (!customer || customer.error || !demoScope.canAccess(customer, req.query.sessionId)) {
+      return res.status(404).json({ success: false, error: 'Customer not found' });
+    }
+    var records = [customer]
+      .concat(_filterBySession(e.opps.listOpportunities({ customerId: req.params.id }).opportunities || [], req.query.sessionId))
+      .concat(_filterBySession(e.fin.listEstimates({ customerId: req.params.id }).estimates || [], req.query.sessionId))
+      .concat(_filterBySession(e.comms.getCommunications(req.params.id, {}).communications || [], req.query.sessionId));
+    var source = records.find(function (record) {
+      return record && record.metadata && record.metadata.polarisIntelligence;
+    });
+    if (!source) {
+      return res.status(404).json({ success: false, error: 'Canonical Polaris intelligence is not available for this customer' });
+    }
+    return res.json({
+      success: true,
+      customerId: req.params.id,
+      data: canonicalPolaris.sanitize(source.metadata.polarisIntelligence),
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to load canonical customer intelligence' });
+  }
 });
 
 /**
  * PUT /api/v1/customers/:id
  * Update a customer.
  */
-router.put('/customers/:id', (req, res) => {
+router.put('/customers/:id', mutationPermission('PUT', '/customers/:id'), (req, res) => {
   try {
     var e = _getEngines().customers;
-    var result = e.updateCustomer(req.params.id, req.body);
+    var existing = e.getCustomer(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.updateCustomer(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -144,9 +276,10 @@ router.put('/customers/:id', (req, res) => {
  * DELETE /api/v1/customers/:id
  * Archive a customer.
  */
-router.delete('/customers/:id', (req, res) => {
+router.delete('/customers/:id', mutationPermission('DELETE', '/customers/:id'), (req, res) => {
   try {
     var e = _getEngines().customers;
+    if (_denyHiddenSimulation(e.getCustomer(req.params.id), req.query.sessionId, res)) return;
     var result = e.archiveCustomer(req.params.id);
     if (result.error) return res.status(404).json(result);
     res.json(result);
@@ -157,9 +290,10 @@ router.delete('/customers/:id', (req, res) => {
  * POST /api/v1/customers/:id/restore
  * Restore an archived customer.
  */
-router.post('/customers/:id/restore', (req, res) => {
+router.post('/customers/:id/restore', mutationPermission('POST', '/customers/:id/restore'), (req, res) => {
   try {
     var e = _getEngines().customers;
+    if (_denyHiddenSimulation(e.getCustomer(req.params.id), req.query.sessionId, res)) return;
     var result = e.restoreCustomer(req.params.id);
     if (result.error) return res.status(400).json(result);
     res.json(result);
@@ -173,6 +307,7 @@ router.post('/customers/:id/restore', (req, res) => {
 router.get('/customers/:id/health', (req, res) => {
   try {
     var e = _getEngines().customers;
+    if (_denyHiddenSimulation(e.getCustomer(req.params.id), req.query.sessionId, res)) return;
     var result = e.calculateCustomerHealth(req.params.id);
     if (result.error) return res.status(404).json(result);
     res.json(result);
@@ -195,23 +330,17 @@ router.get('/communications', (req, res) => {
         if (req.query.type) filters.type = req.query.type;
         if (req.query.direction) filters.direction = req.query.direction;
         if (req.query.status) filters.status = req.query.status;
-        if (req.query.limit) filters.limit = parseInt(req.query.limit) || 50;
-        if (req.query.offset) filters.offset = parseInt(req.query.offset) || 0;
         if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
         if (req.query.dateTo) filters.dateTo = req.query.dateTo;
 
         if (req.query.customerId) {
           var result = e.getCommunications(req.query.customerId, filters);
-          if (result && result.communications) {
-            result.communications = _filterBySession(result.communications, req.query.sessionId);
-          }
+          _filterThenPaginate(result, 'communications', req.query.sessionId, req.query.limit, req.query.offset);
           res.json(result);
         } else {
           // Canonical collection endpoint — return all communications across customers
           var result = e.getAllCommunications(filters);
-          if (result && result.communications) {
-            result.communications = _filterBySession(result.communications, req.query.sessionId);
-          }
+          _filterThenPaginate(result, 'communications', req.query.sessionId, req.query.limit, req.query.offset);
           res.json(result);
         }
       } catch (err) { res.status(500).json({ error: err.message }); }
@@ -221,10 +350,13 @@ router.get('/communications', (req, res) => {
  * POST /api/v1/communications
  * Record a communication.
  */
-router.post('/communications', (req, res) => {
+router.post('/communications', mutationPermission('POST', '/communications'), (req, res) => {
   try {
-    var e = _getEngines().comms;
-    var result = e.recordCommunication(req.body);
+    var engines = _getEngines();
+    var body = req.body || {};
+    var parent = body.customerId ? engines.customers.getCustomer(body.customerId) : null;
+    if (_denyHiddenSimulation(parent, req.query.sessionId, res)) return;
+    var result = engines.comms.recordCommunication(_bodyWithInheritedScope(body, parent));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -239,6 +371,7 @@ router.get('/communications/search', (req, res) => {
     var e = _getEngines().comms;
     if (!req.query.q) return res.status(400).json({ error: 'Search query q is required' });
     var result = e.searchCommunications(req.query.q);
+    _filterCollection(result, 'communications', req.query.sessionId);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -251,7 +384,7 @@ router.get('/communications/:id', (req, res) => {
   try {
     var e = _getEngines().comms;
     var result = e.getCommunication(req.params.id);
-    if (result.error) return res.status(404).json(result);
+    if (_denyHiddenSimulation(result, req.query.sessionId, res)) return;
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -260,9 +393,10 @@ router.get('/communications/:id', (req, res) => {
  * PUT /api/v1/communications/:id/status
  * Update communication status.
  */
-router.put('/communications/:id/status', (req, res) => {
+router.put('/communications/:id/status', mutationPermission('PUT', '/communications/:id/status'), (req, res) => {
   try {
     var e = _getEngines().comms;
+    if (_denyHiddenSimulation(e.getCommunication(req.params.id), req.query.sessionId, res)) return;
     var result = e.updateCommunicationStatus(req.params.id, req.body.status);
     if (result.error) return res.status(400).json(result);
     res.json(result);
@@ -275,8 +409,13 @@ router.put('/communications/:id/status', (req, res) => {
  */
 router.get('/communications/timeline/:customerId', (req, res) => {
   try {
-    var e = _getEngines().comms;
-    var result = e.getTimeline(req.params.customerId);
+    var engines = _getEngines();
+    if (_denyHiddenSimulation(engines.customers.getCustomer(req.params.customerId), req.query.sessionId, res)) return;
+    var result = engines.comms.getTimeline(req.params.customerId);
+    if (result && result.entries) {
+      result.entries = _filterBySession(result.entries, req.query.sessionId);
+      result.total = result.entries.length;
+    }
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -287,12 +426,17 @@ router.get('/communications/timeline/:customerId', (req, res) => {
  */
 router.get('/communications/intelligence/:customerId', (req, res) => {
   try {
-    var e = _getEngines().comms;
+    var engines = _getEngines();
+    if (_denyHiddenSimulation(engines.customers.getCustomer(req.params.customerId), req.query.sessionId, res)) return;
+    var e = engines.comms;
+    var visible = _filterBySession(
+      e.getCommunications(req.params.customerId, {}).communications || [], req.query.sessionId
+    );
     var result = {
-      lastContact: e.getLastContact(req.params.customerId),
-      frequency: e.getCommunicationFrequency(req.params.customerId, 30),
-      engagement: e.getEngagementScore(req.params.customerId),
-      followUps: e.getFollowUpRecommendations(req.params.customerId),
+      lastContact: e.getLastContact(req.params.customerId, visible),
+      frequency: e.getCommunicationFrequency(req.params.customerId, 30, visible),
+      engagement: e.getEngagementScore(req.params.customerId, visible),
+      followUps: e.getFollowUpRecommendations(req.params.customerId, visible),
     };
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -314,11 +458,8 @@ router.get('/opportunities', (req, res) => {
     if (req.query.status) filters.status = req.query.status;
     if (req.query.owner) filters.owner = req.query.owner;
     if (req.query.customerId) filters.customerId = req.query.customerId;
-    if (req.query.limit) filters.limit = parseInt(req.query.limit);
     var result = e.listOpportunities(filters);
-    if (result && result.opportunities) {
-      result.opportunities = _filterBySession(result.opportunities, req.query.sessionId);
-    }
+    _filterThenPaginate(result, 'opportunities', req.query.sessionId, req.query.limit, 0);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -327,10 +468,13 @@ router.get('/opportunities', (req, res) => {
  * POST /api/v1/opportunities
  * Create an opportunity.
  */
-router.post('/opportunities', (req, res) => {
+router.post('/opportunities', mutationPermission('POST', '/opportunities'), (req, res) => {
   try {
-    var e = _getEngines().opps;
-    var result = e.createOpportunity(req.body);
+    var engines = _getEngines();
+    var body = req.body || {};
+    var parent = body.customerId ? engines.customers.getCustomer(body.customerId) : null;
+    if (_denyHiddenSimulation(parent, req.query.sessionId, res)) return;
+    var result = engines.opps.createOpportunity(_bodyWithInheritedScope(body, parent));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -343,12 +487,7 @@ router.post('/opportunities', (req, res) => {
 router.get('/opportunities/pipeline', (req, res) => {
   try {
     var e = _getEngines().opps;
-    var result = {
-      pipeline: e.getPipeline(),
-      metrics: e.getPipelineMetrics(),
-      stages: e.getStageTotals(),
-      forecast: e.calculateForecastRevenue(),
-    };
+    var result = sessionScopedOpportunity.buildSnapshot(e, req.query.sessionId);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -360,7 +499,9 @@ router.get('/opportunities/pipeline', (req, res) => {
 router.get('/opportunities/queue', (req, res) => {
   try {
     var e = _getEngines().opps;
-    var result = e.getPriorityQueue({ limit: parseInt(req.query.limit) || 20 });
+    var result = e.getPriorityQueue({ limit: Number.MAX_SAFE_INTEGER });
+    if (result && result.queue) _filterThenPaginate(result, 'queue', req.query.sessionId, parseInt(req.query.limit) || 20, 0);
+    if (Array.isArray(result)) result = _filterBySession(result, req.query.sessionId);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -373,7 +514,7 @@ router.get('/opportunities/:id', (req, res) => {
   try {
     var e = _getEngines().opps;
     var result = e.getOpportunity(req.params.id);
-    if (result.error) return res.status(404).json(result);
+    if (_denyHiddenSimulation(result, req.query.sessionId, res)) return;
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -382,10 +523,12 @@ router.get('/opportunities/:id', (req, res) => {
  * PUT /api/v1/opportunities/:id
  * Update an opportunity.
  */
-router.put('/opportunities/:id', (req, res) => {
+router.put('/opportunities/:id', mutationPermission('PUT', '/opportunities/:id'), (req, res) => {
   try {
     var e = _getEngines().opps;
-    var result = e.updateOpportunity(req.params.id, req.body);
+    var existing = e.getOpportunity(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.updateOpportunity(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -395,9 +538,10 @@ router.put('/opportunities/:id', (req, res) => {
  * PUT /api/v1/opportunities/:id/stage
  * Move opportunity to a new stage.
  */
-router.put('/opportunities/:id/stage', (req, res) => {
+router.put('/opportunities/:id/stage', mutationPermission('PUT', '/opportunities/:id/stage'), (req, res) => {
   try {
     var e = _getEngines().opps;
+    if (_denyHiddenSimulation(e.getOpportunity(req.params.id), req.query.sessionId, res)) return;
     var result = e.updateOpportunityStage(req.params.id, req.body.stage);
     if (result.error) return res.status(400).json(result);
     res.json(result);
@@ -408,40 +552,12 @@ router.put('/opportunities/:id/stage', (req, res) => {
  * DELETE /api/v1/opportunities/:id
  * Archive an opportunity.
  */
-router.delete('/opportunities/:id', (req, res) => {
+router.delete('/opportunities/:id', mutationPermission('DELETE', '/opportunities/:id'), (req, res) => {
   try {
     var e = _getEngines().opps;
+    if (_denyHiddenSimulation(e.getOpportunity(req.params.id), req.query.sessionId, res)) return;
     var result = e.archiveOpportunity(req.params.id);
     if (result.error) return res.status(404).json(result);
-    res.json(result);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-/**
- * GET /api/v1/opportunities/pipeline
- * Get pipeline view and metrics.
- */
-router.get('/opportunities/pipeline', (req, res) => {
-  try {
-    var e = _getEngines().opps;
-    var result = {
-      pipeline: e.getPipeline(),
-      metrics: e.getPipelineMetrics(),
-      stages: e.getStageTotals(),
-      forecast: e.calculateForecastRevenue(),
-    };
-    res.json(result);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-/**
- * GET /api/v1/opportunities/queue
- * Get priority queue.
- */
-router.get('/opportunities/queue', (req, res) => {
-  try {
-    var e = _getEngines().opps;
-    var result = e.getPriorityQueue({ limit: parseInt(req.query.limit) || 20 });
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -472,10 +588,21 @@ router.get('/workflows', (req, res) => {
  * POST /api/v1/workflows
  * Create a task.
  */
-router.post('/workflows', (req, res) => {
+router.post('/workflows', mutationPermission('POST', '/workflows'), (req, res) => {
   try {
-    var e = _getEngines().wf;
-    var result = e.createTask(req.body);
+    var all = _getEngines();
+    var body = req.body || {};
+    var parent = null;
+    if (body.customerId) {
+      parent = all.customers.getCustomer(body.customerId);
+      if (_denyHiddenSimulation(parent, req.query.sessionId, res)) return;
+    }
+    if (body.opportunityId) {
+      var opportunity = all.opps.getOpportunity(body.opportunityId);
+      if (_denyHiddenSimulation(opportunity, req.query.sessionId, res)) return;
+      parent = parent || opportunity;
+    }
+    var result = all.wf.createTask(_bodyWithInheritedScope(body, parent));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -542,10 +669,12 @@ router.get('/workflows/:id', (req, res) => {
  * PUT /api/v1/workflows/:id
  * Update a task.
  */
-router.put('/workflows/:id', (req, res) => {
+router.put('/workflows/:id', mutationPermission('PUT', '/workflows/:id'), (req, res) => {
   try {
     var e = _getEngines().wf;
-    var result = e.updateTask(req.params.id, req.body);
+    var existing = e.getTask(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.updateTask(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -555,9 +684,10 @@ router.put('/workflows/:id', (req, res) => {
  * POST /api/v1/workflows/:id/complete
  * Mark a task as completed.
  */
-router.post('/workflows/:id/complete', (req, res) => {
+router.post('/workflows/:id/complete', mutationPermission('POST', '/workflows/:id/complete'), (req, res) => {
   try {
     var e = _getEngines().wf;
+    if (_denyHiddenSimulation(e.getTask(req.params.id), req.query.sessionId, res)) return;
     var result = e.completeTask(req.params.id);
     if (result.error) return res.status(404).json(result);
     res.json(result);
@@ -623,6 +753,7 @@ router.get('/financial/estimates', (req, res) => {
     if (req.query.customerId) filters.customerId = req.query.customerId;
     if (req.query.status) filters.status = req.query.status;
     var result = e.listEstimates(filters);
+    _filterCollection(result, 'estimates', req.query.sessionId);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -631,10 +762,16 @@ router.get('/financial/estimates', (req, res) => {
  * POST /api/v1/financial/estimates
  * Create an estimate.
  */
-router.post('/financial/estimates', (req, res) => {
+router.post('/financial/estimates', mutationPermission('POST', '/financial/estimates'), (req, res) => {
   try {
-    var e = _getEngines().fin;
-    var result = e.createEstimate(req.body);
+    var engines = _getEngines();
+    var body = req.body || {};
+    var customer = body.customerId ? engines.customers.getCustomer(body.customerId) : null;
+    var opportunity = body.opportunityId ? engines.opps.getOpportunity(body.opportunityId) : null;
+    if (_denyHiddenSimulation(customer, req.query.sessionId, res)) return;
+    if (body.opportunityId && _denyHiddenSimulation(opportunity, req.query.sessionId, res)) return;
+    var parent = opportunity && !opportunity.error ? opportunity : customer;
+    var result = engines.fin.createEstimate(_bodyWithInheritedScope(body, parent));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -648,7 +785,7 @@ router.get('/financial/estimates/:id', (req, res) => {
   try {
     var e = _getEngines().fin;
     var result = e.getEstimate(req.params.id);
-    if (result.error) return res.status(404).json(result);
+    if (_denyHiddenSimulation(result, req.query.sessionId, res)) return;
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -672,10 +809,19 @@ router.get('/financial/invoices', (req, res) => {
  * POST /api/v1/financial/invoices
  * Create an invoice.
  */
-router.post('/financial/invoices', (req, res) => {
+router.post('/financial/invoices', mutationPermission('POST', '/financial/invoices'), (req, res) => {
   try {
-    var e = _getEngines().fin;
-    var result = e.createInvoice(req.body);
+    var all = _getEngines();
+    var body = req.body || {};
+    var customer = body.customerId ? all.customers.getCustomer(body.customerId) : null;
+    if (_denyHiddenSimulation(customer, req.query.sessionId, res)) return;
+    var parent = customer;
+    if (body.estimateId) {
+      var estimate = all.fin.getEstimate(body.estimateId);
+      if (_denyHiddenSimulation(estimate, req.query.sessionId, res)) return;
+      parent = estimate;
+    }
+    var result = all.fin.createInvoice(_bodyWithInheritedScope(body, parent));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -698,9 +844,10 @@ router.get('/financial/invoices/:id', (req, res) => {
  * POST /api/v1/financial/invoices/:id/send
  * Mark invoice as sent.
  */
-router.post('/financial/invoices/:id/send', (req, res) => {
+router.post('/financial/invoices/:id/send', mutationPermission('POST', '/financial/invoices/:id/send'), (req, res) => {
   try {
     var e = _getEngines().fin;
+    if (_denyHiddenSimulation(e.getInvoice(req.params.id), req.query.sessionId, res)) return;
     var result = e.markInvoiceSent(req.params.id);
     if (result.error) return res.status(404).json(result);
     res.json(result);
@@ -711,10 +858,12 @@ router.post('/financial/invoices/:id/send', (req, res) => {
  * POST /api/v1/financial/payments
  * Record a payment.
  */
-router.post('/financial/payments', (req, res) => {
+router.post('/financial/payments', mutationPermission('POST', '/financial/payments'), (req, res) => {
   try {
     var e = _getEngines().fin;
-    var result = e.recordPayment(req.body);
+    var invoice = e.getInvoice(req.body && req.body.invoiceId);
+    if (_denyHiddenSimulation(invoice, req.query.sessionId, res)) return;
+    var result = e.recordPayment(_bodyWithInheritedScope(req.body, invoice));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -727,8 +876,16 @@ router.post('/financial/payments', (req, res) => {
 router.get('/financial/metrics', (req, res) => {
   try {
     var e = _getEngines().fin;
+    var metrics = e.getFinancialMetrics();
+    var estimates = _filterBySession(e.listEstimates().estimates || [], req.query.sessionId).filter(function (estimate) {
+      return estimate.status !== 'archived' && estimate.status !== 'rejected';
+    });
+    metrics.pendingEstimateCount = estimates.length;
+    metrics.pendingEstimateTotal = Math.round(estimates.reduce(function (sum, estimate) {
+      return sum + (Number(estimate.total) || 0);
+    }, 0) * 100) / 100;
     res.json({
-      metrics: e.getFinancialMetrics(),
+      metrics: metrics,
       profitability: e.calculateProfitability(),
       forecast: e.calculateRevenueForecast(3),
     });
@@ -759,10 +916,26 @@ router.get('/assets', (req, res) => {
  * POST /api/v1/assets
  * Create an asset.
  */
-router.post('/assets', (req, res) => {
+router.post('/assets', mutationPermission('POST', '/assets'), (req, res) => {
   try {
-    var e = _getEngines().ast;
-    var result = e.createAsset(req.body);
+    var all = _getEngines();
+    var body = req.body || {};
+    var parent = null;
+    if (body.assignedCustomerId) {
+      parent = all.customers.getCustomer(body.assignedCustomerId);
+      if (_denyHiddenSimulation(parent, req.query.sessionId, res)) return;
+    }
+    if (body.assignedOpportunityId) {
+      var opportunity = all.opps.getOpportunity(body.assignedOpportunityId);
+      if (_denyHiddenSimulation(opportunity, req.query.sessionId, res)) return;
+      parent = parent || opportunity;
+    }
+    if (body.assignedWorkflowId) {
+      var workflow = all.wf.getTask(body.assignedWorkflowId);
+      if (_denyHiddenSimulation(workflow, req.query.sessionId, res)) return;
+      parent = parent || workflow;
+    }
+    var result = all.ast.createAsset(_bodyWithInheritedScope(body, parent));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -796,10 +969,12 @@ router.get('/assets/:id', (req, res) => {
  * PUT /api/v1/assets/:id
  * Update an asset.
  */
-router.put('/assets/:id', (req, res) => {
+router.put('/assets/:id', mutationPermission('PUT', '/assets/:id'), (req, res) => {
   try {
     var e = _getEngines().ast;
-    var result = e.updateAsset(req.params.id, req.body);
+    var existing = e.getAsset(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.updateAsset(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -809,10 +984,12 @@ router.put('/assets/:id', (req, res) => {
  * POST /api/v1/assets/:id/maintenance
  * Schedule maintenance.
  */
-router.post('/assets/:id/maintenance', (req, res) => {
+router.post('/assets/:id/maintenance', mutationPermission('POST', '/assets/:id/maintenance'), (req, res) => {
   try {
     var e = _getEngines().ast;
-    var data = req.body;
+    var asset = e.getAsset(req.params.id);
+    if (_denyHiddenSimulation(asset, req.query.sessionId, res)) return;
+    var data = _bodyWithInheritedScope(req.body, asset);
     data.assetId = req.params.id;
     var result = e.scheduleMaintenance(data);
     if (result.error) return res.status(400).json(result);
@@ -870,7 +1047,7 @@ router.get('/crew/employees', (req, res) => {
  * POST /api/v1/crew/employees
  * Create an employee.
  */
-router.post('/crew/employees', (req, res) => {
+router.post('/crew/employees', mutationPermission('POST', '/crew/employees'), (req, res) => {
   try {
     var e = _getEngines().crew;
     var result = e.createEmployee(req.body);
@@ -896,10 +1073,12 @@ router.get('/crew/employees/:id', (req, res) => {
  * PUT /api/v1/crew/employees/:id
  * Update an employee.
  */
-router.put('/crew/employees/:id', (req, res) => {
+router.put('/crew/employees/:id', mutationPermission('PUT', '/crew/employees/:id'), (req, res) => {
   try {
     var e = _getEngines().crew;
-    var result = e.updateEmployee(req.params.id, req.body);
+    var existing = e.getEmployee(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.updateEmployee(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -921,10 +1100,31 @@ router.get('/crew/crews', (req, res) => {
  * POST /api/v1/crew/crews
  * Create a crew.
  */
-router.post('/crew/crews', (req, res) => {
+router.post('/crew/crews', mutationPermission('POST', '/crew/crews'), (req, res) => {
   try {
-    var e = _getEngines().crew;
-    var result = e.createCrew(req.body);
+    var all = _getEngines();
+    var body = req.body || {};
+    var parent = null;
+    if (body.assignedCustomerId) {
+      parent = all.customers.getCustomer(body.assignedCustomerId);
+      if (_denyHiddenSimulation(parent, req.query.sessionId, res)) return;
+    }
+    if (body.assignedOpportunityId) {
+      var opportunity = all.opps.getOpportunity(body.assignedOpportunityId);
+      if (_denyHiddenSimulation(opportunity, req.query.sessionId, res)) return;
+      parent = parent || opportunity;
+    }
+    if (body.assignedWorkflowId) {
+      var workflow = all.wf.getTask(body.assignedWorkflowId);
+      if (_denyHiddenSimulation(workflow, req.query.sessionId, res)) return;
+      parent = parent || workflow;
+    }
+    if (body.foremanId) {
+      var foreman = all.crew.getEmployee(body.foremanId);
+      if (_denyHiddenSimulation(foreman, req.query.sessionId, res)) return;
+      parent = parent || foreman;
+    }
+    var result = all.crew.createCrew(_bodyWithInheritedScope(body, parent));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -934,10 +1134,12 @@ router.post('/crew/crews', (req, res) => {
  * POST /api/v1/crew/crews/:id/assign
  * Assign a crew.
  */
-router.post('/crew/crews/:id/assign', (req, res) => {
+router.post('/crew/crews/:id/assign', mutationPermission('POST', '/crew/crews/:id/assign'), (req, res) => {
   try {
     var e = _getEngines().crew;
-    var result = e.assignCrew(req.params.id, req.body);
+    var existing = e.getCrew(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.assignCrew(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -978,10 +1180,19 @@ router.get('/jobs', (req, res) => {
  * POST /api/v1/jobs
  * Create a job.
  */
-router.post('/jobs', (req, res) => {
+router.post('/jobs', mutationPermission('POST', '/jobs'), (req, res) => {
   try {
-    var e = _getEngines().job;
-    var result = e.createJob(req.body);
+    var all = _getEngines();
+    var body = req.body || {};
+    var customer = body.customerId ? all.customers.getCustomer(body.customerId) : null;
+    if (_denyHiddenSimulation(customer, req.query.sessionId, res)) return;
+    var parent = customer;
+    if (body.opportunityId) {
+      var opportunity = all.opps.getOpportunity(body.opportunityId);
+      if (_denyHiddenSimulation(opportunity, req.query.sessionId, res)) return;
+      parent = opportunity;
+    }
+    var result = all.job.createJob(_bodyWithInheritedScope(body, parent));
     if (result.error) return res.status(400).json(result);
     res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1015,10 +1226,12 @@ router.get('/jobs/:id', (req, res) => {
  * PUT /api/v1/jobs/:id
  * Update a job.
  */
-router.put('/jobs/:id', (req, res) => {
+router.put('/jobs/:id', mutationPermission('PUT', '/jobs/:id'), (req, res) => {
   try {
     var e = _getEngines().job;
-    var result = e.updateJob(req.params.id, req.body);
+    var existing = e.getJob(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.updateJob(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1028,9 +1241,10 @@ router.put('/jobs/:id', (req, res) => {
  * POST /api/v1/jobs/:id/schedule
  * Schedule a job.
  */
-router.post('/jobs/:id/schedule', (req, res) => {
+router.post('/jobs/:id/schedule', mutationPermission('POST', '/jobs/:id/schedule'), (req, res) => {
   try {
     var e = _getEngines().job;
+    if (_denyHiddenSimulation(e.getJob(req.params.id), req.query.sessionId, res)) return;
     var result = e.scheduleJob(req.params.id, req.body.scheduledStart, req.body.scheduledEnd);
     if (result.error) return res.status(400).json(result);
     res.json(result);
@@ -1041,9 +1255,10 @@ router.post('/jobs/:id/schedule', (req, res) => {
  * POST /api/v1/jobs/:id/start
  * Start a job.
  */
-router.post('/jobs/:id/start', (req, res) => {
+router.post('/jobs/:id/start', mutationPermission('POST', '/jobs/:id/start'), (req, res) => {
   try {
     var e = _getEngines().job;
+    if (_denyHiddenSimulation(e.getJob(req.params.id), req.query.sessionId, res)) return;
     var result = e.startJob(req.params.id);
     if (result.error) return res.status(400).json(result);
     res.json(result);
@@ -1054,10 +1269,12 @@ router.post('/jobs/:id/start', (req, res) => {
  * POST /api/v1/jobs/:id/complete
  * Complete a job.
  */
-router.post('/jobs/:id/complete', (req, res) => {
+router.post('/jobs/:id/complete', mutationPermission('POST', '/jobs/:id/complete'), (req, res) => {
   try {
     var e = _getEngines().job;
-    var result = e.completeJob(req.params.id, req.body);
+    var existing = e.getJob(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.completeJob(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1067,10 +1284,12 @@ router.post('/jobs/:id/complete', (req, res) => {
  * POST /api/v1/jobs/:id/production
  * Record production.
  */
-router.post('/jobs/:id/production', (req, res) => {
+router.post('/jobs/:id/production', mutationPermission('POST', '/jobs/:id/production'), (req, res) => {
   try {
     var e = _getEngines().job;
-    var result = e.recordProduction(req.params.id, req.body);
+    var existing = e.getJob(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.recordProduction(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1080,10 +1299,12 @@ router.post('/jobs/:id/production', (req, res) => {
  * POST /api/v1/jobs/:id/issue
  * Record an issue.
  */
-router.post('/jobs/:id/issue', (req, res) => {
+router.post('/jobs/:id/issue', mutationPermission('POST', '/jobs/:id/issue'), (req, res) => {
   try {
     var e = _getEngines().job;
-    var result = e.recordIssue(req.params.id, req.body);
+    var existing = e.getJob(req.params.id);
+    if (_denyHiddenSimulation(existing, req.query.sessionId, res)) return;
+    var result = e.recordIssue(req.params.id, _bodyWithInheritedScope(req.body, existing));
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1168,7 +1389,7 @@ router.get('/analytics/kpis', (req, res) => {
 router.get('/analytics/alerts', (req, res) => {
   try {
     var e = _getEngines().bi;
-    res.json(e.generateAlerts());
+    res.json(e.generateAlerts(req.query.sessionId));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1179,7 +1400,7 @@ router.get('/analytics/alerts', (req, res) => {
 router.get('/analytics/:category', (req, res) => {
   try {
     var e = _getEngines().bi;
-    var result = e.getAnalytics(req.params.category);
+    var result = e.getAnalytics(req.params.category, req.query.sessionId);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1204,9 +1425,14 @@ router.get('/analytics/reports/list', (req, res) => {
  * Generate a complete Polaris Intelligence Report for a lead/opportunity.
  * Aggregates data from all M13 engines into a single unified estimate.
  */
-router.post('/polaris/intelligence', (req, res) => {
+router.post('/polaris/intelligence', mutationPermission('POST', '/polaris/intelligence'), (req, res) => {
   try {
     var data = req.body || {};
+    var sessionId = req.query.sessionId || data.sessionId;
+    if (data.customerId) {
+      var customer = _getEngines().customers.getCustomer(data.customerId);
+      if (_denyHiddenSimulation(customer, sessionId, res)) return;
+    }
     var svc = data.service || data.serviceRequested || 'General';
     var description = data.description || '';
     var scope = description ? description.length : 50;
@@ -1304,8 +1530,8 @@ router.post('/polaris/intelligence', (req, res) => {
     try {
       var bi = _getEngines().bi;
       if (bi) {
-        intelligence.kpis = bi.generateKPIs().kpis;
-        intelligence.alerts = bi.generateAlerts().alerts;
+        intelligence.kpis = bi.generateKPIs(sessionId).kpis;
+        intelligence.alerts = bi.generateAlerts(sessionId).alerts;
       }
     } catch (e) {}
 
@@ -1388,9 +1614,14 @@ router.post('/polaris/intelligence', (req, res) => {
  * Generate a unified executive summary from all available intelligence.
  * Aggregates data from all M13 engines into a single cohesive view.
  */
-router.post("/polaris/executive-summary", (req, res) => {
+router.post("/polaris/executive-summary", mutationPermission('POST', '/polaris/executive-summary'), (req, res) => {
   try {
     var data = req.body || {};
+    var sessionId = req.query.sessionId || data.sessionId;
+    if (data.customerId) {
+      var customer = _getEngines().customers.getCustomer(data.customerId);
+      if (_denyHiddenSimulation(customer, sessionId, res)) return;
+    }
     var summary = {
       generatedAt: new Date().toISOString(),
       overview: {},
@@ -1406,13 +1637,13 @@ router.post("/polaris/executive-summary", (req, res) => {
     try {
       var bi = _getEngines().bi;
       if (bi) {
-        var kpis = bi.generateKPIs();
+        var kpis = bi.generateKPIs(sessionId);
         if (kpis && kpis.kpis) {
           summary.financial.revenue = kpis.kpis.totalRevenue || 0;
           summary.financial.outstanding = kpis.kpis.outstandingRevenue || 0;
           summary.financial.profitMargin = kpis.kpis.profitMargin || 0;
         }
-        var alerts = bi.generateAlerts();
+        var alerts = bi.generateAlerts(sessionId);
         if (alerts && alerts.alerts) {
           summary.risks = alerts.alerts.filter(function(a) { return a.severity === "critical" || a.severity === "warning"; }).map(function(a) { return { type: a.type, message: a.message, severity: a.severity }; });
         }
@@ -1437,8 +1668,11 @@ router.post("/polaris/executive-summary", (req, res) => {
     try {
       var commsEng = _getEngines().comms;
       if (commsEng && data.customerId) {
-        var engagement = commsEng.getEngagementScore(data.customerId);
-        var followUps = commsEng.getFollowUpRecommendations(data.customerId);
+        var visibleCommunications = _filterBySession(
+          commsEng.getCommunications(data.customerId, {}).communications || [], sessionId
+        );
+        var engagement = commsEng.getEngagementScore(data.customerId, visibleCommunications);
+        var followUps = commsEng.getFollowUpRecommendations(data.customerId, visibleCommunications);
         summary.customer.engagement = (typeof engagement === "number") ? engagement : (engagement && engagement.score) || 0;
         summary.customer.pendingFollowUps = (followUps || []).length;
         if (summary.customer.pendingFollowUps > 0) {

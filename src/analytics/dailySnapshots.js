@@ -4,37 +4,54 @@
 
 const fs = require('fs');
 const path = require('path');
-const db = require('../db');
+const { getDataDir } = require('../services/dataPaths');
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data', 'analytics');
-function ensureDir() { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); }
-function filePath(orgId, dateStr) { return path.join(DATA_DIR, `${orgId}_${dateStr}.json`); }
+const pendingSnapshots = new Map();
+function dataDir() { return path.join(getDataDir(), 'analytics'); }
+function ensureDir() { const dir = dataDir(); if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); return dir; }
+function identityKey(identity) {
+  if (!identity || typeof identity.key !== 'string' || !/^[a-f0-9]{64}$/.test(identity.key)) {
+    throw new Error('Validated analytics identity is required');
+  }
+  return identity.key;
+}
+function filePath(identity, dateStr) { return path.join(ensureDir(), `${identityKey(identity)}_${dateStr}.json`); }
 
-function loadSnapshot(orgId, dateStr) {
+function loadSnapshot(identity, dateStr) {
   ensureDir();
-  try { if (fs.existsSync(filePath(orgId, dateStr))) return JSON.parse(fs.readFileSync(filePath(orgId, dateStr), 'utf8')); } catch {}
+  try { if (fs.existsSync(filePath(identity, dateStr))) return JSON.parse(fs.readFileSync(filePath(identity, dateStr), 'utf8')); } catch {}
   return null;
 }
 
-function saveSnapshot(orgId, dateStr, data) { ensureDir(); fs.writeFileSync(filePath(orgId, dateStr), JSON.stringify(data, null, 2)); return data; }
+function saveSnapshot(identity, dateStr, data) {
+  const scoped = Object.assign({}, data, { analytics_identity: identityKey(identity) });
+  fs.writeFileSync(filePath(identity, dateStr), JSON.stringify(scoped, null, 2));
+  return scoped;
+}
 
-function loadAllSnapshots(orgId) {
-  ensureDir();
+function loadAllSnapshots(identity) {
+  const dir = ensureDir();
   const results = [];
-  const files = fs.readdirSync(DATA_DIR).filter(f => f.startsWith(orgId + '_') && f.endsWith('.json'));
-  for (const f of files) { try { results.push(JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'))); } catch {} }
+  const prefix = identityKey(identity) + '_';
+  const files = fs.readdirSync(dir).filter(f => f.startsWith(prefix) && f.endsWith('.json'));
+  for (const f of files) { try { results.push(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))); } catch {} }
   return results.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-async function getOrCompute(orgId, dateStr, leads) {
-  if (db.isAvailable()) {
-    try { const r = await db.query('SELECT * FROM analytics_daily WHERE organization_id = $1 AND date = $2', [orgId, dateStr]); if (r.rows && r.rows.length > 0) return r.rows[0]; } catch {}
-  }
-  const fileSnap = loadSnapshot(orgId, dateStr);
+async function getOrCompute(identity, dateStr, leads) {
+  const pendingKey = identityKey(identity) + ':' + dateStr;
+  const fileSnap = loadSnapshot(identity, dateStr);
   if (fileSnap) return fileSnap;
-  const snap = computeFromLeads(orgId, dateStr, leads);
-  saveSnapshot(orgId, dateStr, snap);
-  return snap;
+  if (pendingSnapshots.has(pendingKey)) return pendingSnapshots.get(pendingKey);
+  const computation = Promise.resolve().then(function () {
+    const organizationId = identity.dimensions && identity.dimensions.organizationId;
+    const snap = computeFromLeads(organizationId, dateStr, leads);
+    return saveSnapshot(identity, dateStr, snap);
+  }).finally(function () {
+    if (pendingSnapshots.get(pendingKey) === computation) pendingSnapshots.delete(pendingKey);
+  });
+  pendingSnapshots.set(pendingKey, computation);
+  return computation;
 }
 
 function computeFromLeads(orgId, dateStr, dayLeads) {
@@ -81,4 +98,12 @@ function computePeriodSummary(orgId, period, snapshots) {
   return result;
 }
 
-module.exports = { getOrCompute, saveSnapshot, loadSnapshot, loadAllSnapshots, computeFromLeads, computePeriodSummary };
+module.exports = {
+  getOrCompute,
+  saveSnapshot,
+  loadSnapshot,
+  loadAllSnapshots,
+  computeFromLeads,
+  computePeriodSummary,
+  _pendingSnapshots: pendingSnapshots
+};

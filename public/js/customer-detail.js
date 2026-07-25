@@ -19,6 +19,15 @@ window.CustomerDetail = (function() {
   var _injected = false;
   var _commIdToTranscript = {};
 
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // ── Helpers ──
 
   function $(id) { return document.getElementById(id); }
@@ -49,14 +58,6 @@ window.CustomerDetail = (function() {
       verbalCommitment: 'Verbal Commitment', won: 'Won', lost: 'Lost', archived: 'Archived'
     };
     return map[stage] || capitalizeFirst(stage || 'Unknown');
-  }
-
-  function stageProb(stage) {
-    var map = {
-      lead: 5, qualified: 15, discovery: 30, proposal: 50,
-      negotiation: 70, verbalCommitment: 85, won: 100, lost: 0, archived: 0
-    };
-    return map[stage] != null ? map[stage] : 0;
   }
 
   function getStatusBadge(status) {
@@ -131,6 +132,8 @@ window.CustomerDetail = (function() {
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Confidence</div><div class="drawer-polaris-item-value" id="cdPolConfidence">\u2014</div></div>';
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Revenue Opportunity</div><div class="drawer-polaris-item-value" id="cdPolRevenue">\u2014</div></div>';
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Recommended Action</div><div class="drawer-polaris-item-value" id="cdPolAction">\u2014</div></div>';
+    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Verified Scope</div><div class="drawer-polaris-item-value" id="cdPolScope">\u2014</div></div>';
+    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Missing Information</div><div class="drawer-polaris-item-value" id="cdPolMissing">\u2014</div></div>';
     html += '          </div>';
     html += '        </div>';
     html += '      </div>';
@@ -212,8 +215,8 @@ window.CustomerDetail = (function() {
       var turn = turns[i];
       var cls = turn.speaker === 'ai' ? 'ai' : (turn.speaker === 'customer' ? 'customer' : 'system');
       var label = cls === 'ai' ? 'AI AGENT' : (cls === 'customer' ? firstName : '');
-      var labelHtml = label ? '<div class="demo-msg-label">' + label + '</div>' : '';
-      html += '<div class="demo-msg ' + cls + '">' + labelHtml + turn.text + '</div>';
+      var labelHtml = label ? '<div class="demo-msg-label">' + escapeHtml(label) + '</div>' : '';
+      html += '<div class="demo-msg ' + cls + '">' + labelHtml + escapeHtml(turn.text) + '</div>';
     }
     return html;
   }
@@ -223,13 +226,13 @@ window.CustomerDetail = (function() {
     return text.split('\n').map(function(l) {
       if (l.indexOf('AI:') === 0 || l.indexOf('Agent:') === 0) {
         var colon = l.indexOf(':');
-        return '<div class="demo-msg ai"><div class="demo-msg-label">AI AGENT</div>' + l.substring(colon + 1).trim() + '</div>';
+        return '<div class="demo-msg ai"><div class="demo-msg-label">AI AGENT</div>' + escapeHtml(l.substring(colon + 1).trim()) + '</div>';
       }
       if (l.indexOf('Customer:') === 0) {
         var c = l.indexOf(':');
-        return '<div class="demo-msg customer"><div class="demo-msg-label">' + firstName + '</div>' + l.substring(c + 1).trim() + '</div>';
+        return '<div class="demo-msg customer"><div class="demo-msg-label">' + escapeHtml(firstName) + '</div>' + escapeHtml(l.substring(c + 1).trim()) + '</div>';
       }
-      return '<div class="demo-msg system">' + l + '</div>';
+      return '<div class="demo-msg system">' + escapeHtml(l) + '</div>';
     }).join('');
   }
 
@@ -244,6 +247,9 @@ window.CustomerDetail = (function() {
   }
 
   function _authFetch(url) {
+    if (window.SIM_SESSION_ID) {
+      url += (url.indexOf('?') >= 0 ? '&' : '?') + 'sessionId=' + encodeURIComponent(window.SIM_SESSION_ID);
+    }
     return fetch(url, { headers: _authHeaders() }).then(function(r) { return r.json(); });
   }
 
@@ -254,7 +260,7 @@ window.CustomerDetail = (function() {
       _authFetch('/api/v1/opportunities?customerId=' + encodeURIComponent(customerId)),
       _authFetch('/api/v1/financial/estimates?customerId=' + encodeURIComponent(customerId)),
       _authFetch('/api/v1/communications?customerId=' + encodeURIComponent(customerId)),
-      _authFetch('/api/v1/leads/' + encodeURIComponent(customerId) + '/intelligence').catch(function() { return null; })
+      _authFetch('/api/v1/customers/' + encodeURIComponent(customerId) + '/polaris').catch(function() { return null; })
     ]).then(function(results) {
       return {
         customer: results[0],
@@ -303,7 +309,7 @@ window.CustomerDetail = (function() {
       data.description = primaryOpp.description || '';
       data.estimatedValue = primaryOpp.estimatedValue || 0;
       data.stage = primaryOpp.stage || 'lead';
-      data.closeProbability = primaryOpp.closeProbability != null ? primaryOpp.closeProbability : stageProb(data.stage);
+      data.closeProbability = primaryOpp.closeProbability != null ? primaryOpp.closeProbability : null;
     }
 
     // Estimates
@@ -370,8 +376,10 @@ window.CustomerDetail = (function() {
 
     // Canonical Polaris Intelligence — from pipeline
     data.intelligence = null;
-    if (raw.intelligence && !raw.intelligence.error) {
-      data.intelligence = raw.intelligence;
+    if (raw.intelligence && raw.intelligence.success && raw.intelligence.data) {
+      data.intelligence = raw.intelligence.data;
+      data.service = data.intelligence.service || data.service;
+      data.estimatedValue = data.intelligence.customerFacingPrice;
     }
 
     return data;
@@ -380,78 +388,68 @@ window.CustomerDetail = (function() {
   // ── POLARIS Intelligence ──
 
   function generatePolarisIntel(data) {
-    // Use canonical Polaris intelligence from API when available
-    var canon = data.intelligence;
-    if (canon && canon.polaris) canon = canon.polaris;
-
-    if (canon && (canon.service || canon.pricing || canon.confidence)) {
-      var svc = canon.service || data.service || 'General';
-      var price = canon.pricing ? (canon.pricing.range || fmtCurrency(canon.pricing.estimated || 0)) : fmtCurrency(data.estimatedValue || 0);
-      var confPct = canon.confidence ? (canon.confidence.score || canon.confidence.pct || 0) : (data.closeProbability || 0);
-      var confLabel = canon.confidence ? (canon.confidence.label || (confPct >= 80 ? 'High' : confPct >= 50 ? 'Medium' : 'Low')) : 'Low';
-      var action = canon.action || canon.recommendedAction || '';
-      var summary = canon.summary || canon.classification || '';
-
+    var canonical = data.intelligence;
+    if (!canonical || canonical.pipelineVersion !== 'canonical-polaris-v1') {
       return {
-        summary: summary || capitalizeFirst((data.description || svc).substring(0, 80)),
-        price: price,
-        confidenceLabel: confLabel,
-        confidenceClass: confLabel.toLowerCase(),
-        confidencePct: (typeof confPct === 'number' ? confPct : parseInt(confPct) || 0) + '%',
-        revenue: price + ' \u2014 ' + svc,
-        action: action || (confPct >= 70 ? 'Prioritize immediate follow-up' : confPct >= 40 ? 'Schedule estimate visit' : 'Nurture with follow-up call'),
-        isCanonical: true
+        summary: 'Canonical Polaris intelligence is not available for this customer.',
+        price: 'Not established',
+        confidenceLabel: 'Unavailable',
+        confidenceClass: 'low',
+        confidencePct: '\u2014',
+        revenue: 'Not established',
+        action: 'Review the customer record manually.',
+        scope: 'Not available',
+        missing: 'Not available',
+        canonical: null
       };
     }
 
-    // Fallback: compute from available data (legacy — no $500/5%/30% hardcoded defaults)
-    var svc = data.service || 'General';
-    var estVal = data.estimatedValue || 0;
-    var prob = data.closeProbability || 0;
-    var summary = 'New lead for ' + svc + '.';
-    if (data.description) {
-      summary = capitalizeFirst(data.description.substring(0, 80)) + (data.description.length > 80 ? '\u2026' : '');
+    var canonicalRange = canonical.preliminaryRange;
+    var canonicalPrice = canonicalRange && canonicalRange.low != null && canonicalRange.high != null
+      ? fmtCurrency(canonicalRange.low) + '\u2013' + fmtCurrency(canonicalRange.high)
+      : (canonical.customerFacingPrice != null ? fmtCurrency(canonical.customerFacingPrice) : 'Not established');
+    var canonicalAction = canonical.recommendedAction;
+    if (canonicalAction && typeof canonicalAction === 'object') {
+      canonicalAction = canonicalAction.action || canonicalAction.label || canonicalAction.reason || JSON.stringify(canonicalAction);
     }
-    var price = fmtCurrency(estVal);
-    var confLabel = prob >= 80 ? 'High' : prob >= 50 ? 'Medium' : 'Low';
-    var confClass = confLabel.toLowerCase();
-    var action = prob >= 70 ? 'Prioritize immediate follow-up' : prob >= 40 ? 'Schedule estimate visit' : 'Nurture with follow-up call';
-
+    var canonicalScope = Object.keys(canonical.scope || {}).map(function(key) {
+      return key + ': ' + canonical.scope[key];
+    }).join('; ');
+    var canonicalMissing = (canonical.missingInformation || []).join(', ');
     return {
-      summary: summary,
-      price: price,
-      confidenceLabel: confLabel,
-      confidenceClass: confClass,
-      confidencePct: prob + '%',
-      revenue: price + ' \u2014 ' + svc,
-      action: action,
-      isCanonical: false
+      summary: canonical.service + ' \u2014 ' + canonical.qualification + '. ' + canonical.operationalReasoning,
+      price: canonical.pricingRecommendation + (canonicalPrice !== 'Not established' ? ' ' + canonicalPrice : ''),
+      confidenceLabel: capitalizeFirst(canonical.confidenceLevel || 'low'),
+      confidenceClass: canonical.confidenceLevel || 'low',
+      confidencePct: canonical.confidenceScore + '%',
+      revenue: canonical.customerFacingPrice != null ? fmtCurrency(canonical.customerFacingPrice) : 'Not established',
+      action: canonicalAction || 'No automated action available',
+      scope: canonicalScope || 'No verified service-specific scope captured',
+      missing: canonicalMissing || 'None identified',
+      canonical: canonical
     };
+
   }
 
   // ── Render Pricing Breakdown ──
 
-  function renderPricingBreakdown(estimates) {
-    if (!estimates || estimates.length === 0) {
-      return '<p style="font-size:13px;color:var(--neutral-500);">No estimate data available.</p>';
-    }
-    var est = estimates[0];
-    if (est.items && Array.isArray(est.items) && est.items.length > 0) {
-      var html = '';
-      var total = 0;
-      est.items.forEach(function(item) {
-        var amt = item.amount || item.a || 0;
-        var label = item.description || item.label || item.l || 'Item';
-        total += amt;
-        html += '<div class="drawer-pricing-item"><span>' + label + '</span><span>' + fmtCurrency(amt) + '</span></div>';
+  function renderPricingBreakdown(estimates, canonical) {
+    if (canonical && Array.isArray(canonical.pricingBreakdown)) {
+      var canonicalHtml = '';
+      var canonicalTotal = 0;
+      canonical.pricingBreakdown.forEach(function(item) {
+        var amount = Number(item.amount);
+        if (!(amount > 0)) return;
+        canonicalTotal += amount;
+        canonicalHtml += '<div class="drawer-pricing-item"><span>' + escapeHtml(item.label || 'Cost component') + '</span><span>' + fmtCurrency(amount) + '</span></div>';
       });
-      html += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>' + fmtCurrency(total) + '</strong></span></div>';
-      return html;
+      if (canonicalHtml) {
+        canonicalHtml += '<div class="drawer-pricing-item"><span><strong>Customer-facing total</strong></span><span><strong>' + fmtCurrency(canonicalTotal) + '</strong></span></div>';
+        return canonicalHtml;
+      }
+      return '<p style="font-size:13px;color:var(--neutral-500);">No supported pricing breakdown is available. Complete the missing scope before quoting.</p>';
     }
-    if (est.total) {
-      return '<p style="font-size:13px;color:var(--neutral-500);">Est. value: ' + fmtCurrency(est.total) + '</p>';
-    }
-    return '<p style="font-size:13px;color:var(--neutral-500);">Estimate pending.</p>';
+    return '<p style="font-size:13px;color:var(--neutral-500);">Canonical pricing is not available for this customer.</p>';
   }
 
   // ── Public API ──
@@ -501,7 +499,9 @@ window.CustomerDetail = (function() {
     // Job Details
     $('cdService').textContent = data.service || '\u2014';
     $('cdDescription').textContent = data.description ? capitalizeFirst(data.description) : '\u2014';
-    $('cdEstValue').textContent = fmtCurrency(data.estimatedValue);
+    $('cdEstValue').textContent = data.intelligence && data.estimatedValue == null
+      ? 'Requires assessment'
+      : fmtCurrency(data.estimatedValue);
     $('cdStage').textContent = stageLabel(data.stage);
     $('cdProb').textContent = (data.closeProbability != null ? data.closeProbability + '%' : '\u2014');
 
@@ -512,9 +512,11 @@ window.CustomerDetail = (function() {
     $('cdPolConfidence').innerHTML = '<span class="polaris-confidence ' + intel.confidenceClass + '">' + intel.confidenceLabel + ' (' + intel.confidencePct + ')</span>';
     $('cdPolRevenue').textContent = intel.revenue;
     $('cdPolAction').textContent = intel.action;
+    $('cdPolScope').textContent = intel.scope;
+    $('cdPolMissing').textContent = intel.missing;
 
     // Pricing Breakdown
-    $('cdPricingBreakdown').innerHTML = renderPricingBreakdown(data.estimates);
+    $('cdPricingBreakdown').innerHTML = renderPricingBreakdown(data.estimates, intel.canonical);
 
     // Transcript
     $('cdTranscript').innerHTML = renderTranscriptBubbles(data.primaryTranscript, data.name);

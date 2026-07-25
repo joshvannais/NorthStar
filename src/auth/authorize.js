@@ -25,11 +25,14 @@ const contractorPermissions = {
   },
   calls: {
     view: ['owner', 'admin', 'member', 'viewer'],
+    create: ['owner', 'admin', 'member'],
     flag: ['owner', 'admin', 'member']
   },
   calendar: {
     view: ['owner', 'admin', 'member', 'viewer'],
-    schedule: ['owner', 'admin', 'member']
+    schedule: ['owner', 'admin', 'member'],
+    edit: ['owner', 'admin', 'member'],
+    delete: ['owner', 'admin']
   },
   settings: {
     view: ['owner', 'admin', 'member', 'viewer'],
@@ -47,6 +50,12 @@ const contractorPermissions = {
   },
   organization: {
     delete: ['owner']
+  },
+  polaris: {
+    view: ['owner', 'admin', 'member', 'viewer'],
+    mutate: ['owner', 'admin', 'member'],
+    delete: ['owner', 'admin'],
+    configure: ['owner', 'admin']
   }
 };
 
@@ -97,13 +106,21 @@ function requirePermission(resource, action) {
       return res.status(401).json({ error: { code: 'unauthorized', message: 'Authentication required.' } });
     }
 
-    const role = user.role || 'member';
+    const role = req.userRole;
+    if (!req.tenantContext || !req.orgId || !role) {
+      return res.status(403).json({
+        error: {
+          code: 'organization_membership_required',
+          message: 'Active organization membership is required.'
+        }
+      });
+    }
 
     if (!hasContractorPermission(role, resource, action)) {
       return res.status(403).json({
         error: {
           code: 'forbidden',
-          message: `You do not have permission to ${action} ${resource}. Required role: ${getRequiredRole(resource, action)}`
+          message: `You do not have permission to ${action} ${resource}.`
         }
       });
     }
@@ -116,7 +133,7 @@ function requirePermission(resource, action) {
  * Middleware: require contractor to be the Owner (for billing, delete-org, etc.)
  */
 function requireOwner(req, res, next) {
-  if (!req.user || req.user.role !== 'owner') {
+  if (!req.user || req.userRole !== 'owner') {
     return res.status(403).json({
       error: { code: 'forbidden', message: 'Only the organization owner can perform this action.' }
     });

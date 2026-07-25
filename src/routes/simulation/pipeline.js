@@ -9,6 +9,7 @@
  */
 
 const CATALOG = require('./service-catalog');
+const { detectEmergencyEvidence } = require('../../services/emergencyEvidence');
 
 // ═══════════════════════════════════════════════════════
 // UNIVERSAL PRIMITIVES
@@ -97,6 +98,9 @@ function generateScenario(requestedService, customerName) {
 
 function _populateScope(scenario, svc) {
   const scope = scenario.job.scope;
+  // jobType is a canonical scope dimension for every catalog service. Keep it
+  // in the same object the transcript-grounded extractor validates.
+  scope.jobType = scenario.job.type;
 
   if (svc.id === 'fence') {
     scope.linearFeet = _pickRandom([60, 100, 150, 175, 200, 250, 300]);
@@ -287,7 +291,8 @@ function _buildAnswer(scenario, question) {
 
   const answers = {
     // Fence
-    jobType: { install: 'New installation.', replace: 'Replacing an existing fence.', repair: 'Repairing some damaged sections.' }[scope.jobType],
+    jobType: { install: 'New installation.', replace: 'Replacement work.', repair: 'Repair work.' }[scope.jobType] ||
+      (scope.jobType ? scope.jobType.charAt(0).toUpperCase() + scope.jobType.slice(1) + ' work.' : null),
     linearFeet: `About ${scope.linearFeet} feet.`,
     material: scope.material ? `${scope.material.charAt(0).toUpperCase() + scope.material.slice(1)}${scope.hoa && scope.hoa.includes('yes') ? ' — our HOA requires it' : ''}.` : 'Not sure yet.',
     height: scope.height ? `${scope.height} feet.` : '6 feet.',
@@ -495,8 +500,8 @@ function calculatePricing(scope, classifiedService) {
 function _findServiceKey(classifiedService) {
   const lower = classifiedService.toLowerCase();
   for (const [key, svc] of Object.entries(CATALOG)) {
-    if (lower.includes(key) || svc.displayName.toLowerCase().includes(key)) return key;
-    if (key.includes(lower)) return key;
+    const displayName = svc.displayName.toLowerCase();
+    if (lower.includes(key) || lower.includes(displayName) || displayName.includes(lower) || key.includes(lower)) return key;
   }
   return null;
 }
@@ -544,11 +549,12 @@ function calculateConfidence(extractedScope, missingInfo, serviceKey) {
 // ACTION SELECTION
 // ═══════════════════════════════════════════════════════
 
-function selectAction(transcript, customerName, scope) {
+function selectAction(transcript, customerName, scope, emergencyEvidence) {
   const text = transcript.map(t => (t && t.text ? t.text : '')).join(' ').toLowerCase();
   const name = customerName.split(' ')[0];
+  const emergency = emergencyEvidence || detectEmergencyEvidence(transcript);
 
-  if (text.includes('emergency') || (scope && scope.urgency === 'emergency')) {
+  if (emergency.isEmergency) {
     return { action: 'Dispatch immediately', description: 'Emergency situation reported. Dispatch technician and notify on-call team.', priority: 'critical' };
   }
   if (text.includes('schedule') || text.includes('set up') || text.includes('come out') || text.includes('appointment') || text.includes('morning') || text.includes('afternoon') || text.includes('tomorrow')) {
@@ -583,4 +589,5 @@ module.exports = {
   calculatePricing,
   calculateConfidence,
   selectAction,
+  detectEmergencyEvidence,
 };

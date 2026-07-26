@@ -9,6 +9,7 @@
  */
 
 const CATALOG = require('./service-catalog');
+const { detectEmergencyEvidence } = require('../../services/emergencyEvidence');
 
 // ═══════════════════════════════════════════════════════
 // UNIVERSAL PRIMITIVES
@@ -548,7 +549,7 @@ function selectAction(transcript, customerName, scope) {
   const text = transcript.map(t => (t && t.text ? t.text : '')).join(' ').toLowerCase();
   const name = customerName.split(' ')[0];
 
-  if (text.includes('emergency') || (scope && scope.urgency === 'emergency')) {
+  if (detectEmergencyEvidence(transcript).isEmergency) {
     return { action: 'Dispatch immediately', description: 'Emergency situation reported. Dispatch technician and notify on-call team.', priority: 'critical' };
   }
   if (text.includes('schedule') || text.includes('set up') || text.includes('come out') || text.includes('appointment') || text.includes('morning') || text.includes('afternoon') || text.includes('tomorrow')) {

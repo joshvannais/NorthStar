@@ -23,6 +23,7 @@ jest.mock('../../../src/voice/businessEvents', () => ({
 }));
 
 const webhook = require('../../../src/voice/webhook');
+const businessEvents = require('../../../src/voice/businessEvents');
 
 describe('Voice Webhook Framework', () => {
   // ── Signature Validation ──────────────────────────────────
@@ -199,6 +200,201 @@ describe('Voice Webhook Framework', () => {
       });
       expect(result.received).toBe(true);
       expect(result.routed).toBe(true);
+    });
+  });
+
+  describe('handler timeout lifecycle', () => {
+    function deferred() {
+      let resolve;
+      let reject;
+      const promise = new Promise((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      });
+      return { promise, resolve, reject };
+    }
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      webhook.start();
+      businessEvents.emit.mockReset();
+    });
+
+    afterEach(() => {
+      webhook.shutdown();
+      webhook.start();
+      businessEvents.emit.mockReset().mockResolvedValue({ emitted: true, handlerCount: 0, errors: 0 });
+      jest.useRealTimers();
+    });
+
+    test('normal completion clears its owned timeout', async () => {
+      businessEvents.emit.mockResolvedValueOnce({ emitted: true, handlerCount: 0, errors: 0 });
+
+      await expect(webhook.routeEvent({
+        event: 'call_started',
+        event_id: 'evt_lifecycle_complete',
+        call_id: 'call_lifecycle_complete',
+      })).resolves.toEqual({
+        received: true,
+        routed: true,
+        event: 'call_started',
+        eventId: 'evt_lifecycle_complete',
+      });
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    test('handler rejection clears its owned timeout', async () => {
+      const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
+      businessEvents.emit.mockRejectedValueOnce(new Error('emit failed'));
+
+      await expect(webhook.routeEvent({
+        event: 'call_started',
+        event_id: 'evt_lifecycle_rejection',
+      })).resolves.toEqual({
+        received: true,
+        routed: true,
+        event: 'call_started',
+        eventId: 'evt_lifecycle_rejection',
+      });
+      expect(errorLog).toHaveBeenCalledTimes(1);
+      expect(errorLog).toHaveBeenCalledWith(
+        '[Voice:Webhook] Event handler error for call_started:',
+        'emit failed'
+      );
+      expect(jest.getTimerCount()).toBe(0);
+      errorLog.mockRestore();
+    });
+
+    test('replacement retires the obsolete timeout before the new handler completes', async () => {
+      const firstEmit = deferred();
+      const replacementEmit = deferred();
+      businessEvents.emit
+        .mockReturnValueOnce(firstEmit.promise)
+        .mockReturnValueOnce(replacementEmit.promise);
+
+      const firstRoute = webhook.routeEvent({
+        event: 'call_started',
+        event_id: 'evt_lifecycle_replace',
+      });
+      await Promise.resolve();
+      expect(jest.getTimerCount()).toBe(1);
+
+      const replacementRoute = webhook.routeEvent({
+        event: 'call_started',
+        event_id: 'evt_lifecycle_replace',
+      });
+      await expect(firstRoute).resolves.toEqual({
+        received: true,
+        routed: true,
+        event: 'call_started',
+        eventId: 'evt_lifecycle_replace',
+      });
+      expect(jest.getTimerCount()).toBe(1);
+
+      replacementEmit.resolve({ emitted: true, handlerCount: 0, errors: 0 });
+      await expect(replacementRoute).resolves.toEqual({
+        received: true,
+        routed: true,
+        event: 'call_started',
+        eventId: 'evt_lifecycle_replace',
+      });
+      expect(jest.getTimerCount()).toBe(0);
+
+      firstEmit.resolve({ emitted: true, handlerCount: 0, errors: 0 });
+      await Promise.resolve();
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    test('explicit cancellation retires the timer and cannot fire later', async () => {
+      const emit = deferred();
+      businessEvents.emit.mockReturnValueOnce(emit.promise);
+      const route = webhook.routeEvent({
+        event: 'call_started',
+        event_id: 'evt_lifecycle_cancel',
+      });
+      await Promise.resolve();
+      expect(jest.getTimerCount()).toBe(1);
+
+      expect(webhook.cancelPendingEvent('evt_lifecycle_cancel')).toBe(true);
+      await expect(route).resolves.toEqual({
+        received: true,
+        routed: true,
+        event: 'call_started',
+        eventId: 'evt_lifecycle_cancel',
+      });
+      expect(webhook.cancelPendingEvent('evt_lifecycle_cancel')).toBe(false);
+      expect(jest.getTimerCount()).toBe(0);
+
+      jest.advanceTimersByTime(10000);
+      emit.resolve({ emitted: true, handlerCount: 0, errors: 0 });
+      await Promise.resolve();
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    test('shutdown cancels every timer and rejects new routing until restarted', async () => {
+      const firstEmit = deferred();
+      const secondEmit = deferred();
+      businessEvents.emit
+        .mockReturnValueOnce(firstEmit.promise)
+        .mockReturnValueOnce(secondEmit.promise);
+      const firstRoute = webhook.routeEvent({ event: 'call_started', event_id: 'evt_shutdown_1' });
+      const secondRoute = webhook.routeEvent({ event: 'call_ended', event_id: 'evt_shutdown_2' });
+      await Promise.resolve();
+      expect(jest.getTimerCount()).toBe(2);
+
+      expect(webhook.shutdown()).toBe(2);
+      await expect(Promise.all([firstRoute, secondRoute])).resolves.toEqual([
+        { received: true, routed: true, event: 'call_started', eventId: 'evt_shutdown_1' },
+        { received: true, routed: true, event: 'call_ended', eventId: 'evt_shutdown_2' },
+      ]);
+      expect(jest.getTimerCount()).toBe(0);
+
+      await expect(webhook.routeEvent({
+        event: 'call_started',
+        event_id: 'evt_after_shutdown',
+      })).resolves.toEqual({
+        received: true,
+        routed: false,
+        reason: 'webhook_shutdown',
+        event: 'call_started',
+        eventId: 'evt_after_shutdown',
+      });
+      expect(businessEvents.emit).toHaveBeenCalledTimes(2);
+
+      firstEmit.resolve({ emitted: true, handlerCount: 0, errors: 0 });
+      secondEmit.resolve({ emitted: true, handlerCount: 0, errors: 0 });
+      webhook.start();
+    });
+
+    test('timeout completion removes the expired callback exactly once', async () => {
+      const emit = deferred();
+      const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
+      businessEvents.emit.mockReturnValueOnce(emit.promise);
+      const route = webhook.routeEvent({
+        event: 'call_started',
+        event_id: 'evt_lifecycle_timeout',
+      });
+      await Promise.resolve();
+      expect(jest.getTimerCount()).toBe(1);
+
+      jest.advanceTimersByTime(10000);
+      await expect(route).resolves.toEqual({
+        received: true,
+        routed: true,
+        event: 'call_started',
+        eventId: 'evt_lifecycle_timeout',
+      });
+      expect(errorLog).toHaveBeenCalledTimes(1);
+      expect(errorLog).toHaveBeenCalledWith(
+        '[Voice:Webhook] Event handler error for call_started:',
+        'Handler timeout'
+      );
+      expect(jest.getTimerCount()).toBe(0);
+
+      emit.resolve({ emitted: true, handlerCount: 0, errors: 0 });
+      await Promise.resolve();
+      expect(errorLog).toHaveBeenCalledTimes(1);
+      errorLog.mockRestore();
     });
   });
 

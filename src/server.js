@@ -22,6 +22,7 @@ const polarisEnginesRoutes = require('./routes/polaris-engines');
 const customerIntelligenceRoutes = require('./routes/customerIntelligence');
 const businessProfileRoutes = require('./routes/businessProfile');
 const voiceRoutes = require('./routes/voice');
+const voiceWebhook = require('./voice/webhook');
 const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
 const db = require('./db');
 const cache = require('./cache/client');
@@ -545,6 +546,8 @@ app.use(errorHandler);
 
 // Start server
 async function start() {
+  voiceWebhook.start();
+
   // Initialize database, cache, and audit logging
   await db.initDatabase();
   await cache.init();
@@ -614,6 +617,12 @@ async function start() {
     console.log(`  GET  ${baseUrl}/api/admin/users          → All contractors`);
     console.log('');
   });
+
+  server.once('close', () => {
+    voiceWebhook.shutdown();
+  });
+
+  return server;
 }
 
 // Only auto-start when run directly (not when required via require() for testing)

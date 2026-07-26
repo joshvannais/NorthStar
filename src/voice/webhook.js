@@ -22,6 +22,100 @@ const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
 const DEDUP_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const HANDLER_TIMEOUT_MS = 10000;
 
+// Each in-flight business-event handler owns exactly one timeout. Entries are
+// keyed by Retell event ID so replacement, cancellation, and shutdown can
+// retire obsolete callbacks before they can fire.
+const pendingHandlerTimeouts = new Map();
+let anonymousHandlerSequence = 0;
+let acceptingEvents = true;
+
+function createLifecycleError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function handlerKey(payload) {
+  if (payload.event_id) return payload.event_id;
+  if (payload.call_id) return (payload.event || 'event') + ':' + payload.call_id;
+  anonymousHandlerSequence += 1;
+  return (payload.event || 'event') + ':anonymous:' + anonymousHandlerSequence;
+}
+
+function beginHandlerTimeout(key) {
+  const previous = pendingHandlerTimeouts.get(key);
+  if (previous) {
+    previous.cancel('HANDLER_REPLACED', 'Handler replaced by a newer event');
+  }
+
+  let settled = false;
+  let timer = null;
+  let rejectDeadline;
+  const deadline = new Promise((_, reject) => {
+    rejectDeadline = reject;
+  });
+
+  const entry = {
+    key,
+    deadline,
+    complete() {
+      if (settled) return false;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (pendingHandlerTimeouts.get(key) === entry) {
+        pendingHandlerTimeouts.delete(key);
+      }
+      return true;
+    },
+    cancel(code, message) {
+      if (settled) return false;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (pendingHandlerTimeouts.get(key) === entry) {
+        pendingHandlerTimeouts.delete(key);
+      }
+      rejectDeadline(createLifecycleError(code, message));
+      return true;
+    },
+  };
+
+  timer = setTimeout(() => {
+    if (settled || pendingHandlerTimeouts.get(key) !== entry) return;
+    settled = true;
+    timer = null;
+    pendingHandlerTimeouts.delete(key);
+    rejectDeadline(createLifecycleError('HANDLER_TIMEOUT', 'Handler timeout'));
+  }, HANDLER_TIMEOUT_MS);
+
+  pendingHandlerTimeouts.set(key, entry);
+  return entry;
+}
+
+function cancelPendingEvent(eventId) {
+  const entry = pendingHandlerTimeouts.get(eventId);
+  if (!entry) return false;
+  return entry.cancel('HANDLER_CANCELLED', 'Handler cancelled');
+}
+
+function cancelAllPendingHandlers(code, message) {
+  const entries = Array.from(pendingHandlerTimeouts.values());
+  entries.forEach((entry) => entry.cancel(code, message));
+  return entries.length;
+}
+
+function start() {
+  const cancelled = cancelAllPendingHandlers('HANDLER_REPLACED', 'Webhook lifecycle restarted');
+  acceptingEvents = true;
+  return cancelled;
+}
+
+function shutdown() {
+  acceptingEvents = false;
+  return cancelAllPendingHandlers('WEBHOOK_SHUTDOWN', 'Webhook shutdown');
+}
+
 /**
  * Get the webhook secret dynamically (supports runtime env changes).
  */
@@ -161,6 +255,10 @@ async function routeEvent(payload) {
     return { received: true, routed: false, reason: 'unknown_event' };
   }
 
+  if (!acceptingEvents) {
+    return { received: true, routed: false, reason: 'webhook_shutdown', event, eventId };
+  }
+
   console.log(`[Voice:Webhook] Routing event: ${event} (id: ${eventId})`);
 
   // ── Handle transcript events (streamed during call) ──
@@ -202,6 +300,7 @@ async function routeEvent(payload) {
   // Emit business event for supported types
   const businessEventType = EVENT_TYPE_MAP[event];
   if (businessEventType) {
+    let handlerTimeout = null;
     try {
       const bizEvent = {
         type: businessEventType,
@@ -221,15 +320,21 @@ async function routeEvent(payload) {
       };
 
       // Emit with timeout
-      const emitPromise = businessEvents.emit(bizEvent);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Handler timeout')), HANDLER_TIMEOUT_MS)
-      );
-
-      await Promise.race([emitPromise, timeoutPromise]);
+      handlerTimeout = beginHandlerTimeout(handlerKey(payload));
+      const emitPromise = Promise.resolve().then(() => businessEvents.emit(bizEvent));
+      await Promise.race([emitPromise, handlerTimeout.deadline]);
     } catch (err) {
-      console.error(`[Voice:Webhook] Event handler error for ${event}:`, err.message);
+      const expectedCancellation = err && (
+        err.code === 'HANDLER_REPLACED' ||
+        err.code === 'HANDLER_CANCELLED' ||
+        err.code === 'WEBHOOK_SHUTDOWN'
+      );
+      if (!expectedCancellation) {
+        console.error(`[Voice:Webhook] Event handler error for ${event}:`, err.message);
+      }
       // Don't fail the webhook response — Retell will retry if we 500
+    } finally {
+      if (handlerTimeout) handlerTimeout.complete();
     }
   }
 
@@ -317,4 +422,7 @@ module.exports = {
   validateTimestamp,
   isDuplicate,
   routeEvent,
+  cancelPendingEvent,
+  start,
+  shutdown,
 };

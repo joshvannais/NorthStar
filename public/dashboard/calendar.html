@@ -335,6 +335,32 @@ body { background: var(--neutral-50); }
 <script src="/js/theme.js"></script>
 <script src="/js/calendar-engine.js"></script>
 <script>
+var calendarApiEvents = [];
+var calendarLeadEvents = [];
+var calendarStateListenerRegistered = false;
+
+function renderCalendarSources() {
+  var seenIds = new Set();
+  window.calState.events = calendarApiEvents.concat(calendarLeadEvents).filter(function(event) {
+    if (!event || !event.id) return !!event;
+    if (seenIds.has(event.id)) return false;
+    seenIds.add(event.id);
+    return true;
+  });
+  window.calRenderer.render();
+}
+
+function syncAuthoritativeCalendarLeads(loadInfo) {
+  if (!loadInfo || loadInfo.from !== 'server') return;
+  var events = window.syncCalendarFromAppStore();
+  calendarLeadEvents = Array.isArray(events) ? events : [];
+  renderCalendarSources();
+}
+
+if (window.EventBus && typeof window.EventBus.on === 'function') {
+  window.EventBus.on('store:loaded', syncAuthoritativeCalendarLeads);
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initCalendar);
 } else {
@@ -342,19 +368,17 @@ if (document.readyState === 'loading') {
 }
 
 function initCalendar() {
-  Promise.all([
-    window.calData.fetchEvents().catch(function() { return []; }),
-    Promise.resolve(window.syncCalendarFromAppStore())
-  ]).then(function(results) {
-    var apiEvents = results[0];
-    var leadEvents = results[1];
-    var existingIds = new Set(apiEvents.map(function(e) { return e.id; }));
-    var newLeadEvents = leadEvents.filter(function(e) { return !existingIds.has(e.id); });
-    window.calState.events = apiEvents.concat(newLeadEvents);
+  if (!calendarStateListenerRegistered) {
     window.calState.onChange(function() { window.calRenderer.render(); });
-    window.calRenderer.render();
+    calendarStateListenerRegistered = true;
+  }
+
+  window.calData.fetchEvents().then(function(events) {
+    calendarApiEvents = Array.isArray(events) ? events : [];
+    renderCalendarSources();
   }).catch(function() {
-    window.calRenderer.render();
+    calendarApiEvents = [];
+    renderCalendarSources();
   });
 }
 </script>

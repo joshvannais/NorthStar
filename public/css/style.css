@@ -522,7 +522,8 @@ img, svg, video, canvas {
 }
 
 /* === Dashboard Styles === */
-.dashboard-layout {
+.dashboard-layout,
+.app-layout {
   display: flex;
   min-height: 100vh;
   width: 100%;
@@ -988,7 +989,8 @@ tr:hover td { background: var(--neutral-50); }
   .form-row { grid-template-columns: 1fr; }
 
   /* Dashboard mobile */
-  .dashboard-layout { flex-direction: column; }
+  .dashboard-layout,
+  .app-layout { flex-direction: column; }
 
   .sidebar {
     display: none;
@@ -2694,7 +2696,7 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 
 /* Responsive: Dashboard Widget Grid */
 @media (min-width: 1024px) {
-  .main-content {
+  .dashboard-widget-layout .main-content {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0 var(--space-lg);
@@ -2711,7 +2713,7 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 }
 
 @media (max-width: 768px) {
-  .main-content {
+  .dashboard-widget-layout .main-content {
     display: block;
   }
   .ds-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: var(--space-sm); }

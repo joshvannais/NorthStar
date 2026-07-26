@@ -20,8 +20,20 @@ process.chdir(path.resolve(__dirname, '../..'));
 const intelligence = require('../../src/services/intelligence');
 const decisionEngine = require('../../src/services/decisionEngine');
 const customerIntelligence = require('../../src/services/customerIntelligence');
-const { buildCompactContext, buildBusinessContext, loadData } = require('../../src/context/business');
+const businessContext = require('../../src/context/business');
+const dataLoader = require('../../src/services/dataLoader');
+const { buildPolarisContext } = require('../../src/services/polarisContextBuilder');
+const { buildCompactContext, buildBusinessContext } = businessContext;
 const fixtures = require('../helpers/fixtures');
+
+const EXPECTED_CORE_METRICS = Object.freeze({
+  totalEstimatedLabor: 4279.8,
+  totalEstimatedProfit: 13885.84,
+  averageProfitMargin: '45.5%',
+  averageConfidence: 79,
+  totalTravelMinutes: 404,
+  totalProductionHours: 46,
+});
 
 describe('Phase 3 — Integration: Full Engine Pipeline', () => {
 
@@ -32,13 +44,8 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
     let leads;
 
     beforeAll(() => {
-      // Use real data files from the project
-      try {
-        leads = loadData().leads;
-      } catch (e) {
-        // Fall back to fixtures if data files not available
-        leads = fixtures.fullTestSet;
-      }
+      leads = dataLoader.loadData().leads;
+      expect(leads).toHaveLength(23);
     });
 
     test('Step 1: Intelligence Engine produces valid output for all leads', () => {
@@ -82,20 +89,19 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
       verifyNoNaN(snapshot.snapshot);
     });
 
-    test('Step 4: Business Context builder produces valid context', () => {
-      const context = buildCompactContext({});
-      
-      expect(context).not.toBeNull();
-      expect(context.overview).toBeDefined();
-      expect(context.leads).toBeDefined();
-      expect(context.metrics).toBeDefined();
-      expect(context.calculatedIntelligence).toBeDefined();
-      
-      // All numeric metrics are finite
-      expect(Number.isFinite(context.metrics.pipelineValue)).toBe(true);
-      expect(Number.isFinite(context.metrics.avgLeadValue)).toBe(true);
-      expect(Number.isFinite(context.metrics.needsFollowUp)).toBe(true);
-      expect(Number.isFinite(context.metrics.appointmentsSet)).toBe(true);
+    test('Step 4: low-level compact formatter exposes raw metrics but no computed intelligence', () => {
+      const context = buildCompactContext({ page: 'dashboard' });
+
+      expect(context.overview).toEqual({ totalLeads: 23, totalCustomers: 0, totalEvents: 0, totalJobs: 0 });
+      expect(context.metrics).toEqual({
+        pipelineValue: 30505,
+        needsFollowUp: 5,
+        appointmentsSet: 5,
+        avgLeadValue: 1326,
+      });
+      expect(Object.prototype.hasOwnProperty.call(context, 'calculatedIntelligence')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(context, 'executiveDecisions')).toBe(false);
+      expect(context.dashboardCustomerIntelligence).toBeNull();
     });
 
     test('Step 5: Text context builder produces non-empty string', () => {
@@ -103,28 +109,53 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
       expect(typeof text).toBe('string');
       expect(text.length).toBeGreaterThan(100);
       expect(text).toContain('NORTHSTAR BUSINESS CONTEXT');
+      expect(text).toContain('Estimated pipeline value: $30,505');
+      expect(text).not.toContain('Calculated Intelligence');
+      expect(text).not.toContain('Executive Decisions');
+      expect(text).not.toContain('Total estimated profit');
     });
 
-    test('Step 6: Full pipeline with active lead context works', () => {
+    test('Step 6: supported orchestrator wires active-lead intelligence and decisions exactly', () => {
       const firstLead = leads[0];
-      const context = buildCompactContext({ leadId: firstLead.id });
-      
-      expect(context.activeLead).not.toBeNull();
-      expect(context.activeLeadIntelligence).not.toBeNull();
-      expect(context.activeLeadDecision).not.toBeNull();
-      expect(context.activeLeadNextAction).not.toBeNull();
-      expect(context.activeLeadCustomerIntelligence).not.toBeNull();
-      
-      // Active lead intelligence has valid values
-      if (context.activeLeadIntelligence) {
-        verifyNoNaN(context.activeLeadIntelligence);
-      }
-      
-      // Customer snapshot from active lead
-      if (context.activeLeadCustomerIntelligence) {
-        expect(Number.isFinite(context.activeLeadCustomerIntelligence.priorityScore)).toBe(true);
-        expect(Number.isFinite(context.activeLeadCustomerIntelligence.opportunityScore)).toBe(true);
-      }
+      const raw = buildCompactContext({ leadId: firstLead.id });
+      expect(raw.activeLead.id).toBe('mrk123jsklz6yk');
+      expect(raw.activeLeadIntelligence).toBeNull();
+      expect(raw.activeLeadDecision).toBeNull();
+      expect(raw.activeLeadNextAction).toBeNull();
+      expect(raw.activeLeadCustomerIntelligence).toBeNull();
+
+      const context = buildPolarisContext({
+        page: 'leads',
+        leadId: firstLead.id,
+        userMessage: 'Show the active lead decision',
+        correlationId: 'pipeline-active-lead',
+      });
+      const compact = context.compactContext;
+
+      expect(context.request.page).toBe('leads');
+      expect(context.request.leadId).toBe('mrk123jsklz6yk');
+      expect(context.request.message).toBe('Show the active lead decision');
+      expect(context.request.correlationId).toBe('pipeline-active-lead');
+      expect(compact.activeLead.id).toBe('mrk123jsklz6yk');
+      expect(compact.activeLead.caller).toBe('Elizabeth Garcia');
+      expect(compact.activeLeadIntelligence.leadId).toBe('mrk123jsklz6yk');
+      expect(compact.activeLeadIntelligence.revenue).toBe(500);
+      expect(compact.activeLeadIntelligence.profit.estimated).toBe(159.48);
+      expect(compact.activeLeadIntelligence.confidence.score).toBe(93);
+      expect(compact.activeLeadDecision.priorityScore).toBe(57);
+      expect(compact.activeLeadDecision.priorityLabel).toBe('Medium');
+      expect(compact.activeLeadDecision.factors.estimatedProfit).toBe(159.48);
+      expect(compact.activeLeadDecision.factors.closeProbability).toBe('80%');
+      expect(compact.activeLeadNextAction.action).toBe('Confirm appointment & send proposal');
+      expect(compact.activeLeadNextAction.priority).toBe('high');
+      expect(compact.activeLeadNextAction.escalationLevel).toBe('this-week');
+      expect(compact.activeLeadCustomerIntelligence.priorityScore).toBe(57);
+      expect(compact.activeLeadCustomerIntelligence.snapshot.estimatedRevenue).toBe(500);
+      expect(compact.activeLeadCustomerIntelligence.snapshot.estimatedProfit).toBe(159.48);
+      expect(context.contextText).toContain('Currently viewing: Elizabeth Garcia');
+      expect(context.contextText).toContain('Calculated Intelligence');
+      expect(context.contextText).toContain('Executive Decisions');
+      expect(context.contextText).toContain('Total estimated profit: 13,885.84');
     });
   });
 
@@ -132,25 +163,21 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
   // Test 2: No duplicate orchestration
   // ──────────────────────────────────────────────
   describe('No Duplicate Calculations (Single Orchestrator)', () => {
-    test('buildCompactContext calls intelligence once for aggregate', () => {
-      // Build context twice — same object structure each time
-      const ctx1 = buildCompactContext({});
-      const ctx2 = buildCompactContext({});
-      
-      // Both produce same aggregate values (deterministic)
-      expect(ctx1.calculatedIntelligence.totalEstimatedLabor)
-        .toBe(ctx2.calculatedIntelligence.totalEstimatedLabor);
-      expect(ctx1.calculatedIntelligence.totalEstimatedProfit)
-        .toBe(ctx2.calculatedIntelligence.totalEstimatedProfit);
-      expect(ctx1.calculatedIntelligence.averageConfidence)
-        .toBe(ctx2.calculatedIntelligence.averageConfidence);
+    test('supported orchestrator produces one stable aggregate contract', () => {
+      const ctx1 = buildPolarisContext({ page: 'dashboard', correlationId: 'pipeline-stability-1' });
+      const ctx2 = buildPolarisContext({ page: 'dashboard', correlationId: 'pipeline-stability-2' });
+
+      expect(coreMetrics(ctx1.businessIntelligence)).toEqual(EXPECTED_CORE_METRICS);
+      expect(coreMetrics(ctx1.compactContext.calculatedIntelligence)).toEqual(EXPECTED_CORE_METRICS);
+      expect(coreMetrics(ctx2.businessIntelligence)).toEqual(EXPECTED_CORE_METRICS);
+      expect(coreMetrics(ctx2.compactContext.calculatedIntelligence)).toEqual(EXPECTED_CORE_METRICS);
     });
 
     test('Aggregate consistency across 3 execution paths', () => {
-      const leads = loadData().leads;
-      
-      // Path 1: buildCompactContext
-      const ctx = buildCompactContext({});
+      const leads = dataLoader.loadData().leads;
+
+      // Path 1: supported canonical orchestrator
+      const context = buildPolarisContext({ page: 'dashboard', correlationId: 'pipeline-aggregate' });
       
       // Path 2: Direct aggregate call
       const agg = intelligence.calculateAggregateIntelligence(leads);
@@ -158,19 +185,9 @@ describe('Phase 3 — Integration: Full Engine Pipeline', () => {
       // Path 3: Executive briefing
       const briefing = decisionEngine.generateExecutiveBriefing(leads);
       
-      // Verify all 6 metrics match
-      expect(ctx.calculatedIntelligence.totalEstimatedLabor)
-        .toBe(agg.totalEstimatedLabor);
-      expect(ctx.calculatedIntelligence.totalEstimatedProfit)
-        .toBe(agg.totalEstimatedProfit);
-      expect(ctx.calculatedIntelligence.averageProfitMargin)
-        .toBe(agg.averageProfitMargin);
-      expect(ctx.calculatedIntelligence.averageConfidence)
-        .toBe(agg.averageConfidence);
-      expect(ctx.calculatedIntelligence.totalTravelMinutes)
-        .toBe(agg.totalTravelMinutes);
-      expect(ctx.calculatedIntelligence.totalProductionHours)
-        .toBe(agg.totalProductionHours);
+      expect(coreMetrics(context.businessIntelligence)).toEqual(EXPECTED_CORE_METRICS);
+      expect(coreMetrics(context.compactContext.calculatedIntelligence)).toEqual(EXPECTED_CORE_METRICS);
+      expect(coreMetrics(agg)).toEqual(EXPECTED_CORE_METRICS);
       
       // Executive briefing also consistent
       expect(briefing.summary.totalEstimatedProfit).toBe(agg.totalEstimatedProfit);
@@ -289,6 +306,20 @@ describe('M16.6 Integrity', () => {
     expect(customerIntelligence).toBeDefined();
     expect(buildCompactContext).toBeDefined();
     expect(buildBusinessContext).toBeDefined();
-    expect(loadData).toBeDefined();
+    expect(Object.keys(businessContext).sort()).toEqual(['buildBusinessContext', 'buildCompactContext']);
+    expect(Object.prototype.hasOwnProperty.call(businessContext, 'loadData')).toBe(false);
+    expect(typeof dataLoader.loadData).toBe('function');
+    expect(typeof buildPolarisContext).toBe('function');
   });
 });
+
+function coreMetrics(value) {
+  return {
+    totalEstimatedLabor: value.totalEstimatedLabor,
+    totalEstimatedProfit: value.totalEstimatedProfit,
+    averageProfitMargin: value.averageProfitMargin,
+    averageConfidence: value.averageConfidence,
+    totalTravelMinutes: value.totalTravelMinutes,
+    totalProductionHours: value.totalProductionHours,
+  };
+}

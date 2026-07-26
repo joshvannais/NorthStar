@@ -196,6 +196,13 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(canonical.status).toBe(200);
     expect(compatibility.status).toBe(200);
     expect(legacyPath.status).toBe(200);
+    expect(canonical.body.data.authority).toEqual({
+      organizationId: ORG_A,
+      userId: USER_A,
+      sessionId: 'session-a',
+      explicitSession: 'session-a',
+    });
+    expect(compatibility.body.data.authority).toEqual(canonical.body.data.authority);
     expect(compatibility.body.data.digest).toBe(canonical.body.data.digest);
     expect(legacyPath.body.canonicalDigest).toBe(canonical.body.data.digest);
     expect(stableStringify(compatibility.body.data.items[0].values))
@@ -213,6 +220,9 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(new Set(responses.map(response => response.body.data.digest)).size).toBe(1);
     expect(new Set(responses.map(response => response.body.data.items[0].snapshotDigest)).size).toBe(1);
     expect(new Set(responses.map(response => stableStringify(response.body.data.items[0].values))).size).toBe(1);
+    expect(responses.every(response => response.body.data.authority.organizationId === ORG_A)).toBe(true);
+    expect(responses.every(response => response.body.data.authority.userId === USER_A)).toBe(true);
+    expect(responses.every(response => response.body.data.authority.sessionId === 'session-a')).toBe(true);
   });
 
   test('dashboard and analytics are equal and derived from the canonical snapshot', async () => {

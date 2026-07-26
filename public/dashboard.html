@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
+  <meta name="northstar-canonical-surfaces" content="command-center">
+  <script src="/js/canonical-intelligence.js"></script>
+  <script src="/js/polaris-api.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Command Center — POLARIS™ — NorthStar Solutions</title>
@@ -406,10 +409,16 @@
 
       // ── Section fetcher: safe JSON parse, timeout, error tolerance ──
       function fetchSection(label, url, extractor) {
-        return fetchWithTimeout(url).then(function(r) {
-          if (!r.ok) throw new Error(label + ' HTTP ' + r.status);
-          return r.json().catch(function(){ return {}; });
-        }).then(function(data) {
+        var loaders = {
+          executive: PolarisApi.getExecutiveSummary,
+          kpis: PolarisApi.getKPIs,
+          dashboard: PolarisApi.getDashboard,
+          customers: PolarisApi.getCustomers,
+          agenda: PolarisApi.getAgendaToday,
+          alerts: PolarisApi.getAlerts
+        };
+        var loader = loaders[label];
+        return (loader ? loader() : Promise.reject(new Error('Unsupported canonical section.'))).then(function(data) {
           return extractor ? extractor(data) : data;
         }).catch(function(err) {
           console.warn('[CC] ' + label + ' failed:', err && err.message);

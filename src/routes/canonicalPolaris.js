@@ -206,9 +206,20 @@ function aggregate(items) {
   };
 }
 
-function surfaceProjection(surface, items) {
+function authorityProjection(context) {
+  if (!context) return null;
+  return {
+    organizationId: context.organizationId,
+    userId: context.userId,
+    sessionId: context.sessionId,
+    explicitSession: context.explicitSession,
+  };
+}
+
+function surfaceProjection(surface, items, context) {
   return {
     surface,
+    authority: authorityProjection(context),
     readModelVersion: READ_MODEL_VERSION,
     digest: sha256(items.map(function (item) { return item.projectionDigest; })),
     items: items.map(function (item) {
@@ -223,8 +234,8 @@ function surfaceProjection(surface, items) {
   };
 }
 
-function compatibilityProjection(surface, items) {
-  const common = surfaceProjection(surface, items);
+function compatibilityProjection(surface, items, context) {
+  const common = surfaceProjection(surface, items, context);
   const records = items.map(function (item) {
     if (surface === 'customer-detail') return { ...item.customer, canonical: common.items.find(value => value.ids.graph === item.ids.graph) };
     if (surface === 'leads') return { ...item.opportunity, customer: item.customer, canonical: common.items.find(value => value.ids.graph === item.ids.graph) };
@@ -336,7 +347,7 @@ function createCanonicalRouter(options) {
     if (!SURFACES.has(req.params.surface)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Surface not found.' } });
     try {
       const items = await authoritativeItems(req, dependencies, 'canonical.surface.' + req.params.surface);
-      return res.json({ success: true, data: surfaceProjection(req.params.surface, items) });
+      return res.json({ success: true, data: surfaceProjection(req.params.surface, items, requestContext(req)) });
     } catch (_error) {
       return sendPersistenceUnavailable(res);
     }
@@ -346,7 +357,7 @@ function createCanonicalRouter(options) {
     if (!SURFACES.has(req.params.surface)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Compatibility projection not found.' } });
     try {
       const items = await authoritativeItems(req, dependencies, 'canonical.compat.' + req.params.surface);
-      return res.json({ success: true, data: compatibilityProjection(req.params.surface, items) });
+      return res.json({ success: true, data: compatibilityProjection(req.params.surface, items, requestContext(req)) });
     } catch (_error) {
       return sendPersistenceUnavailable(res);
     }

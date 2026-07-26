@@ -1,286 +1,184 @@
-/**
- * Polaris API Client — Canonical frontend data adapter
- *
- * Shared client for fetching from canonical Polaris engine endpoints.
- * All pages use this module to read authoritative server state.
- * AppStore may cache responses locally, but the server is always
- * the source of truth.
- *
- * Endpoints called here match routes in polaris-engines.js.
- * Data is normalized into consistent frontend models.
- */
-window.PolarisApi = (function() {
+/** PolarisApi - compatibility shapes sourced only from canonical projections. */
+window.PolarisApi = (function () {
+  'use strict';
 
-  var API_PREFIX = '/api/v1';
-
-  /**
-   * Auth-aware fetch with Bearer token from localStorage.
-   */
-  function _fetch(path, opts) {
-    opts = opts || {};
-    opts.headers = opts.headers || {};
-    var token = localStorage.getItem('token');
-    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
-    if (opts.body) opts.headers['Content-Type'] = 'application/json';
-    return fetch(API_PREFIX + path, opts);
+  function requireClient() {
+    if (!window.CanonicalIntelligence) throw new Error('Canonical intelligence client is unavailable.');
+    return window.CanonicalIntelligence;
   }
 
-  /**
-   * GET request to a Polaris engine endpoint.
-   * Returns parsed JSON or throws on non-OK response.
-   */
-  function _get(path) {
-    return _fetch(path).then(function(r) {
-      if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Request failed: ' + path); });
-      return r.json();
+  function compatibility(surface, filters) {
+    return requireClient().loadCompatibility(surface, filters);
+  }
+
+  function records(surface, key, filters) {
+    return compatibility(surface, filters).then(function (projection) {
+      var result = {};
+      result[key] = projection.records || [];
+      result.count = result[key].length;
+      result.total = result[key].length;
+      result.metrics = projection.metrics || null;
+      result.canonicalDigest = projection.digest;
+      result.readModelVersion = projection.readModelVersion;
+      result.authority = projection.authority;
+      result.items = projection.items;
+      return result;
     });
   }
 
-  /**
-   * POST request to a Polaris engine endpoint.
-   */
-  function _post(path, body) {
-    return _fetch(path, {
-      method: 'POST',
-      body: JSON.stringify(body || {})
-    }).then(function(r) {
-      if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'POST failed: ' + path); });
-      return r.json();
-    });
+  function firstValues(projection) {
+    return projection.items && projection.items.length ? projection.items[0].values : null;
   }
 
-  // ═══════════════════════════════════════════════
-  // Domain: Customers
-  // ═══════════════════════════════════════════════
-
-  /**
-   * Fetch all customers from Polaris.
-   * GET /api/v1/customers
-   */
-  function getCustomers(filters) {
-    var qs = [];
-    if (filters) {
-      if (filters.status) qs.push('status=' + encodeURIComponent(filters.status));
-      if (filters.search) qs.push('search=' + encodeURIComponent(filters.search));
-    }
-    var path = '/customers' + (qs.length > 0 ? '?' + qs.join('&') : '');
-    return _get(path);
+  function actionText(action) {
+    if (typeof action === 'string') return action;
+    if (!action || typeof action !== 'object') return '';
+    return action.action || action.title || action.description || action.reason || '';
   }
 
-  // ═══════════════════════════════════════════════
-  // Domain: Communications
-  // ═══════════════════════════════════════════════
+  function getCustomers(filters) { return records('customer-detail', 'customers', filters); }
+  function getCommunications(filters) { return records('communications', 'communications', filters); }
+  function getOpportunities(filters) { return records('leads', 'opportunities', filters); }
+  function getPipeline() { return records('leads', 'opportunities'); }
+  function getEstimates(filters) { return records('estimates', 'estimates', filters); }
+  function getAgendaToday() { return records('calendar', 'tasks'); }
 
-  /**
-   * Fetch communications from Polaris.
-   * GET /api/v1/communications
-   *
-   * @param {object} [filters] - Optional filters (type, direction, status, limit, offset)
-   * @returns {Promise<{communications: Array, total: number}>}
-   */
-  function getCommunications(filters) {
-    var qs = [];
-    if (filters) {
-      if (filters.customerId) qs.push('customerId=' + encodeURIComponent(filters.customerId));
-      if (filters.type) qs.push('type=' + encodeURIComponent(filters.type));
-      if (filters.direction) qs.push('direction=' + encodeURIComponent(filters.direction));
-      if (filters.status) qs.push('status=' + encodeURIComponent(filters.status));
-      if (filters.limit) qs.push('limit=' + parseInt(filters.limit));
-      if (filters.offset) qs.push('offset=' + parseInt(filters.offset));
-    }
-    var path = '/communications' + (qs.length > 0 ? '?' + qs.join('&') : '');
-    return _get(path);
-  }
-
-  // ═══════════════════════════════════════════════
-  // Domain: Opportunities / Leads
-  // ═══════════════════════════════════════════════
-
-  /**
-   * Fetch opportunities (leads) from Polaris.
-   * GET /api/v1/opportunities
-   *
-   * A lead is an opportunity at stage 'lead'. This endpoint
-   * returns all opportunities with optional stage filtering.
-   *
-   * @param {object} [filters] - Optional filters (stage, status, customerId, limit)
-   * @returns {Promise<{opportunities: Array, total: number}>}
-   */
-  function getOpportunities(filters) {
-    var qs = [];
-    if (filters) {
-      if (filters.stage) qs.push('stage=' + encodeURIComponent(filters.stage));
-      if (filters.status) qs.push('status=' + encodeURIComponent(filters.status));
-      if (filters.customerId) qs.push('customerId=' + encodeURIComponent(filters.customerId));
-      if (filters.limit) qs.push('limit=' + parseInt(filters.limit));
-    }
-    var path = '/opportunities' + (qs.length > 0 ? '?' + qs.join('&') : '');
-    return _get(path);
-  }
-
-  /**
-   * Fetch pipeline view and metrics.
-   * GET /api/v1/opportunities/pipeline
-   */
-  function getPipeline() {
-    return _get('/opportunities/pipeline');
-  }
-
-  // ═══════════════════════════════════════════════
-  // Domain: Estimates
-  // ═══════════════════════════════════════════════
-
-  /**
-   * Fetch estimates from Polaris.
-   * GET /api/v1/financial/estimates
-   */
-  function getEstimates(filters) {
-    var qs = [];
-    if (filters) {
-      if (filters.status) qs.push('status=' + encodeURIComponent(filters.status));
-      if (filters.customerId) qs.push('customerId=' + encodeURIComponent(filters.customerId));
-      if (filters.limit) qs.push('limit=' + parseInt(filters.limit));
-    }
-    var path = '/financial/estimates' + (qs.length > 0 ? '?' + qs.join('&') : '');
-    return _get(path);
-  }
-
-  /**
-   * Fetch financial metrics.
-   * GET /api/v1/financial/metrics
-   */
   function getFinancialMetrics() {
-    return _get('/financial/metrics');
+    return compatibility('estimates').then(function (projection) {
+      return Object.assign({}, projection.metrics || {}, {
+        canonicalDigest: projection.digest,
+        readModelVersion: projection.readModelVersion,
+        authority: projection.authority,
+      });
+    });
   }
 
-  // ═══════════════════════════════════════════════
-  // Domain: Analytics
-  // ═══════════════════════════════════════════════
-
-  /**
-   * Fetch executive summary.
-   * GET /api/v1/analytics/executive
-   */
   function getExecutiveSummary() {
-    return _get('/analytics/executive');
+    return compatibility('executive').then(function (projection) {
+      var values = firstValues(projection);
+      var metrics = projection.metrics || {};
+      var recommendations = values && Array.isArray(values.recommendedActions) ? values.recommendedActions.map(function (action) {
+        return { action: actionText(action), source: action };
+      }) : [];
+      return {
+        revenue: { total: metrics.estimatedRevenue, knownGrossProfit: metrics.knownGrossProfit },
+        pipeline: { activeDeals: metrics.graphCount, totalValue: metrics.estimatedRevenue },
+        operations: { appointments: metrics.appointmentCount },
+        recommendations: recommendations,
+        canonical: window.CanonicalIntelligence.getPresentation(projection),
+        canonicalDigest: projection.digest,
+        readModelVersion: projection.readModelVersion,
+        authority: projection.authority,
+      };
+    });
   }
 
-  /**
-   * Fetch KPIs.
-   * GET /api/v1/analytics/kpis
-   */
   function getKPIs() {
-    return _get('/analytics/kpis');
+    return compatibility('executive').then(function (projection) {
+      return {
+        kpis: projection.metrics || {},
+        canonical: window.CanonicalIntelligence.getPresentation(projection),
+        canonicalDigest: projection.digest,
+        readModelVersion: projection.readModelVersion,
+        authority: projection.authority,
+      };
+    });
   }
 
-  /**
-   * Fetch dashboard summary.
-   * GET /api/v1/analytics/dashboard
-   */
   function getDashboard() {
-    return _get('/analytics/dashboard');
+    return compatibility('command-center').then(function (projection) {
+      return {
+        summary: projection.metrics || {},
+        items: projection.items,
+        canonical: window.CanonicalIntelligence.getPresentation(projection),
+        canonicalDigest: projection.digest,
+        readModelVersion: projection.readModelVersion,
+        authority: projection.authority,
+      };
+    });
   }
 
-  /**
-   * Fetch alerts.
-   * GET /api/v1/analytics/alerts
-   */
   function getAlerts() {
-    return _get('/analytics/alerts');
+    return compatibility('executive').then(function (projection) {
+      var values = firstValues(projection);
+      return {
+        alerts: values && Array.isArray(values.recommendedActions) ? values.recommendedActions : [],
+        canonicalDigest: projection.digest,
+        readModelVersion: projection.readModelVersion,
+        authority: projection.authority,
+      };
+    });
   }
 
-  // ═══════════════════════════════════════════════
-  // Domain: Workflows
-  // ═══════════════════════════════════════════════
-
-  /**
-   * Fetch today's agenda.
-   * GET /api/v1/workflows/agenda/today
-   */
-  function getAgendaToday() {
-    return _get('/workflows/agenda/today');
-  }
-
-  // ═══════════════════════════════════════════════
-  // Simulation
-  // ═══════════════════════════════════════════════
-
-  /**
-   * Create a simulated lead across all Polaris engines.
-   * POST /api/v1/simulations/leads
-   */
   function simulateLead(data) {
-    return _post('/simulations/leads', data);
+    data = data || {};
+    var context = requireClient().synchronizeAuthority();
+    var token = localStorage.getItem('token');
+    if (!token || !context.userId) return Promise.reject(new Error('Authentication is required.'));
+    var key = data.idempotencyKey;
+    if (!key && window.crypto && typeof window.crypto.randomUUID === 'function') key = window.crypto.randomUUID();
+    if (!key) return Promise.reject(new Error('An idempotency key is required.'));
+    var body = Object.assign({}, data);
+    delete body.idempotencyKey;
+    var headers = {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': String(key),
+    };
+    if (context.sessionId) headers['X-NorthStar-Session-ID'] = context.sessionId;
+    return fetch('/api/v1/simulations/leads', {
+      method: 'POST',
+      headers: headers,
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok) throw new Error(payload && payload.error && payload.error.message || 'Simulation failed.');
+        return payload;
+      });
+    });
   }
 
-  // ═══════════════════════════════════════════════
-  // Data Normalization
-  // ═══════════════════════════════════════════════
-
-  /**
-   * Normalize a Polaris opportunity into a frontend lead model.
-   * This is the single shared transformation — not duplicated per page.
-   *
-   * @param {object} opp - Polaris opportunity object
-   * @param {object} [customer] - Optional Polaris customer for name/phone enrichment
-   * @returns {object} Normalized lead object
-   */
-  function normalizeLead(opp, customer) {
+  function normalizeLead(record) {
+    if (!record || !record.canonical || !record.canonical.values) return null;
+    var values = record.canonical.values;
+    var customer = record.customer || {};
     return {
-      id: opp.id,
-      customerId: opp.customerId,
-      callerName: customer ? customer.name : (opp.title || '').split(' - ').pop() || 'Unknown',
-      phone: customer ? customer.phone : '',
-      service: opp.title ? opp.title.split(' - ')[0] : 'General',
-      estimatedPrice: opp.estimatedValue || 0,
-      jobDetail: opp.description || '',
-      status: opp.stage === 'lead' ? 'new' : opp.stage,
-      outcome: opp.status === 'won' ? 'appointment-set' : opp.status === 'lost' ? 'no-interest' : 'lead-captured',
-      stage: opp.stage,
-      stageDisplayName: opp.stageDisplayName,
-      probability: opp.probability,
-      expectedRevenue: opp.expectedRevenue,
-      priority: opp.priority,
-      createdAt: opp.createdAt,
-      updatedAt: opp.updatedAt,
-      source: 'polaris',
+      id: record.canonical.ids.opportunity,
+      customerId: record.canonical.ids.customer,
+      canonicalGraphId: record.canonical.ids.graph,
+      callerName: customer.name,
+      phone: customer.phone,
+      service: values.service && values.service.label,
+      estimatedPrice: values.customerFacingPrice,
+      jobDetail: values.service && values.service.scope,
+      status: record.status,
+      calculationVersion: record.canonical.calculationVersion,
+      snapshotDigest: record.canonical.snapshotDigest,
+      canonical: record.canonical,
+      readOnly: true,
     };
   }
 
-  /**
-   * Normalize a Polaris communication into a frontend call record model.
-   *
-   * @param {object} comm - Polaris communication object
-   * @returns {object} Normalized communication object
-   */
-  function normalizeCommunication(comm) {
+  function normalizeCommunication(record) {
+    if (!record || !record.canonical || !record.canonical.values) return null;
     return {
-      id: comm.id,
-      customerId: comm.customerId,
-      callerName: comm.customerName || '',
-      phone: comm.customerPhone || '',
-      type: comm.type || 'call',
-      direction: comm.direction || 'inbound',
-      subject: comm.subject || '',
-      content: comm.content || '',
-      status: comm.status || 'completed',
-      duration: comm.duration,
-      createdAt: comm.createdAt,
-      updatedAt: comm.updatedAt,
+      id: record.canonical.ids.communication,
+      customerId: record.canonical.ids.customer,
+      customerName: record.customer && record.customer.name,
+      customerPhone: record.customer && record.customer.phone,
+      type: record.channel,
+      direction: record.direction,
+      subject: record.subject,
+      content: record.transcript && record.transcript.text,
+      duration: record.transcript && record.transcript.durationSeconds,
+      canonical: record.canonical,
+      readOnly: true,
     };
   }
 
-  // ═══════════════════════════════════════════════
-  // Public API
-  // ═══════════════════════════════════════════════
-
-  return {
-    // Raw fetch
-    fetch: _fetch,
-    get: _get,
-    post: _post,
-
-    // Domain methods
+  return Object.freeze({
+    getCompatibility: compatibility,
     getCustomers: getCustomers,
     getCommunications: getCommunications,
     getOpportunities: getOpportunities,
@@ -292,12 +190,8 @@ window.PolarisApi = (function() {
     getDashboard: getDashboard,
     getAlerts: getAlerts,
     getAgendaToday: getAgendaToday,
-
-    // Simulation
     simulateLead: simulateLead,
-
-    // Normalization
     normalizeLead: normalizeLead,
     normalizeCommunication: normalizeCommunication,
-  };
+  });
 })();

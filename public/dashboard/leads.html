@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="northstar-canonical-surfaces" content="leads estimates">
+  <script src="/js/canonical-intelligence.js"></script>
   <meta charset="UTF-8">
   <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -372,9 +374,8 @@
       if (!isReload && performance && performance.navigation) {
         isReload = performance.navigation.type === 1;
       }
-      if (isReload || !sessionStorage.getItem('northstarSessionId')) {
-        sessionStorage.setItem('northstarSessionId', 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
-      }
+      // CanonicalIntelligence owns per-tab session metadata. Reload/back keep
+      // the same value; opener and independent tabs receive a distinct owner.
       window.SIM_SESSION_ID = sessionStorage.getItem('northstarSessionId');
     })();
 
@@ -417,8 +418,8 @@
 
     function fetchLeads() {
       return Promise.all([
-        _authFetch('/api/v1/opportunities?limit=100'),
-        _authFetch('/api/v1/customers')
+        PolarisApi.getOpportunities({ limit: 100 }),
+        PolarisApi.getCustomers()
       ]).then(function(results) {
         var opps = results[0], custData = results[1];
         pageCustomers = {};
@@ -427,14 +428,14 @@
         }
         if (opps && opps.opportunities) {
           pageLeads = opps.opportunities.map(function(opp) {
-            var customer = opp.customerId ? pageCustomers[opp.customerId] : null;
-            var lead = _normalizeLead(opp, customer);
+            var lead = PolarisApi.normalizeLead(opp);
+            if (!lead) return null;
             lead.caller = lead.callerName; lead.avgPrice = lead.estimatedPrice;
             lead.time = lead.createdAt; lead.receivedAt = lead.createdAt;
             lead.phoneNumber = lead.phone; lead.customerName = lead.callerName;
             lead.description = lead.jobDetail;
             return lead;
-          });
+          }).filter(Boolean);
         } else { pageLeads = []; }
         return pageLeads;
       }).catch(function(err) {
@@ -470,25 +471,18 @@
 
     // === 6 Executive KPI Cards (computed directly from canonical page data) ===
     function renderKpiCards(leads) {
-      var total = leads.length;
-      var qualified = leads.filter(function(l) {
-        return l.status === 'scheduled' || l.status === 'contacted' || l.status === 'new';
-      }).length;
-      var won = leads.filter(function(l) {
-        return l.status === 'completed' || l.outcome === 'appointment-set';
-      }).length;
-      var totalRevenue = leads.reduce(function(s, l) { return s + (l.estimatedPrice || l.avgPrice || 0); }, 0);
-      var conversionRate = qualified > 0 ? Math.round((won / qualified) * 100) : 0;
-      var avgValue = total > 0 ? Math.round(totalRevenue / total) : 0;
-
-      document.getElementById('kpiTotalLeads').textContent = total;
-      document.getElementById('kpiTotalLeadChange').textContent = total > 0 ? total + ' total leads' : 'All time';
-      document.getElementById('kpiQualified').textContent = qualified;
-      document.getElementById('kpiWon').textContent = won;
-      document.getElementById('kpiRevenue').textContent = '$' + Math.round(totalRevenue).toLocaleString();
-      document.getElementById('kpiConversion').textContent = conversionRate + '%';
-      document.getElementById('kpiConversionDetail').textContent = won + ' won of ' + qualified + ' qualified';
-      document.getElementById('kpiAvgValue').textContent = '$' + avgValue.toLocaleString();
+      var projection = CanonicalIntelligence.getProjection('leads');
+      var metrics = projection && projection.metrics;
+      var total = metrics ? metrics.graphCount : null;
+      var revenue = metrics ? metrics.estimatedRevenue : null;
+      document.getElementById('kpiTotalLeads').textContent = total == null ? '\u2014' : total;
+      document.getElementById('kpiTotalLeadChange').textContent = total == null ? 'Unavailable' : total + ' canonical graphs';
+      document.getElementById('kpiQualified').textContent = '\u2014';
+      document.getElementById('kpiWon').textContent = '\u2014';
+      document.getElementById('kpiRevenue').textContent = revenue == null ? 'Not calculated' : '$' + Number(revenue).toLocaleString();
+      document.getElementById('kpiConversion').textContent = '\u2014';
+      document.getElementById('kpiConversionDetail').textContent = 'Not calculated by Part 3';
+      document.getElementById('kpiAvgValue').textContent = 'Not calculated';
     }
 
     // === Polaris Revenue Intelligence Card ===
@@ -528,17 +522,12 @@
     // === Lead Actions (operate on page-local data) ===
     function updateLeadStatus(idx, newStatus) {
       if (!pageLeads[idx]) return;
-      pageLeads[idx].status = newStatus;
-      showNotification('\u2705 ' + (pageLeads[idx].caller || 'Lead') + ' marked as ' + newStatus, 'success');
-      loadLeads();
+      showNotification('Canonical leads are read-only on this surface.', 'warning');
     }
 
     function removeLead(idx) {
       if (!pageLeads[idx]) return;
-      var name = pageLeads[idx].caller || 'Lead';
-      pageLeads.splice(idx, 1);
-      showNotification('\uD83D\uDDD1\uFE0F ' + name + ' removed', 'warning');
-      loadLeads();
+      showNotification('Canonical leads are read-only on this surface.', 'warning');
     }
 
     // Initial load — fetch from canonical API, no AppStore or sessionStorage dependency

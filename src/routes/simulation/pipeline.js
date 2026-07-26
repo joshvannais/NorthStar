@@ -9,7 +9,35 @@
  */
 
 const CATALOG = require('./service-catalog');
+const { AsyncLocalStorage } = require('async_hooks');
 const { detectEmergencyEvidence } = require('../../services/emergencyEvidence');
+
+const randomContext = new AsyncLocalStorage();
+
+function seededRandom(seed) {
+  let state = 2166136261;
+  for (const character of String(seed || 'northstar')) {
+    state ^= character.charCodeAt(0);
+    state = Math.imul(state, 16777619);
+  }
+  return function () {
+    state += 0x6D2B79F5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function withDeterministicSeed(seed, work) {
+  if (typeof work !== 'function') throw new TypeError('work must be a function');
+  return randomContext.run(seededRandom(seed), work);
+}
+
+function _random() {
+  const selected = randomContext.getStore();
+  return selected ? selected() : Math.random();
+}
 
 // ═══════════════════════════════════════════════════════
 // UNIVERSAL PRIMITIVES
@@ -44,8 +72,8 @@ const STATES = [
   ['WI','Wisconsin','Milwaukee',53200,53999,414],['WY','Wyoming','Cheyenne',82000,82999,307],
 ];
 function _randomLocation() {
-  var s = STATES[Math.floor(Math.random() * STATES.length)];
-  return { abbr: s[0], state: s[1], city: s[2], zip: s[3] + Math.floor(Math.random() * (s[4] - s[3])), areaCode: s[5] };
+  var s = STATES[Math.floor(_random() * STATES.length)];
+  return { abbr: s[0], state: s[1], city: s[2], zip: s[3] + Math.floor(_random() * (s[4] - s[3])), areaCode: s[5] };
 }
 
 const CONTACT_TEMPLATES = {
@@ -104,10 +132,10 @@ function _populateScope(scenario, svc) {
     scope.material = _pickRandom(Object.keys(svc.pricing.materials));
     scope.height = _pickRandom([4, 6, 8]);
     scope.gates = [{ type: 'walk', width: 4 }, { type: _pickRandom(['walk', 'drive']), width: _pickRandom([8, 10, 12]) }];
-    scope.removalRequired = Math.random() > 0.3;
+    scope.removalRequired = _random() > 0.3;
     scope.terrain = _pickRandom(['mostly flat', 'slight grade', 'hilly in back corner', 'flat with one tree line']);
     const matInfo = (svc.pricing && svc.pricing.materials && svc.pricing.materials[scope.material]) ? svc.pricing.materials[scope.material].label : scope.material;
-    scope.hoa = Math.random() > 0.5 ? 'yes — ' + matInfo + ' required' : 'no';
+    scope.hoa = _random() > 0.5 ? 'yes — ' + matInfo + ' required' : 'no';
     scope.permitsRequired = 'required, ~2 week processing';
     scope.timeline = _pickRandom(['within 3-4 weeks', 'within 6-8 weeks', 'before summer', 'next month', 'whenever works']);
     scope.urgency = 'moderate';
@@ -130,8 +158,8 @@ function _populateScope(scenario, svc) {
     scope.seer = _pickRandom([14, 16, 18, 20]);
     scope.sqft = _pickRandom([1200, 1600, 2000, 2400, 2800, 3200]);
     scope.existingAge = _pickRandom([10, 15, 18, 22, 25]);
-    scope.ductworkReplace = Math.random() > 0.4;
-    scope.thermostat = Math.random() > 0.5 ? 'smart' : 'standard';
+    scope.ductworkReplace = _random() > 0.4;
+    scope.thermostat = _random() > 0.5 ? 'smart' : 'standard';
     scope.fuelType = 'gas';
     scope.access = _pickRandom(['attic access through hallway', 'basement utility closet', 'garage-mounted']);
     scope.timeline = 'as soon as possible — system failed';
@@ -139,19 +167,19 @@ function _populateScope(scenario, svc) {
   } else if (svc.id === 'plumbing') {
     scope.fixture = _pickRandom(['kitchen sink', 'bathroom sink', 'toilet', 'water heater', 'main drain']);
     scope.leakSeverity = _pickRandom(['active drip', 'slow leak', 'not leaking now']);
-    scope.waterShutoff = Math.random() > 0.5;
+    scope.waterShutoff = _random() > 0.5;
     scope.timeline = _pickRandom(['today', 'tomorrow', 'this week']);
     scope.urgency = _pickRandom(['high', 'moderate', 'emergency']);
   } else if (svc.id === 'electrical') {
     scope.symptoms = _pickRandom(['breaker keeps tripping', 'lights flickering', 'no power to bedroom', 'outlet sparking']);
     scope.breakerBehavior = _pickRandom(['trips immediately', 'trips after a few minutes', 'trips randomly']);
-    scope.safetyConcern = Math.random() > 0.5;
+    scope.safetyConcern = _random() > 0.5;
     scope.urgency = scope.safetyConcern ? 'emergency' : 'high';
   } else if (svc.id === 'concrete') {
     scope.squareFeet = _pickRandom([200, 400, 600, 800, 1200]);
     scope.finish = _pickRandom(['smooth', 'broom finish', 'stamped']);
-    scope.existingRemoval = Math.random() > 0.4;
-    scope.access = Math.random() > 0.3 ? 'good — truck access' : 'limited — pump needed';
+    scope.existingRemoval = _random() > 0.4;
+    scope.access = _random() > 0.3 ? 'good — truck access' : 'limited — pump needed';
     scope.timeline = _pickRandom(['within 2 weeks', 'within a month', 'next month']);
   }
 }
@@ -304,7 +332,7 @@ function _buildAnswer(scenario, question) {
     stories: `${scope.stories}-story.`,
     existingLayers: scope.existingLayers === 1 ? 'Just one layer.' : 'Two layers — the second was put on about 10 years ago.',
     flashingReplace: 'They\'re showing rust so probably need replacement.',
-    insurance: Math.random() > 0.5 ? 'Yes, I think my insurance will cover it.' : 'No, I\'ll be paying out of pocket.',
+    insurance: _random() > 0.5 ? 'Yes, I think my insurance will cover it.' : 'No, I\'ll be paying out of pocket.',
     deckCondition: scope.deckCondition,
 
     // HVAC
@@ -568,8 +596,8 @@ function selectAction(transcript, customerName, scope) {
 // HELPERS
 // ═══════════════════════════════════════════════════════
 
-function _rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-function _pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function _rand(min, max) { return Math.floor(_random() * (max - min + 1)) + min; }
+function _pickRandom(arr) { return arr[Math.floor(_random() * arr.length)]; }
 
 // ═══════════════════════════════════════════════════════
 // EXPORTS
@@ -584,4 +612,5 @@ module.exports = {
   calculatePricing,
   calculateConfidence,
   selectAction,
+  withDeterministicSeed,
 };

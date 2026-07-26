@@ -1,196 +1,133 @@
 /**
- * Simulation Endpoint — Universal Polaris Intelligence Pipeline
+ * Canonical simulation ingestion.
  *
- * POST /api/v1/simulations/leads
- *
- * Architecture: scenario → transcript → scope → classification → pricing → confidence → action
- *
- * Service-agnostic. New services added to service-catalog.js without modifying this file.
+ * Synthetic transcript generation is deterministic per tenant/idempotency key.
+ * The route has no file or browser business-authority writes: a 201 is returned
+ * only after the complete PostgreSQL graph and replay result commit together.
  */
+'use strict';
 
 const express = require('express');
-const router = express.Router();
 const { requireAuth } = require('../auth/middleware');
-const { addLead } = require('../leads/store');
 const db = require('../db');
+const businessProfile = require('../services/businessProfile');
+const { sha256 } = require('../services/businessProfileAdapter');
+const { ingestSimulation } = require('../services/canonicalGraphService');
 const pipeline = require('./simulation/pipeline');
-const sessionReg = require('./simulation/session-registry');
 
-// ── Polaris Engine Loaders ──
-let _engines = {};
-function _getEngines() {
-  if (!_engines.customers) try { _engines.customers = require('../polaris/customer-engine'); } catch (e) {}
-  if (!_engines.comms)    try { _engines.comms    = require('../polaris/communications-engine'); } catch (e) {}
-  if (!_engines.opps)     try { _engines.opps     = require('../polaris/opportunity-engine'); } catch (e) {}
-  if (!_engines.fin)      try { _engines.fin      = require('../polaris/financial-engine'); } catch (e) {}
-  return _engines;
+const router = express.Router();
+
+function idempotencyKey(req) {
+  return req.get('Idempotency-Key') || req.get('X-Idempotency-Key') || '';
 }
 
-router.post('/simulations/leads', requireAuth, async (req, res) => {
-  try {
-    const { name, phone, email, service } = req.body;
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return res.status(400).json({ error: 'Customer name is required', stage: 'validation' });
-    }
-
-    // ── Session ID for demo lifecycle (clean on page reload) ──
-    const sessionId = req.body.sessionId || ('sim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
-
-    const requestedService = (service || 'general').toLowerCase();
-
-    // ── 1. Generate scenario ──
-    const scenario = pipeline.generateScenario(requestedService, name.trim());
-    if (!scenario) return res.status(400).json({ error: 'Could not generate scenario for service: ' + service });
-
-    const svc = pipeline.CATALOG[scenario.serviceKey];
-    if (phone) scenario.customer.phone = phone;
-    if (email) scenario.customer.email = email;
-
-    // ── 2. Generate adaptive transcript ──
-    const transcript = pipeline.generateTranscript(scenario, svc);
-
-    // ── 3. Extract scope from transcript ──
-    const { extracted: scopeEvidence, evidence, missing: missingInfo } = pipeline.extractScope(transcript, scenario);
-
-    // ── 4. Classify service ──
-    const classification = pipeline.classifyService(transcript);
-
-    // ── 5. Calculate pricing ──
-    const pricingResult = pipeline.calculatePricing(scopeEvidence, classification.service);
-
-    // ── 6. Score confidence ──
-    const confidence = pipeline.calculateConfidence(scopeEvidence, missingInfo, scenario.serviceKey);
-
-    // ── 7. Select action ──
-    const recommendedAction = pipeline.selectAction(transcript, scenario.customer.name, scopeEvidence);
-
-    // ── Create canonical records ──
-    const e = _getEngines();
-    if (!e.customers || !e.comms || !e.opps || !e.fin) {
-      return res.status(503).json({ error: 'Polaris engines not available', stage: 'engine_init' });
-    }
-
-    const cust = scenario.customer;
-    const total = pricingResult.total || 500;
-
-    // Customer
-    const custResult = e.customers.createCustomer({
-      name: cust.name, phone: cust.phone || '', email: cust.email || '',
-      address: cust.address || '', status: 'active',
-    });
-    if (custResult.error) return res.status(400).json({ error: 'Customer creation failed: ' + custResult.error, stage: 'customer' });
-    if (custResult.id) sessionReg.register(sessionId, custResult.id);
-
-    // Communication
-    const commResult = e.comms.recordCommunication({
-      customerId: custResult.id, type: 'call', direction: 'inbound',
-      subject: 'Simulated call from ' + cust.name,
-      content: JSON.stringify(transcript), status: 'completed',
-    });
-    if (commResult && commResult.id) sessionReg.register(sessionId, commResult.id);
-
-    // Opportunity — clean service name, no customer name appended
-    const oppResult = e.opps.createOpportunity({
-      customerId: custResult.id,
-      title: classification.service,
-      description: scopeEvidence.description || '',
-      estimatedValue: total,
-      stage: 'lead',
-      priority: recommendedAction.priority || 'medium',
-    });
-    if (oppResult && oppResult.id) sessionReg.register(sessionId, oppResult.id);
-
-    // Estimate
-    const estItems = (pricingResult.breakdown || []).map(b => ({
-      description: b.label || b.description, quantity: 1, unitPrice: b.amount, total: b.amount,
-    }));
-    if (estItems.length === 0) {
-      estItems.push(
-        { description: 'Materials', quantity: 1, unitPrice: Math.round(total * 0.35) },
-        { description: 'Labor', quantity: 1, unitPrice: Math.round(total * 0.40) },
-        { description: 'Equipment', quantity: 1, unitPrice: Math.round(total * 0.15) },
-        { description: 'Permits & fees', quantity: 1, unitPrice: Math.round(total * 0.10) },
-      );
-    }
-
-    const estResult = e.fin.createEstimate({
-      customerId: custResult.id,
-      title: classification.service + ' Estimate',
-      description: JSON.stringify({ scope: scopeEvidence, evidence, missing: missingInfo, confidence, recommendedAction }),
-      items: estItems,
-      status: 'draft',
-    });
-    if (estResult && estResult.id) sessionReg.register(sessionId, estResult.id);
-
-    // Legacy lead
-    const leadEntry = addLead({
-      customerName: cust.name, callerName: cust.name,
-      phone: cust.phone || '', serviceRequested: classification.service,
-      estimatedPrice: total, jobDetail: scopeEvidence.description || '',
-      source: 'simulation', status: 'new', callOutcome: 'Lead captured',
-    });
-    if (leadEntry && leadEntry.id) sessionReg.register(sessionId, leadEntry.id);
-
-    // PostgreSQL
-    let callRecordId = null;
-    if (db.isAvailable()) {
-      try {
-        const cr = await db.query(
-          `INSERT INTO call_records (caller_name, caller_phone, service_type, estimated_price, job_detail, status, outcome, source, is_known_contact) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-          [cust.name, cust.phone || '(555) 000-0000', classification.service, total, '', 'completed', 'lead-captured', 'simulation', false]
-        );
-        if (cr.rows && cr.rows.length > 0) callRecordId = cr.rows[0].id;
-      } catch (e) { console.warn('[Sim] DB:', e.message); }
-    }
-
-    // Polaris intelligence object
-    const priceDisplay = confidence.score >= 80
-      ? '$' + total.toLocaleString()
-      : (confidence.score >= 50
-        ? '$' + (pricingResult.range ? pricingResult.range.low.toLocaleString() : '?') + '–$' + (pricingResult.range ? pricingResult.range.high.toLocaleString() : '?')
-        : 'Insufficient information — schedule on-site assessment');
-
-    const polarisIntel = {
-      detectedIntent: 'Customer requests ' + classification.service.toLowerCase(),
-      classifiedService: classification.service,
-      classificationConfidence: classification.confidence,
-      alternatives: classification.alternatives,
-      evidence: Object.values(evidence),
-      extractedScope: Object.keys(scopeEvidence).map(k => k + ': ' + scopeEvidence[k]),
-      missingInformation: missingInfo,
-      assumptions: missingInfo.length > 0 ? missingInfo.map(m => 'Assume typical ' + m + ' for preliminary range') : [],
-      qualificationStatus: missingInfo.length <= 2 ? 'Qualified' : 'Needs assessment',
-      urgency: scopeEvidence.urgency || 'moderate',
-      customerSentiment: 'Positive — ready to schedule',
-      bookingIntent: 'Yes — requested on-site visit',
-      recommendedAction,
-      pricingRecommendation: priceDisplay,
-      pricingBreakdown: pricingResult.breakdown || [],
-      confidence,
-      operationalReasoning: confidence.score >= 80 ? 'Sufficient scope for reliable estimate.' : 'Incomplete scope — recommend on-site assessment.',
+function buildFacts(scope, evidence) {
+  return Object.keys(scope).filter(function (field) {
+    return evidence[field];
+  }).sort().map(function (field) {
+    return {
+      id: 'simulation-' + field,
+      variable: field,
+      status: 'collected',
+      normalizedValue: scope[field],
+      evidenceText: evidence[field],
+      speaker: 'customer',
+      confidence: 1,
     };
+  });
+}
 
-    console.log('[Simulations] Complete:', JSON.stringify({
-      service: classification.service, total, confidence: confidence.score, turns: transcript.length,
-    }));
-
-    res.status(201).json({
-      success: true,
-      sessionId: sessionId,
-      summary: { name: cust.name, service: classification.service, estimatedValue: total },
-      ids: {
-        customer: custResult.id, communication: commResult ? commResult.id : null,
-        opportunity: oppResult ? oppResult.id : null, estimate: estResult ? estResult.id : null,
-        lead: leadEntry ? leadEntry.id : null, callRecord: callRecordId,
-      },
-      records: { customer: custResult, communication: commResult, opportunity: oppResult, estimate: estResult, lead: leadEntry },
-      transcript,
-      polaris: polarisIntel,
+router.post('/simulations/leads', requireAuth, async function (req, res) {
+  const key = idempotencyKey(req);
+  if (!key) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'Idempotency-Key is required for canonical writes.' },
     });
-  } catch (err) {
-    console.error('[Simulations] Error:', err.message);
-    res.status(500).json({ error: 'Simulation failed: ' + err.message, stage: 'unexpected' });
   }
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  if (!name) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'CUSTOMER_NAME_REQUIRED', message: 'Customer name is required.' },
+    });
+  }
+
+  const organizationId = req.tenantContext.organizationId;
+  const requestedService = String(req.body.service || 'general').toLowerCase();
+  const seed = sha256({ organizationId, key });
+  let prepared;
+  try {
+    prepared = pipeline.withDeterministicSeed(seed, function () {
+      const scenario = pipeline.generateScenario(requestedService, name);
+      if (!scenario) return null;
+      if (req.body.phone) scenario.customer.phone = String(req.body.phone);
+      if (req.body.email) scenario.customer.email = String(req.body.email);
+      const service = pipeline.CATALOG[scenario.serviceKey];
+      const transcript = pipeline.generateTranscript(scenario, service);
+      const extracted = pipeline.extractScope(transcript, scenario);
+      return { scenario, transcript, extracted };
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_SIMULATION_INPUT', message: 'The simulation input could not be normalized.' },
+    });
+  }
+  if (!prepared) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'UNSUPPORTED_SERVICE', message: 'The requested service is not supported.' },
+    });
+  }
+
+  const sessionId = req.body.sessionId
+    ? String(req.body.sessionId)
+    : 'sim_' + seed.slice(0, 24);
+  const graphRequest = {
+    tenantContext: req.tenantContext,
+    idempotencyKey: key,
+    sourceVersion: 'simulation-pipeline-v1',
+    external: {
+      customerId: sessionId + ':customer',
+      callId: sessionId + ':call',
+      transcriptId: sessionId + ':transcript',
+      communicationId: sessionId + ':communication',
+      appointmentId: sessionId + ':appointment',
+    },
+    customer: prepared.scenario.customer,
+    transcript: prepared.transcript,
+    facts: buildFacts(prepared.extracted.extracted, prepared.extracted.evidence),
+    service: {
+      key: prepared.scenario.serviceKey,
+      scope: prepared.extracted.extracted,
+    },
+    businessProfile: businessProfile.getProfile(),
+    appointmentPreference: prepared.extracted.extracted.schedulingPreference
+      ? { text: prepared.extracted.extracted.schedulingPreference }
+      : null,
+  };
+
+  const result = await ingestSimulation(db.getPool(), graphRequest);
+  if (result.status !== 201) return res.status(result.status).json(result.body);
+
+  const response = {
+    ...result.body,
+    sessionId,
+    summary: {
+      name: prepared.scenario.customer.name,
+      service: result.body.snapshot.service.label,
+      estimatedValue: result.body.snapshot.customerFacingPrice,
+    },
+    transcript: prepared.transcript,
+    polaris: result.body.snapshot,
+  };
+  console.log('[Simulations] Canonical graph committed:', JSON.stringify({
+    operationId: result.body.operationId,
+    service: result.body.snapshot.service.key,
+    replayed: result.replayed,
+  }));
+  return res.status(201).json(response);
 });
 
 module.exports = router;

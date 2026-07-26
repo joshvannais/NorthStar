@@ -1,0 +1,340 @@
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
+const request = require('supertest');
+const { Pool } = require('pg');
+const cache = require('../../src/cache/client');
+const { ingestSimulation } = require('../../src/services/canonicalGraphService');
+const { stableStringify } = require('../../src/services/businessProfileAdapter');
+const {
+  READ_MODEL_VERSION,
+  createCanonicalRouter,
+  createCompatibilityRouter,
+} = require('../../src/routes/canonicalPolaris');
+
+const databaseUrl = process.env.M19_PART3_FAILURE_DATABASE_URL;
+const realPostgres = databaseUrl ? describe : describe.skip;
+const migrationDir = path.resolve(__dirname, '../../migrations');
+const migrations = [
+  '001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql',
+  '004_canonical_persistence_v2.sql',
+];
+const ORG_A = '00000000-0000-0000-0000-000000000001';
+const USER_A = '00000000-0000-0000-0000-000000000002';
+const ORG_B = '00000000-0000-0000-0000-000000000010';
+const USER_B = '00000000-0000-0000-0000-000000000011';
+
+async function applyMigrations(pool) {
+  for (const filename of migrations) {
+    await pool.query(fs.readFileSync(path.join(migrationDir, filename), 'utf8'));
+  }
+  await pool.query(
+    `INSERT INTO organizations (id, name, email)
+     VALUES ($1, 'Organization B', 'org-b-api@m19.test')
+     ON CONFLICT (id) DO NOTHING`,
+    [ORG_B]
+  );
+  await pool.query(
+    `INSERT INTO users (id, organization_id, name, email, password_hash, role, status)
+     VALUES ($1, $2, 'User B', 'user-b-api@m19.test', 'not-used', 'owner', 'active')
+     ON CONFLICT (id) DO NOTHING`,
+    [USER_B, ORG_B]
+  );
+}
+
+function graphInput(organizationId, sessionId, key, customerName) {
+  return {
+    tenantContext: { organizationId, trusted: true },
+    idempotencyKey: key,
+    source: 'simulation',
+    sourceVersion: 'api-test-v1',
+    external: {
+      customerId: sessionId + ':customer',
+      callId: sessionId + ':call',
+      transcriptId: sessionId + ':transcript',
+      communicationId: sessionId + ':communication',
+      appointmentId: sessionId + ':appointment',
+    },
+    customer: { name: customerName, phone: '+15555550100', email: customerName.toLowerCase().replace(' ', '.') + '@example.test' },
+    transcript: [
+      { turnId: 'turn-1', speaker: 'customer', text: 'I need a new 100-foot cedar fence and the existing fence removed.' },
+      { turnId: 'turn-2', speaker: 'customer', text: 'Include one walk gate. Weekday mornings work best. This is not an emergency.' },
+    ],
+    facts: [
+      { variable: 'linearFeet', normalizedValue: 100, evidenceText: '100-foot cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
+      { variable: 'material', normalizedValue: 'cedar', evidenceText: 'cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
+      { variable: 'removalRequired', normalizedValue: true, evidenceText: 'existing fence removed', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
+      { variable: 'gates', normalizedValue: [{ type: 'walk' }], evidenceText: 'one walk gate', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
+    ],
+    service: { key: 'fence', scope: { jobType: 'replace', linearFeet: 100, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] } },
+    businessProfile: {
+      version: 'bp-api-v1',
+      company: { currency: 'USD' },
+      crew: { defaultCrewSize: 2, averageHourlyRate: 42, overtimeMultiplier: 1.5 },
+      financial: { markup: 1.3, emergencyMarkup: 1.5, travelCharge: 0.58 },
+      services: [],
+    },
+    appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
+    callDurationSeconds: 242,
+  };
+}
+
+function fakeAuth(req, _res, next) {
+  const organizationId = req.get('X-Test-Organization');
+  const userId = req.get('X-Test-User');
+  if (organizationId && userId) {
+    req.tenantContext = Object.freeze({ organizationId, userId, role: 'owner' });
+    req.userRole = 'owner';
+    req.user = Object.freeze({ id: userId, organizationId, role: 'owner' });
+  }
+  next();
+}
+
+function headers(organizationId, userId, sessionId) {
+  return {
+    'X-Test-Organization': organizationId,
+    'X-Test-User': userId,
+    'X-NorthStar-Session-ID': sessionId,
+    Authorization: 'Bearer test-' + userId,
+  };
+}
+
+function createApp(poolProvider, cacheClient, auditRecorder) {
+  const dependencies = {
+    poolProvider,
+    auth: fakeAuth,
+    cache: cacheClient || cache,
+    audit: auditRecorder || { record: async function () {} },
+  };
+  const app = express();
+  app.use(function (req, _res, next) {
+    req.requestId = 'request-' + Math.random().toString(36).slice(2);
+    next();
+  });
+  app.use(express.json());
+  app.use('/api/v1/canonical', createCanonicalRouter(dependencies));
+  app.use('/api/v1', createCompatibilityRouter(dependencies));
+  return app;
+}
+
+realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
+  let pool;
+  let app;
+  let graphA;
+  let graphB;
+
+  beforeAll(async () => {
+    pool = new Pool({ connectionString: databaseUrl, max: 20 });
+    await applyMigrations(pool);
+    graphA = await ingestSimulation(pool, graphInput(ORG_A, 'session-a', 'm19-api-org-a', 'Avery Smith'));
+    graphB = await ingestSimulation(pool, graphInput(ORG_B, 'session-b', 'm19-api-org-b', 'Blair Jones'));
+    expect(graphA.status).toBe(201);
+    expect(graphB.status).toBe(201);
+    cache.clearForTests();
+    cache.setEnabled(true);
+    app = createApp(function () { return pool; });
+  }, 30000);
+
+  afterAll(async () => {
+    cache.setEnabled(true);
+    cache.clearForTests();
+    await pool.end();
+  });
+
+  test('static routes precede parameter routes and status reports no Redis requirement', async () => {
+    const response = await request(app).get('/api/v1/canonical/status').set(headers(ORG_A, USER_A, 'session-a'));
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      status: 'operational',
+      readModelVersion: READ_MODEL_VERSION,
+      postgresAuthoritative: true,
+      redisRequired: false,
+    });
+    expect(cache.isRedisAvailable()).toBe(false);
+
+    const pipeline = await request(app).get('/api/v1/opportunities/pipeline').set(headers(ORG_A, USER_A, 'session-a'));
+    expect(pipeline.status).toBe(200);
+    expect(pipeline.body.opportunities).toHaveLength(1);
+    const blockedLead = await request(app).post('/api/v1/leads/simulate').set(headers(ORG_A, USER_A, 'session-a')).send({});
+    const blockedCalendar = await request(app).post('/api/v1/calendar/events').set(headers(ORG_A, USER_A, 'session-a')).send({});
+    expect(blockedLead.status).toBe(409);
+    expect(blockedCalendar.status).toBe(409);
+    expect(blockedLead.body.error.code).toBe('LEGACY_AUTHORITY_READ_ONLY');
+  });
+
+  test('organization, user, and session matrix fails closed without disclosing identifiers', async () => {
+    const listA = await request(app).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+    expect(listA.status).toBe(200);
+    expect(listA.body.data.items).toHaveLength(1);
+    expect(listA.body.data.items[0].ids.graph).toBe(graphA.body.graphId);
+
+    const wrongSession = await request(app).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'wrong-session'));
+    expect(wrongSession.status).toBe(200);
+    expect(wrongSession.body.data.items).toEqual([]);
+
+    const crossTenant = await request(app)
+      .get('/api/v1/canonical/graphs/' + graphA.body.graphId)
+      .set(headers(ORG_B, USER_B, 'session-a'));
+    expect(crossTenant.status).toBe(404);
+    expect(crossTenant.body.error.code).toBe('NOT_FOUND');
+
+    const wrongSessionFetch = await request(app)
+      .get('/api/v1/canonical/graphs/' + graphA.body.graphId)
+      .set(headers(ORG_A, USER_A, 'wrong-session'));
+    expect(wrongSessionFetch.status).toBe(404);
+
+    const anonymous = await request(app).get('/api/v1/canonical/graphs');
+    expect(anonymous.status).toBe(401);
+  });
+
+  test('canonical and compatibility projections return identical values and digests', async () => {
+    const canonical = await request(app).get('/api/v1/canonical/surfaces/leads').set(headers(ORG_A, USER_A, 'session-a'));
+    const compatibility = await request(app).get('/api/v1/canonical/compat/leads').set(headers(ORG_A, USER_A, 'session-a'));
+    const legacyPath = await request(app).get('/api/v1/leads').set(headers(ORG_A, USER_A, 'session-a'));
+    expect(canonical.status).toBe(200);
+    expect(compatibility.status).toBe(200);
+    expect(legacyPath.status).toBe(200);
+    expect(compatibility.body.data.digest).toBe(canonical.body.data.digest);
+    expect(legacyPath.body.canonicalDigest).toBe(canonical.body.data.digest);
+    expect(stableStringify(compatibility.body.data.items[0].values))
+      .toBe(stableStringify(canonical.body.data.items[0].values));
+    expect(legacyPath.body.items[0].canonical.snapshotDigest).toBe(graphA.body.snapshotDigest);
+  });
+
+  test('all Part 3 surface projections expose one graph digest and value object', async () => {
+    const surfaces = ['customer-detail', 'leads', 'communications', 'calendar', 'command-center', 'polaris', 'executive', 'estimates'];
+    const responses = [];
+    for (const surface of surfaces) {
+      responses.push(await request(app).get('/api/v1/canonical/surfaces/' + surface).set(headers(ORG_A, USER_A, 'session-a')));
+    }
+    expect(responses.every(response => response.status === 200)).toBe(true);
+    expect(new Set(responses.map(response => response.body.data.digest)).size).toBe(1);
+    expect(new Set(responses.map(response => response.body.data.items[0].snapshotDigest)).size).toBe(1);
+    expect(new Set(responses.map(response => stableStringify(response.body.data.items[0].values))).size).toBe(1);
+  });
+
+  test('dashboard and analytics are equal and derived from the canonical snapshot', async () => {
+    const dashboard = await request(app).get('/api/v1/canonical/dashboard').set(headers(ORG_A, USER_A, 'session-a'));
+    const analytics = await request(app).get('/api/v1/canonical/analytics').set(headers(ORG_A, USER_A, 'session-a'));
+    expect(dashboard.status).toBe(200);
+    expect(analytics.status).toBe(200);
+    expect(analytics.body.data).toEqual(dashboard.body.data);
+    expect(dashboard.body.data).toMatchObject({ graphCount: 1, customerCount: 1, estimatedRevenue: 4510, knownGrossProfit: null });
+  });
+
+  test('cache hit, miss, filters, identity, expiry, and disabled behavior preserve results', async () => {
+    cache.clearForTests();
+    cache.setEnabled(true);
+    let queryCount = 0;
+    const countedPool = {
+      query: async function (...args) {
+        queryCount += 1;
+        return pool.query(...args);
+      },
+    };
+    const countedApp = createApp(function () { return countedPool; });
+    const first = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+    const second = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+    expect(second.body).toEqual(first.body);
+    expect(queryCount).toBe(1);
+
+    await request(countedApp).get('/api/v1/canonical/graphs?status=lead').set(headers(ORG_A, USER_A, 'session-a'));
+    await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'other-session'));
+    await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_B, 'session-a'));
+    await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_B, USER_B, 'session-b'));
+    expect(queryCount).toBe(5);
+
+    const identity = {
+      organizationId: ORG_A, userId: USER_A, sessionId: 'expiry-session',
+      endpoint: 'expiry-test', filters: {}, readModelVersion: READ_MODEL_VERSION,
+    };
+    await cache.setCanonical(identity, { value: 'cached' }, 0.01);
+    expect(await cache.get(cache.buildCanonicalKey(identity))).toEqual({ value: 'cached' });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(await cache.get(cache.buildCanonicalKey(identity))).toBeNull();
+
+    cache.setEnabled(false);
+    const disabledBefore = queryCount;
+    const disabledA = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+    const disabledB = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+    expect(disabledB.body).toEqual(disabledA.body);
+    expect(queryCount - disabledBefore).toBe(2);
+    cache.setEnabled(true);
+    cache.clearForTests();
+  });
+
+  test('cache failure changes latency only and Redis configuration is ignored', async () => {
+    const failingCache = {
+      wrapCanonical: async function (_identity, fetchFn) { return fetchFn(); },
+      invalidateOrg: async function () { throw new Error('cache unavailable'); },
+      isAvailable: function () { return false; },
+    };
+    const noCacheApp = createApp(function () { return pool; }, failingCache);
+    const response = await request(noCacheApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+    expect(response.status).toBe(200);
+    expect(response.body.data.items[0].snapshotDigest).toBe(graphA.body.snapshotDigest);
+  });
+
+  test('identifier mutation is tenant/session isolated and persists a correlated audit row', async () => {
+    const auditRecorder = {
+      record: async function (entry) {
+        await pool.query(
+          `INSERT INTO audit_logs
+            (organization_id, user_id, action, entity_type, entity_id, details, ip_address)
+           VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)`,
+          [entry.organizationId, entry.userId, entry.action, entry.entityType, entry.entityId,
+            JSON.stringify({ requestId: entry.correlationId, beforeState: entry.beforeState, afterState: entry.afterState }),
+            entry.ipAddress || '']
+        );
+      },
+    };
+    const mutationApp = createApp(function () { return pool; }, cache, auditRecorder);
+    const appointmentId = graphA.body.ids.appointment;
+    const crossTenant = await request(mutationApp)
+      .patch('/api/v1/canonical/appointments/' + appointmentId)
+      .set(headers(ORG_B, USER_B, 'session-a'))
+      .send({ status: 'scheduled', scheduledStart: '2026-07-28T13:00:00.000Z', scheduledEnd: '2026-07-28T14:00:00.000Z' });
+    expect(crossTenant.status).toBe(404);
+
+    const wrongSession = await request(mutationApp)
+      .patch('/api/v1/canonical/appointments/' + appointmentId)
+      .set(headers(ORG_A, USER_A, 'wrong-session'))
+      .send({ status: 'scheduled' });
+    expect(wrongSession.status).toBe(404);
+
+    const updated = await request(mutationApp)
+      .patch('/api/v1/canonical/appointments/' + appointmentId)
+      .set(headers(ORG_A, USER_A, 'session-a'))
+      .send({ status: 'scheduled', scheduledStart: '2026-07-28T13:00:00.000Z', scheduledEnd: '2026-07-28T14:00:00.000Z' });
+    expect(updated.status).toBe(200);
+    expect(updated.body.data.status).toBe('scheduled');
+    const auditRow = await pool.query(
+      `SELECT organization_id, user_id, action, entity_type, entity_id, details
+         FROM audit_logs WHERE entity_type = 'canonical_appointment' AND entity_id = $1`,
+      [appointmentId]
+    );
+    expect(auditRow.rows).toHaveLength(1);
+    expect(auditRow.rows[0]).toMatchObject({
+      organization_id: ORG_A,
+      user_id: USER_A,
+      action: 'PATCH 200',
+      entity_type: 'canonical_appointment',
+      entity_id: appointmentId,
+    });
+    expect(auditRow.rows[0].details.requestId).toMatch(/^request-/);
+  });
+
+  test('required PostgreSQL outage returns 503 instead of empty success', async () => {
+    const unavailable = createApp(function () {
+      return { query: async function () { throw new Error('connection refused'); } };
+    });
+    const status = await request(unavailable).get('/api/v1/canonical/status').set(headers(ORG_A, USER_A, 'session-a'));
+    const graphs = await request(unavailable).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+    expect(status.status).toBe(503);
+    expect(graphs.status).toBe(503);
+    expect(status.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
+    expect(graphs.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
+  });
+});

@@ -22,6 +22,7 @@ const polarisEnginesRoutes = require('./routes/polaris-engines');
 const customerIntelligenceRoutes = require('./routes/customerIntelligence');
 const businessProfileRoutes = require('./routes/businessProfile');
 const voiceRoutes = require('./routes/voice');
+const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -523,6 +524,10 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 // ── /api/v1/* routes — registered BEFORE /api to avoid interception by apiRoutes' global requireAuth
 const simulationsRoutes = require('./routes/simulations');
 app.use('/api/v1', simulationsRoutes);
+app.use('/api/v1/canonical', createCanonicalRouter());
+// Canonical compatibility routes precede legacy dashboard/public routers so
+// supported reads cannot be shadowed by unscoped file-era handlers.
+app.use('/api/v1', createCompatibilityRouter());
 app.use('/api/v1', dashboardRoutes);
 app.use('/api/v1', publicApiRoutes);
 app.use('/api/v1/polaris', polarisRoutes);

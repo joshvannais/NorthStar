@@ -335,49 +335,11 @@ body { background: var(--neutral-50); }
 <script src="/js/theme.js"></script>
 <script src="/js/calendar-engine.js"></script>
 <script>
-// Ensure AppStore has data — seed demo leads if empty (same as Dashboard)
-(function ensureAppStoreData() {
-  try {
-    var existing = (window.AppStore && window.AppStore.getLeads) ? window.AppStore.getLeads() : [];
-    if (!existing || existing.length === 0) {
-      // Try loading from API first
-      if (typeof API !== 'undefined' && API.getLeads) {
-        API.getLeads().then(function(result) {
-          if (!result || !result.items || result.items.length === 0) {
-            seedDemoLeads();
-          }
-          runInit();
-        }).catch(function() {
-          seedDemoLeads();
-          runInit();
-        });
-      } else {
-        seedDemoLeads();
-        runInit();
-      }
-    } else {
-      runInit();
-    }
-  } catch(e) {
-    runInit();
-  }
-
-  function seedDemoLeads() {
-    if (typeof genCall === 'function') {
-      for (var i = 0; i < 3; i++) {
-        try { genCall(); } catch(e) {}
-      }
-    }
-  }
-
-  function runInit() {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initCalendar);
-    } else {
-      initCalendar();
-    }
-  }
-})();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initCalendar);
+} else {
+  initCalendar();
+}
 
 function initCalendar() {
   Promise.all([

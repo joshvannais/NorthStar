@@ -776,5 +776,14 @@
       setInterval(render, 60000);
     })();
   </script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/nav-component.js"></script>
+  <script>
+    var preservedSidebar = document.querySelector('.sidebar');
+    preservedSidebar = preservedSidebar ? preservedSidebar.cloneNode(true) : null;
+    NavComponent.init("command-center");
+    var generatedSidebar = document.querySelector('.sidebar');
+    if (preservedSidebar && generatedSidebar) generatedSidebar.replaceWith(preservedSidebar);
+  </script>
 </body>
 </html>

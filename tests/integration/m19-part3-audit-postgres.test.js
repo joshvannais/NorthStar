@@ -1,15 +1,19 @@
 'use strict';
 
-const realPostgres = process.env.M19_PG_URL ? describe : describe.skip;
+const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+
+const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 
 realPostgres('Mission 19 Part 3 audit compatibility on disposable PostgreSQL', () => {
   let db;
   let audit;
   let previousDatabaseUrl;
+  let suiteDatabase;
 
   beforeAll(async () => {
     previousDatabaseUrl = process.env.DATABASE_URL;
-    process.env.DATABASE_URL = process.env.M19_PG_URL;
+    suiteDatabase = await createSuiteDatabase('audit');
+    process.env.DATABASE_URL = suiteDatabase.connectionString;
     jest.resetModules();
     db = require('../../src/db');
     audit = require('../../src/audit/client');
@@ -17,12 +21,13 @@ realPostgres('Mission 19 Part 3 audit compatibility on disposable PostgreSQL', (
   }, 30000);
 
   afterAll(async () => {
-    if (db && db.isAvailable()) {
-      await db.query("DELETE FROM audit_logs WHERE action LIKE 'm19.commit1.%'");
-      await db.getPool().end();
+    try {
+      if (db && db.getPool()) await db.getPool().end();
+    } finally {
+      if (suiteDatabase) await suiteDatabase.cleanup();
+      if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previousDatabaseUrl;
     }
-    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
-    else process.env.DATABASE_URL = previousDatabaseUrl;
   });
 
   test('verifies and writes the existing migrated schema without actor_id assumptions', async () => {

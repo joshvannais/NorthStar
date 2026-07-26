@@ -7,6 +7,7 @@ const { Pool } = require('pg');
 const repository = require('../../src/persistence/v2/repository');
 const { stableStringify } = require('../../src/services/businessProfileAdapter');
 const simulationPipeline = require('../../src/routes/simulation/pipeline');
+const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const {
   GRAPH_STAGES,
   executeCanonicalGraph,
@@ -16,8 +17,8 @@ const {
   ingestVoice,
 } = require('../../src/services/canonicalGraphService');
 
-const databaseUrl = process.env.M19_PART3_FAILURE_DATABASE_URL;
-const realPostgres = databaseUrl ? describe : describe.skip;
+let databaseUrl;
+const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const migrationDir = path.resolve(__dirname, '../../migrations');
 const migrations = [
   '001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql',
@@ -135,14 +136,25 @@ function runWorker(input, count) {
 
 realPostgres('Mission 19 Part 3 transactional canonical graph on disposable PostgreSQL', () => {
   let pool;
+  let suiteDatabase;
 
   beforeAll(async () => {
+    suiteDatabase = await createSuiteDatabase('canonical-graph');
+    databaseUrl = suiteDatabase.connectionString;
     pool = new Pool({ connectionString: databaseUrl, max: 32 });
     await applyMigrations(pool);
   }, 30000);
 
   afterAll(async () => {
-    await pool.end();
+    try {
+      if (pool) await pool.end();
+    } finally {
+      if (suiteDatabase) await suiteDatabase.cleanup();
+    }
+  });
+
+  beforeEach(async () => {
+    await pool.query('TRUNCATE TABLE canonical_operations CASCADE');
   });
 
   test('sequential duplicate replays byte-equivalent stable IDs and one graph', async () => {

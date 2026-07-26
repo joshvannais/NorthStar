@@ -73,19 +73,24 @@ describe('Pattern Detection — detectEmergency', () => {
     expect(result.severity).toBe('high');
   });
 
-  test('detects medium severity: urgent', () => {
-    const result = detectEmergency('I need this done urgent');
-    expect(result.severity).toBe('medium');
+  test('does not classify generic urgency as emergency evidence', () => {
+    const result = detectEmergency('I need this done urgent', 'customer');
+    expect(result).toBeNull();
   });
 
-  test('detects medium severity: ASAP', () => {
-    const result = detectEmergency('Can you come ASAP?');
-    expect(result.severity).toBe('medium');
+  test('does not classify ASAP as emergency evidence', () => {
+    const result = detectEmergency('Can you come ASAP?', 'customer');
+    expect(result).toBeNull();
   });
 
-  test('detects low severity: broken', () => {
-    const result = detectEmergency('My gutter is broken');
-    expect(result.severity).toBe('low');
+  test('does not classify a generic broken item as emergency evidence', () => {
+    const result = detectEmergency('My gutter is broken', 'customer');
+    expect(result).toBeNull();
+  });
+
+  test('fails closed for non-customer emergency language', () => {
+    expect(detectEmergency('There is a flood in the basement', 'agent')).toBeNull();
+    expect(detectEmergency('There is a fire in the attic', 'unknown')).toBeNull();
   });
 
   test('returns null for non-emergency text', () => {
@@ -354,7 +359,7 @@ describe('handleTranscriptSegment', () => {
     const event = {
       type: 'transcript_segment',
       sessionId: 'test-session',
-      data: { text: 'I have a flood in my basement and how much does it cost?' },
+      data: { speaker: 'customer', text: 'I have a flood in my basement and how much does it cost?' },
     };
 
     handleTranscriptSegment(event);
@@ -415,7 +420,7 @@ describe('getSessionGuidance / clearSessionGuidance', () => {
   test('clears guidance for a session', () => {
     handleTranscriptSegment({
       sessionId: 'clear-test',
-      data: { text: 'This is an emergency!' },
+      data: { speaker: 'customer', text: 'This is an emergency!' },
     });
     expect(getSessionGuidance('clear-test').length).toBeGreaterThan(0);
 

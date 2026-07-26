@@ -6,13 +6,10 @@ const crypto = require('crypto');
 const { randomUUID } = require('crypto');
 const { Pool } = require('pg');
 const repository = require('../../src/persistence/v2/repository');
+const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 
-const urls = {
-  fresh: process.env.M19_PG_FRESH_URL,
-  upgrade: process.env.M19_PG_UPGRADE_URL,
-  concurrency: process.env.M19_PG_CONCURRENCY_URL,
-};
-const realPostgres = Object.values(urls).every(Boolean) ? describe : describe.skip;
+const urls = {};
+const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const migrationDir = path.resolve(__dirname, '../../migrations');
 const currentMigrations = ['001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql'];
 const persistenceMigration = '004_canonical_persistence_v2.sql';
@@ -43,16 +40,33 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
   let upgrade;
   let concurrencyA;
   let concurrencyB;
+  let suiteDatabases = [];
 
   beforeAll(async () => {
+    suiteDatabases.push(await createSuiteDatabase('persistence-fresh'));
+    suiteDatabases.push(await createSuiteDatabase('persistence-upgrade'));
+    suiteDatabases.push(await createSuiteDatabase('persistence-concurrency'));
+    urls.fresh = suiteDatabases[0].connectionString;
+    urls.upgrade = suiteDatabases[1].connectionString;
+    urls.concurrency = suiteDatabases[2].connectionString;
     fresh = new Pool({ connectionString: urls.fresh, max: 8 });
     upgrade = new Pool({ connectionString: urls.upgrade, max: 8 });
     concurrencyA = new Pool({ connectionString: urls.concurrency, max: 24 });
     concurrencyB = new Pool({ connectionString: urls.concurrency, max: 24 });
+    await apply(concurrencyA, [...currentMigrations, persistenceMigration]);
+    await addOrganizationB(concurrencyA);
   });
 
   afterAll(async () => {
-    await Promise.all([fresh.end(), upgrade.end(), concurrencyA.end(), concurrencyB.end()]);
+    try {
+      await Promise.all([fresh, upgrade, concurrencyA, concurrencyB].filter(Boolean).map(pool => pool.end()));
+    } finally {
+      for (const database of suiteDatabases.reverse()) await database.cleanup();
+    }
+  });
+
+  beforeEach(async () => {
+    await concurrencyA.query('TRUNCATE TABLE canonical_operations CASCADE');
   });
 
   test('fresh migration creates only the complete Part 3 canonical schema and required constraints', async () => {
@@ -144,8 +158,6 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
   }, 30000);
 
   test('tenant-safe foreign keys, singleton operation constraints, and external identifiers reject collisions', async () => {
-    await apply(concurrencyA, [...currentMigrations, persistenceMigration]);
-    await addOrganizationB(concurrencyA);
     const claimA = await repository.claimOperation(concurrencyA, {
       organizationId: orgA,
       keyHash: digest('constraints-a'),

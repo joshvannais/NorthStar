@@ -14,18 +14,18 @@ const { app } = require('../../src/server');
 describe('Phase 4 — API: Health Check System', () => {
 
   describe('Public Health Endpoints', () => {
-    test('GET /api/health returns 200 with status', async () => {
+    test('GET /api/health reports degraded when PostgreSQL is not initialized', async () => {
       const res = await request(app).get('/api/health');
       expect(res.status).toBe(200);
       expect(res.type).toMatch(/json/);
       expect(res.body).toBeDefined();
-      expect(res.body.status).toBe('ok');
+      expect(res.body.status).toBe('degraded');
     });
 
-    test('GET /api/stats returns JSON response', async () => {
+    test('GET /api/stats requires authenticated tenant context', async () => {
       const res = await request(app).get('/api/stats');
       expect(res.type).toMatch(/json/);
-      expect([200, 500]).toContain(res.status);
+      expect(res.status).toBe(401);
     });
   });
 

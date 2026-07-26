@@ -2,20 +2,21 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const request = require('supertest');
 const { Pool } = require('pg');
 const cache = require('../../src/cache/client');
-const { ingestSimulation } = require('../../src/services/canonicalGraphService');
+const { ingestRetell, ingestSimulation, ingestVoice } = require('../../src/services/canonicalGraphService');
 const { stableStringify } = require('../../src/services/businessProfileAdapter');
+const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const {
   READ_MODEL_VERSION,
   createCanonicalRouter,
   createCompatibilityRouter,
 } = require('../../src/routes/canonicalPolaris');
 
-const databaseUrl = process.env.M19_PART3_FAILURE_DATABASE_URL;
-const realPostgres = databaseUrl ? describe : describe.skip;
+const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const migrationDir = path.resolve(__dirname, '../../migrations');
 const migrations = [
   '001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql',
@@ -25,6 +26,25 @@ const ORG_A = '00000000-0000-0000-0000-000000000001';
 const USER_A = '00000000-0000-0000-0000-000000000002';
 const ORG_B = '00000000-0000-0000-0000-000000000010';
 const USER_B = '00000000-0000-0000-0000-000000000011';
+const RATIFICATION_KEY = 'm19-part3-fence-001';
+
+function dataDigest() {
+  const root = path.resolve(__dirname, '../../data');
+  const hash = crypto.createHash('sha256');
+  function visit(directory) {
+    if (!fs.existsSync(directory)) return;
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+      const absolute = path.join(directory, entry.name);
+      const relative = path.relative(root, absolute).replace(/\\/g, '/');
+      hash.update(entry.isDirectory() ? 'directory:' : 'file:');
+      hash.update(relative);
+      if (entry.isDirectory()) visit(absolute);
+      else if (entry.isFile()) hash.update(fs.readFileSync(absolute));
+    }
+  }
+  visit(root);
+  return hash.digest('hex');
+}
 
 async function applyMigrations(pool) {
   for (const filename of migrations) {
@@ -57,20 +77,27 @@ function graphInput(organizationId, sessionId, key, customerName) {
       communicationId: sessionId + ':communication',
       appointmentId: sessionId + ':appointment',
     },
-    customer: { name: customerName, phone: '+15555550100', email: customerName.toLowerCase().replace(' ', '.') + '@example.test' },
+    customer: {
+      name: customerName,
+      phone: '+15555550100',
+      email: customerName.toLowerCase().replace(' ', '.') + '@example.test',
+      address: { line1: '100 Cedar Lane', city: 'Testville', state: 'NY', postalCode: '10001' },
+    },
     transcript: [
-      { turnId: 'turn-1', speaker: 'customer', text: 'I need a new 100-foot cedar fence and the existing fence removed.' },
+      { turnId: 'turn-1', speaker: 'customer', text: 'I need a new 100-foot six-foot-high cedar fence and the existing fence removed.' },
       { turnId: 'turn-2', speaker: 'customer', text: 'Include one walk gate. Weekday mornings work best. This is not an emergency.' },
     ],
     facts: [
       { variable: 'linearFeet', normalizedValue: 100, evidenceText: '100-foot cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
+      { variable: 'height', normalizedValue: 6, evidenceText: 'six-foot-high', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
       { variable: 'material', normalizedValue: 'cedar', evidenceText: 'cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
       { variable: 'removalRequired', normalizedValue: true, evidenceText: 'existing fence removed', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
       { variable: 'gates', normalizedValue: [{ type: 'walk' }], evidenceText: 'one walk gate', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
     ],
-    service: { key: 'fence', scope: { jobType: 'replace', linearFeet: 100, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] } },
+    service: { key: 'fence', scope: { jobType: 'replace', linearFeet: 100, height: 6, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] } },
+    businessProfileVersion: 'bp-ratification-v1',
     businessProfile: {
-      version: 'bp-api-v1',
+      version: 'bp-ratification-v1',
       company: { currency: 'USD' },
       crew: { defaultCrewSize: 2, averageHourlyRate: 42, overtimeMultiplier: 1.5 },
       financial: { markup: 1.3, emergencyMarkup: 1.5, travelCharge: 0.58 },
@@ -124,23 +151,79 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
   let app;
   let graphA;
   let graphB;
+  let dataBefore;
+  let multiSourcePool;
+  let multiSourceApp;
+  let suiteDatabases = [];
 
   beforeAll(async () => {
-    pool = new Pool({ connectionString: databaseUrl, max: 20 });
+    dataBefore = dataDigest();
+    suiteDatabases.push(await createSuiteDatabase('canonical-api'));
+    suiteDatabases.push(await createSuiteDatabase('canonical-api-multisource'));
+    pool = new Pool({ connectionString: suiteDatabases[0].connectionString, max: 20 });
+    multiSourcePool = new Pool({ connectionString: suiteDatabases[1].connectionString, max: 20 });
     await applyMigrations(pool);
-    graphA = await ingestSimulation(pool, graphInput(ORG_A, 'session-a', 'm19-api-org-a', 'Avery Smith'));
-    graphB = await ingestSimulation(pool, graphInput(ORG_B, 'session-b', 'm19-api-org-b', 'Blair Jones'));
-    expect(graphA.status).toBe(201);
-    expect(graphB.status).toBe(201);
-    cache.clearForTests();
-    cache.setEnabled(true);
+    await applyMigrations(multiSourcePool);
     app = createApp(function () { return pool; });
+    multiSourceApp = createApp(function () { return multiSourcePool; });
   }, 30000);
 
   afterAll(async () => {
+    try {
+      expect(dataDigest()).toBe(dataBefore);
+    } finally {
+      cache.setEnabled(true);
+      cache.clearForTests();
+      await Promise.all([pool, multiSourcePool].filter(Boolean).map(value => value.end()));
+      for (const database of suiteDatabases.reverse()) await database.cleanup();
+    }
+  });
+
+  beforeEach(async () => {
     cache.setEnabled(true);
     cache.clearForTests();
-    await pool.end();
+    await Promise.all([
+      pool.query('TRUNCATE TABLE canonical_operations CASCADE; TRUNCATE TABLE audit_logs'),
+      multiSourcePool.query('TRUNCATE TABLE canonical_operations CASCADE; TRUNCATE TABLE audit_logs'),
+    ]);
+    graphA = await ingestSimulation(pool, graphInput(ORG_A, 'session-a', RATIFICATION_KEY, 'Avery Smith'));
+    graphB = await ingestSimulation(pool, graphInput(ORG_B, 'session-b', RATIFICATION_KEY, 'Blair Jones'));
+    expect(graphA.status).toBe(201);
+    expect(graphB.status).toBe(201);
+  });
+
+  test('controlled fence fixture has one graph, byte-equivalent replay, conflict isolation, and no raw key', async () => {
+    const replay = await ingestSimulation(pool, graphInput(ORG_A, 'session-a', RATIFICATION_KEY, 'Avery Smith'));
+    expect(replay).toMatchObject({ status: 201, replayed: true });
+    expect(stableStringify(replay.body)).toBe(stableStringify(graphA.body));
+    expect(graphA.body.snapshot).toMatchObject({
+      customerFacingPrice: 4510,
+      calculationVersion: 'm19-part3-canonical-v1',
+      service: { scope: { linearFeet: 100, height: 6, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] } },
+      appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
+      risk: { emergency: false },
+      grossProfit: null,
+      netProfit: null,
+    });
+
+    const conflictInput = graphInput(ORG_A, 'session-a', RATIFICATION_KEY, 'Different Customer');
+    const conflict = await ingestSimulation(pool, conflictInput);
+    expect(conflict).toMatchObject({
+      status: 409,
+      body: { error: { code: 'IDEMPOTENCY_FINGERPRINT_CONFLICT' } },
+    });
+
+    const operations = await pool.query(
+      `SELECT organization_id, graph_id, row_to_json(canonical_operations)::text AS serialized
+         FROM canonical_operations
+        WHERE graph_id IN ($1, $2)
+        ORDER BY organization_id`,
+      [graphA.body.graphId, graphB.body.graphId]
+    );
+    expect(operations.rows).toHaveLength(2);
+    expect(new Set(operations.rows.map(row => row.organization_id))).toEqual(new Set([ORG_A, ORG_B]));
+    expect(new Set(operations.rows.map(row => row.graph_id)).size).toBe(2);
+    expect(operations.rows.every(row => !row.serialized.includes(RATIFICATION_KEY))).toBe(true);
   });
 
   test('static routes precede parameter routes and status reports no Redis requirement', async () => {
@@ -185,8 +268,61 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
       .set(headers(ORG_A, USER_A, 'wrong-session'));
     expect(wrongSessionFetch.status).toBe(404);
 
+    const tenantBWrongSession = await request(app).get('/api/v1/canonical/graphs').set(headers(ORG_B, USER_B, 'session-a'));
+    expect(tenantBWrongSession.status).toBe(200);
+    expect(tenantBWrongSession.body.data.items).toEqual([]);
+
+    const listB = await request(app).get('/api/v1/canonical/graphs').set(headers(ORG_B, USER_B, 'session-b'));
+    expect(listB.status).toBe(200);
+    expect(listB.body.data.items).toHaveLength(1);
+    expect(listB.body.data.items[0].ids.graph).toBe(graphB.body.graphId);
+    expect(listB.body.data.items[0].ids.graph).not.toBe(graphA.body.graphId);
+
     const anonymous = await request(app).get('/api/v1/canonical/graphs');
     expect(anonymous.status).toBe(401);
+  });
+
+  test('organization-wide reads retain legitimate simulation, voice, and Retell graphs without cross-tenant disclosure', async () => {
+    const simulation = await ingestSimulation(
+      multiSourcePool,
+      graphInput(ORG_A, 'multisource-session', 'm19-api-multisource-simulation', 'Simulation Customer')
+    );
+    const voice = await ingestVoice(
+      multiSourcePool,
+      graphInput(ORG_A, 'multisource-voice', 'm19-api-multisource-voice', 'Voice Customer')
+    );
+    const retell = await ingestRetell(
+      multiSourcePool,
+      graphInput(ORG_A, 'multisource-retell', 'm19-api-multisource-retell', 'Retell Customer')
+    );
+    const tenantB = await ingestSimulation(
+      multiSourcePool,
+      graphInput(ORG_B, 'multisource-b', 'm19-api-multisource-b', 'Tenant B Customer')
+    );
+    expect([simulation, voice, retell, tenantB].every(result => result.status === 201)).toBe(true);
+
+    const organizationA = await request(multiSourceApp)
+      .get('/api/v1/canonical/graphs')
+      .set(headers(ORG_A, USER_A, 'multisource-session'));
+    expect(organizationA.status).toBe(200);
+    expect(organizationA.body.data.items).toHaveLength(3);
+    expect(organizationA.body.data.items.map(item => item.source.type).sort())
+      .toEqual(['retell', 'simulation', 'voice']);
+
+    const wrongSimulationSession = await request(multiSourceApp)
+      .get('/api/v1/canonical/graphs')
+      .set(headers(ORG_A, USER_A, 'wrong-simulation-session'));
+    expect(wrongSimulationSession.status).toBe(200);
+    expect(wrongSimulationSession.body.data.items.map(item => item.source.type).sort())
+      .toEqual(['retell', 'voice']);
+
+    const organizationB = await request(multiSourceApp)
+      .get('/api/v1/canonical/graphs')
+      .set(headers(ORG_B, USER_B, 'multisource-b'));
+    expect(organizationB.status).toBe(200);
+    expect(organizationB.body.data.items).toHaveLength(1);
+    expect(organizationB.body.data.items[0].ids.graph).toBe(tenantB.body.graphId);
+    expect(organizationB.body.data.items[0].ids.graph).not.toBe(simulation.body.graphId);
   });
 
   test('canonical and compatibility projections return identical values and digests', async () => {

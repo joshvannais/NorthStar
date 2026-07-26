@@ -15,6 +15,8 @@ process.chdir(path.resolve(__dirname, '../..'));
 
 const request = require('supertest');
 const { app } = require('../../src/server');
+const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const realPostgresHealth = process.env.M19_PG_ADMIN_URL ? test : test.skip;
 
 describe('Phase 4 — API: Polaris Routes (/api/v1/polaris)', () => {
 
@@ -108,12 +110,39 @@ describe('Phase 4 — API: Auth Endpoints', () => {
 });
 
 describe('Phase 4 — API: Health & Generic Routes', () => {
-  test('GET /api/health returns 200 (public)', async () => {
+  test('GET /api/health reports degraded when PostgreSQL is uninitialized', async () => {
     const res = await request(app).get('/api/health');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/json/);
-    expect(res.body.status).toBe('ok');
+    expect(res.body.status).toBe('degraded');
+    expect(res.body.components.database).toBe('unavailable');
   });
+
+  realPostgresHealth('GET /api/health reports ok after verified PostgreSQL initialization', async () => {
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    let healthyDb;
+    let suiteDatabase;
+    try {
+      suiteDatabase = await createSuiteDatabase('health');
+      process.env.DATABASE_URL = suiteDatabase.connectionString;
+      jest.resetModules();
+      healthyDb = require('../../src/db');
+      const healthyApp = require('../../src/server').app;
+
+      await expect(healthyDb.initDatabase()).resolves.toBe(true);
+      const res = await request(healthyApp).get('/api/health');
+      expect(res.status).toBe(200);
+      expect(res.type).toMatch(/json/);
+      expect(res.body.status).toBe('ok');
+      expect(res.body.components.database).toBe('healthy');
+    } finally {
+      if (healthyDb && healthyDb.getPool()) await healthyDb.getPool().end();
+      if (suiteDatabase) await suiteDatabase.cleanup();
+      if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previousDatabaseUrl;
+      jest.resetModules();
+    }
+  }, 30000);
 
   test('GET /api/leads — rejects unauthenticated', async () => {
     const res = await request(app).get('/api/leads');

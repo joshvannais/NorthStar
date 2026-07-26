@@ -14,6 +14,7 @@
 'use strict';
 
 const { buildPolarisIntelligence } = require('../../src/routes/demo');
+const customerRepository = require('../../src/polaris/customerRepository');
 
 // ── Fixtures ──
 
@@ -428,8 +429,51 @@ describe('Phase E — Contact Intelligence', function() {
 
     test('different customer has separate timeline', function() {
       expect(Array.isArray(result.customerTimeline)).toBe(true);
-      // Jane Doe should have fewer timeline entries than John Smith (who has 3+)
-      expect(result.customerTimeline.length).toBeLessThan(3);
+      expect(result.customerTimeline).toHaveLength(1);
+    });
+
+    test('same name with a different strong identity cannot overwrite or inherit another customer', function() {
+      const suffix = String(process.pid).slice(-4).padStart(4, '0');
+      const name = 'Identity Boundary ' + process.pid;
+      const existingPhone = '55510' + suffix;
+      const incomingPhone = '55520' + suffix;
+      const existing = customerRepository.createCustomer({ name: name, phone: existingPhone });
+      let createdCustomerId = null;
+
+      try {
+        customerRepository.addEvent(existing.id, {
+          eventType: customerRepository.EVENT_TYPES.CALL_RECEIVED,
+          sourceEventId: 'identity-boundary-prior-1-' + process.pid,
+          source: 'contact_intelligence_regression'
+        });
+        customerRepository.addEvent(existing.id, {
+          eventType: customerRepository.EVENT_TYPES.CALL_RECEIVED,
+          sourceEventId: 'identity-boundary-prior-2-' + process.pid,
+          source: 'contact_intelligence_regression'
+        });
+
+        const isolatedResult = buildPolarisIntelligence(
+          'NorthStar Tree Service',
+          'Tree Service',
+          treeServiceTranscript,
+          { customerName: name, customerPhone: incomingPhone },
+          'simulation'
+        );
+        const incomingMatches = customerRepository.searchCustomers({ search: incomingPhone });
+        const preservedExisting = customerRepository.getCustomer(existing.id);
+
+        expect(incomingMatches).toHaveLength(1);
+        createdCustomerId = incomingMatches[0].id;
+        expect(createdCustomerId).not.toBe(existing.id);
+        expect(preservedExisting.phone).toBe(existingPhone);
+        expect(customerRepository.getEvents(existing.id)).toHaveLength(2);
+        expect(isolatedResult.contactProfile.phone).toBe(incomingPhone);
+        expect(isolatedResult.customerTimeline).toHaveLength(1);
+        expect(customerRepository.getEvents(createdCustomerId)).toHaveLength(1);
+      } finally {
+        if (createdCustomerId) customerRepository.deleteCustomer(createdCustomerId);
+        customerRepository.deleteCustomer(existing.id);
+      }
     });
   });
 });

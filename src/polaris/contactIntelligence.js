@@ -144,7 +144,13 @@ function findOrCreateCustomer(identity) {
     name: identity.name
   });
 
-  if (resolution.customerId) {
+  var hasConflicts = Array.isArray(resolution.conflicts) && resolution.conflicts.length > 0;
+  var isStrongMatch = resolution.customerId &&
+    resolution.confidence >= 0.8 &&
+    !resolution.ambiguous &&
+    !hasConflicts;
+
+  if (isStrongMatch) {
     // Found existing customer — update with latest info
     var updates = {};
     if (identity.name) updates.name = identity.name;

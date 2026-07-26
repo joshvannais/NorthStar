@@ -3,7 +3,7 @@
  * V3-19: Append-only audit log storage for security-relevant actions.
  * 
  * Logs every create, update, delete operation with actor, target, before/after state.
- * Stored in-memory with optional PostgreSQL persistence.
+ * Stored in-memory with best-effort PostgreSQL persistence.
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -21,14 +21,16 @@ const MAX_MEMORY_LOGS = 10000;
 async function record(entry) {
   const logEntry = {
     id: uuidv4(),
-    timestamp: new Date().toISOString(),
-    actorId: entry.actorId || 'system',
+    createdAt: new Date().toISOString(),
+    organizationId: entry.organizationId || null,
+    userId: entry.userId || null,
+    actorLabel: entry.actorLabel || (entry.userId ? 'authenticated' : 'system'),
     actorRole: entry.actorRole || 'system',
     action: entry.action || 'unknown',
     entityType: entry.entityType || 'unknown',
     entityId: entry.entityId || null,
-    beforeState: entry.beforeState ? JSON.stringify(entry.beforeState) : null,
-    afterState: entry.afterState ? JSON.stringify(entry.afterState) : null,
+    beforeState: entry.beforeState || null,
+    afterState: entry.afterState || null,
     ipAddress: entry.ipAddress || null,
     userAgent: entry.userAgent || null,
     correlationId: entry.correlationId || null
@@ -37,15 +39,28 @@ async function record(entry) {
   // Persist to PostgreSQL if available
   if (db.isAvailable()) {
     try {
+      const details = {
+        actorLabel: logEntry.actorLabel,
+        role: logEntry.actorRole,
+        requestId: logEntry.correlationId,
+        correlationId: logEntry.correlationId,
+        userAgent: logEntry.userAgent,
+        beforeState: logEntry.beforeState,
+        afterState: logEntry.afterState,
+      };
       await db.query(
-        `INSERT INTO audit_logs (id, actor_id, actor_role, action, entity_type, entity_id, before_state, after_state, ip_address, user_agent, correlation_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [logEntry.id, logEntry.actorId, logEntry.actorRole, logEntry.action,
-         logEntry.entityType, logEntry.entityId, logEntry.beforeState, logEntry.afterState,
-         logEntry.ipAddress, logEntry.userAgent, logEntry.correlationId]
+        `INSERT INTO audit_logs
+          (organization_id, user_id, action, entity_type, entity_id, details, ip_address, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+        [logEntry.organizationId, logEntry.userId, logEntry.action,
+         logEntry.entityType, logEntry.entityId || '', JSON.stringify(details),
+         logEntry.ipAddress || '', logEntry.createdAt]
       );
-    } catch (err) {
-      console.warn('[Audit] DB insert failed:', err.message);
+    } catch (_err) {
+      console.warn('[Audit] Persistence warning:', {
+        requestId: logEntry.correlationId || 'unavailable',
+        event: 'audit_persistence_failed',
+      });
     }
   }
 
@@ -62,12 +77,12 @@ async function query(filters = {}) {
 
   let results = [...auditLog];
 
-  if (actorId) results = results.filter(e => e.actorId === actorId);
+  if (actorId) results = results.filter(e => e.userId === actorId || e.actorLabel === actorId);
   if (entityType) results = results.filter(e => e.entityType === entityType);
   if (action) results = results.filter(e => e.action === action);
   if (ip) results = results.filter(e => e.ipAddress === ip);
-  if (from) results = results.filter(e => new Date(e.timestamp) >= new Date(from));
-  if (to) results = results.filter(e => new Date(e.timestamp) <= new Date(to));
+  if (from) results = results.filter(e => new Date(e.createdAt) >= new Date(from));
+  if (to) results = results.filter(e => new Date(e.createdAt) <= new Date(to));
 
   const total = results.length;
   const start = (page - 1) * limit;
@@ -77,33 +92,33 @@ async function query(filters = {}) {
 }
 
 /**
- * Ensure the audit_logs table exists in PostgreSQL.
+ * Verify the migrated audit_logs table contract without creating a competing
+ * runtime schema or optional indexes.
  */
 async function ensureTable() {
   if (!db.isAvailable()) return;
   try {
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id UUID PRIMARY KEY,
-        timestamp TIMESTAMP DEFAULT NOW(),
-        actor_id VARCHAR(255) NOT NULL,
-        actor_role VARCHAR(50) NOT NULL,
-        action VARCHAR(50) NOT NULL,
-        entity_type VARCHAR(50) NOT NULL,
-        entity_id VARCHAR(255),
-        before_state JSONB,
-        after_state JSONB,
-        ip_address VARCHAR(45),
-        user_agent TEXT,
-        correlation_id VARCHAR(255)
-      );
-    `);
-    // Add index for common queries
-    await db.query(`CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id)`);
-    await db.query(`CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id)`);
-    await db.query(`CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)`);
-  } catch (err) {
-    console.warn('[Audit] Table creation warning:', err.message);
+    const result = await db.query(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs'`
+    );
+    const actual = new Set((result && result.rows || []).map(row => row.column_name));
+    const required = ['organization_id', 'user_id', 'action', 'entity_type', 'entity_id', 'details', 'ip_address', 'created_at'];
+    const missing = required.filter(column => !actual.has(column));
+    if (missing.length) {
+      console.warn('[Audit] Schema verification warning:', {
+        event: 'audit_schema_incompatible',
+        missingColumns: missing,
+      });
+      return false;
+    }
+    return true;
+  } catch (_err) {
+    console.warn('[Audit] Schema verification warning:', {
+      event: 'audit_schema_unavailable',
+    });
+    return false;
   }
 }
 

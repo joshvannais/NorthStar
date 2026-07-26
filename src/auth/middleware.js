@@ -203,21 +203,105 @@ async function recordLoginAttempt(ip, userId, success) {
  * Middleware: require a valid contractor JWT.
  * Attaches user info to req.user.
  */
-function requireAuth(req, res, next) {
+function requestId(req) {
+  return req.requestId || req.correlationId || 'unavailable';
+}
+
+function sendAuthError(req, res, status, message, code) {
+  return res.status(status).json({
+    error: message,
+    code,
+    requestId: requestId(req),
+  });
+}
+
+function attachTenantContext(req, membership) {
+  const context = Object.freeze({
+    userId: membership.id,
+    organizationId: membership.organization_id,
+    role: membership.role,
+  });
+  const trustedUser = Object.freeze({
+    id: membership.id,
+    sub: membership.id,
+    email: membership.email || '',
+    name: membership.name || '',
+    role: membership.role,
+    organizationId: membership.organization_id,
+    orgId: membership.organization_id,
+  });
+
+  Object.defineProperties(req, {
+    user: { value: trustedUser, enumerable: true, configurable: false, writable: false },
+    tenantContext: { value: context, enumerable: true, configurable: false, writable: false },
+    orgId: { value: context.organizationId, enumerable: true, configurable: false, writable: false },
+    userRole: { value: context.role, enumerable: true, configurable: false, writable: false },
+  });
+}
+
+async function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authentication required' });
+    return sendAuthError(req, res, 401, 'Authentication required', 'unauthorized');
   }
   const token = authHeader.split(' ')[1];
+  let decoded;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    decoded = jwt.verify(token, JWT_SECRET);
     if (decoded.role !== 'contractor') {
-      return res.status(403).json({ error: 'Invalid user token' });
+      return sendAuthError(req, res, 403, 'Invalid user token', 'forbidden');
     }
-    req.user = decoded;
-    next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return sendAuthError(req, res, 401, 'Invalid or expired token', 'invalid_token');
+  }
+
+  if (!decoded.sub) {
+    return sendAuthError(req, res, 401, 'Invalid or expired token', 'invalid_token');
+  }
+  if (!db.isAvailable()) {
+    return sendAuthError(
+      req,
+      res,
+      503,
+      'Organization authorization is temporarily unavailable',
+      'authorization_unavailable'
+    );
+  }
+
+  try {
+    const result = await db.query(
+      `SELECT id, organization_id, role, status, email, name
+         FROM users
+        WHERE id = $1`,
+      [decoded.sub]
+    );
+    const rows = result && Array.isArray(result.rows) ? result.rows : [];
+    if (rows.length !== 1) {
+      return sendAuthError(req, res, 403, 'Active organization membership required', 'organization_membership_required');
+    }
+
+    const membership = rows[0];
+    if (!membership.id ||
+        !membership.organization_id ||
+        membership.status !== 'active' ||
+        !membership.role) {
+      return sendAuthError(req, res, 403, 'Active organization membership required', 'organization_membership_required');
+    }
+
+    attachTenantContext(req, membership);
+    return next();
+  } catch (_err) {
+    console.warn('[Auth] Membership lookup warning:', {
+      requestId: requestId(req),
+      event: 'authorization_persistence_unavailable',
+    });
+    return sendAuthError(
+      req,
+      res,
+      503,
+      'Organization authorization is temporarily unavailable',
+      'authorization_unavailable'
+    );
   }
 }
 
@@ -254,5 +338,6 @@ module.exports = {
   recordLoginAttempt,
   requireAuth,
   requireAdmin,
+  attachTenantContext,
   JWT_SECRET,
 };

@@ -10,6 +10,7 @@
  */
 
 const { ApiError } = require('../middleware/errorHandler');
+const { hasPermission } = require('./permissions');
 
 /**
  * Permission map for contractor roles.
@@ -97,14 +98,27 @@ function requirePermission(resource, action) {
       return res.status(401).json({ error: { code: 'unauthorized', message: 'Authentication required.' } });
     }
 
-    const role = user.role || 'member';
+    const role = req.userRole;
+    const normalizedAction = action === 'view' ? 'read'
+      : action === 'edit' ? 'update'
+        : action === 'schedule' ? 'create'
+          : action === 'manage' ? 'update'
+            : action;
 
-    if (!hasContractorPermission(role, resource, action)) {
+    if (!req.tenantContext || !req.orgId || !role) {
+      return res.status(403).json({
+        error: { code: 'forbidden', message: 'Active organization membership is required.' },
+        requestId: req.requestId || req.correlationId || 'unavailable'
+      });
+    }
+
+    if (!hasPermission(role, resource, normalizedAction)) {
       return res.status(403).json({
         error: {
           code: 'forbidden',
           message: `You do not have permission to ${action} ${resource}. Required role: ${getRequiredRole(resource, action)}`
-        }
+        },
+        requestId: req.requestId || req.correlationId || 'unavailable'
       });
     }
 
@@ -116,7 +130,7 @@ function requirePermission(resource, action) {
  * Middleware: require contractor to be the Owner (for billing, delete-org, etc.)
  */
 function requireOwner(req, res, next) {
-  if (!req.user || req.user.role !== 'owner') {
+  if (!req.user || !req.tenantContext || req.userRole !== 'owner') {
     return res.status(403).json({
       error: { code: 'forbidden', message: 'Only the organization owner can perform this action.' }
     });

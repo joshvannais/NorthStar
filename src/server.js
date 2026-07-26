@@ -41,9 +41,9 @@ const PORT = config.port || 3000;
 
 // Middleware
 app.use(cors(corsOptions));
+app.use(correlationId);
 app.use(express.json({ limit: '1mb' }));
 app.use(securityHeaders);
-app.use(correlationId);
 app.use(auditLogger);
 
 // Static assets (CSS, JS)

@@ -360,8 +360,8 @@
   <script src="/js/polaris-api.js"></script>
   <script>
     // Premium notification toasts
-    window.showToast = showNotification;
     window.showNotification = NotificationService.show;
+    window.showToast = window.showNotification;
 
     // ── Demo session lifecycle — clean state on page reload ──
     (function() {

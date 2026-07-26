@@ -11,7 +11,13 @@
     /* ── Only what's unique to Command Center ── */
     * { box-sizing: border-box; }
 
-    .cc-workspace { max-width: 1400px; margin: 0 auto; padding: 16px 24px; }
+    .cc-workspace {
+      grid-column: 1 / -1;
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 16px 24px;
+    }
 
     /* ── Simulate Lead ── */
     .cc-sim-banner {
@@ -334,6 +340,7 @@
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
 
+  <script>
     (function() {
       var loading = document.getElementById('ccLoading');
       var content = document.getElementById('ccContent');

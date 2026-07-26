@@ -2714,11 +2714,13 @@
     }
   </script>
 
-  <script async>
+  <script>
+    (async function loadLandingStats() {
     try {
       var r = await fetch('/api/stats');
       var d = await r.json();
     } catch(e) {}
+    })();
   </script>
 
   <script src="/js/theme.js"></script>

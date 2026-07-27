@@ -3,11 +3,13 @@
 const { randomUUID } = require('crypto');
 const { v5: uuidv5 } = require('uuid');
 const db = require('../db');
+const cache = require('../cache/client');
 const repository = require('../persistence/v2/repository');
-const { adaptBusinessProfile, sha256, stableStringify, stableValue } = require('./businessProfileAdapter');
+const { sha256, stableValue } = require('./businessProfileAdapter');
 const { CALCULATION_VERSION, calculateCanonicalPolaris } = require('./canonicalPolarisCalculation');
+const { getActiveBusinessProfile } = require('./organizationAuthority');
 
-const SOURCES = new Set(['simulation', 'demo', 'retell', 'voice']);
+const SOURCES = new Set(['simulation', 'demo', 'retell', 'voice', 'lead']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const GRAPH_STAGES = Object.freeze([
   'customer', 'transcript', 'facts', 'communication', 'opportunity',
@@ -94,10 +96,9 @@ function normalizeRequest(source) {
   const idempotencyKey = requireText(request.idempotencyKey, 'idempotencyKey');
   if (idempotencyKey.length > 512) throw validationError('idempotencyKey is too long');
   const ingestionSource = requireText(request.source, 'source').toLowerCase();
-  if (!SOURCES.has(ingestionSource)) throw validationError('source must be simulation, demo, retell, or voice');
+  if (!SOURCES.has(ingestionSource)) throw validationError('source must be simulation, demo, retell, voice, or lead');
   const service = request.service && typeof request.service === 'object' ? request.service : {};
   const customer = request.customer && typeof request.customer === 'object' ? request.customer : {};
-  const profile = adaptBusinessProfile(request.businessProfile || {}, request.businessProfileVersion);
   const normalized = {
     organizationId,
     source: ingestionSource,
@@ -121,7 +122,6 @@ function normalizeRequest(source) {
       key: requireText(service.key, 'service.key').toLowerCase(),
       scope: stableValue(service.scope || {}),
     },
-    businessProfile: stableValue(profile),
     appointmentPreference: request.appointmentPreference ? stableValue(request.appointmentPreference) : null,
     scheduledAppointment: request.scheduledAppointment ? stableValue(request.scheduledAppointment) : null,
     travel: request.travel ? stableValue(request.travel) : null,
@@ -133,6 +133,112 @@ function normalizeRequest(source) {
     calculationVersion: optionalText(request.calculationVersion) || CALCULATION_VERSION,
   };
   return { normalized, idempotencyKey };
+}
+
+function normalizeEmail(value) {
+  const normalized = optionalText(value);
+  return normalized ? normalized.toLowerCase() : null;
+}
+
+function normalizePhone(value) {
+  const normalized = optionalText(value);
+  if (!normalized) return null;
+  const digits = normalized.replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.length === 10) return '+1' + digits;
+  if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
+  return '+' + digits;
+}
+
+function identityConflict() {
+  const error = new Error('Strong customer identifiers resolve to different canonical customers.');
+  error.code = 'CANONICAL_CUSTOMER_IDENTITY_CONFLICT';
+  error.safeCode = 'customer_identity_conflict';
+  error.retryable = false;
+  return error;
+}
+
+async function resolveCanonicalCustomer(client, request, proposedCustomerId, common) {
+  const normalizedEmail = normalizeEmail(request.customer.email);
+  const normalizedPhone = normalizePhone(request.customer.phone);
+  const externalCustomerId = request.external.customerId;
+  const lockKeys = [
+    normalizedEmail ? 'email:' + normalizedEmail : null,
+    normalizedPhone ? 'phone:' + normalizedPhone : null,
+    externalCustomerId ? 'external:' + externalCustomerId : null,
+  ].filter(Boolean).map(function (value) {
+    return request.organizationId + ':' + value;
+  }).sort();
+
+  for (const lockKey of lockKeys) {
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lockKey]);
+  }
+
+  const candidates = new Set();
+  if (normalizedEmail || normalizedPhone) {
+    const identities = await client.query(
+      `SELECT customer_id
+         FROM canonical_customer_identities
+        WHERE organization_id = $1
+          AND ((identity_type = 'email' AND normalized_value = $2)
+            OR (identity_type = 'phone' AND normalized_value = $3))`,
+      [request.organizationId, normalizedEmail || '', normalizedPhone || '']
+    );
+    identities.rows.forEach(function (row) { candidates.add(row.customer_id); });
+  }
+  if (externalCustomerId) {
+    const external = await client.query(
+      `SELECT id FROM canonical_customers
+        WHERE organization_id = $1 AND external_customer_id = $2`,
+      [request.organizationId, externalCustomerId]
+    );
+    external.rows.forEach(function (row) { candidates.add(row.id); });
+  }
+  if (candidates.size > 1) throw identityConflict();
+
+  let customerId = candidates.size === 1 ? Array.from(candidates)[0] : null;
+  if (!customerId) {
+    await client.query(
+      `INSERT INTO canonical_customers
+        (id, organization_id, operation_id, graph_id, external_customer_id, name, email, phone, address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+      [proposedCustomerId, ...common, externalCustomerId, request.customer.name, request.customer.email,
+        request.customer.phone, JSON.stringify(request.customer.address)]
+    );
+    customerId = proposedCustomerId;
+  } else {
+    const updated = await client.query(
+      `UPDATE canonical_customers
+          SET name = CASE WHEN name IS NULL OR btrim(name) = '' THEN $3 ELSE name END,
+              email = COALESCE(email, $4), phone = COALESCE(phone, $5),
+              address = COALESCE(address, $6::jsonb),
+              external_customer_id = COALESCE(external_customer_id, $7),
+              updated_at = NOW()
+        WHERE organization_id = $1 AND id = $2
+        RETURNING id`,
+      [request.organizationId, customerId, request.customer.name, request.customer.email,
+        request.customer.phone, JSON.stringify(request.customer.address), externalCustomerId]
+    );
+    if (updated.rows.length !== 1) throw identityConflict();
+  }
+
+  const identitiesToBind = [
+    normalizedEmail ? ['email', normalizedEmail] : null,
+    normalizedPhone ? ['phone', normalizedPhone] : null,
+  ].filter(Boolean);
+  for (const identity of identitiesToBind) {
+    const bound = await client.query(
+      `INSERT INTO canonical_customer_identities
+        (organization_id, identity_type, normalized_value, customer_id)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (organization_id, identity_type, normalized_value) DO UPDATE
+         SET customer_id = canonical_customer_identities.customer_id
+       RETURNING customer_id`,
+      [request.organizationId, identity[0], identity[1], customerId]
+    );
+    if (bound.rows[0].customer_id !== customerId) throw identityConflict();
+  }
+  return customerId;
 }
 
 function artifactIds(graphId, factCount) {
@@ -194,6 +300,13 @@ async function insertGraph(client, operation, leaseOwner, request, options) {
   const persistedFacts = request.facts.map(function (fact, index) {
     return { ...fact, id: ids.facts[index] };
   });
+  const text = transcriptText(request.transcript);
+  const transcriptFingerprint = sha256(request.transcript);
+  const common = [request.organizationId, operation.id, operation.graph_id];
+
+  ids.customer = await resolveCanonicalCustomer(client, request, ids.customer, common);
+  stageFailure(options, 'customer');
+
   const calculation = calculateCanonicalPolaris({
     organizationId: request.organizationId,
     customerId: ids.customer,
@@ -219,18 +332,6 @@ async function insertGraph(client, operation, leaseOwner, request, options) {
     callDurationSeconds: request.callDurationSeconds,
   });
   const snapshotDigest = sha256(calculation);
-  const text = transcriptText(request.transcript);
-  const transcriptFingerprint = sha256(request.transcript);
-  const common = [request.organizationId, operation.id, operation.graph_id];
-
-  await client.query(
-    `INSERT INTO canonical_customers
-      (id, organization_id, operation_id, graph_id, external_customer_id, name, email, phone, address)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
-    [ids.customer, ...common, request.external.customerId, request.customer.name, request.customer.email,
-      request.customer.phone, JSON.stringify(request.customer.address)]
-  );
-  stageFailure(options, 'customer');
 
   await client.query(
     `INSERT INTO canonical_transcripts
@@ -279,13 +380,14 @@ async function insertGraph(client, operation, leaseOwner, request, options) {
   await client.query(
     `INSERT INTO canonical_estimates
       (id, organization_id, operation_id, graph_id, opportunity_id, calculation_version,
-       normalized_input_fingerprint, business_profile_version, business_profile_hash, currency,
-       customer_price, line_items, calculation_output, snapshot_digest)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14)`,
+        normalized_input_fingerprint, business_profile_version, business_profile_hash, currency,
+       customer_price, line_items, calculation_output, snapshot_digest, business_profile_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15)`,
     [ids.estimate, ...common, ids.opportunity, calculation.calculationVersion,
       calculation.normalizedInputFingerprint, calculation.businessProfileInputVersion,
       calculation.businessProfileInputHash, request.businessProfile.currency || 'USD', calculation.customerFacingPrice,
-      JSON.stringify(calculation.pricingLineItems), JSON.stringify(calculation), snapshotDigest]
+      JSON.stringify(calculation.pricingLineItems), JSON.stringify(calculation), snapshotDigest,
+      request.businessProfileAuthority.id]
   );
   stageFailure(options, 'estimate');
 
@@ -305,12 +407,12 @@ async function insertGraph(client, operation, leaseOwner, request, options) {
     `INSERT INTO canonical_polaris_snapshots
       (id, organization_id, operation_id, graph_id, customer_id, transcript_id, opportunity_id,
        estimate_id, calculation_version, normalized_input_fingerprint, business_profile_version,
-       business_profile_hash, supporting_fact_ids, snapshot, snapshot_digest)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::uuid[],$14::jsonb,$15)`,
+       business_profile_hash, supporting_fact_ids, snapshot, snapshot_digest, business_profile_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::uuid[],$14::jsonb,$15,$16)`,
     [ids.polarisSnapshot, ...common, ids.customer, ids.transcript, ids.opportunity, ids.estimate,
       calculation.calculationVersion, calculation.normalizedInputFingerprint,
       calculation.businessProfileInputVersion, calculation.businessProfileInputHash,
-      ids.facts, JSON.stringify(calculation), snapshotDigest]
+      ids.facts, JSON.stringify(calculation), snapshotDigest, request.businessProfileAuthority.id]
   );
   stageFailure(options, 'polarisSnapshot');
 
@@ -321,6 +423,11 @@ async function insertGraph(client, operation, leaseOwner, request, options) {
     ids,
     calculationVersion: calculation.calculationVersion,
     normalizedInputFingerprint: calculation.normalizedInputFingerprint,
+    businessProfile: {
+      id: request.businessProfileAuthority.id,
+      version: request.businessProfileAuthority.versionLabel,
+      hash: request.businessProfileAuthority.profileHash,
+    },
     snapshotDigest,
     snapshot: calculation,
   };
@@ -371,6 +478,9 @@ async function executeCanonicalGraph(pool, source, options) {
     return { status: claim.operation.result_status, body: claim.operation.result_body, replayed: true };
   }
   if (claim.kind === 'permanent_failure') {
+    if (claim.operation.safe_error_code === 'customer_identity_conflict') {
+      return safeError(409, 'CANONICAL_CUSTOMER_IDENTITY_CONFLICT', 'Strong customer identifiers conflict.');
+    }
     return safeError(422, claim.operation.safe_error_code || 'PERMANENT_OPERATION_FAILURE', 'The canonical operation cannot be retried.');
   }
   if (claim.kind === 'active_timeout') {
@@ -381,6 +491,30 @@ async function executeCanonicalGraph(pool, source, options) {
     const crash = new Error('Injected crash after claim');
     crash.code = 'INJECTED_CRASH_AFTER_CLAIM';
     throw crash;
+  }
+
+  try {
+    const authority = await getActiveBusinessProfile(resolvedPool, request.organizationId);
+    request.businessProfile = authority.normalizedProfile;
+    request.businessProfileAuthority = authority;
+  } catch (error) {
+    try {
+      await repository.failOperation(resolvedPool, {
+        organizationId: request.organizationId,
+        operationId: claim.operation.id,
+        leaseOwner,
+        retryable: true,
+        safeErrorCode: error.code === 'CANONICAL_BUSINESS_PROFILE_REQUIRED'
+          ? 'canonical_business_profile_required' : 'profile_authority_unavailable',
+      });
+    } catch (_failureError) {
+      // The response remains fail-closed even if failure-state persistence is unavailable.
+    }
+    return safeError(503,
+      error.code === 'CANONICAL_BUSINESS_PROFILE_REQUIRED'
+        ? 'CANONICAL_BUSINESS_PROFILE_REQUIRED' : 'CANONICAL_PERSISTENCE_UNAVAILABLE',
+      error.code === 'CANONICAL_BUSINESS_PROFILE_REQUIRED'
+        ? 'An active organization Business Profile is required.' : 'Canonical PostgreSQL persistence is unavailable.');
   }
 
   let result;
@@ -400,8 +534,10 @@ async function executeCanonicalGraph(pool, source, options) {
     } catch (failureError) {
       return safeError(503, 'CANONICAL_PERSISTENCE_UNAVAILABLE', 'Canonical PostgreSQL persistence is unavailable.');
     }
-    return safeError(error.retryable === false ? 422 : 503,
-      error.retryable === false ? 'PERMANENT_GRAPH_FAILURE' : 'RETRYABLE_GRAPH_FAILURE',
+    return safeError(error.code === 'CANONICAL_CUSTOMER_IDENTITY_CONFLICT' ? 409 : (error.retryable === false ? 422 : 503),
+      error.code === 'CANONICAL_CUSTOMER_IDENTITY_CONFLICT'
+        ? 'CANONICAL_CUSTOMER_IDENTITY_CONFLICT'
+        : (error.retryable === false ? 'PERMANENT_GRAPH_FAILURE' : 'RETRYABLE_GRAPH_FAILURE'),
       error.retryable === false ? 'The canonical graph request cannot be completed.' : 'The canonical graph was not created; retry is safe.');
   }
 
@@ -409,6 +545,11 @@ async function executeCanonicalGraph(pool, source, options) {
     const crash = new Error('Injected crash after commit before response');
     crash.code = 'INJECTED_CRASH_AFTER_COMMIT';
     throw crash;
+  }
+  try {
+    await ((options && options.cache) || cache).invalidateOrg(request.organizationId);
+  } catch (_cacheError) {
+    // PostgreSQL commit is authoritative; cache availability only affects latency.
   }
   return result;
 }
@@ -429,13 +570,21 @@ function ingestVoice(pool, source, options) {
   return executeCanonicalGraph(pool, { ...source, source: 'voice' }, options);
 }
 
+function ingestLead(pool, source, options) {
+  return executeCanonicalGraph(pool, { ...source, source: 'lead' }, options);
+}
+
 module.exports = {
   GRAPH_STAGES,
   artifactIds,
   executeCanonicalGraph,
   ingestDemo,
+  ingestLead,
   ingestRetell,
   ingestSimulation,
   ingestVoice,
   normalizeRequest,
+  normalizeEmail,
+  normalizePhone,
+  resolveCanonicalCustomer,
 };

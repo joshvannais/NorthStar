@@ -9,8 +9,8 @@
 
 const express = require('express');
 const { requireAuth } = require('../auth/middleware');
+const { requirePermission } = require('../auth/permissions');
 const db = require('../db');
-const businessProfile = require('../services/businessProfile');
 const { sha256 } = require('../services/businessProfileAdapter');
 const { ingestSimulation } = require('../services/canonicalGraphService');
 const pipeline = require('./simulation/pipeline');
@@ -37,7 +37,7 @@ function buildFacts(scope, evidence) {
   });
 }
 
-router.post('/simulations/leads', requireAuth, async function (req, res) {
+router.post('/simulations/leads', requireAuth, requirePermission('leads', 'create'), async function (req, res) {
   const key = idempotencyKey(req);
   if (!key) {
     return res.status(400).json({
@@ -102,7 +102,6 @@ router.post('/simulations/leads', requireAuth, async function (req, res) {
       key: prepared.scenario.serviceKey,
       scope: prepared.extracted.extracted,
     },
-    businessProfile: businessProfile.getProfile(),
     appointmentPreference: prepared.extracted.extracted.schedulingPreference
       ? { text: prepared.extracted.extracted.schedulingPreference }
       : null,

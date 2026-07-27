@@ -54,6 +54,10 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
 
   afterEach(() => voice.clearRuntimeHandlesForTests());
 
+  beforeEach(async () => {
+    await pool.query('TRUNCATE TABLE canonical_voice_session_events, canonical_voice_sessions CASCADE');
+  });
+
   afterAll(async () => {
     if (pool) await pool.end();
     if (database) await database.cleanup();

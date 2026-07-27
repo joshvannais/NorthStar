@@ -55,7 +55,7 @@ scoped, and auditable.
 
 ## Reachable production graph surfaces
 
-| Surface | Disposition after migrations 005-007 |
+| Surface | Disposition after migrations 005-008 |
 | --- | --- |
 | `POST /api/retell/webhook` | Persisted agent ownership, then one canonical PostgreSQL graph transaction |
 | `POST /api/v1/voice/webhook` | Signature/timestamp validation, persisted agent ownership, then the same canonical ingestion service |
@@ -77,15 +77,33 @@ scoped, and auditable.
 | Estimate tax | Derived only from validated canonical Business Profile configuration, or explicitly unavailable |
 | Mounted simulation | Generates structured facts and a nonfinancial transcript; every financial value comes from the centralized canonical calculation using the persisted Business Profile |
 
-## Final voice and calculation authority remediation
+## Single canonical calculation authority
 
-The mounted simulation path no longer imports, exports, or reaches the
-historical simulation service-catalog calculator. Transcript generation does
-not calculate or speak a price; it promises a canonical written estimate. The
-mounted route supplies structured scope facts to the canonical orchestration
-service, and response, transcript, UI, and replay pricing use only the persisted
-canonical result. Tests deliberately use a Business Profile whose configured
-pricing differs from the former hard-coded catalog.
+The mounted simulation path no longer imports, exports, or reaches the deleted
+historical `simulation/service-catalog.js` calculator. Its replacement scenario
+catalog contains only nonfinancial scope and customer-statement metadata.
+Transcript generation does not calculate or speak a price; it promises a
+canonical written estimate. The dormant browser `calcPrice` and `calcBreakdown`
+implementations were removed, so browser presentation consumes the mounted API
+result and has no calculator fallback.
+
+The mounted route supplies structured quantities and scope facts to the
+canonical orchestration service. That service selects a stable service id from
+the pinned, persisted Business Profile and evaluates only the profile's explicit
+`canonicalPricing` rules (`fixed`, `perUnit`, `perUnitByValue`, and
+`perItemByValue`). Labor, material, gate, removal, permit, overhead, markup,
+travel, emergency adjustment, range, and tax inputs therefore originate only
+from that profile snapshot. The persisted result records the exact profile id,
+version, hash, and sorted profile-field paths used. Missing quantities or rules,
+malformed configuration, unsupported scope values, and unsupported services
+produce `null` values with stable `notCalculated` reasons; configured zero
+remains zero. Response, transcript, UI, and replay pricing use the persisted
+canonical result, and replay never recalculates against a newer profile version.
+Adversarial mounted tests use one profile with $99 per linear foot labor, $123
+per linear foot cedar, a $9,999 permit, distinct gate/removal charges, 55 percent
+overhead, and zero tax, plus a second organization with different rates. The
+first profile produces a $37,376 subtotal, deliberately diverging from the
+retired $4,510 catalog amount.
 
 `POST /api/v1/voice/call` and `POST /api/retell/create-call` use one shared
 canonical creation service. It resolves persisted membership, organization,
@@ -109,14 +127,19 @@ a process-local session or transmits an unowned provider call. Provisioning the
 demo tenant, profile, integration, environment value, and secret remains a
 separate production-owner decision and did not occur in this PR.
 
-Retell financial variables preserve the pinned Business Profile exactly:
+Retell financial variables preserve the pinned Business Profile semantics. The
+canonical persisted representation and the Retell transport representation are
+deliberately distinct:
 
-- a configured numeric zero remains numeric zero;
-- a missing value remains `null` with `not_configured` status;
-- a malformed value remains `null` with `unavailable` status;
+- a configured zero remains numeric `0` in the canonical persisted result and
+  is serialized as the Retell transport string `"0"` with `configured` status;
+- a missing value remains `null` canonically and is serialized as
+  `"not_configured"` with `not_configured` status;
+- a malformed or explicit null value remains `null` canonically and is
+  serialized as `"unavailable"` with `unavailable` status;
 - a configured positive value is passed unchanged;
 - `pricing_rules` and the corresponding individual variables carry identical
-  values and dispositions; and
+  serialized values and dispositions; and
 - tax is configured, explicitly zero-rated, or unavailable. No 7 percent or
   other tax default is assumed, and unavailable values are explicitly marked
   as values the agent must not quote.
@@ -209,7 +232,7 @@ existing database.
 ## Local ratification ledger
 
 All PostgreSQL commands below used PostgreSQL 17.10 in a fresh task-specific
-cluster outside OneDrive, bound only to `127.0.0.1:55433`. Every suite/run/
+cluster outside OneDrive, bound only to `127.0.0.1:55439`. Every suite/run/
 worker/process received a unique database and isolated `NORTHSTAR_DATA_DIR`.
 `M19_PG_ADMIN_URL`, `M19_EXPECTED_PG_DATA_DIR`, `M19_EXPECTED_PG_PORT`, and
 `M19_TEST_RUN_ID` were process environment values only. The provider boundary
@@ -217,35 +240,45 @@ was intercepted; no external call was transmitted. The repeatable commands,
 shown without the disposable URL, were:
 
 ```powershell
-$focused = @(
+$calculationAuthority = @(
   'tests\unit\m19-part3-simulation-authority.test.js',
-  'tests\unit\m19-part3-retell-financial-semantics.test.js',
-  'tests\api\m19-part3-remediation-mounted-postgres.test.js',
-  'tests\integration\m19-part3-voice-sessions-postgres.test.js',
-  'tests\integration\m19-part3-persistence-v2-postgres.test.js',
+  'tests\unit\m19-part3-canonical-calculation.test.js',
   'tests\ratification\m19-part3-authority-containment.test.js'
 )
-node .\node_modules\jest\bin\jest.js --runInBand @focused
+node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand @calculationAuthority
+$mountedAuthority = @(
+  'tests\api\m19-part3-remediation-mounted-postgres.test.js',
+  'tests\api\m19-part3-canonical-api-postgres.test.js',
+  'tests\integration\m19-part3-canonical-graph-postgres.test.js'
+)
+node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand @mountedAuthority
 $m19 = Get-ChildItem tests -Recurse -File -Filter '*m19-part3*.test.js' |
   Sort-Object FullName | ForEach-Object FullName
-node .\node_modules\jest\bin\jest.js --runInBand @m19
-node .\node_modules\jest\bin\jest.js --runInBand tests\api
-node .\node_modules\jest\bin\jest.js --runInBand
-node .\node_modules\jest\bin\jest.js --maxWorkers=4 --randomize --seed=7331
-node .\node_modules\jest\bin\jest.js --maxWorkers=4 --randomize --seed=91027
-node .\node_modules\jest\bin\jest.js --maxWorkers=4 --randomize --seed=182133331
-node .\node_modules\jest\bin\jest.js --maxWorkers=4 --randomize --seed=-905440317
-node .\node_modules\jest\bin\jest.js --runInBand --detectOpenHandles
+node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand @m19
+node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand tests\api
+node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand
+node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=7331 --showSeed
+node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=91027 --showSeed
+node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=182133331 --showSeed
+node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=-182133331 --showSeed
+node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=730194257 --showSeed
+node .\node_modules\jest\bin\jest.js --config jest.config.js tests\api\m19-part3-remediation-mounted-postgres.test.js --runInBand --randomize --seed=182133331 --showSeed
+node .\node_modules\jest\bin\jest.js --config jest.config.js tests\api\m19-part3-remediation-mounted-postgres.test.js --runInBand --randomize --seed=-182133331 --showSeed
+node .\node_modules\jest\bin\jest.js --config jest.config.js tests\api\m19-part3-remediation-mounted-postgres.test.js --runInBand --randomize --seed=730194257 --showSeed
+node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand --detectOpenHandles
 node tests\browser\m19-part3-cross-page-matrix.js --browser=chrome
 node tests\browser\m19-part3-cross-page-matrix.js --browser=webkit
 ```
 
-Final-head results were 6 suites/40 tests for the focused remediation group,
-15/118 for the complete focused Mission 19 Part 3 group, and 5/66 for the API
-group. Each of two complete serial runs, both fixed-seed four-worker runs, both
-additional randomized four-worker runs, and the detect-open-handles run passed
-42 suites/974 tests. Chrome and actual Playwright WebKit each passed 126
-assertions across seven surfaces with zero automatic mutations.
+Final-head results were 3 suites/25 tests for focused calculation authority, 3
+suites/47 tests for the mounted PostgreSQL authority group, 15/115 for the
+complete focused Mission 19 Part 3 group, and 5/66 for the API group. Each of
+two complete serial runs, both fixed-seed four-worker runs, all three required
+randomized four-worker runs, and the detect-open-handles run passed 42
+suites/971 tests. The isolated mounted provenance suite passed 1 suite/15 tests
+under each of seeds `182133331`, `-182133331`, and `730194257`. Chrome and actual
+Playwright WebKit each passed 126 assertions across seven surfaces with zero
+automatic mutations.
 
 The first independent run at seed `182133331` exposed an order dependency in
 the mounted PostgreSQL provenance suite: a Polaris snapshot was expected from
@@ -256,20 +289,23 @@ four-worker seed `182133331` run. A second inherited order dependency in the
 same suite's canonical lead read was also made self-contained. Both corrections
 retain the expected provenance row and strict assertions.
 
-Intermediate validation failures were retained as evidence: the first focused
-simulation assertion found that structured scope omitted `jobType`; the first
-combined PostgreSQL inventory assertion placed migration 008's table in the
-wrong alphabetical position; the reversed provenance run exposed the second
-self-contained-fixture gap; one first serial run exposed a static ratification
-phrase mismatch; and the first inline-script parser command was truncated by
-PowerShell argument quoting. The first complete-HTML parser invocation could
-not resolve `python` on `PATH` and passed unchanged with the bundled runtime.
-The first final integrity script also asked `Test-Path` to represent the
-historical quote-bearing Windows-invalid path, while the first data-hash map
-used shorthand names for four `polaris-*` files; directory enumeration and the
-exact 11 repository filenames then passed with all blobs, skip-worktree bits,
-non-materialization checks, and hashes unchanged. Each issue was diagnosed
-narrowly and rerun without skips, relaxed assertions, lower concurrency, extra
-timeout, production access, or provider access. The final code-head gates above
-are clean. GitHub CI remains unavailable if PR #69 continues to report zero
-checks.
+Intermediate validation failures were retained as evidence. At this additive
+head, the first focused unit attempt supplied the old transcript fixture shape;
+the first combined PostgreSQL run then exposed five stale graph/Retell fixture
+expectations, and the next run exposed four stale artifact-count/tax fixtures.
+Those test-only fixtures were aligned to their already-supported contracts and
+the complete mandatory groups passed. The first fresh/upgrade schema comparison
+query also used an ambiguous PostgreSQL `text || "char"` expression and an
+obsolete PowerShell SHA API after both migrations had already succeeded; a
+read-only corrected comparison proved 218 identical schema objects with SHA-256
+`8c3be80db118ece93c8a53c283841c64d4a3bac1363b015c4e131ecb401d6dd2`.
+
+Earlier published-head diagnostics also remain part of the ledger: structured
+scope initially omitted `jobType`; migration 008's table was placed in the wrong
+alphabetical position in one assertion; reversed provenance exposed a second
+self-contained-fixture gap; one serial run exposed a static ratification phrase
+mismatch; and parser/integrity commands required Windows quoting and exact-name
+corrections. Every failure was diagnosed narrowly and rerun without skips,
+relaxed assertions, lower concurrency, extra timeout, production access, or
+provider access. The final additive-head gates above are clean. GitHub CI remains
+unavailable if PR #69 continues to report zero checks.

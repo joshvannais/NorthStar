@@ -24,6 +24,7 @@ const businessProfileRoutes = require('./routes/businessProfile');
 const voiceRoutes = require('./routes/voice');
 const voiceWebhook = require('./voice/webhook');
 const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
+const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -44,7 +45,12 @@ const PORT = config.port || 3000;
 // Middleware
 app.use(cors(corsOptions));
 app.use(correlationId);
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({
+  limit: '1mb',
+  verify(req, _res, buffer) {
+    req.rawBody = buffer.toString();
+  },
+}));
 app.use(securityHeaders);
 app.use(auditLogger);
 
@@ -529,15 +535,21 @@ app.use('/api/v1/canonical', createCanonicalRouter());
 // Canonical compatibility routes precede legacy dashboard/public routers so
 // supported reads cannot be shadowed by unscoped file-era handlers.
 app.use('/api/v1', createCompatibilityRouter());
-app.use('/api/v1', dashboardRoutes);
-app.use('/api/v1', publicApiRoutes);
+// Specific downstream routers precede the broad dashboard router. This keeps
+// its router-wide authentication from touching paths it does not own.
+app.use('/api/v1/business-profile', businessProfileRoutes);
+app.use('/api/v1/voice', voiceRoutes);
 app.use('/api/v1/polaris', polarisRoutes);
 app.use('/api/v1', polarisEnginesRoutes);
 app.use('/api/v1/leads', customerIntelligenceRoutes);
-app.use('/api/v1/business-profile', businessProfileRoutes);
-app.use('/api/v1/voice', voiceRoutes);
+app.use('/api/v1', publicApiRoutes);
+app.use('/api/v1', dashboardRoutes);
 
-// API routes (global requireAuth applies to all /api/* routes EXCEPT /api/v1/* handled above)
+// Canonical /api lead adapters precede the file-era router. The compatibility
+// router authenticates only paths it owns, so public webhooks still fall through.
+app.use('/api', canonicalLeadsRoutes);
+app.use('/api', createCompatibilityRouter());
+// API routes (global requireAuth applies to all remaining /api/* routes)
 app.use('/api', apiRoutes);
 
 // 404 + error handler (single instances)

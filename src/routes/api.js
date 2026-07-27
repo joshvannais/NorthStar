@@ -4,7 +4,8 @@
 
 const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
-const { handleWebhook, getDiagnostics } = require('../retell/webhook');
+const { getDiagnostics } = require('../retell/webhook');
+const { handleCanonicalRetellWebhook } = require('../services/canonicalRetellIngestion');
 const customersRouter = require('./customers');
 const demoRouter = require('./demo');
 const voiceRouter = require('./voice');
@@ -13,6 +14,9 @@ const db = require('../db');
 const jobber = require('../integrations/jobber');
 const config = require('../config');
 const { requireAuth } = require('../auth/middleware');
+const { requirePermission } = require('../auth/permissions');
+const { getOrganizationIntegration } = require('../services/organizationAuthority');
+const { getDataRoot, dataPath } = require('../services/dataRoot');
 
 const router = express.Router();
 
@@ -27,7 +31,7 @@ const router = express.Router();
 router.get('/health', (req, res) => {
   const fs = require('fs');
   const path = require('path');
-  const dataDir = path.resolve(__dirname, '..', '..', 'data');
+  const dataDir = getDataRoot();
   const now = new Date().toISOString();
 
   // Check data directory
@@ -67,15 +71,7 @@ router.get('/health', (req, res) => {
  * POST /api/retell/webhook
  * Receive call events from Retell AI. PUBLIC — external webhook.
  */
-router.post('/retell/webhook', async (req, res) => {
-  try {
-    const result = await handleWebhook(req.body);
-    res.json(result);
-  } catch (err) {
-    console.error('[API] Webhook error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+router.post('/retell/webhook', handleCanonicalRetellWebhook);
 
 /**
  * GET /api/retell/webhook/diagnostics
@@ -104,9 +100,7 @@ router.get('/retell/webhook/config', (req, res) => {
     res.json({
       webhookUrl: `https://northstar-os.ai/api/retell/webhook`,
       retellConfigured: !!(config.retell && config.retell.apiKey),
-      retellAgentId: config.retell?.agentId || null,
-      retellAgentName: config.retell?.agentName || null,
-      phoneNumbers: config.retell?.fromNumbers || config.retell?.phoneNumbers || [],
+      canonicalOwnershipRequired: true,
       note: 'Configure this URL in your Retell dashboard → Agent settings → Webhook URL',
     });
   } catch (err) {
@@ -128,7 +122,7 @@ router.post('/contact', async (req, res) => {
     
     const fs = require('fs');
     const path = require('path');
-    const contactsDir = path.join(__dirname, '..', '..', 'data');
+    const contactsDir = getDataRoot();
     if (!fs.existsSync(contactsDir)) fs.mkdirSync(contactsDir, { recursive: true });
     
     const entry = {
@@ -389,7 +383,7 @@ router.post('/calendar/schedule', async (req, res) => {
  * POST /api/retell/create-agent
  * Create a new Retell AI agent for a contractor.
  */
-router.post('/retell/create-agent', async (req, res) => {
+router.post('/retell/create-agent', requirePermission('integrations', 'create'), async (req, res) => {
   const { createAgent } = require('../retell/client');
   const result = await createAgent({
     name: req.body.name || 'Northstar Receptionist',
@@ -397,17 +391,32 @@ router.post('/retell/create-agent', async (req, res) => {
     services: req.body.services || 'home services',
     scheduleUrl: req.body.scheduleUrl,
   });
-  res.json(result || { error: 'Retell API not configured' });
+  if (!result) return res.status(503).json({ success: false, error: { code: 'RETELL_UNCONFIGURED', message: 'Retell API is not configured.' } });
+  const agentId = result.agent_id || result.agentId || result.id;
+  if (!agentId) return res.status(502).json({ success: false, error: { code: 'RETELL_AGENT_ID_MISSING', message: 'Retell did not return an agent identifier.' } });
+  try {
+    await require('../services/organizationAuthority').bindIntegrationOwner(db.getPool(), {
+      organizationId: req.tenantContext.organizationId,
+      userId: req.tenantContext.userId,
+      provider: 'retell',
+      externalIntegrationId: agentId,
+      metadata: { provisionedBy: 'api' },
+    });
+    return res.json({ ...result, canonicalOwnershipPersisted: true });
+  } catch (error) {
+    return res.status(error.status || 503).json({ success: false, error: { code: error.code || 'CANONICAL_PERSISTENCE_UNAVAILABLE', message: error.status === 409 ? error.message : 'Canonical PostgreSQL persistence is unavailable.' } });
+  }
 });
 
 /**
  * POST /api/retell/create-call
  * Initiate an outbound call via the active Retell AI agent.
  */
-router.post('/retell/create-call', async (req, res) => {
+router.post('/retell/create-call', requirePermission('leads', 'create'), async (req, res) => {
   try {
     const { createCall } = require('../retell/client');
-    const result = await createCall(req.body.phoneNumber, config.retell.agentId, {
+    const integration = await getOrganizationIntegration(db.getPool(), req.tenantContext.organizationId, 'retell');
+    const result = await createCall(req.body.phoneNumber, integration.external_integration_id, {
       service: req.body.service,
       caller: req.body.caller,
       fromNumber: config.twilio ? config.twilio.phoneNumber : undefined,
@@ -415,24 +424,22 @@ router.post('/retell/create-call', async (req, res) => {
     if (!result) {
       return res.json({ success: false, error: 'Retell API not configured', status: 'unconfigured' });
     }
-    const { addLead } = require('../leads/store');
-    const { appendLead } = require('../sheets/client');
-    const lead = addLead({
-      caller: req.body.caller || 'Outbound Call',
-      phone: req.body.phoneNumber,
-      phoneNumber: req.body.phoneNumber,
-      service: req.body.service || 'General',
-      status: result.call_status || 'in-progress',
-      type: 'outbound',
-      outcome: 'outbound_call',
-      receivedAt: new Date().toISOString(),
-      summary: 'Outbound call via Retell AI',
+    res.json({
+      success: true,
+      callId: result.call_id,
+      status: result.call_status,
+      canonicalGraphPendingWebhook: true,
     });
-    await appendLead(lead).catch(function() {});
-    res.json({ success: true, callId: result.call_id, status: result.call_status, lead });
   } catch (err) {
     console.error('[API] Retell create-call error:', err.message);
-    res.status(500).json({ error: err.message });
+    const status = err && err.status ? err.status : 503;
+    res.status(status).json({
+      success: false,
+      error: {
+        code: err && err.code ? err.code : 'CANONICAL_PERSISTENCE_UNAVAILABLE',
+        message: status === 503 ? 'Canonical PostgreSQL persistence is unavailable.' : err.message,
+      },
+    });
   }
 });
 
@@ -541,7 +548,7 @@ router.post('/integrations/jobber/disconnect', async (req, res) => {
 router.get('/contact/messages', (req, res) => {
   const fs = require('fs');
   const path = require('path');
-  const filePath = path.join(__dirname, '..', '..', 'data', 'contact-messages.json');
+  const filePath = dataPath('contact-messages.json');
   if (fs.existsSync(filePath)) {
     const messages = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     return res.json({ messages, count: messages.length });

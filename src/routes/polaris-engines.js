@@ -77,7 +77,15 @@ router.use((req, res, next) => {
 });
 
 // All engine routes require authentication
-router.use(requireAuth);
+const OWNED_ROUTE_PREFIXES = new Set([
+  'customers', 'communications', 'opportunities', 'workflows', 'financial',
+  'assets', 'crew', 'jobs', 'analytics', 'polaris', 'engines',
+]);
+router.use((req, res, next) => {
+  const prefix = String(req.path || '').split('/').filter(Boolean)[0] || '';
+  if (!OWNED_ROUTE_PREFIXES.has(prefix)) return next();
+  return requireAuth(req, res, next);
+});
 
 // ══════════════════════════════════════════════
 // CUSTOMER ENGINE

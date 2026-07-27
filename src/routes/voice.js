@@ -13,6 +13,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { requireAuth } = require('../auth/middleware');
+const { requirePermission } = require('../auth/permissions');
 const { handleWebhook, rawBodyCapture } = require('../voice/webhook');
 const { eventBus, createEvent, EVENT_TYPES } = require('../voice/businessEvents');
 const { executeCallCompletion } = require('../voice/callCompletion');
@@ -24,6 +25,7 @@ const humanHandoff = require('../voice/humanHandoff');
 const { toolDefinitions, toolHandlers } = require('../voice/toolRegistry');
 const db = require('../db');
 const config = require('../config');
+const { getOrganizationIntegration } = require('../services/organizationAuthority');
 
 const router = express.Router();
 
@@ -256,7 +258,7 @@ router.get('/sessions/:id', (req, res) => {
  * - caller: Caller/lead name (optional)
  * - customerId: Optional customer/lead ID for targeted intelligence (optional)
  */
-router.post('/call', async (req, res) => {
+router.post('/call', requirePermission('leads', 'create'), async (req, res) => {
   try {
     const { phoneNumber, service, caller, customerId } = req.body;
 
@@ -279,7 +281,8 @@ router.post('/call', async (req, res) => {
 
     // Initiate outbound call via Retell with EC and tool definitions
     const { createCall } = require('../retell/client');
-    const result = await createCall(phoneNumber, config.retell.agentId, {
+    const integration = await getOrganizationIntegration(db.getPool(), req.tenantContext.organizationId, 'retell');
+    const result = await createCall(phoneNumber, integration.external_integration_id, {
       service: service || 'General',
       caller: caller || 'Outbound Call',
       fromNumber: config.twilio ? config.twilio.phoneNumber : undefined,
@@ -297,20 +300,6 @@ router.post('/call', async (req, res) => {
       toNumber: phoneNumber,
       direction: 'outbound',
       metadata: { service, caller, executiveContextGenerated: !!executiveContext },
-    });
-
-    // Record lead from outbound call
-    const { addLead } = require('../leads/store');
-    const lead = addLead({
-      caller: caller || 'Outbound Call',
-      phone: phoneNumber,
-      phoneNumber: phoneNumber,
-      service: service || 'General',
-      status: 'in-progress',
-      type: 'outbound',
-      outcome: 'outbound_call',
-      receivedAt: new Date().toISOString(),
-      summary: 'Outbound call via Retell AI',
     });
 
     const bizEvent = createEvent('CALL_STARTED', {
@@ -336,15 +325,12 @@ router.post('/call', async (req, res) => {
         status: session.status,
         startedAt: session.startedAt,
       },
-      lead: {
-        id: lead.id,
-        customerName: lead.customerName,
-        phone: lead.phone,
-      },
+      canonicalGraphPendingWebhook: true,
     });
   } catch (err) {
     console.error('[Voice:Routes] Outbound call error:', err.message);
-    res.status(500).json({ error: { code: 'CALL_FAILED', message: err.message } });
+    const status = err && err.status ? err.status : 503;
+    res.status(status).json({ error: { code: err && err.code ? err.code : 'CALL_FAILED', message: status === 503 ? 'Canonical PostgreSQL persistence is unavailable.' : err.message } });
   }
 });
 

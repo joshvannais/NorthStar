@@ -5,7 +5,9 @@ const db = require('../db');
 const cache = require('../cache/client');
 const audit = require('../audit/client');
 const { requireAuth } = require('../auth/middleware');
+const { requirePermission } = require('../auth/permissions');
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
+const { bindIntegrationOwner } = require('../services/organizationAuthority');
 
 const READ_MODEL_VERSION = 'm19-part3-read-v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -60,18 +62,18 @@ const GRAPH_SELECT = `
          a.id AS appointment_id, a.preference, a.scheduled_start, a.scheduled_end,
          a.status AS appointment_status,
          ps.id AS polaris_snapshot_id, ps.calculation_version,
-         ps.normalized_input_fingerprint, ps.business_profile_version,
+         ps.normalized_input_fingerprint, ps.business_profile_id, ps.business_profile_version,
          ps.business_profile_hash, ps.supporting_fact_ids, ps.snapshot,
          ps.snapshot_digest, ps.created_at AS snapshot_created_at
     FROM canonical_operations o
-    JOIN canonical_customers c
-      ON c.organization_id = o.organization_id AND c.operation_id = o.id
     JOIN canonical_transcripts t
       ON t.organization_id = o.organization_id AND t.operation_id = o.id
     JOIN canonical_communications cm
       ON cm.organization_id = o.organization_id AND cm.operation_id = o.id
     JOIN canonical_opportunities op
       ON op.organization_id = o.organization_id AND op.operation_id = o.id
+    JOIN canonical_customers c
+      ON c.organization_id = o.organization_id AND c.id = op.customer_id
     JOIN canonical_estimates e
       ON e.organization_id = o.organization_id AND e.operation_id = o.id
     JOIN canonical_appointments a
@@ -143,6 +145,7 @@ function projectRow(row) {
     normalizedInputFingerprint: row.normalized_input_fingerprint,
     businessProfileInputVersion: row.business_profile_version,
     businessProfileInputHash: row.business_profile_hash,
+    businessProfileAuthorityId: row.business_profile_id,
     supportingTranscriptFactIds: row.supporting_fact_ids,
     snapshotDigest: row.snapshot_digest,
     snapshot: row.snapshot,
@@ -252,6 +255,7 @@ function createDependencies(options) {
   return {
     poolProvider: supplied.poolProvider || function () { return db.getPool(); },
     auth: supplied.auth || requireAuth,
+    permission: supplied.permission || requirePermission,
     cache: supplied.cache || cache,
     audit: supplied.audit || audit,
   };
@@ -363,7 +367,7 @@ function createCanonicalRouter(options) {
     }
   });
 
-  router.patch('/appointments/:id', express.json(), async function (req, res) {
+  router.patch('/appointments/:id', dependencies.permission('calendar', 'update'), express.json(), async function (req, res) {
     const context = requestContext(req);
     if (!UUID.test(req.params.id)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } });
     try {
@@ -423,6 +427,30 @@ function createCanonicalRouter(options) {
     }
   });
 
+  router.put('/integrations/:provider', dependencies.permission('integrations', 'update'), express.json(), async function (req, res) {
+    const context = requestContext(req);
+    const provider = String(req.params.provider || '').toLowerCase();
+    if (!['retell', 'voice'].includes(provider)) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_INTEGRATION_PROVIDER', message: 'Integration provider is invalid.' } });
+    }
+    try {
+      const bound = await bindIntegrationOwner(resolvePool(dependencies.poolProvider), {
+        organizationId: context.organizationId,
+        userId: context.userId,
+        provider,
+        externalIntegrationId: req.body && (req.body.agentId || req.body.externalIntegrationId),
+        status: req.body && req.body.status,
+        metadata: req.body && req.body.metadata,
+      });
+      return res.json({ success: true, data: bound });
+    } catch (error) {
+      if (error && error.status) {
+        return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
+      }
+      return sendPersistenceUnavailable(res);
+    }
+  });
+
   router.get('/graphs/:id', async function (req, res) {
     const context = requestContext(req);
     try {
@@ -453,13 +481,27 @@ function createCanonicalRouter(options) {
 function createCompatibilityRouter(options) {
   const dependencies = createDependencies(options);
   const router = express.Router();
-  router.use(dependencies.auth);
-  router.use(function (req, res, next) {
+  function requireContext(req, res, next) {
     if (!requestContext(req)) {
       return res.status(401).json({ error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
     }
     return next();
-  });
+  }
+  function ownedGet(path, ...handlers) {
+    router.get(path, dependencies.auth, requireContext, ...handlers);
+  }
+  function ownedPost(path, ...handlers) {
+    router.post(path, dependencies.auth, requireContext, ...handlers);
+  }
+  function ownedPut(path, ...handlers) {
+    router.put(path, dependencies.auth, requireContext, ...handlers);
+  }
+  function ownedPatch(path, ...handlers) {
+    router.patch(path, dependencies.auth, requireContext, ...handlers);
+  }
+  function ownedDelete(path, ...handlers) {
+    router.delete(path, dependencies.auth, requireContext, ...handlers);
+  }
 
   function handle(surface, shape) {
     return async function (req, res) {
@@ -473,21 +515,21 @@ function createCompatibilityRouter(options) {
     };
   }
 
-  router.get('/customers', handle('customer-detail', function (projection) { return { customers: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  router.get('/communications', handle('communications', function (projection) { return { communications: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  router.get('/opportunities/pipeline', handle('leads', function (projection) { return { stages: {}, opportunities: projection.records, canonicalDigest: projection.digest }; }));
-  router.get('/opportunities', handle('leads', function (projection) { return { opportunities: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  router.get('/financial/estimates', handle('estimates', function (projection) { return { estimates: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  router.get('/analytics/executive', handle('executive', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
-  router.get('/analytics/kpis', handle('executive', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
-  router.get('/analytics/dashboard', handle('command-center', function (projection) { return { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest }; }));
-  router.get('/analytics/alerts', handle('executive', function (projection) { return { alerts: [], canonicalDigest: projection.digest }; }));
-  router.get('/workflows/agenda/today', handle('calendar', function (projection) { return { tasks: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  router.get('/leads', handle('leads', function (projection) { return { leads: projection.records, items: projection.records, total: projection.records.length, canonicalDigest: projection.digest }; }));
-  router.get('/calls', handle('communications', function (projection) { return { calls: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  router.get('/appointments', handle('calendar', function (projection) { return { appointments: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  router.get('/dashboard/overview', handle('command-center', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
-  router.get('/dashboard/status', async function (req, res) {
+  ownedGet('/customers', handle('customer-detail', function (projection) { return { customers: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/communications', handle('communications', function (projection) { return { communications: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/opportunities/pipeline', handle('leads', function (projection) { return { stages: {}, opportunities: projection.records, canonicalDigest: projection.digest }; }));
+  ownedGet('/opportunities', handle('leads', function (projection) { return { opportunities: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/financial/estimates', handle('estimates', function (projection) { return { estimates: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/analytics/executive', handle('executive', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
+  ownedGet('/analytics/kpis', handle('executive', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
+  ownedGet('/analytics/dashboard', handle('command-center', function (projection) { return { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest }; }));
+  ownedGet('/analytics/alerts', handle('executive', function (projection) { return { alerts: [], canonicalDigest: projection.digest }; }));
+  ownedGet('/workflows/agenda/today', handle('calendar', function (projection) { return { tasks: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/leads', handle('leads', function (projection) { return { leads: projection.records, items: projection.records, total: projection.records.length, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/calls', handle('communications', function (projection) { return { calls: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/appointments', handle('calendar', function (projection) { return { appointments: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/dashboard/overview', handle('command-center', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
+  ownedGet('/dashboard/status', async function (req, res) {
     try {
       const context = requestContext(req);
       const result = await resolvePool(dependencies.poolProvider).query(
@@ -506,8 +548,17 @@ function createCompatibilityRouter(options) {
       return sendPersistenceUnavailable(res);
     }
   });
-  router.get('/calendar/events', handle('calendar', function (projection) { return { events: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  router.get('/financial/metrics', handle('estimates', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
+  ownedGet('/calendar/events', handle('calendar', function (projection) { return { events: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/financial/metrics', handle('estimates', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
+  ownedGet('/polaris/intelligence', handle('polaris', function (projection) { return { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest }; }));
+  ownedGet('/polaris/estimates', handle('estimates', function (projection) { return { estimates: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/polaris/recommendations', handle('polaris', function (projection) { return { recommendations: [], sourceGraphs: projection.records, canonicalDigest: projection.digest }; }));
+  ownedGet('/polaris/learning', handle('polaris', function (projection) { return { snapshots: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/polaris/pipeline', handle('leads', function (projection) { return { opportunities: projection.records, ...projection.metrics, canonicalDigest: projection.digest }; }));
+  ownedGet('/polaris/retell-context', handle('calendar', function (projection) { return { appointments: projection.records, canonicalDigest: projection.digest }; }));
+  ownedGet('/polaris/business-context', handle('executive', function (projection) { return { success: true, context: { ...projection.metrics, canonicalDigest: projection.digest } }; }));
+  ownedGet('/polaris/unified-context', handle('executive', function (projection) { return { success: true, context: { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest } }; }));
+  ownedGet('/stats', handle('executive', function (projection) { return { totalCalls: projection.metrics.graphCount, totalRevenue: projection.metrics.estimatedRevenue, appointmentsBooked: projection.metrics.appointmentCount, canonicalDigest: projection.digest }; }));
 
   function legacyWriteBlocked(_req, res) {
     return res.status(409).json({
@@ -521,14 +572,38 @@ function createCompatibilityRouter(options) {
 
   // These static legacy mutations are deliberately intercepted before the
   // older parameter routes. They cannot become a second file/browser writer.
-  router.post('/leads/simulate', legacyWriteBlocked);
-  router.post('/analytics/seed', legacyWriteBlocked);
-  router.post('/calendar/events', legacyWriteBlocked);
-  router.put('/calendar/events/:id', legacyWriteBlocked);
-  router.delete('/calendar/events/:id', legacyWriteBlocked);
-  router.post('/calls/:id/mark-known', legacyWriteBlocked);
+  ownedPost('/leads/simulate', dependencies.permission('leads', 'create'), legacyWriteBlocked);
+  ownedPost('/analytics/seed', legacyWriteBlocked);
+  ownedPost('/calendar/events', dependencies.permission('calendar', 'create'), legacyWriteBlocked);
+  ownedPut('/calendar/events/:id', dependencies.permission('calendar', 'update'), legacyWriteBlocked);
+  ownedDelete('/calendar/events/:id', dependencies.permission('calendar', 'delete'), legacyWriteBlocked);
+  ownedPost('/calls/:id/mark-known', dependencies.permission('calls', 'update'), legacyWriteBlocked);
+  ownedPost('/calls/record', dependencies.permission('calls', 'create'), legacyWriteBlocked);
+  ownedPost('/calendar/schedule', dependencies.permission('calendar', 'create'), legacyWriteBlocked);
+  ownedPost('/customers', dependencies.permission('leads', 'create'), legacyWriteBlocked);
+  ownedPut('/customers/:id', dependencies.permission('leads', 'update'), legacyWriteBlocked);
+  ownedDelete('/customers/:id', dependencies.permission('leads', 'delete'), legacyWriteBlocked);
+  ownedPost('/customers/:id/restore', dependencies.permission('leads', 'update'), legacyWriteBlocked);
+  ownedPost('/communications', dependencies.permission('calls', 'create'), legacyWriteBlocked);
+  ownedPut('/communications/:id/status', dependencies.permission('calls', 'update'), legacyWriteBlocked);
+  ownedPost('/opportunities', dependencies.permission('leads', 'create'), legacyWriteBlocked);
+  ownedPut('/opportunities/:id', dependencies.permission('leads', 'update'), legacyWriteBlocked);
+  ownedPut('/opportunities/:id/stage', dependencies.permission('leads', 'update'), legacyWriteBlocked);
+  ownedDelete('/opportunities/:id', dependencies.permission('leads', 'delete'), legacyWriteBlocked);
+  ownedPost('/workflows', dependencies.permission('calendar', 'create'), legacyWriteBlocked);
+  ownedPut('/workflows/:id', dependencies.permission('calendar', 'update'), legacyWriteBlocked);
+  ownedPost('/workflows/:id/complete', dependencies.permission('calendar', 'update'), legacyWriteBlocked);
+  ownedPost('/financial/estimates', dependencies.permission('leads', 'create'), legacyWriteBlocked);
+  ownedPatch('/leads/:id/status', dependencies.permission('leads', 'update'), legacyWriteBlocked);
+  ownedPost('/calendar/import/ics', dependencies.permission('calendar', 'create'), legacyWriteBlocked);
+  ownedPost('/polaris/estimate', dependencies.permission('leads', 'create'), legacyWriteBlocked);
+  ownedPost('/polaris/complete', legacyWriteBlocked);
+  ownedPost('/polaris/recommendations/generate', legacyWriteBlocked);
+  ownedPut('/polaris/recommendations/:id/resolve', legacyWriteBlocked);
+  ownedPost('/polaris/pipeline', legacyWriteBlocked);
+  ownedPost('/polaris/config', legacyWriteBlocked);
 
-  router.get('/customers/:id', async function (req, res) {
+  ownedGet('/customers/:id', async function (req, res) {
     try {
       const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), requestContext(req), req.params.id);
       if (!item || item.ids.customer !== req.params.id) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Customer not found.' } });
@@ -538,7 +613,7 @@ function createCompatibilityRouter(options) {
     }
   });
 
-  router.get('/leads/:id', async function (req, res) {
+  ownedGet('/leads/:id', async function (req, res) {
     try {
       const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), requestContext(req), req.params.id);
       if (!item || item.ids.opportunity !== req.params.id) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Lead not found.' } });

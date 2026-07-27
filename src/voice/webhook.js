@@ -16,6 +16,7 @@
 const crypto = require('crypto');
 const businessEvents = require('./businessEvents');
 const transcriptStream = require('./transcriptStream');
+const { ingestRetellPayload } = require('../services/canonicalRetellIngestion');
 
 // ── Configuration ──────────────────────────────────────────────
 const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
@@ -378,24 +379,24 @@ async function handleWebhook(req, res) {
       return res.status(400).json({ error: { code: 'INVALID_TIMESTAMP', message: 'Timestamp outside acceptable window' } });
     }
 
-    // 3. Deduplicate
-    if (isDuplicate(eventId)) {
-      console.log(`[Voice:Webhook] Duplicate event ${eventId} — acking`);
-      return res.json({ received: true, deduplicated: true });
-    }
-
-    // 4. Route
-    const result = await routeEvent(req.body);
+    // 3. Durable graph idempotency replaces the legacy in-memory webhook
+    // deduplication check for mounted production events.
+    // 4. Route every mounted production Retell event through persisted
+    // integration ownership. Terminal events commit canonical graphs; other
+    // events are acknowledged without invoking legacy graph writers.
+    const canonical = await ingestRetellPayload(req.body, { ingestionSource: 'voice' });
 
     // 5. Return success
     const elapsed = Date.now() - startTime;
     console.log(`[Voice:Webhook] Completed: ${req.body.event} (${elapsed}ms)`);
 
-    res.json({ received: true, ...result });
+    return res.status(canonical.status).json(canonical.body);
   } catch (err) {
     console.error(`[Voice:Webhook] Fatal error for event ${eventId}:`, err.message);
-    // Return 200 even on errors to prevent Retell from retrying endlessly
-    res.json({ received: true, error: 'internal_handler_error' });
+    return res.status(503).json({
+      success: false,
+      error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE', message: 'Canonical PostgreSQL persistence is unavailable.' },
+    });
   }
 }
 
@@ -407,6 +408,11 @@ async function handleWebhook(req, res) {
  *   router.post('/webhook', rawBodyCapture, express.json(), handleWebhook)
  */
 function rawBodyCapture(req, res, next) {
+  if (typeof req.rawBody === 'string') return next();
+  if (req.readableEnded) {
+    req.rawBody = JSON.stringify(req.body || {});
+    return next();
+  }
   let data = '';
   req.on('data', chunk => { data += chunk; });
   req.on('end', () => {

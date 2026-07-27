@@ -363,15 +363,52 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     expect(unavailable.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
   });
 
-  test('compatibility fallthrough leaves downstream Polaris and voice routes reachable without repeated auth', async () => {
+  test('retired Polaris authority is exact while the voice route remains reachable', async () => {
     const publicStatus = await request(app).get('/api/v1/polaris/status');
-    expect(publicStatus.status).toBe(200);
-    expect(publicStatus.body.engine).toBe('Polaris Intelligence Engine');
+    expect(publicStatus.status).toBe(410);
+    expect(publicStatus.body.error.code).toBe('LEGACY_AUTHORITY_RETIRED');
     const chat = await request(app).post('/api/v1/polaris/chat').set(auth(USERS.owner)).send({ message: 'status' });
-    expect(chat.status).toBe(500);
-    expect(chat.body.error.code).toBe('CONFIGURATION_ERROR');
+    expect(chat.status).toBe(410);
+    expect(chat.body.error.code).toBe('LEGACY_AUTHORITY_RETIRED');
     const voice = await request(app).get('/api/v1/voice/status').set(auth(USERS.owner));
     expect(voice.status).toBe(200);
+  });
+
+  test('retired method ownership performs one membership lookup and never touches repository data', async () => {
+    const originalQuery = db.query;
+    const originalRead = fs.readFileSync;
+    const originalWrite = fs.writeFileSync;
+    const originalAppend = fs.appendFileSync;
+    const isolatedRoot = path.resolve(process.env.NORTHSTAR_DATA_DIR) + path.sep;
+    let membershipLookups = 0;
+    db.query = async function (statement, values) {
+      if (/FROM users/i.test(String(statement))) membershipLookups += 1;
+      return originalQuery(statement, values);
+    };
+    function rejectRepositoryAccess(target) {
+      if (path.resolve(String(target)).startsWith(isolatedRoot)) throw new Error('retired route accessed repository data');
+    }
+    fs.readFileSync = function (target, ...args) { rejectRepositoryAccess(target); return originalRead.call(fs, target, ...args); };
+    fs.writeFileSync = function (target, ...args) { rejectRepositoryAccess(target); return originalWrite.call(fs, target, ...args); };
+    fs.appendFileSync = function (target, ...args) { rejectRepositoryAccess(target); return originalAppend.call(fs, target, ...args); };
+    try {
+      for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
+        const before = membershipLookups;
+        const response = await request(app)[method]('/api/v1/assets/historical-id').set(auth(USERS.owner)).send({ ignored: true });
+        expect(response.status).toBe(410);
+        expect(response.body.error.code).toBe('LEGACY_AUTHORITY_RETIRED');
+        expect(membershipLookups - before).toBe(1);
+      }
+      const beforeOptions = membershipLookups;
+      const options = await request(app).options('/api/v1/assets/historical-id');
+      expect(options.status).toBe(204);
+      expect(membershipLookups).toBe(beforeOptions);
+    } finally {
+      db.query = originalQuery;
+      fs.readFileSync = originalRead;
+      fs.writeFileSync = originalWrite;
+      fs.appendFileSync = originalAppend;
+    }
   });
 
   test('Business Profile authority is organization-scoped, RBAC protected, and graph provenance references the exact version', async () => {

@@ -277,15 +277,14 @@ async function authoritativeItems(req, dependencies, endpoint) {
 function createCanonicalRouter(options) {
   const dependencies = createDependencies(options);
   const router = express.Router();
-  router.use(dependencies.auth);
-  router.use(function (req, res, next) {
+  function requireCanonicalContext(req, res, next) {
     if (!requestContext(req)) {
       return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
     }
     return next();
-  });
+  }
 
-  router.get('/status', async function (req, res) {
+  router.get('/status', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     if (!context) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
     try {
@@ -311,7 +310,7 @@ function createCanonicalRouter(options) {
     }
   });
 
-  router.get('/graphs', async function (req, res) {
+  router.get('/graphs', dependencies.auth, requireCanonicalContext, async function (req, res) {
     if (!requestContext(req)) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
     try {
       const items = await authoritativeItems(req, dependencies, 'canonical.graphs');
@@ -322,7 +321,7 @@ function createCanonicalRouter(options) {
   });
 
   for (const endpoint of ['dashboard', 'analytics']) {
-    router.get('/' + endpoint, async function (req, res) {
+    router.get('/' + endpoint, dependencies.auth, requireCanonicalContext, async function (req, res) {
       if (!requestContext(req)) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
       try {
         const items = await authoritativeItems(req, dependencies, 'canonical.' + endpoint);
@@ -333,7 +332,7 @@ function createCanonicalRouter(options) {
     });
   }
 
-  router.get('/surfaces/:surface', async function (req, res) {
+  router.get('/surfaces/:surface', dependencies.auth, requireCanonicalContext, async function (req, res) {
     if (!SURFACES.has(req.params.surface)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Surface not found.' } });
     try {
       const items = await authoritativeItems(req, dependencies, 'canonical.surface.' + req.params.surface);
@@ -343,7 +342,7 @@ function createCanonicalRouter(options) {
     }
   });
 
-  router.get('/compat/:surface', async function (req, res) {
+  router.get('/compat/:surface', dependencies.auth, requireCanonicalContext, async function (req, res) {
     if (!SURFACES.has(req.params.surface)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Compatibility projection not found.' } });
     try {
       const items = await authoritativeItems(req, dependencies, 'canonical.compat.' + req.params.surface);
@@ -353,7 +352,7 @@ function createCanonicalRouter(options) {
     }
   });
 
-  router.patch('/appointments/:id', dependencies.permission('calendar', 'update'), express.json(), async function (req, res) {
+  router.patch('/appointments/:id', dependencies.auth, requireCanonicalContext, dependencies.permission('calendar', 'update'), express.json(), async function (req, res) {
     const context = requestContext(req);
     if (!UUID.test(req.params.id)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } });
     try {
@@ -408,7 +407,7 @@ function createCanonicalRouter(options) {
     }
   });
 
-  router.put('/integrations/:provider', dependencies.permission('integrations', 'update'), express.json(), async function (req, res) {
+  router.put('/integrations/:provider', dependencies.auth, requireCanonicalContext, dependencies.permission('integrations', 'update'), express.json(), async function (req, res) {
     const context = requestContext(req);
     const provider = String(req.params.provider || '').toLowerCase();
     if (!['retell', 'voice'].includes(provider)) {
@@ -432,7 +431,7 @@ function createCanonicalRouter(options) {
     }
   });
 
-  router.get('/graphs/:id', async function (req, res) {
+  router.get('/graphs/:id', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     try {
       const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), context, req.params.id);
@@ -443,7 +442,7 @@ function createCanonicalRouter(options) {
     }
   });
 
-  router.get('/snapshots/:id', async function (req, res) {
+  router.get('/snapshots/:id', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     try {
       const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), context, req.params.id);
@@ -505,11 +504,19 @@ function createCompatibilityRouter(options) {
   ownedGet('/analytics/kpis', handle('executive', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
   ownedGet('/analytics/dashboard', handle('command-center', function (projection) { return { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest }; }));
   ownedGet('/analytics/alerts', handle('executive', function (projection) { return { alerts: [], canonicalDigest: projection.digest }; }));
+  ownedGet('/analytics/trends', handle('executive', function (projection) { return { data: { ...projection.metrics, trend: [], canonicalDigest: projection.digest } }; }));
+  ownedGet('/analytics/pipeline', handle('leads', function (projection) { return { data: { opportunities: projection.records, ...projection.metrics, canonicalDigest: projection.digest } }; }));
+  ownedGet('/analytics/by-service', handle('executive', function (projection) { return { data: { services: [], ...projection.metrics, canonicalDigest: projection.digest } }; }));
   ownedGet('/workflows/agenda/today', handle('calendar', function (projection) { return { tasks: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/leads', handle('leads', function (projection) { return { leads: projection.records, items: projection.records, total: projection.records.length, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/calls', handle('communications', function (projection) { return { calls: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/appointments', handle('calendar', function (projection) { return { appointments: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/dashboard/overview', handle('command-center', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
+  for (const dashboardEndpoint of ['summary', 'revenue', 'brief', 'coach', 'kpis', 'trends', 'revenue-trends']) {
+    ownedGet('/dashboard/' + dashboardEndpoint, handle('executive', function (projection) {
+      return { data: { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest } };
+    }));
+  }
   ownedGet('/dashboard/status', async function (req, res) {
     try {
       const context = requestContext(req);
@@ -530,6 +537,7 @@ function createCompatibilityRouter(options) {
     }
   });
   ownedGet('/calendar/events', handle('calendar', function (projection) { return { events: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
+  ownedGet('/calendar/upcoming', handle('calendar', function (projection) { return { events: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/financial/metrics', handle('estimates', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
   ownedGet('/polaris/intelligence', handle('polaris', function (projection) { return { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest }; }));
   ownedGet('/polaris/estimates', handle('estimates', function (projection) { return { estimates: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
@@ -540,6 +548,7 @@ function createCompatibilityRouter(options) {
   ownedGet('/polaris/business-context', handle('executive', function (projection) { return { success: true, context: { ...projection.metrics, canonicalDigest: projection.digest } }; }));
   ownedGet('/polaris/unified-context', handle('executive', function (projection) { return { success: true, context: { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest } }; }));
   ownedGet('/stats', handle('executive', function (projection) { return { totalCalls: projection.metrics.graphCount, totalRevenue: projection.metrics.estimatedRevenue, appointmentsBooked: projection.metrics.appointmentCount, canonicalDigest: projection.digest }; }));
+  ownedGet('/leads/intelligence/dashboard', handle('executive', function (projection) { return { success: true, data: { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest } }; }));
 
   function legacyWriteBlocked(_req, res) {
     return res.status(409).json({
@@ -592,6 +601,39 @@ function createCompatibilityRouter(options) {
     } catch (_error) {
       return sendPersistenceUnavailable(res);
     }
+  });
+
+  async function canonicalDetail(req, res, identifierKey, notFoundMessage, shape) {
+    try {
+      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), requestContext(req), req.params.id);
+      if (!item || item.ids[identifierKey] !== req.params.id) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: notFoundMessage } });
+      }
+      return res.json(shape(item));
+    } catch (_error) {
+      return sendPersistenceUnavailable(res);
+    }
+  }
+
+  ownedGet('/communications/:id', function (req, res) {
+    return canonicalDetail(req, res, 'communication', 'Communication not found.', function (item) {
+      return { ...item.communication, transcript: item.transcript, customer: item.customer, canonical: surfaceProjection('communications', [item]).items[0] };
+    });
+  });
+  ownedGet('/opportunities/:id', function (req, res) {
+    return canonicalDetail(req, res, 'opportunity', 'Opportunity not found.', function (item) {
+      return { ...item.opportunity, customer: item.customer, canonical: surfaceProjection('leads', [item]).items[0] };
+    });
+  });
+  ownedGet('/financial/estimates/:id', function (req, res) {
+    return canonicalDetail(req, res, 'estimate', 'Estimate not found.', function (item) {
+      return { ...item.estimate, canonical: surfaceProjection('estimates', [item]).items[0] };
+    });
+  });
+  ownedGet('/leads/:id/intelligence', function (req, res) {
+    return canonicalDetail(req, res, 'opportunity', 'Lead not found.', function (item) {
+      return { success: true, data: { values: item.snapshot, facts: item.facts, calculationVersion: item.calculationVersion, snapshotDigest: item.snapshotDigest } };
+    });
   });
 
   ownedGet('/leads/:id', async function (req, res) {

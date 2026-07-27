@@ -15,15 +15,11 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const config = require('./config');
 const apiRoutes = require('./routes/api');
-const dashboardRoutes = require('./routes/dashboard');
-const publicApiRoutes = require('./routes/publicApi');
-const polarisRoutes = require('./routes/polaris');
-const polarisEnginesRoutes = require('./routes/polaris-engines');
-const customerIntelligenceRoutes = require('./routes/customerIntelligence');
 const businessProfileRoutes = require('./routes/businessProfile');
 const voiceRoutes = require('./routes/voice');
 const voiceWebhook = require('./voice/webhook');
 const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
+const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
 const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const db = require('./db');
 const cache = require('./cache/client');
@@ -539,16 +535,13 @@ app.use('/api/v1', createCompatibilityRouter());
 // its router-wide authentication from touching paths it does not own.
 app.use('/api/v1/business-profile', businessProfileRoutes);
 app.use('/api/v1/voice', voiceRoutes);
-app.use('/api/v1/polaris', polarisRoutes);
-app.use('/api/v1', polarisEnginesRoutes);
-app.use('/api/v1/leads', customerIntelligenceRoutes);
-app.use('/api/v1', publicApiRoutes);
-app.use('/api/v1', dashboardRoutes);
+app.use('/api/v1', createLegacyAuthorityRetirementRouter());
 
 // Canonical /api lead adapters precede the file-era router. The compatibility
 // router authenticates only paths it owns, so public webhooks still fall through.
 app.use('/api', canonicalLeadsRoutes);
 app.use('/api', createCompatibilityRouter());
+app.use('/api', createLegacyAuthorityRetirementRouter());
 // API routes (global requireAuth applies to all remaining /api/* routes)
 app.use('/api', apiRoutes);
 

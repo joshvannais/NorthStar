@@ -81,6 +81,32 @@ describe('Mission 19 Part 3 durable tenant context', () => {
     expect(Object.isFrozen(result.req.user)).toBe(true);
   });
 
+  test('only middleware-created context is reusable and a second auth boundary performs no second lookup', async () => {
+    const result = await authenticate([{
+      id: 'user-a', organization_id: 'org-a', role: 'owner', status: 'active',
+    }]);
+    const secondNext = jest.fn();
+    await auth.requireAuth(result.req, result.res, secondNext);
+    expect(result.next).toHaveBeenCalledTimes(1);
+    expect(secondNext).toHaveBeenCalledTimes(1);
+    expect(db.query).toHaveBeenCalledTimes(1);
+
+    const untrusted = {
+      headers: {},
+      tenantContext: Object.freeze({ userId: 'attacker', organizationId: 'org-evil', role: 'owner' }),
+      user: Object.freeze({ id: 'attacker', organizationId: 'org-evil', role: 'owner' }),
+      orgId: 'org-evil',
+      userRole: 'owner',
+      requestId: 'untrusted-request',
+    };
+    const denied = responseRecorder();
+    const untrustedNext = jest.fn();
+    await auth.requireAuth(untrusted, denied, untrustedNext);
+    expect(untrustedNext).not.toHaveBeenCalled();
+    expect(denied.statusCode).toBe(401);
+    expect(denied.body.code).toBe('unauthorized');
+  });
+
   test.each([
     ['missing', []],
     ['ambiguous', [

@@ -21,12 +21,11 @@ const realPostgresHealth = process.env.M19_PG_ADMIN_URL ? test : test.skip;
 describe('Phase 4 — API: Polaris Routes (/api/v1/polaris)', () => {
 
   describe('Status Endpoint', () => {
-    test('GET /api/v1/polaris/status — responds (may be 200 or 401 depending on middleware order)', async () => {
+    test('GET /api/v1/polaris/status — reports the retired legacy authority', async () => {
       const res = await request(app).get('/api/v1/polaris/status');
-      // Pre-Phase 9: dashboard router's global requireAuth intercepts → 401
-      // Post-Phase 9: /status is public → 200
-      expect([200, 401]).toContain(res.status);
+      expect(res.status).toBe(410);
       expect(res.type).toMatch(/json/);
+      expect(res.body.error.code).toBe('LEGACY_AUTHORITY_RETIRED');
     });
   });
 

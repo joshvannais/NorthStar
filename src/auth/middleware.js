@@ -18,6 +18,7 @@ const ACCESS_TOKEN_EXPIRY = '24h';
 const ADMIN_TOKEN_EXPIRY = '30m';
 const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 const RESET_TOKEN_EXPIRY_HOURS = 1;
+const trustedTenantRequests = new WeakSet();
 
 /**
  * Hash a token for database storage (SHA-256).
@@ -237,9 +238,11 @@ function attachTenantContext(req, membership) {
     orgId: { value: context.organizationId, enumerable: true, configurable: false, writable: false },
     userRole: { value: context.role, enumerable: true, configurable: false, writable: false },
   });
+  trustedTenantRequests.add(req);
 }
 
 async function requireAuth(req, res, next) {
+  if (trustedTenantRequests.has(req)) return next();
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return sendAuthError(req, res, 401, 'Authentication required', 'unauthorized');

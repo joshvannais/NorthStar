@@ -30,12 +30,11 @@ describe('Phase 4 — API: Health Check System', () => {
   });
 
   describe('Polaris Status', () => {
-    test('GET /api/v1/polaris/status — returns JSON (may be 200 or 401)', async () => {
+    test('GET /api/v1/polaris/status — returns the exact retired-authority response', async () => {
       const res = await request(app).get('/api/v1/polaris/status');
-      // Pre-Phase 9 middleware order: dashboard requireAuth intercepts → 401
-      // Post-Phase 9: public → 200
-      expect([200, 401]).toContain(res.status);
+      expect(res.status).toBe(410);
       expect(res.type).toMatch(/json/);
+      expect(res.body.error.code).toBe('LEGACY_AUTHORITY_RETIRED');
     });
   });
 

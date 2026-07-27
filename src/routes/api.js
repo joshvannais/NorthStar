@@ -6,9 +6,7 @@ const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
 const { getDiagnostics } = require('../retell/webhook');
 const { handleCanonicalRetellWebhook } = require('../services/canonicalRetellIngestion');
-const customersRouter = require('./customers');
 const demoRouter = require('./demo');
-const voiceRouter = require('./voice');
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
 const jobber = require('../integrations/jobber');
@@ -153,19 +151,14 @@ router.post('/contact', async (req, res) => {
 
 // Demo routes — public interactive demo
 router.use('/demo', demoRouter);
-// Mount voice routes (handles its own auth: webhook is public, everything else protected)
-router.use('/v1/voice', voiceRouter);
-
 // ══════════════════════════════════════════════
 // PROTECTED ROUTES — authentication required
 // ══════════════════════════════════════════════
-router.use(requireAuth);
-
     /**
      * GET /api/stats
      * Return aggregate stats: total calls, total revenue, served from database.
      */
-    router.get('/stats', async (req, res) => {
+    router.get('/stats', requireAuth, async (req, res) => {
       if (!db.isAvailable()) {
         return res.json({ totalCalls: 0, totalRevenue: 0, appointmentsBooked: 0 });
       }
@@ -186,7 +179,7 @@ router.use(requireAuth);
      * POST /api/calls/record
      * Record a simulated call with pricing data from the engine.
      */
-    router.post('/calls/record', async (req, res) => {
+    router.post('/calls/record', requireAuth, async (req, res) => {
       if (!db.isAvailable()) {
         return res.json({ success: true, note: 'DB not available, call not persisted' });
       }
@@ -207,7 +200,7 @@ router.use(requireAuth);
  * GET /api/leads
  * Return all leads (for testing/demo purposes).
  */
-router.get('/leads', (req, res) => {
+router.get('/leads', requireAuth, (req, res) => {
   const leads = getAllLeads();
   res.json({ items: leads, count: leads.length });
 });
@@ -216,7 +209,7 @@ router.get('/leads', (req, res) => {
  * GET /api/leads/export
  * Export all leads as CSV.
  */
-router.get('/leads/export', (req, res) => {
+router.get('/leads/export', requireAuth, (req, res) => {
   const { getAllLeads } = require('../leads/store');
   const leads = getAllLeads();
   const fields = ['id','caller','customerName','phone','phoneNumber','service','serviceRequested','status','avgPrice','address','jobAddress','receivedAt','updatedAt','duration','outcome','summary','transcript'];
@@ -240,7 +233,7 @@ router.get('/leads/export', (req, res) => {
  * GET /api/leads/:id
  * Return a single lead by ID.
  */
-router.get('/leads/:id', (req, res) => {
+router.get('/leads/:id', requireAuth, (req, res) => {
   const lead = getLead(req.params.id);
   if (!lead) {
     return res.status(404).json({ error: 'Lead not found' });
@@ -252,7 +245,7 @@ router.get('/leads/:id', (req, res) => {
  * POST /api/leads
  * Create a new lead.
  */
-router.post('/leads', (req, res) => {
+router.post('/leads', requireAuth, (req, res) => {
   const { addLead } = require('../leads/store');
   const lead = addLead(req.body);
   res.json({ success: true, lead });
@@ -262,7 +255,7 @@ router.post('/leads', (req, res) => {
  * PUT /api/leads/:id
  * Update an existing lead.
  */
-router.put('/leads/:id', (req, res) => {
+router.put('/leads/:id', requireAuth, (req, res) => {
   const { updateLead } = require('../leads/store');
   const updated = updateLead(req.params.id, req.body);
   if (!updated) {
@@ -275,7 +268,7 @@ router.put('/leads/:id', (req, res) => {
  * DELETE /api/leads/:id
  * Delete a lead.
  */
-router.delete('/leads/:id', (req, res) => {
+router.delete('/leads/:id', requireAuth, (req, res) => {
   const { removeLead } = require('../leads/store');
   const removed = removeLead(req.params.id);
   if (!removed) {
@@ -290,7 +283,7 @@ router.delete('/leads/:id', (req, res) => {
  */
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
-router.post('/leads/import', upload.single('file'), (req, res) => {
+router.post('/leads/import', requireAuth, upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const { addLead } = require('../leads/store');
@@ -342,7 +335,7 @@ router.post('/leads/import', upload.single('file'), (req, res) => {
  * POST /api/leads/simulate
  * Simulate a lead for testing (without needing a real phone call).
  */
-router.post('/leads/simulate', async (req, res) => {
+router.post('/leads/simulate', requireAuth, async (req, res) => {
   const { addLead } = require('../leads/store');
   const { appendLead } = require('../sheets/client');
   const { sendLeadNotification: sendSms } = require('../notifications/sms');
@@ -369,7 +362,7 @@ router.post('/leads/simulate', async (req, res) => {
  * POST /api/calendar/schedule
  * Schedule an estimate appointment from a lead.
  */
-router.post('/calendar/schedule', async (req, res) => {
+router.post('/calendar/schedule', requireAuth, async (req, res) => {
   const lead = getLead(req.body.leadId);
   if (!lead) {
     return res.status(404).json({ error: 'Lead not found' });
@@ -383,7 +376,7 @@ router.post('/calendar/schedule', async (req, res) => {
  * POST /api/retell/create-agent
  * Create a new Retell AI agent for a contractor.
  */
-router.post('/retell/create-agent', requirePermission('integrations', 'create'), async (req, res) => {
+router.post('/retell/create-agent', requireAuth, requirePermission('integrations', 'create'), async (req, res) => {
   const { createAgent } = require('../retell/client');
   const result = await createAgent({
     name: req.body.name || 'Northstar Receptionist',
@@ -412,7 +405,7 @@ router.post('/retell/create-agent', requirePermission('integrations', 'create'),
  * POST /api/retell/create-call
  * Initiate an outbound call via the active Retell AI agent.
  */
-router.post('/retell/create-call', requirePermission('leads', 'create'), async (req, res) => {
+router.post('/retell/create-call', requireAuth, requirePermission('leads', 'create'), async (req, res) => {
   try {
     const { createCall } = require('../retell/client');
     const integration = await getOrganizationIntegration(db.getPool(), req.tenantContext.organizationId, 'retell');
@@ -447,7 +440,7 @@ router.post('/retell/create-call', requirePermission('leads', 'create'), async (
  * POST /api/retell/verify
  * Verify the Retell API key and agent configuration.
  */
-router.post('/retell/verify', async (req, res) => {
+router.post('/retell/verify', requireAuth, async (req, res) => {
   try {
     const { verifyApiKey } = require('../retell/client');
     const result = await verifyApiKey();
@@ -461,7 +454,7 @@ router.post('/retell/verify', async (req, res) => {
  * POST /api/retell/send-sms
  * Send an SMS via the configured provider.
  */
-router.post('/retell/send-sms', async (req, res) => {
+router.post('/retell/send-sms', requireAuth, async (req, res) => {
   try {
     const { sendSMS } = require('../retell/client');
     const result = await sendSMS(req.body.phoneNumber, req.body.message);
@@ -479,7 +472,7 @@ router.post('/retell/send-sms', async (req, res) => {
  * GET /api/integrations/jobber/status
  * Check if Jobber is connected for the current user.
  */
-router.get('/integrations/jobber/status', async (req, res) => {
+router.get('/integrations/jobber/status', requireAuth, async (req, res) => {
   const userId = req.query.userId;
   const debug = {
     hasClientId: !!process.env.JOBBER_CLIENT_ID,
@@ -496,7 +489,7 @@ router.get('/integrations/jobber/status', async (req, res) => {
  * GET /api/integrations/jobber/auth
  * Start the OAuth flow to connect Jobber.
  */
-router.get('/integrations/jobber/auth', (req, res) => {
+router.get('/integrations/jobber/auth', requireAuth, (req, res) => {
   const userId = req.query.userId;
   if (!userId) return res.status(400).json({ error: 'Missing userId' });
   const authUrl = jobber.getAuthUrl(userId, `${req.protocol}://${req.get('host')}`);
@@ -508,7 +501,7 @@ router.get('/integrations/jobber/auth', (req, res) => {
  * GET /api/integrations/jobber/callback
  * Handle the OAuth callback from Jobber.
  */
-router.get('/integrations/jobber/callback', async (req, res) => {
+router.get('/integrations/jobber/callback', requireAuth, async (req, res) => {
   const { code, state } = req.query;
   if (!code) return res.status(400).send('Missing authorization code');
   
@@ -534,7 +527,7 @@ router.get('/integrations/jobber/callback', async (req, res) => {
  * POST /api/integrations/jobber/disconnect
  * Disconnect Jobber for a user.
  */
-router.post('/integrations/jobber/disconnect', async (req, res) => {
+router.post('/integrations/jobber/disconnect', requireAuth, async (req, res) => {
   const userId = req.body.userId;
   if (!userId) return res.status(400).json({ error: 'Missing userId' });
   await jobber.disconnect(userId);
@@ -545,7 +538,7 @@ router.post('/integrations/jobber/disconnect', async (req, res) => {
  * GET /api/contact/messages
  * List contact messages (internal use).
  */
-router.get('/contact/messages', (req, res) => {
+router.get('/contact/messages', requireAuth, (req, res) => {
   const fs = require('fs');
   const path = require('path');
   const filePath = dataPath('contact-messages.json');
@@ -555,8 +548,5 @@ router.get('/contact/messages', (req, res) => {
   }
   res.json({ messages: [], count: 0 });
 });
-
-// Mount customer profile routes
-router.use('/customers', customersRouter);
 
 module.exports = router;

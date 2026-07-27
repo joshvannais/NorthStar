@@ -20,8 +20,6 @@ const VALID_SECTIONS = new Set([
   'notifications', 'integrations', 'canonicalPricing', 'canonicalCosts',
 ]);
 
-router.use(requireAuth);
-
 function sendError(res, error) {
   const status = error && error.status ? error.status : 503;
   const code = error && error.code ? error.code : 'CANONICAL_PERSISTENCE_UNAVAILABLE';
@@ -63,7 +61,7 @@ async function persist(req, rawProfile) {
   return stored;
 }
 
-router.get('/', async function (req, res) {
+router.get('/', requireAuth, async function (req, res) {
   try {
     return res.json({ success: true, data: response(await active(req)) });
   } catch (error) {
@@ -71,7 +69,7 @@ router.get('/', async function (req, res) {
   }
 });
 
-router.put('/', requirePermission('settings', 'update'), async function (req, res) {
+router.put('/', requireAuth, requirePermission('settings', 'update'), async function (req, res) {
   try {
     return res.json({ success: true, data: response(await persist(req, req.body || {})) });
   } catch (error) {
@@ -80,7 +78,7 @@ router.put('/', requirePermission('settings', 'update'), async function (req, re
   }
 });
 
-router.put('/:section', requirePermission('settings', 'update'), async function (req, res) {
+router.put('/:section', requireAuth, requirePermission('settings', 'update'), async function (req, res) {
   const section = req.params.section;
   if (!VALID_SECTIONS.has(section)) {
     return res.status(400).json({ success: false, error: { code: 'INVALID_PROFILE_SECTION', message: 'Business Profile section is invalid.' } });
@@ -95,7 +93,7 @@ router.put('/:section', requirePermission('settings', 'update'), async function 
   }
 });
 
-router.get('/:section', async function (req, res) {
+router.get('/:section', requireAuth, async function (req, res) {
   const section = req.params.section;
   if (!VALID_SECTIONS.has(section)) {
     return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Business Profile section not found.' } });

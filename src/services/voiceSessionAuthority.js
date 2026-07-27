@@ -27,6 +27,7 @@ function projectSession(row) {
     organizationId: row.organization_id,
     externalSessionId: row.external_session_id,
     callId: row.external_session_id,
+    providerSessionId: row.provider_session_id || null,
     provider: row.provider,
     status: row.status,
     direction: row.direction,
@@ -59,13 +60,14 @@ async function createSession(pool, input) {
   if (!externalSessionId) throw authorityError('VOICE_SESSION_ID_REQUIRED', 'Voice session identifier is required.', 400);
   const result = await source.query(
     `INSERT INTO canonical_voice_sessions
-      (organization_id, external_session_id, provider, integration_ownership_id,
+      (organization_id, external_session_id, provider, provider_session_id, integration_ownership_id,
        business_profile_id, business_profile_version, business_profile_hash,
        status, direction, from_number, to_number, runtime_owner_id, metadata)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
      ON CONFLICT (organization_id, external_session_id) DO NOTHING
      RETURNING *`,
-    [input.organizationId, externalSessionId, input.provider || 'voice', input.integrationOwnershipId,
+    [input.organizationId, externalSessionId, input.provider || 'voice', input.providerSessionId || null,
+      input.integrationOwnershipId,
       input.profileId, input.profileVersion, input.profileHash, input.status || 'active',
       input.direction || 'inbound', input.fromNumber || null, input.toNumber || null,
       input.runtimeOwned ? RUNTIME_OWNER_ID : null, JSON.stringify(stableValue(input.metadata || {}))]
@@ -92,6 +94,7 @@ async function assignProviderIdentity(pool, input) {
       const updated = await client.query(
         `UPDATE canonical_voice_sessions
             SET external_session_id = $3,
+                provider_session_id = $3,
                 metadata = metadata || $4::jsonb,
                 updated_at = NOW()
           WHERE organization_id = $1 AND external_session_id = $2
@@ -107,6 +110,47 @@ async function assignProviderIdentity(pool, input) {
       throw error;
     }
   });
+}
+
+async function attachProviderIdentity(pool, input) {
+  const providerSessionId = String(input.providerSessionId || '').trim();
+  if (!providerSessionId) {
+    throw authorityError('VOICE_PROVIDER_SESSION_REQUIRED', 'The voice provider did not return a session identifier.', 502);
+  }
+  try {
+    const updated = await requirePool(pool).query(
+      `UPDATE canonical_voice_sessions
+          SET provider_session_id = $3,
+              metadata = metadata || $4::jsonb,
+              updated_at = NOW()
+        WHERE organization_id = $1 AND external_session_id = $2
+        RETURNING *`,
+      [input.organizationId, String(input.externalSessionId), providerSessionId,
+        JSON.stringify(stableValue({ providerSessionId }))]
+    );
+    if (updated.rows.length !== 1) {
+      throw authorityError('VOICE_SESSION_NOT_FOUND', 'Voice session not found.', 404);
+    }
+    return projectSession(updated.rows[0]);
+  } catch (error) {
+    if (error && error.code === '23505') {
+      throw authorityError('VOICE_PROVIDER_SESSION_CONFLICT', 'The provider session identity is already bound.', 409);
+    }
+    throw error;
+  }
+}
+
+async function findSessionByProviderIdentity(pool, provider, providerSessionId) {
+  const identifier = String(providerSessionId || '').trim();
+  if (!identifier) return null;
+  const result = await requirePool(pool).query(
+    SELECT_SESSION + ' WHERE s.provider = $1 AND s.provider_session_id = $2',
+    [String(provider), identifier]
+  );
+  if (result.rows.length > 1) {
+    throw authorityError('VOICE_PROVIDER_SESSION_CONFLICT', 'The provider session identity is ambiguous.', 409);
+  }
+  return result.rows.length === 1 ? projectSession(result.rows[0]) : null;
 }
 
 async function getSession(pool, organizationId, externalSessionId) {
@@ -219,10 +263,12 @@ function clearRuntimeHandlesForTests() {
 
 module.exports = {
   RUNTIME_OWNER_ID,
+  attachProviderIdentity,
   assignProviderIdentity,
   appendEvent,
   clearRuntimeHandlesForTests,
   createSession,
+  findSessionByProviderIdentity,
   getSession,
   listSessions,
   performRuntimeAction,

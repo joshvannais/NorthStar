@@ -65,7 +65,7 @@ async function createCanonicalVoiceCall(options) {
     getOrganizationIntegration(pool, organizationId, 'retell'),
     getActiveBusinessProfile(pool, organizationId),
   ]);
-  const provisionalSessionId = 'pending-' + crypto.randomUUID();
+  const provisionalSessionId = source.externalSessionId || ('pending-' + crypto.randomUUID());
   const fromNumber = boundedText(integration.metadata && integration.metadata.fromNumber, 64,
     source.fromNumber || '');
   await voiceSessions.createSession(pool, {
@@ -105,17 +105,23 @@ async function createCanonicalVoiceCall(options) {
       toolDefinitions,
     });
     providerSessionId = result && (result.call_id || result.callId);
-    const session = await voiceSessions.assignProviderIdentity(pool, {
-      organizationId,
-      externalSessionId: provisionalSessionId,
-      providerSessionId,
-    });
-    currentSessionId = providerSessionId;
+    const session = source.preserveExternalSessionId
+      ? await voiceSessions.attachProviderIdentity(pool, {
+        organizationId,
+        externalSessionId: provisionalSessionId,
+        providerSessionId,
+      })
+      : await voiceSessions.assignProviderIdentity(pool, {
+        organizationId,
+        externalSessionId: provisionalSessionId,
+        providerSessionId,
+      });
+    currentSessionId = source.preserveExternalSessionId ? provisionalSessionId : providerSessionId;
     const started = await voiceSessions.appendEvent(pool, {
       organizationId,
-      externalSessionId: providerSessionId,
+      externalSessionId: currentSessionId,
       eventType: 'call_started',
-      payload: { direction: 'outbound' },
+      payload: { direction: 'outbound', providerSessionId },
       status: 'active',
     });
     return { result, session: started.session || session, profile, integration };
@@ -125,6 +131,7 @@ async function createCanonicalVoiceCall(options) {
       externalSessionId: currentSessionId,
       providerSessionId,
     }, error);
+    error.canonicalSessionId = currentSessionId;
     throw error;
   }
 }
@@ -138,6 +145,8 @@ async function createProvisionedDemoVoiceCall(options) {
       ...source,
       organizationId: demo.organizationId,
       source: 'public-demo',
+      externalSessionId: 'demo-' + crypto.randomUUID(),
+      preserveExternalSessionId: true,
     });
   } catch (error) {
     if (!demo || ['CANONICAL_BUSINESS_PROFILE_REQUIRED', 'INTEGRATION_OWNERSHIP_UNKNOWN',

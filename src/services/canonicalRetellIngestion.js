@@ -133,24 +133,34 @@ async function ingestRetellPayload(payload, options) {
     if (!callId) {
       return { status: 400, body: { success: false, error: { code: 'RETELL_CALL_ID_REQUIRED', message: 'Retell call identifier is required.' } } };
     }
-    const profile = await getActiveBusinessProfile(pool, ownership.organizationId);
     const call = callFrom(payload);
-    const voiceSession = await voiceSessions.createSession(pool, {
-      organizationId: ownership.organizationId,
-      externalSessionId: callId,
-      provider: 'retell',
-      integrationOwnershipId: ownership.id,
-      profileId: profile.id,
-      profileVersion: profile.versionLabel,
-      profileHash: profile.profileHash,
-      direction: text(call.direction) === 'outbound' ? 'outbound' : 'inbound',
-      fromNumber: text(call.from_number),
-      toNumber: text(call.to_number),
-      metadata: { source: options && options.ingestionSource === 'voice' ? 'voice-webhook' : 'retell-webhook' },
-    });
+    let voiceSession = await voiceSessions.findSessionByProviderIdentity(pool, 'retell', callId);
+    if (voiceSession && voiceSession.organizationId !== ownership.organizationId) {
+      throw Object.assign(new Error('Integration ownership conflicts with the persisted voice session.'), {
+        code: 'INTEGRATION_OWNERSHIP_CONFLICT', status: 409,
+      });
+    }
+    if (!voiceSession) {
+      const profile = await getActiveBusinessProfile(pool, ownership.organizationId);
+      voiceSession = await voiceSessions.createSession(pool, {
+        organizationId: ownership.organizationId,
+        externalSessionId: callId,
+        provider: 'retell',
+        providerSessionId: callId,
+        integrationOwnershipId: ownership.id,
+        profileId: profile.id,
+        profileVersion: profile.versionLabel,
+        profileHash: profile.profileHash,
+        direction: text(call.direction) === 'outbound' ? 'outbound' : 'inbound',
+        fromNumber: text(call.from_number),
+        toNumber: text(call.to_number),
+        metadata: { source: options && options.ingestionSource === 'voice' ? 'voice-webhook' : 'retell-webhook' },
+      });
+    }
+    const authoritySessionId = voiceSession.externalSessionId;
     await voiceSessions.appendEvent(pool, {
       organizationId: ownership.organizationId,
-      externalSessionId: callId,
+      externalSessionId: authoritySessionId,
       externalEventId: text(payload && payload.event_id),
       eventType: event || 'unknown',
       payload: {
@@ -165,7 +175,7 @@ async function ingestRetellPayload(payload, options) {
     if (existing) {
       await voiceSessions.appendEvent(pool, {
         organizationId: ownership.organizationId,
-        externalSessionId: callId,
+        externalSessionId: authoritySessionId,
         externalEventId: text(payload && payload.event_id),
         eventType: event,
         payload: { replayed: true },
@@ -183,7 +193,7 @@ async function ingestRetellPayload(payload, options) {
     const result = await ingest(pool, request, options);
     await voiceSessions.appendEvent(pool, {
       organizationId: ownership.organizationId,
-      externalSessionId: callId,
+      externalSessionId: authoritySessionId,
       externalEventId: text(payload && payload.event_id),
       eventType: event,
       payload: { graphStatus: result.status },

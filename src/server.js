@@ -558,36 +558,6 @@ async function start() {
   await cache.init();
   await audit.ensureTable();
 
-  // Initialize Polaris Intelligence Engine
-  const polaris = require('./polaris/engine');
-  polaris.init();
-  // Initialize Polaris Customer Lifecycle Engine
-  const customerEngine = require('./polaris/customer-engine');
-  customerEngine.init();
-  // Initialize Polaris Communications Intelligence Engine
-  const commsEngine = require('./polaris/communications-engine');
-  commsEngine.init();
-  // Initialize Polaris Opportunity & Pipeline Intelligence Engine
-  const oppEngine = require('./polaris/opportunity-engine');
-  oppEngine.init();
-  // Initialize Polaris Workflow & Scheduling Intelligence Engine
-  const wfEngine = require('./polaris/workflow-engine');
-  wfEngine.init();
-  // Initialize Polaris Financial Intelligence Engine
-  const finEngine = require('./polaris/financial-engine');
-  finEngine.init();
-  // Initialize Polaris Asset & Equipment Intelligence Engine
-  const astEngine = require('./polaris/asset-engine');
-  astEngine.init();
-  // Initialize Polaris Crew & Resource Intelligence Engine
-  const crewEngine = require('./polaris/crew-engine');
-  crewEngine.init();
-  // Initialize Polaris Job Execution Intelligence Engine
-  const jobEngine = require('./polaris/job-engine');
-  jobEngine.init();
-  // Initialize Polaris Business Intelligence & Analytics Engine
-  const analyticsEngine = require('./polaris/analytics-engine');
-  analyticsEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;

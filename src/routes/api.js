@@ -4,7 +4,7 @@
 
 const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
-const { getDiagnostics } = require('../retell/webhook');
+const { getDiagnostics } = require('../retell/diagnostics');
 const { handleCanonicalRetellWebhook } = require('../services/canonicalRetellIngestion');
 const demoRouter = require('./demo');
 const { scheduleEstimate } = require('../calendar/client');
@@ -74,7 +74,8 @@ router.post('/retell/webhook', handleCanonicalRetellWebhook);
 /**
  * GET /api/retell/webhook/diagnostics
  * Returns webhook pipeline diagnostics: event count, recent events,
- * active demo sessions, and Retell configuration status.
+ * canonical authority and Retell configuration status. Tenant session state is
+ * available only through tenant-scoped canonical endpoints.
  * PUBLIC — used for debugging the webhook pipeline.
  */
 router.get('/retell/webhook/diagnostics', (req, res) => {

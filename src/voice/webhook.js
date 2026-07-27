@@ -2,7 +2,8 @@
  * Retell Voice Webhook Framework — Part 4
  *
  * Secure webhook handling for Retell AI call events.
- * Replaces src/retell/webhook.js (kept for backward compatibility).
+ * Canonical signed voice webhook transport. The retired process-local Retell
+ * webhook implementation has been removed.
  *
  * Security:
  * - HMAC-SHA256 signature validation

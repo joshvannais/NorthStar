@@ -46,9 +46,11 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     expect(canonicalClient).toContain("safeStorage(global.sessionStorage, 'northstarSessionId')");
   });
 
-  test('audit SQL matches the migrated schema and cache code has no Redis requirement', () => {
+  test('audit SQL matches the migrated schema and canonical reads cannot use acceleration caches', () => {
     const audit = source('src/audit/client.js');
     const cache = source('src/cache/client.js');
+    const canonicalRoute = source('src/routes/canonicalPolaris.js');
+    const canonicalGraph = source('src/services/canonicalGraphService.js');
 
     expect(audit).toMatch(/INSERT INTO audit_logs\s*\(organization_id, user_id, action, entity_type, entity_id, details, ip_address, created_at\)/);
     expect(audit).not.toMatch(/CREATE\s+(?:TABLE|INDEX)/i);
@@ -56,6 +58,59 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     expect(cache).not.toMatch(/require\(['"]redis['"]\)/);
     expect(cache).not.toContain('REDIS_URL');
     expect(cache).toContain('PostgreSQL is always authoritative');
+    expect(cache).toMatch(/async function setCanonical[\s\S]*return false;/);
+    expect(cache).toMatch(/async function wrapCanonical[\s\S]*return fetchFn\(\);/);
+    expect(canonicalRoute).not.toContain('wrapCanonical');
+    expect(canonicalGraph).not.toContain('wrapCanonical');
+  });
+
+  test('mounted legacy authority is retired and canonical voice authority is PostgreSQL scoped', () => {
+    const server = source('src/server.js');
+    const retirement = source('src/routes/legacyAuthorityRetirement.js');
+    const voiceRoute = source('src/routes/voice.js');
+    const voiceAuthority = source('src/services/voiceSessionAuthority.js');
+
+    expect(server).not.toContain("require('./routes/polaris')");
+    expect(server).not.toContain("require('./routes/polaris-engines')");
+    expect(server).not.toContain("require('./routes/publicApi')");
+    expect(server).toContain("require('./routes/legacyAuthorityRetirement')");
+    expect(retirement).toContain("code: 'LEGACY_AUTHORITY_RETIRED'");
+    expect(retirement).toContain("router.get('/polaris/status', retired)");
+    expect(voiceRoute).toContain("requirePermission('calls', 'read')");
+    expect(voiceRoute).toContain("requirePermission('calls', 'update')");
+    expect(voiceAuthority).toContain('canonical_voice_sessions');
+    expect(voiceAuthority).toContain('canonical_voice_session_events');
+    expect(voiceAuthority).toContain('const runtimeHandles = new Map()');
+    expect(voiceAuthority).toContain("'VOICE_RUNTIME_UNAVAILABLE'");
+  });
+
+  test('voice profiles and tax values are pinned canonical inputs rather than request inventions', () => {
+    const retell = source('src/services/canonicalRetellIngestion.js');
+    const graph = source('src/services/canonicalGraphService.js');
+    const calculator = source('src/services/canonicalPolarisCalculation.js');
+    const simulator = source('public/js/simulator.js');
+    const demo = source('src/routes/demo.js');
+    const voiceMigration = source('migrations/006_canonical_voice_sessions.sql');
+    const taxMigration = source('migrations/007_canonical_tax_authority.sql');
+
+    expect(retell).toContain('const voiceSession = await voiceSessions.createSession(pool, {');
+    expect(retell).toContain('businessProfileAuthorityId: voiceSession && voiceSession.profile.id');
+    expect(retell).toContain('businessProfileAuthorityVersion: voiceSession && voiceSession.profile.version');
+    expect(retell).toContain('businessProfileAuthorityHash: voiceSession && voiceSession.profile.hash');
+    expect(graph).toContain('const authority = request.businessProfileAuthorityId');
+    expect(graph).toContain('await getBusinessProfileById(resolvedPool, request.organizationId, request.businessProfileAuthorityId)');
+    expect(graph).toContain('request.businessProfileAuthority = authority');
+    expect(calculator).toContain("'tax_configuration_unavailable'");
+    expect(calculator).toContain('totalIncludingTax');
+    expect(simulator).not.toMatch(/const\s+price\s*=\s*calcPrice\s*\(/);
+    expect(simulator).not.toMatch(/const\s+breakdown\s*=\s*calcBreakdown\s*\(/);
+    expect(demo).toContain("opportunityLabel: 'CANONICAL ESTIMATE REQUIRED'");
+    expect(demo).toContain('canonicalRequired: true');
+    expect(voiceMigration).toContain('CREATE TABLE IF NOT EXISTS canonical_voice_sessions');
+    expect(voiceMigration).toContain('CREATE TABLE IF NOT EXISTS canonical_voice_session_events');
+    expect(taxMigration).toContain('tax_rate_percent');
+    expect(taxMigration).toContain('tax_not_calculated_reason');
+    expect(taxMigration).toContain('total_including_tax');
   });
 
   test('every real PostgreSQL suite owns a run, suite, worker, and process isolated database', () => {
@@ -73,6 +128,8 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
       'tests/integration/m19-part3-persistence-v2-postgres.test.js',
       'tests/integration/m19-part3-canonical-graph-postgres.test.js',
       'tests/api/m19-part3-canonical-api-postgres.test.js',
+      'tests/api/m19-part3-remediation-mounted-postgres.test.js',
+      'tests/integration/m19-part3-voice-sessions-postgres.test.js',
       'tests/api/polaris.test.js',
     ]) {
       expect(source(suite)).toContain('createSuiteDatabase');
@@ -100,6 +157,7 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     const graphSuite = source('tests/integration/m19-part3-canonical-graph-postgres.test.js');
     const apiSuite = source('tests/api/m19-part3-canonical-api-postgres.test.js');
     const auditSuite = source('tests/integration/m19-part3-audit-postgres.test.js');
+    const voiceSuite = source('tests/integration/m19-part3-voice-sessions-postgres.test.js');
     const browserSuite = source('tests/browser/m19-part3-cross-page-matrix.js');
 
     for (const gate of [
@@ -112,6 +170,8 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     expect(apiSuite).toContain('m19-part3-fence-001');
     expect(apiSuite).toContain('organization, user, and session matrix fails closed');
     expect(auditSuite).toContain('without actor_id assumptions');
+    expect(voiceSuite).toContain('identical provider IDs remain isolated by organization');
+    expect(voiceSuite).toContain('profile pinned when the session was created');
     expect(browserSuite).toContain('all seven surfaces share one graph');
     expect(browserSuite).toContain("selected === 'chrome' || selected === 'webkit'");
   });

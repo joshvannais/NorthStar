@@ -64,6 +64,11 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
   let generateToken;
   let putBusinessProfile;
   let bindIntegrationOwner;
+  let voiceSessions;
+  let profileAuthorityA;
+  let profileAuthorityB;
+  let integrationAuthorityA;
+  let integrationAuthorityB;
   let leadStore;
   let sheets;
   let originalDatabaseUrl;
@@ -118,15 +123,23 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       );
     }
     ({ putBusinessProfile, bindIntegrationOwner } = require('../../src/services/organizationAuthority'));
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: USERS.owner, profile });
-    await putBusinessProfile(pool, { organizationId: ORG_B, userId: USERS.other, profile: { ...profile, company: { name: 'Other Company', currency: 'USD' } } });
-    await bindIntegrationOwner(pool, {
+    profileAuthorityA = await putBusinessProfile(pool, { organizationId: ORG_A, userId: USERS.owner, profile });
+    profileAuthorityB = await putBusinessProfile(pool, { organizationId: ORG_B, userId: USERS.other, profile: { ...profile, company: { name: 'Other Company', currency: 'USD' } } });
+    integrationAuthorityA = await bindIntegrationOwner(pool, {
       organizationId: ORG_A,
       userId: USERS.owner,
       provider: 'retell',
       externalIntegrationId: 'agent-mounted-a',
       metadata: { source: 'mounted-test' },
     });
+    integrationAuthorityB = await bindIntegrationOwner(pool, {
+      organizationId: ORG_B,
+      userId: USERS.other,
+      provider: 'retell',
+      externalIntegrationId: 'agent-mounted-b',
+      metadata: { source: 'mounted-test' },
+    });
+    voiceSessions = require('../../src/services/voiceSessionAuthority');
     ({ app } = require('../../src/server'));
     ({ generateToken } = require('../../src/auth/middleware'));
     leadStore = require('../../src/leads/store');
@@ -324,6 +337,98 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     expect(stored.rows).toEqual([{ source: 'voice', count: 1 }]);
     expect(leadStore.addLead).not.toHaveBeenCalled();
     expect(sheets.appendLead).not.toHaveBeenCalled();
+  });
+
+  test('voice sessions enforce the persisted role matrix, tenant boundary, and live-runtime boundary', async () => {
+    const pool = db.getPool();
+    async function createVoiceSession(organizationId, integration, profileRecord, externalSessionId, runtimeOwned) {
+      return voiceSessions.createSession(pool, {
+        organizationId,
+        externalSessionId,
+        provider: 'retell',
+        integrationOwnershipId: integration.id,
+        profileId: profileRecord.id,
+        profileVersion: profileRecord.versionLabel,
+        profileHash: profileRecord.profileHash,
+        direction: 'inbound',
+        runtimeOwned,
+      });
+    }
+
+    const sharedA = await createVoiceSession(ORG_A, integrationAuthorityA, profileAuthorityA, 'mounted-shared-voice', false);
+    const sharedB = await createVoiceSession(ORG_B, integrationAuthorityB, profileAuthorityB, 'mounted-shared-voice', false);
+    await createVoiceSession(ORG_A, integrationAuthorityA, profileAuthorityA, 'mounted-only-a', false);
+    await createVoiceSession(ORG_A, integrationAuthorityA, profileAuthorityA, 'mounted-runtime', true);
+    await createVoiceSession(ORG_A, integrationAuthorityA, profileAuthorityA, 'mounted-runtime-missing', true);
+
+    for (const role of ['owner', 'admin', 'member', 'viewer']) {
+      const list = await request(app).get('/api/v1/voice/sessions?all=true').set(auth(USERS[role]));
+      expect(list.status).toBe(200);
+      expect(list.body.sessions.every(session => session.organizationId === ORG_A)).toBe(true);
+      const detail = await request(app).get('/api/v1/voice/sessions/mounted-shared-voice').set(auth(USERS[role]));
+      expect(detail.status).toBe(200);
+      expect(detail.body.session.id).toBe(sharedA.id);
+      expect(detail.body.session.profile.id).toBe(profileAuthorityA.id);
+    }
+
+    const otherShared = await request(app).get('/api/v1/voice/sessions/mounted-shared-voice').set(auth(USERS.other));
+    expect(otherShared.status).toBe(200);
+    expect(otherShared.body.session.id).toBe(sharedB.id);
+    expect(otherShared.body.session.profile.id).toBe(profileAuthorityB.id);
+    const crossTenantMissing = await request(app).get('/api/v1/voice/sessions/mounted-only-a').set(auth(USERS.other));
+    expect(crossTenantMissing.status).toBe(404);
+    expect(crossTenantMissing.body.error.code).toBe('VOICE_SESSION_NOT_FOUND');
+
+    const deniedEventCount = (await pool.query(
+      `SELECT count(*)::int AS count FROM canonical_voice_session_events e
+        JOIN canonical_voice_sessions s ON s.id = e.voice_session_id AND s.organization_id = e.organization_id
+       WHERE s.organization_id = $1 AND s.external_session_id = 'mounted-runtime'`,
+      [ORG_A]
+    )).rows[0].count;
+    for (const role of ['member', 'viewer']) {
+      const denied = await request(app)
+        .post('/api/v1/voice/sessions/mounted-runtime/handoff')
+        .set(auth(USERS[role]))
+        .set('Idempotency-Key', 'denied-runtime-' + role)
+        .send({ reason: role + ' request' });
+      expect(denied.status).toBe(403);
+      expect(denied.body.required).toEqual({ resource: 'calls', action: 'update' });
+    }
+    expect((await pool.query(
+      `SELECT count(*)::int AS count FROM canonical_voice_session_events e
+        JOIN canonical_voice_sessions s ON s.id = e.voice_session_id AND s.organization_id = e.organization_id
+       WHERE s.organization_id = $1 AND s.external_session_id = 'mounted-runtime'`,
+      [ORG_A]
+    )).rows[0].count).toBe(deniedEventCount);
+
+    const actions = [];
+    voiceSessions.registerRuntimeHandle(ORG_A, 'mounted-runtime', {
+      async handoff(reason) { actions.push(['handoff', reason]); },
+      async cancel(reason) { actions.push(['cancel', reason]); },
+    });
+    const ownerHandoff = await request(app)
+      .post('/api/v1/voice/sessions/mounted-runtime/handoff')
+      .set(auth(USERS.owner))
+      .set('Idempotency-Key', 'owner-runtime-handoff')
+      .send({ reason: 'owner request' });
+    expect(ownerHandoff.status).toBe(200);
+    expect(ownerHandoff.body.session.status).toBe('escalating');
+    const adminCancel = await request(app)
+      .post('/api/v1/voice/sessions/mounted-runtime/cancel')
+      .set(auth(USERS.admin))
+      .set('Idempotency-Key', 'admin-runtime-cancel')
+      .send({ reason: 'admin request' });
+    expect(adminCancel.status).toBe(200);
+    expect(adminCancel.body.session.status).toBe('cancelled');
+    expect(actions).toEqual([['handoff', 'owner request'], ['cancel', 'admin request']]);
+
+    const unavailable = await request(app)
+      .post('/api/v1/voice/sessions/mounted-runtime-missing/cancel')
+      .set(auth(USERS.owner))
+      .set('Idempotency-Key', 'missing-runtime-cancel')
+      .send({ reason: 'no process handle' });
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.body.error.code).toBe('VOICE_RUNTIME_UNAVAILABLE');
   });
 
   test('read then committed write then immediate read observes the new graph', async () => {

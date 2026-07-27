@@ -374,7 +374,7 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(dashboard.body.data).toMatchObject({ graphCount: 1, customerCount: 1, estimatedRevenue: 4510, knownGrossProfit: null });
   });
 
-  test('cache hit, miss, filters, identity, expiry, and disabled behavior preserve results', async () => {
+  test('every canonical read queries PostgreSQL while generic cache expiry remains isolated', async () => {
     cache.clearForTests();
     cache.setEnabled(true);
     let queryCount = 0;
@@ -388,22 +388,19 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     const first = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
     const second = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
     expect(second.body).toEqual(first.body);
-    expect(queryCount).toBe(1);
+    expect(queryCount).toBe(2);
 
     await request(countedApp).get('/api/v1/canonical/graphs?status=lead').set(headers(ORG_A, USER_A, 'session-a'));
     await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'other-session'));
     await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_B, 'session-a'));
     await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_B, USER_B, 'session-b'));
-    expect(queryCount).toBe(5);
+    expect(queryCount).toBe(6);
 
-    const identity = {
-      organizationId: ORG_A, userId: USER_A, sessionId: 'expiry-session',
-      endpoint: 'expiry-test', filters: {}, readModelVersion: READ_MODEL_VERSION,
-    };
-    await cache.setCanonical(identity, { value: 'cached' }, 0.01);
-    expect(await cache.get(cache.buildCanonicalKey(identity))).toEqual({ value: 'cached' });
+    const genericKey = cache.buildKey('test-expiry', ORG_A);
+    await cache.set(genericKey, { value: 'cached' }, 0.01);
+    expect(await cache.get(genericKey)).toEqual({ value: 'cached' });
     await new Promise(resolve => setTimeout(resolve, 20));
-    expect(await cache.get(cache.buildCanonicalKey(identity))).toBeNull();
+    expect(await cache.get(genericKey)).toBeNull();
 
     cache.setEnabled(false);
     const disabledBefore = queryCount;
@@ -415,11 +412,11 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     cache.clearForTests();
   });
 
-  test('cache failure changes latency only and Redis configuration is ignored', async () => {
+  test('canonical reads never invoke an injected cache and Redis configuration is ignored', async () => {
     const failingCache = {
-      wrapCanonical: async function (_identity, fetchFn) { return fetchFn(); },
-      invalidateOrg: async function () { throw new Error('cache unavailable'); },
-      isAvailable: function () { return false; },
+      wrapCanonical: async function () { throw new Error('canonical cache must not be called'); },
+      invalidateOrg: async function () { throw new Error('canonical cache must not be called'); },
+      isAvailable: function () { throw new Error('canonical cache must not be called'); },
     };
     const noCacheApp = createApp(function () { return pool; }, failingCache);
     const response = await request(noCacheApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));

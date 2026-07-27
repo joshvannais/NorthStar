@@ -13,7 +13,7 @@ function identity(organizationId, endpoint) {
   };
 }
 
-describe('canonical organization cache consistency', () => {
+describe('canonical reads never depend on process-local cache state', () => {
   beforeEach(() => {
     cache.setEnabled(true);
     cache.clearForTests();
@@ -24,43 +24,20 @@ describe('canonical organization cache consistency', () => {
     cache.clearForTests();
   });
 
-  test('an invalidation prevents an older concurrent read from repopulating stale data', async () => {
+  test('every canonical wrapper call executes its authoritative PostgreSQL read', async () => {
     const org = identity('org-a');
-    let release;
-    const delayed = new Promise(resolve => { release = resolve; });
-    const staleRead = cache.wrapCanonical(org, async function () {
-      await delayed;
-      return ['stale'];
-    });
-
-    await cache.invalidateOrg('org-a');
-    release();
-    expect(await staleRead).toEqual(['stale']);
-
-    let freshFetches = 0;
-    const fresh = await cache.wrapCanonical(org, async function () {
-      freshFetches += 1;
-      return ['fresh'];
-    });
-    const cachedFresh = await cache.wrapCanonical(org, async function () {
-      throw new Error('fresh value should have been cached');
-    });
-    expect(fresh).toEqual(['fresh']);
-    expect(cachedFresh).toEqual(['fresh']);
-    expect(freshFetches).toBe(1);
+    let calls = 0;
+    const first = await cache.wrapCanonical(org, async function () { calls += 1; return ['first']; });
+    const second = await cache.wrapCanonical(org, async function () { calls += 1; return ['second']; });
+    expect(first).toEqual(['first']);
+    expect(second).toEqual(['second']);
+    expect(calls).toBe(2);
   });
 
-  test('organization A invalidation leaves organization B entries intact', async () => {
-    const orgA = identity('org-a');
-    const orgB = identity('org-b');
-    await cache.setCanonical(orgA, ['a']);
-    await cache.setCanonical(orgB, ['b']);
-    const orgBKey = cache.buildCanonicalKey(orgB);
-
-    await cache.invalidateOrg('org-a');
-
-    expect(await cache.get(orgBKey)).toEqual(['b']);
-    expect(await cache.get(cache.buildCanonicalKey(orgA))).toBeNull();
+  test('canonical cache population is disabled even when generic caching is enabled', async () => {
+    const org = identity('org-a');
+    expect(await cache.setCanonical(org, ['stale'], 60)).toBe(false);
+    expect(await cache.get(cache.buildCanonicalKey(org))).toBeNull();
   });
 
   test('disabled cache returns the same authoritative value without correctness dependencies', async () => {

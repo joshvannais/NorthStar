@@ -3,7 +3,6 @@
 const { randomUUID } = require('crypto');
 const { v5: uuidv5 } = require('uuid');
 const db = require('../db');
-const cache = require('../cache/client');
 const repository = require('../persistence/v2/repository');
 const { sha256, stableValue } = require('./businessProfileAdapter');
 const { CALCULATION_VERSION, calculateCanonicalPolaris } = require('./canonicalPolarisCalculation');
@@ -545,11 +544,6 @@ async function executeCanonicalGraph(pool, source, options) {
     const crash = new Error('Injected crash after commit before response');
     crash.code = 'INJECTED_CRASH_AFTER_COMMIT';
     throw crash;
-  }
-  try {
-    await ((options && options.cache) || cache).invalidateOrg(request.organizationId);
-  } catch (_cacheError) {
-    // PostgreSQL commit is authoritative; cache availability only affects latency.
   }
   return result;
 }

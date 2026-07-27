@@ -357,7 +357,6 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       if (/canonical_/i.test(String(statement))) throw new Error('connection unavailable');
       return originalQuery(statement, values);
     };
-    await require('../../src/cache/client').invalidateOrg(ORG_A);
     const unavailable = await request(app).get('/api/leads').set(auth(USERS.owner));
     pool.query = originalQuery;
     expect(unavailable.status).toBe(503);

@@ -2,7 +2,6 @@
 
 const express = require('express');
 const db = require('../db');
-const cache = require('../cache/client');
 const audit = require('../audit/client');
 const { requireAuth } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
@@ -256,7 +255,6 @@ function createDependencies(options) {
     poolProvider: supplied.poolProvider || function () { return db.getPool(); },
     auth: supplied.auth || requireAuth,
     permission: supplied.permission || requirePermission,
-    cache: supplied.cache || cache,
     audit: supplied.audit || audit,
   };
 }
@@ -271,21 +269,9 @@ function sendPersistenceUnavailable(res) {
 async function authoritativeItems(req, dependencies, endpoint) {
   const context = requestContext(req);
   const filters = queryFilters(req);
-  const identity = {
-    ...context,
-    endpoint,
-    filters,
-    readModelVersion: READ_MODEL_VERSION,
-  };
-  const fetchAuthoritative = async function () {
-    const pool = resolvePool(dependencies.poolProvider);
-    return listCanonicalGraphs(pool, context, filters);
-  };
-  try {
-    return await dependencies.cache.wrapCanonical(identity, fetchAuthoritative, 30);
-  } catch (_cacheError) {
-    return fetchAuthoritative();
-  }
+  void endpoint;
+  const pool = resolvePool(dependencies.poolProvider);
+  return listCanonicalGraphs(pool, context, filters);
 }
 
 function createCanonicalRouter(options) {
@@ -317,7 +303,7 @@ function createCanonicalRouter(options) {
           completedGraphs: result.rows[0].completed_graphs,
           postgresAuthoritative: true,
           redisRequired: false,
-          cacheEnabled: dependencies.cache.isAvailable(),
+          canonicalResponseCaching: false,
         },
       });
     } catch (_error) {
@@ -394,11 +380,6 @@ function createCanonicalRouter(options) {
           RETURNING *`,
         [context.organizationId, req.params.id, start, end, status]
       );
-      try {
-        await dependencies.cache.invalidateOrg(context.organizationId);
-      } catch (_cacheError) {
-        // PostgreSQL has already committed the authoritative mutation.
-      }
       try {
         await dependencies.audit.record({
         organizationId: context.organizationId,

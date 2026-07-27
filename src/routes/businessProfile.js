@@ -9,7 +9,6 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const cache = require('../cache/client');
 const fixtureProfile = require('../services/businessProfile');
 const { requireAuth } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
@@ -61,11 +60,6 @@ async function persist(req, rawProfile) {
     userId: req.tenantContext.userId,
     profile: rawProfile,
   });
-  try {
-    await cache.invalidateOrg(req.tenantContext.organizationId);
-  } catch (_cacheError) {
-    // PostgreSQL remains authoritative.
-  }
   return stored;
 }
 

@@ -180,7 +180,7 @@ realPostgres('Mission 19 Part 3 transactional canonical graph on disposable Post
         const scenario = simulationPipeline.generateScenario('fence', 'Avery Smith');
         return {
           scenario,
-          transcript: simulationPipeline.generateTranscript(scenario, simulationPipeline.CATALOG.fence),
+          transcript: simulationPipeline.generateTranscript(scenario),
         };
       });
     }

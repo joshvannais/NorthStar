@@ -63,8 +63,7 @@ router.post('/simulations/leads', requireAuth, requirePermission('leads', 'creat
       if (!scenario) return null;
       if (req.body.phone) scenario.customer.phone = String(req.body.phone);
       if (req.body.email) scenario.customer.email = String(req.body.email);
-      const service = pipeline.CATALOG[scenario.serviceKey];
-      const transcript = pipeline.generateTranscript(scenario, service);
+      const transcript = pipeline.generateTranscript(scenario);
       const extracted = pipeline.extractScope(transcript, scenario);
       return { scenario, transcript, extracted };
     });

@@ -53,6 +53,7 @@ const profile = {
   headquarters: {},
   crew: { defaultCrewSize: 2, maxCrewSize: 6, averageHourlyRate: 42, overtimeMultiplier: 1.5 },
   financial: { desiredGrossMargin: 40, markup: 1.3, emergencyMarkup: 1.5, travelCharge: 0.58 },
+  canonicalPricing: { customerMarkupPercent: 50, taxRatePercent: 0 },
   scheduling: { maxJobsPerDay: 4, workDayLength: 8 },
   services: [],
 };
@@ -231,6 +232,18 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       .set('Idempotency-Key', 'mounted-simulation-member')
       .send({ name: 'Simulation Member', service: 'fence', phone: '+15555551104' });
     expect(memberSimulation.status).toBe(201);
+    const canonicalMarkup = memberSimulation.body.polaris.pricingLineItems.find(item => item.code === 'configured-markup');
+    const canonicalBase = memberSimulation.body.polaris.pricingLineItems
+      .filter(item => item.code !== 'configured-markup')
+      .reduce((sum, item) => sum + item.customerCharge, 0);
+    expect(canonicalMarkup.customerCharge).toBe(canonicalBase * 0.5);
+    expect(memberSimulation.body.summary.estimatedValue).toBe(memberSimulation.body.polaris.customerFacingPrice);
+    const simulatedAgentText = memberSimulation.body.transcript
+      .filter(turn => turn.speaker === 'ai')
+      .map(turn => turn.text)
+      .join('\n');
+    expect(simulatedAgentText).toContain('provide the written estimate before any work begins');
+    expect(simulatedAgentText).not.toMatch(/\$|price range|typically looking in the range/i);
     const viewerSimulation = await request(app)
       .post('/api/v1/simulations/leads')
       .set(auth(USERS.viewer))

@@ -5,7 +5,7 @@
  * service catalog (service-catalog.js) without modifying this file.
  *
  * Pipeline:
- *   scenario → transcript → scope → classification → pricing → confidence → action
+ *   scenario → nonfinancial transcript → scope → classification → confidence → action
  */
 
 const CATALOG = require('./service-catalog');
@@ -188,7 +188,9 @@ function _populateScope(scenario, svc) {
 // TRANSCRIPT ENGINE — Adaptive conversation
 // ═══════════════════════════════════════════════════════
 
-function generateTranscript(scenario, svc) {
+function generateTranscript(scenario) {
+  const svc = CATALOG[scenario && scenario.serviceKey];
+  if (!svc) throw new Error('Unsupported simulation service');
   const firstName = scenario.customer.firstName;
   const turns = [];
 
@@ -241,17 +243,11 @@ function generateTranscript(scenario, svc) {
     turns.push({ speaker: 'customer', text: _pickRandom(['Weekday mornings work best.', 'Afternoons are better for me.', 'Any weekday is fine.', 'I\'m flexible — whatever works for your team.']) });
   }
 
-  // Pricing discussion
-  const pricing = _estimatePrice(scenario, svc);
-  if (pricing && pricing.strategy !== 'insufficient') {
-    turns.push({ speaker: 'customer', text: 'Can you give me a rough idea of what something like this might cost?' });
-    turns.push({ speaker: 'ai', text: pricing.responseText });
-    turns.push({ speaker: 'customer', text: 'Okay, that gives me a good starting point. Can we schedule someone to come out and take a look?' });
-  } else {
-    turns.push({ speaker: 'customer', text: 'Can you give me a ballpark price?' });
-    turns.push({ speaker: 'ai', text: 'I\'d need a few more details to give you even a rough range. Let me have one of our estimators do an on-site assessment — they\'ll be able to give you an accurate quote.' });
-    turns.push({ speaker: 'customer', text: 'That makes sense. Let\'s set that up.' });
-  }
+  // The canonical PostgreSQL orchestration runs after these facts have been
+  // collected. The simulated agent must not pre-compute or speak a price.
+  turns.push({ speaker: 'customer', text: 'Can you give me a ballpark price?' });
+  turns.push({ speaker: 'ai', text: 'I have the details needed to prepare an estimate. Our estimator will review them and provide the written estimate before any work begins.' });
+  turns.push({ speaker: 'customer', text: 'That makes sense. Let\'s set that up.' });
 
   // Confirmation
   turns.push({ speaker: 'ai', text: 'Perfect. Let me summarize: ' + _buildSummary(scenario, svc) + ' Our estimator will reach out to confirm the appointment. Does that all sound right?' });
@@ -373,29 +369,6 @@ function _buildAnswer(scenario, question) {
   return answers[id] || null;
 }
 
-function _estimatePrice(scenario, svc) {
-  const scope = scenario.job.scope;
-  const pricing = svc.pricing;
-
-  if (!pricing || !pricing.calculate) return { strategy: 'insufficient', responseText: 'I\'d need a few more details to give you even a rough range. Let me have one of our estimators come out for an on-site assessment.' };
-
-  try {
-    const result = pricing.calculate(scope);
-    const low = result.range.low.toLocaleString();
-    const high = result.range.high.toLocaleString();
-
-    return {
-      strategy: pricing.strategy,
-      total: result.total,
-      range: result.range,
-      breakdown: result.breakdown,
-      responseText: `Based on what you've described, you're typically looking in the range of $${low} to $${high}. That's a preliminary estimate — our team will do a full assessment on-site and give you a firm quote before any work begins. No obligation.`,
-    };
-  } catch (e) {
-    return { strategy: 'insufficient', responseText: 'I\'d need a few more details to give you a meaningful range. Our estimator can provide an accurate quote during the on-site visit.' };
-  }
-}
-
 function _buildSummary(scenario, svc) {
   const scope = scenario.job.scope;
   const name = svc.displayName;
@@ -502,35 +475,6 @@ function classifyService(transcript) {
 }
 
 // ═══════════════════════════════════════════════════════
-// PRICING
-// ═══════════════════════════════════════════════════════
-
-function calculatePricing(scope, classifiedService) {
-  // Find matching service in catalog
-  const svcKey = _findServiceKey(classifiedService);
-  if (!svcKey || !CATALOG[svcKey].pricing) {
-    return { strategy: 'insufficient', total: null, range: { low: 300, high: 800 }, breakdown: [] };
-  }
-
-  const svc = CATALOG[svcKey];
-  try {
-    const result = svc.pricing.calculate(scope);
-    return { strategy: svc.pricing.strategy, ...result };
-  } catch (e) {
-    return { strategy: 'insufficient', total: null, range: null, breakdown: [], reason: e.message };
-  }
-}
-
-function _findServiceKey(classifiedService) {
-  const lower = classifiedService.toLowerCase();
-  for (const [key, svc] of Object.entries(CATALOG)) {
-    if (lower.includes(key) || svc.displayName.toLowerCase().includes(key)) return key;
-    if (key.includes(lower)) return key;
-  }
-  return null;
-}
-
-// ═══════════════════════════════════════════════════════
 // CONFIDENCE
 // ═══════════════════════════════════════════════════════
 
@@ -604,12 +548,10 @@ function _pickRandom(arr) { return arr[Math.floor(_random() * arr.length)]; }
 // ═══════════════════════════════════════════════════════
 
 module.exports = {
-  CATALOG,
   generateScenario,
   generateTranscript,
   extractScope,
   classifyService,
-  calculatePricing,
   calculateConfidence,
   selectAction,
   withDeterministicSeed,

@@ -92,6 +92,8 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
       'canonical_opportunities',
       'canonical_polaris_snapshots',
       'canonical_transcripts',
+      'canonical_voice_session_events',
+      'canonical_voice_sessions',
     ]);
 
     const constraints = await fresh.query(
@@ -112,6 +114,13 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
       'canonical_polaris_estimate_fk',
       'canonical_customer_identities_customer_fk',
       'canonical_polaris_profile_authority_fk',
+      'canonical_voice_sessions_integration_fk',
+      'canonical_voice_sessions_profile_fk',
+      'canonical_voice_sessions_operation_fk',
+      'canonical_voice_session_events_session_fk',
+      'canonical_estimates_tax_rate_check',
+      'canonical_estimates_tax_amount_check',
+      'canonical_estimates_total_with_tax_check',
     ]) {
       expect(constraintNames.has(name)).toBe(true);
     }

@@ -636,9 +636,15 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
   });
 
   test('/api/leads reads and exports canonical projections and PostgreSQL outage returns retryable 503', async () => {
+    const fixture = await request(app)
+      .post('/api/leads')
+      .set(auth(USERS.owner))
+      .set('Idempotency-Key', 'self-contained-canonical-read')
+      .send({ customerName: 'Self Contained Read', email: 'self-contained-read@example.test', service: 'general' });
+    expect(fixture.status).toBe(201);
     const list = await request(app).get('/api/leads').set(auth(USERS.owner));
     expect(list.status).toBe(200);
-    expect(list.body.items.length).toBeGreaterThan(0);
+    expect(list.body.items.some(item => item.id === fixture.body.ids.opportunity)).toBe(true);
     expect(list.body.items.every(item => item.canonical && item.canonical.snapshotDigest)).toBe(true);
     const csv = await request(app).get('/api/leads/export').set(auth(USERS.owner));
     expect(csv.status).toBe(200);
@@ -706,6 +712,17 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
   });
 
   test('Business Profile authority is organization-scoped, RBAC protected, and graph provenance references the exact version', async () => {
+    const graph = await request(app)
+      .post('/api/v1/simulations/leads')
+      .set(auth(USERS.owner))
+      .set('Idempotency-Key', 'self-contained-profile-provenance')
+      .send({ name: 'Self Contained Provenance', service: 'fence', phone: '+15555553991' });
+    expect(graph.status).toBe(201);
+    expect(graph.body.businessProfile).toEqual({
+      id: profileAuthorityA.id,
+      version: profileAuthorityA.versionLabel,
+      hash: profileAuthorityA.profileHash,
+    });
     const profileA = await request(app).get('/api/v1/business-profile').set(auth(USERS.owner));
     const profileB = await request(app).get('/api/v1/business-profile').set(auth(USERS.other));
     expect(profileA.status).toBe(200);
@@ -723,8 +740,8 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
          JOIN canonical_business_profiles bp
            ON bp.organization_id = ps.organization_id AND bp.id = ps.business_profile_id
         WHERE ps.organization_id = $1
-        ORDER BY ps.created_at DESC LIMIT 1`,
-      [ORG_A]
+          AND ps.id = $2`,
+      [ORG_A, graph.body.ids.polarisSnapshot]
     );
     expect(provenance.rows).toHaveLength(1);
     expect(provenance.rows[0]).toMatchObject({

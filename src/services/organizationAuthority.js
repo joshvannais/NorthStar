@@ -154,6 +154,24 @@ async function getOrganizationIntegration(pool, organizationId, provider) {
   return result.rows[0];
 }
 
+async function getProvisionedDemoOrganization(pool, configuredOrganizationId) {
+  const organizationId = String(configuredOrganizationId || '').trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(organizationId)) {
+    throw authorityError('DEMO_UNAVAILABLE', 'The public demo is not provisioned.', 503);
+  }
+  const result = await requirePool(pool).query(
+    `SELECT d.organization_id
+       FROM canonical_demo_authority d
+       JOIN organizations o ON o.id = d.organization_id
+      WHERE d.organization_id = $1 AND d.status = 'active'`,
+    [organizationId]
+  );
+  if (result.rows.length !== 1) {
+    throw authorityError('DEMO_UNAVAILABLE', 'The public demo is not provisioned.', 503);
+  }
+  return Object.freeze({ organizationId: result.rows[0].organization_id });
+}
+
 async function bindIntegrationOwner(pool, input) {
   const identifier = String(input.externalIntegrationId || '').trim();
   if (!identifier) throw authorityError('INVALID_INTEGRATION_ID', 'Integration identifier is required.', 400);
@@ -179,6 +197,7 @@ module.exports = {
   bindIntegrationOwner,
   getActiveBusinessProfile,
   getBusinessProfileById,
+  getProvisionedDemoOrganization,
   getOrganizationIntegration,
   projectProfile,
   putBusinessProfile,

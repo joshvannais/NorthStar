@@ -13,7 +13,7 @@ const jobber = require('../integrations/jobber');
 const config = require('../config');
 const { requireAuth } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
-const { getOrganizationIntegration } = require('../services/organizationAuthority');
+const { createCanonicalVoiceCall } = require('../services/canonicalVoiceSessionCreation');
 const { getDataRoot, dataPath } = require('../services/dataRoot');
 
 const router = express.Router();
@@ -407,20 +407,21 @@ router.post('/retell/create-agent', requireAuth, requirePermission('integrations
  */
 router.post('/retell/create-call', requireAuth, requirePermission('leads', 'create'), async (req, res) => {
   try {
-    const { createCall } = require('../retell/client');
-    const integration = await getOrganizationIntegration(db.getPool(), req.tenantContext.organizationId, 'retell');
-    const result = await createCall(req.body.phoneNumber, integration.external_integration_id, {
-      service: req.body.service,
-      caller: req.body.caller,
-      fromNumber: config.twilio ? config.twilio.phoneNumber : undefined,
+    const created = await createCanonicalVoiceCall({
+      pool: db.getPool(),
+      organizationId: req.tenantContext.organizationId,
+      phoneNumber: req.body && req.body.phoneNumber,
+      service: req.body && req.body.service,
+      caller: req.body && req.body.caller,
+      fromNumber: config.retell && config.retell.phoneNumber,
+      source: 'api-retell-create-call',
     });
-    if (!result) {
-      return res.json({ success: false, error: 'Retell API not configured', status: 'unconfigured' });
-    }
     res.json({
       success: true,
-      callId: result.call_id,
-      status: result.call_status,
+      callId: created.result.call_id,
+      status: created.result.call_status,
+      profile: created.session.profile,
+      session: created.session,
       canonicalGraphPendingWebhook: true,
     });
   } catch (err) {

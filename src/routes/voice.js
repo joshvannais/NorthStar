@@ -6,29 +6,10 @@ const config = require('../config');
 const { requireAuth } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { handleWebhook, rawBodyCapture } = require('../voice/webhook');
-const { createCall } = require('../retell/client');
-const { toolDefinitions } = require('../voice/toolRegistry');
-const { getActiveBusinessProfile, getOrganizationIntegration } = require('../services/organizationAuthority');
+const { createCanonicalVoiceCall } = require('../services/canonicalVoiceSessionCreation');
 const voiceSessions = require('../services/voiceSessionAuthority');
 
 const router = express.Router();
-
-function deepFreeze(value) {
-  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
-  Object.values(value).forEach(deepFreeze);
-  return Object.freeze(value);
-}
-
-function persistedContext(profile) {
-  return deepFreeze({
-    businessProfile: JSON.parse(JSON.stringify(profile.rawProfile)),
-    canonicalAuthority: {
-      id: profile.id,
-      version: profile.versionLabel,
-      hash: profile.profileHash,
-    },
-  });
-}
 
 function errorResponse(res, error) {
   const status = error && error.status ? error.status : 503;
@@ -66,52 +47,22 @@ router.get('/sessions/:id', requireAuth, requirePermission('calls', 'read'), asy
 });
 
 router.post('/call', requireAuth, requirePermission('leads', 'create'), async function (req, res) {
-  const phoneNumber = String(req.body && req.body.phoneNumber || '').trim();
-  if (!phoneNumber) return res.status(400).json({ success: false, error: { code: 'MISSING_PHONE', message: 'phoneNumber is required.' } });
   try {
-    const pool = db.getPool();
-    const orgId = organizationId(req);
-    const [integration, profile] = await Promise.all([
-      getOrganizationIntegration(pool, orgId, 'retell'),
-      getActiveBusinessProfile(pool, orgId),
-    ]);
-    const executiveContext = persistedContext(profile);
-    const result = await createCall(phoneNumber, integration.external_integration_id, {
-      service: String(req.body.service || 'General'),
-      caller: String(req.body.caller || 'Outbound Call'),
-      fromNumber: config.twilio && config.twilio.phoneNumber,
-      executiveContext,
-      toolDefinitions,
-    });
-    if (!result || !result.call_id) {
-      return res.status(502).json({ success: false, error: { code: 'VOICE_PROVIDER_SESSION_REQUIRED', message: 'The voice provider did not return a session identifier.' } });
-    }
-    const session = await voiceSessions.createSession(pool, {
-      organizationId: orgId,
-      externalSessionId: result.call_id,
-      provider: 'retell',
-      integrationOwnershipId: integration.id,
-      profileId: profile.id,
-      profileVersion: profile.versionLabel,
-      profileHash: profile.profileHash,
-      direction: 'outbound',
-      fromNumber: config.twilio && config.twilio.phoneNumber,
-      toNumber: phoneNumber,
-      metadata: { service: req.body.service || null, caller: req.body.caller || null },
-    });
-    await voiceSessions.appendEvent(pool, {
-      organizationId: orgId,
-      externalSessionId: result.call_id,
-      eventType: 'call_started',
-      payload: { direction: 'outbound' },
-      status: 'active',
+    const created = await createCanonicalVoiceCall({
+      pool: db.getPool(),
+      organizationId: organizationId(req),
+      phoneNumber: req.body && req.body.phoneNumber,
+      service: req.body && req.body.service,
+      caller: req.body && req.body.caller,
+      fromNumber: config.retell && config.retell.phoneNumber,
+      source: 'api-v1-voice-call',
     });
     return res.json({
       success: true,
-      callId: result.call_id,
-      status: result.call_status,
-      profile: session.profile,
-      session,
+      callId: created.result.call_id,
+      status: created.result.call_status,
+      profile: created.session.profile,
+      session: created.session,
       canonicalGraphPendingWebhook: true,
     });
   } catch (error) {

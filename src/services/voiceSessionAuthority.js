@@ -74,6 +74,41 @@ async function createSession(pool, input) {
   return getSession(source, input.organizationId, externalSessionId);
 }
 
+async function assignProviderIdentity(pool, input) {
+  const providerSessionId = String(input.providerSessionId || '').trim();
+  if (!providerSessionId) {
+    throw authorityError('VOICE_PROVIDER_SESSION_REQUIRED', 'The voice provider did not return a session identifier.', 502);
+  }
+  return repository.withTransaction(requirePool(pool), async function (client) {
+    const current = await client.query(
+      `SELECT id FROM canonical_voice_sessions
+        WHERE organization_id = $1 AND external_session_id = $2 FOR UPDATE`,
+      [input.organizationId, String(input.externalSessionId)]
+    );
+    if (current.rows.length !== 1) {
+      throw authorityError('VOICE_SESSION_NOT_FOUND', 'Voice session not found.', 404);
+    }
+    try {
+      const updated = await client.query(
+        `UPDATE canonical_voice_sessions
+            SET external_session_id = $3,
+                metadata = metadata || $4::jsonb,
+                updated_at = NOW()
+          WHERE organization_id = $1 AND external_session_id = $2
+          RETURNING *`,
+        [input.organizationId, String(input.externalSessionId), providerSessionId,
+          JSON.stringify(stableValue({ providerSessionId }))]
+      );
+      return projectSession(updated.rows[0]);
+    } catch (error) {
+      if (error && error.code === '23505') {
+        throw authorityError('VOICE_PROVIDER_SESSION_CONFLICT', 'The provider session identity is already bound.', 409);
+      }
+      throw error;
+    }
+  });
+}
+
 async function getSession(pool, organizationId, externalSessionId) {
   const result = await requirePool(pool).query(
     SELECT_SESSION + ' WHERE s.organization_id = $1 AND s.external_session_id = $2',
@@ -184,6 +219,7 @@ function clearRuntimeHandlesForTests() {
 
 module.exports = {
   RUNTIME_OWNER_ID,
+  assignProviderIdentity,
   appendEvent,
   clearRuntimeHandlesForTests,
   createSession,

@@ -16,6 +16,7 @@ const persistenceMigration = '004_canonical_persistence_v2.sql';
 const authorityMigration = '005_canonical_organization_authority.sql';
 const voiceMigration = '006_canonical_voice_sessions.sql';
 const taxMigration = '007_canonical_tax_authority.sql';
+const demoMigration = '008_canonical_demo_authority.sql';
 const orgA = '00000000-0000-0000-0000-000000000001';
 const orgB = '00000000-0000-0000-0000-000000000010';
 
@@ -56,7 +57,7 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
     upgrade = new Pool({ connectionString: urls.upgrade, max: 8 });
     concurrencyA = new Pool({ connectionString: urls.concurrency, max: 24 });
     concurrencyB = new Pool({ connectionString: urls.concurrency, max: 24 });
-    await apply(concurrencyA, [...currentMigrations, persistenceMigration, authorityMigration, voiceMigration, taxMigration]);
+    await apply(concurrencyA, [...currentMigrations, persistenceMigration, authorityMigration, voiceMigration, taxMigration, demoMigration]);
     await addOrganizationB(concurrencyA);
   });
 
@@ -73,7 +74,7 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
   });
 
   test('fresh migration creates only the complete Part 3 canonical schema and required constraints', async () => {
-    await apply(fresh, [...currentMigrations, persistenceMigration, authorityMigration, voiceMigration, taxMigration]);
+    await apply(fresh, [...currentMigrations, persistenceMigration, authorityMigration, voiceMigration, taxMigration, demoMigration]);
     const tables = await fresh.query(
       `SELECT tablename FROM pg_catalog.pg_tables
         WHERE schemaname = 'public' AND tablename LIKE 'canonical_%'
@@ -85,6 +86,7 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
       'canonical_communications',
       'canonical_customer_identities',
       'canonical_customers',
+      'canonical_demo_authority',
       'canonical_estimates',
       'canonical_facts',
       'canonical_integration_ownership',
@@ -121,6 +123,7 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
       'canonical_estimates_tax_rate_check',
       'canonical_estimates_tax_amount_check',
       'canonical_estimates_total_with_tax_check',
+      'canonical_demo_authority_status_check',
     ]) {
       expect(constraintNames.has(name)).toBe(true);
     }
@@ -153,7 +156,7 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
         ORDER BY table_name, ordinal_position`
     );
 
-    await apply(upgrade, [persistenceMigration, authorityMigration, voiceMigration, taxMigration]);
+    await apply(upgrade, [persistenceMigration, authorityMigration, voiceMigration, taxMigration, demoMigration]);
 
     const after = await upgrade.query(
       `SELECT

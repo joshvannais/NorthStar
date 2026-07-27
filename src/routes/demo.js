@@ -16,10 +16,12 @@
 
 const express = require('express');
 const router = express.Router();
-const { v4: uuidv4 } = require('uuid');
 const config = require('../config');
+const db = require('../db');
 const retell = require('../retell/client');
 const liveTimeline = require('../voice/liveTimeline');
+const { rateLimit } = require('../middleware/rateLimit');
+const { createProvisionedDemoVoiceCall } = require('../services/canonicalVoiceSessionCreation');
 
 const demoSessions = new Map();
 const TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -974,19 +976,6 @@ router.get('/industries', (req, res) => {
   res.json({ industries: ALL_INDUSTRIES });
 });
 
-/**
- * Format a phone number to E.164 format (+1XXXXXXXXXX).
- */
-function formatE164(phone) {
-  if (!phone) return '';
-  // If already E.164, return as-is
-  if (/^\+[1-9]\d{6,14}$/.test(phone)) return phone;
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 10) return '+1' + digits;
-  if (digits.length === 11 && digits[0] === '1') return '+' + digits;
-  return '+' + digits; // best effort
-}
-
 // ── Customer-safe error mapping ──
 // Internal errors → customer-safe messages. All diagnostics logged server-side only.
 const CUSTOMER_ERRORS = {
@@ -1024,127 +1013,40 @@ function customerError(internalCode, internalDetails) {
  * Instrumented call pipeline with full server-side diagnostics.
  * Customer-facing responses are always clean: { success, error: { code, message } }
  */
-router.post('/call', async (req, res) => {
-  const pipelineId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
-  const log = (stage, status, detail) => {
-    console.log(`[Demo/Pipeline:${pipelineId}] Stage ${stage}: ${status} — ${detail}`);
-  };
-
+router.post('/call', rateLimit('public-api'), async (req, res) => {
+  const body = req.body || {};
+  const normalizedIndustry = ALL_INDUSTRIES.find(industry =>
+    industry.toLowerCase() === String(body.industry || '').trim().toLowerCase());
+  if (!normalizedIndustry) {
+    return res.status(400).json(customerError('VALIDATION_INVALID_INDUSTRY', 'A supported industry is required.'));
+  }
   try {
-    // ── Stage 1: Request received ──
-    console.log('1. request_received', 'OK', `POST /demo/call`);
-    const { businessName, industry, phoneNumber } = req.body;
-
-    // ── Stage 2: Business profile loaded ──
-    if (!businessName) {
-      console.log('2. business_profile', 'FAIL', 'Missing businessName');
-      return res.status(400).json(customerError('VALIDATION_MISSING_FIELD', `Missing businessName`));
-    }
-    console.log('2. business_profile', 'OK', `businessName="${businessName}"`);
-
-    // ── Stage 3: Industry validated ──
-    const normalizedIndustry = ALL_INDUSTRIES.find(i => i.toLowerCase() === (industry || '').toLowerCase());
-    if (!normalizedIndustry) {
-      console.log('3. credentials_verified', 'FAIL', `Invalid industry: ${industry}`);
-      return res.status(400).json(customerError('VALIDATION_INVALID_INDUSTRY', `Invalid industry: ${industry}`));
-    }
-    console.log('3. credentials_verified', 'OK', `industry="${normalizedIndustry}"`);
-
-    // ── Stage 4: Phone validated ──
-    const digits = (phoneNumber || '').replace(/\D/g, '');
-    if (digits.length < 10) {
-      console.log('4. phone_validated', 'FAIL', `Invalid phone: "${phoneNumber}"`);
-      return res.status(400).json(customerError('INVALID_PHONE_NUMBER', `Invalid phone: ${phoneNumber}`));
-    }
-    console.log('4. phone_validated', 'OK', `phone="${phoneNumber}" (${digits.length} digits)`);
-
-    const demoSessionId = uuidv4();
-    const ec = buildExecutiveContext(businessName, normalizedIndustry, phoneNumber, demoSessionId);
-    const configured = Boolean(config.retell && config.retell.apiKey && config.retell.agentId);
-
-    // ── Stage 5: Retell credentials verified ──
-    if (!configured) {
-      console.log('5. credentials_verified', 'SIMULATION', 'Retell not configured — returning simulation path');
-      const session = {
-        id: demoSessionId, businessName, industry: normalizedIndustry, phoneNumber,
-        executiveContext: ec, callId: `sim-${demoSessionId.slice(0, 8)}`,
-        callStatus: 'idle', createdAt: Date.now(), transcriptLines: [],
-        transcriptIndex: 0, startedAt: null, stateSeq: 1,
-        error: null,
-      };
-      demoSessions.set(demoSessionId, session);
-      return res.json({
-        success: true, demoSessionId, callId: session.callId,
-        status: 'idle', mode: 'simulation',
-        message: 'Demo simulation ready. Call /simulate to start.',
+    const created = await createProvisionedDemoVoiceCall({
+      pool: db.getPool(),
+      configuredOrganizationId: process.env.NORTHSTAR_DEMO_ORGANIZATION_ID,
+      phoneNumber: body.phoneNumber,
+      service: normalizedIndustry,
+      caller: typeof body.contactName === 'string' ? body.contactName : 'Demo caller',
+      fromNumber: config.retell && config.retell.phoneNumber,
+    });
+    return res.json({
+      success: true,
+      demoSessionId: created.session.externalSessionId,
+      canonicalSessionId: created.session.id,
+      callId: created.result.call_id,
+      status: created.result.call_status,
+      mode: 'live',
+      profile: created.session.profile,
+    });
+  } catch (error) {
+    if (error && error.code === 'DEMO_UNAVAILABLE') {
+      return res.status(503).json({
+        success: false,
+        error: { code: 'demo_unavailable', message: 'The public demo is unavailable.' },
       });
     }
-
-    console.log('5. credentials_verified', 'OK', `Retell API key + agent ID present`);
-
-    // ── Stage 6: Agent loaded ──
-    // Verify the agent exists by fetching it (optional check — skip if not critical)
-    console.log('6. agent_loaded', 'OK', `agentId=${config.retell.agentId}`);
-
-    // ── Stage 7: Call request sent to Retell ──
-    const e164Phone = formatE164(phoneNumber);
-    console.log('7. call_requested', 'SENDING', `phone=${phoneNumber} e164=${e164Phone} service=${ec.service}`);
-    liveTimeline.addEntry(demoSessionId, 'call_creating', 'Requesting call via Retell', 'system');
-
-    let callResult;
-            try {
-              callResult = await retell.createCall(e164Phone, config.retell.agentId, {
-                service: ec.service,
-                caller: `Demo: ${businessName}`,
-                // webhook_url is NOT sent per-call — the agent itself has
-                // webhook_url configured with all webhook_events.
-                // Passing webhook_url per-call overrides the agent's webhook_events
-                // config and causes custom events (transcript_updated) to be dropped.
-                executiveContext: ec,
-              });
-    } catch (callErr) {
-      // Classify the error — log full details server-side, return clean customer message
-      if (callErr instanceof retell.DiagnosticError) {
-        console.log('7. call_requested', 'FAIL', `[${callErr.stage}] ${callErr.code}: ${callErr.details}`);
-        return res.status(callErr.httpStatus || 502).json(customerError(callErr.code, callErr.details));
-      }
-      console.log('7. call_requested', 'FAIL', `Unknown error: ${callErr.message}`);
-      return res.status(502).json(customerError('RETELL_UNKNOWN_ERROR', callErr.message));
-    }
-
-    // ── Stage 8: call_id created ──
-    const retellCallId = callResult?.call_id;
-    if (!retellCallId) {
-      console.log('8. call_created', 'FAIL', 'Retell did not return a call_id');
-      return res.status(502).json(customerError('RETELL_MISSING_CALL_ID', 'Retell did not return a call_id'));
-    }
-    console.log('8. call_created', 'OK', `call_id=${retellCallId}`);
-
-    // ── Stage 9: Session created ──
-    const session = {
-      id: demoSessionId, businessName, industry: normalizedIndustry, phoneNumber,
-      executiveContext: ec, callId: retellCallId,
-      callStatus: 'call_created', createdAt: Date.now(), transcriptLines: [],
-      transcriptIndex: 0, startedAt: null, stateSeq: 1,
-      error: null,
-    };
-    demoSessions.set(demoSessionId, session);
-    liveTimeline.addEntry(demoSessionId, 'call_created', `Retell call ${retellCallId} created`, 'system');
-
-    // Start polling the Retell API for call status updates
-    // (Fallback when webhooks aren't available — e.g. agent not published)
-    startCallPoller(demoSessionId, retellCallId);
-
-    // ── Stage 10: Returning success ──
-    console.log('9. returning_success', 'OK', `session=${demoSessionId} status=call_created`);
-    return res.json({
-      success: true, demoSessionId, callId: retellCallId,
-      status: 'call_created', mode: 'live',
-    });
-
-  } catch (err) {
-    console.error(`[Demo/Pipeline:${pipelineId}] Uncaught error:`, err.message, err.stack);
-    res.status(500).json(customerError('INTERNAL_SERVER_ERROR', err.message));
+    const status = error && error.status ? error.status : 502;
+    return res.status(status).json(customerError(error && error.code || 'RETELL_UNKNOWN_ERROR', 'The demo call could not be created.'));
   }
 });
 

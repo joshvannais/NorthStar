@@ -406,7 +406,7 @@ async function createCall(phoneNumber, agentId, options) {
 
   const body = {
     agent_id: agentId,
-    from_number: config.retell.phoneNumber || '',
+    from_number: opts.fromNumber || config.retell.phoneNumber || '',
     to_number: phoneNumber,
     retell_llm_dynamic_variables: dynamicVariables,
   };

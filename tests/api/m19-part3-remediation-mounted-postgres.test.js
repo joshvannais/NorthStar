@@ -76,6 +76,8 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
   let originalOpenAiKey;
   let originalRetellKey;
   let originalRetellWebhookSecret;
+  let originalDemoOrganizationId;
+  let retell;
   let dataBefore;
   let legacyCountsBefore;
 
@@ -94,6 +96,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     originalOpenAiKey = process.env.OPENAI_API_KEY;
     originalRetellKey = process.env.RETELL_API_KEY;
     originalRetellWebhookSecret = process.env.RETELL_WEBHOOK_SECRET;
+    originalDemoOrganizationId = process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
     process.env.DATABASE_URL = suiteDatabase.connectionString;
     delete process.env.OPENAI_API_KEY;
     delete process.env.RETELL_API_KEY;
@@ -141,6 +144,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       metadata: { source: 'mounted-test' },
     });
     voiceSessions = require('../../src/services/voiceSessionAuthority');
+    retell = require('../../src/retell/client');
     ({ app } = require('../../src/server'));
     ({ generateToken } = require('../../src/auth/middleware'));
     leadStore = require('../../src/leads/store');
@@ -164,6 +168,8 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       else process.env.RETELL_API_KEY = originalRetellKey;
       if (originalRetellWebhookSecret === undefined) delete process.env.RETELL_WEBHOOK_SECRET;
       else process.env.RETELL_WEBHOOK_SECRET = originalRetellWebhookSecret;
+      if (originalDemoOrganizationId === undefined) delete process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
+      else process.env.NORTHSTAR_DEMO_ORGANIZATION_ID = originalDemoOrganizationId;
       if (suiteDatabase) await suiteDatabase.cleanup();
     }
   });
@@ -350,6 +356,162 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     expect(stored.rows).toEqual([{ source: 'voice', count: 1 }]);
     expect(leadStore.addLead).not.toHaveBeenCalled();
     expect(sheets.appendLead).not.toHaveBeenCalled();
+  });
+
+  test('both tenant call routes create the pinned canonical session before the provider boundary and ignore caller authority', async () => {
+    const pool = db.getPool();
+    const observed = [];
+    const provider = jest.spyOn(retell, 'createCall').mockImplementation(async (phoneNumber, agentId, options) => {
+      const pending = await pool.query(
+        `SELECT organization_id, business_profile_id, business_profile_version,
+                business_profile_hash, status, metadata
+           FROM canonical_voice_sessions
+          WHERE to_number = $1 AND external_session_id LIKE 'pending-%'`,
+        [phoneNumber]
+      );
+      expect(pending.rows).toHaveLength(1);
+      observed.push({ phoneNumber, agentId, options, pending: pending.rows[0] });
+      return { call_id: 'provider-' + observed.length, call_status: 'registered' };
+    });
+    try {
+      for (const route of ['/api/v1/voice/call', '/api/retell/create-call']) {
+        const response = await request(app)
+          .post(route)
+          .set(auth(USERS.member))
+          .send({
+            phoneNumber: '+1555555300' + (observed.length + 1),
+            service: 'Fence',
+            caller: 'Scenario Customer',
+            organizationId: ORG_B,
+            businessName: 'Caller Controlled Company',
+            profile: { company: { name: 'Caller Controlled Company' } },
+            pricing: { minimumJobPrice: 1 },
+          });
+        expect(response.status).toBe(200);
+        expect(response.body.session.organizationId).toBe(ORG_A);
+        expect(response.body.profile).toEqual({
+          id: profileAuthorityA.id,
+          version: profileAuthorityA.versionLabel,
+          hash: profileAuthorityA.profileHash,
+        });
+      }
+      expect(observed).toHaveLength(2);
+      for (const call of observed) {
+        expect(call.agentId).toBe('agent-mounted-a');
+        expect(call.pending.organization_id).toBe(ORG_A);
+        expect(call.pending.business_profile_id).toBe(profileAuthorityA.id);
+        expect(call.pending.business_profile_version).toBe(profileAuthorityA.versionLabel);
+        expect(call.pending.business_profile_hash).toBe(profileAuthorityA.profileHash);
+        expect(call.options.executiveContext.businessProfile.company.name).toBe('Mounted Test Company');
+        expect(call.options.executiveContext.businessProfile.company.name).not.toBe('Caller Controlled Company');
+      }
+    } finally {
+      provider.mockRestore();
+    }
+  });
+
+  test('tenant call RBAC fails closed and provider failure leaves a durable failed session', async () => {
+    const pool = db.getPool();
+    const failure = Object.assign(new Error('intercepted provider failure'), {
+      code: 'RETELL_INTERCEPTED_FAILURE',
+      status: 502,
+    });
+    const provider = jest.spyOn(retell, 'createCall').mockRejectedValue(failure);
+    try {
+      const viewer = await request(app)
+        .post('/api/retell/create-call')
+        .set(auth(USERS.viewer))
+        .send({ phoneNumber: '+15555553101' });
+      expect(viewer.status).toBe(403);
+      expect(provider).not.toHaveBeenCalled();
+
+      const failed = await request(app)
+        .post('/api/retell/create-call')
+        .set(auth(USERS.owner))
+        .send({ phoneNumber: '+15555553102' });
+      expect(failed.status).toBe(502);
+      expect(failed.body.error.code).toBe('RETELL_INTERCEPTED_FAILURE');
+      const durable = await pool.query(
+        `SELECT status, completed_at, metadata
+           FROM canonical_voice_sessions
+          WHERE organization_id = $1 AND to_number = $2`,
+        [ORG_A, '+15555553102']
+      );
+      expect(durable.rows).toHaveLength(1);
+      expect(durable.rows[0].status).toBe('failed');
+      expect(durable.rows[0].completed_at).not.toBeNull();
+      expect(durable.rows[0].metadata.source).toBe('api-retell-create-call');
+    } finally {
+      provider.mockRestore();
+    }
+  });
+
+  test('public demo is safely unavailable unless server-owned persisted demo authority is provisioned', async () => {
+    delete process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
+    const provider = jest.spyOn(retell, 'createCall');
+    try {
+      const unavailable = await request(app)
+        .post('/api/demo/call')
+        .send({ businessName: 'Caller Business', industry: 'General Contracting', phoneNumber: '+15555553201' });
+      expect(unavailable.status).toBe(503);
+      expect(unavailable.body.error).toEqual({ code: 'demo_unavailable', message: 'The public demo is unavailable.' });
+      expect(provider).not.toHaveBeenCalled();
+    } finally {
+      provider.mockRestore();
+    }
+  });
+
+  test('provisioned public demo uses only the isolated server-owned organization, profile, integration, and PostgreSQL session', async () => {
+    const pool = db.getPool();
+    await pool.query(
+      `INSERT INTO canonical_demo_authority (organization_id, status)
+       VALUES ($1, 'active') ON CONFLICT (organization_id) DO UPDATE SET status = 'active'`,
+      [ORG_B]
+    );
+    process.env.NORTHSTAR_DEMO_ORGANIZATION_ID = ORG_B;
+    let providerContext;
+    const provider = jest.spyOn(retell, 'createCall').mockImplementation(async (_phone, agentId, options) => {
+      providerContext = { agentId, options };
+      const pending = await pool.query(
+        `SELECT organization_id, business_profile_id FROM canonical_voice_sessions
+          WHERE organization_id = $1 AND external_session_id LIKE 'pending-%'`,
+        [ORG_B]
+      );
+      expect(pending.rows).toHaveLength(1);
+      expect(pending.rows[0].business_profile_id).toBe(profileAuthorityB.id);
+      return { call_id: 'provider-demo-isolated', call_status: 'registered' };
+    });
+    try {
+      const response = await request(app)
+        .post('/api/demo/call')
+        .send({
+          businessName: 'Mounted Test Company',
+          organizationId: ORG_A,
+          profile: profile,
+          pricing: { taxRate: 99 },
+          industry: 'General Contracting',
+          contactName: 'Bounded Scenario',
+          phoneNumber: '+15555553202',
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.callId).toBe('provider-demo-isolated');
+      expect(response.body.profile.id).toBe(profileAuthorityB.id);
+      expect(providerContext.agentId).toBe('agent-mounted-b');
+      expect(providerContext.options.executiveContext.businessProfile.company.name).toBe('Other Company');
+      expect(require('../../src/routes/demo').demoSessions.has('provider-demo-isolated')).toBe(false);
+      const persisted = await pool.query(
+        `SELECT organization_id, business_profile_id, external_session_id
+           FROM canonical_voice_sessions WHERE external_session_id = $1`,
+        ['provider-demo-isolated']
+      );
+      expect(persisted.rows).toEqual([{
+        organization_id: ORG_B,
+        business_profile_id: profileAuthorityB.id,
+        external_session_id: 'provider-demo-isolated',
+      }]);
+    } finally {
+      provider.mockRestore();
+    }
   });
 
   test('voice sessions enforce the persisted role matrix, tenant boundary, and live-runtime boundary', async () => {

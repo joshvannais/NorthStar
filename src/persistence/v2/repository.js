@@ -47,10 +47,19 @@ async function withTransaction(pool, work) {
   const source = resolvePool(pool);
   const client = typeof source.connect === 'function' ? await source.connect() : source;
   const shouldRelease = client !== source && typeof client.release === 'function';
+  let transportFailure = null;
+  const containClientError = function (error) {
+    transportFailure = transportFailure || error;
+  };
+  if (shouldRelease && typeof client.on === 'function') {
+    client.on('error', containClientError);
+  }
   try {
     await begin(client);
     const result = await work(client);
+    if (transportFailure) throw transportFailure;
     await commit(client);
+    if (transportFailure) throw transportFailure;
     return result;
   } catch (error) {
     try {
@@ -60,7 +69,12 @@ async function withTransaction(pool, work) {
     }
     throw error;
   } finally {
-    if (shouldRelease) client.release();
+    if (shouldRelease) {
+      client.release(transportFailure || undefined);
+      if (typeof client.removeListener === 'function') {
+        client.removeListener('error', containClientError);
+      }
+    }
   }
 }
 
@@ -204,14 +218,14 @@ async function getGraphByOperationId(pool, organizationId, operationId) {
             ps.id AS polaris_snapshot_id, ps.calculation_version, ps.snapshot_digest,
             ps.snapshot
        FROM canonical_operations o
-       LEFT JOIN canonical_customers c
-         ON c.organization_id = o.organization_id AND c.operation_id = o.id
        LEFT JOIN canonical_transcripts t
          ON t.organization_id = o.organization_id AND t.operation_id = o.id
        LEFT JOIN canonical_communications cm
          ON cm.organization_id = o.organization_id AND cm.operation_id = o.id
        LEFT JOIN canonical_opportunities op
          ON op.organization_id = o.organization_id AND op.operation_id = o.id
+       LEFT JOIN canonical_customers c
+         ON c.organization_id = o.organization_id AND c.id = op.customer_id
        LEFT JOIN canonical_estimates e
          ON e.organization_id = o.organization_id AND e.operation_id = o.id
        LEFT JOIN canonical_appointments a

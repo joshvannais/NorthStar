@@ -10,6 +10,7 @@
 const crypto = require('crypto');
 
 const memoryCache = new Map();
+const organizationGenerations = new Map();
 const KEY_PREFIX = 'northstar:cache:v2:';
 const REQUIRED_CANONICAL_IDENTITY = Object.freeze([
   'organizationId', 'userId', 'sessionId', 'endpoint', 'filters', 'readModelVersion',
@@ -65,7 +66,11 @@ function buildKey(type, id) {
   return KEY_PREFIX + String(type) + ':' + String(id);
 }
 
-function buildCanonicalKey(identity) {
+function organizationGeneration(organizationId) {
+  return organizationGenerations.get(String(organizationId)) || 0;
+}
+
+function buildCanonicalKey(identity, generation) {
   const source = identity && typeof identity === 'object' ? identity : {};
   const missing = REQUIRED_CANONICAL_IDENTITY.filter(function (field) {
     return source[field] === undefined || source[field] === null || source[field] === '';
@@ -73,6 +78,8 @@ function buildCanonicalKey(identity) {
   if (missing.length) throw new TypeError('canonical cache identity missing: ' + missing.join(', '));
   return KEY_PREFIX + 'canonical:' + digest({
     organizationId: String(source.organizationId),
+    organizationGeneration: generation === undefined
+      ? organizationGeneration(source.organizationId) : generation,
     userId: String(source.userId),
     sessionId: String(source.sessionId),
     endpoint: String(source.endpoint),
@@ -112,6 +119,7 @@ async function del(key) {
 
 async function invalidateOrg(organizationId) {
   const marker = String(organizationId);
+  organizationGenerations.set(marker, organizationGeneration(marker) + 1);
   for (const [key, entry] of memoryCache) {
     if (entry.organizationId === marker) memoryCache.delete(key);
   }
@@ -120,9 +128,12 @@ async function invalidateOrg(organizationId) {
   }
 }
 
-async function setCanonical(identity, value, ttlSeconds) {
+async function setCanonical(identity, value, ttlSeconds, expectedGeneration) {
   if (!cacheEnabled) return false;
-  const key = buildCanonicalKey(identity);
+  const generation = expectedGeneration === undefined
+    ? organizationGeneration(identity.organizationId) : expectedGeneration;
+  if (generation !== organizationGeneration(identity.organizationId)) return false;
+  const key = buildCanonicalKey(identity, generation);
   const ttl = ttlSeconds === undefined || ttlSeconds === null ? getTTL('canonical') : Number(ttlSeconds);
   if (!Number.isFinite(ttl) || ttl <= 0) return false;
   memoryCache.set(key, {
@@ -136,7 +147,8 @@ async function setCanonical(identity, value, ttlSeconds) {
 async function wrapCanonical(identity, fetchFn, ttlSeconds) {
   if (typeof fetchFn !== 'function') throw new TypeError('fetchFn is required');
   if (!cacheEnabled) return fetchFn();
-  const key = buildCanonicalKey(identity);
+  const generation = organizationGeneration(identity.organizationId);
+  const key = buildCanonicalKey(identity, generation);
   try {
     const cached = await get(key);
     if (cached !== null) return cached;
@@ -146,7 +158,7 @@ async function wrapCanonical(identity, fetchFn, ttlSeconds) {
   const authoritative = await fetchFn();
   try {
     if (authoritative !== null && authoritative !== undefined) {
-      await setCanonical(identity, authoritative, ttlSeconds);
+      await setCanonical(identity, authoritative, ttlSeconds, generation);
     }
   } catch (_error) {
     // Acceleration failures never alter the authoritative response.
@@ -182,6 +194,7 @@ function setEnabled(enabled) {
 
 function clearForTests() {
   memoryCache.clear();
+  organizationGenerations.clear();
 }
 
 module.exports = {

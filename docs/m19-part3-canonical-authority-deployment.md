@@ -299,13 +299,27 @@ query also used an ambiguous PostgreSQL `text || "char"` expression and an
 obsolete PowerShell SHA API after both migrations had already succeeded; a
 read-only corrected comparison proved 218 identical schema objects with SHA-256
 `8c3be80db118ece93c8a53c283841c64d4a3bac1363b015c4e131ecb401d6dd2`.
+The final independent fresh/upgrade inventory expanded that comparison to
+relations, columns, and constraints: both paths produced 763 identical objects
+with SHA-256
+`599e94dca7a58308e5f714f8bd5d923064e7da15420054eed70529de0e0b74bc`
+and zero Business Profile, operation, or demo-authority rows.
 
 Earlier published-head diagnostics also remain part of the ledger: structured
 scope initially omitted `jobType`; migration 008's table was placed in the wrong
 alphabetical position in one assertion; reversed provenance exposed a second
 self-contained-fixture gap; one serial run exposed a static ratification phrase
 mismatch; and parser/integrity commands required Windows quoting and exact-name
-corrections. Every failure was diagnosed narrowly and rerun without skips,
-relaxed assertions, lower concurrency, extra timeout, production access, or
-provider access. The final additive-head gates above are clean. GitHub CI remains
-unavailable if PR #69 continues to report zero checks.
+corrections. At this final additive head, the first complete inline-script
+verifier also encountered the Windows Python `cp1252` pipe encoding before any
+syntax check; the same parser passed all 8 HTML files and 17 complete inline
+scripts with an explicit UTF-8 byte pipe. The first final migration identity
+guard compared PostgreSQL's `127.0.0.1/32` rendering to the unmasked loopback
+string and stopped before creating a database; `host(inet_server_addr())` then
+verified only `127.0.0.1` and the migration matrix passed. The first data-hash
+map transcribed the middle of one preflight digest incorrectly and stopped on
+that comparison; re-reading all 11 exact SHA-256 values and their immutable tree
+blobs proved every file unchanged. Every failure was diagnosed narrowly and
+rerun without skips, relaxed assertions, lower concurrency, extra timeout,
+production access, or provider access. The final additive-head gates above are
+clean. GitHub CI remains unavailable if PR #69 continues to report zero checks.

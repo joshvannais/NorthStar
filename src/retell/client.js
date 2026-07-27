@@ -184,6 +184,58 @@ async function getCall(callId) {
 }
 
 
+function own(source, key) {
+  return Boolean(source && Object.prototype.hasOwnProperty.call(source, key));
+}
+
+function financialValue(profile, sources, options) {
+  let selected;
+  let configured = false;
+  for (const source of sources) {
+    if (own(profile[source.object], source.key)) {
+      selected = profile[source.object][source.key];
+      configured = true;
+      break;
+    }
+  }
+  if (!configured) return { value: 'not_configured', status: 'not_configured' };
+  if (typeof selected !== 'number' || !Number.isFinite(selected) || selected < 0 ||
+      (options && options.maximum !== undefined && selected > options.maximum)) {
+    return { value: 'unavailable', status: 'unavailable' };
+  }
+  return { value: String(selected), status: 'configured' };
+}
+
+function retellFinancialSemantics(profile) {
+  const source = profile && typeof profile === 'object' ? profile : {};
+  return {
+    minimum_job_price: financialValue(source, [
+      { object: 'financial', key: 'minimumJobPrice' },
+    ]),
+    emergency_markup: financialValue(source, [
+      { object: 'canonicalPricing', key: 'emergencyMultiplier' },
+      { object: 'financial', key: 'emergencyMarkup' },
+    ]),
+    travel_charge: financialValue(source, [
+      { object: 'canonicalPricing', key: 'travelCustomerChargePerMile' },
+      { object: 'financial', key: 'travelCharge' },
+    ]),
+    // Canonical tax authority is intentionally never inferred from the legacy
+    // financial.taxRate field. It must be explicitly configured here.
+    tax_rate: financialValue(source, [
+      { object: 'canonicalPricing', key: 'taxRatePercent' },
+    ], { maximum: 100 }),
+  };
+}
+
+function financialRules(semantics) {
+  const rules = Object.keys(semantics).map(function (key) {
+    const entry = semantics[key];
+    return `${key}=${entry.value} (${entry.status})`;
+  });
+  return rules.join('; ') + '. Do not quote, infer, or replace financial values marked not_configured or unavailable. No pricing promises without a written estimate.';
+}
+
 /**
  * Map Executive Context to Retell dynamic variables.
  * Extracts key fields from the frozen EC for injection into the LLM prompt.
@@ -243,14 +295,13 @@ function mapExecutiveContextToVariables(ec, opts) {
   vars.faq = bp.faq || (ec.faq || '');
   vars.custom_prompt = bp.customPrompt || (ec.customPrompt || '');
 
-  // Pricing rules (combined from financial settings)
-  if (bp.financial) {
-    const minPrice = bp.financial.minimumJobPrice || 150;
-    const markup = bp.financial.emergencyMarkup || 1.0;
-    const travel = bp.financial.travelCharge || 0;
-    vars.pricing_rules = `Minimum job price: ${minPrice}. Emergency markup: ${markup}x. Travel charge: ${travel}/mile. No pricing promises without written estimate.`;
-  } else {
-    vars.pricing_rules = 'No pricing promises without written estimate. Free estimates available.';
+  // Financial variables and the combined prompt share one exact disposition.
+  // Zero is configured; absence and malformed values are never defaulted.
+  const financial = retellFinancialSemantics(bp);
+  vars.pricing_rules = financialRules(financial);
+  for (const [key, entry] of Object.entries(financial)) {
+    vars[key] = entry.value;
+    vars[key + '_status'] = entry.status;
   }
 
   // Scheduling rules (combined from scheduling settings)
@@ -282,14 +333,6 @@ function mapExecutiveContextToVariables(ec, opts) {
     vars.scheduling_preferences = JSON.stringify(bp.scheduling);
     vars.max_jobs_per_day = bp.scheduling.maxJobsPerDay || 4;
     vars.work_day_length = bp.scheduling.workDayLength || 8;
-  }
-
-  // Financial settings
-  if (bp.financial) {
-    vars.minimum_job_price = bp.financial.minimumJobPrice || 150;
-    vars.emergency_markup = bp.financial.emergencyMarkup || 1.5;
-    vars.travel_charge = bp.financial.travelCharge || 0.58;
-    vars.tax_rate = bp.financial.taxRate || 7;
   }
 
   // Polaris preferences
@@ -553,5 +596,6 @@ module.exports = {
   verifyApiKey,
   sendSMS,
   mapExecutiveContextToVariables,
+  retellFinancialSemantics,
   DiagnosticError,
 };

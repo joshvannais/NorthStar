@@ -7,6 +7,8 @@ const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database'
 const { bindIntegrationOwner, putBusinessProfile } = require('../../src/services/organizationAuthority');
 const voice = require('../../src/services/voiceSessionAuthority');
 const { ingestRetellPayload } = require('../../src/services/canonicalRetellIngestion');
+const { createCanonicalVoiceCall } = require('../../src/services/canonicalVoiceSessionCreation');
+const { mapExecutiveContextToVariables } = require('../../src/retell/client');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const migrationDir = path.resolve(__dirname, '../../migrations');
@@ -138,14 +140,61 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     })).rejects.toMatchObject({ status: 503, code: 'VOICE_RUNTIME_UNAVAILABLE' });
   });
 
-  test('completion and replay use the profile pinned when the session was created', async () => {
-    const pinned = await create(ORG_A, integrationA, profileA, 'pinned-call', false);
+  test('profile changes affect new Retell variables while completion and replay retain the pinned original profile', async () => {
+    const pinnedAuthority = await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      userId: USER_A,
+      profile: {
+        ...PROFILE,
+        financial: { minimumJobPrice: 275, emergencyMarkup: 1.4, travelCharge: 1.1 },
+        canonicalPricing: { emergencyMultiplier: 1.4, travelCustomerChargePerMile: 1.1, taxRatePercent: 8.25 },
+      },
+    });
+    let pinnedVariables;
+    const pinnedCall = await createCanonicalVoiceCall({
+      pool,
+      organizationId: ORG_A,
+      phoneNumber: '+15555550198',
+      source: 'profile-version-test',
+      createProviderCall: async (_phone, _agent, options) => {
+        pinnedVariables = mapExecutiveContextToVariables(options.executiveContext);
+        return { call_id: 'pinned-call', call_status: 'registered' };
+      },
+    });
     const newer = await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: USER_A,
-      profile: { ...PROFILE, company: { name: 'Newer Voice Profile', currency: 'USD' } },
+      profile: {
+        ...PROFILE,
+        company: { name: 'Newer Voice Profile', currency: 'USD' },
+        financial: { minimumJobPrice: 0, emergencyMarkup: 0, travelCharge: 0 },
+        canonicalPricing: { emergencyMultiplier: 0, travelCustomerChargePerMile: 0, taxRatePercent: 0 },
+      },
     });
-    expect(newer.id).not.toBe(pinned.profile.id);
+    let newerVariables;
+    const newerCall = await createCanonicalVoiceCall({
+      pool,
+      organizationId: ORG_A,
+      phoneNumber: '+15555550197',
+      source: 'profile-version-test',
+      createProviderCall: async (_phone, _agent, options) => {
+        newerVariables = mapExecutiveContextToVariables(options.executiveContext);
+        return { call_id: 'newer-call', call_status: 'registered' };
+      },
+    });
+    expect(newer.id).not.toBe(pinnedAuthority.id);
+    expect(pinnedCall.session.profile).toEqual({
+      id: pinnedAuthority.id,
+      version: pinnedAuthority.versionLabel,
+      hash: pinnedAuthority.profileHash,
+    });
+    expect(newerCall.session.profile.id).toBe(newer.id);
+    expect(pinnedVariables).toMatchObject({
+      minimum_job_price: '275', emergency_markup: '1.4', travel_charge: '1.1', tax_rate: '8.25',
+    });
+    expect(newerVariables).toMatchObject({
+      minimum_job_price: '0', emergency_markup: '0', travel_charge: '0', tax_rate: '0',
+    });
     const payload = {
       event: 'call_ended',
       event_id: 'pinned-event-1',
@@ -159,13 +208,15 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     };
     const completed = await ingestRetellPayload(payload, { pool, ingestionSource: 'voice' });
     expect(completed.status).toBe(201);
-    expect(completed.body.businessProfile).toEqual(pinned.profile);
+    expect(completed.body.businessProfile).toEqual(pinnedCall.session.profile);
     const replayed = await ingestRetellPayload({ ...payload, event_id: 'pinned-event-2' }, { pool, ingestionSource: 'voice' });
     expect(replayed.status).toBe(201);
     expect(replayed.replayed).toBe(true);
-    expect(replayed.body.businessProfile).toEqual(pinned.profile);
+    expect(replayed.body.businessProfile).toEqual(pinnedCall.session.profile);
     const session = await voice.getSession(pool, ORG_A, 'pinned-call');
     expect(session.status).toBe('completed');
-    expect(session.profile).toEqual(pinned.profile);
+    expect(session.profile).toEqual(pinnedCall.session.profile);
+    expect(pinnedVariables.pricing_rules).toContain('tax_rate=8.25 (configured)');
+    expect(pinnedVariables.pricing_rules).not.toBe(newerVariables.pricing_rules);
   });
 });

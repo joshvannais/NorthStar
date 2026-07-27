@@ -370,7 +370,13 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
         [phoneNumber]
       );
       expect(pending.rows).toHaveLength(1);
-      observed.push({ phoneNumber, agentId, options, pending: pending.rows[0] });
+      observed.push({
+        phoneNumber,
+        agentId,
+        options,
+        pending: pending.rows[0],
+        variables: retell.mapExecutiveContextToVariables(options.executiveContext),
+      });
       return { call_id: 'provider-' + observed.length, call_status: 'registered' };
     });
     try {
@@ -404,6 +410,14 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
         expect(call.pending.business_profile_hash).toBe(profileAuthorityA.profileHash);
         expect(call.options.executiveContext.businessProfile.company.name).toBe('Mounted Test Company');
         expect(call.options.executiveContext.businessProfile.company.name).not.toBe('Caller Controlled Company');
+        expect(call.variables).toMatchObject({
+          minimum_job_price: 'not_configured',
+          emergency_markup: '1.5',
+          travel_charge: '0.58',
+          tax_rate: '0',
+        });
+        expect(call.variables.pricing_rules).toContain('tax_rate=0 (configured)');
+        expect(call.variables.pricing_rules).not.toMatch(/tax_rate=7|minimum_job_price=150/);
       }
     } finally {
       provider.mockRestore();

@@ -439,7 +439,7 @@ describe('Voice Webhook Framework', () => {
       };
     }
 
-    test('returns 200 with received:true for valid event', async () => {
+    test('fails closed when persisted integration ownership is unavailable', async () => {
       const req = mockReq({
         event: 'call_started',
         event_id: 'test_evt_' + Date.now(),
@@ -453,8 +453,8 @@ describe('Voice Webhook Framework', () => {
       const res = mockRes();
       await webhook.handleWebhook(req, res);
 
-      expect(res.statusCode).toBeNull(); // 200 default
-      expect(res.responseBody.received).toBe(true);
+      expect(res.statusCode).toBe(503);
+      expect(res.responseBody.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
     });
 
     test('returns 400 for invalid timestamp', async () => {
@@ -476,7 +476,7 @@ describe('Voice Webhook Framework', () => {
       expect(res.responseBody.error.code).toBe('INVALID_TIMESTAMP');
     });
 
-    test('returns deduplicated:true for duplicate event', async () => {
+    test('does not let in-memory deduplication bypass persisted ownership', async () => {
       const eventId = 'dup_test_' + Date.now();
       const req = mockReq({
         event: 'call_started',
@@ -490,14 +490,14 @@ describe('Voice Webhook Framework', () => {
       // First call
       const res1 = mockRes();
       await webhook.handleWebhook(req, res1);
-      expect(res1.responseBody.received).toBe(true);
-      expect(res1.responseBody.deduplicated).toBeUndefined();
+      expect(res1.statusCode).toBe(503);
+      expect(res1.responseBody.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
 
       // Second call with same event_id
       const res2 = mockRes();
       await webhook.handleWebhook(req, res2);
-      expect(res2.responseBody.received).toBe(true);
-      expect(res2.responseBody.deduplicated).toBe(true);
+      expect(res2.statusCode).toBe(503);
+      expect(res2.responseBody.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
     });
   });
 });

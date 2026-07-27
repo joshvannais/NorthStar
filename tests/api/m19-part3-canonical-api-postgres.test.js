@@ -10,6 +10,7 @@ const cache = require('../../src/cache/client');
 const { ingestRetell, ingestSimulation, ingestVoice } = require('../../src/services/canonicalGraphService');
 const { stableStringify } = require('../../src/services/businessProfileAdapter');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 const {
   READ_MODEL_VERSION,
   createCanonicalRouter,
@@ -20,7 +21,7 @@ const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const migrationDir = path.resolve(__dirname, '../../migrations');
 const migrations = [
   '001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql',
-  '004_canonical_persistence_v2.sql',
+  '004_canonical_persistence_v2.sql', '005_canonical_organization_authority.sql',
 ];
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const USER_A = '00000000-0000-0000-0000-000000000002';
@@ -62,6 +63,8 @@ async function applyMigrations(pool) {
      ON CONFLICT (id) DO NOTHING`,
     [USER_B, ORG_B]
   );
+  await putBusinessProfile(pool, { organizationId: ORG_A, userId: USER_A, profile: graphInput(ORG_A, 'profile-a', 'profile-a', 'Profile A').businessProfile });
+  await putBusinessProfile(pool, { organizationId: ORG_B, userId: USER_B, profile: graphInput(ORG_B, 'profile-b', 'profile-b', 'Profile B').businessProfile });
 }
 
 function graphInput(organizationId, sessionId, key, customerName) {
@@ -113,6 +116,7 @@ function fakeAuth(req, _res, next) {
   const userId = req.get('X-Test-User');
   if (organizationId && userId) {
     req.tenantContext = Object.freeze({ organizationId, userId, role: 'owner' });
+    req.orgId = organizationId;
     req.userRole = 'owner';
     req.user = Object.freeze({ id: userId, organizationId, role: 'owner' });
   }

@@ -13,6 +13,7 @@ const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const migrationDir = path.resolve(__dirname, '../../migrations');
 const currentMigrations = ['001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql'];
 const persistenceMigration = '004_canonical_persistence_v2.sql';
+const authorityMigration = '005_canonical_organization_authority.sql';
 const orgA = '00000000-0000-0000-0000-000000000001';
 const orgB = '00000000-0000-0000-0000-000000000010';
 
@@ -53,7 +54,7 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
     upgrade = new Pool({ connectionString: urls.upgrade, max: 8 });
     concurrencyA = new Pool({ connectionString: urls.concurrency, max: 24 });
     concurrencyB = new Pool({ connectionString: urls.concurrency, max: 24 });
-    await apply(concurrencyA, [...currentMigrations, persistenceMigration]);
+    await apply(concurrencyA, [...currentMigrations, persistenceMigration, authorityMigration]);
     await addOrganizationB(concurrencyA);
   });
 
@@ -70,7 +71,7 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
   });
 
   test('fresh migration creates only the complete Part 3 canonical schema and required constraints', async () => {
-    await apply(fresh, [...currentMigrations, persistenceMigration]);
+    await apply(fresh, [...currentMigrations, persistenceMigration, authorityMigration]);
     const tables = await fresh.query(
       `SELECT tablename FROM pg_catalog.pg_tables
         WHERE schemaname = 'public' AND tablename LIKE 'canonical_%'
@@ -78,10 +79,13 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
     );
     expect(tables.rows.map(row => row.tablename)).toEqual([
       'canonical_appointments',
+      'canonical_business_profiles',
       'canonical_communications',
+      'canonical_customer_identities',
       'canonical_customers',
       'canonical_estimates',
       'canonical_facts',
+      'canonical_integration_ownership',
       'canonical_operations',
       'canonical_opportunities',
       'canonical_polaris_snapshots',
@@ -104,6 +108,8 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
       'canonical_estimates_opportunity_fk',
       'canonical_appointments_opportunity_fk',
       'canonical_polaris_estimate_fk',
+      'canonical_customer_identities_customer_fk',
+      'canonical_polaris_profile_authority_fk',
     ]) {
       expect(constraintNames.has(name)).toBe(true);
     }
@@ -136,7 +142,7 @@ realPostgres('Mission 19 Part 3 Persistence V2 on disposable PostgreSQL', () => 
         ORDER BY table_name, ordinal_position`
     );
 
-    await apply(upgrade, [persistenceMigration]);
+    await apply(upgrade, [persistenceMigration, authorityMigration]);
 
     const after = await upgrade.query(
       `SELECT

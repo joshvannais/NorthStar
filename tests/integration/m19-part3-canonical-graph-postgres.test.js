@@ -8,6 +8,7 @@ const repository = require('../../src/persistence/v2/repository');
 const { stableStringify } = require('../../src/services/businessProfileAdapter');
 const simulationPipeline = require('../../src/routes/simulation/pipeline');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 const {
   GRAPH_STAGES,
   executeCanonicalGraph,
@@ -22,7 +23,7 @@ const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const migrationDir = path.resolve(__dirname, '../../migrations');
 const migrations = [
   '001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql',
-  '004_canonical_persistence_v2.sql',
+  '004_canonical_persistence_v2.sql', '005_canonical_organization_authority.sql',
 ];
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const ORG_B = '00000000-0000-0000-0000-000000000010';
@@ -42,6 +43,8 @@ async function applyMigrations(pool) {
      ON CONFLICT (id) DO NOTHING`,
     [ORG_B]
   );
+  await putBusinessProfile(pool, { organizationId: ORG_A, profile: graphInput('profile-a').businessProfile });
+  await putBusinessProfile(pool, { organizationId: ORG_B, profile: graphInput('profile-b').businessProfile });
 }
 
 function graphInput(key, overrides) {

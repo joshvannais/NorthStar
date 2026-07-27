@@ -5,8 +5,9 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../db');
+const { dataPath } = require('../services/dataRoot');
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data', 'analytics');
+const DATA_DIR = dataPath('analytics');
 function ensureDir() { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); }
 function filePath(orgId, dateStr) { return path.join(DATA_DIR, `${orgId}_${dateStr}.json`); }
 

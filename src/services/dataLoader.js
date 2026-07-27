@@ -10,8 +10,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const { getDataRoot } = require('./dataRoot');
 
-const DATA_DIR = path.resolve(__dirname, '../../data');
+const DATA_DIR = getDataRoot();
 
 // Cache loaded data to avoid re-reading on every request
 let _cache = null;

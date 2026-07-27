@@ -11,11 +11,12 @@ const customerIntelligence = require('../services/customerIntelligence');
 const fs = require('fs');
 const path = require('path');
 const { requireAuth } = require('../auth/middleware');
+const { getDataRoot } = require('../services/dataRoot');
 
 // All customer intelligence routes require authentication
 router.use(requireAuth);
 
-const DATA_DIR = path.resolve(__dirname, '../../data');
+const DATA_DIR = getDataRoot();
 
 /**
  * GET /api/v1/leads/:id/intelligence

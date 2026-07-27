@@ -8,11 +8,12 @@ const path = require('path');
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth/middleware');
+const { dataPath } = require('../services/dataRoot');
 
 // All customer routes require authentication
 router.use(requireAuth);
 
-const DATA_FILE = path.join(__dirname, '..', '..', 'data', 'customers.json');
+const DATA_FILE = dataPath('customers.json');
 
 function loadCustomers() {
   try {

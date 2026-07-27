@@ -5,8 +5,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const { dataPath } = require('../services/dataRoot');
 
-const DATA_FILE = path.join(__dirname, '..', '..', 'data', 'leads.json');
+const DATA_FILE = dataPath('leads.json');
 
 function loadLeads() {
   try {

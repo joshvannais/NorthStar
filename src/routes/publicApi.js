@@ -577,7 +577,7 @@ router.get('/dashboard/revenue-trends', requireAuth, async (req, res, next) => {
 router.get('/health', function(req, res) {
   const fs = require('fs');
   const path = require('path');
-  const dataDir = path.resolve(__dirname, '..', '..', 'data');
+  const dataDir = require('../services/dataRoot').getDataRoot();
   const now = new Date().toISOString();
 
   const dataDirOk = fs.existsSync(dataDir);

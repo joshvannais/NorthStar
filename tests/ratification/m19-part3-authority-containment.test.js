@@ -153,6 +153,18 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     }
   });
 
+  test('deployment inventory discloses route, canary, rollback, CI, and production boundaries', () => {
+    const deployment = source('docs/m19-part3-canonical-authority-deployment.md');
+    expect(deployment).toContain('## Mounted legacy route disposition');
+    expect(deployment).toContain('LEGACY_AUTHORITY_READ_ONLY');
+    expect(deployment).toContain('LEGACY_AUTHORITY_RETIRED');
+    expect(deployment).toContain('## Canary and observability checks');
+    expect(deployment).toContain('## Rollback and stop criteria');
+    expect(deployment).toContain('CI is unavailable, not passing');
+    expect(deployment).toContain('has not changed Railway, production data, production');
+    expect(deployment).toContain('or PR #66');
+  });
+
   test('durable suites retain every mandatory real-runtime ratification gate', () => {
     const graphSuite = source('tests/integration/m19-part3-canonical-graph-postgres.test.js');
     const apiSuite = source('tests/api/m19-part3-canonical-api-postgres.test.js');

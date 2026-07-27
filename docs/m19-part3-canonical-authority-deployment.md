@@ -67,6 +67,43 @@ scoped, and auditable.
 | Canonical response cache | Disabled for authority reads; every canonical request queries PostgreSQL |
 | Estimate tax | Derived only from validated canonical Business Profile configuration, or explicitly unavailable |
 
+## Mounted legacy route disposition
+
+The `/api/v1` and `/api` routers own exact methods rather than applying
+router-wide authentication. An unmatched method falls through without a second
+membership lookup or an attempt to redefine immutable tenant context.
+
+The following compatibility reads are adapted to organization-scoped canonical
+PostgreSQL projections:
+
+- customers and customer detail;
+- communications, calls, and communication detail;
+- opportunities, pipeline, lead detail, and lead intelligence;
+- financial estimates and financial metrics;
+- analytics, dashboard, executive, and statistics projections;
+- workflow agenda, appointments, and calendar projections; and
+- Polaris intelligence, estimates, recommendations, learning, pipeline,
+  Retell context, business context, and unified context.
+
+The following legacy mutation groups are blocked with
+`LEGACY_AUTHORITY_READ_ONLY` and HTTP 409 before any legacy repository can run:
+
+- legacy lead simulation/import/status writes;
+- calendar event, schedule, and ICS-import writes;
+- call-record and mark-known writes;
+- customer, communication, opportunity, and workflow writes;
+- legacy financial estimate writes; and
+- legacy Polaris estimate, completion, recommendation, pipeline, and
+  configuration writes.
+
+All other methods and paths beneath the legacy `polaris`, `customers`,
+`communications`, `opportunities`, `workflows`, `financial`, `assets`, `crew`,
+`jobs`, `analytics`, `engines`, `dashboard`, `leads`, `calls`, and `calendar`
+prefixes are retired with `LEGACY_AUTHORITY_RETIRED` and HTTP 410. The contact
+writer is also retired. The old `polaris-engines`, `publicApi`, and dashboard
+routers are not mounted. Their source and file-backed stores remain historical
+or import/test fixture material only; they are not production tenant authority.
+
 ## Deployment gates outside this PR
 
 - Take and verify the normal database backup required by the deployment owner.
@@ -78,3 +115,37 @@ scoped, and auditable.
   enabling its webhook.
 - Do not automatically backfill legacy files, Sheets, `leads`, `call_records`,
   or legacy Polaris JSON data.
+
+## Canary and observability checks
+
+These are future deployment-owner gates; this PR has not performed them.
+
+1. Enable one explicitly configured organization only after its active Business
+   Profile and integration ownership have been independently verified.
+2. Confirm `/api/health` reports PostgreSQL persistence healthy and the
+   authenticated canonical status reports `postgresAuthoritative: true`,
+   `redisRequired: false`, and `canonicalResponseCaching: false`.
+3. Observe canonical operation state, lease/replay outcomes, audit persistence,
+   voice-session ownership/runtime-unavailable responses, and normalized 409,
+   410, and 503 error codes. A warm read followed by database outage must never
+   return a stale 200.
+4. Compare canonical graph, Business Profile provenance, estimate tax
+   disposition, and all seven browser projections for the canary organization.
+5. Confirm repository data-file hashes remain unchanged and no legacy or
+   automatic browser writer runs.
+
+## Rollback and stop criteria
+
+Stop the canary before broader enablement for any tenant crossover, stale 200
+during PostgreSQL outage, duplicate graph, partial graph, missing audit record,
+unexpected legacy file mutation, voice ownership mismatch, Business Profile
+provenance mismatch, fabricated tax/total, or sustained unexpected error rate.
+Disable new ingestion for the canary organization and preserve database and
+audit evidence. Application-release rollback must use the deployment owner's
+normal immutable release procedure; do not destructively reverse schema, delete
+canonical rows, infer ownership, or run a compensating backfill from this PR.
+
+GitHub CI is evidence only when checks exist and report a result. If PR #69 has
+zero checks or workflow runs, CI is unavailable, not passing. This PR has not
+been merged or deployed and has not changed Railway, production data, production
+schema, or PR #66.

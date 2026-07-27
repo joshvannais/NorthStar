@@ -1,10 +1,9 @@
 'use strict';
 
-const CATALOG = require('../routes/simulation/service-catalog');
 const { adaptBusinessProfile, finiteOrNull, sha256, stableStringify, stableValue } = require('./businessProfileAdapter');
 const { detectEmergencyEvidence, normalizeSpeaker } = require('./emergencyEvidence');
 
-const CALCULATION_VERSION = 'm19-part3-canonical-v1';
+const CALCULATION_VERSION = 'm19-part3-canonical-v2';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -80,16 +79,6 @@ function normalizeFacts(facts) {
   }).sort(function (a, b) { return a.id.localeCompare(b.id); });
 }
 
-function explicitNumber(source, key, options) {
-  if (!source || !Object.prototype.hasOwnProperty.call(source, key)) return null;
-  return finiteOrNull(source[key], options);
-}
-
-function selectSetting(explicit, key, fallback, options) {
-  const selected = explicitNumber(explicit, key, options);
-  return selected === null ? fallback : selected;
-}
-
 function normalizeCanonicalInput(source) {
   const input = source && typeof source === 'object' ? source : {};
   const service = input.service && typeof input.service === 'object' ? input.service : {};
@@ -97,8 +86,8 @@ function normalizeCanonicalInput(source) {
   const profile = input.businessProfile && input.businessProfile.hash
     ? input.businessProfile
     : adaptBusinessProfile(input.businessProfile || {}, input.businessProfileVersion);
-  const explicitPricing = input.pricingSettings || (input.settings && input.settings.pricing) || {};
-  const explicitCosts = input.costSettings || (input.settings && input.settings.costs) || {};
+  const profileAuthority = input.businessProfileAuthority && typeof input.businessProfileAuthority === 'object'
+    ? input.businessProfileAuthority : {};
   const normalized = {
     organizationId: requireUuid(input.organizationId || (input.organization && input.organization.id), 'organizationId'),
     customerId: requireUuid(input.customerId, 'customerId'),
@@ -111,22 +100,24 @@ function normalizeCanonicalInput(source) {
     transcript: normalizeTranscript(input.transcript),
     facts: normalizeFacts(input.facts),
     businessProfile: stableValue(profile),
+    businessProfileAuthority: {
+      id: profileAuthority.id ? String(profileAuthority.id) : null,
+      version: profileAuthority.versionLabel ? String(profileAuthority.versionLabel) : profile.version,
+      hash: profileAuthority.profileHash ? String(profileAuthority.profileHash) : profile.hash,
+    },
     appointmentPreference: input.appointmentPreference ? stableValue(input.appointmentPreference) : null,
     travel: input.travel ? stableValue(input.travel) : null,
     actualCrewAssignment: input.actualCrewAssignment ? stableValue(input.actualCrewAssignment) : null,
     callDurationSeconds: finiteOrNull(input.callDurationSeconds, { nonNegative: true }),
     settings: {
       pricing: {
-        customerMarkupPercent: selectSetting(explicitPricing, 'customerMarkupPercent', profile.pricing.customerMarkupPercent, { nonNegative: true }),
-        travelCustomerChargePerMile: selectSetting(explicitPricing, 'travelCustomerChargePerMile', profile.pricing.travelCustomerChargePerMile, { nonNegative: true }),
-        emergencyMultiplier: selectSetting(explicitPricing, 'emergencyMultiplier', profile.pricing.emergencyMultiplier, { positive: true }),
+        customerMarkupPercent: profile.pricing.customerMarkupPercent,
+        travelCustomerChargePerMile: profile.pricing.travelCustomerChargePerMile,
+        emergencyMultiplier: profile.pricing.emergencyMultiplier,
       },
       costs: {
-        overheadPercent: selectSetting(explicitCosts, 'overheadPercent', profile.costs.overheadPercent, { nonNegative: true }),
-        travelCostPerMile: selectSetting(explicitCosts, 'travelCostPerMile', profile.costs.travelCostPerMile, { nonNegative: true }),
-        materialCost: explicitNumber(explicitCosts, 'materialCost', { nonNegative: true }),
-        laborCost: explicitNumber(explicitCosts, 'laborCost', { nonNegative: true }),
-        equipmentCost: explicitNumber(explicitCosts, 'equipmentCost', { nonNegative: true }),
+        overheadPercent: profile.costs.overheadPercent,
+        travelCostPerMile: profile.costs.travelCostPerMile,
       },
     },
   };
@@ -149,27 +140,200 @@ function adaptLiveInput(source) {
   return adaptInput(source);
 }
 
-function classifyLine(label, index) {
-  const value = String(label || '').toLowerCase();
-  if (/material|cedar|pine|vinyl|aluminum|iron|chain link|shingle|concrete/.test(value)) return 'materials';
-  if (/labor|installation/.test(value)) return 'labor';
-  if (/equipment/.test(value)) return 'equipment';
-  if (/travel|mileage/.test(value)) return 'travel';
-  return 'serviceCharge';
-}
-
 function configuredMaterialCost(input) {
-  if (input.settings.costs.materialCost !== null) return input.settings.costs.materialCost;
   const map = input.businessProfile.costs.materialCostByService || {};
   const material = input.service.scope.material ? String(input.service.scope.material).toLowerCase() : '';
   return finiteOrNull(map[input.service.key + ':' + material], { nonNegative: true });
 }
 
-function matchedProfileService(input, definition) {
-  const expected = String(definition && definition.displayName || input.service.key).toLowerCase();
+function matchedProfileService(input) {
   return (input.businessProfile.services || []).find(function (service) {
-    return String(service.name || '').toLowerCase() === expected;
+    return String(service.id || '').toLowerCase() === input.service.key;
   }) || null;
+}
+
+function hasOwn(source, key) {
+  return Boolean(source && Object.prototype.hasOwnProperty.call(source, key));
+}
+
+function configuredNumberState(source, key, options) {
+  if (!hasOwn(source, key)) return { status: 'missing', value: null };
+  const value = finiteOrNull(source[key], options);
+  return value === null ? { status: 'malformed', value: null } : { status: 'configured', value };
+}
+
+function exactCondition(condition, scope) {
+  if (condition === undefined || condition === null) return { applies: true, field: null, error: null };
+  if (!condition || typeof condition !== 'object' || !condition.field || !hasOwn(condition, 'equals')) {
+    return { applies: false, field: null, error: 'pricing_rule_condition_malformed' };
+  }
+  const field = String(condition.field);
+  if (!hasOwn(scope, field)) return { applies: false, field, error: null };
+  return {
+    applies: stableStringify(scope[field]) === stableStringify(condition.equals),
+    field,
+    error: null,
+  };
+}
+
+function ruleFailure(kind, code) {
+  return kind + ':' + String(code || 'unnamed');
+}
+
+function calculateProfileLineItems(input, profileService, conflicting) {
+  if (!profileService) {
+    return { calculated: false, lineItems: [], reason: 'service_not_configured', requiredScope: [], fieldsUsed: [] };
+  }
+  const config = profileService.canonicalPricing;
+  if (!config || typeof config !== 'object') {
+    return { calculated: false, lineItems: [], reason: 'service_pricing_configuration_missing', requiredScope: [], fieldsUsed: [] };
+  }
+  if (!Array.isArray(config.lineItems) || config.lineItems.length === 0) {
+    return { calculated: false, lineItems: [], reason: 'service_pricing_configuration_malformed', requiredScope: [], fieldsUsed: [] };
+  }
+  const requiredScope = Array.isArray(config.requiredScope)
+    ? config.requiredScope.filter(function (field) { return typeof field === 'string' && field.trim(); }).map(String)
+    : [];
+  const fieldsUsed = ['services[' + profileService.id + '].canonicalPricing.requiredScope'];
+  const unavailable = requiredScope.filter(function (field) {
+    return !hasOwn(input.service.scope, field) || input.service.scope[field] === null || input.service.scope[field] === '' ||
+      conflicting.some(function (fact) { return fact.variable === field; });
+  });
+  if (unavailable.length) {
+    return {
+      calculated: false,
+      lineItems: [],
+      reason: 'required_scope_unavailable:' + Array.from(new Set(unavailable)).sort().join(','),
+      requiredScope,
+      fieldsUsed,
+    };
+  }
+  if (hasOwn(config, 'allowedScopeValues')) {
+    if (!config.allowedScopeValues || typeof config.allowedScopeValues !== 'object' || Array.isArray(config.allowedScopeValues)) {
+      return { calculated: false, lineItems: [], reason: 'allowed_scope_values_malformed', requiredScope, fieldsUsed };
+    }
+    for (const field of Object.keys(config.allowedScopeValues).sort()) {
+      const allowed = config.allowedScopeValues[field];
+      fieldsUsed.push('services[' + profileService.id + '].canonicalPricing.allowedScopeValues.' + field);
+      if (!Array.isArray(allowed) || allowed.length === 0) {
+        return { calculated: false, lineItems: [], reason: 'allowed_scope_values_malformed:' + field, requiredScope, fieldsUsed };
+      }
+      if (hasOwn(input.service.scope, field) && !allowed.some(function (value) {
+        return stableStringify(value) === stableStringify(input.service.scope[field]);
+      })) {
+        return {
+          calculated: false,
+          lineItems: [],
+          reason: 'pricing_scope_value_unsupported:' + field + ':' + String(input.service.scope[field]).toLowerCase(),
+          requiredScope,
+          fieldsUsed,
+        };
+      }
+    }
+  }
+
+  const lineItems = [];
+  const seenCodes = new Set();
+  for (let index = 0; index < config.lineItems.length; index += 1) {
+    const rule = config.lineItems[index];
+    const code = rule && rule.code ? String(rule.code) : 'rule-' + (index + 1);
+    const basePath = 'services[' + profileService.id + '].canonicalPricing.lineItems[' + code + ']';
+    if (!rule || typeof rule !== 'object' || !rule.code || seenCodes.has(code)) {
+      return { calculated: false, lineItems: [], reason: ruleFailure('pricing_rule_malformed', code), requiredScope, fieldsUsed };
+    }
+    seenCodes.add(code);
+    const condition = exactCondition(rule.when, input.service.scope);
+    if (condition.error) {
+      return { calculated: false, lineItems: [], reason: ruleFailure(condition.error, code), requiredScope, fieldsUsed };
+    }
+    if (condition.field) fieldsUsed.push(basePath + '.when');
+    if (!condition.applies) continue;
+
+    const type = String(rule.type || '');
+    let amount = null;
+    if (type === 'fixed') {
+      const fixed = configuredNumberState(rule, 'amount', { nonNegative: true });
+      if (fixed.status !== 'configured') {
+        return { calculated: false, lineItems: [], reason: ruleFailure('pricing_rule_amount_' + fixed.status, code), requiredScope, fieldsUsed };
+      }
+      amount = fixed.value;
+      fieldsUsed.push(basePath + '.amount');
+    } else if (type === 'perUnit') {
+      const quantityField = rule.quantityField ? String(rule.quantityField) : '';
+      if (!quantityField) {
+        return { calculated: false, lineItems: [], reason: ruleFailure('pricing_rule_quantity_field_missing', code), requiredScope, fieldsUsed };
+      }
+      const quantity = configuredNumberState(input.service.scope, quantityField, { nonNegative: true });
+      if (quantity.status !== 'configured') {
+        return { calculated: false, lineItems: [], reason: 'pricing_quantity_' + quantity.status + ':' + quantityField, requiredScope, fieldsUsed };
+      }
+      const rate = configuredNumberState(rule, 'unitRate', { nonNegative: true });
+      if (rate.status !== 'configured') {
+        return { calculated: false, lineItems: [], reason: ruleFailure('pricing_rule_rate_' + rate.status, code), requiredScope, fieldsUsed };
+      }
+      amount = quantity.value * rate.value;
+      fieldsUsed.push(basePath + '.unitRate');
+    } else if (type === 'perUnitByValue') {
+      const quantityField = rule.quantityField ? String(rule.quantityField) : '';
+      const selectorField = rule.selectorField ? String(rule.selectorField) : '';
+      const quantity = configuredNumberState(input.service.scope, quantityField, { nonNegative: true });
+      if (!quantityField || quantity.status !== 'configured') {
+        return { calculated: false, lineItems: [], reason: 'pricing_quantity_' + (quantityField ? quantity.status : 'field_missing') + ':' + quantityField, requiredScope, fieldsUsed };
+      }
+      if (!selectorField || !hasOwn(input.service.scope, selectorField)) {
+        return { calculated: false, lineItems: [], reason: 'pricing_selector_missing:' + selectorField, requiredScope, fieldsUsed };
+      }
+      const selected = String(input.service.scope[selectorField]).toLowerCase();
+      if (!rule.unitRates || typeof rule.unitRates !== 'object' || !hasOwn(rule.unitRates, selected)) {
+        return { calculated: false, lineItems: [], reason: 'pricing_scope_value_unsupported:' + selectorField + ':' + selected, requiredScope, fieldsUsed };
+      }
+      const rate = configuredNumberState(rule.unitRates, selected, { nonNegative: true });
+      if (rate.status !== 'configured') {
+        return { calculated: false, lineItems: [], reason: ruleFailure('pricing_rule_rate_' + rate.status, code), requiredScope, fieldsUsed };
+      }
+      amount = quantity.value * rate.value;
+      fieldsUsed.push(basePath + '.unitRates.' + selected);
+    } else if (type === 'perItemByValue') {
+      const collectionField = rule.collectionField ? String(rule.collectionField) : '';
+      const selectorField = rule.selectorField ? String(rule.selectorField) : '';
+      const collection = collectionField && input.service.scope[collectionField];
+      if (!Array.isArray(collection)) {
+        return { calculated: false, lineItems: [], reason: 'pricing_collection_missing:' + collectionField, requiredScope, fieldsUsed };
+      }
+      if (!selectorField || !rule.unitRates || typeof rule.unitRates !== 'object') {
+        return { calculated: false, lineItems: [], reason: ruleFailure('pricing_rule_rate_map_malformed', code), requiredScope, fieldsUsed };
+      }
+      amount = 0;
+      for (const item of collection) {
+        const selected = item && hasOwn(item, selectorField) ? String(item[selectorField]).toLowerCase() : '';
+        if (!selected || !hasOwn(rule.unitRates, selected)) {
+          return { calculated: false, lineItems: [], reason: 'pricing_scope_value_unsupported:' + collectionField + '.' + selectorField + ':' + selected, requiredScope, fieldsUsed };
+        }
+        const rate = configuredNumberState(rule.unitRates, selected, { nonNegative: true });
+        if (rate.status !== 'configured') {
+          return { calculated: false, lineItems: [], reason: ruleFailure('pricing_rule_rate_' + rate.status, code), requiredScope, fieldsUsed };
+        }
+        amount += rate.value;
+        fieldsUsed.push(basePath + '.unitRates.' + selected);
+      }
+    } else {
+      return { calculated: false, lineItems: [], reason: ruleFailure('pricing_rule_type_unsupported', code), requiredScope, fieldsUsed };
+    }
+
+    lineItems.push({
+      code: 'profile-' + code,
+      label: String(rule.label || code),
+      category: String(rule.category || 'serviceCharge'),
+      customerCharge: roundCurrency(amount),
+    });
+  }
+  return {
+    calculated: true,
+    lineItems,
+    reason: null,
+    requiredScope,
+    fieldsUsed: Array.from(new Set(fieldsUsed)).sort(),
+  };
 }
 
 function notCalculatedCollector() {
@@ -185,61 +349,26 @@ function notCalculatedCollector() {
 
 function calculateCanonicalPolaris(source) {
   const input = normalizeCanonicalInput(source);
-  const definition = CATALOG[input.service.key] || null;
   const scope = input.service.scope;
-  const missing = [];
   const conflicting = input.facts.filter(function (fact) { return fact.status === 'conflicting'; });
   const notCalculated = notCalculatedCollector();
-  let pricing = null;
-  let priceReason = null;
-
-  if (!definition || !definition.pricing || typeof definition.pricing.calculate !== 'function') {
-    priceReason = 'The requested service does not have a supported current catalog price.';
-  } else {
-    for (const field of definition.scopeSchema.required || []) {
-      if (scope[field] === undefined || scope[field] === null || scope[field] === '') missing.push(field);
-      if (conflicting.some(function (fact) { return fact.variable === field; })) missing.push(field);
-    }
-    if (input.service.key === 'fence' && scope.material && !definition.pricing.materials[scope.material]) {
-      missing.push('supported material');
-    }
-    if (missing.length) {
-      priceReason = 'Required supported scope is missing or contradictory: ' + Array.from(new Set(missing)).join(', ') + '.';
-    } else {
-      try {
-        pricing = definition.pricing.calculate(clone(scope));
-        if (!pricing || !Number.isFinite(pricing.total) || pricing.total <= 0) {
-          pricing = null;
-          priceReason = 'The supported catalog did not produce a finite positive price.';
-        }
-      } catch (error) {
-        priceReason = 'The supported catalog could not calculate this scope.';
-      }
-    }
-  }
-
-  const lineItems = [];
-  if (pricing) {
-    (pricing.breakdown || []).forEach(function (item, index) {
-      const amount = finiteOrNull(item.amount, { nonNegative: true });
-      if (amount === null) throw contractError('catalog pricing produced a non-finite line item');
-      lineItems.push({
-        code: 'catalog-' + (index + 1),
-        label: String(item.label || item.description || 'Catalog charge'),
-        category: classifyLine(item.label || item.description, index),
-        customerCharge: roundCurrency(amount),
-      });
-    });
-  }
+  const profileService = matchedProfileService(input);
+  const profilePricing = calculateProfileLineItems(input, profileService, conflicting);
+  const pricingCalculated = profilePricing.calculated;
+  const priceReason = profilePricing.reason;
+  const lineItems = profilePricing.lineItems.slice();
+  const baseSubtotal = pricingCalculated
+    ? roundCurrency(lineItems.reduce(function (sum, line) { return sum + line.customerCharge; }, 0))
+    : null;
 
   const emergency = detectEmergencyEvidence(input.transcript);
   const markupPercent = input.settings.pricing.customerMarkupPercent;
-  if (pricing && markupPercent !== null && markupPercent > 0) {
+  if (pricingCalculated && markupPercent !== null && markupPercent > 0) {
     lineItems.push({
       code: 'configured-markup',
       label: 'Configured customer markup',
       category: 'markup',
-      customerCharge: roundCurrency(pricing.total * markupPercent / 100),
+      customerCharge: roundCurrency(baseSubtotal * markupPercent / 100),
     });
   }
 
@@ -247,7 +376,7 @@ function calculateCanonicalPolaris(source) {
   const travelMinutes = input.travel ? finiteOrNull(input.travel.minutes, { nonNegative: true }) : null;
   const travelSource = input.travel && input.travel.source ? String(input.travel.source) : null;
   const travelRate = input.settings.pricing.travelCustomerChargePerMile;
-  if (pricing && distanceMiles !== null && travelRate !== null) {
+  if (pricingCalculated && distanceMiles !== null && travelRate !== null) {
     lineItems.push({
       code: 'configured-travel',
       label: 'Configured travel charge',
@@ -257,7 +386,7 @@ function calculateCanonicalPolaris(source) {
   }
 
   const emergencyMultiplier = input.settings.pricing.emergencyMultiplier;
-  if (pricing && emergency.isEmergency && emergencyMultiplier !== null && emergencyMultiplier > 1) {
+  if (pricingCalculated && emergency.isEmergency && emergencyMultiplier !== null && emergencyMultiplier > 1) {
     const beforeEmergency = lineItems.reduce(function (sum, line) { return sum + line.customerCharge; }, 0);
     lineItems.push({
       code: 'configured-emergency',
@@ -267,16 +396,16 @@ function calculateCanonicalPolaris(source) {
     });
   }
 
-  const customerFacingPrice = pricing
+  const customerFacingPrice = pricingCalculated
     ? roundCurrency(lineItems.reduce(function (sum, line) { return sum + line.customerCharge; }, 0))
     : notCalculated.add('customerFacingPrice', priceReason);
-  const materialsCharge = pricing
+  const materialsCharge = pricingCalculated
     ? roundCurrency(lineItems.filter(function (line) { return line.category === 'materials'; }).reduce(function (sum, line) { return sum + line.customerCharge; }, 0))
     : notCalculated.add('materialsCharge', priceReason);
-  const laborCharge = pricing
+  const laborCharge = pricingCalculated
     ? roundCurrency(lineItems.filter(function (line) { return line.category === 'labor'; }).reduce(function (sum, line) { return sum + line.customerCharge; }, 0))
     : notCalculated.add('laborCharge', priceReason);
-  const equipmentCharge = pricing
+  const equipmentCharge = pricingCalculated
     ? roundCurrency(lineItems.filter(function (line) { return line.category === 'equipment'; }).reduce(function (sum, line) { return sum + line.customerCharge; }, 0))
     : notCalculated.add('equipmentCharge', priceReason);
   const taxRatePercent = input.businessProfile.pricing.taxRatePercent;
@@ -290,10 +419,8 @@ function calculateCanonicalPolaris(source) {
     ? notCalculated.add('totalIncludingTax', taxReason)
     : roundCurrency(customerFacingPrice + tax);
 
-  const profileService = matchedProfileService(input, definition);
   const laborHours = finiteOrNull(scope.laborHours, { nonNegative: true })
-    ?? (profileService ? profileService.averageHours : null)
-    ?? notCalculated.add('laborHours', 'No authoritative production-hours input exists for this service scope.');
+    ?? notCalculated.add('laborHours', 'No authoritative production-hours fact exists for this service scope.');
   const productionDurationHours = laborHours === null
     ? notCalculated.add('estimatedProductionDurationHours', 'Production duration requires authoritative labor hours.')
     : laborHours;
@@ -307,14 +434,14 @@ function calculateCanonicalPolaris(source) {
   if (materialsCharge > 0 && materialCost === null) {
     notCalculated.add('knownDirectMaterialCost', 'Customer material charges are not authoritative internal material costs.');
   }
-  let laborCost = input.settings.costs.laborCost;
-  if (laborCost === null && laborHours !== null && crewRecommendation && input.businessProfile.crew.averageHourlyCost !== null) {
+  let laborCost = null;
+  if (laborHours !== null && crewRecommendation && input.businessProfile.crew.averageHourlyCost !== null) {
     laborCost = roundCurrency(laborHours * crewRecommendation.size * input.businessProfile.crew.averageHourlyCost);
   }
   if (laborCharge > 0 && laborCost === null) {
     notCalculated.add('knownInternalLaborCost', 'Internal labor cost requires hours, crew size, and an authoritative hourly cost.');
   }
-  let equipmentCost = input.settings.costs.equipmentCost;
+  let equipmentCost = null;
   const equipmentReference = scope.equipmentReference || (profileService && profileService.equipmentReference) || null;
   if (equipmentCost === null && equipmentReference) {
     equipmentCost = finiteOrNull(input.businessProfile.costs.equipmentCostByReference[equipmentReference], { nonNegative: true });
@@ -322,9 +449,9 @@ function calculateCanonicalPolaris(source) {
   if (equipmentCharge > 0 && equipmentCost === null) {
     notCalculated.add('knownEquipmentCost', 'Customer equipment charges are not authoritative internal equipment costs.');
   }
-  const travelCustomerCharge = pricing && distanceMiles !== null && travelRate !== null
+  const travelCustomerCharge = pricingCalculated && distanceMiles !== null && travelRate !== null
     ? roundCurrency(distanceMiles * travelRate)
-    : notCalculated.add('travelCustomerCharge', !pricing ? priceReason
+    : notCalculated.add('travelCustomerCharge', !pricingCalculated ? priceReason
       : (distanceMiles === null ? 'No authoritative travel distance is available.' : 'No customer travel charge is explicitly configured.'));
   const travelInternalCost = distanceMiles !== null && input.settings.costs.travelCostPerMile !== null
     ? roundCurrency(distanceMiles * input.settings.costs.travelCostPerMile)
@@ -337,7 +464,7 @@ function calculateCanonicalPolaris(source) {
   if (laborCharge > 0) requiredCosts.push(laborCost);
   if (equipmentCharge > 0) requiredCosts.push(equipmentCost);
   if (distanceMiles !== null) requiredCosts.push(travelInternalCost);
-  const directCostsKnown = pricing && requiredCosts.length > 0 && requiredCosts.every(function (value) { return value !== null; });
+  const directCostsKnown = pricingCalculated && requiredCosts.length > 0 && requiredCosts.every(function (value) { return value !== null; });
   const knownDirectCosts = directCostsKnown
     ? roundCurrency(requiredCosts.reduce(function (sum, value) { return sum + value; }, 0))
     : notCalculated.add('knownDirectCosts', 'All applicable direct-cost components must be known.');
@@ -370,11 +497,12 @@ function calculateCanonicalPolaris(source) {
   if (input.actualCrewAssignment === null) notCalculated.add('actualCrewAssignment', 'No actual crew assignment was supplied.');
   if (input.appointmentPreference === null) notCalculated.add('appointmentPreference', 'No appointment preference was supplied.');
 
-  const requiredCount = definition ? (definition.scopeSchema.required || []).length : 0;
-  const missingCount = Array.from(new Set(missing)).length;
-  const confidenceScore = Math.max(0, Math.min(100, definition ? 100 - (missingCount * 30) - (conflicting.length * 20) : 0));
+  const requiredCount = profilePricing.requiredScope.length;
+  const missingCount = priceReason && priceReason.startsWith('required_scope_unavailable:')
+    ? priceReason.slice('required_scope_unavailable:'.length).split(',').filter(Boolean).length : 0;
+  const confidenceScore = Math.max(0, Math.min(100, profileService ? 100 - (missingCount * 30) - (conflicting.length * 20) : 0));
   const confidenceFactors = [
-    { factor: 'supportedService', value: Boolean(definition) },
+    { factor: 'supportedService', value: Boolean(profileService) },
     { factor: 'requiredScopeCollected', value: Math.max(0, requiredCount - missingCount) + '/' + requiredCount },
     { factor: 'contradictoryFacts', value: conflicting.length },
     { factor: 'supportingFacts', value: input.facts.length },
@@ -390,18 +518,31 @@ function calculateCanonicalPolaris(source) {
   const fingerprintSource = clone(input);
   const normalizedInputFingerprint = sha256(fingerprintSource);
   let preliminaryRange = null;
-  if (pricing && pricing.range) {
-    const markupMultiplier = markupPercent !== null ? 1 + (markupPercent / 100) : 1;
-    const fixedTravel = distanceMiles !== null && travelRate !== null ? distanceMiles * travelRate : 0;
-    const configuredEmergencyMultiplier = emergency.isEmergency && emergencyMultiplier !== null && emergencyMultiplier > 1
-      ? emergencyMultiplier : 1;
+  const rangeState = profileService && profileService.canonicalPricing
+    ? configuredNumberState(profileService.canonicalPricing, 'rangePercent', { nonNegative: true })
+    : { status: 'missing', value: null };
+  if (pricingCalculated && rangeState.status === 'configured') {
+    const rangeMultiplier = rangeState.value / 100;
     preliminaryRange = {
-      low: roundCurrency(((pricing.range.low * markupMultiplier) + fixedTravel) * configuredEmergencyMultiplier),
-      high: roundCurrency(((pricing.range.high * markupMultiplier) + fixedTravel) * configuredEmergencyMultiplier),
+      low: roundCurrency(customerFacingPrice * Math.max(0, 1 - rangeMultiplier)),
+      high: roundCurrency(customerFacingPrice * (1 + rangeMultiplier)),
     };
   } else {
-    notCalculated.add('preliminaryRange', priceReason);
+    notCalculated.add('preliminaryRange', priceReason || 'range_configuration_' + rangeState.status);
   }
+  const businessProfileFieldsUsed = Array.from(new Set(profilePricing.fieldsUsed.concat([
+    'canonicalPricing.customerMarkupPercent',
+    'canonicalPricing.travelCustomerChargePerMile',
+    'canonicalPricing.emergencyMultiplier',
+    'canonicalPricing.taxRatePercent',
+    'canonicalCosts.overheadPercent',
+    'canonicalCosts.travelCostPerMile',
+    'canonicalCosts.materialCostByService',
+    'canonicalCosts.equipmentCostByReference',
+    'crew.defaultCrewSize',
+    'crew.averageHourlyRate',
+  ], rangeState.status === 'configured' && profileService
+    ? ['services[' + profileService.id + '].canonicalPricing.rangePercent'] : []))).sort();
   const output = {
     contract: 'CanonicalPolarisOutput',
     organizationId: input.organizationId,
@@ -409,13 +550,15 @@ function calculateCanonicalPolaris(source) {
     opportunityId: input.opportunityId,
     calculationVersion: input.calculationVersion,
     normalizedInputFingerprint,
-    businessProfileInputVersion: input.businessProfile.version,
-    businessProfileInputHash: input.businessProfile.hash,
+    businessProfileInputId: input.businessProfileAuthority.id,
+    businessProfileInputVersion: input.businessProfileAuthority.version,
+    businessProfileInputHash: input.businessProfileAuthority.hash,
+    businessProfileFieldsUsed,
     service: {
       key: input.service.key,
-      label: definition ? definition.displayName : null,
-      supported: Boolean(pricing),
-      unpricedReason: pricing ? null : priceReason,
+      label: profileService ? profileService.name : null,
+      supported: pricingCalculated,
+      unpricedReason: pricingCalculated ? null : priceReason,
       scope: clone(scope),
     },
     customerFacingPrice,

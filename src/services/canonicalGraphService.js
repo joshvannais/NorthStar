@@ -124,8 +124,6 @@ function normalizeRequest(source) {
     appointmentPreference: request.appointmentPreference ? stableValue(request.appointmentPreference) : null,
     scheduledAppointment: request.scheduledAppointment ? stableValue(request.scheduledAppointment) : null,
     travel: request.travel ? stableValue(request.travel) : null,
-    pricingSettings: request.pricingSettings ? stableValue(request.pricingSettings) : null,
-    costSettings: request.costSettings ? stableValue(request.costSettings) : null,
     actualCrewAssignment: request.actualCrewAssignment ? stableValue(request.actualCrewAssignment) : null,
     callDurationSeconds: request.callDurationSeconds === undefined ? null : request.callDurationSeconds,
     occurredAt: optionalText(request.occurredAt),
@@ -332,10 +330,9 @@ async function insertGraph(client, operation, leaseOwner, request, options) {
       };
     }),
     businessProfile: request.businessProfile,
+    businessProfileAuthority: request.businessProfileAuthority,
     appointmentPreference: request.appointmentPreference,
     travel: request.travel,
-    pricingSettings: request.pricingSettings,
-    costSettings: request.costSettings,
     actualCrewAssignment: request.actualCrewAssignment,
     callDurationSeconds: request.callDurationSeconds,
   });

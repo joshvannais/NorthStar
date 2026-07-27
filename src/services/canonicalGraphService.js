@@ -389,13 +389,15 @@ async function insertGraph(client, operation, leaseOwner, request, options) {
     `INSERT INTO canonical_estimates
       (id, organization_id, operation_id, graph_id, opportunity_id, calculation_version,
         normalized_input_fingerprint, business_profile_version, business_profile_hash, currency,
-       customer_price, line_items, calculation_output, snapshot_digest, business_profile_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15)`,
+       customer_price, line_items, calculation_output, snapshot_digest, business_profile_id,
+       tax_rate_percent, tax_amount, tax_not_calculated_reason, total_including_tax)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15,$16,$17,$18,$19)`,
     [ids.estimate, ...common, ids.opportunity, calculation.calculationVersion,
       calculation.normalizedInputFingerprint, calculation.businessProfileInputVersion,
       calculation.businessProfileInputHash, request.businessProfile.currency || 'USD', calculation.customerFacingPrice,
       JSON.stringify(calculation.pricingLineItems), JSON.stringify(calculation), snapshotDigest,
-      request.businessProfileAuthority.id]
+      request.businessProfileAuthority.id, calculation.taxRatePercent, calculation.tax,
+      calculation.taxDisposition.reason, calculation.totalIncludingTax]
   );
   stageFailure(options, 'estimate');
 

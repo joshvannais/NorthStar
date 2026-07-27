@@ -14,6 +14,7 @@ const migrations = [
   '001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql',
   '004_canonical_persistence_v2.sql', '005_canonical_organization_authority.sql',
   '006_canonical_voice_sessions.sql',
+  '007_canonical_tax_authority.sql',
 ];
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const ORG_B = '00000000-0000-0000-0000-000000000010';

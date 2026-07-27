@@ -23,6 +23,12 @@ window.CustomerDetail = (function() {
 
   function $(id) { return document.getElementById(id); }
 
+  function escapeText(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character];
+    });
+  }
+
   function fmtCurrency(n) {
     if (n == null || isNaN(n)) return 'Not calculated';
     return '$' + Math.round(n).toLocaleString();
@@ -386,7 +392,13 @@ window.CustomerDetail = (function() {
         var label = item.label || item.code || 'Item';
         html += '<div class="drawer-pricing-item"><span>' + label + '</span><span>' + fmtCurrency(amt) + '</span></div>';
       });
-      html += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>' + fmtCurrency(values.customerFacingPrice) + '</strong></span></div>';
+      html += '<div class="drawer-pricing-item"><span><strong>Subtotal</strong></span><span><strong>' + fmtCurrency(values.subtotalBeforeTax) + '</strong></span></div>';
+      if (values.taxDisposition && values.taxDisposition.status === 'calculated') {
+        html += '<div class="drawer-pricing-item"><span>Tax</span><span>' + fmtCurrency(values.tax) + '</span></div>';
+        html += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>' + fmtCurrency(values.totalIncludingTax) + '</strong></span></div>';
+      } else {
+        html += '<div class="drawer-pricing-item"><span>Tax</span><span>Not calculated (' + escapeText(values.taxDisposition && values.taxDisposition.reason || 'tax_configuration_unavailable') + ')</span></div>';
+      }
       return html;
     }
     if (values && values.customerFacingPrice !== null) {

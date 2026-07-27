@@ -23,6 +23,7 @@ const migrations = [
   '001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql',
   '004_canonical_persistence_v2.sql', '005_canonical_organization_authority.sql',
   '006_canonical_voice_sessions.sql',
+  '007_canonical_tax_authority.sql',
 ];
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const USER_A = '00000000-0000-0000-0000-000000000002';
@@ -203,6 +204,11 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(stableStringify(replay.body)).toBe(stableStringify(graphA.body));
     expect(graphA.body.snapshot).toMatchObject({
       customerFacingPrice: 4510,
+      subtotalBeforeTax: 4510,
+      taxRatePercent: null,
+      tax: null,
+      totalIncludingTax: null,
+      taxDisposition: { status: 'notCalculated', reason: 'tax_configuration_unavailable' },
       calculationVersion: 'm19-part3-canonical-v1',
       service: { scope: { linearFeet: 100, height: 6, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] } },
       appointmentPreference: { dayPart: 'morning', days: ['weekday'] },

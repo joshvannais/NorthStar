@@ -28,6 +28,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * @property {string} calculationVersion
  * @property {string} normalizedInputFingerprint
  * @property {number|null} customerFacingPrice
+ * @property {number|null} tax
+ * @property {number|null} totalIncludingTax
  * @property {Array<Object>} pricingLineItems
  * @property {number|null} knownDirectCosts
  * @property {number|null} grossProfit
@@ -277,6 +279,16 @@ function calculateCanonicalPolaris(source) {
   const equipmentCharge = pricing
     ? roundCurrency(lineItems.filter(function (line) { return line.category === 'equipment'; }).reduce(function (sum, line) { return sum + line.customerCharge; }, 0))
     : notCalculated.add('equipmentCharge', priceReason);
+  const taxRatePercent = input.businessProfile.pricing.taxRatePercent;
+  const taxReason = taxRatePercent === null
+    ? 'tax_configuration_unavailable'
+    : (customerFacingPrice === null ? 'tax_base_unavailable' : null);
+  const tax = taxReason === null
+    ? roundCurrency(customerFacingPrice * taxRatePercent / 100)
+    : notCalculated.add('tax', taxReason);
+  const totalIncludingTax = tax === null
+    ? notCalculated.add('totalIncludingTax', taxReason)
+    : roundCurrency(customerFacingPrice + tax);
 
   const profileService = matchedProfileService(input, definition);
   const laborHours = finiteOrNull(scope.laborHours, { nonNegative: true })
@@ -407,6 +419,14 @@ function calculateCanonicalPolaris(source) {
       scope: clone(scope),
     },
     customerFacingPrice,
+    subtotalBeforeTax: customerFacingPrice,
+    taxRatePercent,
+    tax,
+    taxDisposition: {
+      status: tax === null ? 'notCalculated' : 'calculated',
+      reason: taxReason,
+    },
+    totalIncludingTax,
     preliminaryRange,
     pricingLineItems: lineItems,
     materialsCharge,

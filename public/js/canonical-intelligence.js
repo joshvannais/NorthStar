@@ -299,6 +299,12 @@
       calculationVersion: item ? item.calculationVersion : null,
       snapshotDigest: item ? item.snapshotDigest : null,
       price: values ? values.customerFacingPrice : null,
+      tax: values ? {
+        ratePercent: values.taxRatePercent,
+        amount: values.tax,
+        totalIncludingTax: values.totalIncludingTax,
+        disposition: values.taxDisposition,
+      } : null,
       scope: values && values.service ? values.service.scope : null,
       labor: values ? { charge: values.laborCharge, hours: values.laborHours, knownInternalCost: values.knownInternalLaborCost } : null,
       duration: values ? { callSeconds: values.callDurationSeconds, productionHours: values.estimatedProductionDurationHours } : null,

@@ -677,26 +677,25 @@ function polarisEstimateFromSession(session) {
 }
 
 function polarisEstimate(businessName, industry, transcriptLines, executiveSummary, transcriptSource) {
-  // Thin consumer of the canonical intelligence record
-  const intelligence = buildPolarisIntelligence(businessName, industry, transcriptLines || [], executiveSummary, transcriptSource);
-  // Return backward-compatible shape + the full canonical record
+  void businessName;
+  void industry;
+  void transcriptLines;
+  void executiveSummary;
+  void transcriptSource;
   return {
-    opportunityLabel: intelligence.estimate.opportunityLabel,
-    confidence: intelligence.estimate.confidence,
-    revenueRange: intelligence.estimate.revenueRange,
-    qualification: intelligence.qualification,
-    extractedValues: intelligence.extractedValues,
-    detectedService: intelligence.detectedService,
-    reasoning: intelligence.reasoning,
-    generatedAt: intelligence.generatedAt,
-    // Expose the full canonical record
-    polarisIntelligence: intelligence,
-    // Executive briefing for frontend
-    executiveBriefing: intelligence.executiveBriefing,
-    // Variables with actual values
-    estimatingVariables: intelligence.estimatingVariables,
-    // Breakdown
-    customerFacts: intelligence.customerFacts,
+    opportunityLabel: 'CANONICAL ESTIMATE REQUIRED',
+    confidence: 0,
+    revenueRange: '\u2014',
+    qualification: null,
+    extractedValues: {},
+    detectedService: null,
+    reasoning: ['Demo-local calculation is retired; submit the scenario to the organization-scoped canonical API.'],
+    generatedAt: null,
+    polarisIntelligence: null,
+    executiveBriefing: null,
+    estimatingVariables: [],
+    customerFacts: [],
+    canonicalRequired: true,
   };
 }
 function scheduleSimAdvance(sessionId) {

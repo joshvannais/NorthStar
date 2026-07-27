@@ -52,6 +52,7 @@ function adaptBusinessProfile(profile, version) {
   const canonicalPricing = source.canonicalPricing || {};
   const canonicalCosts = source.canonicalCosts || {};
   const services = Array.isArray(source.services) ? source.services : [];
+  const configuredTaxRate = configured(canonicalPricing, 'taxRatePercent', { nonNegative: true });
 
   const normalized = {
     version: String(version || source.version || source.updatedAt || 'business-profile-v1'),
@@ -65,6 +66,7 @@ function adaptBusinessProfile(profile, version) {
       customerMarkupPercent: configured(canonicalPricing, 'customerMarkupPercent', { nonNegative: true }),
       travelCustomerChargePerMile: configured(canonicalPricing, 'travelCustomerChargePerMile', { nonNegative: true }),
       emergencyMultiplier: configured(canonicalPricing, 'emergencyMultiplier', { positive: true }),
+      taxRatePercent: configuredTaxRate !== null && configuredTaxRate <= 100 ? configuredTaxRate : null,
       legacyCatalogMarkupMultiplier: finiteOrNull(financial.markup, { positive: true }),
       legacyTravelChargePerMile: finiteOrNull(financial.travelCharge, { nonNegative: true }),
       legacyEmergencyMultiplier: finiteOrNull(financial.emergencyMarkup, { positive: true }),

@@ -46,6 +46,11 @@ const VALUES = Object.freeze({
     scope: { linearFeet: 100, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }], heightFeet: 6 },
   },
   customerFacingPrice: 4510,
+  subtotalBeforeTax: 4510,
+  taxRatePercent: null,
+  tax: null,
+  taxDisposition: { status: 'notCalculated', reason: 'tax_configuration_unavailable' },
+  totalIncludingTax: null,
   preliminaryRange: { low: 3834, high: 5187 },
   pricingLineItems: [
     { code: 'fence-base', label: 'Cedar fence', category: 'materials', customerCharge: 3700 },

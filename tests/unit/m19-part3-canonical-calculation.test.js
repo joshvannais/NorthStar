@@ -76,6 +76,7 @@ describe('Mission 19 Part 3 canonical calculation contract', () => {
       customerMarkupPercent: null,
       travelCustomerChargePerMile: null,
       emergencyMultiplier: null,
+      taxRatePercent: null,
       legacyCatalogMarkupMultiplier: 1.3,
       legacyTravelChargePerMile: 0.58,
       legacyEmergencyMultiplier: 1.5,
@@ -85,6 +86,12 @@ describe('Mission 19 Part 3 canonical calculation contract', () => {
   test('freezes the audited 100-foot cedar/removal/walk-gate customer price', () => {
     const result = calculateCanonicalPolaris(fenceInput());
     expect(result.customerFacingPrice).toBe(4510);
+    expect(result.subtotalBeforeTax).toBe(4510);
+    expect(result.taxRatePercent).toBeNull();
+    expect(result.tax).toBeNull();
+    expect(result.totalIncludingTax).toBeNull();
+    expect(result.taxDisposition).toEqual({ status: 'notCalculated', reason: 'tax_configuration_unavailable' });
+    expect(result.notCalculated).toContainEqual({ field: 'tax', reason: 'tax_configuration_unavailable' });
     expect(result.preliminaryRange).toEqual({ low: 3834, high: 5187 });
     expect(result.pricingLineItems.map(item => item.customerCharge)).toEqual([1800, 1200, 400, 350, 350, 410]);
     expect(result.materialsCharge).toBe(1800);
@@ -99,6 +106,38 @@ describe('Mission 19 Part 3 canonical calculation contract', () => {
       'fact-gate', 'fact-linear-feet', 'fact-material', 'fact-removal',
     ]);
     expect(stableStringify(result)).not.toMatch(/NaN|Infinity/);
+  });
+
+  test.each([
+    ['configured', 8.25, 372.08, 4882.08],
+    ['explicit zero', 0, 0, 4510],
+  ])('calculates tax only from %s organization configuration', (_label, rate, expectedTax, expectedTotal) => {
+    const result = calculateCanonicalPolaris(fenceInput({
+      businessProfile: profile({ canonicalPricing: { taxRatePercent: rate } }),
+      pricingSettings: { taxRatePercent: 99 },
+    }));
+    expect(result.subtotalBeforeTax).toBe(4510);
+    expect(result.taxRatePercent).toBe(rate);
+    expect(result.tax).toBe(expectedTax);
+    expect(result.totalIncludingTax).toBe(expectedTotal);
+    expect(result.taxDisposition).toEqual({ status: 'calculated', reason: null });
+    expect(result.notCalculated).not.toEqual(expect.arrayContaining([expect.objectContaining({ field: 'tax' })]));
+  });
+
+  test('malformed or request-only tax never fabricates a total', () => {
+    const malformed = calculateCanonicalPolaris(fenceInput({
+      businessProfile: profile({ canonicalPricing: { taxRatePercent: 'not-a-rate' } }),
+      pricingSettings: { taxRatePercent: 7 },
+    }));
+    expect(malformed.taxRatePercent).toBeNull();
+    expect(malformed.tax).toBeNull();
+    expect(malformed.totalIncludingTax).toBeNull();
+    expect(malformed.taxDisposition.reason).toBe('tax_configuration_unavailable');
+    const outOfRange = calculateCanonicalPolaris(fenceInput({
+      businessProfile: profile({ canonicalPricing: { taxRatePercent: 100.01 } }),
+    }));
+    expect(outOfRange.tax).toBeNull();
+    expect(outOfRange.taxDisposition.reason).toBe('tax_configuration_unavailable');
   });
 
   test.each([

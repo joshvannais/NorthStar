@@ -25,6 +25,7 @@ const migrations = [
   '001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql',
   '004_canonical_persistence_v2.sql', '005_canonical_organization_authority.sql',
   '006_canonical_voice_sessions.sql',
+  '007_canonical_tax_authority.sql',
 ];
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const ORG_B = '00000000-0000-0000-0000-000000000010';
@@ -328,6 +329,40 @@ realPostgres('Mission 19 Part 3 transactional canonical graph on disposable Post
       [response.body.operationId]
     );
     expect(operation.rows[0].serialized).not.toContain(key);
+  });
+
+  test('configured tax is persisted explicitly and unavailable tax remains explicit', async () => {
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      profile: {
+        ...graphInput('tax-profile').businessProfile,
+        canonicalPricing: { taxRatePercent: 8.25 },
+      },
+    });
+    const response = await ingestSimulation(pool, graphInput('m19-tax-configured'));
+    expect(response.status).toBe(201);
+    expect(response.body.snapshot).toMatchObject({
+      subtotalBeforeTax: 4510,
+      taxRatePercent: 8.25,
+      tax: 372.08,
+      totalIncludingTax: 4882.08,
+      taxDisposition: { status: 'calculated', reason: null },
+    });
+    const estimate = await pool.query(
+      `SELECT tax_rate_percent::float AS tax_rate_percent,
+              tax_amount::float AS tax_amount,
+              tax_not_calculated_reason,
+              total_including_tax::float AS total_including_tax
+         FROM canonical_estimates
+        WHERE organization_id = $1 AND id = $2`,
+      [ORG_A, response.body.ids.estimate]
+    );
+    expect(estimate.rows[0]).toEqual({
+      tax_rate_percent: 8.25,
+      tax_amount: 372.08,
+      tax_not_calculated_reason: null,
+      total_including_tax: 4882.08,
+    });
   });
 
   test('database unavailable before claim returns normalized 503 without an INSERT', async () => {

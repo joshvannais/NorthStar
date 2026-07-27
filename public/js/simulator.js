@@ -960,8 +960,8 @@ function genTranscript(svc,s,name,phone,num,sn,st){
     function genCall(){
       const svc=services[Math.floor(Math.random()*services.length)];
       const s=svc.scenarios[Math.floor(Math.random()*svc.scenarios.length)];
-      const price=calcPrice(svc,s);
-      const det=fmtDetail(svc,s);const bdl=calcBreakdown(svc,s);
+      const price=null;
+      const det=fmtDetail(svc,s);const bdl=[];
       const fn=fNames[Math.floor(Math.random()*fNames.length)];
       const ln=lNames[Math.floor(Math.random()*lNames.length)];
       const name=fn+" "+ln;
@@ -990,10 +990,10 @@ function genTranscript(svc,s,name,phone,num,sn,st){
         avgPrice:price,jobDetail:det,
         duration:durMin+":"+(durRem<10?"0":"")+durRem,
         status:status,outcome:outcome,time:time,receivedAt:new Date().toISOString(),
-        summary:svc.name+": "+s.label+". "+det+". Estimated $"+price.toLocaleString()+".",
-        priceBreakdown:(function(){try{var pb=calcBreakdown(svc,s);return pb.map(function(x){return x.l}).join(", ");}catch(e){return "";}})(),
+        summary:svc.name+": "+s.label+". "+det+". Canonical estimate unavailable until server processing.",
+        priceBreakdown:"",
         transcript:genTranscript(svc,s,name,phone,num,sn,st),
-        pricingBreakdown:calcBreakdown(svc,s)
+        pricingBreakdown:[]
       };
     }
 // Filter state is managed by the page-specific inline script

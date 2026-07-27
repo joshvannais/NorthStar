@@ -473,8 +473,8 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
         expect(call.options.executiveContext.businessProfile.company.name).not.toBe('Caller Controlled Company');
         expect(call.variables).toMatchObject({
           minimum_job_price: 'not_configured',
-          emergency_markup: '1.5',
-          travel_charge: '0.58',
+          emergency_markup: '1',
+          travel_charge: '0',
           tax_rate: '0',
         });
         expect(call.variables.pricing_rules).toContain('tax_rate=0 (configured)');

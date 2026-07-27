@@ -94,7 +94,7 @@ function graphInput(organizationId, sessionId, key, customerName) {
     },
     transcript: [
       { turnId: 'turn-1', speaker: 'customer', text: 'I need a new 100-foot six-foot-high cedar fence and the existing fence removed.' },
-      { turnId: 'turn-2', speaker: 'customer', text: 'Include one walk gate. Weekday mornings work best. This is not an emergency.' },
+      { turnId: 'turn-2', speaker: 'customer', text: 'Include one walk gate. Permits are required. Weekday mornings work best. This is not an emergency.' },
     ],
     facts: [
       { variable: 'linearFeet', normalizedValue: 100, evidenceText: '100-foot cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
@@ -102,8 +102,20 @@ function graphInput(organizationId, sessionId, key, customerName) {
       { variable: 'material', normalizedValue: 'cedar', evidenceText: 'cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
       { variable: 'removalRequired', normalizedValue: true, evidenceText: 'existing fence removed', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
       { variable: 'gates', normalizedValue: [{ type: 'walk' }], evidenceText: 'one walk gate', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
+      { variable: 'permitsRequired', normalizedValue: true, evidenceText: 'permits are required', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
     ],
-    service: { key: 'fence', scope: { jobType: 'replace', linearFeet: 100, height: 6, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] } },
+    service: {
+      key: 'fence',
+      scope: {
+        jobType: 'replace',
+        linearFeet: 100,
+        height: 6,
+        material: 'cedar',
+        removalRequired: true,
+        gates: [{ type: 'walk' }],
+        permitsRequired: true,
+      },
+    },
     businessProfileVersion: 'bp-ratification-v1',
     businessProfile,
     appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
@@ -208,7 +220,16 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
       totalIncludingTax: null,
       taxDisposition: { status: 'notCalculated', reason: 'tax_configuration_unavailable' },
       calculationVersion: 'm19-part3-canonical-v2',
-      service: { scope: { linearFeet: 100, height: 6, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] } },
+      service: {
+        scope: {
+          linearFeet: 100,
+          height: 6,
+          material: 'cedar',
+          removalRequired: true,
+          gates: [{ type: 'walk' }],
+          permitsRequired: true,
+        },
+      },
       appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
       risk: { emergency: false },
       grossProfit: null,

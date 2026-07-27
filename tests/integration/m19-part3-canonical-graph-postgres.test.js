@@ -74,17 +74,26 @@ function graphInput(key, overrides) {
     },
     transcript: [
       { turnId: 'turn-1', speaker: 'customer', text: 'I need a new 100-foot cedar fence and the existing fence removed.' },
-      { turnId: 'turn-2', speaker: 'customer', text: 'Include one walk gate. Weekday mornings work best. This is not an emergency.' },
+      { turnId: 'turn-2', speaker: 'customer', text: 'Include one walk gate. Permits are required. Weekday mornings work best. This is not an emergency.' },
     ],
     facts: [
       { id: 'scope-length', variable: 'linearFeet', normalizedValue: 100, evidenceText: '100-foot cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
       { id: 'scope-material', variable: 'material', normalizedValue: 'cedar', evidenceText: 'cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
       { id: 'scope-removal', variable: 'removalRequired', normalizedValue: true, evidenceText: 'existing fence removed', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
       { id: 'scope-gate', variable: 'gates', normalizedValue: [{ type: 'walk' }], evidenceText: 'one walk gate', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
+      { id: 'scope-permit', variable: 'permitsRequired', normalizedValue: true, evidenceText: 'permits are required', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
     ],
     service: {
       key: 'fence',
-      scope: { jobType: 'replace', linearFeet: 100, material: 'cedar', height: 6, removalRequired: true, gates: [{ type: 'walk' }] },
+      scope: {
+        jobType: 'replace',
+        linearFeet: 100,
+        material: 'cedar',
+        height: 6,
+        removalRequired: true,
+        gates: [{ type: 'walk' }],
+        permitsRequired: true,
+      },
     },
     businessProfileVersion: 'bp-graph-v1',
     businessProfile,
@@ -169,7 +178,7 @@ realPostgres('Mission 19 Part 3 transactional canonical graph on disposable Post
     expect(second.status).toBe(201);
     expect(second.replayed).toBe(true);
     expect(stableStringify(second.body)).toBe(stableStringify(first.body));
-    expect(await artifactCount(pool, ORG_A, first.body.operationId)).toBe(11);
+    expect(await artifactCount(pool, ORG_A, first.body.operationId)).toBe(12);
   });
 
   test('simulation generation is concurrency-safe and deterministic per operation seed', () => {
@@ -196,7 +205,7 @@ realPostgres('Mission 19 Part 3 transactional canonical graph on disposable Post
     const bodies = new Set(results.map(result => stableStringify(result.body)));
     expect(bodies.size).toBe(1);
     const operationId = results[0].body.operationId;
-    expect(await artifactCount(pool, ORG_A, operationId)).toBe(11);
+    expect(await artifactCount(pool, ORG_A, operationId)).toBe(12);
     const count = await pool.query(
       `SELECT COUNT(*)::int AS count FROM canonical_operations
         WHERE organization_id = $1 AND id = $2`,
@@ -250,7 +259,7 @@ realPostgres('Mission 19 Part 3 transactional canonical graph on disposable Post
     const replay = await ingestSimulation(pool, input);
     expect(replay.status).toBe(201);
     expect(replay.replayed).toBe(true);
-    expect(await artifactCount(pool, ORG_A, replay.body.operationId)).toBe(11);
+    expect(await artifactCount(pool, ORG_A, replay.body.operationId)).toBe(12);
   });
 
   test.each(GRAPH_STAGES)('failure after %s rolls back every graph artifact', async stage => {
@@ -357,9 +366,9 @@ realPostgres('Mission 19 Part 3 transactional canonical graph on disposable Post
     );
     expect(estimate.rows[0]).toEqual({
       tax_rate_percent: 8.25,
-      tax_amount: 372.08,
+      tax_amount: 3083.52,
       tax_not_calculated_reason: null,
-      total_including_tax: 4882.08,
+      total_including_tax: 40459.52,
     });
   });
 

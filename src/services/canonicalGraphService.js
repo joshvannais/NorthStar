@@ -6,7 +6,7 @@ const db = require('../db');
 const repository = require('../persistence/v2/repository');
 const { sha256, stableValue } = require('./businessProfileAdapter');
 const { CALCULATION_VERSION, calculateCanonicalPolaris } = require('./canonicalPolarisCalculation');
-const { getActiveBusinessProfile } = require('./organizationAuthority');
+const { getActiveBusinessProfile, getBusinessProfileById } = require('./organizationAuthority');
 
 const SOURCES = new Set(['simulation', 'demo', 'retell', 'voice', 'lead']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -130,7 +130,16 @@ function normalizeRequest(source) {
     callDurationSeconds: request.callDurationSeconds === undefined ? null : request.callDurationSeconds,
     occurredAt: optionalText(request.occurredAt),
     calculationVersion: optionalText(request.calculationVersion) || CALCULATION_VERSION,
+    businessProfileAuthorityId: optionalText(request.businessProfileAuthorityId),
+    businessProfileAuthorityVersion: optionalText(request.businessProfileAuthorityVersion),
+    businessProfileAuthorityHash: optionalText(request.businessProfileAuthorityHash),
   };
+  if (normalized.businessProfileAuthorityId && !UUID.test(normalized.businessProfileAuthorityId)) {
+    throw validationError('businessProfileAuthorityId must be a UUID');
+  }
+  if (normalized.businessProfileAuthorityHash && !/^[0-9a-f]{64}$/.test(normalized.businessProfileAuthorityHash)) {
+    throw validationError('businessProfileAuthorityHash must be a SHA-256 digest');
+  }
   return { normalized, idempotencyKey };
 }
 
@@ -493,7 +502,15 @@ async function executeCanonicalGraph(pool, source, options) {
   }
 
   try {
-    const authority = await getActiveBusinessProfile(resolvedPool, request.organizationId);
+    const authority = request.businessProfileAuthorityId
+      ? await getBusinessProfileById(resolvedPool, request.organizationId, request.businessProfileAuthorityId)
+      : await getActiveBusinessProfile(resolvedPool, request.organizationId);
+    if ((request.businessProfileAuthorityVersion && request.businessProfileAuthorityVersion !== authority.versionLabel) ||
+        (request.businessProfileAuthorityHash && request.businessProfileAuthorityHash !== authority.profileHash)) {
+      const mismatch = new Error('Pinned Business Profile provenance does not match persisted authority.');
+      mismatch.code = 'CANONICAL_BUSINESS_PROFILE_REQUIRED';
+      throw mismatch;
+    }
     request.businessProfile = authority.normalizedProfile;
     request.businessProfileAuthority = authority;
   } catch (error) {

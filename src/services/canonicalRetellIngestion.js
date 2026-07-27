@@ -69,7 +69,7 @@ function serviceKey(payload, turns) {
   return KNOWN_SERVICES.find(function (key) { return candidate.includes(key); }) || 'general';
 }
 
-function graphRequest(payload, ownership) {
+function graphRequest(payload, ownership, voiceSession) {
   const call = callFrom(payload);
   const analysis = analysisFrom(payload);
   const turns = transcriptTurns(payload);
@@ -102,6 +102,9 @@ function graphRequest(payload, ownership) {
       ? Math.max(0, Math.round(Number(call.duration_ms) / 1000))
       : (payload && payload.duration_ms !== undefined ? Math.max(0, Math.round(Number(payload.duration_ms) / 1000)) : null),
     occurredAt: text(call.start_timestamp) || text(call.start_time) || null,
+    businessProfileAuthorityId: voiceSession && voiceSession.profile.id,
+    businessProfileAuthorityVersion: voiceSession && voiceSession.profile.version,
+    businessProfileAuthorityHash: voiceSession && voiceSession.profile.hash,
   };
 }
 
@@ -132,7 +135,7 @@ async function ingestRetellPayload(payload, options) {
     }
     const profile = await getActiveBusinessProfile(pool, ownership.organizationId);
     const call = callFrom(payload);
-    await voiceSessions.createSession(pool, {
+    const voiceSession = await voiceSessions.createSession(pool, {
       organizationId: ownership.organizationId,
       externalSessionId: callId,
       provider: 'retell',
@@ -172,7 +175,7 @@ async function ingestRetellPayload(payload, options) {
       });
       return { status: existing.result_status, body: { ...existing.result_body, received: true, replayed: true }, replayed: true };
     }
-    const request = graphRequest(payload, ownership);
+    const request = graphRequest(payload, ownership, voiceSession);
     if (!request.transcript.length) {
       return { status: 400, body: { success: false, error: { code: 'RETELL_TRANSCRIPT_REQUIRED', message: 'A completed Retell call requires a transcript.' } } };
     }

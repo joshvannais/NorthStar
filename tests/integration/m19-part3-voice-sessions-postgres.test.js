@@ -6,6 +6,7 @@ const { Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { bindIntegrationOwner, putBusinessProfile } = require('../../src/services/organizationAuthority');
 const voice = require('../../src/services/voiceSessionAuthority');
+const { ingestRetellPayload } = require('../../src/services/canonicalRetellIngestion');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const migrationDir = path.resolve(__dirname, '../../migrations');
@@ -131,5 +132,36 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     await expect(voice.performRuntimeAction(pool, {
       organizationId: ORG_A, externalSessionId: 'runtime-call', action: 'cancel', userId: USER_A,
     })).rejects.toMatchObject({ status: 503, code: 'VOICE_RUNTIME_UNAVAILABLE' });
+  });
+
+  test('completion and replay use the profile pinned when the session was created', async () => {
+    const pinned = await create(ORG_A, integrationA, profileA, 'pinned-call', false);
+    const newer = await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      userId: USER_A,
+      profile: { ...PROFILE, company: { name: 'Newer Voice Profile', currency: 'USD' } },
+    });
+    expect(newer.id).not.toBe(pinned.profile.id);
+    const payload = {
+      event: 'call_ended',
+      event_id: 'pinned-event-1',
+      call: {
+        call_id: 'pinned-call',
+        agent_id: 'voice-agent-a',
+        from_number: '+15555550199',
+        transcript_object: [{ role: 'user', words: 'I need general service.' }],
+        call_analysis: { customer_name: 'Pinned Customer', service_requested: 'general' },
+      },
+    };
+    const completed = await ingestRetellPayload(payload, { pool, ingestionSource: 'voice' });
+    expect(completed.status).toBe(201);
+    expect(completed.body.businessProfile).toEqual(pinned.profile);
+    const replayed = await ingestRetellPayload({ ...payload, event_id: 'pinned-event-2' }, { pool, ingestionSource: 'voice' });
+    expect(replayed.status).toBe(201);
+    expect(replayed.replayed).toBe(true);
+    expect(replayed.body.businessProfile).toEqual(pinned.profile);
+    const session = await voice.getSession(pool, ORG_A, 'pinned-call');
+    expect(session.status).toBe('completed');
+    expect(session.profile).toEqual(pinned.profile);
   });
 });

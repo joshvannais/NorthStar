@@ -58,6 +58,24 @@ async function getActiveBusinessProfile(pool, organizationId) {
   return projectProfile(result.rows[0]);
 }
 
+async function getBusinessProfileById(pool, organizationId, profileId) {
+  const result = await requirePool(pool).query(
+    `SELECT id, organization_id, version_number, version_label, raw_profile,
+            normalized_profile, normalized_profile_hash, created_by, created_at
+       FROM canonical_business_profiles
+      WHERE organization_id = $1 AND id = $2`,
+    [organizationId, profileId]
+  );
+  if (result.rows.length !== 1) {
+    throw authorityError(
+      'CANONICAL_BUSINESS_PROFILE_REQUIRED',
+      'The pinned organization Business Profile is unavailable.',
+      503
+    );
+  }
+  return projectProfile(result.rows[0]);
+}
+
 async function putBusinessProfile(pool, input) {
   const source = requirePool(pool);
   const rawProfile = stableValue(input.profile || {});
@@ -160,6 +178,7 @@ module.exports = {
   authorityError,
   bindIntegrationOwner,
   getActiveBusinessProfile,
+  getBusinessProfileById,
   getOrganizationIntegration,
   projectProfile,
   putBusinessProfile,

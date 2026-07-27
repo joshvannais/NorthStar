@@ -10,6 +10,7 @@ const cache = require('../../src/cache/client');
 const { ingestRetell, ingestSimulation, ingestVoice } = require('../../src/services/canonicalGraphService');
 const { stableStringify } = require('../../src/services/businessProfileAdapter');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { EXTREME_FENCE_SUBTOTAL, canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 const {
   READ_MODEL_VERSION,
@@ -71,6 +72,8 @@ async function applyMigrations(pool) {
 }
 
 function graphInput(organizationId, sessionId, key, customerName) {
+  const businessProfile = canonicalFenceProfile({ version: 'bp-ratification-v1' });
+  delete businessProfile.canonicalPricing.taxRatePercent;
   return {
     tenantContext: { organizationId, trusted: true },
     idempotencyKey: key,
@@ -102,13 +105,7 @@ function graphInput(organizationId, sessionId, key, customerName) {
     ],
     service: { key: 'fence', scope: { jobType: 'replace', linearFeet: 100, height: 6, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] } },
     businessProfileVersion: 'bp-ratification-v1',
-    businessProfile: {
-      version: 'bp-ratification-v1',
-      company: { currency: 'USD' },
-      crew: { defaultCrewSize: 2, averageHourlyRate: 42, overtimeMultiplier: 1.5 },
-      financial: { markup: 1.3, emergencyMarkup: 1.5, travelCharge: 0.58 },
-      services: [],
-    },
+    businessProfile,
     appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
     callDurationSeconds: 242,
   };
@@ -204,13 +201,13 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(replay).toMatchObject({ status: 201, replayed: true });
     expect(stableStringify(replay.body)).toBe(stableStringify(graphA.body));
     expect(graphA.body.snapshot).toMatchObject({
-      customerFacingPrice: 4510,
-      subtotalBeforeTax: 4510,
+      customerFacingPrice: EXTREME_FENCE_SUBTOTAL,
+      subtotalBeforeTax: EXTREME_FENCE_SUBTOTAL,
       taxRatePercent: null,
       tax: null,
       totalIncludingTax: null,
       taxDisposition: { status: 'notCalculated', reason: 'tax_configuration_unavailable' },
-      calculationVersion: 'm19-part3-canonical-v1',
+      calculationVersion: 'm19-part3-canonical-v2',
       service: { scope: { linearFeet: 100, height: 6, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] } },
       appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
       risk: { emergency: false },
@@ -379,7 +376,12 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(dashboard.status).toBe(200);
     expect(analytics.status).toBe(200);
     expect(analytics.body.data).toEqual(dashboard.body.data);
-    expect(dashboard.body.data).toMatchObject({ graphCount: 1, customerCount: 1, estimatedRevenue: 4510, knownGrossProfit: null });
+    expect(dashboard.body.data).toMatchObject({
+      graphCount: 1,
+      customerCount: 1,
+      estimatedRevenue: EXTREME_FENCE_SUBTOTAL,
+      knownGrossProfit: null,
+    });
   });
 
   test('every canonical read queries PostgreSQL while generic cache expiry remains isolated', async () => {

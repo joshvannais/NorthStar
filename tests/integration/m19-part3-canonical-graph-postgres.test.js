@@ -8,6 +8,7 @@ const repository = require('../../src/persistence/v2/repository');
 const { stableStringify } = require('../../src/services/businessProfileAdapter');
 const simulationPipeline = require('../../src/routes/simulation/pipeline');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { EXTREME_FENCE_SUBTOTAL, canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 const {
   GRAPH_STAGES,
@@ -51,6 +52,8 @@ async function applyMigrations(pool) {
 }
 
 function graphInput(key, overrides) {
+  const businessProfile = canonicalFenceProfile({ version: 'bp-graph-v1' });
+  delete businessProfile.canonicalPricing.taxRatePercent;
   const input = {
     tenantContext: { organizationId: ORG_A, trusted: true },
     idempotencyKey: key,
@@ -84,13 +87,7 @@ function graphInput(key, overrides) {
       scope: { jobType: 'replace', linearFeet: 100, material: 'cedar', height: 6, removalRequired: true, gates: [{ type: 'walk' }] },
     },
     businessProfileVersion: 'bp-graph-v1',
-    businessProfile: {
-      version: 'bp-graph-v1',
-      company: { currency: 'USD' },
-      crew: { defaultCrewSize: 2, averageHourlyRate: 42, overtimeMultiplier: 1.5 },
-      financial: { markup: 1.3, emergencyMarkup: 1.5, travelCharge: 0.58 },
-      services: [],
-    },
+    businessProfile,
     appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
     callDurationSeconds: 242,
     occurredAt: '2026-07-26T12:00:00.000Z',
@@ -316,7 +313,7 @@ realPostgres('Mission 19 Part 3 transactional canonical graph on disposable Post
         },
       }));
       expect(response.status).toBe(201);
-      expect(response.body.snapshot.customerFacingPrice).toBe(4510);
+      expect(response.body.snapshot.customerFacingPrice).toBe(EXTREME_FENCE_SUBTOTAL);
     }
   });
 
@@ -343,10 +340,10 @@ realPostgres('Mission 19 Part 3 transactional canonical graph on disposable Post
     const response = await ingestSimulation(pool, graphInput('m19-tax-configured'));
     expect(response.status).toBe(201);
     expect(response.body.snapshot).toMatchObject({
-      subtotalBeforeTax: 4510,
+      subtotalBeforeTax: EXTREME_FENCE_SUBTOTAL,
       taxRatePercent: 8.25,
-      tax: 372.08,
-      totalIncludingTax: 4882.08,
+      tax: 3083.52,
+      totalIncludingTax: 40459.52,
       taxDisposition: { status: 'calculated', reason: null },
     });
     const estimate = await pool.query(

@@ -1,7 +1,7 @@
 'use strict';
 
-const catalog = require('../../src/routes/simulation/service-catalog');
 const pipeline = require('../../src/routes/simulation/pipeline');
+const scenarios = require('../../src/routes/simulation/scenario-catalog');
 const eventIntelligence = require('../../src/voice/eventIntelligence');
 const { adaptBusinessProfile, stableStringify } = require('../../src/services/businessProfileAdapter');
 const { detectEmergencyEvidence } = require('../../src/services/emergencyEvidence');
@@ -12,6 +12,11 @@ const {
   calculateCanonicalPolaris,
   readHistoricalSnapshot,
 } = require('../../src/services/canonicalPolarisCalculation');
+const {
+  EXTREME_FENCE_SUBTOTAL,
+  canonicalFenceProfile,
+  canonicalFenceScope,
+} = require('../helpers/m19-part3-business-profile');
 
 const IDS = Object.freeze({
   organizationId: '00000000-0000-0000-0000-000000000001',
@@ -19,34 +24,11 @@ const IDS = Object.freeze({
   opportunityId: '20000000-0000-0000-0000-000000000001',
 });
 
-function profile(overrides) {
-  return {
-    version: 'bp-fixture-v1',
-    company: { currency: 'USD' },
-    crew: { defaultCrewSize: 2, averageHourlyRate: 42, overtimeMultiplier: 1.5 },
-    financial: { markup: 1.3, emergencyMarkup: 1.5, travelCharge: 0.58 },
-    services: [],
-    ...(overrides || {}),
-  };
-}
-
 function fenceInput(overrides) {
   return {
     ...IDS,
     calculationVersion: CALCULATION_VERSION,
-    service: {
-      key: 'fence',
-      scope: {
-        jobType: 'replace',
-        linearFeet: 100,
-        material: 'cedar',
-        height: 6,
-        removalRequired: true,
-        gates: [{ type: 'walk', width: 4 }],
-        permitsRequired: true,
-        schedulingPreference: 'weekday morning',
-      },
-    },
+    service: { key: 'fence', scope: canonicalFenceScope() },
     transcript: [
       { turnId: 'turn-1', speaker: 'customer', text: 'I need a new 100-foot cedar fence and the existing fence removed.' },
       { turnId: 'turn-2', speaker: 'customer', text: 'Please include one walk gate. Weekday mornings work best. This is not an emergency.' },
@@ -57,7 +39,12 @@ function fenceInput(overrides) {
       { id: 'fact-removal', variable: 'removalRequired', status: 'collected', normalizedValue: true, evidenceTurnId: 'turn-1' },
       { id: 'fact-gate', variable: 'gates', status: 'collected', normalizedValue: [{ type: 'walk' }], evidenceTurnId: 'turn-2' },
     ],
-    businessProfile: profile(),
+    businessProfile: canonicalFenceProfile(),
+    businessProfileAuthority: {
+      id: '30000000-0000-0000-0000-000000000001',
+      versionLabel: 'org-profile-v1',
+      profileHash: 'b'.repeat(64),
+    },
     appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
     travel: null,
     callDurationSeconds: 242,
@@ -66,162 +53,278 @@ function fenceInput(overrides) {
   };
 }
 
+function withoutTax(profile) {
+  const copy = JSON.parse(JSON.stringify(profile));
+  delete copy.canonicalPricing.taxRatePercent;
+  return copy;
+}
+
 describe('Mission 19 Part 3 canonical calculation contract', () => {
-  test('normalizes Business Profile once without activating legacy pricing knobs', () => {
-    const first = adaptBusinessProfile(profile(), 'bp-fixture-v1');
-    const second = adaptBusinessProfile(JSON.parse(JSON.stringify(profile())), 'bp-fixture-v1');
+  test('normalizes stable service authority without activating legacy financial knobs', () => {
+    const raw = canonicalFenceProfile();
+    const first = adaptBusinessProfile(raw, 'bp-fixture-v1');
+    const second = adaptBusinessProfile(JSON.parse(JSON.stringify(raw)), 'bp-fixture-v1');
     expect(first.hash).toMatch(/^[0-9a-f]{64}$/);
     expect(first.hash).toBe(second.hash);
     expect(first.pricing).toMatchObject({
-      customerMarkupPercent: null,
-      travelCustomerChargePerMile: null,
-      emergencyMultiplier: null,
-      taxRatePercent: null,
-      legacyCatalogMarkupMultiplier: 1.3,
-      legacyTravelChargePerMile: 0.58,
-      legacyEmergencyMultiplier: 1.5,
+      customerMarkupPercent: 0,
+      travelCustomerChargePerMile: 0,
+      emergencyMultiplier: 1,
+      taxRatePercent: 0,
+      legacyCatalogMarkupMultiplier: 9.99,
+      legacyTravelChargePerMile: 7.77,
+      legacyEmergencyMultiplier: 8.88,
     });
+    expect(first.services).toEqual([
+      expect.objectContaining({
+        id: 'fence',
+        name: 'Persisted Profile Fence',
+        canonicalPricing: expect.objectContaining({ rangePercent: 10 }),
+      }),
+    ]);
   });
 
-  test('freezes the audited 100-foot cedar/removal/walk-gate customer price', () => {
+  test('calculates the adversarial fence solely from the pinned persisted profile', () => {
     const result = calculateCanonicalPolaris(fenceInput());
-    expect(result.customerFacingPrice).toBe(4510);
-    expect(result.subtotalBeforeTax).toBe(4510);
-    expect(result.taxRatePercent).toBeNull();
-    expect(result.tax).toBeNull();
-    expect(result.totalIncludingTax).toBeNull();
-    expect(result.taxDisposition).toEqual({ status: 'notCalculated', reason: 'tax_configuration_unavailable' });
-    expect(result.notCalculated).toContainEqual({ field: 'tax', reason: 'tax_configuration_unavailable' });
-    expect(result.preliminaryRange).toEqual({ low: 3834, high: 5187 });
-    expect(result.pricingLineItems.map(item => item.customerCharge)).toEqual([1800, 1200, 400, 350, 350, 410]);
-    expect(result.materialsCharge).toBe(1800);
-    expect(result.laborCharge).toBe(1200);
-    expect(result.knownDirectMaterialCost).toBeNull();
-    expect(result.knownInternalLaborCost).toBeNull();
-    expect(result.knownDirectCosts).toBeNull();
-    expect(result.grossProfit).toBeNull();
-    expect(result.netProfit).toBeNull();
-    expect(result.risk.emergency).toBe(false);
+    expect(result.customerFacingPrice).toBe(EXTREME_FENCE_SUBTOTAL);
+    expect(result.subtotalBeforeTax).toBe(EXTREME_FENCE_SUBTOTAL);
+    expect(result.customerFacingPrice).not.toBe(4510);
+    expect(result.taxRatePercent).toBe(0);
+    expect(result.tax).toBe(0);
+    expect(result.totalIncludingTax).toBe(EXTREME_FENCE_SUBTOTAL);
+    expect(result.taxDisposition).toEqual({ status: 'calculated', reason: null });
+    expect(result.preliminaryRange).toEqual({ low: 33638.4, high: 41113.6 });
+    expect(result.pricingLineItems).toEqual([
+      expect.objectContaining({ code: 'profile-profile-labor', category: 'labor', customerCharge: 9900 }),
+      expect.objectContaining({ code: 'profile-profile-material', category: 'materials', customerCharge: 12300 }),
+      expect.objectContaining({ code: 'profile-profile-permit', customerCharge: 9999 }),
+      expect.objectContaining({ code: 'profile-profile-gates', category: 'materials', customerCharge: 777 }),
+      expect.objectContaining({ code: 'profile-profile-removal', category: 'labor', customerCharge: 4400 }),
+    ]);
+    expect(result.materialsCharge).toBe(13077);
+    expect(result.laborCharge).toBe(14300);
+    expect(result.businessProfileInputId).toBe('30000000-0000-0000-0000-000000000001');
+    expect(result.businessProfileInputVersion).toBe('org-profile-v1');
+    expect(result.businessProfileInputHash).toBe('b'.repeat(64));
+    expect(result.businessProfileFieldsUsed).toEqual(expect.arrayContaining([
+      'services[fence].canonicalPricing.lineItems[profile-labor].unitRate',
+      'services[fence].canonicalPricing.lineItems[profile-material].unitRates.cedar',
+      'services[fence].canonicalPricing.lineItems[profile-permit].amount',
+      'services[fence].canonicalPricing.lineItems[profile-gates].unitRates.walk',
+      'services[fence].canonicalPricing.lineItems[profile-removal].unitRate',
+      'services[fence].canonicalPricing.allowedScopeValues.jobType',
+    ]));
     expect(result.supportingTranscriptFactIds).toEqual([
       'fact-gate', 'fact-linear-feet', 'fact-material', 'fact-removal',
     ]);
     expect(stableStringify(result)).not.toMatch(/NaN|Infinity/);
   });
 
+  test('different organization profiles and profile versions produce their exact configured results', () => {
+    const alternate = canonicalFenceProfile({
+      version: 'bp-alternate-v7',
+      companyName: 'Other Organization',
+      laborPerFoot: 1,
+      materialRates: { cedar: 2 },
+      permitCharge: 3,
+      gateRates: { walk: 4 },
+      removalPerFoot: 5,
+      rangePercent: 0,
+    });
+    const result = calculateCanonicalPolaris(fenceInput({
+      organizationId: '00000000-0000-0000-0000-000000000002',
+      businessProfile: alternate,
+      businessProfileAuthority: {
+        id: '30000000-0000-0000-0000-000000000002',
+        versionLabel: 'org-profile-v7',
+        profileHash: 'c'.repeat(64),
+      },
+    }));
+    expect(result.customerFacingPrice).toBe(807);
+    expect(result.preliminaryRange).toEqual({ low: 807, high: 807 });
+    expect(result.businessProfileInputVersion).toBe('org-profile-v7');
+    expect(result.businessProfileInputHash).toBe('c'.repeat(64));
+    expect(stableStringify(result)).not.toContain('4510');
+  });
+
   test.each([
-    ['configured', 8.25, 372.08, 4882.08],
-    ['explicit zero', 0, 0, 4510],
+    ['configured', 8.25, 3083.52, 40459.52],
+    ['explicit zero', 0, 0, EXTREME_FENCE_SUBTOTAL],
   ])('calculates tax only from %s organization configuration', (_label, rate, expectedTax, expectedTotal) => {
     const result = calculateCanonicalPolaris(fenceInput({
-      businessProfile: profile({ canonicalPricing: { taxRatePercent: rate } }),
+      businessProfile: canonicalFenceProfile({ taxRatePercent: rate }),
       pricingSettings: { taxRatePercent: 99 },
     }));
-    expect(result.subtotalBeforeTax).toBe(4510);
+    expect(result.subtotalBeforeTax).toBe(EXTREME_FENCE_SUBTOTAL);
     expect(result.taxRatePercent).toBe(rate);
     expect(result.tax).toBe(expectedTax);
     expect(result.totalIncludingTax).toBe(expectedTotal);
     expect(result.taxDisposition).toEqual({ status: 'calculated', reason: null });
-    expect(result.notCalculated).not.toEqual(expect.arrayContaining([expect.objectContaining({ field: 'tax' })]));
   });
 
-  test('malformed or request-only tax never fabricates a total', () => {
-    const malformed = calculateCanonicalPolaris(fenceInput({
-      businessProfile: profile({ canonicalPricing: { taxRatePercent: 'not-a-rate' } }),
-      pricingSettings: { taxRatePercent: 7 },
+  test('missing and malformed tax never fabricate a rate or total', () => {
+    for (const profile of [
+      withoutTax(canonicalFenceProfile()),
+      canonicalFenceProfile({ taxRatePercent: 'not-a-rate' }),
+      canonicalFenceProfile({ taxRatePercent: 100.01 }),
+    ]) {
+      const result = calculateCanonicalPolaris(fenceInput({
+        businessProfile: profile,
+        pricingSettings: { taxRatePercent: 7 },
+      }));
+      expect(result.customerFacingPrice).toBe(EXTREME_FENCE_SUBTOTAL);
+      expect(result.taxRatePercent).toBeNull();
+      expect(result.tax).toBeNull();
+      expect(result.totalIncludingTax).toBeNull();
+      expect(result.taxDisposition).toEqual({
+        status: 'notCalculated',
+        reason: 'tax_configuration_unavailable',
+      });
+      expect(result.notCalculated).toContainEqual({
+        field: 'tax',
+        reason: 'tax_configuration_unavailable',
+      });
+    }
+  });
+
+  test('missing, malformed, unsupported, and contradictory pricing inputs fail explicitly', () => {
+    const noService = calculateCanonicalPolaris(fenceInput({
+      businessProfile: { ...canonicalFenceProfile(), services: [] },
     }));
-    expect(malformed.taxRatePercent).toBeNull();
-    expect(malformed.tax).toBeNull();
-    expect(malformed.totalIncludingTax).toBeNull();
-    expect(malformed.taxDisposition.reason).toBe('tax_configuration_unavailable');
-    const outOfRange = calculateCanonicalPolaris(fenceInput({
-      businessProfile: profile({ canonicalPricing: { taxRatePercent: 100.01 } }),
+    expect(noService.customerFacingPrice).toBeNull();
+    expect(noService.service.unpricedReason).toBe('service_not_configured');
+
+    const noConfigProfile = canonicalFenceProfile();
+    noConfigProfile.services = [{ id: 'fence', name: 'Unconfigured Fence' }];
+    const noConfig = calculateCanonicalPolaris(fenceInput({ businessProfile: noConfigProfile }));
+    expect(noConfig.customerFacingPrice).toBeNull();
+    expect(noConfig.service.unpricedReason).toBe('service_pricing_configuration_missing');
+
+    const malformedProfile = canonicalFenceProfile();
+    malformedProfile.services[0].canonicalPricing.lineItems[0].unitRate = 'not-a-rate';
+    const malformed = calculateCanonicalPolaris(fenceInput({ businessProfile: malformedProfile }));
+    expect(malformed.customerFacingPrice).toBeNull();
+    expect(malformed.service.unpricedReason).toBe('pricing_rule_rate_malformed:profile-labor');
+
+    const unsupportedService = calculateCanonicalPolaris(fenceInput({
+      service: { key: 'roofing', scope: {} },
     }));
-    expect(outOfRange.tax).toBeNull();
-    expect(outOfRange.taxDisposition.reason).toBe('tax_configuration_unavailable');
-  });
+    expect(unsupportedService.customerFacingPrice).toBeNull();
+    expect(unsupportedService.service.unpricedReason).toBe('service_not_configured');
 
-  test.each([
-    ['fence', { jobType: 'replace', linearFeet: 100, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }] }, 4510],
-    ['roofing', { jobType: 'replace', squares: 20, material: 'architectural', existingLayers: 1 }, 10505],
-    ['hvac', { jobType: 'replace', tonnage: 3, systemType: 'central', seer: 14, sqft: 2000, ductworkReplace: false, thermostat: 'standard' }, 6950],
-    ['plumbing', { jobType: 'repair', fixture: 'sink' }, 129],
-    ['electrical', { jobType: 'repair', symptoms: 'tripping breaker' }, 149],
-    ['concrete', { jobType: 'install', squareFeet: 400, finish: 'standard', existingRemoval: false, reinforcement: false }, 5280],
-  ])('preserves current %s catalog price', (serviceKey, scope, expected) => {
-    const rawCatalog = catalog[serviceKey].pricing.calculate(scope);
-    const result = calculateCanonicalPolaris(fenceInput({ service: { key: serviceKey, scope }, facts: [] }));
-    expect(rawCatalog.total).toBe(expected);
-    expect(result.customerFacingPrice).toBe(expected);
-  });
+    const unsupportedJob = calculateCanonicalPolaris(fenceInput({
+      service: { key: 'fence', scope: canonicalFenceScope({ jobType: 'inspect' }) },
+    }));
+    expect(unsupportedJob.customerFacingPrice).toBeNull();
+    expect(unsupportedJob.service.unpricedReason).toBe('pricing_scope_value_unsupported:jobType:inspect');
 
-  test('does not price missing, unsupported, or contradictory scope', () => {
+    const unsupportedMaterial = calculateCanonicalPolaris(fenceInput({
+      service: { key: 'fence', scope: canonicalFenceScope({ material: 'mystery composite' }) },
+    }));
+    expect(unsupportedMaterial.customerFacingPrice).toBeNull();
+    expect(unsupportedMaterial.service.unpricedReason)
+      .toBe('pricing_scope_value_unsupported:material:mystery composite');
+
     const missing = calculateCanonicalPolaris(fenceInput({
-      service: { key: 'fence', scope: { jobType: 'replace', material: 'cedar' } },
+      service: {
+        key: 'fence',
+        scope: canonicalFenceScope({ linearFeet: undefined }),
+      },
     }));
     expect(missing.customerFacingPrice).toBeNull();
-    expect(missing.service.unpricedReason).toContain('linearFeet');
-
-    const unsupported = calculateCanonicalPolaris(fenceInput({
-      service: { key: 'fence', scope: { jobType: 'replace', linearFeet: 100, material: 'mystery composite' } },
-    }));
-    expect(unsupported.customerFacingPrice).toBeNull();
-    expect(unsupported.service.unpricedReason).toContain('supported material');
+    expect(missing.service.unpricedReason).toBe('required_scope_unavailable:linearFeet');
 
     const conflicting = calculateCanonicalPolaris(fenceInput({
       facts: [{ id: 'fact-conflict', variable: 'linearFeet', status: 'conflicting', normalizedValue: null }],
     }));
     expect(conflicting.customerFacingPrice).toBeNull();
+    expect(conflicting.service.unpricedReason).toBe('required_scope_unavailable:linearFeet');
     expect(conflicting.risk.contradictoryFactIds).toEqual(['fact-conflict']);
   });
 
-  test('keeps charge, cost, gross-profit, overhead, and net-profit semantics separate', () => {
+  test('explicit zero profile rates remain an exact calculated zero', () => {
+    const zero = canonicalFenceProfile({
+      laborPerFoot: 0,
+      materialRates: { cedar: 0 },
+      permitCharge: 0,
+      gateRates: { walk: 0 },
+      removalPerFoot: 0,
+      taxRatePercent: 0,
+      overheadPercent: 0,
+      materialCostByService: { 'fence:cedar': 0 },
+      averageHourlyRate: 0,
+      rangePercent: 0,
+    });
     const result = calculateCanonicalPolaris(fenceInput({
-      businessProfile: profile({
-        crew: { defaultCrewSize: 2, averageHourlyRate: 25, overtimeMultiplier: 1.5 },
-        canonicalPricing: { customerMarkupPercent: 10, travelCustomerChargePerMile: 0.5 },
-        canonicalCosts: { overheadPercent: 10, travelCostPerMile: 0.2 },
-      }),
-      service: {
-        key: 'fence',
-        scope: {
-          jobType: 'replace', linearFeet: 100, material: 'cedar', removalRequired: true,
-          gates: [{ type: 'walk' }], laborHours: 4,
-        },
-      },
-      travel: { distanceMiles: 10, minutes: 20, source: 'configured-route' },
-      costSettings: { materialCost: 900 },
+      businessProfile: zero,
+      service: { key: 'fence', scope: canonicalFenceScope({ laborHours: 0 }) },
     }));
-    expect(result.customerFacingPrice).toBe(4966);
-    expect(result.travel.customerCharge).toBe(5);
-    expect(result.knownInternalLaborCost).toBe(200);
-    expect(result.travel.knownInternalCost).toBe(2);
-    expect(result.knownDirectCosts).toBe(1102);
-    expect(result.grossProfit).toBe(3864);
-    expect(result.overhead).toBe(110.2);
-    expect(result.netProfit).toBe(3753.8);
+    expect(result.customerFacingPrice).toBe(0);
+    expect(result.taxRatePercent).toBe(0);
+    expect(result.tax).toBe(0);
+    expect(result.totalIncludingTax).toBe(0);
+    expect(result.preliminaryRange).toEqual({ low: 0, high: 0 });
+    expect(result.pricingLineItems.every(item => item.customerCharge === 0)).toBe(true);
   });
 
-  test('applies emergency pricing only for explicit configuration and current customer evidence', () => {
-    const currentEmergency = [{ turnId: 'e1', speaker: 'customer', text: 'There is water flooding the room right now.' }];
-    const legacyOnly = calculateCanonicalPolaris(fenceInput({ transcript: currentEmergency }));
-    expect(legacyOnly.customerFacingPrice).toBe(4510);
+  test('caller financial overrides have no authority and direct costs remain distinct', () => {
+    const input = fenceInput({
+      service: { key: 'fence', scope: canonicalFenceScope({ laborHours: 4 }) },
+      pricingSettings: {
+        customerMarkupPercent: 900,
+        travelCustomerChargePerMile: 900,
+        emergencyMultiplier: 9,
+        taxRatePercent: 99,
+      },
+      costSettings: { materialCost: 1, overheadPercent: 1 },
+    });
+    const result = calculateCanonicalPolaris(input);
+    expect(result.customerFacingPrice).toBe(EXTREME_FENCE_SUBTOTAL);
+    expect(result.knownDirectMaterialCost).toBe(12000);
+    expect(result.knownInternalLaborCost).toBe(336);
+    expect(result.knownDirectCosts).toBe(12336);
+    expect(result.grossProfit).toBe(25040);
+    expect(result.overhead).toBe(6784.8);
+    expect(result.netProfit).toBe(18255.2);
+  });
 
-    const configured = calculateCanonicalPolaris(fenceInput({
+  test('emergency adjustment requires current customer evidence and persisted profile configuration', () => {
+    const currentEmergency = [{ turnId: 'e1', speaker: 'customer', text: 'There is water flooding the room right now.' }];
+    const requestOnly = calculateCanonicalPolaris(fenceInput({
       transcript: currentEmergency,
       pricingSettings: { emergencyMultiplier: 1.5 },
     }));
-    expect(configured.customerFacingPrice).toBe(6765);
+    expect(requestOnly.customerFacingPrice).toBe(EXTREME_FENCE_SUBTOTAL);
+
+    const configured = calculateCanonicalPolaris(fenceInput({
+      transcript: currentEmergency,
+      businessProfile: canonicalFenceProfile({ emergencyMultiplier: 1.5 }),
+    }));
+    expect(configured.customerFacingPrice).toBe(56064);
     expect(configured.risk).toMatchObject({ emergency: true, signal: 'active flooding' });
 
     const historical = calculateCanonicalPolaris(fenceInput({
       transcript: [{ speaker: 'customer', text: 'It flooded yesterday, but it was fixed and is fine now.' }],
-      pricingSettings: { emergencyMultiplier: 1.5 },
+      businessProfile: canonicalFenceProfile({ emergencyMultiplier: 1.5 }),
     }));
-    expect(historical.customerFacingPrice).toBe(4510);
+    expect(historical.customerFacingPrice).toBe(EXTREME_FENCE_SUBTOTAL);
     expect(historical.risk.emergency).toBe(false);
   });
 
-  test('uses one customer-only clause-local classifier in simulation and live processing', () => {
+  test('simulation scenario metadata and transcript generation remain strictly nonfinancial', () => {
+    expect(stableStringify(scenarios)).not.toMatch(
+      /\b(?:price|pricing|cost|rate|charge|fee|markup|margin|tax|overhead|permitAmount)\b/i
+    );
+    const scenario = pipeline.withDeterministicSeed('nonfinancial-transcript', function () {
+      return pipeline.generateScenario('fence', 'Avery Smith');
+    });
+    const transcript = pipeline.withDeterministicSeed('nonfinancial-transcript', function () {
+      return pipeline.generateTranscript(scenario);
+    });
+    expect(stableStringify(transcript)).not.toMatch(/\$|\b\d+(?:\.\d+)?\s*(?:dollars?|cents?)\b/i);
+  });
+
+  test('uses one customer-only clause-local emergency classifier in simulation and live processing', () => {
     expect(detectEmergencyEvidence([{ speaker: 'agent', text: 'Is this an emergency?' }]).isEmergency).toBe(false);
     expect(detectEmergencyEvidence([{ speaker: 'customer', text: 'There is no leak and no flood.' }]).isEmergency).toBe(false);
     expect(detectEmergencyEvidence([{ speaker: 'customer', text: 'The old leak was repaired; it has not returned.' }]).isEmergency).toBe(false);
@@ -243,7 +346,7 @@ describe('Mission 19 Part 3 canonical calculation contract', () => {
     eventIntelligence.clearSessionGuidance('canonical-live-emergency');
   });
 
-  test('demo and real adapters are byte-equivalent for identical normalized input', () => {
+  test('demo and live adapters are byte-equivalent for identical normalized input', () => {
     const simulation = fenceInput({
       transcript: [{ turnId: 'same-turn', speaker: 'customer', text: 'I need a 100-foot cedar fence.' }],
     });
@@ -259,8 +362,10 @@ describe('Mission 19 Part 3 canonical calculation contract', () => {
 
   test('returns immutable historical payload values without recalculating them', () => {
     const historical = {
-      calculationVersion: 'm19-part3-canonical-v0',
+      calculationVersion: 'm19-part3-canonical-v1',
       normalizedInputFingerprint: 'a'.repeat(64),
+      businessProfileInputVersion: 'org-profile-v1',
+      businessProfileInputHash: 'd'.repeat(64),
       customerFacingPrice: 4321,
       pricingLineItems: [{ code: 'historical', customerCharge: 4321 }],
     };

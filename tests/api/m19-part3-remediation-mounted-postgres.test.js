@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
 
 jest.mock('../../src/leads/store', () => {
   const actual = jest.requireActual('../../src/leads/store');
@@ -48,14 +49,32 @@ function directoryDigest(root) {
   return hash.digest('hex');
 }
 
-const profile = {
-  company: { name: 'Mounted Test Company', currency: 'USD' },
-  headquarters: {},
-  crew: { defaultCrewSize: 2, maxCrewSize: 6, averageHourlyRate: 42, overtimeMultiplier: 1.5 },
-  financial: { desiredGrossMargin: 40, markup: 1.3, emergencyMarkup: 1.5, travelCharge: 0.58 },
-  canonicalPricing: { customerMarkupPercent: 50, taxRatePercent: 0 },
-  scheduling: { maxJobsPerDay: 4, workDayLength: 8 },
-  services: [],
+const profile = canonicalFenceProfile({
+  companyName: 'Mounted Test Company',
+  materialRates: { cedar: 123, pine: 71, vinyl: 137, 'chain-link': 149 },
+  gateRates: { walk: 777, drive: 4321 },
+});
+profile.financial = {
+  desiredGrossMargin: 40,
+  markup: 1.3,
+  emergencyMarkup: 1.5,
+  travelCharge: 0.58,
+};
+profile.scheduling = { maxJobsPerDay: 4, workDayLength: 8 };
+
+const otherProfile = canonicalFenceProfile({
+  companyName: 'Other Company',
+  laborPerFoot: 7,
+  materialRates: { cedar: 11, pine: 13, vinyl: 17, 'chain-link': 19 },
+  permitCharge: 23,
+  gateRates: { walk: 29, drive: 31 },
+  removalPerFoot: 37,
+});
+otherProfile.financial = {
+  desiredGrossMargin: 33,
+  markup: 1.1,
+  emergencyMarkup: 1.2,
+  travelCharge: 0.25,
 };
 
 realPostgres('Mission 19 Part 3 corrected real server mount', () => {
@@ -128,7 +147,11 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     }
     ({ putBusinessProfile, bindIntegrationOwner } = require('../../src/services/organizationAuthority'));
     profileAuthorityA = await putBusinessProfile(pool, { organizationId: ORG_A, userId: USERS.owner, profile });
-    profileAuthorityB = await putBusinessProfile(pool, { organizationId: ORG_B, userId: USERS.other, profile: { ...profile, company: { name: 'Other Company', currency: 'USD' } } });
+    profileAuthorityB = await putBusinessProfile(pool, {
+      organizationId: ORG_B,
+      userId: USERS.other,
+      profile: otherProfile,
+    });
     integrationAuthorityA = await bindIntegrationOwner(pool, {
       organizationId: ORG_A,
       userId: USERS.owner,
@@ -236,13 +259,25 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       .post('/api/v1/simulations/leads')
       .set(auth(USERS.member))
       .set('Idempotency-Key', 'mounted-simulation-member')
-      .send({ name: 'Simulation Member', service: 'fence', phone: '+15555551104' });
+      .send({
+        name: 'Simulation Member',
+        service: 'fence',
+        phone: '+15555551104',
+        pricing: { laborPerFoot: 1, taxRatePercent: 99 },
+        businessProfile: otherProfile,
+      });
     expect(memberSimulation.status).toBe(201);
-    const canonicalMarkup = memberSimulation.body.polaris.pricingLineItems.find(item => item.code === 'configured-markup');
-    const canonicalBase = memberSimulation.body.polaris.pricingLineItems
-      .filter(item => item.code !== 'configured-markup')
-      .reduce((sum, item) => sum + item.customerCharge, 0);
-    expect(canonicalMarkup.customerCharge).toBe(canonicalBase * 0.5);
+    expect(memberSimulation.body.polaris.customerFacingPrice).toBe(68597);
+    expect(memberSimulation.body.polaris.businessProfileInputId).toBe(profileAuthorityA.id);
+    expect(memberSimulation.body.polaris.businessProfileInputVersion).toBe(profileAuthorityA.versionLabel);
+    expect(memberSimulation.body.polaris.businessProfileInputHash).toBe(profileAuthorityA.profileHash);
+    expect(memberSimulation.body.polaris.pricingLineItems).toEqual([
+      expect.objectContaining({ code: 'profile-profile-labor', customerCharge: 24750 }),
+      expect.objectContaining({ code: 'profile-profile-material', customerCharge: 17750 }),
+      expect.objectContaining({ code: 'profile-profile-permit', customerCharge: 9999 }),
+      expect.objectContaining({ code: 'profile-profile-gates', customerCharge: 5098 }),
+      expect.objectContaining({ code: 'profile-profile-removal', customerCharge: 11000 }),
+    ]);
     expect(memberSimulation.body.summary.estimatedValue).toBe(memberSimulation.body.polaris.customerFacingPrice);
     const simulatedAgentText = memberSimulation.body.transcript
       .filter(turn => turn.speaker === 'ai')
@@ -250,6 +285,32 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       .join('\n');
     expect(simulatedAgentText).toContain('provide the written estimate before any work begins');
     expect(simulatedAgentText).not.toMatch(/\$|price range|typically looking in the range/i);
+
+    const otherSimulation = await request(app)
+      .post('/api/v1/simulations/leads')
+      .set(auth(USERS.other))
+      .set('Idempotency-Key', 'mounted-simulation-other')
+      .send({ name: 'Simulation Member', service: 'fence', phone: '+15555551104' });
+    expect(otherSimulation.status).toBe(201);
+    expect(otherSimulation.body.polaris.businessProfileInputId).toBe(profileAuthorityB.id);
+    expect(otherSimulation.body.polaris.businessProfileInputHash).toBe(profileAuthorityB.profileHash);
+    const otherScope = otherSimulation.body.polaris.service.scope;
+    const otherItems = Object.fromEntries(
+      otherSimulation.body.polaris.pricingLineItems.map(item => [item.code, item.customerCharge])
+    );
+    expect(otherItems['profile-profile-labor']).toBe(otherScope.linearFeet * 7);
+    expect(otherItems['profile-profile-material']).toBe(
+      otherScope.linearFeet * { cedar: 11, pine: 13, vinyl: 17, 'chain-link': 19 }[otherScope.material]
+    );
+    expect(otherItems['profile-profile-permit']).toBe(otherScope.permitsRequired ? 23 : undefined);
+    expect(otherItems['profile-profile-gates']).toBe(
+      otherScope.gates.reduce((sum, gate) => sum + { walk: 29, drive: 31 }[gate.type], 0)
+    );
+    expect(otherItems['profile-profile-removal']).toBe(otherScope.removalRequired
+      ? otherScope.linearFeet * 37
+      : undefined);
+    expect(otherSimulation.body.polaris.customerFacingPrice)
+      .not.toBe(memberSimulation.body.polaris.customerFacingPrice);
     const viewerSimulation = await request(app)
       .post('/api/v1/simulations/leads')
       .set(auth(USERS.viewer))

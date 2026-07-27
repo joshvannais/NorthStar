@@ -89,6 +89,8 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     const graph = source('src/services/canonicalGraphService.js');
     const calculator = source('src/services/canonicalPolarisCalculation.js');
     const simulator = source('public/js/simulator.js');
+    const scenarioCatalog = source('src/routes/simulation/scenario-catalog.js');
+    const simulationPipeline = source('src/routes/simulation/pipeline.js');
     const demo = source('src/routes/demo.js');
     const voiceMigration = source('migrations/006_canonical_voice_sessions.sql');
     const taxMigration = source('migrations/007_canonical_tax_authority.sql');
@@ -102,8 +104,13 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     expect(graph).toContain('request.businessProfileAuthority = authority');
     expect(calculator).toContain("'tax_configuration_unavailable'");
     expect(calculator).toContain('totalIncludingTax');
-    expect(simulator).not.toMatch(/const\s+price\s*=\s*calcPrice\s*\(/);
-    expect(simulator).not.toMatch(/const\s+breakdown\s*=\s*calcBreakdown\s*\(/);
+    expect(calculator).not.toContain("require('../routes/simulation/");
+    expect(calculator).not.toContain('definition.pricing');
+    expect(fs.existsSync(path.join(ROOT, 'src/routes/simulation/service-catalog.js'))).toBe(false);
+    expect(simulationPipeline).toContain("require('./scenario-catalog')");
+    expect(simulationPipeline).not.toMatch(/\.pricing\b|calculatePricing|service-catalog/);
+    expect(scenarioCatalog).not.toMatch(/\b(?:unitRate|unitRates|fixedPrice|avgPrice|calculate)\s*:/);
+    expect(simulator).not.toMatch(/function\s+calcPrice\s*\(|function\s+calcBreakdown\s*\(/);
     expect(demo).toContain("opportunityLabel: 'CANONICAL ESTIMATE REQUIRED'");
     expect(demo).toContain('canonicalRequired: true');
     expect(voiceMigration).toContain('CREATE TABLE IF NOT EXISTS canonical_voice_sessions');

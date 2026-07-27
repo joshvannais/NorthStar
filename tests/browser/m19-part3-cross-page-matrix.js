@@ -4,6 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const { EXTREME_FENCE_SUBTOTAL } = require('../helpers/m19-part3-business-profile');
 
 const PLAYWRIGHT = 'C:/Users/joshv/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright-core';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
@@ -34,35 +35,37 @@ const VALUES = Object.freeze({
   organizationId: ORG_A,
   customerId: IDS.customer,
   opportunityId: IDS.opportunity,
-  calculationVersion: 'm19-part3-calc-v1',
+  calculationVersion: 'm19-part3-canonical-v2',
   normalizedInputFingerprint: 'd'.repeat(64),
   businessProfileInputVersion: 'fixture-v1',
   businessProfileInputHash: 'e'.repeat(64),
   service: {
-    key: 'fence-installation',
-    label: 'Fence installation',
+    key: 'fence',
+    label: 'Persisted Profile Fence',
     supported: true,
     unpricedReason: null,
     scope: { linearFeet: 100, material: 'cedar', removalRequired: true, gates: [{ type: 'walk' }], heightFeet: 6 },
   },
-  customerFacingPrice: 4510,
-  subtotalBeforeTax: 4510,
-  taxRatePercent: null,
-  tax: null,
-  taxDisposition: { status: 'notCalculated', reason: 'tax_configuration_unavailable' },
-  totalIncludingTax: null,
-  preliminaryRange: { low: 3834, high: 5187 },
+  customerFacingPrice: EXTREME_FENCE_SUBTOTAL,
+  subtotalBeforeTax: EXTREME_FENCE_SUBTOTAL,
+  taxRatePercent: 0,
+  tax: 0,
+  taxDisposition: { status: 'calculated', reason: null },
+  totalIncludingTax: EXTREME_FENCE_SUBTOTAL,
+  preliminaryRange: { low: 33638.4, high: 41113.6 },
   pricingLineItems: [
-    { code: 'fence-base', label: 'Cedar fence', category: 'materials', customerCharge: 3700 },
-    { code: 'fence-removal', label: 'Existing fence removal', category: 'labor', customerCharge: 500 },
-    { code: 'walk-gate', label: 'Walk gate', category: 'equipment', customerCharge: 310 },
+    { code: 'profile-profile-labor', label: 'Profile labor per foot', category: 'labor', customerCharge: 9900 },
+    { code: 'profile-profile-material', label: 'Profile material per foot', category: 'materials', customerCharge: 12300 },
+    { code: 'profile-profile-permit', label: 'Profile permit charge', category: 'serviceCharge', customerCharge: 9999 },
+    { code: 'profile-profile-gates', label: 'Profile gate charge', category: 'materials', customerCharge: 777 },
+    { code: 'profile-profile-removal', label: 'Profile removal per foot', category: 'labor', customerCharge: 4400 },
   ],
-  materialsCharge: 3700,
+  materialsCharge: 13077,
   knownDirectMaterialCost: null,
-  laborCharge: 500,
+  laborCharge: 14300,
   laborHours: 24,
   knownInternalLaborCost: null,
-  equipmentCharge: 310,
+  equipmentCharge: 0,
   knownEquipmentCost: null,
   equipmentReference: null,
   travel: { minutes: 35, distanceMiles: 18, source: 'fixture-map', customerCharge: null, knownInternalCost: null },
@@ -70,7 +73,7 @@ const VALUES = Object.freeze({
   estimatedProductionDurationHours: 24,
   crewRecommendation: { size: 2, source: 'business-profile' },
   actualCrewAssignment: null,
-  estimatedRevenue: 4510,
+  estimatedRevenue: EXTREME_FENCE_SUBTOTAL,
   knownDirectCosts: null,
   grossProfit: null,
   grossMarginPercent: null,
@@ -152,7 +155,7 @@ function projection(surface, sessionId, mode) {
     metrics: {
       graphCount: 1,
       customerCount: 1,
-      estimatedRevenue: 4510,
+      estimatedRevenue: EXTREME_FENCE_SUBTOTAL,
       knownGrossProfit: null,
       appointmentCount: 1,
       snapshotDigests: [SNAPSHOT_DIGEST],
@@ -334,9 +337,12 @@ async function main() {
     await collisionPage.addInitScript(initialIdentity, { sessionId: SESSION_A, injectBusinessCache: true });
     await collisionPage.goto(origin + '/dashboard/leads', { waitUntil: 'domcontentloaded' });
     const collision = await waitForSurface(collisionPage, 'leads');
-    assert.strictEqual(collision.price, 4510, 'server result wins storage and duplicate-ID collisions');
+    assert.strictEqual(collision.price, EXTREME_FENCE_SUBTOTAL, 'server result wins storage and duplicate-ID collisions');
     const cachedPrices = await collisionPage.evaluate(() => window.AppStore.getLeads().map((lead) => lead.avgPrice));
-    assert.ok(cachedPrices.length > 0 && cachedPrices.every((price) => price === 4510), 'AppStore caches only the authorized server projection');
+    assert.ok(
+      cachedPrices.length > 0 && cachedPrices.every((price) => price === EXTREME_FENCE_SUBTOTAL),
+      'AppStore caches only the authorized server projection'
+    );
     await collisionPage.close();
 
     for (const rejectionMode of ['wrong-organization', 'wrong-session', 'malformed', 'rejected']) {

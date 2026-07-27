@@ -2,7 +2,8 @@
 
 const db = require('../db');
 const { ingestRetell, ingestVoice } = require('./canonicalGraphService');
-const { resolveIntegrationOwner } = require('./organizationAuthority');
+const { getActiveBusinessProfile, resolveIntegrationOwner } = require('./organizationAuthority');
+const voiceSessions = require('./voiceSessionAuthority');
 
 const TERMINAL_EVENTS = new Set(['call_ended', 'call_analyzed']);
 const KNOWN_SERVICES = ['fence', 'roofing', 'hvac', 'plumbing', 'electrical', 'concrete'];
@@ -125,15 +126,50 @@ async function ingestRetellPayload(payload, options) {
   const event = text(payload && payload.event);
   try {
     const ownership = await resolveIntegrationOwner(pool, 'retell', agentIdentifier(payload));
-    if (!TERMINAL_EVENTS.has(event)) {
-      return { status: 202, body: { received: true, processed: false, canonical: true } };
-    }
     const callId = callIdentifier(payload);
     if (!callId) {
       return { status: 400, body: { success: false, error: { code: 'RETELL_CALL_ID_REQUIRED', message: 'Retell call identifier is required.' } } };
     }
+    const profile = await getActiveBusinessProfile(pool, ownership.organizationId);
+    const call = callFrom(payload);
+    await voiceSessions.createSession(pool, {
+      organizationId: ownership.organizationId,
+      externalSessionId: callId,
+      provider: 'retell',
+      integrationOwnershipId: ownership.id,
+      profileId: profile.id,
+      profileVersion: profile.versionLabel,
+      profileHash: profile.profileHash,
+      direction: text(call.direction) === 'outbound' ? 'outbound' : 'inbound',
+      fromNumber: text(call.from_number),
+      toNumber: text(call.to_number),
+      metadata: { source: options && options.ingestionSource === 'voice' ? 'voice-webhook' : 'retell-webhook' },
+    });
+    await voiceSessions.appendEvent(pool, {
+      organizationId: ownership.organizationId,
+      externalSessionId: callId,
+      externalEventId: text(payload && payload.event_id),
+      eventType: event || 'unknown',
+      payload: {
+        transcript: transcriptTurns(payload),
+        analysis: analysisFrom(payload),
+      },
+    });
+    if (!TERMINAL_EVENTS.has(event)) {
+      return { status: 202, body: { received: true, processed: false, canonical: true } };
+    }
     const existing = await completedCall(pool, ownership.organizationId, callId);
     if (existing) {
+      await voiceSessions.appendEvent(pool, {
+        organizationId: ownership.organizationId,
+        externalSessionId: callId,
+        externalEventId: text(payload && payload.event_id),
+        eventType: event,
+        payload: { replayed: true },
+        status: 'completed',
+        summary: existing.result_body,
+        canonicalOperationId: existing.result_body && existing.result_body.operationId,
+      });
       return { status: existing.result_status, body: { ...existing.result_body, received: true, replayed: true }, replayed: true };
     }
     const request = graphRequest(payload, ownership);
@@ -142,6 +178,16 @@ async function ingestRetellPayload(payload, options) {
     }
     const ingest = options && options.ingestionSource === 'voice' ? ingestVoice : ingestRetell;
     const result = await ingest(pool, request, options);
+    await voiceSessions.appendEvent(pool, {
+      organizationId: ownership.organizationId,
+      externalSessionId: callId,
+      externalEventId: text(payload && payload.event_id),
+      eventType: event,
+      payload: { graphStatus: result.status },
+      status: result.status === 201 ? 'completed' : 'failed',
+      summary: result.body,
+      canonicalOperationId: result.body && result.body.operationId,
+    });
     return { ...result, body: { ...result.body, received: result.status === 201 } };
   } catch (error) {
     const status = error && error.status ? error.status : 503;

@@ -1,543 +1,213 @@
-/**
- * Voice API endpoints for the Retell voice system.
- *
- * Routes:
- * - POST /api/v1/voice/webhook — Webhook receiver (PUBLIC)
- * - GET  /api/v1/voice/sessions — List active sessions (auth required)
- * - GET  /api/v1/voice/sessions/:id — Get session details (auth required)
- * - POST /api/v1/voice/call — Initiate outbound call (auth required)
- */
-
 'use strict';
 
 const express = require('express');
-const crypto = require('crypto');
+const db = require('../db');
+const config = require('../config');
 const { requireAuth } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { handleWebhook, rawBodyCapture } = require('../voice/webhook');
-const { eventBus, createEvent, EVENT_TYPES } = require('../voice/businessEvents');
-const { executeCallCompletion } = require('../voice/callCompletion');
-const { updateContext, registerIntelligenceHandlers, getSessionGuidance, clearSessionGuidance } = require('../voice/eventIntelligence');
-const { buildPolarisContext } = require('../services/polarisContextBuilder');
-const { buildExecutiveContext } = require('../voice/executiveContext');
-const transcriptStream = require('../voice/transcriptStream');
-const humanHandoff = require('../voice/humanHandoff');
-const { toolDefinitions, toolHandlers } = require('../voice/toolRegistry');
-const db = require('../db');
-const config = require('../config');
-const { getOrganizationIntegration } = require('../services/organizationAuthority');
+const { createCall } = require('../retell/client');
+const { toolDefinitions } = require('../voice/toolRegistry');
+const { getActiveBusinessProfile, getOrganizationIntegration } = require('../services/organizationAuthority');
+const voiceSessions = require('../services/voiceSessionAuthority');
 
 const router = express.Router();
 
-// ── Session Store (in-memory, survives request lifecycle) ──────
-// In production, this would be Redis or DB-backed
-
-const activeSessions = new Map();
-
-/**
- * Create a new voice session.
- */
-function createSession(callId, data = {}) {
-  const session = {
-    id: callId || crypto.randomUUID(),
-    callId: callId || '',
-    status: 'active',
-    startedAt: new Date().toISOString(),
-    completedAt: null,
-    fromNumber: data.fromNumber || '',
-    toNumber: data.toNumber || '',
-    direction: data.direction || 'inbound',
-    events: [],
-    summary: null,
-    leadId: null,
-    ...data,
-  };
-  activeSessions.set(session.id, session);
-  return session;
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  Object.values(value).forEach(deepFreeze);
+  return Object.freeze(value);
 }
 
-/**
- * Get a session by ID.
- */
-function getSession(id) {
-  return activeSessions.get(id) || null;
-}
-
-/**
- * Update a session.
- */
-function updateSession(id, updates) {
-  const session = activeSessions.get(id);
-  if (!session) return null;
-  Object.assign(session, updates);
-  activeSessions.set(id, session);
-  return session;
-}
-
-/**
- * Close a session.
- */
-function closeSession(id) {
-  const session = activeSessions.get(id);
-  if (session) {
-    session.status = 'completed';
-    session.completedAt = new Date().toISOString();
-    activeSessions.set(id, session);
-  }
-  return session;
-}
-
-/**
- * List all active sessions.
- */
-function listActiveSessions() {
-  return Array.from(activeSessions.values())
-    .filter(s => s.status === 'active')
-    .map(s => ({
-      id: s.id,
-      callId: s.callId,
-      status: s.status,
-      startedAt: s.startedAt,
-      fromNumber: s.fromNumber,
-      toNumber: s.toNumber,
-      direction: s.direction,
-      eventCount: s.events.length,
-    }));
-}
-
-/**
- * List all sessions (including completed).
- */
-function listAllSessions() {
-  return Array.from(activeSessions.values()).map(s => ({
-    id: s.id,
-    callId: s.callId,
-    status: s.status,
-    startedAt: s.startedAt,
-    completedAt: s.completedAt,
-    fromNumber: s.fromNumber,
-    toNumber: s.toNumber,
-    direction: s.direction,
-    eventCount: s.events.length,
-  }));
-}
-
-// ── Register Internal Event Handlers ───────────────────────────
-
-/**
- * Set up event handlers that manage sessions and trigger pipelines.
- */
-function setupInternalHandlers() {
-  // call_started: Create a new session
-  eventBus.on(EVENT_TYPES.CALL_STARTED, (event) => {
-    const session = createSession(event.sessionId, {
-      fromNumber: event.data?.fromNumber || '',
-      toNumber: event.data?.toNumber || '',
-      direction: event.data?.direction || 'inbound',
-      events: [event],
-    });
-    console.log(`[Voice:Routes] Session created: ${session.id}`);
+function persistedContext(profile) {
+  return deepFreeze({
+    businessProfile: JSON.parse(JSON.stringify(profile.rawProfile)),
+    canonicalAuthority: {
+      id: profile.id,
+      version: profile.versionLabel,
+      hash: profile.profileHash,
+    },
   });
-
-  // call_completed: Run the completion pipeline and close session
-  eventBus.on(EVENT_TYPES.CALL_COMPLETED, async (event) => {
-    console.log(`[Voice:Routes] Call completed: ${event.sessionId}`);
-
-    // Update session with final event
-    updateSession(event.sessionId, {
-      events: [...(getSession(event.sessionId)?.events || []), event],
-    });
-
-    // Execute completion pipeline
-    try {
-      const result = await executeCallCompletion(event);
-      updateSession(event.sessionId, {
-        summary: result.steps?.summary || null,
-        leadId: result.steps?.lead?.id || null,
-        actionItems: result.steps?.actionItems || [],
-      });
-    } catch (err) {
-      console.error(`[Voice:Routes] Completion pipeline error: ${err.message}`);
-    }
-
-    // Close the session
-    closeSession(event.sessionId);
-  });
-
-  console.log('[Voice:Routes] Internal event handlers registered');
 }
 
-// ── Context Initialization ─────────────────────────────────────
-
-/**
- * Freeze executive context for use by event intelligence handlers.
- */
-function freezeExecutiveContext() {
-  try {
-    const context = buildPolarisContext({ page: 'voice', correlationId: 'voice-init' });
-    updateContext(context);
-    console.log('[Voice:Routes] Executive context frozen for voice intelligence');
-  } catch (err) {
-    console.error('[Voice:Routes] Failed to freeze executive context:', err.message);
-  }
+function errorResponse(res, error) {
+  const status = error && error.status ? error.status : 503;
+  const code = error && error.code ? error.code : 'CANONICAL_PERSISTENCE_UNAVAILABLE';
+  const message = status === 503 && code !== 'VOICE_RUNTIME_UNAVAILABLE' && code !== 'CANONICAL_BUSINESS_PROFILE_REQUIRED'
+    ? 'Canonical PostgreSQL persistence is unavailable.' : error.message;
+  return res.status(status).json({ success: false, error: { code, message } });
 }
 
-// ── Initialize voice module ────────────────────────────────────
-
-function initVoice() {
-  registerIntelligenceHandlers();
-  setupInternalHandlers();
-  freezeExecutiveContext();
-  console.log('[Voice:Routes] Voice module initialized');
+function organizationId(req) {
+  return req.tenantContext.organizationId;
 }
 
-// ── Routes ─────────────────────────────────────────────────────
-
-// ══════════════════════════════════════════════
-// PUBLIC ROUTES — no authentication required
-// ══════════════════════════════════════════════
-
-/**
- * POST /api/v1/voice/webhook
- * Receive call events from Retell AI. PUBLIC — external webhook.
- *
- * Headers:
- * - X-Retell-Signature: HMAC-SHA256 of raw body
- * - X-Retell-Timestamp: Unix timestamp (seconds)
- */
 router.post('/webhook',
   rawBodyCapture,
-  express.json({ verify: (req, res, buf) => { req.rawBody = req.rawBody || buf.toString(); } }),
+  express.json({ verify: function (req, _res, buffer) { req.rawBody = req.rawBody || buffer.toString(); } }),
   handleWebhook
 );
 
-// ══════════════════════════════════════════════
-// PROTECTED ROUTES — authentication required
-// ══════════════════════════════════════════════
-router.use(requireAuth);
-
-/**
- * GET /api/v1/voice/sessions
- * List all active voice sessions.
- */
-router.get('/sessions', (req, res) => {
+router.get('/sessions', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
   try {
-    const includeCompleted = req.query.all === 'true';
-    const sessions = includeCompleted ? listAllSessions() : listActiveSessions();
-    res.json({ sessions, count: sessions.length });
-  } catch (err) {
-    console.error('[Voice:Routes] List sessions error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to list sessions' } });
+    const sessions = await voiceSessions.listSessions(db.getPool(), organizationId(req), req.query.all === 'true');
+    return res.json({ sessions, count: sessions.length });
+  } catch (error) {
+    return errorResponse(res, error);
   }
 });
 
-/**
- * GET /api/v1/voice/sessions/:id
- * Get detailed information about a specific voice session.
- */
-router.get('/sessions/:id', (req, res) => {
+router.get('/sessions/:id', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
   try {
-    const session = getSession(req.params.id);
-    if (!session) {
-      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
-    }
-    res.json({ session });
-  } catch (err) {
-    console.error('[Voice:Routes] Get session error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get session' } });
+    return res.json({ session: await voiceSessions.getSession(db.getPool(), organizationId(req), req.params.id) });
+  } catch (error) {
+    return errorResponse(res, error);
   }
 });
 
-/**
- * POST /api/v1/voice/call
- * Initiate an outbound call via Retell AI.
- *
- * Body:
- * - phoneNumber: Destination phone number (required)
- * - service: Service type (optional)
- * - caller: Caller/lead name (optional)
- * - customerId: Optional customer/lead ID for targeted intelligence (optional)
- */
-router.post('/call', requirePermission('leads', 'create'), async (req, res) => {
+router.post('/call', requireAuth, requirePermission('leads', 'create'), async function (req, res) {
+  const phoneNumber = String(req.body && req.body.phoneNumber || '').trim();
+  if (!phoneNumber) return res.status(400).json({ success: false, error: { code: 'MISSING_PHONE', message: 'phoneNumber is required.' } });
   try {
-    const { phoneNumber, service, caller, customerId } = req.body;
-
-    if (!phoneNumber) {
-      return res.status(400).json({ error: { code: 'MISSING_PHONE', message: 'phoneNumber is required' } });
-    }
-
-    // Build Executive Context for this call
-    let executiveContext = null;
-    try {
-      executiveContext = buildExecutiveContext({
-        customerId: customerId || null,
-        sessionId: null,
-        voiceSession: { direction: 'outbound', phoneNumber, service, caller },
-      });
-    } catch (err) {
-      console.error('[Voice:Routes] Failed to build executive context:', err.message);
-      // Continue without EC — graceful degradation
-    }
-
-    // Initiate outbound call via Retell with EC and tool definitions
-    const { createCall } = require('../retell/client');
-    const integration = await getOrganizationIntegration(db.getPool(), req.tenantContext.organizationId, 'retell');
+    const pool = db.getPool();
+    const orgId = organizationId(req);
+    const [integration, profile] = await Promise.all([
+      getOrganizationIntegration(pool, orgId, 'retell'),
+      getActiveBusinessProfile(pool, orgId),
+    ]);
+    const executiveContext = persistedContext(profile);
     const result = await createCall(phoneNumber, integration.external_integration_id, {
-      service: service || 'General',
-      caller: caller || 'Outbound Call',
-      fromNumber: config.twilio ? config.twilio.phoneNumber : undefined,
+      service: String(req.body.service || 'General'),
+      caller: String(req.body.caller || 'Outbound Call'),
+      fromNumber: config.twilio && config.twilio.phoneNumber,
       executiveContext,
       toolDefinitions,
     });
-
-    if (!result) {
-      return res.json({ success: false, error: 'Retell API not configured', status: 'unconfigured' });
+    if (!result || !result.call_id) {
+      return res.status(502).json({ success: false, error: { code: 'VOICE_PROVIDER_SESSION_REQUIRED', message: 'The voice provider did not return a session identifier.' } });
     }
-
-    // Create a session for this outbound call
-    const session = createSession(result.call_id, {
-      fromNumber: config.twilio?.phoneNumber || '',
-      toNumber: phoneNumber,
+    const session = await voiceSessions.createSession(pool, {
+      organizationId: orgId,
+      externalSessionId: result.call_id,
+      provider: 'retell',
+      integrationOwnershipId: integration.id,
+      profileId: profile.id,
+      profileVersion: profile.versionLabel,
+      profileHash: profile.profileHash,
       direction: 'outbound',
-      metadata: { service, caller, executiveContextGenerated: !!executiveContext },
+      fromNumber: config.twilio && config.twilio.phoneNumber,
+      toNumber: phoneNumber,
+      metadata: { service: req.body.service || null, caller: req.body.caller || null },
     });
-
-    const bizEvent = createEvent('CALL_STARTED', {
-      sessionId: result.call_id,
-      data: {
-        fromNumber: config.twilio?.phoneNumber || '',
-        toNumber: phoneNumber,
-        direction: 'outbound',
-        service: service || 'General',
-        caller: caller || 'Outbound Call',
-      },
+    await voiceSessions.appendEvent(pool, {
+      organizationId: orgId,
+      externalSessionId: result.call_id,
+      eventType: 'call_started',
+      payload: { direction: 'outbound' },
+      status: 'active',
     });
-    eventBus.emit(bizEvent);
-
-    res.json({
+    return res.json({
       success: true,
       callId: result.call_id,
       status: result.call_status,
-      executiveContextGenerated: !!executiveContext,
-      toolsConfigured: toolDefinitions.length,
-      session: {
-        id: session.id,
-        status: session.status,
-        startedAt: session.startedAt,
-      },
+      profile: session.profile,
+      session,
       canonicalGraphPendingWebhook: true,
     });
-  } catch (err) {
-    console.error('[Voice:Routes] Outbound call error:', err.message);
-    const status = err && err.status ? err.status : 503;
-    res.status(status).json({ error: { code: err && err.code ? err.code : 'CALL_FAILED', message: status === 503 ? 'Canonical PostgreSQL persistence is unavailable.' : err.message } });
+  } catch (error) {
+    return errorResponse(res, error);
   }
 });
 
-/**
- * POST /api/v1/voice/context/refresh
- * Manually refresh the frozen executive context.
- */
-router.post('/context/refresh', (req, res) => {
+async function sessionTimeline(req, res) {
   try {
-    freezeExecutiveContext();
-    res.json({ success: true, message: 'Executive context refreshed' });
-  } catch (err) {
-    console.error('[Voice:Routes] Context refresh error:', err.message);
-    res.status(500).json({ error: { code: 'REFRESH_FAILED', message: err.message } });
+    const entries = await voiceSessions.timeline(db.getPool(), organizationId(req), req.params.id);
+    return res.json({ sessionId: req.params.id, entries, count: entries.length });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+router.get('/sessions/:id/timeline', requireAuth, requirePermission('calls', 'read'), sessionTimeline);
+router.get('/sessions/:id/transcript', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+  try {
+    const entries = await voiceSessions.timeline(db.getPool(), organizationId(req), req.params.id);
+    const segments = entries.filter(function (entry) { return entry.event === 'transcript' || entry.event === 'transcript_ready'; });
+    return res.json({ sessionId: req.params.id, segments, count: segments.length });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+});
+router.get('/sessions/:id/guidance', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+  try {
+    const entries = await voiceSessions.timeline(db.getPool(), organizationId(req), req.params.id);
+    const guidance = entries.filter(function (entry) { return entry.event === 'guidance'; });
+    return res.json({ sessionId: req.params.id, guidance, count: guidance.length });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+});
+router.get('/sessions/:id/escalation', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+  try {
+    const session = await voiceSessions.getSession(db.getPool(), organizationId(req), req.params.id);
+    return res.json({ sessionId: req.params.id, isEscalating: session.status === 'escalating', status: session.status });
+  } catch (error) {
+    return errorResponse(res, error);
   }
 });
 
-/**
- * GET /api/v1/voice/events/history
- * Get recent business event history from the EventBus.
- */
-router.get('/events/history', (req, res) => {
+async function runtimeAction(req, res, action) {
   try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
-    const history = eventBus.getHistory(limit);
-    res.json({ events: history, count: history.length });
-  } catch (err) {
-    console.error('[Voice:Routes] Event history error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get event history' } });
-  }
-});
-
-// ═════════════════════════════════════════════════════════════════
-// M17 P3: Transcript, Guidance, Handoff, Escalation endpoints
-// ═════════════════════════════════════════════════════════════════
-
-/**
- * GET /api/v1/voice/sessions/:id/transcript
- * Get transcript segments for a voice session.
- * Query params: ?since=N  — only return segments with segmentIndex >= N
- */
-router.get('/sessions/:id/transcript', (req, res) => {
-  try {
-    const sessionId = req.params.id;
-    const since = req.query.since ? parseInt(req.query.since, 10) : undefined;
-
-    const segments = transcriptStream.getTranscript(sessionId, since);
-    const count = transcriptStream.getSegmentCount(sessionId);
-
-    res.json({
-      sessionId,
-      segments,
-      count: segments.length,
-      totalSegments: count,
-      since: since || 0,
+    const result = await voiceSessions.performRuntimeAction(db.getPool(), {
+      organizationId: organizationId(req),
+      externalSessionId: req.params.id,
+      action,
+      reason: req.body && req.body.reason,
+      userId: req.tenantContext.userId,
+      eventId: req.get('Idempotency-Key') || null,
     });
-  } catch (err) {
-    console.error('[Voice:Routes] Transcript error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get transcript' } });
+    return res.json({ success: true, session: result.session });
+  } catch (error) {
+    return errorResponse(res, error);
   }
+}
+
+router.post('/sessions/:id/handoff', requireAuth, requirePermission('calls', 'update'), function (req, res) {
+  return runtimeAction(req, res, 'handoff');
+});
+router.post('/sessions/:id/cancel', requireAuth, requirePermission('calls', 'update'), function (req, res) {
+  return runtimeAction(req, res, 'cancel');
 });
 
-/**
- * GET /api/v1/voice/sessions/:id/guidance
- * Get live intelligence guidance events for a voice session.
- */
-router.get('/sessions/:id/guidance', (req, res) => {
+router.get('/status', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
   try {
-    const sessionId = req.params.id;
-    const guidance = getSessionGuidance(sessionId);
-
-    res.json({
-      sessionId,
-      guidance,
-      count: guidance.length,
+    const sessions = await voiceSessions.listSessions(db.getPool(), organizationId(req), false);
+    return res.json({
+      status: 'ok',
+      persistence: 'postgresql',
+      components: { canonicalSessions: 'healthy', activeSessions: sessions.length },
     });
-  } catch (err) {
-    console.error('[Voice:Routes] Guidance error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get guidance' } });
+  } catch (error) {
+    return errorResponse(res, error);
   }
 });
 
-/**
- * POST /api/v1/voice/sessions/:id/handoff
- * Manually trigger human handoff for a session.
- *
- * Body:
- * - reason: Reason for handoff (optional)
- * - triggeredBy: Who triggered it (optional, default: 'api')
- */
-router.post('/sessions/:id/handoff', (req, res) => {
+router.get('/dashboard', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
   try {
-    const sessionId = req.params.id;
-    const { reason, triggeredBy } = req.body;
-
-    // Get current session
-    const session = getSession(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
-    }
-
-    // Get transcript segments for escalation check
-    const segments = transcriptStream.getTranscript(sessionId);
-
-    // Get escalation status
-    const existingEscalation = humanHandoff.getEscalationStatus(sessionId);
-    if (existingEscalation && existingEscalation.status === 'escalating') {
-      return res.json({
-        sessionId,
-        alreadyEscalating: true,
-        escalation: existingEscalation,
-      });
-    }
-
-    // Initiate escalation
-    const escalation = humanHandoff.initiateEscalation(sessionId, {
-      trigger: reason || 'manual',
-      detail: reason || 'Manual handoff triggered via API',
-      severity: 'medium',
-    }, null);
-
-    // Update session status
-    updateSession(sessionId, { status: 'escalating' });
-
-    // Tag the call
-    const { tagCall } = require('../voice/toolRegistry');
-    tagCall({ callId: sessionId, tags: ['escalated', 'human-handoff'] });
-
-    res.json({
-      sessionId,
-      escalated: true,
-      escalation,
-      transcriptSegments: segments.length,
+    const sessions = await voiceSessions.listSessions(db.getPool(), organizationId(req), true);
+    return res.json({
+      activeCalls: sessions.filter(function (session) { return session.status === 'active' || session.status === 'escalating'; }).length,
+      callsCompleted: sessions.filter(function (session) { return session.status === 'completed'; }).length,
     });
-  } catch (err) {
-    console.error('[Voice:Routes] Handoff error:', err.message);
-    res.status(500).json({ error: { code: 'HANDOFF_FAILED', message: err.message } });
+  } catch (error) {
+    return errorResponse(res, error);
   }
 });
 
-/**
- * GET /api/v1/voice/sessions/:id/escalation
- * Get escalation status for a session.
- */
-router.get('/sessions/:id/escalation', (req, res) => {
-  try {
-    const sessionId = req.params.id;
-    const escalation = humanHandoff.getEscalationStatus(sessionId);
-
-    res.json({
-      sessionId,
-      escalation,
-      isEscalating: escalation ? escalation.status === 'escalating' : false,
-    });
-  } catch (err) {
-    console.error('[Voice:Routes] Escalation status error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get escalation status' } });
-  }
-});
-
-/**
- * GET /api/v1/voice/status
- * Get voice module status.
- */
-router.get('/status', (req, res) => {
-  try {
-    const retellOk = !!(process.env.RETELL_API_KEY || config.retell.apiKey);
-    const twilioOk = !!(process.env.TWILIO_ACCOUNT_SID || config.twilio.accountSid);
-    const webhookSecretOk = !!(process.env.RETELL_WEBHOOK_SECRET || process.env.RETELL_API_KEY);
-
-    res.json({
-      status: retellOk ? 'configured' : 'unconfigured',
-      components: {
-        retellAI: retellOk ? 'healthy' : 'unconfigured',
-        twilio: twilioOk ? 'healthy' : 'unconfigured',
-        webhookSecret: webhookSecretOk ? 'configured' : 'missing',
-        activeSessions: listActiveSessions().length,
-      },
-      uptime: process.uptime(),
-    });
-  } catch (err) {
-    console.error('[Voice:Routes] Status error:', err.message);
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get status' } });
-  }
-});
-router.get('/sessions/:id/timeline', (req, res) => {
-  const entries = liveTimeline.getTimeline(req.params.id);
-  res.json({ sessionId: req.params.id, entries, count: entries.length });
-});
-
-router.get('/dashboard', (req, res) => {
-  const now = new Date();
-  const ids = liveTimeline.getActiveSessionIds();
-  let done = 0;
-  const durations = [];
-  for (const id of ids) {
-    const e = liveTimeline.getTimeline(id);
-    if (e.find(x => x.event === 'call_completed')) done++;
-    if (!e.find(x => x.event === 'call_completed')) {
-      const s = e.find(x => x.event === 'call_started');
-      if (s) durations.push(Math.floor((now - new Date(s.timestamp)) / 1000));
-    }
-  }
-  res.json({ activeCalls: ids.length - done, callsCompletedToday: done, activeCallDurations: durations });
-});
-
-// ── Initialize on load ─────────────────────────────────────────
-initVoice();
+function retired(_req, res) {
+  return res.status(410).json({ success: false, error: { code: 'LEGACY_AUTHORITY_RETIRED', message: 'This process-local voice endpoint has been retired.' } });
+}
+router.post('/context/refresh', requireAuth, retired);
+router.get('/events/history', requireAuth, retired);
 
 module.exports = router;

@@ -126,6 +126,7 @@ function generateScenario(requestedService, customerName) {
 
 function _populateScope(scenario, svc) {
   const scope = scenario.job.scope;
+  scope.jobType = scenario.job.type;
 
   if (svc.id === 'fence') {
     scope.linearFeet = _pickRandom([60, 100, 150, 175, 200, 250, 300]);

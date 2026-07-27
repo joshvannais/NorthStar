@@ -89,9 +89,8 @@ const CONTACT_TEMPLATES = {
 // ═══════════════════════════════════════════════════════
 
 function generateScenario(requestedService, customerName) {
-  const requested = String(requestedService || '').toLowerCase();
-  const scenarioServices = Object.keys(SCENARIOS).filter(k => requested.includes(k));
-  const svcKey = scenarioServices.length > 0 ? scenarioServices[0] : _pickRandom(Object.keys(SCENARIOS));
+  const requested = String(requestedService || '').trim().toLowerCase();
+  const svcKey = Object.prototype.hasOwnProperty.call(SCENARIOS, requested) ? requested : null;
   const svc = SCENARIOS[svcKey];
   if (!svc) return null;
 
@@ -555,6 +554,9 @@ function _pickRandom(arr) { return arr[Math.floor(_random() * arr.length)]; }
 // ═══════════════════════════════════════════════════════
 
 module.exports = {
+  supportsService: function (service) {
+    return Object.prototype.hasOwnProperty.call(SCENARIOS, String(service || '').trim().toLowerCase());
+  },
   generateScenario,
   generateTranscript,
   extractScope,

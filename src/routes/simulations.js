@@ -38,6 +38,20 @@ function buildFacts(scope, evidence) {
 }
 
 router.post('/simulations/leads', requireAuth, requirePermission('leads', 'create'), async function (req, res) {
+  const rawService = req.body && req.body.service;
+  const requestedService = typeof rawService === 'string' ? rawService.trim().toLowerCase() : '';
+  if (!requestedService) {
+    return res.status(422).json({
+      success: false,
+      error: { code: 'service_required', message: 'A supported service is required.' },
+    });
+  }
+  if (!pipeline.supportsService(requestedService)) {
+    return res.status(422).json({
+      success: false,
+      error: { code: 'unsupported_service', message: 'The requested service is not supported.' },
+    });
+  }
   const key = idempotencyKey(req);
   if (!key) {
     return res.status(400).json({
@@ -54,7 +68,6 @@ router.post('/simulations/leads', requireAuth, requirePermission('leads', 'creat
   }
 
   const organizationId = req.tenantContext.organizationId;
-  const requestedService = String(req.body.service || 'general').toLowerCase();
   const seed = sha256({ organizationId, key });
   let prepared;
   try {
@@ -73,12 +86,7 @@ router.post('/simulations/leads', requireAuth, requirePermission('leads', 'creat
       error: { code: 'INVALID_SIMULATION_INPUT', message: 'The simulation input could not be normalized.' },
     });
   }
-  if (!prepared) {
-    return res.status(400).json({
-      success: false,
-      error: { code: 'UNSUPPORTED_SERVICE', message: 'The requested service is not supported.' },
-    });
-  }
+  if (!prepared) throw new Error('Supported simulation service failed deterministic construction.');
 
   const sessionId = req.body.sessionId
     ? String(req.body.sessionId)

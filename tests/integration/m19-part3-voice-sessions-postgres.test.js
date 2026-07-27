@@ -2,6 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const { Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { bindIntegrationOwner, putBusinessProfile } = require('../../src/services/organizationAuthority');
@@ -16,6 +18,7 @@ const ORG_A = '31000000-0000-0000-0000-000000000001';
 const ORG_B = '31000000-0000-0000-0000-000000000002';
 const USER_A = '32000000-0000-0000-0000-000000000001';
 const USER_B = '32000000-0000-0000-0000-000000000002';
+const execFileAsync = promisify(execFile);
 
 const PROFILE = {
   company: { name: 'Voice Authority', currency: 'USD' },
@@ -89,6 +92,24 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     await expect(voice.getSession(pool, ORG_B, 'only-in-a')).rejects.toMatchObject({ status: 404, code: 'VOICE_SESSION_NOT_FOUND' });
   });
 
+  test('a separate process observes the same persisted organization-scoped voice session', async () => {
+    const persisted = await create(ORG_A, integrationA, profileA, 'separate-process-call', false);
+    const reader = path.resolve(__dirname, '../helpers/m19-part3-voice-session-reader.js');
+    const child = await execFileAsync(process.execPath, [reader, ORG_A, 'separate-process-call'], {
+      env: { ...process.env, DATABASE_URL: database.connectionString },
+      windowsHide: true,
+    });
+    expect(child.stderr).toBe('');
+    expect(JSON.parse(child.stdout)).toEqual([{
+      organization_id: ORG_A,
+      external_session_id: 'separate-process-call',
+      status: 'active',
+      business_profile_id: persisted.profile.id,
+      business_profile_version: persisted.profile.version,
+      business_profile_hash: persisted.profile.hash,
+    }]);
+  });
+
   test('timeline replay is durable and provider event identity is idempotent', async () => {
     await create(ORG_A, integrationA, profileA, 'timeline-call', false);
     const first = await voice.appendEvent(pool, {
@@ -140,7 +161,7 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     })).rejects.toMatchObject({ status: 503, code: 'VOICE_RUNTIME_UNAVAILABLE' });
   });
 
-  test('profile changes affect new Retell variables while completion and replay retain the pinned original profile', async () => {
+  test('profile pinned when the session was created drives variables, completion, and replay across profile changes', async () => {
     const pinnedAuthority = await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: USER_A,

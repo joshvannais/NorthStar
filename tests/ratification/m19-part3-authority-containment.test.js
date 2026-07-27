@@ -91,11 +91,12 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     const simulator = source('public/js/simulator.js');
     const scenarioCatalog = source('src/routes/simulation/scenario-catalog.js');
     const simulationPipeline = source('src/routes/simulation/pipeline.js');
-    const demo = source('src/routes/demo.js');
     const voiceMigration = source('migrations/006_canonical_voice_sessions.sql');
     const taxMigration = source('migrations/007_canonical_tax_authority.sql');
+    const providerIdentityMigration = source('migrations/009_canonical_voice_provider_identity.sql');
 
-    expect(retell).toContain('const voiceSession = await voiceSessions.createSession(pool, {');
+    expect(retell).toContain('voiceSession = await voiceSessions.createSession(pool, {');
+    expect(retell).toContain("findSessionByProviderIdentity(pool, 'retell', callId)");
     expect(retell).toContain('businessProfileAuthorityId: voiceSession && voiceSession.profile.id');
     expect(retell).toContain('businessProfileAuthorityVersion: voiceSession && voiceSession.profile.version');
     expect(retell).toContain('businessProfileAuthorityHash: voiceSession && voiceSession.profile.hash');
@@ -111,13 +112,15 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     expect(simulationPipeline).not.toMatch(/\.pricing\b|calculatePricing|service-catalog/);
     expect(scenarioCatalog).not.toMatch(/\b(?:unitRate|unitRates|fixedPrice|avgPrice|calculate)\s*:/);
     expect(simulator).not.toMatch(/function\s+calcPrice\s*\(|function\s+calcBreakdown\s*\(/);
-    expect(demo).toContain("opportunityLabel: 'CANONICAL ESTIMATE REQUIRED'");
-    expect(demo).toContain('canonicalRequired: true');
+    expect(source('src/routes/demo.js')).toContain("require('../services/demoVoiceLifecycle')");
+    expect(source('src/routes/demo.js')).not.toMatch(/INDUSTRY_DEFAULTS|demoSessions|function\s+polarisEstimate|polarisEstimate\s*\(/);
     expect(voiceMigration).toContain('CREATE TABLE IF NOT EXISTS canonical_voice_sessions');
     expect(voiceMigration).toContain('CREATE TABLE IF NOT EXISTS canonical_voice_session_events');
     expect(taxMigration).toContain('tax_rate_percent');
     expect(taxMigration).toContain('tax_not_calculated_reason');
     expect(taxMigration).toContain('total_including_tax');
+    expect(providerIdentityMigration).toContain('provider_session_id');
+    expect(providerIdentityMigration).toContain('canonical_voice_sessions_provider_identity');
   });
 
   test('every real PostgreSQL suite owns a run, suite, worker, and process isolated database', () => {

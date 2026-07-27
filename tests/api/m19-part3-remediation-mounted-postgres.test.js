@@ -3,9 +3,13 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
+
+const execFileAsync = promisify(execFile);
 
 jest.mock('../../src/leads/store', () => {
   const actual = jest.requireActual('../../src/leads/store');
@@ -419,6 +423,75 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     expect(sheets.appendLead).not.toHaveBeenCalled();
   });
 
+  test('missing and unsupported simulation services fail before every durable or external side effect', async () => {
+    const pool = db.getPool();
+    const tables = ['canonical_operations', 'canonical_customers', 'canonical_opportunities',
+      'canonical_estimates', 'canonical_polaris_snapshots'];
+    async function counts() {
+      const values = {};
+      for (const table of tables) {
+        values[table] = (await pool.query('SELECT count(*)::int AS count FROM ' + table)).rows[0].count;
+      }
+      return values;
+    }
+    const before = await counts();
+    const bytesBefore = directoryDigest(process.env.NORTHSTAR_DATA_DIR);
+    const provider = jest.spyOn(retell, 'createCall');
+    try {
+      for (const [service, code] of [
+        [undefined, 'service_required'],
+        ['', 'service_required'],
+        ['   ', 'service_required'],
+        ['definitely-unsupported-widget', 'unsupported_service'],
+      ]) {
+        const body = {
+          name: 'Rejected Simulation',
+          pricing: { customerFacingPrice: 77777 },
+          businessProfile: { services: [{ id: 'definitely-unsupported-widget', price: 77777 }] },
+        };
+        if (service !== undefined) body.service = service;
+        const response = await request(app)
+          .post('/api/v1/simulations/leads')
+          .set(auth(USERS.member))
+          .set('Idempotency-Key', 'rejected-' + code + '-' + String(service))
+          .send(body);
+        expect(response.status).toBe(422);
+        expect(response.body).toEqual({
+          success: false,
+          error: { code, message: code === 'service_required'
+            ? 'A supported service is required.' : 'The requested service is not supported.' },
+        });
+        expect(JSON.stringify(response.body)).not.toContain('77777');
+      }
+      expect(await counts()).toEqual(before);
+      expect(directoryDigest(process.env.NORTHSTAR_DATA_DIR)).toBe(bytesBefore);
+      expect(provider).not.toHaveBeenCalled();
+
+      const normalized = await request(app)
+        .post('/api/v1/simulations/leads')
+        .set(auth(USERS.member))
+        .set('Idempotency-Key', 'case-normalized-fence')
+        .send({ name: 'Case Normalized', service: '  FeNcE  ' });
+      expect(normalized.status).toBe(201);
+      expect(normalized.body.snapshot.service.key).toBe('fence');
+
+      const absentFromProfile = await request(app)
+        .post('/api/v1/simulations/leads')
+        .set(auth(USERS.member))
+        .set('Idempotency-Key', 'supported-profile-absent')
+        .send({ name: 'Absent Profile Service', service: 'plumbing' });
+      expect(absentFromProfile.status).toBe(201);
+      expect(absentFromProfile.body.snapshot.service.key).toBe('plumbing');
+      expect(absentFromProfile.body.snapshot.service.unpricedReason).toBe('service_not_configured');
+      expect(absentFromProfile.body.snapshot.notCalculated).toContainEqual({
+        field: 'customerFacingPrice', reason: 'service_not_configured',
+      });
+      expect(absentFromProfile.body.snapshot.customerFacingPrice).toBeNull();
+    } finally {
+      provider.mockRestore();
+    }
+  });
+
   test('both tenant call routes create the pinned canonical session before the provider boundary and ignore caller authority', async () => {
     const pool = db.getPool();
     const observed = [];
@@ -536,7 +609,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     }
   });
 
-  test('provisioned public demo uses only the isolated server-owned organization, profile, integration, and PostgreSQL session', async () => {
+  test('provisioned public demo uses one stable PostgreSQL identity through pending, cross-process, completion, estimate, and replay', async () => {
     const pool = db.getPool();
     await pool.query(
       `INSERT INTO canonical_demo_authority (organization_id, status)
@@ -545,12 +618,12 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     );
     process.env.NORTHSTAR_DEMO_ORGANIZATION_ID = ORG_B;
     let providerContext;
-    const provider = jest.spyOn(retell, 'createCall').mockImplementation(async (_phone, agentId, options) => {
+    const provider = jest.spyOn(retell, 'createCall').mockImplementation(async (phone, agentId, options) => {
       providerContext = { agentId, options };
       const pending = await pool.query(
         `SELECT organization_id, business_profile_id FROM canonical_voice_sessions
-          WHERE organization_id = $1 AND external_session_id LIKE 'pending-%'`,
-        [ORG_B]
+          WHERE organization_id = $1 AND external_session_id LIKE 'demo-%' AND to_number = $2`,
+        [ORG_B, phone]
       );
       expect(pending.rows).toHaveLength(1);
       expect(pending.rows[0].business_profile_id).toBe(profileAuthorityB.id);
@@ -569,23 +642,177 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
           phoneNumber: '+15555553202',
         });
       expect(response.status).toBe(200);
-      expect(response.body.callId).toBe('provider-demo-isolated');
+      expect(response.body.demoSessionId).toMatch(/^demo-[0-9a-f-]{36}$/);
+      expect(response.body.callId).toBe(response.body.demoSessionId);
+      expect(response.body.lifecycle).toBe('pending');
+      expect(response.body.estimate).toEqual({ status: 'not_ready', snapshot: null });
       expect(response.body.profile.id).toBe(profileAuthorityB.id);
       expect(providerContext.agentId).toBe('agent-mounted-b');
       expect(providerContext.options.executiveContext.businessProfile.company.name).toBe('Other Company');
-      expect(require('../../src/routes/demo').demoSessions.has('provider-demo-isolated')).toBe(false);
       const persisted = await pool.query(
-        `SELECT organization_id, business_profile_id, external_session_id
+        `SELECT organization_id, business_profile_id, external_session_id, provider_session_id, metadata
            FROM canonical_voice_sessions WHERE external_session_id = $1`,
-        ['provider-demo-isolated']
+        [response.body.demoSessionId]
       );
       expect(persisted.rows).toEqual([{
         organization_id: ORG_B,
         business_profile_id: profileAuthorityB.id,
-        external_session_id: 'provider-demo-isolated',
+        external_session_id: response.body.demoSessionId,
+        provider_session_id: 'provider-demo-isolated',
+        metadata: expect.objectContaining({ source: 'public-demo', providerSessionId: 'provider-demo-isolated' }),
       }]);
+
+      const pendingStatus = await request(app).get('/api/demo/' + response.body.demoSessionId + '/status');
+      expect(pendingStatus.status).toBe(200);
+      expect(pendingStatus.body).toMatchObject({
+        sessionId: response.body.demoSessionId,
+        lifecycle: 'pending',
+        persistence: 'postgresql',
+        estimate: { status: 'not_ready', snapshot: null },
+        polarisEstimate: null,
+      });
+      const pendingEstimate = await request(app).get('/api/demo/' + response.body.demoSessionId + '/polaris-estimate');
+      expect(pendingEstimate.body.estimate).toEqual({ status: 'not_ready', snapshot: null });
+
+      const child = await execFileAsync(process.execPath, [
+        path.join(__dirname, '../helpers/read-demo-lifecycle-child.js'),
+        response.body.demoSessionId,
+      ], {
+        cwd: path.resolve(__dirname, '../..'),
+        env: {
+          ...process.env,
+          DATABASE_URL: suiteDatabase.connectionString,
+          NORTHSTAR_DEMO_ORGANIZATION_ID: ORG_B,
+        },
+      });
+      expect(JSON.parse(child.stdout)).toMatchObject({
+        sessionId: response.body.demoSessionId,
+        lifecycle: 'pending',
+        estimateStatus: 'not_ready',
+      });
+
+      const completion = {
+        event: 'call_ended',
+        event_id: 'evt-demo-complete',
+        call: {
+          call_id: 'provider-demo-isolated',
+          agent_id: 'agent-mounted-b',
+          from_number: '+15555553202',
+          transcript_object: [
+            { role: 'agent', words: 'How can I help?' },
+            { role: 'user', words: 'I need a 100 foot cedar fence replacement with one walk gate and permit.' },
+          ],
+          call_analysis: {
+            customer_name: 'Bounded Scenario',
+            service_requested: 'fence',
+            job_scope: {
+              jobType: 'replace', linearFeet: 100, material: 'cedar', removalRequired: true,
+              gates: [{ type: 'walk', width: 4 }], permitsRequired: true,
+            },
+          },
+        },
+      };
+      const completed = await request(app).post('/api/retell/webhook').send(completion);
+      expect(completed.status).toBe(201);
+      const ready = await request(app).get('/api/demo/' + response.body.demoSessionId + '/polaris-estimate');
+      expect(ready.status).toBe(200);
+      expect(ready.body.lifecycle).toBe('completed');
+      expect(ready.body.estimate.status).toBe('ready');
+      expect(ready.body.estimate.snapshot.businessProfileInputId).toBe(profileAuthorityB.id);
+      expect(ready.body.estimate.snapshot.customerFacingPrice).not.toBe(77777);
+      expect(ready.body.polarisEstimate).toEqual(ready.body.estimate.snapshot);
+      const transcript = await request(app).get('/api/demo/' + response.body.demoSessionId + '/transcript');
+      const timeline = await request(app).get('/api/demo/' + response.body.demoSessionId + '/timeline');
+      expect(transcript.body.lines).toContainEqual(expect.objectContaining({ text: expect.stringContaining('cedar fence') }));
+      expect(timeline.body.entries.some(entry => entry.event === 'call_ended')).toBe(true);
+
+      const replay = await request(app).post('/api/retell/webhook').send({ ...completion, event_id: 'evt-demo-replay' });
+      expect(replay.status).toBe(201);
+      expect(replay.body.replayed).toBe(true);
+      const afterReplay = await request(app).get('/api/demo/' + response.body.demoSessionId + '/polaris-estimate');
+      expect(afterReplay.body.estimate.snapshotDigest).toBe(ready.body.estimate.snapshotDigest);
     } finally {
       provider.mockRestore();
+    }
+  });
+
+  test('public demo provider failure is durable and visible through the stable canonical identifier', async () => {
+    const pool = db.getPool();
+    await pool.query(
+      `INSERT INTO canonical_demo_authority (organization_id, status)
+       VALUES ($1, 'active') ON CONFLICT (organization_id) DO UPDATE SET status = 'active'`,
+      [ORG_B]
+    );
+    process.env.NORTHSTAR_DEMO_ORGANIZATION_ID = ORG_B;
+    const failure = Object.assign(new Error('intercepted public demo provider failure'), {
+      code: 'RETELL_INTERCEPTED_FAILURE', status: 502,
+    });
+    const provider = jest.spyOn(retell, 'createCall').mockRejectedValue(failure);
+    try {
+      const failed = await request(app).post('/api/demo/call').send({
+        industry: 'fence', contactName: 'Provider Failure', phoneNumber: '+15555553203',
+      });
+      expect(failed.status).toBe(502);
+      expect(failed.body.error.code).toBe('retell_intercepted_failure');
+      expect(failed.body.demoSessionId).toMatch(/^demo-[0-9a-f-]{36}$/);
+      const status = await request(app).get('/api/demo/' + failed.body.demoSessionId + '/status');
+      expect(status.status).toBe(200);
+      expect(status.body).toMatchObject({
+        sessionId: failed.body.demoSessionId,
+        lifecycle: 'failed',
+        canonicalStatus: 'failed',
+        estimate: { status: 'unavailable', snapshot: null },
+      });
+      expect(status.body.providerFailure.event).toBe('provider_creation_failed');
+      expect(status.body.providerFailure.payload.code).toBe('RETELL_INTERCEPTED_FAILURE');
+    } finally {
+      provider.mockRestore();
+    }
+  });
+
+  test('unknown, foreign, and expired demo identifiers share one non-disclosing response', async () => {
+    const pool = db.getPool();
+    await pool.query(
+      `INSERT INTO canonical_demo_authority (organization_id, status)
+       VALUES ($1, 'active') ON CONFLICT (organization_id) DO UPDATE SET status = 'active'`,
+      [ORG_B]
+    );
+    process.env.NORTHSTAR_DEMO_ORGANIZATION_ID = ORG_B;
+    const foreignId = 'demo-10000000-0000-4000-8000-000000000001';
+    const expiredId = 'demo-10000000-0000-4000-8000-000000000002';
+    await voiceSessions.createSession(pool, {
+      organizationId: ORG_A,
+      externalSessionId: foreignId,
+      provider: 'retell',
+      integrationOwnershipId: integrationAuthorityA.id,
+      profileId: profileAuthorityA.id,
+      profileVersion: profileAuthorityA.versionLabel,
+      profileHash: profileAuthorityA.profileHash,
+      metadata: { source: 'public-demo' },
+    });
+    await voiceSessions.createSession(pool, {
+      organizationId: ORG_B,
+      externalSessionId: expiredId,
+      provider: 'retell',
+      integrationOwnershipId: integrationAuthorityB.id,
+      profileId: profileAuthorityB.id,
+      profileVersion: profileAuthorityB.versionLabel,
+      profileHash: profileAuthorityB.profileHash,
+      metadata: { source: 'public-demo' },
+    });
+    await pool.query(
+      "UPDATE canonical_voice_sessions SET started_at = NOW() - INTERVAL '25 hours' WHERE organization_id = $1 AND external_session_id = $2",
+      [ORG_B, expiredId]
+    );
+    for (const identifier of [
+      'demo-10000000-0000-4000-8000-000000000099', foreignId, expiredId, 'not-a-demo-id',
+    ]) {
+      const response = await request(app).get('/api/demo/' + identifier + '/status');
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        success: false,
+        error: { code: 'demo_session_not_found', message: 'Demo session not found.' },
+      });
     }
   });
 

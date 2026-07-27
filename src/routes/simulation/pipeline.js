@@ -1,14 +1,14 @@
 /**
  * Polaris Intelligence Pipeline — Universal simulation engine
  *
- * Service-agnostic architecture. New services are added to the
- * service catalog (service-catalog.js) without modifying this file.
+ * Service-agnostic architecture. New nonfinancial scenarios are added to the
+ * scenario catalog without modifying the canonical calculation service.
  *
  * Pipeline:
  *   scenario → nonfinancial transcript → scope → classification → confidence → action
  */
 
-const CATALOG = require('./service-catalog');
+const SCENARIOS = require('./scenario-catalog');
 const { AsyncLocalStorage } = require('async_hooks');
 const { detectEmergencyEvidence } = require('../../services/emergencyEvidence');
 
@@ -89,9 +89,10 @@ const CONTACT_TEMPLATES = {
 // ═══════════════════════════════════════════════════════
 
 function generateScenario(requestedService, customerName) {
-  const catalogServices = Object.keys(CATALOG).filter(k => requestedService.includes(k));
-  const svcKey = catalogServices.length > 0 ? catalogServices[0] : _pickRandom(Object.keys(CATALOG));
-  const svc = CATALOG[svcKey];
+  const requested = String(requestedService || '').toLowerCase();
+  const scenarioServices = Object.keys(SCENARIOS).filter(k => requested.includes(k));
+  const svcKey = scenarioServices.length > 0 ? scenarioServices[0] : _pickRandom(Object.keys(SCENARIOS));
+  const svc = SCENARIOS[svcKey];
   if (!svc) return null;
 
   const firstName = customerName.split(' ')[0];
@@ -130,20 +131,19 @@ function _populateScope(scenario, svc) {
 
   if (svc.id === 'fence') {
     scope.linearFeet = _pickRandom([60, 100, 150, 175, 200, 250, 300]);
-    scope.material = _pickRandom(Object.keys(svc.pricing.materials));
+    scope.material = _pickRandom(svc.materials);
     scope.height = _pickRandom([4, 6, 8]);
     scope.gates = [{ type: 'walk', width: 4 }, { type: _pickRandom(['walk', 'drive']), width: _pickRandom([8, 10, 12]) }];
     scope.removalRequired = _random() > 0.3;
     scope.terrain = _pickRandom(['mostly flat', 'slight grade', 'hilly in back corner', 'flat with one tree line']);
-    const matInfo = (svc.pricing && svc.pricing.materials && svc.pricing.materials[scope.material]) ? svc.pricing.materials[scope.material].label : scope.material;
-    scope.hoa = _random() > 0.5 ? 'yes — ' + matInfo + ' required' : 'no';
-    scope.permitsRequired = 'required, ~2 week processing';
+    scope.hoa = _random() > 0.5 ? 'yes - ' + scope.material + ' required' : 'no';
+    scope.permitsRequired = true;
     scope.timeline = _pickRandom(['within 3-4 weeks', 'within 6-8 weeks', 'before summer', 'next month', 'whenever works']);
     scope.urgency = 'moderate';
     scope.access = 'good — side gate access';
   } else if (svc.id === 'roofing') {
     scope.squares = _pickRandom([18, 22, 28, 32, 38, 45]);
-    scope.material = _pickRandom(Object.keys(svc.pricing.materials));
+    scope.material = _pickRandom(svc.materials);
     scope.pitch = _pickRandom(['4/12 walkable', '6/12 moderate', '8/12 steep']);
     scope.stories = _pickRandom([1, 2]);
     scope.existingLayers = _pickRandom([1, 2]);
@@ -190,7 +190,7 @@ function _populateScope(scenario, svc) {
 // ═══════════════════════════════════════════════════════
 
 function generateTranscript(scenario) {
-  const svc = CATALOG[scenario && scenario.serviceKey];
+  const svc = SCENARIOS[scenario && scenario.serviceKey];
   if (!svc) throw new Error('Unsupported simulation service');
   const firstName = scenario.customer.firstName;
   const turns = [];
@@ -321,7 +321,7 @@ function _buildAnswer(scenario, question) {
     removalRequired: scope.removalRequired ? 'Yes, there\'s an old fence that needs to come down first.' : 'No, it\'s bare ground right now.',
     terrain: scope.terrain ? scope.terrain + '. Nothing too difficult.' : 'Mostly flat.',
     hoa: scope.hoa,
-    permitsRequired: scope.permitsRequired,
+    permitsRequired: scope.permitsRequired ? 'Yes, permits are required.' : 'No permit is required.',
 
     // Roof
     squares: `I think it's about ${scope.squares} squares.`,
@@ -364,7 +364,6 @@ function _buildAnswer(scenario, question) {
     timeline: scope.timeline + '.',
     schedulingPreference: _pickRandom(['Weekday mornings work best.', 'Afternoons are better.', 'Any weekday is fine.', 'I\'m flexible.']),
     urgency: scope.urgency === 'high' || scope.urgency === 'emergency' ? 'As soon as possible — it\'s urgent.' : 'Not an emergency but I\'d like it done soon.',
-    budget: scope.budget ? `Around $${scope.budget.min.toLocaleString()} to $${scope.budget.max.toLocaleString()}.` : 'I\'m flexible on budget.',
   };
 
   return answers[id] || null;
@@ -392,7 +391,7 @@ function _buildSummary(scenario, svc) {
 
 function extractScope(transcript, scenario) {
   const fullText = transcript.map(t => (t && t.text ? t.text : '')).join(' ');
-  const svc = CATALOG[scenario.serviceKey];
+  const svc = SCENARIOS[scenario.serviceKey];
   if (!svc) return { extracted: {}, evidence: {}, missing: [] };
 
   const scope = scenario.job.scope;
@@ -440,6 +439,13 @@ function _getRelatedKeywords(dim, value) {
     height: ['foot', 'ft', 'feet'],
     material: [String(value).toLowerCase()],
     jobType: [String(value).toLowerCase()],
+    gates: ['gate'],
+    removalRequired: value
+      ? ['needs to come down', 'removal of existing fence', 'old fence']
+      : ['bare ground', 'no existing fence'],
+    permitsRequired: value
+      ? ['permits are required', 'permit is required']
+      : ['no permit is required', 'no permit required'],
   };
   return maps[dim] || [];
 }
@@ -452,7 +458,7 @@ function classifyService(transcript) {
   const text = transcript.map(t => (t && t.text ? t.text : '')).join(' ').toLowerCase();
   const scores = {};
 
-  for (const [key, svc] of Object.entries(CATALOG)) {
+  for (const [key, svc] of Object.entries(SCENARIOS)) {
     let score = 0;
     for (const kw of svc.classificationKeywords) {
       if (text.includes(kw.toLowerCase())) score += 1;
@@ -480,7 +486,7 @@ function classifyService(transcript) {
 // ═══════════════════════════════════════════════════════
 
 function calculateConfidence(extractedScope, missingInfo, serviceKey) {
-  const svc = CATALOG[serviceKey];
+  const svc = SCENARIOS[serviceKey];
   if (!svc) return { score: 0, label: 'Insufficient', explanation: 'Unknown service type.' };
 
   const required = svc.scopeSchema.required || [];
@@ -506,7 +512,7 @@ function calculateConfidence(extractedScope, missingInfo, serviceKey) {
   const pct = possible > 0 ? Math.round((earned / possible) * 100) : 0;
 
   let label, explanation;
-  if (pct >= 80) { label = 'High'; explanation = 'Most required scope collected. Estimate is reliable.'; }
+  if (pct >= 80) { label = 'High'; explanation = 'Most required scope facts were collected.'; }
   else if (pct >= 50) { label = 'Medium'; explanation = 'Partial scope. Some assumptions in use.'; }
   else if (pct >= 20) { label = 'Low'; explanation = 'Limited scope. On-site assessment recommended.'; }
   else { label = 'Insufficient'; explanation = 'Not enough information. On-site assessment required.'; }

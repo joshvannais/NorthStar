@@ -262,7 +262,14 @@ combined PostgreSQL inventory assertion placed migration 008's table in the
 wrong alphabetical position; the reversed provenance run exposed the second
 self-contained-fixture gap; one first serial run exposed a static ratification
 phrase mismatch; and the first inline-script parser command was truncated by
-PowerShell argument quoting. Each was diagnosed narrowly and rerun without
-skips, relaxed assertions, lower concurrency, extra timeout, production access,
-or provider access. The final code-head gates above are clean. GitHub CI remains
-unavailable if PR #69 continues to report zero checks.
+PowerShell argument quoting. The first complete-HTML parser invocation could
+not resolve `python` on `PATH` and passed unchanged with the bundled runtime.
+The first final integrity script also asked `Test-Path` to represent the
+historical quote-bearing Windows-invalid path, while the first data-hash map
+used shorthand names for four `polaris-*` files; directory enumeration and the
+exact 11 repository filenames then passed with all blobs, skip-worktree bits,
+non-materialization checks, and hashes unchanged. Each issue was diagnosed
+narrowly and rerun without skips, relaxed assertions, lower concurrency, extra
+timeout, production access, or provider access. The final code-head gates above
+are clean. GitHub CI remains unavailable if PR #69 continues to report zero
+checks.

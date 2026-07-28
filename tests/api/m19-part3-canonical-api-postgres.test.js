@@ -16,6 +16,9 @@ const {
   READ_MODEL_VERSION,
   createCanonicalRouter,
   createCompatibilityRouter,
+  listCanonicalGraphs,
+  serviceAnalyticsProjection,
+  trendProjection,
 } = require('../../src/routes/canonicalPolaris');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -26,6 +29,7 @@ const migrations = [
   '006_canonical_voice_sessions.sql',
   '007_canonical_tax_authority.sql',
   '008_canonical_demo_authority.sql',
+  '009_canonical_voice_provider_identity.sql',
 ];
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const USER_A = '00000000-0000-0000-0000-000000000002';
@@ -405,6 +409,134 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     });
   });
 
+  test('compatibility analytics and recommendations project persisted canonical intelligence truthfully', async () => {
+    const before = await Promise.all([
+      request(app).get('/api/v1/analytics/trends').set(headers(ORG_A, USER_A, 'session-a')),
+      request(app).get('/api/v1/analytics/by-service').set(headers(ORG_A, USER_A, 'session-a')),
+      request(app).get('/api/v1/polaris/recommendations').set(headers(ORG_A, USER_A, 'session-a')),
+      request(app).get('/api/v1/opportunities/pipeline').set(headers(ORG_A, USER_A, 'session-a')),
+      request(app).get('/api/v1/analytics/alerts').set(headers(ORG_A, USER_A, 'session-a')),
+    ]);
+    expect(before.every(response => response.status === 200)).toBe(true);
+
+    const [trends, services, recommendations, pipeline, alerts] = before.map(response => response.body);
+    expect(trends.data.projection).toEqual({ status: 'available', canonicalGraphCount: 1 });
+    expect(trends.data.trend).toHaveLength(1);
+    expect(trends.data.trend[0]).toMatchObject({
+      graphCount: 1,
+      estimatedRevenue: EXTREME_FENCE_SUBTOTAL,
+      pricedGraphCount: 1,
+      unpricedGraphCount: 0,
+    });
+    expect(trends.data.trend[0].sourceGraphs[0]).toMatchObject({
+      graphId: graphA.body.graphId,
+      snapshotDigest: graphA.body.snapshotDigest,
+      businessProfile: {
+        id: graphA.body.businessProfile.id,
+        version: graphA.body.businessProfile.version,
+        hash: graphA.body.businessProfile.hash,
+      },
+    });
+
+    expect(services.data.projection).toEqual({ status: 'available', canonicalGraphCount: 1 });
+    expect(services.data.services).toHaveLength(1);
+    expect(services.data.services[0]).toMatchObject({
+      serviceKey: 'fence',
+      graphCount: 1,
+      estimatedRevenue: EXTREME_FENCE_SUBTOTAL,
+      serviceIdentity: { status: 'available' },
+    });
+    expect(services.data.services[0].sourceGraphs[0].graphId).toBe(graphA.body.graphId);
+
+    expect(recommendations.projection).toEqual({ status: 'available', canonicalGraphCount: 1 });
+    expect(recommendations.recommendations).toEqual(graphA.body.snapshot.recommendedActions);
+    expect(recommendations.recommendationDetails.map(item => item.recommendation))
+      .toEqual(graphA.body.snapshot.recommendedActions);
+    expect(recommendations.recommendationDetails[0].sourceGraphs[0].graphId).toBe(graphA.body.graphId);
+    expect(pipeline.projection).toEqual({ status: 'available', canonicalGraphCount: 1 });
+    expect(pipeline.stages.lead).toMatchObject({ count: 1, graphIds: [graphA.body.graphId] });
+    expect(alerts.projection).toEqual({ status: 'available', canonicalGraphCount: 1 });
+    expect(alerts.alerts).toEqual([]);
+
+    const replay = await ingestSimulation(pool, graphInput(ORG_A, 'session-a', RATIFICATION_KEY, 'Avery Smith'));
+    expect(replay).toMatchObject({ status: 201, replayed: true });
+    const after = await Promise.all([
+      request(app).get('/api/v1/analytics/trends').set(headers(ORG_A, USER_A, 'session-a')),
+      request(app).get('/api/v1/analytics/by-service').set(headers(ORG_A, USER_A, 'session-a')),
+      request(app).get('/api/v1/polaris/recommendations').set(headers(ORG_A, USER_A, 'session-a')),
+    ]);
+    expect(after.map(response => response.body)).toEqual(before.slice(0, 3).map(response => response.body));
+  });
+
+  test('compatibility projections exclude other organizations and distinguish genuine empty state', async () => {
+    const tenantB = await Promise.all([
+      request(app).get('/api/v1/analytics/trends').set(headers(ORG_B, USER_B, 'session-b')),
+      request(app).get('/api/v1/analytics/by-service').set(headers(ORG_B, USER_B, 'session-b')),
+      request(app).get('/api/v1/polaris/recommendations').set(headers(ORG_B, USER_B, 'session-b')),
+    ]);
+    expect(tenantB.every(response => response.status === 200)).toBe(true);
+    const tenantBSources = [
+      tenantB[0].body.data.trend[0].sourceGraphs,
+      tenantB[1].body.data.services[0].sourceGraphs,
+      tenantB[2].body.recommendationDetails[0].sourceGraphs,
+    ].flat();
+    expect(new Set(tenantBSources.map(source => source.graphId))).toEqual(new Set([graphB.body.graphId]));
+    expect(tenantBSources.some(source => source.graphId === graphA.body.graphId)).toBe(false);
+
+    const emptyOrganization = '00000000-0000-0000-0000-000000000020';
+    const emptyUser = '00000000-0000-0000-0000-000000000021';
+    const empty = await Promise.all([
+      request(app).get('/api/v1/analytics/trends').set(headers(emptyOrganization, emptyUser, 'empty-session')),
+      request(app).get('/api/v1/analytics/by-service').set(headers(emptyOrganization, emptyUser, 'empty-session')),
+      request(app).get('/api/v1/polaris/recommendations').set(headers(emptyOrganization, emptyUser, 'empty-session')),
+      request(app).get('/api/v1/opportunities/pipeline').set(headers(emptyOrganization, emptyUser, 'empty-session')),
+    ]);
+    expect(empty.every(response => response.status === 200)).toBe(true);
+    expect(empty[0].body.data).toMatchObject({
+      trend: [],
+      projection: { status: 'no_canonical_data', canonicalGraphCount: 0 },
+      graphCount: 0,
+      estimatedRevenue: null,
+    });
+    expect(empty[1].body.data).toMatchObject({
+      services: [],
+      projection: { status: 'no_canonical_data', canonicalGraphCount: 0 },
+    });
+    expect(empty[2].body).toMatchObject({
+      recommendations: [],
+      recommendationDetails: [],
+      projection: { status: 'no_canonical_data', canonicalGraphCount: 0 },
+    });
+    expect(empty[3].body).toMatchObject({
+      stages: {},
+      projection: { status: 'no_canonical_data', canonicalGraphCount: 0 },
+    });
+  });
+
+  test('unsupported canonical projection inputs return explicit unavailable dispositions', async () => {
+    const items = await listCanonicalGraphs(pool, {
+      organizationId: ORG_A,
+      userId: USER_A,
+      sessionId: 'session-a',
+      explicitSession: 'session-a',
+    }, { limit: 50, status: null, customerId: null });
+    expect(items).toHaveLength(1);
+    const missingService = [{ ...items[0], snapshot: { ...items[0].snapshot, service: null } }];
+    const missingTimestamp = [{ ...items[0], snapshotCreatedAt: 'not-a-timestamp' }];
+    expect(serviceAnalyticsProjection(missingService).services[0]).toMatchObject({
+      serviceKey: null,
+      serviceIdentity: { status: 'unavailable', reason: 'canonical_service_identity_unavailable' },
+    });
+    expect(trendProjection(missingTimestamp)).toMatchObject({
+      trend: [],
+      projection: {
+        status: 'unavailable',
+        reason: 'canonical_snapshot_timestamp_unavailable',
+        canonicalGraphCount: 1,
+      },
+    });
+  });
+
   test('every canonical read queries PostgreSQL while generic cache expiry remains isolated', async () => {
     cache.clearForTests();
     cache.setEnabled(true);
@@ -510,9 +642,12 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     });
     const status = await request(unavailable).get('/api/v1/canonical/status').set(headers(ORG_A, USER_A, 'session-a'));
     const graphs = await request(unavailable).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+    const trends = await request(unavailable).get('/api/v1/analytics/trends').set(headers(ORG_A, USER_A, 'session-a'));
     expect(status.status).toBe(503);
     expect(graphs.status).toBe(503);
+    expect(trends.status).toBe(503);
     expect(status.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
     expect(graphs.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
+    expect(trends.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
   });
 });

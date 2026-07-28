@@ -172,7 +172,7 @@ async function listCanonicalGraphs(pool, context, filters) {
     values.push(filters.customerId);
     where += ` AND c.id = $${values.length}`;
   }
-  const result = await pool.query(GRAPH_SELECT + where + ` ORDER BY ps.created_at DESC LIMIT $3`, values);
+  const result = await pool.query(GRAPH_SELECT + where + ` ORDER BY ps.created_at DESC, o.id ASC LIMIT $3`, values);
   return result.rows.map(projectRow);
 }
 
@@ -190,18 +190,58 @@ async function getCanonicalGraph(pool, context, identifier) {
   return result.rows.length ? projectRow(result.rows[0]) : null;
 }
 
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function roundedSum(values) {
+  return Math.round(values.reduce(function (sum, value) { return sum + value; }, 0) * 100) / 100;
+}
+
+function projectionState(items) {
+  return {
+    status: items.length ? 'available' : 'no_canonical_data',
+    canonicalGraphCount: items.length,
+  };
+}
+
+function sourceGraph(item) {
+  return {
+    graphId: item.ids.graph,
+    operationId: item.ids.operation,
+    snapshotId: item.ids.polarisSnapshot,
+    snapshotDigest: item.snapshotDigest,
+    snapshotCreatedAt: item.snapshotCreatedAt,
+    calculationVersion: item.calculationVersion,
+    businessProfile: {
+      id: item.businessProfileAuthorityId,
+      version: item.businessProfileInputVersion,
+      hash: item.businessProfileInputHash,
+    },
+    notCalculated: Array.isArray(item.snapshot && item.snapshot.notCalculated)
+      ? item.snapshot.notCalculated : [],
+  };
+}
+
 function aggregate(items) {
   const values = items.map(function (item) { return item.snapshot; });
-  const revenue = values.reduce(function (sum, value) {
-    return sum + (Number(value && value.estimatedRevenue) || 0);
-  }, 0);
-  const knownGrossProfit = values.filter(function (value) { return value && value.grossProfit !== null; });
+  const revenue = values.map(function (value) {
+    return finiteNumber(value && value.estimatedRevenue);
+  }).filter(function (value) { return value !== null; });
+  const knownGrossProfit = values.map(function (value) {
+    return finiteNumber(value && value.grossProfit);
+  }).filter(function (value) { return value !== null; });
   return {
+    dataState: projectionState(items),
     graphCount: items.length,
     customerCount: new Set(items.map(function (item) { return item.ids.customer; })).size,
-    estimatedRevenue: Math.round(revenue * 100) / 100,
+    estimatedRevenue: revenue.length ? roundedSum(revenue) : null,
+    pricedGraphCount: revenue.length,
+    unpricedGraphCount: items.length - revenue.length,
     knownGrossProfit: knownGrossProfit.length
-      ? Math.round(knownGrossProfit.reduce(function (sum, value) { return sum + Number(value.grossProfit); }, 0) * 100) / 100
+      ? roundedSum(knownGrossProfit)
       : null,
     appointmentCount: items.filter(function (item) { return item.ids.appointment; }).length,
     snapshotDigests: items.map(function (item) { return item.snapshotDigest; }),
@@ -230,9 +270,134 @@ function surfaceProjection(surface, items, context) {
         calculationVersion: item.calculationVersion,
         snapshotDigest: item.snapshotDigest,
         projectionDigest: item.projectionDigest,
+        snapshotCreatedAt: item.snapshotCreatedAt,
+        businessProfile: {
+          id: item.businessProfileAuthorityId,
+          version: item.businessProfileInputVersion,
+          hash: item.businessProfileInputHash,
+        },
         values: item.snapshot,
       };
     }),
+  };
+}
+
+function pipelineStageProjection(items) {
+  const stages = {};
+  for (const item of items) {
+    const key = String(item.opportunity.status || 'unavailable');
+    if (!stages[key]) stages[key] = { count: 0, graphIds: [], snapshotDigests: [] };
+    stages[key].count += 1;
+    stages[key].graphIds.push(item.ids.graph);
+    stages[key].snapshotDigests.push(item.snapshotDigest);
+  }
+  return {
+    stages: Object.keys(stages).sort().reduce(function (ordered, key) {
+      ordered[key] = stages[key];
+      return ordered;
+    }, {}),
+    projection: projectionState(items),
+  };
+}
+
+function alertProjection(items) {
+  const alerts = items.filter(function (item) {
+    return Boolean(item.snapshot && item.snapshot.risk && item.snapshot.risk.emergency);
+  }).map(function (item) {
+    return {
+      type: 'canonical_emergency_risk',
+      severity: 'high',
+      message: 'Canonical intelligence identifies an emergency service risk.',
+      sourceGraph: sourceGraph(item),
+    };
+  });
+  return { alerts, projection: projectionState(items) };
+}
+
+function trendProjection(items) {
+  const buckets = new Map();
+  for (const item of items) {
+    const timestamp = new Date(item.snapshotCreatedAt);
+    const date = Number.isNaN(timestamp.valueOf()) ? null : timestamp.toISOString().slice(0, 10);
+    if (!date) continue;
+    if (!buckets.has(date)) buckets.set(date, []);
+    buckets.get(date).push(item);
+  }
+  const trend = Array.from(buckets.keys()).sort().map(function (date) {
+    const dateItems = buckets.get(date);
+    const metrics = aggregate(dateItems);
+    return {
+      date,
+      graphCount: metrics.graphCount,
+      estimatedRevenue: metrics.estimatedRevenue,
+      pricedGraphCount: metrics.pricedGraphCount,
+      unpricedGraphCount: metrics.unpricedGraphCount,
+      knownGrossProfit: metrics.knownGrossProfit,
+      sourceGraphs: dateItems.map(sourceGraph),
+    };
+  });
+  return {
+    trend,
+    projection: items.length && !trend.length
+      ? { status: 'unavailable', reason: 'canonical_snapshot_timestamp_unavailable', canonicalGraphCount: items.length }
+      : projectionState(items),
+  };
+}
+
+function serviceAnalyticsProjection(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const snapshotService = item.snapshot && item.snapshot.service;
+    const key = snapshotService && typeof snapshotService.key === 'string' && snapshotService.key.trim()
+      ? snapshotService.key.trim().toLowerCase() : null;
+    const groupKey = key || '__unavailable__';
+    if (!groups.has(groupKey)) groups.set(groupKey, []);
+    groups.get(groupKey).push(item);
+  }
+  const services = Array.from(groups.keys()).sort(function (left, right) {
+    if (left === '__unavailable__') return 1;
+    if (right === '__unavailable__') return -1;
+    return left.localeCompare(right);
+  }).map(function (groupKey) {
+    const serviceItems = groups.get(groupKey);
+    const metrics = aggregate(serviceItems);
+    const snapshotService = serviceItems[0].snapshot && serviceItems[0].snapshot.service;
+    return {
+      serviceKey: groupKey === '__unavailable__' ? null : groupKey,
+      serviceLabel: snapshotService && snapshotService.label ? snapshotService.label : null,
+      serviceIdentity: groupKey === '__unavailable__'
+        ? { status: 'unavailable', reason: 'canonical_service_identity_unavailable' }
+        : { status: 'available' },
+      graphCount: metrics.graphCount,
+      estimatedRevenue: metrics.estimatedRevenue,
+      pricedGraphCount: metrics.pricedGraphCount,
+      unpricedGraphCount: metrics.unpricedGraphCount,
+      knownGrossProfit: metrics.knownGrossProfit,
+      sourceGraphs: serviceItems.map(sourceGraph),
+    };
+  });
+  return { services, projection: projectionState(items) };
+}
+
+function recommendationProjection(items) {
+  const byAction = new Map();
+  for (const item of items) {
+    const actions = Array.isArray(item.snapshot && item.snapshot.recommendedActions)
+      ? item.snapshot.recommendedActions : [];
+    for (const rawAction of actions) {
+      if (rawAction === null || rawAction === undefined) continue;
+      const recommendation = typeof rawAction === 'string' ? rawAction.trim() : stableValue(rawAction);
+      if (recommendation === '') continue;
+      const key = sha256(recommendation);
+      if (!byAction.has(key)) byAction.set(key, { recommendation, sourceGraphs: [] });
+      byAction.get(key).sourceGraphs.push(sourceGraph(item));
+    }
+  }
+  const recommendationDetails = Array.from(byAction.values());
+  return {
+    recommendations: recommendationDetails.map(function (entry) { return entry.recommendation; }),
+    recommendationDetails,
+    projection: projectionState(items),
   };
 }
 
@@ -487,7 +652,7 @@ function createCompatibilityRouter(options) {
     return async function (req, res) {
       try {
         const items = await authoritativeItems(req, dependencies, 'compat.' + surface + '.' + req.path);
-        const projection = compatibilityProjection(surface, items);
+        const projection = compatibilityProjection(surface, items, requestContext(req));
         return res.json(shape(projection, items));
       } catch (_error) {
         return sendPersistenceUnavailable(res);
@@ -497,16 +662,16 @@ function createCompatibilityRouter(options) {
 
   ownedGet('/customers', handle('customer-detail', function (projection) { return { customers: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/communications', handle('communications', function (projection) { return { communications: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  ownedGet('/opportunities/pipeline', handle('leads', function (projection) { return { stages: {}, opportunities: projection.records, canonicalDigest: projection.digest }; }));
+  ownedGet('/opportunities/pipeline', handle('leads', function (projection, items) { return { ...pipelineStageProjection(items), opportunities: projection.records, canonicalDigest: projection.digest }; }));
   ownedGet('/opportunities', handle('leads', function (projection) { return { opportunities: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/financial/estimates', handle('estimates', function (projection) { return { estimates: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/analytics/executive', handle('executive', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
   ownedGet('/analytics/kpis', handle('executive', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
   ownedGet('/analytics/dashboard', handle('command-center', function (projection) { return { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest }; }));
-  ownedGet('/analytics/alerts', handle('executive', function (projection) { return { alerts: [], canonicalDigest: projection.digest }; }));
-  ownedGet('/analytics/trends', handle('executive', function (projection) { return { data: { ...projection.metrics, trend: [], canonicalDigest: projection.digest } }; }));
+  ownedGet('/analytics/alerts', handle('executive', function (projection, items) { return { ...alertProjection(items), canonicalDigest: projection.digest }; }));
+  ownedGet('/analytics/trends', handle('executive', function (projection, items) { return { data: { ...projection.metrics, ...trendProjection(items), canonicalDigest: projection.digest } }; }));
   ownedGet('/analytics/pipeline', handle('leads', function (projection) { return { data: { opportunities: projection.records, ...projection.metrics, canonicalDigest: projection.digest } }; }));
-  ownedGet('/analytics/by-service', handle('executive', function (projection) { return { data: { services: [], ...projection.metrics, canonicalDigest: projection.digest } }; }));
+  ownedGet('/analytics/by-service', handle('executive', function (projection, items) { return { data: { ...serviceAnalyticsProjection(items), ...projection.metrics, canonicalDigest: projection.digest } }; }));
   ownedGet('/workflows/agenda/today', handle('calendar', function (projection) { return { tasks: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/leads', handle('leads', function (projection) { return { leads: projection.records, items: projection.records, total: projection.records.length, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/calls', handle('communications', function (projection) { return { calls: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
@@ -541,7 +706,7 @@ function createCompatibilityRouter(options) {
   ownedGet('/financial/metrics', handle('estimates', function (projection) { return { ...projection.metrics, canonicalDigest: projection.digest }; }));
   ownedGet('/polaris/intelligence', handle('polaris', function (projection) { return { ...projection.metrics, items: projection.records, canonicalDigest: projection.digest }; }));
   ownedGet('/polaris/estimates', handle('estimates', function (projection) { return { estimates: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
-  ownedGet('/polaris/recommendations', handle('polaris', function (projection) { return { recommendations: [], sourceGraphs: projection.records, canonicalDigest: projection.digest }; }));
+  ownedGet('/polaris/recommendations', handle('polaris', function (projection, items) { return { ...recommendationProjection(items), sourceGraphs: projection.records, canonicalDigest: projection.digest }; }));
   ownedGet('/polaris/learning', handle('polaris', function (projection) { return { snapshots: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
   ownedGet('/polaris/pipeline', handle('leads', function (projection) { return { opportunities: projection.records, ...projection.metrics, canonicalDigest: projection.digest }; }));
   ownedGet('/polaris/retell-context', handle('calendar', function (projection) { return { appointments: projection.records, canonicalDigest: projection.digest }; }));
@@ -653,12 +818,17 @@ module.exports = {
   READ_MODEL_VERSION,
   SURFACES,
   aggregate,
+  alertProjection,
   compatibilityProjection,
   createCanonicalRouter,
   createCompatibilityRouter,
   getCanonicalGraph,
   listCanonicalGraphs,
+  pipelineStageProjection,
   projectRow,
+  recommendationProjection,
   requestContext,
+  serviceAnalyticsProjection,
   surfaceProjection,
+  trendProjection,
 };

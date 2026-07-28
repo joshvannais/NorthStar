@@ -150,30 +150,45 @@ unchanged. Both engines reported zero pre-Save mutations, zero provider-boundary
 requests, zero console/page errors, zero horizontal overflow, and no
 `[object Object]` output.
 
-## Session-scoped canonical voice tools
+## Canonical Retell Conversation Flow authority
 
-Canonical voice creation imports `src/voice/canonicalSessionTools.js`, not the
-file-era `src/voice/toolRegistry.js` or the file-backed Business Profile
-singleton. The tool factory receives the organization id, stable internal voice
-session id, and exact profile row already pinned by PostgreSQL voice-session
-creation. Its immutable authority object contains profile id, version, hash,
-and source `canonical_business_profiles`.
+The independently inventoried Retell Conversation Flow Agent V10 has no custom
+functions and no MCPs. NorthStar therefore does not advertise or send a local
+`getFAQ`/`get_faq` tool, executable closure, MCP configuration, or per-call
+callback. `src/voice/canonicalSessionTools.js` and its provider-only replay
+helper were removed after the mounted inventory proved they had no legitimate
+non-provider consumer. The canonical startup probe rejects loading the legacy
+`src/voice/toolRegistry.js` and file-backed Business Profile service.
 
-The only provider-advertised local tool is `getFAQ`. It answers company name,
-hours, and minimum-price questions solely from the pinned profile. Execution
-requires the exact organization and internal session id. Explicit zero
-`canonicalPricing.minimumJobPrice` is spoken as `$0`; a configured positive
-value is preserved; missing returns `not_configured`; malformed returns
-`unavailable`. Neither case invents `$150` or another fallback. The answer also
-states that the minimum is not a quote and that exact pricing requires a
-written canonical estimate.
+FAQ and business-information responses remain the responsibility of the ten
+native Retell knowledge bases attached to the agent (Company Profile, Customer
+FAQ, Lead Qualification, NorthStar AI Behavior Guide, Operations & Escalation,
+Policies & Compliance, Pricing & Estimates, Sales Playbook, Scheduling &
+Availability, and Services) plus canonical per-call Business Profile dynamic
+variables. No knowledge-base content is copied into this repository or the
+create-call payload.
 
-Provider-bound definitions contain no file-derived data. A child-process
-startup probe rejects loading either legacy module. Separate organizations get
-separate immutable tool instances. After a profile update, replay reloads the
-historical profile row by the session's pinned id/version/hash, so the original
-tool answers and Retell variables remain unchanged. The provider boundary was
-intercepted throughout validation; no provider request was transmitted.
+Both mounted creation routes first persist a PostgreSQL voice session with the
+organization integration owner and exact active Business Profile id, version,
+and hash. They then send only `agent_id`, `from_number`, `to_number`, and
+`retell_llm_dynamic_variables` to the intercepted create-phone-call boundary.
+The exact dynamic-variable keys are `assistant_name`, `company_name`,
+`industry`, `owner_name`, `business_description`, `website`, `business_email`,
+`business_phone`, `business_hours`, `emergency_policy`, `service_area`,
+`services`, `pricing_rules`, `scheduling_rules`, `faq`, `policies`,
+`company_values`, `voice_style`, `custom_prompt`, and `northstar_greeting`.
+Every value comes from that pinned persisted profile. Caller-supplied business,
+tenant, profile, pricing, customer, or scenario fields cannot override them.
+Missing values become `not_configured`; malformed values become `unavailable`;
+explicit numeric zero is serialized as `0` in the relevant prompt-safe rule.
+
+`POST /api/retell/webhook` remains the existing event webhook for call-started,
+call-ended, call-analyzed, transcript, completion, and replay processing. It is
+not a custom-function callback and does not execute `getFAQ`. Retell native
+knowledge bases, Conversation Flow nodes, transfer/SMS/code/extraction behavior,
+and dashboard configuration were not modified by this remediation. The
+provider boundary was intercepted throughout validation; no provider request
+was transmitted.
 
 ## Single production calculation authority
 
@@ -188,17 +203,18 @@ neither recalculates a quote.
 
 ## Retell zero, missing, malformed, and tax semantics
 
-- configured zero remains numeric `0` canonically and string `"0"` with
-  `configured` status in Retell variables;
-- missing remains canonical `null` and transport `"not_configured"`;
-- explicit null or malformed remains canonical `null` and transport
-  `"unavailable"`;
-- a configured positive value passes unchanged; and
-- `pricing_rules` and individual variables carry identical value/disposition.
+- configured zero remains numeric `0` canonically and is encoded as value `0`
+  with `configured` disposition inside `pricing_rules`;
+- missing remains canonical `null` and is encoded as `not_configured`;
+- malformed remains canonical `null` and is encoded as `unavailable`; and
+- a configured positive value passes unchanged.
 
 Tax is configured, explicitly zero-rated, or unavailable. No default is
-assumed. The Retell prompt instructs the agent not to quote unavailable values.
-Replay uses the persisted original snapshot and pinned profile.
+assumed. `pricing_rules` is the only financial variable in the actual global
+prompt contract; the obsolete, unused individual financial variables were
+removed rather than duplicated. The prompt instructs the agent not to quote,
+infer, or replace unavailable values. Replay uses the persisted original
+snapshot and pinned profile.
 
 ## Mounted legacy route disposition
 
@@ -400,3 +416,108 @@ either-value result, serialized in place of required parallel coverage, given a
 larger global timeout, or replaced with mock-only evidence. OneDrive remained
 closed. PR #69 remains draft/open/unmerged. This PR has not changed Railway, production data, production
 schema, deployed code, or PR #66.
+
+## Phantom Retell provider-tool correction
+
+Commit 51 (`c3b18061b0593b25820d0c0027d7265b25c5fb51`) removes the
+unsupported provider-tool path after the mounted dependency inventory found no
+legitimate non-provider consumer for `canonicalSessionTools.js` or
+`getPinnedVoiceSessionTools`. The canonical client no longer contains
+`retell_llm_tools`, `createAgentWithTools`, or a per-call `webhook_url` field.
+The ordinary `POST /api/retell/webhook` event route remains mounted and
+unchanged. The unrelated historical `src/voice/toolRegistry.js` is not loaded by
+canonical startup and is not provider authority.
+
+Read-only evidence showed Conversation Flow Agent V10 with ten native knowledge
+bases, no tools, and no MCPs. The evidence screenshots, agent identity, private
+knowledge-base files, and prompt artifact were not copied into the repository or
+sent to Retell. The Retell dashboard was not changed.
+
+### Disposable PostgreSQL evidence for this correction
+
+Validation used PostgreSQL `17.10` in a new task-specific cluster at
+`C:\Users\joshv\AppData\Local\Temp\NorthStar-M19-Part3-8754-phantom-retell-20260728\data`.
+SQL verified that it listened only at `127.0.0.1:55442`, reported that exact
+data directory and port, and began with only the `postgres` and `template1`
+connectable databases and zero public tables. Test URLs existed only in process
+environments. Every PostgreSQL suite allocated and removed its own
+run/suite/worker/process database. After validation, only `postgres` and
+`template1` remained and the maintenance database still had zero public tables.
+No new migration was added. The installed service, port 5432, existing
+databases, Railway, staging, production, and production data were never used.
+
+### Exact correction commands and results
+
+The four disposable-server identity variables were pre-exported in the task
+process and are intentionally not written here. These were the final runtime
+commands (the PowerShell variables match the earlier command block):
+
+```powershell
+& $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand tests/unit/m19-part3-canonical-voice-tools.test.js tests/unit/m19-part3-retell-financial-semantics.test.js
+& $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand tests/unit/m19-part3-canonical-voice-tools.test.js tests/unit/m19-part3-retell-financial-semantics.test.js tests/integration/m19-part3-voice-sessions-postgres.test.js tests/api/m19-part3-remediation-mounted-postgres.test.js
+& $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand --silent tests/api
+& $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand --silent
+& $node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=182133331 --silent
+& $node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=20260728 --silent
+& $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand --randomize --seed=511917 --silent --runTestsByPath tests/api/m19-part3-remediation-mounted-postgres.test.js tests/integration/m19-part3-voice-sessions-postgres.test.js tests/unit/m19-part3-retell-financial-semantics.test.js tests/unit/m19-part3-canonical-voice-tools.test.js
+& $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand --detectOpenHandles --silent
+```
+
+The exact Mission 19 selection was passed to `--runTestsByPath` from sorted
+`rg --files tests` results whose test filename begins `m19-part3`, plus
+`tests/api/polaris.test.js`. Results:
+
+- mapper/provider contract: 2 suites, 8 tests, exit 0;
+- mounted provider, voice provenance, replay, event webhook, failure, outage,
+  tenant, restart, and separate-process focus: 4 suites, 31 tests, exit 0;
+- exact Mission 19 selection: 20 suites, 162 tests, exit 0;
+- complete API selection: 6 suites, 74 tests, exit 0;
+- complete serial: 43 suites, 887 tests, exit 0;
+- complete four-worker seed `182133331`: 43 suites, 887 tests, exit 0;
+- complete four-worker seed `20260728`: 43 suites, 887 tests, exit 0;
+- reversed randomized provider/provenance seed `511917`: 4 suites, 31 tests,
+  exit 0; and
+- complete `--detectOpenHandles`: 43 suites, 887 tests, exit 0 with no reported
+  open handle.
+
+Static ratification and focused contract reruns passed 3 suites/18 tests.
+`node --check` passed for all seven changed JavaScript files; `git diff
+--check`, the generated/untracked scan, all three protected invalid-path
+mode/blob/skip-worktree checks, and all 11 repository data SHA-256 checks
+passed. No frontend file changed, so the Chrome/WebKit matrices were not rerun
+under the server-only correction authorization.
+
+### Intermediate correction ledger
+
+1. The first bulk patch against `src/retell/client.js` failed atomically because
+   its copied console rendering used mojibake for an em dash. No partial edit was
+   made; bounded UTF-8 hunks then applied cleanly.
+2. A broad `--testPathPatterns=m19-part3` command matched the checkout directory
+   name and therefore ran the complete 43-suite set. It passed, but was not
+   mislabeled as the focused result; the explicit path-list run supplied the
+   20-suite/162-test Mission 19 evidence above.
+3. One read-only source inventory included a nonexistent `README.md` candidate;
+   `rg` reported that path missing while all requested source matches completed.
+   No repository state changed.
+4. The first final data-hash command used shorthand `recommendations.json`
+   instead of tracked `data/polaris-recommendations.json`. It failed without a
+   write. The rerun resolved all 11 exact tracked paths through Git and matched
+   every published hash, including
+   `0970f714a8b9c4937f679e4cbee82a907b9780a1df657e1eb1b8318f59c55547`
+   for `data/polaris-recommendations.json`.
+
+No test assertion failed. No assertion was skipped, weakened, retried as an
+application workaround, serialized in place of required parallel coverage, or
+given a larger global timeout. No live Retell/provider request, webhook request,
+Publish action, dashboard mutation, Railway access, production access,
+deployment, merge, migration outside the disposable cluster, or PR #66 change
+occurred.
+
+The following independently observed Retell configuration topics remain future
+work and are not changed by this PR: the unmatched global-prompt quotation mark,
+invisible zero-width characters, potential greeting precedence conflict,
+Everything/Keep-forever data retention, absent PII redaction, absent Safety
+Guardrails, disabled Secure URLs, knowledge-base templates needing populated
+Business Profile facts, Mission 20/21 Business Profile/NKA synchronization, and
+any future custom-function or MCP design. A normal non-production Retell
+call/session canary remains a later deployment-owner gate.

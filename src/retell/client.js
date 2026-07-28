@@ -210,7 +210,7 @@ function retellFinancialSemantics(profile) {
   const source = profile && typeof profile === 'object' ? profile : {};
   return {
     minimum_job_price: financialValue(source, [
-      { object: 'financial', key: 'minimumJobPrice' },
+      { object: 'canonicalPricing', key: 'minimumJobPrice' },
     ]),
     emergency_markup: financialValue(source, [
       { object: 'canonicalPricing', key: 'emergencyMultiplier' },

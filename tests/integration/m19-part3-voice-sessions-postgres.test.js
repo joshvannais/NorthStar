@@ -9,7 +9,7 @@ const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database'
 const { bindIntegrationOwner, putBusinessProfile } = require('../../src/services/organizationAuthority');
 const voice = require('../../src/services/voiceSessionAuthority');
 const { ingestRetellPayload } = require('../../src/services/canonicalRetellIngestion');
-const { createCanonicalVoiceCall } = require('../../src/services/canonicalVoiceSessionCreation');
+const { createCanonicalVoiceCall, getPinnedVoiceSessionTools } = require('../../src/services/canonicalVoiceSessionCreation');
 const { mapExecutiveContextToVariables } = require('../../src/retell/client');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -167,10 +167,11 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
       userId: USER_A,
       profile: {
         ...PROFILE,
-        financial: { minimumJobPrice: 275, emergencyMarkup: 1.4, travelCharge: 1.1 },
-        canonicalPricing: { emergencyMultiplier: 1.4, travelCustomerChargePerMile: 1.1, taxRatePercent: 8.25 },
+        financial: { minimumJobPrice: 999, emergencyMarkup: 1.4, travelCharge: 1.1 },
+        canonicalPricing: { minimumJobPrice: 275, emergencyMultiplier: 1.4, travelCustomerChargePerMile: 1.1, taxRatePercent: 8.25 },
       },
     });
+    let pinnedProviderTools;
     let pinnedVariables;
     const pinnedCall = await createCanonicalVoiceCall({
       pool,
@@ -179,6 +180,7 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
       source: 'profile-version-test',
       createProviderCall: async (_phone, _agent, options) => {
         pinnedVariables = mapExecutiveContextToVariables(options.executiveContext);
+        pinnedProviderTools = options.sessionTools;
         return { call_id: 'pinned-call', call_status: 'registered' };
       },
     });
@@ -188,10 +190,11 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
       profile: {
         ...PROFILE,
         company: { name: 'Newer Voice Profile', currency: 'USD' },
-        financial: { minimumJobPrice: 0, emergencyMarkup: 0, travelCharge: 0 },
-        canonicalPricing: { emergencyMultiplier: 0, travelCustomerChargePerMile: 0, taxRatePercent: 0 },
+        financial: { minimumJobPrice: 999, emergencyMarkup: 0, travelCharge: 0 },
+        canonicalPricing: { minimumJobPrice: 0, emergencyMultiplier: 0, travelCustomerChargePerMile: 0, taxRatePercent: 0 },
       },
     });
+    let newerProviderTools;
     let newerVariables;
     const newerCall = await createCanonicalVoiceCall({
       pool,
@@ -200,6 +203,7 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
       source: 'profile-version-test',
       createProviderCall: async (_phone, _agent, options) => {
         newerVariables = mapExecutiveContextToVariables(options.executiveContext);
+        newerProviderTools = options.sessionTools;
         return { call_id: 'newer-call', call_status: 'registered' };
       },
     });
@@ -215,6 +219,120 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     });
     expect(newerVariables).toMatchObject({
       minimum_job_price: '0', emergency_markup: '0', travel_charge: '0', tax_rate: '0',
+    });
+    const pinnedContext = {
+      organizationId: ORG_A,
+      voiceSessionId: pinnedCall.session.id,
+    };
+    const newerContext = {
+      organizationId: ORG_A,
+      voiceSessionId: newerCall.session.id,
+    };
+    expect(pinnedProviderTools).toBe(pinnedCall.tools);
+    expect(newerProviderTools).toBe(newerCall.tools);
+    expect(pinnedCall.tools.execute('getFAQ', { question: 'minimum price' }, pinnedContext)).toMatchObject({
+      answer: expect.stringContaining('$275'),
+      minimumJobPrice: { status: 'configured', value: 275 },
+      authority: expect.objectContaining({ profileId: pinnedAuthority.id, profileHash: pinnedAuthority.profileHash }),
+    });
+    expect(newerCall.tools.execute('getFAQ', { question: 'minimum price' }, newerContext)).toMatchObject({
+      answer: expect.stringContaining('$0'),
+      minimumJobPrice: { status: 'configured', value: 0 },
+      authority: expect.objectContaining({ profileId: newer.id, profileHash: newer.profileHash }),
+    });
+    const replayTools = await getPinnedVoiceSessionTools({
+      pool,
+      organizationId: ORG_A,
+      externalSessionId: 'pinned-call',
+    });
+    expect(replayTools.execute('getFAQ', { question: 'minimum price' }, {
+      organizationId: ORG_A,
+      voiceSessionId: pinnedCall.session.id,
+    }).answer).toContain('$275');
+    let scopeError;
+    try {
+      replayTools.execute('getFAQ', { question: 'minimum price' }, {
+        organizationId: ORG_B,
+        voiceSessionId: pinnedCall.session.id,
+      });
+    } catch (error) {
+      scopeError = error;
+    }
+    expect(scopeError).toMatchObject({ code: 'VOICE_TOOL_SCOPE_MISMATCH', status: 403 });
+    expect(pinnedCall.tools.definitions.map(item => item.function.name)).toEqual(['getFAQ']);
+
+    const organizationBProfile = await putBusinessProfile(pool, {
+      organizationId: ORG_B,
+      userId: USER_B,
+      profile: {
+        ...PROFILE,
+        company: { name: 'Voice B Canonical Tools', currency: 'USD' },
+        financial: { minimumJobPrice: 50 },
+        canonicalPricing: { minimumJobPrice: 425 },
+      },
+    });
+    let organizationBVariables;
+    const organizationBCall = await createCanonicalVoiceCall({
+      pool,
+      organizationId: ORG_B,
+      phoneNumber: '+15555550196',
+      createProviderCall: async (_phone, _agent, options) => {
+        organizationBVariables = mapExecutiveContextToVariables(options.executiveContext);
+        return { call_id: 'organization-b-tools-call', call_status: 'registered' };
+      },
+    });
+    expect(organizationBVariables.minimum_job_price).toBe('425');
+    expect(organizationBCall.tools.execute('getFAQ', { question: 'minimum price' }, {
+      organizationId: ORG_B,
+      voiceSessionId: organizationBCall.session.id,
+    })).toMatchObject({
+      answer: expect.stringContaining('$425'),
+      authority: expect.objectContaining({ profileId: organizationBProfile.id, organizationId: ORG_B }),
+    });
+
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      userId: USER_A,
+      profile: { ...PROFILE, financial: { minimumJobPrice: 650 }, canonicalPricing: {} },
+    });
+    let missingVariables;
+    const missingCall = await createCanonicalVoiceCall({
+      pool,
+      organizationId: ORG_A,
+      phoneNumber: '+15555550195',
+      createProviderCall: async (_phone, _agent, options) => {
+        missingVariables = mapExecutiveContextToVariables(options.executiveContext);
+        return { call_id: 'missing-tools-call', call_status: 'registered' };
+      },
+    });
+    expect(missingVariables.minimum_job_price).toBe('not_configured');
+    expect(missingCall.tools.execute('getFAQ', { question: 'minimum price' }, {
+      organizationId: ORG_A,
+      voiceSessionId: missingCall.session.id,
+    }).minimumJobPrice).toEqual({ status: 'not_configured', value: null });
+
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      userId: USER_A,
+      profile: { ...PROFILE, financial: { minimumJobPrice: 650 }, canonicalPricing: { minimumJobPrice: '150' } },
+    });
+    let malformedVariables;
+    const malformedCall = await createCanonicalVoiceCall({
+      pool,
+      organizationId: ORG_A,
+      phoneNumber: '+15555550194',
+      createProviderCall: async (_phone, _agent, options) => {
+        malformedVariables = mapExecutiveContextToVariables(options.executiveContext);
+        return { call_id: 'malformed-tools-call', call_status: 'registered' };
+      },
+    });
+    expect(malformedVariables.minimum_job_price).toBe('unavailable');
+    expect(malformedCall.tools.execute('getFAQ', { question: 'minimum price' }, {
+      organizationId: ORG_A,
+      voiceSessionId: malformedCall.session.id,
+    })).toMatchObject({
+      answer: expect.stringContaining('unavailable'),
+      minimumJobPrice: { status: 'unavailable', value: null },
     });
     const payload = {
       event: 'call_ended',

@@ -18,7 +18,7 @@ describe('Mission 19 Part 3 Retell financial semantics', () => {
   test('explicit zero remains configured zero for every supported financial variable', () => {
     const result = variables({
       financial: { minimumJobPrice: 0, emergencyMarkup: 0, travelCharge: 0, taxRate: 91 },
-      canonicalPricing: { emergencyMultiplier: 0, travelCustomerChargePerMile: 0, taxRatePercent: 0 },
+      canonicalPricing: { minimumJobPrice: 0, emergencyMultiplier: 0, travelCustomerChargePerMile: 0, taxRatePercent: 0 },
     });
     expectConsistent(result, {
       minimum_job_price: { value: '0', status: 'configured' },
@@ -44,7 +44,7 @@ describe('Mission 19 Part 3 Retell financial semantics', () => {
   test('malformed values are unavailable and legacy tax cannot become canonical tax authority', () => {
     const result = variables({
       financial: { minimumJobPrice: '150', emergencyMarkup: -1, travelCharge: null, taxRate: 7 },
-      canonicalPricing: { taxRatePercent: 100.01 },
+      canonicalPricing: { minimumJobPrice: '150', taxRatePercent: 100.01 },
     });
     expectConsistent(result, {
       minimum_job_price: { value: 'unavailable', status: 'unavailable' },
@@ -58,11 +58,11 @@ describe('Mission 19 Part 3 Retell financial semantics', () => {
   test('positive canonical values and different pinned organizations remain exact', () => {
     const organizationA = variables({
       financial: { minimumJobPrice: 275, emergencyMarkup: 1.25, travelCharge: 0.75 },
-      canonicalPricing: { emergencyMultiplier: 1.4, travelCustomerChargePerMile: 1.1, taxRatePercent: 8.25 },
+      canonicalPricing: { minimumJobPrice: 275, emergencyMultiplier: 1.4, travelCustomerChargePerMile: 1.1, taxRatePercent: 8.25 },
     });
     const organizationB = variables({
       financial: { minimumJobPrice: 50, emergencyMarkup: 2, travelCharge: 3 },
-      canonicalPricing: { emergencyMultiplier: 2, travelCustomerChargePerMile: 3, taxRatePercent: 0 },
+      canonicalPricing: { minimumJobPrice: 50, emergencyMultiplier: 2, travelCustomerChargePerMile: 3, taxRatePercent: 0 },
     });
     expectConsistent(organizationA, {
       minimum_job_price: { value: '275', status: 'configured' },

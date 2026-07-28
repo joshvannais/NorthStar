@@ -58,6 +58,26 @@ const profile = canonicalFenceProfile({
   materialRates: { cedar: 123, pine: 71, vinyl: 137, 'chain-link': 149 },
   gateRates: { walk: 777, drive: 4321 },
 });
+Object.assign(profile.company, {
+  industry: 'fencing',
+  ownerName: 'Mounted Owner',
+  description: 'Persisted mounted canonical profile.',
+  website: 'https://mounted.example.test',
+  email: 'voice@mounted.example.test',
+  phone: '+15555553090',
+});
+profile.hours = { monday: { open: '08:00', close: '17:00' } };
+profile.emergencyPolicy = 'Human confirmation is required for emergencies.';
+profile.serviceArea = { counties: ['Mounted County'] };
+profile.faq = ['Site review is required before quoting.'];
+profile.policies = { warranty: 'Written agreement controls.' };
+profile.companyValues = ['Accuracy', 'Safety'];
+profile.customPrompt = 'Use only the persisted mounted profile.';
+profile.retell = {
+  assistantName: 'Mounted Assistant',
+  voiceStyle: 'direct and calm',
+  greetingTemplate: 'Thank you for calling Mounted Test Company.',
+};
 profile.financial = {
   desiredGrossMargin: 40,
   markup: 1.3,
@@ -495,25 +515,33 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
   test('both tenant call routes create the pinned canonical session before the provider boundary and ignore caller authority', async () => {
     const pool = db.getPool();
     const observed = [];
-    const provider = jest.spyOn(retell, 'createCall').mockImplementation(async (phoneNumber, agentId, options) => {
-      const pending = await pool.query(
-        `SELECT organization_id, business_profile_id, business_profile_version,
-                business_profile_hash, status, metadata
-           FROM canonical_voice_sessions
-          WHERE to_number = $1 AND external_session_id LIKE 'pending-%'`,
-        [phoneNumber]
-      );
-      expect(pending.rows).toHaveLength(1);
-      observed.push({
-        phoneNumber,
-        agentId,
-        options,
-        pending: pending.rows[0],
-        variables: retell.mapExecutiveContextToVariables(options.executiveContext),
-      });
-      return { call_id: 'provider-' + observed.length, call_status: 'registered' };
-    });
+    const retellConfig = require('../../src/config');
+    const originalKey = retellConfig.retell.apiKey;
+    const originalPhone = retellConfig.retell.phoneNumber;
+    const originalFetch = global.fetch;
     try {
+      retellConfig.retell.apiKey = 'intercepted-mounted-key';
+      retellConfig.retell.phoneNumber = '+15555553099';
+      global.fetch = jest.fn(async (_url, options) => {
+        const body = JSON.parse(options.body);
+        const pending = await pool.query(
+          `SELECT organization_id, business_profile_id, business_profile_version,
+                  business_profile_hash, status, metadata
+             FROM canonical_voice_sessions
+            WHERE to_number = $1 AND external_session_id LIKE 'pending-%'`,
+          [body.to_number]
+        );
+        expect(pending.rows).toHaveLength(1);
+        observed.push({ body, pending: pending.rows[0] });
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            call_id: 'provider-' + observed.length,
+            call_status: 'registered',
+          }),
+        };
+      });
       for (const route of ['/api/v1/voice/call', '/api/retell/create-call']) {
         const response = await request(app)
           .post(route)
@@ -537,24 +565,34 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       }
       expect(observed).toHaveLength(2);
       for (const call of observed) {
-        expect(call.agentId).toBe('agent-mounted-a');
+        expect(Object.keys(call.body).sort()).toEqual([
+          'agent_id', 'from_number', 'retell_llm_dynamic_variables', 'to_number',
+        ]);
+        expect(call.body.agent_id).toBe('agent-mounted-a');
+        expect(call.body.from_number).toBe('+15555553099');
         expect(call.pending.organization_id).toBe(ORG_A);
         expect(call.pending.business_profile_id).toBe(profileAuthorityA.id);
         expect(call.pending.business_profile_version).toBe(profileAuthorityA.versionLabel);
         expect(call.pending.business_profile_hash).toBe(profileAuthorityA.profileHash);
-        expect(call.options.executiveContext.businessProfile.company.name).toBe('Mounted Test Company');
-        expect(call.options.executiveContext.businessProfile.company.name).not.toBe('Caller Controlled Company');
-        expect(call.variables).toMatchObject({
-          minimum_job_price: 'not_configured',
-          emergency_markup: '1',
-          travel_charge: '0',
-          tax_rate: '0',
+        expect(Object.keys(call.body.retell_llm_dynamic_variables).sort()).toEqual(
+          [...retell.PROMPT_VARIABLE_KEYS].sort()
+        );
+        expect(call.body.retell_llm_dynamic_variables).toMatchObject({
+          assistant_name: 'Mounted Assistant',
+          company_name: 'Mounted Test Company',
+          business_email: 'voice@mounted.example.test',
+          scheduling_rules: JSON.stringify({ maxJobsPerDay: 4, workDayLength: 8 }),
         });
-        expect(call.variables.pricing_rules).toContain('tax_rate=0 (configured)');
-        expect(call.variables.pricing_rules).not.toMatch(/tax_rate=7|minimum_job_price=150/);
+        expect(call.body.retell_llm_dynamic_variables.pricing_rules).toContain('tax_rate=0 (configured)');
+        expect(call.body.retell_llm_dynamic_variables.pricing_rules).not.toMatch(/tax_rate=7|minimum_job_price=150/);
+        expect(JSON.stringify(call.body)).not.toMatch(
+          /Caller Controlled|Scenario Customer|getFAQ|retell_llm_tools|mcp|webhook_url|callback|businessProfile\.json/
+        );
       }
     } finally {
-      provider.mockRestore();
+      global.fetch = originalFetch;
+      retellConfig.retell.apiKey = originalKey;
+      retellConfig.retell.phoneNumber = originalPhone;
     }
   });
 

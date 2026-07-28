@@ -2,11 +2,9 @@
 
 const crypto = require('crypto');
 const retell = require('../retell/client');
-const { createSessionScopedCanonicalTools } = require('../voice/canonicalSessionTools');
 const {
   authorityError,
   getActiveBusinessProfile,
-  getBusinessProfileById,
   getOrganizationIntegration,
   getProvisionedDemoOrganization,
 } = require('./organizationAuthority');
@@ -93,23 +91,13 @@ async function createCanonicalVoiceCall(options) {
     eventType: 'provider_creation_requested',
     payload: { direction: 'outbound' },
   });
-  const sessionTools = createSessionScopedCanonicalTools({
-    organizationId,
-    voiceSessionId: canonicalSession.id,
-    profile,
-  });
-
   let providerSessionId = null;
   let currentSessionId = provisionalSessionId;
   try {
     const createProviderCall = source.createProviderCall || retell.createCall;
     const result = await createProviderCall(phoneNumber, integration.external_integration_id, {
-      service: requestedService,
-      caller: requestedCaller,
       fromNumber,
       executiveContext: persistedContext(profile),
-      toolDefinitions: sessionTools.definitions,
-      sessionTools,
     });
     providerSessionId = result && (result.call_id || result.callId);
     const session = source.preserveExternalSessionId
@@ -131,7 +119,7 @@ async function createCanonicalVoiceCall(options) {
       payload: { direction: 'outbound', providerSessionId },
       status: 'active',
     });
-    return { result, session: started.session || session, profile, integration, tools: sessionTools };
+    return { result, session: started.session || session, profile, integration };
   } catch (error) {
     await recordFailure(pool, {
       organizationId,
@@ -141,20 +129,6 @@ async function createCanonicalVoiceCall(options) {
     error.canonicalSessionId = currentSessionId;
     throw error;
   }
-}
-
-async function getPinnedVoiceSessionTools(options) {
-  const source = options || {};
-  const session = await voiceSessions.getSession(source.pool, source.organizationId, source.externalSessionId);
-  const profile = await getBusinessProfileById(source.pool, source.organizationId, session.profile.id);
-  if (profile.versionLabel !== session.profile.version || profile.profileHash !== session.profile.hash) {
-    throw authorityError('VOICE_PROFILE_PROVENANCE_MISMATCH', 'Pinned voice-session profile provenance is inconsistent.', 409);
-  }
-  return createSessionScopedCanonicalTools({
-    organizationId: source.organizationId,
-    voiceSessionId: session.id,
-    profile,
-  });
 }
 
 async function createProvisionedDemoVoiceCall(options) {
@@ -181,7 +155,6 @@ async function createProvisionedDemoVoiceCall(options) {
 module.exports = {
   createCanonicalVoiceCall,
   createProvisionedDemoVoiceCall,
-  getPinnedVoiceSessionTools,
   persistedContext,
   validatePhone,
 };

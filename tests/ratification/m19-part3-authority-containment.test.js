@@ -123,6 +123,22 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     expect(providerIdentityMigration).toContain('canonical_voice_sessions_provider_identity');
   });
 
+  test('mounted Retell creation has no phantom provider tool or callback authority', () => {
+    const client = source('src/retell/client.js');
+    const service = source('src/services/canonicalVoiceSessionCreation.js');
+    const voiceRoute = source('src/routes/voice.js');
+    const apiRoute = source('src/routes/api.js');
+
+    expect(client).not.toMatch(/retell_llm_tools|createAgentWithTools|webhook_url/);
+    expect(service).not.toMatch(/getFAQ|get_faq|getPinnedVoiceSessionTools|canonicalSessionTools|sessionTools|toolDefinitions/);
+    expect(voiceRoute).toContain('createCanonicalVoiceCall({');
+    expect(apiRoute).toContain("router.post('/retell/create-call'");
+    expect(apiRoute).toContain('createCanonicalVoiceCall({');
+    expect(apiRoute).toContain("router.post('/retell/webhook'");
+    expect(apiRoute).not.toMatch(/retell\/webhook[\s\S]{0,300}(?:getFAQ|get_faq)/);
+    expect(fs.existsSync(path.join(ROOT, 'src/voice/canonicalSessionTools.js'))).toBe(false);
+  });
+
   test('every real PostgreSQL suite owns a run, suite, worker, and process isolated database', () => {
     const helper = source('tests/helpers/m19-part3-postgres-database.js');
     expect(helper).toContain('M19_TEST_RUN_ID');

@@ -236,171 +236,102 @@ function financialRules(semantics) {
   return rules.join('; ') + '. Do not quote, infer, or replace financial values marked not_configured or unavailable. No pricing promises without a written estimate.';
 }
 
-/**
- * Map Executive Context to Retell dynamic variables.
- * Extracts key fields from the frozen EC for injection into the LLM prompt.
- *
- * @param {Object} ec - Executive Context from buildExecutiveContext / buildPolarisContext
- * @param {Object} [opts] - Additional options
- * @returns {Object} Retell-compatible retell_llm_dynamic_variables
- */
-function mapExecutiveContextToVariables(ec, opts) {
-  const vars = {};
+const PROMPT_VARIABLE_KEYS = Object.freeze([
+  'assistant_name',
+  'company_name',
+  'industry',
+  'owner_name',
+  'business_description',
+  'website',
+  'business_email',
+  'business_phone',
+  'business_hours',
+  'emergency_policy',
+  'service_area',
+  'services',
+  'pricing_rules',
+  'scheduling_rules',
+  'faq',
+  'policies',
+  'company_values',
+  'voice_style',
+  'custom_prompt',
+  'northstar_greeting',
+]);
 
-  if (!ec) return vars;
-
-  // Business Profile
-  const bp = ec.businessProfile || {};
-  if (bp.company) {
-    vars.company_name = bp.company.name || '';
-    vars.company_dba = bp.company.dba || '';
-    vars.company_email = bp.company.email || '';
-    vars.company_phone = bp.company.phone || '';
-    vars.company_website = bp.company.website || '';
-    vars.company_timezone = bp.company.timeZone || '';
-  }
-
-  // NorthStar branding — top-level for easy reference in conversation flow
-  if (bp.retell) {
-    vars.northstar_greeting = bp.retell.greetingTemplate || `Thanks for calling ${bp.company?.name || 'us'}. This is NorthStar, your AI receptionist. How can I help you today?`;
-    vars.brand_name = bp.retell.brandName || 'NorthStar';
-    vars.brand_voice = bp.retell.brandVoice || 'professional and warm';
-    vars.assistant_name = bp.retell.assistantName || bp.retell.brandName || 'NorthStar';
-    vars.voice_style = bp.retell.voiceStyle || bp.retell.brandVoice || 'professional and warm';
-  }
-
-  // Aliases for common variable names used in conversation flow prompts
-  vars.website = vars.company_website || '';
-  vars.business_email = vars.company_email || '';
-  vars.business_phone = vars.company_phone || '';
-
-  // Industry from flat EC field
-  if (ec.industry) vars.industry = ec.industry;
-
-  // Emergency policy (derived from hours)
-  if (bp.hours) {
-    const hasEmergency = Object.values(bp.hours).some(h => h && h.emergency);
-    vars.emergency_available = hasEmergency ? 'true' : 'false';
-    vars.emergency_policy = hasEmergency
-      ? 'Emergency service is available. Additional charges may apply for after-hours emergency calls.'
-      : 'Standard business hours apply. Emergency calls are not currently available.';
-  }
-
-  // Service area
-  vars.service_area = bp.serviceArea || (ec.serviceArea || '');
-  vars.business_description = bp.businessDescription || (ec.businessDescription || `${ec.industry || ''} services`);
-  vars.owner_name = bp.ownerName || (ec.ownerName || '');
-  vars.company_values = bp.companyValues || (ec.companyValues || 'Quality work, customer satisfaction, and professional service.');
-  vars.policies = bp.policies || (ec.policies || '');
-  vars.faq = bp.faq || (ec.faq || '');
-  vars.custom_prompt = bp.customPrompt || (ec.customPrompt || '');
-
-  // Financial variables and the combined prompt share one exact disposition.
-  // Zero is configured; absence and malformed values are never defaulted.
-  const financial = retellFinancialSemantics(bp);
-  vars.pricing_rules = financialRules(financial);
-  for (const [key, entry] of Object.entries(financial)) {
-    vars[key] = entry.value;
-    vars[key + '_status'] = entry.status;
-  }
-
-  // Scheduling rules (combined from scheduling settings)
-  if (bp.scheduling) {
-    const maxJobs = bp.scheduling.maxJobsPerDay || 4;
-    const leadHrs = bp.scheduling.leadTimeHours || 4;
-    const emergLead = bp.scheduling.emergencyLeadTimeMinutes || 60;
-    vars.scheduling_rules = `Maximum ${maxJobs} jobs per day. ${leadHrs} hour lead time for standard calls. ${emergLead} minute lead time for emergency calls. No appointment promises without confirmation.`;
-  } else {
-    vars.scheduling_rules = 'Standard business hours. Lead time varies by job type. No appointment promises without confirmation.';
-  }
-
-  // Services
-  if (bp.services && Array.isArray(bp.services)) {
-    vars.services = JSON.stringify(bp.services.slice(0, 10));
-    vars.service_count = bp.services.length;
-  } else {
-    vars.services = '[]';
-    vars.service_count = 0;
-  }
-
-  // Hours
-  if (bp.hours) {
-    vars.business_hours = JSON.stringify(bp.hours);
-  }
-
-  // Scheduling preferences
-  if (bp.scheduling) {
-    vars.scheduling_preferences = JSON.stringify(bp.scheduling);
-    vars.max_jobs_per_day = bp.scheduling.maxJobsPerDay || 4;
-    vars.work_day_length = bp.scheduling.workDayLength || 8;
-  }
-
-  // Polaris preferences
-  if (bp.polaris) {
-    vars.response_style = bp.polaris.responseStyle || 'executive';
-  }
-
-  // Retell preferences
-  if (bp.retell) {
-    vars.retell_preferences = JSON.stringify(bp.retell);
-    vars.conversation_style = bp.retell.conversationStyle || 'consultative';
-    vars.max_conversation_length = bp.retell.maxConversationLength || 15;
-  }
-
-  // Customer data (if available)
-  const customer = ec.customer || {};
-  if (customer.lead) {
-    const lead = customer.lead;
-    vars.customer_name = lead.customerName || lead.name || lead.caller || '';
-    vars.customer_phone = lead.phone || lead.phoneNumber || '';
-    vars.customer_address = lead.address || lead.propertyAddress || '';
-    vars.customer_status = lead.status || '';
-    vars.customer_service = lead.service || '';
-    vars.customer_id = lead.id || '';
-  } else if (customer.customerRecord) {
-    const rec = customer.customerRecord;
-    vars.customer_name = rec.name || rec.companyName || '';
-    vars.customer_phone = rec.phone || '';
-    vars.customer_address = rec.address || '';
-  }
-
-  // Customer history
-  if (customer.recentEstimate) {
-    vars.customer_history = `Recent estimate: ${customer.recentEstimate.total || customer.recentEstimate.amount || 0} for ${customer.recentEstimate.service || 'unknown service'}`;
-  }
-
-  // Decision intelligence
-  const decisions = ec.decisions || ec.executiveDecisions || {};
-  if (decisions.nextBestAction) {
-    vars.next_best_action = typeof decisions.nextBestAction === 'string'
-      ? decisions.nextBestAction
-      : JSON.stringify(decisions.nextBestAction);
-  }
-  if (decisions.rank) {
-    vars.lead_priority = decisions.rank.priority || decisions.rank.rank || '';
-    vars.lead_score = decisions.rank.score || 0;
-  }
-
-  // Job intelligence
-  const intel = ec.intelligence || ec.businessIntelligence || {};
-  if (intel.jobIntelligence) {
-    vars.job_intelligence = JSON.stringify(intel.jobIntelligence);
-  }
-
-  // Override with explicit service/caller from options
-  if (opts && opts.service) vars.service = opts.service;
-  if (opts && opts.caller) vars.customer_name_override = opts.caller;
-
-  // ── String coercion: Retell expects all dynamic variable values to be strings ──
-  // Convert any non-string values (numbers, booleans, objects) to strings.
-  // This prevents silent failures like "service_count must be string".
-  for (const key of Object.keys(vars)) {
-    if (typeof vars[key] !== 'string') {
-      vars[key] = String(vars[key]);
+function promptValue(value) {
+  if (value === undefined || value === null) return 'not_configured';
+  if (typeof value === 'string') return value.trim() || 'not_configured';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'unavailable';
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    try {
+      const serialized = JSON.stringify(value);
+      return serialized === undefined ? 'unavailable' : serialized;
+    } catch (_error) {
+      return 'unavailable';
     }
   }
+  return 'unavailable';
+}
 
-  return vars;
+function firstPersistedValue(candidates) {
+  for (const candidate of candidates) {
+    if (own(candidate.source, candidate.key)) return candidate.source[candidate.key];
+  }
+  return undefined;
+}
+
+/**
+ * Map one persisted Business Profile to the exact dynamic variables consumed by
+ * the deployed Retell Conversation Flow Agent. Caller scenario/contact inputs
+ * never participate in this mapping.
+ */
+function mapExecutiveContextToVariables(ec) {
+  const bp = ec && ec.businessProfile && typeof ec.businessProfile === 'object'
+    ? ec.businessProfile
+    : {};
+  const company = bp.company && typeof bp.company === 'object' ? bp.company : {};
+  const retell = bp.retell && typeof bp.retell === 'object' ? bp.retell : {};
+  const vars = {
+    assistant_name: promptValue(firstPersistedValue([
+      { source: retell, key: 'assistantName' },
+      { source: retell, key: 'brandName' },
+    ])),
+    company_name: promptValue(firstPersistedValue([{ source: company, key: 'name' }])),
+    industry: promptValue(firstPersistedValue([
+      { source: bp, key: 'industry' },
+      { source: company, key: 'industry' },
+    ])),
+    owner_name: promptValue(firstPersistedValue([
+      { source: bp, key: 'ownerName' },
+      { source: company, key: 'ownerName' },
+    ])),
+    business_description: promptValue(firstPersistedValue([
+      { source: bp, key: 'businessDescription' },
+      { source: company, key: 'description' },
+    ])),
+    website: promptValue(firstPersistedValue([{ source: company, key: 'website' }])),
+    business_email: promptValue(firstPersistedValue([{ source: company, key: 'email' }])),
+    business_phone: promptValue(firstPersistedValue([{ source: company, key: 'phone' }])),
+    business_hours: promptValue(firstPersistedValue([{ source: bp, key: 'hours' }])),
+    emergency_policy: promptValue(firstPersistedValue([{ source: bp, key: 'emergencyPolicy' }])),
+    service_area: promptValue(firstPersistedValue([{ source: bp, key: 'serviceArea' }])),
+    services: promptValue(firstPersistedValue([{ source: bp, key: 'services' }])),
+    pricing_rules: financialRules(retellFinancialSemantics(bp)),
+    scheduling_rules: promptValue(firstPersistedValue([{ source: bp, key: 'scheduling' }])),
+    faq: promptValue(firstPersistedValue([{ source: bp, key: 'faq' }])),
+    policies: promptValue(firstPersistedValue([{ source: bp, key: 'policies' }])),
+    company_values: promptValue(firstPersistedValue([{ source: bp, key: 'companyValues' }])),
+    voice_style: promptValue(firstPersistedValue([
+      { source: retell, key: 'voiceStyle' },
+      { source: retell, key: 'brandVoice' },
+    ])),
+    custom_prompt: promptValue(firstPersistedValue([{ source: bp, key: 'customPrompt' }])),
+    northstar_greeting: promptValue(firstPersistedValue([{ source: retell, key: 'greetingTemplate' }])),
+  };
+
+  return Object.fromEntries(PROMPT_VARIABLE_KEYS.map((key) => [key, vars[key]]));
 }
 
 /**
@@ -410,11 +341,8 @@ function mapExecutiveContextToVariables(ec, opts) {
  * @param {string} phoneNumber - Destination phone number
  * @param {string} agentId - Retell agent ID
  * @param {Object} [options]
- * @param {string} [options.service] - Service type
- * @param {string} [options.caller] - Caller name
  * @param {string} [options.fromNumber] - Originating phone number
  * @param {Object} [options.executiveContext] - Frozen Executive Context for dynamic variables
- * @param {Array} [options.toolDefinitions] - Retell tool definitions for dynamic function calling
  */
 async function createCall(phoneNumber, agentId, options) {
   if (!agentId) {
@@ -437,15 +365,7 @@ async function createCall(phoneNumber, agentId, options) {
 
   const opts = options || {};
   const ec = opts.executiveContext || null;
-  const dynamicVariables = mapExecutiveContextToVariables(ec, opts);
-
-  // Also include explicit overrides
-  if (!dynamicVariables.service) {
-    dynamicVariables.service = opts.service || 'home services';
-  }
-  if (!dynamicVariables.customer_name) {
-    dynamicVariables.customer_name = opts.caller || '';
-  }
+  const dynamicVariables = mapExecutiveContextToVariables(ec);
 
   const body = {
     agent_id: agentId,
@@ -453,14 +373,6 @@ async function createCall(phoneNumber, agentId, options) {
     to_number: phoneNumber,
     retell_llm_dynamic_variables: dynamicVariables,
   };
-
-  // Per-call webhook URL override.
-  // If provided, Retell sends events to this URL instead of the agent's default.
-  // This is critical: the dev server and prod server have different webhook URLs,
-  // and the call must send events back to the server that placed it.
-  if (opts.webhookUrl) {
-    body.webhook_url = opts.webhookUrl;
-  }
 
   // Validate from_number is a real Retell-provisioned number
   if (!body.from_number || body.from_number === phoneNumber) {
@@ -472,18 +384,12 @@ async function createCall(phoneNumber, agentId, options) {
     );
   }
 
-  // Include tool definitions if provided
-  if (opts.toolDefinitions && Array.isArray(opts.toolDefinitions)) {
-    body.retell_llm_tools = opts.toolDefinitions;
-  }
-
   // Log the full payload for debugging (server-side only)
   console.log('[Retell:createCall] Payload verification:');
   console.log(`  agent_id: ${body.agent_id}`);
   console.log(`  from_number: ${body.from_number}`);
   console.log(`  to_number: ${body.to_number}`);
   console.log(`  dynamic_variables: ${Object.keys(dynamicVariables).length} keys`);
-  console.log(`  tools: ${body.retell_llm_tools ? body.retell_llm_tools.length : 0}`);
 
   // ── Retry loop with exponential backoff ──
   // Transient failures (network, 5xx, 429) are retried up to 2 additional times.
@@ -531,38 +437,6 @@ async function createCall(phoneNumber, agentId, options) {
 }
 
 /**
- * Build agent configuration with tool definitions.
- *
- * @param {Object} params
- * @param {string} params.name - Agent name
- * @param {string} params.companyName - Company name
- * @param {string} params.services - Service description
- * @param {string} [params.scheduleUrl] - Optional scheduling URL
- * @param {string} [params.language] - Language code
- * @param {Array} [params.toolDefinitions] - Retell tool definitions
- * @returns {Promise<Object>}
- */
-async function createAgentWithTools({ name, companyName, services, scheduleUrl, language = 'en-US', toolDefinitions }) {
-  const body = {
-    agent_name: name,
-    voice_id: '11labs-Rachel',
-    language,
-    response_engine: {
-      type: 'retell-llm',
-      llm_id: config.retell.agentId,
-      llm_instructions: buildPrompt({ companyName, services }),
-    },
-    scheduling: scheduleUrl ? { url: scheduleUrl } : undefined,
-  };
-
-  if (toolDefinitions && Array.isArray(toolDefinitions)) {
-    body.retell_llm_tools = toolDefinitions;
-  }
-
-  return request('POST', '/create-agent', body);
-}
-
-/**
  * Verify the Retell API key is valid by fetching account info.
  */
 async function verifyApiKey() {
@@ -588,7 +462,6 @@ async function sendSMS(phoneNumber, message) {
 
 module.exports = {
   createAgent,
-  createAgentWithTools,
   buildPrompt,
   registerWebhook,
   getCall,
@@ -597,5 +470,6 @@ module.exports = {
   sendSMS,
   mapExecutiveContextToVariables,
   retellFinancialSemantics,
+  PROMPT_VARIABLE_KEYS,
   DiagnosticError,
 };

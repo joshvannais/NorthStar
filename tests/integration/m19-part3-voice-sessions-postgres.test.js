@@ -9,7 +9,7 @@ const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database'
 const { bindIntegrationOwner, putBusinessProfile } = require('../../src/services/organizationAuthority');
 const voice = require('../../src/services/voiceSessionAuthority');
 const { ingestRetellPayload } = require('../../src/services/canonicalRetellIngestion');
-const { createCanonicalVoiceCall, getPinnedVoiceSessionTools } = require('../../src/services/canonicalVoiceSessionCreation');
+const { createCanonicalVoiceCall } = require('../../src/services/canonicalVoiceSessionCreation');
 const { mapExecutiveContextToVariables } = require('../../src/retell/client');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -171,7 +171,6 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
         canonicalPricing: { minimumJobPrice: 275, emergencyMultiplier: 1.4, travelCustomerChargePerMile: 1.1, taxRatePercent: 8.25 },
       },
     });
-    let pinnedProviderTools;
     let pinnedVariables;
     const pinnedCall = await createCanonicalVoiceCall({
       pool,
@@ -180,7 +179,7 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
       source: 'profile-version-test',
       createProviderCall: async (_phone, _agent, options) => {
         pinnedVariables = mapExecutiveContextToVariables(options.executiveContext);
-        pinnedProviderTools = options.sessionTools;
+        expect(Object.keys(options).sort()).toEqual(['executiveContext', 'fromNumber']);
         return { call_id: 'pinned-call', call_status: 'registered' };
       },
     });
@@ -194,7 +193,6 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
         canonicalPricing: { minimumJobPrice: 0, emergencyMultiplier: 0, travelCustomerChargePerMile: 0, taxRatePercent: 0 },
       },
     });
-    let newerProviderTools;
     let newerVariables;
     const newerCall = await createCanonicalVoiceCall({
       pool,
@@ -203,7 +201,7 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
       source: 'profile-version-test',
       createProviderCall: async (_phone, _agent, options) => {
         newerVariables = mapExecutiveContextToVariables(options.executiveContext);
-        newerProviderTools = options.sessionTools;
+        expect(Object.keys(options).sort()).toEqual(['executiveContext', 'fromNumber']);
         return { call_id: 'newer-call', call_status: 'registered' };
       },
     });
@@ -214,52 +212,14 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
       hash: pinnedAuthority.profileHash,
     });
     expect(newerCall.session.profile.id).toBe(newer.id);
-    expect(pinnedVariables).toMatchObject({
-      minimum_job_price: '275', emergency_markup: '1.4', travel_charge: '1.1', tax_rate: '8.25',
-    });
-    expect(newerVariables).toMatchObject({
-      minimum_job_price: '0', emergency_markup: '0', travel_charge: '0', tax_rate: '0',
-    });
-    const pinnedContext = {
-      organizationId: ORG_A,
-      voiceSessionId: pinnedCall.session.id,
-    };
-    const newerContext = {
-      organizationId: ORG_A,
-      voiceSessionId: newerCall.session.id,
-    };
-    expect(pinnedProviderTools).toBe(pinnedCall.tools);
-    expect(newerProviderTools).toBe(newerCall.tools);
-    expect(pinnedCall.tools.execute('getFAQ', { question: 'minimum price' }, pinnedContext)).toMatchObject({
-      answer: expect.stringContaining('$275'),
-      minimumJobPrice: { status: 'configured', value: 275 },
-      authority: expect.objectContaining({ profileId: pinnedAuthority.id, profileHash: pinnedAuthority.profileHash }),
-    });
-    expect(newerCall.tools.execute('getFAQ', { question: 'minimum price' }, newerContext)).toMatchObject({
-      answer: expect.stringContaining('$0'),
-      minimumJobPrice: { status: 'configured', value: 0 },
-      authority: expect.objectContaining({ profileId: newer.id, profileHash: newer.profileHash }),
-    });
-    const replayTools = await getPinnedVoiceSessionTools({
-      pool,
-      organizationId: ORG_A,
-      externalSessionId: 'pinned-call',
-    });
-    expect(replayTools.execute('getFAQ', { question: 'minimum price' }, {
-      organizationId: ORG_A,
-      voiceSessionId: pinnedCall.session.id,
-    }).answer).toContain('$275');
-    let scopeError;
-    try {
-      replayTools.execute('getFAQ', { question: 'minimum price' }, {
-        organizationId: ORG_B,
-        voiceSessionId: pinnedCall.session.id,
-      });
-    } catch (error) {
-      scopeError = error;
-    }
-    expect(scopeError).toMatchObject({ code: 'VOICE_TOOL_SCOPE_MISMATCH', status: 403 });
-    expect(pinnedCall.tools.definitions.map(item => item.function.name)).toEqual(['getFAQ']);
+    expect(pinnedVariables.company_name).toBe('Voice Authority');
+    expect(pinnedVariables.pricing_rules).toContain('minimum_job_price=275 (configured)');
+    expect(pinnedVariables.pricing_rules).toContain('tax_rate=8.25 (configured)');
+    expect(newerVariables.company_name).toBe('Newer Voice Profile');
+    expect(newerVariables.pricing_rules).toContain('minimum_job_price=0 (configured)');
+    expect(newerVariables.pricing_rules).toContain('tax_rate=0 (configured)');
+    expect(pinnedCall).not.toHaveProperty('tools');
+    expect(newerCall).not.toHaveProperty('tools');
 
     const organizationBProfile = await putBusinessProfile(pool, {
       organizationId: ORG_B,
@@ -281,14 +241,10 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
         return { call_id: 'organization-b-tools-call', call_status: 'registered' };
       },
     });
-    expect(organizationBVariables.minimum_job_price).toBe('425');
-    expect(organizationBCall.tools.execute('getFAQ', { question: 'minimum price' }, {
-      organizationId: ORG_B,
-      voiceSessionId: organizationBCall.session.id,
-    })).toMatchObject({
-      answer: expect.stringContaining('$425'),
-      authority: expect.objectContaining({ profileId: organizationBProfile.id, organizationId: ORG_B }),
-    });
+    expect(organizationBVariables.company_name).toBe('Voice B Canonical Tools');
+    expect(organizationBVariables.pricing_rules).toContain('minimum_job_price=425 (configured)');
+    expect(organizationBCall.session.profile.id).toBe(organizationBProfile.id);
+    expect(organizationBCall).not.toHaveProperty('tools');
 
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
@@ -305,11 +261,8 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
         return { call_id: 'missing-tools-call', call_status: 'registered' };
       },
     });
-    expect(missingVariables.minimum_job_price).toBe('not_configured');
-    expect(missingCall.tools.execute('getFAQ', { question: 'minimum price' }, {
-      organizationId: ORG_A,
-      voiceSessionId: missingCall.session.id,
-    }).minimumJobPrice).toEqual({ status: 'not_configured', value: null });
+    expect(missingVariables.pricing_rules).toContain('minimum_job_price=not_configured (not_configured)');
+    expect(missingCall).not.toHaveProperty('tools');
 
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
@@ -326,14 +279,8 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
         return { call_id: 'malformed-tools-call', call_status: 'registered' };
       },
     });
-    expect(malformedVariables.minimum_job_price).toBe('unavailable');
-    expect(malformedCall.tools.execute('getFAQ', { question: 'minimum price' }, {
-      organizationId: ORG_A,
-      voiceSessionId: malformedCall.session.id,
-    })).toMatchObject({
-      answer: expect.stringContaining('unavailable'),
-      minimumJobPrice: { status: 'unavailable', value: null },
-    });
+    expect(malformedVariables.pricing_rules).toContain('minimum_job_price=unavailable (unavailable)');
+    expect(malformedCall).not.toHaveProperty('tools');
     const payload = {
       event: 'call_ended',
       event_id: 'pinned-event-1',

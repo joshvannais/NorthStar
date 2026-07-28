@@ -8,14 +8,14 @@
  */
 function getCspDirectives() {
   return {
-    defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
-    styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-    fontSrc: ["'self'", "https://fonts.gstatic.com"],
-    imgSrc: ["'self'", "data:", "https:"],
-    connectSrc: ["'self'", "https://api.retellai.com", "https://api.getjobber.com"],
-    frameSrc: ["'none'"],
-    objectSrc: ["'none'"]
+    'default-src': ["'self'"],
+    'script-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
+    'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+    'font-src': ["'self'", "https://fonts.gstatic.com"],
+    'img-src': ["'self'", "data:", "https:"],
+    'connect-src': ["'self'", "https://api.retellai.com", "https://api.getjobber.com"],
+    'frame-src': ["'none'"],
+    'object-src': ["'none'"]
   };
 }
 

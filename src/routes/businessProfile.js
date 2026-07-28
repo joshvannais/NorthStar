@@ -1,18 +1,22 @@
 /**
  * Organization-scoped canonical Business Profile API.
  *
- * The file-backed profile service is used only to validate the established
- * input shape. Reads and writes on this mounted tenant route use PostgreSQL.
+ * Reads, validation, and writes on this mounted tenant route use the persisted
+ * organization profile contract. No file-backed profile singleton is loaded.
  */
 'use strict';
 
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const fixtureProfile = require('../services/businessProfile');
 const { requireAuth } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { getActiveBusinessProfile, putBusinessProfile } = require('../services/organizationAuthority');
+const {
+  migrateLegacyCanonicalAuthority,
+  prepareBusinessProfileForWrite,
+  synchronizeLegacyFinancial,
+} = require('../services/businessProfileAdapter');
 
 const VALID_SECTIONS = new Set([
   'company', 'headquarters', 'serviceArea', 'routing', 'hours', 'crew',
@@ -29,13 +33,19 @@ function sendError(res, error) {
 }
 
 function response(profile) {
+  const editable = migrateLegacyCanonicalAuthority(profile.rawProfile);
+  synchronizeLegacyFinancial(editable.profile);
   return {
-    ...profile.rawProfile,
+    ...editable.profile,
     canonicalAuthority: {
       id: profile.id,
       version: profile.versionLabel,
       hash: profile.profileHash,
       createdAt: profile.createdAt,
+      legacyMigration: {
+        pending: editable.migratedFields.length > 0,
+        fields: editable.migratedFields,
+      },
     },
   };
 }
@@ -45,18 +55,21 @@ async function active(req) {
 }
 
 async function persist(req, rawProfile) {
-  const validation = fixtureProfile.validateProfile(rawProfile);
-  if (!validation.valid) {
+  const source = rawProfile && typeof rawProfile === 'object' && !Array.isArray(rawProfile)
+    ? { ...rawProfile } : {};
+  delete source.canonicalAuthority;
+  const prepared = prepareBusinessProfileForWrite(source);
+  if (prepared.errors.length) {
     const error = new Error('Business Profile validation failed.');
     error.status = 400;
     error.code = 'INVALID_BUSINESS_PROFILE';
-    error.details = validation.errors;
+    error.details = prepared.errors;
     throw error;
   }
   const stored = await putBusinessProfile(db.getPool(), {
     organizationId: req.tenantContext.organizationId,
     userId: req.tenantContext.userId,
-    profile: rawProfile,
+    profile: prepared.profile,
   });
   return stored;
 }

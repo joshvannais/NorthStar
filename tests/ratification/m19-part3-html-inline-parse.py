@@ -9,6 +9,7 @@ import subprocess
 
 PAGES = (
     "public/dashboard.html",
+    "public/dashboard/business-profile.html",
     "public/dashboard/calendar.html",
     "public/dashboard/command-center.html",
     "public/dashboard/communications.html",

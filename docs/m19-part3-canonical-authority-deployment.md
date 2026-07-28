@@ -302,6 +302,13 @@ This remediation retained every intermediate failure:
    `powershell.exe -Command` removed embedded double quotes from the helper's
    interpolated `throw` expression. Both diagnostic expressions now use
    single-quoted format operands that survive the documented launch boundary.
+8. The first final-integrity verifier command abbreviated four `polaris-*` data
+   filenames, passed an unquoted revision range to one diff-stat invocation,
+   attempted `Test-Path` on an intentionally Windows-invalid name, and called the
+   privilege-requiring `Get-NetTCPConnection`. The corrected read-only pass used
+   the exact eleven baseline filenames, a quoted revision range, parent-directory
+   name enumeration, SQL server identity, and `netstat`; every hash, path, and
+   loopback server assertion passed.
 
 No assertion was weakened, skipped, retried as an application workaround,
 serialized globally, given a larger global timeout, or replaced by lower

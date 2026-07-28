@@ -191,7 +191,7 @@ $node = 'C:\Users\joshv\.cache\codex-runtimes\codex-primary-runtime\dependencies
 $git = 'C:\Users\joshv\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git\cmd\git.exe'
 $python = 'C:\Users\joshv\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
 $env:NORTHSTAR_NODE_EXE = $node
-function Assert-ExternalExit([string]$name, [int]$code) { if ($code -ne 0) { throw "$name failed with exit $code" } }
+function Assert-ExternalExit([string]$name, [int]$code) { if ($code -ne 0) { throw ('{0} failed with exit {1}' -f $name, $code) } }
 $calculationAuthority = @(
   '.\tests\unit\m19-part3-simulation-authority.test.js',
   '.\tests\unit\m19-part3-canonical-calculation.test.js',
@@ -235,7 +235,7 @@ Assert-ExternalExit 'Chrome matrix' $LASTEXITCODE
 & $node .\tests\browser\m19-part3-cross-page-matrix.js --browser=webkit
 Assert-ExternalExit 'WebKit matrix' $LASTEXITCODE
 $changedJavaScript = @(& $git -c core.protectNTFS=false diff --name-only --diff-filter=ACMR 65e20310c4daf7c101f282826edd27606da1c7d5...HEAD -- '*.js')
-foreach ($file in $changedJavaScript) { & $node --check $file; if ($LASTEXITCODE -ne 0) { throw "node --check failed: $file" } }
+foreach ($file in $changedJavaScript) { & $node --check $file; if ($LASTEXITCODE -ne 0) { throw ('node --check failed: {0}' -f $file) } }
 Write-Output ('CHANGED_JS_CHECKED={0}' -f $changedJavaScript.Count)
 & $python .\tests\ratification\m19-part3-html-inline-parse.py
 Assert-ExternalExit 'HTML and inline-script parsing' $LASTEXITCODE
@@ -298,6 +298,10 @@ This remediation retained every intermediate failure:
    parser command also omitted the documented `NORTHSTAR_NODE_EXE` process value.
    The wording is now contiguous, and the parser rerun uses the same process-only
    Node environment as the committed command block.
+7. The next verbatim clean-session launch stopped before any test because Windows
+   `powershell.exe -Command` removed embedded double quotes from the helper's
+   interpolated `throw` expression. Both diagnostic expressions now use
+   single-quoted format operands that survive the documented launch boundary.
 
 No assertion was weakened, skipped, retried as an application workaround,
 serialized globally, given a larger global timeout, or replaced by lower

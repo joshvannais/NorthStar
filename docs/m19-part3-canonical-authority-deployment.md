@@ -124,6 +124,30 @@ other default is assumed. The prompt marks unavailable financial values as
 values the agent must not quote. Replay returns the persisted original snapshot
 and never recalculates against a newer profile.
 
+## Mounted legacy route disposition
+
+Supported compatibility reads are adapters over organization-scoped canonical
+PostgreSQL projections. Unsupported legacy writes return exact HTTP 409
+`LEGACY_AUTHORITY_READ_ONLY` before a historical store can run. Retired methods
+and paths return exact HTTP 410 `LEGACY_AUTHORITY_RETIRED` without importing a
+retired implementation.
+
+## Canary and observability checks
+
+These remain future deployment-owner gates. A canary must verify profile and
+integration ownership, operation/replay state, audit persistence, voice-session
+identity, tax disposition, all seven browser projections, and fail-closed
+PostgreSQL outage behavior. Zero GitHub checks do not replace this evidence.
+
+## Rollback and stop criteria
+
+Stop a canary for tenant crossover, stale success during PostgreSQL outage,
+duplicate or partial graphs, missing audit rows, profile/provider identity
+mismatch, fabricated pricing/tax, or unexpected file mutation. Use the
+deployment owner's immutable release procedure; do not delete canonical rows,
+reverse the additive schema destructively, infer ownership, or backfill from
+legacy data as a rollback mechanism.
+
 ## Deployment-owner gates outside this PR
 
 1. Take and verify the deployment owner's normal database backup.
@@ -162,10 +186,12 @@ PostgreSQL verifier environment values must already identify the approved
 disposable cluster; the disposable URL is intentionally not stored here.
 
 ```powershell
+$ErrorActionPreference = 'Stop'
 $node = 'C:\Users\joshv\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
 $git = 'C:\Users\joshv\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git\cmd\git.exe'
 $python = 'C:\Users\joshv\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
 $env:NORTHSTAR_NODE_EXE = $node
+function Assert-ExternalExit([string]$name, [int]$code) { if ($code -ne 0) { throw "$name failed with exit $code" } }
 $calculationAuthority = @(
   '.\tests\unit\m19-part3-simulation-authority.test.js',
   '.\tests\unit\m19-part3-canonical-calculation.test.js',
@@ -173,28 +199,46 @@ $calculationAuthority = @(
   '.\tests\ratification\m19-part3-production-startup-authority.test.js'
 )
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand @calculationAuthority --silent
+Assert-ExternalExit 'focused calculation authority' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js .\tests\api\m19-part3-remediation-mounted-postgres.test.js --runInBand --silent
+Assert-ExternalExit 'mounted authority' $LASTEXITCODE
 $m19 = Get-ChildItem .\tests -Recurse -File -Filter '*m19-part3*.test.js' |
   Sort-Object FullName | ForEach-Object { Resolve-Path -Relative $_.FullName }
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand @m19 --silent
+Assert-ExternalExit 'focused Mission 19' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand .\tests\api --silent
+Assert-ExternalExit 'API suite' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand --silent
+Assert-ExternalExit 'serial run 1' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand --silent
+Assert-ExternalExit 'serial run 2' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=7331 --showSeed --silent
+Assert-ExternalExit 'fixed seed 7331' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=91027 --showSeed --silent
+Assert-ExternalExit 'fixed seed 91027' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=182133331 --showSeed --silent
+Assert-ExternalExit 'random seed 182133331' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=-182133331 --showSeed --silent
+Assert-ExternalExit 'random seed -182133331' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --maxWorkers=4 --randomize --seed=730194257 --showSeed --silent
+Assert-ExternalExit 'random seed 730194257' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js .\tests\api\m19-part3-remediation-mounted-postgres.test.js --runInBand --randomize --seed=182133331 --showSeed --silent
+Assert-ExternalExit 'isolated seed 182133331' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js .\tests\api\m19-part3-remediation-mounted-postgres.test.js --runInBand --randomize --seed=-182133331 --showSeed --silent
+Assert-ExternalExit 'isolated seed -182133331' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js .\tests\api\m19-part3-remediation-mounted-postgres.test.js --runInBand --randomize --seed=730194257 --showSeed --silent
+Assert-ExternalExit 'isolated seed 730194257' $LASTEXITCODE
 & $node .\node_modules\jest\bin\jest.js --config jest.config.js --runInBand --detectOpenHandles --silent
+Assert-ExternalExit 'detect-open-handles' $LASTEXITCODE
 & $node .\tests\browser\m19-part3-cross-page-matrix.js --browser=chrome
+Assert-ExternalExit 'Chrome matrix' $LASTEXITCODE
 & $node .\tests\browser\m19-part3-cross-page-matrix.js --browser=webkit
+Assert-ExternalExit 'WebKit matrix' $LASTEXITCODE
 $changedJavaScript = @(& $git -c core.protectNTFS=false diff --name-only --diff-filter=ACMR 65e20310c4daf7c101f282826edd27606da1c7d5...HEAD -- '*.js')
 foreach ($file in $changedJavaScript) { & $node --check $file; if ($LASTEXITCODE -ne 0) { throw "node --check failed: $file" } }
-"CHANGED_JS_CHECKED=$($changedJavaScript.Count)"
+Write-Output ('CHANGED_JS_CHECKED={0}' -f $changedJavaScript.Count)
 & $python .\tests\ratification\m19-part3-html-inline-parse.py
+Assert-ExternalExit 'HTML and inline-script parsing' $LASTEXITCODE
 ```
 
 Final results for those commands:
@@ -242,7 +286,19 @@ This remediation retained every intermediate failure:
    Windows inline-parser encoding correction, migration identity guard
    correction, and data-hash transcription correction. They were not hidden or
    replaced by narrowed final evidence.
+5. The first clean-session reproduction of the committed command block exposed
+   a stale documentation-ratification phrase and a quoted PowerShell output line
+   that was not portable through `-Command`. The block also lacked per-process
+   exit enforcement, so later successful parser output masked the earlier Jest
+   exit. The document now restores the required legacy/canary/rollback evidence,
+   uses `Write-Output`, and throws after every external command before this full
+   block is rerun.
+6. The first narrow documentation rerun showed that line wrapping had split the
+   exact production-boundary phrase expected by ratification. Its standalone
+   parser command also omitted the documented `NORTHSTAR_NODE_EXE` process value.
+   The wording is now contiguous, and the parser rerun uses the same process-only
+   Node environment as the committed command block.
 
 No assertion was weakened, skipped, retried as an application workaround,
 serialized globally, given a larger global timeout, or replaced by lower
-concurrency. PR #69 remains draft and unmerged. PR #66 remains unchanged.
+concurrency. PR #69 remains draft and unmerged. This PR has not changed Railway, production data, production schema, or PR #66.

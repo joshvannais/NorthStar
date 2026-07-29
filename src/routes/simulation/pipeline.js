@@ -1,14 +1,43 @@
 /**
  * Polaris Intelligence Pipeline — Universal simulation engine
  *
- * Service-agnostic architecture. New services are added to the
- * service catalog (service-catalog.js) without modifying this file.
+ * Service-agnostic architecture. New nonfinancial scenarios are added to the
+ * scenario catalog without modifying the canonical calculation service.
  *
  * Pipeline:
- *   scenario → transcript → scope → classification → pricing → confidence → action
+ *   scenario → nonfinancial transcript → scope → classification → confidence → action
  */
 
-const CATALOG = require('./service-catalog');
+const SCENARIOS = require('./scenario-catalog');
+const { AsyncLocalStorage } = require('async_hooks');
+const { detectEmergencyEvidence } = require('../../services/emergencyEvidence');
+
+const randomContext = new AsyncLocalStorage();
+
+function seededRandom(seed) {
+  let state = 2166136261;
+  for (const character of String(seed || 'northstar')) {
+    state ^= character.charCodeAt(0);
+    state = Math.imul(state, 16777619);
+  }
+  return function () {
+    state += 0x6D2B79F5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function withDeterministicSeed(seed, work) {
+  if (typeof work !== 'function') throw new TypeError('work must be a function');
+  return randomContext.run(seededRandom(seed), work);
+}
+
+function _random() {
+  const selected = randomContext.getStore();
+  return selected ? selected() : Math.random();
+}
 
 // ═══════════════════════════════════════════════════════
 // UNIVERSAL PRIMITIVES
@@ -43,8 +72,8 @@ const STATES = [
   ['WI','Wisconsin','Milwaukee',53200,53999,414],['WY','Wyoming','Cheyenne',82000,82999,307],
 ];
 function _randomLocation() {
-  var s = STATES[Math.floor(Math.random() * STATES.length)];
-  return { abbr: s[0], state: s[1], city: s[2], zip: s[3] + Math.floor(Math.random() * (s[4] - s[3])), areaCode: s[5] };
+  var s = STATES[Math.floor(_random() * STATES.length)];
+  return { abbr: s[0], state: s[1], city: s[2], zip: s[3] + Math.floor(_random() * (s[4] - s[3])), areaCode: s[5] };
 }
 
 const CONTACT_TEMPLATES = {
@@ -60,9 +89,9 @@ const CONTACT_TEMPLATES = {
 // ═══════════════════════════════════════════════════════
 
 function generateScenario(requestedService, customerName) {
-  const catalogServices = Object.keys(CATALOG).filter(k => requestedService.includes(k));
-  const svcKey = catalogServices.length > 0 ? catalogServices[0] : _pickRandom(Object.keys(CATALOG));
-  const svc = CATALOG[svcKey];
+  const requested = String(requestedService || '').trim().toLowerCase();
+  const svcKey = Object.prototype.hasOwnProperty.call(SCENARIOS, requested) ? requested : null;
+  const svc = SCENARIOS[svcKey];
   if (!svc) return null;
 
   const firstName = customerName.split(' ')[0];
@@ -97,23 +126,23 @@ function generateScenario(requestedService, customerName) {
 
 function _populateScope(scenario, svc) {
   const scope = scenario.job.scope;
+  scope.jobType = scenario.job.type;
 
   if (svc.id === 'fence') {
     scope.linearFeet = _pickRandom([60, 100, 150, 175, 200, 250, 300]);
-    scope.material = _pickRandom(Object.keys(svc.pricing.materials));
+    scope.material = _pickRandom(svc.materials);
     scope.height = _pickRandom([4, 6, 8]);
     scope.gates = [{ type: 'walk', width: 4 }, { type: _pickRandom(['walk', 'drive']), width: _pickRandom([8, 10, 12]) }];
-    scope.removalRequired = Math.random() > 0.3;
+    scope.removalRequired = _random() > 0.3;
     scope.terrain = _pickRandom(['mostly flat', 'slight grade', 'hilly in back corner', 'flat with one tree line']);
-    const matInfo = (svc.pricing && svc.pricing.materials && svc.pricing.materials[scope.material]) ? svc.pricing.materials[scope.material].label : scope.material;
-    scope.hoa = Math.random() > 0.5 ? 'yes — ' + matInfo + ' required' : 'no';
-    scope.permitsRequired = 'required, ~2 week processing';
+    scope.hoa = _random() > 0.5 ? 'yes - ' + scope.material + ' required' : 'no';
+    scope.permitsRequired = true;
     scope.timeline = _pickRandom(['within 3-4 weeks', 'within 6-8 weeks', 'before summer', 'next month', 'whenever works']);
     scope.urgency = 'moderate';
     scope.access = 'good — side gate access';
   } else if (svc.id === 'roofing') {
     scope.squares = _pickRandom([18, 22, 28, 32, 38, 45]);
-    scope.material = _pickRandom(Object.keys(svc.pricing.materials));
+    scope.material = _pickRandom(svc.materials);
     scope.pitch = _pickRandom(['4/12 walkable', '6/12 moderate', '8/12 steep']);
     scope.stories = _pickRandom([1, 2]);
     scope.existingLayers = _pickRandom([1, 2]);
@@ -129,8 +158,8 @@ function _populateScope(scenario, svc) {
     scope.seer = _pickRandom([14, 16, 18, 20]);
     scope.sqft = _pickRandom([1200, 1600, 2000, 2400, 2800, 3200]);
     scope.existingAge = _pickRandom([10, 15, 18, 22, 25]);
-    scope.ductworkReplace = Math.random() > 0.4;
-    scope.thermostat = Math.random() > 0.5 ? 'smart' : 'standard';
+    scope.ductworkReplace = _random() > 0.4;
+    scope.thermostat = _random() > 0.5 ? 'smart' : 'standard';
     scope.fuelType = 'gas';
     scope.access = _pickRandom(['attic access through hallway', 'basement utility closet', 'garage-mounted']);
     scope.timeline = 'as soon as possible — system failed';
@@ -138,19 +167,19 @@ function _populateScope(scenario, svc) {
   } else if (svc.id === 'plumbing') {
     scope.fixture = _pickRandom(['kitchen sink', 'bathroom sink', 'toilet', 'water heater', 'main drain']);
     scope.leakSeverity = _pickRandom(['active drip', 'slow leak', 'not leaking now']);
-    scope.waterShutoff = Math.random() > 0.5;
+    scope.waterShutoff = _random() > 0.5;
     scope.timeline = _pickRandom(['today', 'tomorrow', 'this week']);
     scope.urgency = _pickRandom(['high', 'moderate', 'emergency']);
   } else if (svc.id === 'electrical') {
     scope.symptoms = _pickRandom(['breaker keeps tripping', 'lights flickering', 'no power to bedroom', 'outlet sparking']);
     scope.breakerBehavior = _pickRandom(['trips immediately', 'trips after a few minutes', 'trips randomly']);
-    scope.safetyConcern = Math.random() > 0.5;
+    scope.safetyConcern = _random() > 0.5;
     scope.urgency = scope.safetyConcern ? 'emergency' : 'high';
   } else if (svc.id === 'concrete') {
     scope.squareFeet = _pickRandom([200, 400, 600, 800, 1200]);
     scope.finish = _pickRandom(['smooth', 'broom finish', 'stamped']);
-    scope.existingRemoval = Math.random() > 0.4;
-    scope.access = Math.random() > 0.3 ? 'good — truck access' : 'limited — pump needed';
+    scope.existingRemoval = _random() > 0.4;
+    scope.access = _random() > 0.3 ? 'good — truck access' : 'limited — pump needed';
     scope.timeline = _pickRandom(['within 2 weeks', 'within a month', 'next month']);
   }
 }
@@ -159,7 +188,9 @@ function _populateScope(scenario, svc) {
 // TRANSCRIPT ENGINE — Adaptive conversation
 // ═══════════════════════════════════════════════════════
 
-function generateTranscript(scenario, svc) {
+function generateTranscript(scenario) {
+  const svc = SCENARIOS[scenario && scenario.serviceKey];
+  if (!svc) throw new Error('Unsupported simulation service');
   const firstName = scenario.customer.firstName;
   const turns = [];
 
@@ -212,17 +243,11 @@ function generateTranscript(scenario, svc) {
     turns.push({ speaker: 'customer', text: _pickRandom(['Weekday mornings work best.', 'Afternoons are better for me.', 'Any weekday is fine.', 'I\'m flexible — whatever works for your team.']) });
   }
 
-  // Pricing discussion
-  const pricing = _estimatePrice(scenario, svc);
-  if (pricing && pricing.strategy !== 'insufficient') {
-    turns.push({ speaker: 'customer', text: 'Can you give me a rough idea of what something like this might cost?' });
-    turns.push({ speaker: 'ai', text: pricing.responseText });
-    turns.push({ speaker: 'customer', text: 'Okay, that gives me a good starting point. Can we schedule someone to come out and take a look?' });
-  } else {
-    turns.push({ speaker: 'customer', text: 'Can you give me a ballpark price?' });
-    turns.push({ speaker: 'ai', text: 'I\'d need a few more details to give you even a rough range. Let me have one of our estimators do an on-site assessment — they\'ll be able to give you an accurate quote.' });
-    turns.push({ speaker: 'customer', text: 'That makes sense. Let\'s set that up.' });
-  }
+  // The canonical PostgreSQL orchestration runs after these facts have been
+  // collected. The simulated agent must not pre-compute or speak a price.
+  turns.push({ speaker: 'customer', text: 'Can you give me a ballpark price?' });
+  turns.push({ speaker: 'ai', text: 'I have the details needed to prepare an estimate. Our estimator will review them and provide the written estimate before any work begins.' });
+  turns.push({ speaker: 'customer', text: 'That makes sense. Let\'s set that up.' });
 
   // Confirmation
   turns.push({ speaker: 'ai', text: 'Perfect. Let me summarize: ' + _buildSummary(scenario, svc) + ' Our estimator will reach out to confirm the appointment. Does that all sound right?' });
@@ -295,7 +320,7 @@ function _buildAnswer(scenario, question) {
     removalRequired: scope.removalRequired ? 'Yes, there\'s an old fence that needs to come down first.' : 'No, it\'s bare ground right now.',
     terrain: scope.terrain ? scope.terrain + '. Nothing too difficult.' : 'Mostly flat.',
     hoa: scope.hoa,
-    permitsRequired: scope.permitsRequired,
+    permitsRequired: scope.permitsRequired ? 'Yes, permits are required.' : 'No permit is required.',
 
     // Roof
     squares: `I think it's about ${scope.squares} squares.`,
@@ -303,7 +328,7 @@ function _buildAnswer(scenario, question) {
     stories: `${scope.stories}-story.`,
     existingLayers: scope.existingLayers === 1 ? 'Just one layer.' : 'Two layers — the second was put on about 10 years ago.',
     flashingReplace: 'They\'re showing rust so probably need replacement.',
-    insurance: Math.random() > 0.5 ? 'Yes, I think my insurance will cover it.' : 'No, I\'ll be paying out of pocket.',
+    insurance: _random() > 0.5 ? 'Yes, I think my insurance will cover it.' : 'No, I\'ll be paying out of pocket.',
     deckCondition: scope.deckCondition,
 
     // HVAC
@@ -338,33 +363,9 @@ function _buildAnswer(scenario, question) {
     timeline: scope.timeline + '.',
     schedulingPreference: _pickRandom(['Weekday mornings work best.', 'Afternoons are better.', 'Any weekday is fine.', 'I\'m flexible.']),
     urgency: scope.urgency === 'high' || scope.urgency === 'emergency' ? 'As soon as possible — it\'s urgent.' : 'Not an emergency but I\'d like it done soon.',
-    budget: scope.budget ? `Around $${scope.budget.min.toLocaleString()} to $${scope.budget.max.toLocaleString()}.` : 'I\'m flexible on budget.',
   };
 
   return answers[id] || null;
-}
-
-function _estimatePrice(scenario, svc) {
-  const scope = scenario.job.scope;
-  const pricing = svc.pricing;
-
-  if (!pricing || !pricing.calculate) return { strategy: 'insufficient', responseText: 'I\'d need a few more details to give you even a rough range. Let me have one of our estimators come out for an on-site assessment.' };
-
-  try {
-    const result = pricing.calculate(scope);
-    const low = result.range.low.toLocaleString();
-    const high = result.range.high.toLocaleString();
-
-    return {
-      strategy: pricing.strategy,
-      total: result.total,
-      range: result.range,
-      breakdown: result.breakdown,
-      responseText: `Based on what you've described, you're typically looking in the range of $${low} to $${high}. That's a preliminary estimate — our team will do a full assessment on-site and give you a firm quote before any work begins. No obligation.`,
-    };
-  } catch (e) {
-    return { strategy: 'insufficient', responseText: 'I\'d need a few more details to give you a meaningful range. Our estimator can provide an accurate quote during the on-site visit.' };
-  }
 }
 
 function _buildSummary(scenario, svc) {
@@ -389,7 +390,7 @@ function _buildSummary(scenario, svc) {
 
 function extractScope(transcript, scenario) {
   const fullText = transcript.map(t => (t && t.text ? t.text : '')).join(' ');
-  const svc = CATALOG[scenario.serviceKey];
+  const svc = SCENARIOS[scenario.serviceKey];
   if (!svc) return { extracted: {}, evidence: {}, missing: [] };
 
   const scope = scenario.job.scope;
@@ -437,6 +438,13 @@ function _getRelatedKeywords(dim, value) {
     height: ['foot', 'ft', 'feet'],
     material: [String(value).toLowerCase()],
     jobType: [String(value).toLowerCase()],
+    gates: ['gate'],
+    removalRequired: value
+      ? ['needs to come down', 'removal of existing fence', 'old fence']
+      : ['bare ground', 'no existing fence'],
+    permitsRequired: value
+      ? ['permits are required', 'permit is required']
+      : ['no permit is required', 'no permit required'],
   };
   return maps[dim] || [];
 }
@@ -449,7 +457,7 @@ function classifyService(transcript) {
   const text = transcript.map(t => (t && t.text ? t.text : '')).join(' ').toLowerCase();
   const scores = {};
 
-  for (const [key, svc] of Object.entries(CATALOG)) {
+  for (const [key, svc] of Object.entries(SCENARIOS)) {
     let score = 0;
     for (const kw of svc.classificationKeywords) {
       if (text.includes(kw.toLowerCase())) score += 1;
@@ -473,40 +481,11 @@ function classifyService(transcript) {
 }
 
 // ═══════════════════════════════════════════════════════
-// PRICING
-// ═══════════════════════════════════════════════════════
-
-function calculatePricing(scope, classifiedService) {
-  // Find matching service in catalog
-  const svcKey = _findServiceKey(classifiedService);
-  if (!svcKey || !CATALOG[svcKey].pricing) {
-    return { strategy: 'insufficient', total: null, range: { low: 300, high: 800 }, breakdown: [] };
-  }
-
-  const svc = CATALOG[svcKey];
-  try {
-    const result = svc.pricing.calculate(scope);
-    return { strategy: svc.pricing.strategy, ...result };
-  } catch (e) {
-    return { strategy: 'insufficient', total: null, range: null, breakdown: [], reason: e.message };
-  }
-}
-
-function _findServiceKey(classifiedService) {
-  const lower = classifiedService.toLowerCase();
-  for (const [key, svc] of Object.entries(CATALOG)) {
-    if (lower.includes(key) || svc.displayName.toLowerCase().includes(key)) return key;
-    if (key.includes(lower)) return key;
-  }
-  return null;
-}
-
-// ═══════════════════════════════════════════════════════
 // CONFIDENCE
 // ═══════════════════════════════════════════════════════
 
 function calculateConfidence(extractedScope, missingInfo, serviceKey) {
-  const svc = CATALOG[serviceKey];
+  const svc = SCENARIOS[serviceKey];
   if (!svc) return { score: 0, label: 'Insufficient', explanation: 'Unknown service type.' };
 
   const required = svc.scopeSchema.required || [];
@@ -532,7 +511,7 @@ function calculateConfidence(extractedScope, missingInfo, serviceKey) {
   const pct = possible > 0 ? Math.round((earned / possible) * 100) : 0;
 
   let label, explanation;
-  if (pct >= 80) { label = 'High'; explanation = 'Most required scope collected. Estimate is reliable.'; }
+  if (pct >= 80) { label = 'High'; explanation = 'Most required scope facts were collected.'; }
   else if (pct >= 50) { label = 'Medium'; explanation = 'Partial scope. Some assumptions in use.'; }
   else if (pct >= 20) { label = 'Low'; explanation = 'Limited scope. On-site assessment recommended.'; }
   else { label = 'Insufficient'; explanation = 'Not enough information. On-site assessment required.'; }
@@ -548,7 +527,7 @@ function selectAction(transcript, customerName, scope) {
   const text = transcript.map(t => (t && t.text ? t.text : '')).join(' ').toLowerCase();
   const name = customerName.split(' ')[0];
 
-  if (text.includes('emergency') || (scope && scope.urgency === 'emergency')) {
+  if (detectEmergencyEvidence(transcript).isEmergency) {
     return { action: 'Dispatch immediately', description: 'Emergency situation reported. Dispatch technician and notify on-call team.', priority: 'critical' };
   }
   if (text.includes('schedule') || text.includes('set up') || text.includes('come out') || text.includes('appointment') || text.includes('morning') || text.includes('afternoon') || text.includes('tomorrow')) {
@@ -567,20 +546,22 @@ function selectAction(transcript, customerName, scope) {
 // HELPERS
 // ═══════════════════════════════════════════════════════
 
-function _rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-function _pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function _rand(min, max) { return Math.floor(_random() * (max - min + 1)) + min; }
+function _pickRandom(arr) { return arr[Math.floor(_random() * arr.length)]; }
 
 // ═══════════════════════════════════════════════════════
 // EXPORTS
 // ═══════════════════════════════════════════════════════
 
 module.exports = {
-  CATALOG,
+  supportsService: function (service) {
+    return Object.prototype.hasOwnProperty.call(SCENARIOS, String(service || '').trim().toLowerCase());
+  },
   generateScenario,
   generateTranscript,
   extractScope,
   classifyService,
-  calculatePricing,
   calculateConfidence,
   selectAction,
+  withDeterministicSeed,
 };

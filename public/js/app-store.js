@@ -1,11 +1,13 @@
 /**
- * AppStore — Centralized application state store
- * Single source of truth for all NorthStar data
- * Communicates via EventBus
+ * AppStore - in-memory presentation cache for authorized canonical records.
+ * PostgreSQL is the only business authority. Browser storage and automatic
+ * frontend mutations are deliberately unsupported.
  */
-window.AppStore = (function() {
-  const bus = window.EventBus;
-  const state = {
+window.AppStore = (function () {
+  'use strict';
+
+  var bus = window.EventBus || { emit: function () {}, on: function () {} };
+  var state = {
     leads: [],
     customers: [],
     estimates: [],
@@ -16,6 +18,7 @@ window.AppStore = (function() {
     polarisInsights: [],
     polarisHistory: [],
     notifications: [],
+    canonical: null,
     settings: { theme: localStorage.getItem('northstar-theme') || 'light' },
     ui: {
       selectedLeadId: null,
@@ -23,165 +26,174 @@ window.AppStore = (function() {
       currentFilters: {},
       currentSearch: '',
       currentSort: '',
-      mobileMenuOpen: false
-    }
+      mobileMenuOpen: false,
+    },
   };
+  var activeLoad = null;
 
-  // --- Leads ---
-  function addLead(leadData) {
-    const lead = leadData instanceof window.Models.Lead ? leadData : new window.Models.Lead(leadData);
-    state.leads.unshift(lead);
-    bus.emit('lead:created', lead);
-    bus.emit('store:changed', { type: 'lead', action: 'created', data: lead });
-    saveToSession();
-    return lead;
+  function canonicalRecord(record) {
+    if (!record || !record.canonical || !record.canonical.values || !record.canonical.ids) return null;
+    var values = record.canonical.values;
+    var customer = record.customer || {};
+    return Object.freeze({
+      id: record.canonical.ids.opportunity,
+      canonicalGraphId: record.canonical.ids.graph,
+      canonicalSnapshotId: record.canonical.ids.polarisSnapshot,
+      customerId: record.canonical.ids.customer,
+      caller: customer.name || '',
+      callerName: customer.name || '',
+      customerName: customer.name || '',
+      phone: customer.phone || '',
+      phoneNumber: customer.phone || '',
+      address: customer.address || '',
+      service: values.service ? values.service.label : null,
+      serviceType: values.service ? values.service.key : null,
+      jobDetail: values.service ? values.service.scope : null,
+      description: values.service ? values.service.scope : null,
+      status: record.status || null,
+      outcome: record.status || null,
+      avgPrice: values.customerFacingPrice,
+      estimatedPrice: values.customerFacingPrice,
+      duration: values.callDurationSeconds,
+      receivedAt: null,
+      time: null,
+      calculationVersion: record.canonical.calculationVersion,
+      snapshotDigest: record.canonical.snapshotDigest,
+      canonical: record.canonical,
+      legacy: false,
+      readOnly: true,
+      source: 'canonical-postgresql',
+    });
   }
 
-  function updateLead(id, updates) {
-    const idx = state.leads.findIndex(l => l.id === id);
-    if (idx === -1) return null;
-    Object.assign(state.leads[idx], updates, { updatedAt: new Date().toISOString() });
-    bus.emit('lead:updated', state.leads[idx]);
-    bus.emit('store:changed', { type: 'lead', action: 'updated', data: state.leads[idx] });
-    saveToSession();
-    return state.leads[idx];
+  function rejectMutation(action) {
+    bus.emit('legacy:mutation-blocked', { action: action, reason: 'canonical-server-authority' });
+    return null;
   }
 
-  function removeLead(id) {
-    const idx = state.leads.findIndex(l => l.id === id);
-    if (idx === -1) return;
-    const removed = state.leads.splice(idx, 1)[0];
-    bus.emit('lead:deleted', removed);
-    bus.emit('store:changed', { type: 'lead', action: 'deleted' });
-    saveToSession();
-  }
+  function addLead() { return rejectMutation('addLead'); }
+  function updateLead() { return rejectMutation('updateLead'); }
+  function removeLead() { return rejectMutation('removeLead'); }
+  function convertLeadToCustomer() { return rejectMutation('convertLeadToCustomer'); }
 
   function getLeads(filter) {
-    if (!filter) return state.leads;
-    return state.leads.filter(filter);
+    var values = state.leads.slice();
+    return typeof filter === 'function' ? values.filter(filter) : values;
   }
 
   function getLead(id) {
-    return state.leads.find(l => l.id === id) || null;
+    return state.leads.find(function (lead) {
+      return lead.id === id || lead.canonicalGraphId === id || lead.customerId === id || lead.canonicalSnapshotId === id;
+    }) || null;
   }
 
-  // --- KPIs (computed from leads) ---
+  function getCustomer(id) {
+    return state.customers.find(function (customer) { return customer.id === id; }) || null;
+  }
+
   function getKpis() {
-    const leads = state.leads;
-    const total = leads.length;
-    const qualified = leads.filter(l => l.status === 'scheduled' || l.status === 'contacted' || l.status === 'new' || l.status === 'qualified').length;
-    const scheduled = leads.filter(l => l.status === 'scheduled').length;
-    const won = leads.filter(l => l.status === 'completed' || l.outcome === 'appointment-set').length;
-    const pipeline = leads.filter(l => l.status === 'new' || l.status === 'contacted' || l.status === 'qualified').length;
-    const revenue = leads.filter(l => l.status === 'completed').reduce((sum, l) => sum + (l.avgPrice || 0), 0);
-    const totalValue = leads.reduce((sum, l) => sum + (l.avgPrice || 0), 0);
-    const conversionRate = total > 0 ? Math.round((won / total) * 100) : 0;
-    const avgLeadValue = total > 0 ? Math.round(totalValue / total) : 0;
-    const topOpportunity = leads.reduce((best, l) => (!best || (l.avgPrice || 0) > (best.avgPrice || 0)) ? l : best, null);
-    return { total, qualified, scheduled, won, pipeline, revenue, conversionRate, avgLeadValue, topOpportunity };
+    var metrics = state.canonical && state.canonical.metrics ? state.canonical.metrics : null;
+    if (!metrics) return null;
+    return Object.freeze({
+      total: metrics.graphCount,
+      revenue: metrics.estimatedRevenue,
+      pipeline: metrics.estimatedRevenue,
+      appointments: metrics.appointmentCount,
+      knownGrossProfit: metrics.knownGrossProfit,
+      snapshotDigests: metrics.snapshotDigests,
+    });
   }
 
-  // --- Settings ---
   function setSetting(key, value) {
     state.settings[key] = value;
-    bus.emit('setting:changed', { key, value });
+    bus.emit('setting:changed', { key: key, value: value });
     if (key === 'theme') localStorage.setItem('northstar-theme', value);
   }
-
   function getSetting(key) { return state.settings[key]; }
-
-  // --- UI State ---
-  function setUi(key, value) { state.ui[key] = value; bus.emit('ui:changed', { key, value }); }
+  function setUi(key, value) { state.ui[key] = value; bus.emit('ui:changed', { key: key, value: value }); }
   function getUi(key) { return state.ui[key]; }
 
-  // --- Persistence ---
-  function saveToSession() {
-    try { sessionStorage.setItem('northstar_calls', JSON.stringify(state.leads)); } catch(e) {}
+  // Kept as compatibility no-ops so old callers cannot revive browser data.
+  function saveToSession() { return false; }
+  function loadFromSession() { return false; }
+
+  function clearCanonical(reason) {
+    state.leads = [];
+    state.customers = [];
+    state.canonical = null;
+    bus.emit('store:rejected', { reason: reason || 'canonical-projection-rejected' });
   }
 
-  function loadFromSession() {
-    try {
-      const saved = sessionStorage.getItem('northstar_calls');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          state.leads = parsed;
-          bus.emit('store:loaded', { from: 'session', count: parsed.length });
-        }
-      }
-    } catch(e) {}
+  function applyProjection(projection) {
+    if (!projection || projection.surface !== 'leads') return [];
+    if (state.canonical === projection) return state.leads.slice();
+    var records = Array.isArray(projection.records) ? projection.records : [];
+    var leads = records.map(canonicalRecord).filter(Boolean);
+    state.leads = leads;
+    state.customers = records.map(function (record) {
+      if (!record.customer || !record.canonical) return null;
+      return Object.freeze(Object.assign({}, record.customer, {
+        canonical: record.canonical,
+        legacy: false,
+        readOnly: true,
+      }));
+    }).filter(Boolean);
+    state.canonical = projection;
+    bus.emit('store:loaded', {
+      from: 'server',
+      count: leads.length,
+      digest: projection.digest,
+      readModelVersion: projection.readModelVersion,
+      authority: projection.authority,
+    });
+    return leads.slice();
   }
 
-  // --- Backend Sync ---
-  var syncInProgress = false;
-
-  async function loadFromServer() {
-    if (syncInProgress) return;
-    syncInProgress = true;
-    try {
-      if (typeof API !== 'undefined' && API.getLeads) {
-        const result = await API.getLeads();
-        if (result && Array.isArray(result.items)) {
-          state.leads = result.items;
-          bus.emit('store:loaded', { from: 'server', count: result.items.length });
-        }
-      }
-    } catch(e) {
-      // Backend not available — use session data
-      loadFromSession();
+  function loadFromServer() {
+    if (!window.CanonicalIntelligence) {
+      clearCanonical('canonical-client-unavailable');
+      return Promise.reject(new Error('Canonical client is unavailable.'));
     }
-    syncInProgress = false;
+    if (activeLoad) return activeLoad;
+    activeLoad = window.CanonicalIntelligence.loadCompatibility('leads').then(function (projection) {
+      return applyProjection(projection);
+    }).catch(function (error) {
+      clearCanonical(error && error.message);
+      throw error;
+    }).finally(function () {
+      activeLoad = null;
+    });
+    return activeLoad;
   }
 
-  function wrapWithBackend(fn, apiCall) {
-    return function() {
-      var result = fn.apply(this, arguments);
-      if (typeof API !== 'undefined' && apiCall) {
-        try {
-          apiCall(result);
-        } catch(e) {
-          // Backend sync failed — data still in local state
-        }
-      }
-      return result;
-    };
+  if (window.addEventListener) {
+    window.addEventListener('canonical:loaded', function (event) {
+      if (!event || !event.detail || event.detail.surface !== 'leads' || !event.detail.compatibility) return;
+      var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('leads');
+      if (projection) applyProjection(projection);
+    });
+    window.addEventListener('canonical:rejected', function (event) {
+      clearCanonical(event && event.detail ? event.detail.reason : 'canonical-projection-rejected');
+    });
   }
+  loadFromServer().catch(function () {});
 
-  // Override addLead to sync to backend
-  var _origAddLead = addLead;
-  addLead = function(leadData) {
-    var lead = _origAddLead(leadData);
-    if (typeof API !== 'undefined' && API.createLead) {
-      API.createLead(leadData).catch(function() {});
-    }
-    return lead;
-  };
-
-  var _origUpdateLead = updateLead;
-  updateLead = function(id, updates) {
-    var result = _origUpdateLead(id, updates);
-    if (typeof API !== 'undefined' && API.updateLead) {
-      API.updateLead(id, updates).catch(function() {});
-    }
-    return result;
-  };
-
-  var _origRemoveLead = removeLead;
-  removeLead = function(id) {
-    var result = _origRemoveLead(id);
-    if (typeof API !== 'undefined' && API.deleteLead) {
-      API.deleteLead(id).catch(function() {});
-    }
-    return result;
-  };
-
-  // Initialize — try session first (preserves simulated data across pages), fall back to server
-  loadFromSession();
-  if (state.leads.length === 0) {
-    loadFromServer();
-  }
-
-  bus.on('lead:created', () => { /* trigger recalculations */ });
-
-  return { addLead, updateLead, removeLead, getLeads, getLead, getKpis, setSetting, getSetting, setUi, getUi, getState: () => state, loadFromSession, saveToSession, loadFromServer };
+  return Object.freeze({
+    addLead: addLead,
+    updateLead: updateLead,
+    removeLead: removeLead,
+    convertLeadToCustomer: convertLeadToCustomer,
+    getLeads: getLeads,
+    getLead: getLead,
+    getCustomer: getCustomer,
+    getKpis: getKpis,
+    setSetting: setSetting,
+    getSetting: getSetting,
+    setUi: setUi,
+    getUi: getUi,
+    getState: function () { return state; },
+    loadFromSession: loadFromSession,
+    saveToSession: saveToSession,
+    loadFromServer: loadFromServer,
+  });
 })();

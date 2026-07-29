@@ -35,7 +35,12 @@ const STAGE_PROBABILITIES = {
 };
 
 // All dashboard routes require authentication
-router.use(requireAuth);
+const OWNED_ROUTE_PREFIXES = new Set(['dashboard', 'leads', 'calls', 'calendar']);
+router.use((req, res, next) => {
+  const prefix = String(req.path || '').split('/').filter(Boolean)[0] || '';
+  if (!OWNED_ROUTE_PREFIXES.has(prefix)) return next();
+  return requireAuth(req, res, next);
+});
 
 /**
  * Helper: Calculate date range bounds.
@@ -767,7 +772,8 @@ router.post('/calls/:id/mark-known', async (req, res) => {
 // Calendar API — Phase 1
 // ================================================================
 
-const CALENDAR_DATA_FILE = path.join(__dirname, '..', '..', 'data', 'events.json');
+const { dataPath } = require('../services/dataRoot');
+const CALENDAR_DATA_FILE = dataPath('events.json');
 
 function loadCalendarEvents() {
   try {

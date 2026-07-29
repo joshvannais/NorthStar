@@ -11,8 +11,9 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { getDataRoot } = require('../services/dataRoot');
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = getDataRoot();
 
 // ── Storage file paths ──
 const STORES = {

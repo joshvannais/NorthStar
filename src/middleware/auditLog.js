@@ -12,8 +12,12 @@ const audit = require('../audit/client');
  * Middleware: attach a correlation ID to every request.
  */
 function correlationId(req, res, next) {
-  req.correlationId = req.headers['x-correlation-id'] || uuidv4();
-  res.setHeader('X-Correlation-ID', req.correlationId);
+  const generated = uuidv4();
+  Object.defineProperties(req, {
+    requestId: { value: generated, enumerable: true, configurable: false, writable: false },
+    correlationId: { value: generated, enumerable: true, configurable: false, writable: false },
+  });
+  res.setHeader('X-Correlation-ID', generated);
   next();
 }
 
@@ -29,6 +33,13 @@ function auditLogger(req, res, next) {
   // Log on response finish
   res.on('finish', () => {
     const duration = Date.now() - start;
+    console.info('[Request]', {
+      requestId: req.requestId,
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      durationMs: duration,
+    });
 
     // Only log data-modifying operations and errors
     const isModifying = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
@@ -38,16 +49,21 @@ function auditLogger(req, res, next) {
       const entityType = req.path.split('/').filter(Boolean)[1] || 'unknown';
 
       audit.record({
-        actorId: req.user?.id || req.admin?.id || 'anonymous',
-        actorRole: req.admin ? 'admin' : (req.user?.role || 'anonymous'),
+        organizationId: req.tenantContext?.organizationId || null,
+        userId: req.tenantContext?.userId || null,
+        actorLabel: req.admin ? 'admin' : (req.user ? 'authenticated' : 'anonymous'),
+        actorRole: req.admin ? 'admin' : (req.userRole || 'anonymous'),
         action: `${req.method} ${res.statusCode}`,
         entityType,
         entityId: req.params?.id || null,
         ipAddress: req.ip,
         userAgent: req.headers['user-agent'] || null,
-        correlationId: req.correlationId,
+        correlationId: req.requestId,
         afterState: { method: req.method, path: req.path, status: res.statusCode, duration }
-      }).catch(err => console.warn('[Audit] Log error:', err.message));
+      }).catch(() => console.warn('[Audit] Persistence warning:', {
+        requestId: req.requestId,
+        event: 'audit_persistence_failed',
+      }));
     }
   });
 

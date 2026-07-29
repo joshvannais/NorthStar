@@ -5,6 +5,7 @@ module.exports = {
   testMatch: ['**/*.test.js'],
   verbose: true,
   testTimeout: 15000,
+  setupFilesAfterEnv: ['<rootDir>/tests/helpers/isolated-data-root.js'],
   collectCoverageFrom: [
     'src/services/**/*.js',
     'src/context/**/*.js',

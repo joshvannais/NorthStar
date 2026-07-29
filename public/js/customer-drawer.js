@@ -48,7 +48,7 @@ window.CustomerDrawer = (function() {
     var intel = {
       service: '',
       confidence: { score: 0, label: 'Pending', explanation: '' },
-      pricing: { range: { low: 0, high: 0 }, breakdown: [], total: 0 },
+      pricing: { range: { low: null, high: null }, breakdown: [], subtotal: null, tax: null, total: null, taxUnavailableReason: null },
       recommendedAction: '',
       evidence: [],
       assumptions: [],
@@ -59,8 +59,8 @@ window.CustomerDrawer = (function() {
     intel.service = lead.service || lead.serviceRequested || '';
 
     // Try to extract canonical Polaris intelligence from estimate
-    var canonical = null;
-    if (lead.polarisEstimate) {
+    var canonical = lead.canonical && lead.canonical.values ? lead.canonical.values : null;
+    if (!canonical && lead.polarisEstimate) {
       if (lead.polarisEstimate.description) {
         try {
           canonical = typeof lead.polarisEstimate.description === 'string'
@@ -101,21 +101,15 @@ window.CustomerDrawer = (function() {
     }
 
     // Pricing — canonical breakdown from estimate items, then analysis
-    if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
-      intel.pricing.breakdown = [];
-      var total = 0;
-      for (var i = 0; i < lead.pricingBreakdown.length; i++) {
-        var item = lead.pricingBreakdown[i];
-        var amt = item.a || 0;
-        if (amt > 0) { intel.pricing.breakdown.push(item); total += amt; }
-      }
-      intel.pricing.total = total;
-      if (total > 0) {
-        intel.pricing.range = { low: Math.round(total * 0.85), high: Math.round(total * 1.15) };
-      }
-    } else if (analysis && analysis.estimatedPrice && analysis.estimatedPrice > 0) {
-      intel.pricing.total = analysis.estimatedPrice;
-      intel.pricing.range = { low: Math.round(analysis.estimatedPrice * 0.85), high: Math.round(analysis.estimatedPrice * 1.15) };
+    if (canonical) {
+      intel.pricing.breakdown = (canonical.pricingLineItems || []).map(function (item) {
+        return { l: item.label, a: item.customerCharge };
+      });
+      intel.pricing.range = canonical.preliminaryRange || { low: null, high: null };
+      intel.pricing.subtotal = canonical.subtotalBeforeTax;
+      intel.pricing.tax = canonical.tax;
+      intel.pricing.total = canonical.totalIncludingTax;
+      intel.pricing.taxUnavailableReason = canonical.taxDisposition && canonical.taxDisposition.reason;
     }
 
     // Scope, evidence, assumptions, missing — canonical first
@@ -196,7 +190,7 @@ window.CustomerDrawer = (function() {
     var confExplanation = intel.confidence.explanation || '';
 
     // Pricing range
-    var hasRange = intel.pricing.range.low > 0 && intel.pricing.range.high > 0;
+    var hasRange = Number.isFinite(intel.pricing.range.low) && Number.isFinite(intel.pricing.range.high) && intel.pricing.range.low > 0 && intel.pricing.range.high > 0;
     var hasBreakdown = intel.pricing.breakdown.length > 0;
     var rangeSection = '';
     if (hasRange) {

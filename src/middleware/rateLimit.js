@@ -2,8 +2,8 @@
  * Rate Limiting Middleware
  * 
  * Protects API endpoints from abuse by limiting request frequency.
- * Uses in-memory store by default. When Redis is available, uses Redis for
- * distributed rate limiting across multiple app instances.
+ * Uses an in-memory availability control. It is never business authority and
+ * Redis is not required for Mission 19 Part 3.
  * 
  * See V3-24_Rate_Limiting.md for full spec.
  * 
@@ -49,7 +49,7 @@ async function checkRateLimit(key, limit, windowMs) {
   const now = Date.now();
   const resetTime = now + windowMs;
 
-  // Try Redis first
+  // Use the optional acceleration cache when enabled.
   if (cache.isAvailable()) {
     try {
       const result = await cache.incr(key, windowMs / 1000);
@@ -61,8 +61,8 @@ async function checkRateLimit(key, limit, windowMs) {
         count
       };
     } catch (err) {
-      // Fall through to memory store
-      console.warn('[RateLimit] Redis error, falling back to memory:', err.message);
+      // Fall through to the middleware-local availability control.
+      console.warn('[RateLimit] Cache error, falling back to local limiting:', err.message);
     }
   }
 

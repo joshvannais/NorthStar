@@ -23,8 +23,14 @@ window.CustomerDetail = (function() {
 
   function $(id) { return document.getElementById(id); }
 
+  function escapeText(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character];
+    });
+  }
+
   function fmtCurrency(n) {
-    if (n == null || isNaN(n)) return '$0';
+    if (n == null || isNaN(n)) return 'Not calculated';
     return '$' + Math.round(n).toLocaleString();
   }
 
@@ -248,20 +254,25 @@ window.CustomerDetail = (function() {
   }
 
   function fetchAll(customerId) {
-    // Fetch all 5 endpoints in parallel — includes canonical Polaris intelligence
+    if (!window.CanonicalIntelligence) return Promise.reject(new Error('Canonical intelligence client is unavailable.'));
+    var filters = { customerId: customerId };
     return Promise.all([
-      _authFetch('/api/v1/customers/' + encodeURIComponent(customerId)),
-      _authFetch('/api/v1/opportunities?customerId=' + encodeURIComponent(customerId)),
-      _authFetch('/api/v1/financial/estimates?customerId=' + encodeURIComponent(customerId)),
-      _authFetch('/api/v1/communications?customerId=' + encodeURIComponent(customerId)),
-      _authFetch('/api/v1/leads/' + encodeURIComponent(customerId) + '/intelligence').catch(function() { return null; })
+      window.CanonicalIntelligence.loadCompatibility('customer-detail', filters),
+      window.CanonicalIntelligence.loadCompatibility('leads', filters),
+      window.CanonicalIntelligence.loadCompatibility('estimates', filters),
+      window.CanonicalIntelligence.loadCompatibility('communications', filters)
     ]).then(function(results) {
+      var digest = results[0].digest;
+      if (results.some(function(projection) { return projection.digest !== digest; })) {
+        throw new Error('Canonical customer projections do not share one graph digest.');
+      }
       return {
-        customer: results[0],
-        opportunities: results[1],
-        estimates: results[2],
-        communications: results[3],
-        intelligence: results[4]
+        customer: results[0].records[0] || null,
+        opportunity: results[1].records[0] || null,
+        estimate: results[2].records[0] || null,
+        communications: results[3].records || [],
+        canonical: results[0].items[0] || null,
+        digest: digest
       };
     });
   }
@@ -269,64 +280,39 @@ window.CustomerDetail = (function() {
   function normalizeData(raw) {
     var data = {};
 
-    // Customer
-    if (raw.customer && !raw.customer.error) {
+    if (raw.customer) {
       data.name = raw.customer.name || '';
       data.phone = raw.customer.phone || '';
       data.email = raw.customer.email || '';
       data.address = raw.customer.address || '';
       data.status = raw.customer.status || 'active';
-      data.totalJobs = raw.customer.totalJobs || 0;
-      data.totalRevenue = raw.customer.totalRevenue || 0;
-      data.lastInteraction = raw.customer.lastContact || raw.customer.updatedAt || raw.customer.createdAt || null;
+      data.totalJobs = null;
+      data.totalRevenue = null;
+      data.lastInteraction = null;
     }
 
-    // Opportunities — find the best match for this customer
-    var opps = (raw.opportunities && raw.opportunities.opportunities) ? raw.opportunities.opportunities : [];
-    if (!Array.isArray(opps) && raw.opportunities && Array.isArray(raw.opportunities)) {
-      opps = raw.opportunities;
-    }
-    var primaryOpp = null;
-    if (opps.length > 0) {
-      // Prefer open/active opportunities
-      for (var i = 0; i < opps.length; i++) {
-        var o = opps[i];
-        if (!primaryOpp) primaryOpp = o;
-        if (o.stage !== 'won' && o.stage !== 'lost' && o.stage !== 'archived') {
-          primaryOpp = o;
-          break;
-        }
-      }
-    }
+    var primaryOpp = raw.opportunity;
     if (primaryOpp) {
-      data.service = primaryOpp.title || primaryOpp.service || '';
-      data.description = primaryOpp.description || '';
-      data.estimatedValue = primaryOpp.estimatedValue || 0;
-      data.stage = primaryOpp.stage || 'lead';
-      data.closeProbability = primaryOpp.closeProbability != null ? primaryOpp.closeProbability : stageProb(data.stage);
+      data.stage = primaryOpp.status || null;
     }
 
-    // Estimates
-    var ests = (raw.estimates && raw.estimates.estimates) ? raw.estimates.estimates : [];
-    if (!Array.isArray(ests) && raw.estimates && Array.isArray(raw.estimates)) {
-      ests = raw.estimates;
-    }
-    data.estimates = ests;
-    if (ests.length > 0 && !data.estimatedValue) {
-      data.estimatedValue = ests[0].total || 0;
-    }
+    var values = raw.canonical && raw.canonical.values;
+    data.canonical = raw.canonical;
+    data.intelligence = values || null;
+    data.service = values && values.service ? (values.service.label || values.service.key) : '';
+    data.description = values && values.service ? values.service.scope : null;
+    data.estimatedValue = values ? values.customerFacingPrice : null;
+    data.closeProbability = null;
+    data.estimates = raw.estimate ? [raw.estimate] : [];
 
-    // Communications — extract transcripts
-    var comms = (raw.communications && raw.communications.communications) ? raw.communications.communications : [];
-    if (!Array.isArray(comms) && raw.communications && Array.isArray(raw.communications)) {
-      comms = raw.communications;
-    }
+    var comms = Array.isArray(raw.communications) ? raw.communications : [];
     data.communications = comms;
     _commIdToTranscript = {};
     for (var j = 0; j < comms.length; j++) {
       var c = comms[j];
-      if (c.content) {
-        _commIdToTranscript[c.id] = c.content;
+      var transcript = c.transcript && c.transcript.text;
+      if (transcript) {
+        _commIdToTranscript[c.id] = transcript;
       }
     }
     // Transcript selection — strict priority:
@@ -351,8 +337,8 @@ window.CustomerDetail = (function() {
 
     // Pass 1: type==="call" with valid transcript
     for (var k = 0; k < comms.length; k++) {
-      if (comms[k].type === 'call' && _isValidTranscript(comms[k].content)) {
-        data.primaryTranscript = comms[k].content;
+      if (comms[k].channel === 'call' && _isValidTranscript(comms[k].transcript && comms[k].transcript.text)) {
+        data.primaryTranscript = comms[k].transcript.text;
         data.primaryCommId = comms[k].id;
         break;
       }
@@ -360,18 +346,12 @@ window.CustomerDetail = (function() {
     // Pass 2: any valid transcript (fallback for legacy/non-call records)
     if (!data.primaryTranscript) {
       for (var m = 0; m < comms.length; m++) {
-        if (_isValidTranscript(comms[m].content)) {
-          data.primaryTranscript = comms[m].content;
+        if (_isValidTranscript(comms[m].transcript && comms[m].transcript.text)) {
+          data.primaryTranscript = comms[m].transcript.text;
           data.primaryCommId = comms[m].id;
           break;
         }
       }
-    }
-
-    // Canonical Polaris Intelligence — from pipeline
-    data.intelligence = null;
-    if (raw.intelligence && !raw.intelligence.error) {
-      data.intelligence = raw.intelligence;
     }
 
     return data;
@@ -380,52 +360,20 @@ window.CustomerDetail = (function() {
   // ── POLARIS Intelligence ──
 
   function generatePolarisIntel(data) {
-    // Use canonical Polaris intelligence from API when available
     var canon = data.intelligence;
-    if (canon && canon.polaris) canon = canon.polaris;
-
-    if (canon && (canon.service || canon.pricing || canon.confidence)) {
-      var svc = canon.service || data.service || 'General';
-      var price = canon.pricing ? (canon.pricing.range || fmtCurrency(canon.pricing.estimated || 0)) : fmtCurrency(data.estimatedValue || 0);
-      var confPct = canon.confidence ? (canon.confidence.score || canon.confidence.pct || 0) : (data.closeProbability || 0);
-      var confLabel = canon.confidence ? (canon.confidence.label || (confPct >= 80 ? 'High' : confPct >= 50 ? 'Medium' : 'Low')) : 'Low';
-      var action = canon.action || canon.recommendedAction || '';
-      var summary = canon.summary || canon.classification || '';
-
-      return {
-        summary: summary || capitalizeFirst((data.description || svc).substring(0, 80)),
-        price: price,
-        confidenceLabel: confLabel,
-        confidenceClass: confLabel.toLowerCase(),
-        confidencePct: (typeof confPct === 'number' ? confPct : parseInt(confPct) || 0) + '%',
-        revenue: price + ' \u2014 ' + svc,
-        action: action || (confPct >= 70 ? 'Prioritize immediate follow-up' : confPct >= 40 ? 'Schedule estimate visit' : 'Nurture with follow-up call'),
-        isCanonical: true
-      };
-    }
-
-    // Fallback: compute from available data (legacy — no $500/5%/30% hardcoded defaults)
-    var svc = data.service || 'General';
-    var estVal = data.estimatedValue || 0;
-    var prob = data.closeProbability || 0;
-    var summary = 'New lead for ' + svc + '.';
-    if (data.description) {
-      summary = capitalizeFirst(data.description.substring(0, 80)) + (data.description.length > 80 ? '\u2026' : '');
-    }
-    var price = fmtCurrency(estVal);
-    var confLabel = prob >= 80 ? 'High' : prob >= 50 ? 'Medium' : 'Low';
-    var confClass = confLabel.toLowerCase();
-    var action = prob >= 70 ? 'Prioritize immediate follow-up' : prob >= 40 ? 'Schedule estimate visit' : 'Nurture with follow-up call';
-
+    if (!canon) return { summary: 'Canonical intelligence unavailable.', price: '\u2014', confidenceLabel: 'Not calculated', confidenceClass: '', confidencePct: '\u2014', revenue: '\u2014', action: '\u2014', isCanonical: false };
+    var recommendation = canon.recommendedActions && canon.recommendedActions[0];
+    var action = typeof recommendation === 'string' ? recommendation : recommendation && (recommendation.action || recommendation.title || recommendation.description || recommendation.reason);
+    var confidence = canon.confidence && canon.confidence.score;
     return {
-      summary: summary,
-      price: price,
-      confidenceLabel: confLabel,
-      confidenceClass: confClass,
-      confidencePct: prob + '%',
-      revenue: price + ' \u2014 ' + svc,
-      action: action,
-      isCanonical: false
+      summary: canon.service ? (canon.service.label || canon.service.key || 'Canonical service') : 'Canonical service',
+      price: fmtCurrency(canon.customerFacingPrice),
+      confidenceLabel: 'Server confidence',
+      confidenceClass: '',
+      confidencePct: confidence === null || confidence === undefined ? 'Not calculated' : confidence + '%',
+      revenue: fmtCurrency(canon.estimatedRevenue),
+      action: action || 'No recommendation recorded',
+      isCanonical: true
     };
   }
 
@@ -436,20 +384,25 @@ window.CustomerDetail = (function() {
       return '<p style="font-size:13px;color:var(--neutral-500);">No estimate data available.</p>';
     }
     var est = estimates[0];
-    if (est.items && Array.isArray(est.items) && est.items.length > 0) {
+    var values = est.canonical && est.canonical.values;
+    if (values && Array.isArray(values.pricingLineItems) && values.pricingLineItems.length > 0) {
       var html = '';
-      var total = 0;
-      est.items.forEach(function(item) {
-        var amt = item.amount || item.a || 0;
-        var label = item.description || item.label || item.l || 'Item';
-        total += amt;
+      values.pricingLineItems.forEach(function(item) {
+        var amt = item.customerCharge;
+        var label = item.label || item.code || 'Item';
         html += '<div class="drawer-pricing-item"><span>' + label + '</span><span>' + fmtCurrency(amt) + '</span></div>';
       });
-      html += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>' + fmtCurrency(total) + '</strong></span></div>';
+      html += '<div class="drawer-pricing-item"><span><strong>Subtotal</strong></span><span><strong>' + fmtCurrency(values.subtotalBeforeTax) + '</strong></span></div>';
+      if (values.taxDisposition && values.taxDisposition.status === 'calculated') {
+        html += '<div class="drawer-pricing-item"><span>Tax</span><span>' + fmtCurrency(values.tax) + '</span></div>';
+        html += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>' + fmtCurrency(values.totalIncludingTax) + '</strong></span></div>';
+      } else {
+        html += '<div class="drawer-pricing-item"><span>Tax</span><span>Not calculated (' + escapeText(values.taxDisposition && values.taxDisposition.reason || 'tax_configuration_unavailable') + ')</span></div>';
+      }
       return html;
     }
-    if (est.total) {
-      return '<p style="font-size:13px;color:var(--neutral-500);">Est. value: ' + fmtCurrency(est.total) + '</p>';
+    if (values && values.customerFacingPrice !== null) {
+      return '<p style="font-size:13px;color:var(--neutral-500);">Est. value: ' + fmtCurrency(values.customerFacingPrice) + '</p>';
     }
     return '<p style="font-size:13px;color:var(--neutral-500);">Estimate pending.</p>';
   }
@@ -494,7 +447,7 @@ window.CustomerDetail = (function() {
 
     // Customer Profile
     $('cdProfileStatus').innerHTML = getStatusBadge(data.status || 'active');
-    $('cdProfileJobs').textContent = data.totalJobs || 0;
+    $('cdProfileJobs').textContent = data.totalJobs == null ? '\u2014' : data.totalJobs;
     $('cdProfileRevenue').textContent = fmtCurrency(data.totalRevenue);
     $('cdProfileLastInteraction').textContent = fmtDate(data.lastInteraction);
 

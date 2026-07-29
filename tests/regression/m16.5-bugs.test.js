@@ -19,8 +19,19 @@ process.chdir(path.resolve(__dirname, '../..'));
 const intelligence = require('../../src/services/intelligence');
 const decisionEngine = require('../../src/services/decisionEngine');
 const customerIntelligence = require('../../src/services/customerIntelligence');
+const dataLoader = require('../../src/services/dataLoader');
+const { buildPolarisContext } = require('../../src/services/polarisContextBuilder');
 const { buildCompactContext, buildBusinessContext } = require('../../src/context/business');
 const fixtures = require('../helpers/fixtures');
+
+const EXPECTED_CORE_METRICS = Object.freeze({
+  totalEstimatedLabor: 4279.8,
+  totalEstimatedProfit: 13885.84,
+  averageProfitMargin: '45.5%',
+  averageConfidence: 79,
+  totalTravelMinutes: 404,
+  totalProductionHours: 46,
+});
 
 // ────────────────────────────────────────────────────────
 // BUG 1: Data Drift — compactContext preserves all 20 lead fields
@@ -183,37 +194,29 @@ describe('M16.5 Bug 2 — NaN Propagation: 28 Number.isFinite guards', () => {
 // ────────────────────────────────────────────────────────
 describe('M16.5 Bug 3 — Duplicate Orchestration: single orchestrator', () => {
   
-  test('buildCompactContext is the single context builder', () => {
-    // Verify both context builders produce consistent output
-    const compact = buildCompactContext({});
-    const text = buildBusinessContext({});
-    
-    expect(compact).toBeDefined();
-    expect(text).toBeDefined();
-    expect(typeof text).toBe('string');
-    
-    // Compact context should contain the same aggregate data
-    if (compact.leads.length > 0) {
-      expect(text).toContain('NORTHSTAR BUSINESS CONTEXT');
-    }
+  test('low-level formatters do not invent computed intelligence', () => {
+    const compact = buildCompactContext({ page: 'dashboard' });
+    const text = buildBusinessContext({ page: 'dashboard' });
+
+    expect(Object.prototype.hasOwnProperty.call(compact, 'calculatedIntelligence')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(compact, 'executiveDecisions')).toBe(false);
+    expect(compact.dashboardCustomerIntelligence).toBeNull();
+    expect(text).toContain('NORTHSTAR BUSINESS CONTEXT');
+    expect(text).not.toContain('Calculated Intelligence');
+    expect(text).not.toContain('Executive Decisions');
+    expect(text).not.toContain('Total estimated labor cost');
+    expect(text).not.toContain('Total estimated profit');
   });
 
-  test('Each engine call produces stable output across multiple invocations', () => {
-    // Build context 3 times — aggregate values remain identical (single orchestrator)
-    const ctx1 = buildCompactContext({});
-    const ctx2 = buildCompactContext({});
-    const ctx3 = buildCompactContext({});
-    
-    const ci1 = ctx1.calculatedIntelligence;
-    const ci2 = ctx2.calculatedIntelligence;
-    const ci3 = ctx3.calculatedIntelligence;
-    
-    expect(ci1.totalEstimatedLabor).toBe(ci2.totalEstimatedLabor);
-    expect(ci1.totalEstimatedLabor).toBe(ci3.totalEstimatedLabor);
-    expect(ci1.totalEstimatedProfit).toBe(ci2.totalEstimatedProfit);
-    expect(ci1.totalEstimatedProfit).toBe(ci3.totalEstimatedProfit);
-    expect(ci1.averageConfidence).toBe(ci2.averageConfidence);
-    expect(ci1.averageConfidence).toBe(ci3.averageConfidence);
+  test('supported orchestrator produces stable exact intelligence across invocations', () => {
+    const options = { page: 'dashboard', correlationId: 'm16.5-stability' };
+    const metrics1 = coreMetrics(buildPolarisContext(options).businessIntelligence);
+    const metrics2 = coreMetrics(buildPolarisContext(options).businessIntelligence);
+    const metrics3 = coreMetrics(buildPolarisContext(options).businessIntelligence);
+
+    expect(metrics1).toEqual(EXPECTED_CORE_METRICS);
+    expect(metrics2).toEqual(EXPECTED_CORE_METRICS);
+    expect(metrics3).toEqual(EXPECTED_CORE_METRICS);
   });
 });
 
@@ -258,18 +261,12 @@ describe('M16.5 Bug 4 — Business Profile: missing fields use defaults', () => 
 describe('M16.5 Bug 5 — Aggregate Consistency: 6 metrics match', () => {
   
   test('6 core metrics match across compactContext, direct aggregate, and executive briefing', () => {
-    // Load data
-    const { loadData } = require('../../src/context/business');
-    const data = loadData();
+    const data = dataLoader.loadData();
     const leads = data.leads;
-    
-    if (leads.length === 0) {
-      // No data — skip
-      return;
-    }
-    
-    // Path 1: buildCompactContext
-    const ctx = buildCompactContext({});
+    expect(leads).toHaveLength(23);
+
+    // Path 1: supported canonical orchestrator
+    const context = buildPolarisContext({ page: 'dashboard', correlationId: 'm16.5-aggregate' });
     
     // Path 2: Direct aggregate
     const agg = intelligence.calculateAggregateIntelligence(leads);
@@ -277,27 +274,12 @@ describe('M16.5 Bug 5 — Aggregate Consistency: 6 metrics match', () => {
     // Path 3: Executive briefing
     const briefing = decisionEngine.generateExecutiveBriefing(leads);
     
-    // Verify all 6 metrics
-    // 1. Total Estimated Labor
-    expect(ctx.calculatedIntelligence.totalEstimatedLabor).toBe(agg.totalEstimatedLabor);
-    
-    // 2. Total Estimated Profit
-    expect(ctx.calculatedIntelligence.totalEstimatedProfit).toBe(agg.totalEstimatedProfit);
+    expect(coreMetrics(context.businessIntelligence)).toEqual(EXPECTED_CORE_METRICS);
+    expect(coreMetrics(context.compactContext.calculatedIntelligence)).toEqual(EXPECTED_CORE_METRICS);
+    expect(coreMetrics(agg)).toEqual(EXPECTED_CORE_METRICS);
     expect(briefing.summary.totalEstimatedProfit).toBe(agg.totalEstimatedProfit);
-    
-    // 3. Average Profit Margin
-    expect(ctx.calculatedIntelligence.averageProfitMargin).toBe(agg.averageProfitMargin);
     expect(briefing.summary.averageProfitMargin).toBe(agg.averageProfitMargin);
-    
-    // 4. Average Confidence
-    expect(ctx.calculatedIntelligence.averageConfidence).toBe(agg.averageConfidence);
     expect(briefing.summary.averageConfidence).toBe(agg.averageConfidence + '%');
-    
-    // 5. Total Travel Minutes
-    expect(ctx.calculatedIntelligence.totalTravelMinutes).toBe(agg.totalTravelMinutes);
-    
-    // 6. Total Production Hours
-    expect(ctx.calculatedIntelligence.totalProductionHours).toBe(agg.totalProductionHours);
   });
 });
 
@@ -373,23 +355,27 @@ describe('M16.5 Bug 8 — Prompt Consistency: same context → same prompt', () 
     }
   });
 
-  test('Business context contains expected sections', () => {
+  test('low-level business context contains raw sections but no computed sections', () => {
     const text = buildBusinessContext({});
-    
-    // Should contain standard sections
-    const expectedSections = [
-      'NORTHSTAR BUSINESS CONTEXT',
-      'END CONTEXT',
-    ];
-    
-    expectedSections.forEach(section => {
-      expect(text).toContain(section);
-    });
-    
-    if (buildCompactContext({}).leads.length > 0) {
-      expect(text).toContain('Pipeline Health');
-      expect(text).toContain('Calculated Intelligence');
-    }
+
+    expect(text).toContain('NORTHSTAR BUSINESS CONTEXT');
+    expect(text).toContain('Pipeline Health');
+    expect(text).toContain('END CONTEXT');
+    expect(text).not.toContain('Calculated Intelligence');
+    expect(text).not.toContain('Executive Decisions');
+    expect(text).not.toContain('Average confidence score');
+  });
+
+  test('orchestrated business context contains exact computed sections and values', () => {
+    const context = buildPolarisContext({ page: 'dashboard', correlationId: 'm16.5-context-text' });
+
+    expect(context.contextText).toContain('Calculated Intelligence');
+    expect(context.contextText).toContain('Executive Decisions');
+    expect(context.contextText).toContain('Total estimated labor cost: 4,279.8');
+    expect(context.contextText).toContain('Total estimated profit: 13,885.84');
+    expect(context.contextText).toContain('Average profit margin: 45.5%');
+    expect(context.contextText).toContain('Average confidence score: 79%');
+    expect(coreMetrics(context.compactContext.calculatedIntelligence)).toEqual(EXPECTED_CORE_METRICS);
   });
 });
 
@@ -415,4 +401,15 @@ function verifyAllFinite(obj, label, depth = 0) {
   if (typeof obj === 'object') {
     Object.values(obj).forEach(v => verifyAllFinite(v, label, depth + 1));
   }
+}
+
+function coreMetrics(value) {
+  return {
+    totalEstimatedLabor: value.totalEstimatedLabor,
+    totalEstimatedProfit: value.totalEstimatedProfit,
+    averageProfitMargin: value.averageProfitMargin,
+    averageConfidence: value.averageConfidence,
+    totalTravelMinutes: value.totalTravelMinutes,
+    totalProductionHours: value.totalProductionHours,
+  };
 }

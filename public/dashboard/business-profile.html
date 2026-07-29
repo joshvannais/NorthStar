@@ -30,6 +30,10 @@
     .bp-field input:focus, .bp-field select:focus, .bp-field textarea:focus { outline: none; border-color: var(--brand-500); box-shadow: 0 0 0 3px rgba(196,155,44,0.15); }
     .bp-field input::placeholder, .bp-field textarea::placeholder { color: var(--neutral-400); }
     .bp-field .help-text { font-size: 11px; color: var(--neutral-400); }
+    .bp-authority-note { margin: 0 0 14px; padding: 10px 12px; border-left: 3px solid var(--brand-500); background: rgba(196,155,44,0.08); color: var(--neutral-600); font-size: 12px; line-height: 1.5; }
+    .bp-validation-error { display: none; margin-top: 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: rgba(185,28,28,0.08); color: #991b1b; font-size: 12px; }
+    .bp-validation-error.show { display: block; }
+    .bp-field [aria-invalid="true"] { border-color: #b91c1c; }
     .bp-field .bp-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
     .bp-field .bp-toggle input { display: none; }
     .bp-field .bp-toggle .slider { width: 36px; height: 20px; background: var(--neutral-300); border-radius: 10px; position: relative; transition: background 0.2s; }
@@ -218,18 +222,21 @@
         <!-- Section: Financial -->
         <div class="bp-section" id="section-financial">
           <div class="bp-card">
-            <h3>Financial Settings</h3>
-            <div class="bp-section-desc">Financial defaults consumed by the Estimating Engine, Intelligence Engine, and profit calculations.</div>
+            <h3>Canonical Pricing &amp; Cost Authority</h3>
+            <div class="bp-section-desc">These persisted organization fields are consumed directly by canonical estimates and voice-session context.</div>
+            <div class="bp-authority-note" id="canonicalAuthorityNote">Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.</div>
             <div class="bp-grid">
-              <div class="bp-field"><label>Desired Gross Margin (%)</label><input id="fin-desiredGrossMargin" type="number" step="0.5" min="0" max="100"></div>
-              <div class="bp-field"><label>Desired Net Margin (%)</label><input id="fin-desiredNetMargin" type="number" step="0.5" min="0" max="100"></div>
-              <div class="bp-field"><label>Markup Multiplier</label><input id="fin-markup" type="number" step="0.1" min="1"></div>
-              <div class="bp-field"><label>Tax Rate (%)</label><input id="fin-taxRate" type="number" step="0.5" min="0" max="20"></div>
-              <div class="bp-field"><label>Emergency Markup</label><input id="fin-emergencyMarkup" type="number" step="0.1" min="1"></div>
-              <div class="bp-field"><label>Travel Charge ($/mile)</label><input id="fin-travelCharge" type="number" step="0.01" min="0"></div>
-              <div class="bp-field"><label>Minimum Job Price ($)</label><input id="fin-minimumJobPrice" type="number" step="5" min="0"></div>
-              <div class="bp-field"><label>Maximum Discount (%)</label><input id="fin-maximumDiscount" type="number" step="1" min="0" max="100"></div>
+              <div class="bp-field"><label>Customer Markup (%)</label><input id="fin-customerMarkupPercent" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.customerMarkupPercent</span></div>
+              <div class="bp-field"><label>Tax Rate (%)</label><input id="fin-taxRatePercent" data-canonical-field type="number" step="0.01" min="0" max="100"><span class="help-text">canonicalPricing.taxRatePercent</span></div>
+              <div class="bp-field"><label>Emergency Multiplier</label><input id="fin-emergencyMultiplier" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.emergencyMultiplier</span></div>
+              <div class="bp-field"><label>Customer Travel Charge ($/mile)</label><input id="fin-travelCustomerChargePerMile" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.travelCustomerChargePerMile</span></div>
+              <div class="bp-field"><label>Minimum Job Price ($)</label><input id="fin-minimumJobPrice" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.minimumJobPrice</span></div>
+              <div class="bp-field"><label>Overhead (%)</label><input id="cost-overheadPercent" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalCosts.overheadPercent</span></div>
+              <div class="bp-field"><label>Internal Travel Cost ($/mile)</label><input id="cost-travelCostPerMile" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalCosts.travelCostPerMile</span></div>
+              <div class="bp-field bp-full"><label>Material Cost by Service (JSON)</label><textarea id="cost-materialCostByService" data-canonical-field rows="3" placeholder='{"fence:cedar": 120}'></textarea><span class="help-text">canonicalCosts.materialCostByService; values must be non-negative numbers.</span></div>
+              <div class="bp-field bp-full"><label>Equipment Cost by Reference (JSON)</label><textarea id="cost-equipmentCostByReference" data-canonical-field rows="3" placeholder='{"mini-excavator": 350}'></textarea><span class="help-text">canonicalCosts.equipmentCostByReference; values must be non-negative numbers.</span></div>
             </div>
+            <div id="canonicalFinancialError" class="bp-validation-error" role="alert"></div>
           </div>
         </div>
 
@@ -349,6 +356,15 @@
     // ====================================================================
     var profileData = null;
 
+    function profileRequest(url, options) {
+      var request = options || {};
+      var headers = request.headers || {};
+      var token = localStorage.getItem('token');
+      if (token) headers.Authorization = 'Bearer ' + token;
+      request.headers = headers;
+      return fetch(url, request);
+    }
+
     // ====================================================================
     // Section navigation
     // ====================================================================
@@ -363,7 +379,7 @@
     // Load profile
     // ====================================================================
     function loadProfile() {
-      fetch('/api/v1/business-profile')
+      profileRequest('/api/v1/business-profile')
         .then(function(r) { return r.json(); })
         .then(function(resp) {
           if (resp.success && resp.data) {
@@ -439,15 +455,25 @@
       // Services
       renderServices(p.services);
 
-      // Financial
-      setVal('fin-desiredGrossMargin', p.financial.desiredGrossMargin);
-      setVal('fin-desiredNetMargin', p.financial.desiredNetMargin);
-      setVal('fin-markup', p.financial.markup);
-      setVal('fin-taxRate', p.financial.taxRate);
-      setVal('fin-emergencyMarkup', p.financial.emergencyMarkup);
-      setVal('fin-travelCharge', p.financial.travelCharge);
-      setVal('fin-minimumJobPrice', p.financial.minimumJobPrice);
-      setVal('fin-maximumDiscount', p.financial.maximumDiscount);
+      // Canonical pricing and costs. Legacy financial values are adapted by
+      // the server only when the canonical blocks are genuinely absent.
+      var canonicalPricing = p.canonicalPricing && typeof p.canonicalPricing === 'object' && !Array.isArray(p.canonicalPricing) ? p.canonicalPricing : {};
+      var canonicalCosts = p.canonicalCosts && typeof p.canonicalCosts === 'object' && !Array.isArray(p.canonicalCosts) ? p.canonicalCosts : {};
+      renderCanonicalNumber('fin-customerMarkupPercent', canonicalPricing, 'customerMarkupPercent', 0);
+      renderCanonicalNumber('fin-taxRatePercent', canonicalPricing, 'taxRatePercent', 0, 100);
+      renderCanonicalNumber('fin-emergencyMultiplier', canonicalPricing, 'emergencyMultiplier', 0);
+      renderCanonicalNumber('fin-travelCustomerChargePerMile', canonicalPricing, 'travelCustomerChargePerMile', 0);
+      renderCanonicalNumber('fin-minimumJobPrice', canonicalPricing, 'minimumJobPrice', 0);
+      renderCanonicalNumber('cost-overheadPercent', canonicalCosts, 'overheadPercent', 0);
+      renderCanonicalNumber('cost-travelCostPerMile', canonicalCosts, 'travelCostPerMile', 0);
+      renderCanonicalMap('cost-materialCostByService', canonicalCosts, 'materialCostByService');
+      renderCanonicalMap('cost-equipmentCostByReference', canonicalCosts, 'equipmentCostByReference');
+      var migration = p.canonicalAuthority && p.canonicalAuthority.legacyMigration;
+      var note = document.getElementById('canonicalAuthorityNote');
+      if (note) note.textContent = migration && migration.pending
+        ? 'Legacy values are shown for a one-way migration. They become canonical only after explicit Save.'
+        : 'Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.';
+      clearCanonicalError();
 
       // Scheduling
       setVal('sched-maxJobsPerDay', p.scheduling.maxJobsPerDay);
@@ -515,6 +541,88 @@
       if (el) el.checked = !!val;
     }
 
+    function hasOwn(source, key) {
+      return !!source && Object.prototype.hasOwnProperty.call(source, key);
+    }
+
+    function renderCanonicalNumber(id, source, key, minimum, maximum) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var present = hasOwn(source, key);
+      var value = present ? source[key] : null;
+      var valid = typeof value === 'number' && Number.isFinite(value) && value >= minimum && (maximum === undefined || value <= maximum);
+      el.value = valid ? String(value) : '';
+      el.dataset.authorityState = present ? (valid ? 'configured' : 'malformed') : 'missing';
+      el.dataset.userEdited = 'false';
+      el.setAttribute('aria-invalid', present && !valid ? 'true' : 'false');
+    }
+
+    function renderCanonicalMap(id, source, key) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var present = hasOwn(source, key);
+      var value = present ? source[key] : null;
+      var valid = value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(function(mapKey) {
+        return mapKey.trim() && typeof value[mapKey] === 'number' && Number.isFinite(value[mapKey]) && value[mapKey] >= 0;
+      });
+      el.value = valid ? JSON.stringify(value, null, 2) : '';
+      el.dataset.authorityState = present ? (valid ? 'configured' : 'malformed') : 'missing';
+      el.dataset.userEdited = 'false';
+      el.setAttribute('aria-invalid', present && !valid ? 'true' : 'false');
+    }
+
+    function readCanonicalNumber(id, label, minimum, maximum) {
+      var el = document.getElementById(id);
+      var raw = el ? el.value.trim() : '';
+      if (!raw) {
+        if (el && el.dataset.authorityState === 'malformed' && el.dataset.userEdited !== 'true') {
+          throw new Error(label + ' is malformed in the persisted profile. Enter a valid number or clear it explicitly.');
+        }
+        return { configured: false };
+      }
+      var value = Number(raw);
+      if (!Number.isFinite(value) || value < minimum || (maximum !== undefined && value > maximum) || (el.validity && !el.validity.valid)) {
+        throw new Error(label + ' must be a finite number' + (maximum === undefined ? ' at least ' + minimum : ' from ' + minimum + ' through ' + maximum) + '.');
+      }
+      return { configured: true, value: value };
+    }
+
+    function readCanonicalMap(id, label) {
+      var el = document.getElementById(id);
+      var raw = el ? el.value.trim() : '';
+      if (!raw) {
+        if (el && el.dataset.authorityState === 'malformed' && el.dataset.userEdited !== 'true') {
+          throw new Error(label + ' is malformed in the persisted profile. Enter a valid JSON object or clear it explicitly.');
+        }
+        return { configured: false };
+      }
+      var value;
+      try { value = JSON.parse(raw); } catch (_error) { throw new Error(label + ' must be valid JSON.'); }
+      if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(function(key) {
+        return key.trim() && typeof value[key] === 'number' && Number.isFinite(value[key]) && value[key] >= 0;
+      })) throw new Error(label + ' must be a JSON object of non-negative finite numbers.');
+      return { configured: true, value: value };
+    }
+
+    function assignCanonical(target, key, state) {
+      if (state.configured) target[key] = state.value;
+      else delete target[key];
+    }
+
+    function showCanonicalError(message) {
+      var error = document.getElementById('canonicalFinancialError');
+      if (!error) return;
+      error.textContent = message;
+      error.classList.add('show');
+    }
+
+    function clearCanonicalError() {
+      var error = document.getElementById('canonicalFinancialError');
+      if (!error) return;
+      error.textContent = '';
+      error.classList.remove('show');
+    }
+
     function renderHours(hours) {
       var container = document.getElementById('hoursContainer');
       if (!container) return;
@@ -559,6 +667,7 @@
     // ====================================================================
     function collectProfile() {
       var p = JSON.parse(JSON.stringify(profileData || {}));
+      delete p.canonicalAuthority;
 
       p.company.name = getVal('company-name');
       p.company.dba = getVal('company-dba');
@@ -632,14 +741,35 @@
         });
       }
 
-      p.financial.desiredGrossMargin = parseFloat(getVal('fin-desiredGrossMargin')) || 40;
-      p.financial.desiredNetMargin = parseFloat(getVal('fin-desiredNetMargin')) || 20;
-      p.financial.markup = parseFloat(getVal('fin-markup')) || 1.3;
-      p.financial.taxRate = parseFloat(getVal('fin-taxRate')) || 0;
-      p.financial.emergencyMarkup = parseFloat(getVal('fin-emergencyMarkup')) || 1.5;
-      p.financial.travelCharge = parseFloat(getVal('fin-travelCharge')) || 0.58;
-      p.financial.minimumJobPrice = parseFloat(getVal('fin-minimumJobPrice')) || 0;
-      p.financial.maximumDiscount = parseFloat(getVal('fin-maximumDiscount')) || 0;
+      p.canonicalPricing = p.canonicalPricing && typeof p.canonicalPricing === 'object' && !Array.isArray(p.canonicalPricing) ? p.canonicalPricing : {};
+      p.canonicalCosts = p.canonicalCosts && typeof p.canonicalCosts === 'object' && !Array.isArray(p.canonicalCosts) ? p.canonicalCosts : {};
+      var markup = readCanonicalNumber('fin-customerMarkupPercent', 'Customer markup', 0);
+      var tax = readCanonicalNumber('fin-taxRatePercent', 'Tax rate', 0, 100);
+      var emergency = readCanonicalNumber('fin-emergencyMultiplier', 'Emergency multiplier', 0);
+      var travelCharge = readCanonicalNumber('fin-travelCustomerChargePerMile', 'Customer travel charge', 0);
+      var minimumJob = readCanonicalNumber('fin-minimumJobPrice', 'Minimum job price', 0);
+      var overhead = readCanonicalNumber('cost-overheadPercent', 'Overhead percent', 0);
+      var travelCost = readCanonicalNumber('cost-travelCostPerMile', 'Internal travel cost', 0);
+      var materialCosts = readCanonicalMap('cost-materialCostByService', 'Material cost map');
+      var equipmentCosts = readCanonicalMap('cost-equipmentCostByReference', 'Equipment cost map');
+      assignCanonical(p.canonicalPricing, 'customerMarkupPercent', markup);
+      assignCanonical(p.canonicalPricing, 'taxRatePercent', tax);
+      assignCanonical(p.canonicalPricing, 'emergencyMultiplier', emergency);
+      assignCanonical(p.canonicalPricing, 'travelCustomerChargePerMile', travelCharge);
+      assignCanonical(p.canonicalPricing, 'minimumJobPrice', minimumJob);
+      assignCanonical(p.canonicalCosts, 'overheadPercent', overhead);
+      assignCanonical(p.canonicalCosts, 'travelCostPerMile', travelCost);
+      assignCanonical(p.canonicalCosts, 'materialCostByService', materialCosts);
+      assignCanonical(p.canonicalCosts, 'equipmentCostByReference', equipmentCosts);
+
+      // Legacy fields are compatibility mirrors only. They can never override
+      // canonical values and disappear when the canonical value is missing.
+      p.financial = p.financial && typeof p.financial === 'object' ? p.financial : {};
+      if (markup.configured) p.financial.markup = 1 + markup.value / 100; else delete p.financial.markup;
+      if (tax.configured) p.financial.taxRate = tax.value; else delete p.financial.taxRate;
+      if (emergency.configured) p.financial.emergencyMarkup = emergency.value; else delete p.financial.emergencyMarkup;
+      if (travelCharge.configured) p.financial.travelCharge = travelCharge.value; else delete p.financial.travelCharge;
+      if (minimumJob.configured) p.financial.minimumJobPrice = minimumJob.value; else delete p.financial.minimumJobPrice;
 
       p.scheduling.maxJobsPerDay = parseInt(getVal('sched-maxJobsPerDay')) || 4;
       p.scheduling.travelBuffer = parseInt(getVal('sched-travelBuffer')) || 0;
@@ -703,9 +833,19 @@
       btn.disabled = true;
       btn.textContent = '⏳ Saving...';
 
-      var data = collectProfile();
+      var data;
+      try {
+        clearCanonicalError();
+        data = collectProfile();
+      } catch (error) {
+        showCanonicalError(error.message);
+        showToast('❌ ' + error.message, 'error');
+        btn.disabled = false;
+        btn.textContent = '💾 Save Profile';
+        return;
+      }
 
-      fetch('/api/v1/business-profile', {
+      profileRequest('/api/v1/business-profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -714,6 +854,7 @@
         .then(function(resp) {
           if (resp.success) {
             profileData = resp.data;
+            renderProfile(profileData);
             showToast('✅ Profile saved successfully', 'success');
           } else {
             var msg = resp.errors ? resp.errors.join('; ') : 'Validation failed';
@@ -743,7 +884,17 @@
     // ====================================================================
     // Init
     // ====================================================================
-    document.addEventListener('DOMContentLoaded', loadProfile);
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('[data-canonical-field]').forEach(function(el) {
+        el.addEventListener('input', function() {
+          el.dataset.userEdited = 'true';
+          el.dataset.authorityState = el.value.trim() ? 'edited' : 'missing';
+          el.setAttribute('aria-invalid', 'false');
+          clearCanonicalError();
+        });
+      });
+      loadProfile();
+    });
   </script>
   <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("business-profile");</script>

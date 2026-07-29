@@ -85,7 +85,7 @@ const REGRESSION_HVAC = {
     customer: "James Wilson",
     service: "hvac",
     timestamp: "2026-07-21",
-    pipeline: "universal (service-catalog + pipeline.js)",
+    pipeline: "universal (nonfinancial scenario-catalog + canonical Business Profile calculation)",
   },
 };
 

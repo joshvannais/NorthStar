@@ -157,20 +157,14 @@ class CalendarRenderer {
     var monthEvents = this.state.getEventsForMonth();
     var todayEvents = this.state.getTodayEvents();
     var totalEvents = this.state.events.length;
-    var allLeads = this.state.getLiveLeads();
-    // Pipeline: sum ALL leads' avgPrice (same formula as Dashboard's renderPolarisCard)
-    var pipelineValue = 0;
-    for (var i = 0; i < allLeads.length; i++) {
-      var l = allLeads[i];
-      var a = l.polarisAnalysis;
-      pipelineValue += a ? (parseFloat(a.estimatedPrice) || 0) : (parseFloat(l.avgPrice || l.estimated_price) || 0);
-    }
+    var canonical = window.CanonicalIntelligence && window.CanonicalIntelligence.getPresentation('calendar');
+    var pipelineValue = canonical && canonical.metrics ? canonical.metrics.estimatedRevenue : null;
 
     this.kpiBar.innerHTML = `
       <span class="cal-kpi-pill"><span class="cal-kpi-icon">📅</span><span class="cal-kpi-num">${monthEvents.length}</span><span class="cal-kpi-label">Appointments</span></span>
       <span class="cal-kpi-pill"><span class="cal-kpi-icon">📞</span><span class="cal-kpi-num">${todayEvents.length}</span><span class="cal-kpi-label">Today</span></span>
       <span class="cal-kpi-pill"><span class="cal-kpi-icon">📊</span><span class="cal-kpi-num">${totalEvents}</span><span class="cal-kpi-label">Events</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">💰</span><span class="cal-kpi-num">$${pipelineValue.toLocaleString()}</span><span class="cal-kpi-label">Pipeline</span></span>`;
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon">💰</span><span class="cal-kpi-num">${pipelineValue == null ? 'Not calculated' : '$' + Number(pipelineValue).toLocaleString()}</span><span class="cal-kpi-label">Pipeline</span></span>`;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -391,70 +385,37 @@ class CalendarRenderer {
   // ═══════════════════════════════════════════════════════════════
   renderPolaris() {
     if (!this.polarisSection) return;
-    const s = this.state;
-    const allLeads = s.getLiveLeads();
-    // Pipeline: sum ALL leads' prices (same as Dashboard formula)
-    var totalPipeline = 0;
-    for (var pi = 0; pi < allLeads.length; pi++) {
-      var pl = allLeads[pi];
-      var pa = pl.polarisAnalysis;
-      totalPipeline += pa ? (parseFloat(pa.estimatedPrice) || 0) : (parseFloat(pl.avgPrice || pl.estimated_price) || 0);
+    const canonical = window.CanonicalIntelligence && window.CanonicalIntelligence.getPresentation('calendar');
+    const values = canonical && canonical.values;
+    function esc(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, function(character) {
+        return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character];
+      });
     }
-    // Top lead: highest avgPrice across all leads (same as Dashboard's renderPolarisCard)
-    var topLead = null, topPrice = 0;
-    for (var ti = 0; ti < allLeads.length; ti++) {
-      var tl = allLeads[ti];
-      var tp = parseFloat(tl.avgPrice || tl.estimated_price) || 0;
-      if (tp > topPrice) { topPrice = tp; topLead = tl; }
+    function money(value) { return value == null ? 'Not calculated' : '$' + Number(value).toLocaleString(); }
+    function actionText(action) {
+      if (typeof action === 'string') return action;
+      return action && (action.action || action.title || action.description || action.reason) || 'No recommendation recorded';
     }
-    const today = new Date();
-    const todayStr = s._formatDate(today);
-    const todayEvents = s.events.filter(e => e.date === todayStr);
-    const todayAppts = todayEvents.filter(e => e.type === 'lead');
-    const todayRevenue = todayAppts.reduce((sum, e) => sum + (parseFloat(e.estimatedPrice) || 0), 0);
-    const totalEvents = s.events.length;
-    const totalLeads = allLeads.length;
-    const scheduleEfficiency = totalEvents > 0 ? Math.round((todayAppts.length / Math.max(totalEvents, 1)) * 100) : 0;
-    const capacityPct = Math.min(100, Math.round((todayAppts.length / 8) * 100));
-
-    // Calendar-specific Polaris intelligence
     let html = '<div class="polaris-card">';
-    // Header
     html += '<div class="polaris-header">';
     html += '<h2 style="font-size:15px;font-weight:700;color:#e8eaed;display:flex;align-items:center;gap:6px;margin:0;letter-spacing:0.01em;">POLARIS<span style="font-size:9px;color:#9aa0a6;font-weight:400;vertical-align:super;">&#8482;</span> <span style="font-weight:400;font-size:13px;color:#9aa0a6;">Intelligence</span></h2>';
-    html += '<span class="cal-polaris-badge" style="background:#a67c00;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;letter-spacing:0.05em;">&#10022; DAY ANALYSIS</span>';
+    html += '<span class="cal-polaris-badge" style="background:#a67c00;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;letter-spacing:0.05em;">&#10022; CANONICAL</span>';
     html += '</div>';
-    // Body — vertically stacked rows
     html += '<div class="polaris-grid" style="display:flex;flex-direction:column;gap:0;">';
-    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Executive Summary</span><span class="cal-polaris-value">' + todayAppts.length + ' appointment' + (todayAppts.length !== 1 ? 's' : '') + ' today</span></div>';
-    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Today’s Revenue</span><span class="cal-polaris-value">$' + todayRevenue.toLocaleString() + '</span></div>';
-    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Today’s Appointments</span><span class="cal-polaris-value">' + todayAppts.length + '</span></div>';
-    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Schedule Efficiency</span><span class="cal-polaris-value">' + scheduleEfficiency + '%</span></div>';
-    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Pipeline Value</span><span class="cal-polaris-value">$' + totalPipeline.toLocaleString() + '</span></div>';
-    // Highest Value Appointment
-    const highestValue = todayAppts.length > 0 ? todayAppts.sort((a,b) => (parseFloat(b.estimatedPrice)||0) - (parseFloat(a.estimatedPrice)||0))[0] : null;
-    if (highestValue) {
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Highest Value</span><span class="cal-polaris-value">' + (highestValue.title||'') + ' — $' + parseFloat(highestValue.estimatedPrice).toLocaleString() + '</span></div>';
-    }
-    // Capacity Utilization
-    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Capacity Utilization</span><span class="cal-polaris-value">' + capacityPct + '%</span></div>';
-    // Scheduling Conflicts
-    const timeCounts = {};
-    todayEvents.forEach(e => { if (e.time) { timeCounts[e.time] = (timeCounts[e.time] || 0) + 1; } });
-    const conflicts = Object.keys(timeCounts).filter(t => timeCounts[t] > 1).length;
-    html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Scheduling Conflicts</span><span class="cal-polaris-value" style="color:' + (conflicts > 0 ? '#ef4444' : '#22c55e') + ';">' + (conflicts > 0 ? conflicts + ' conflict' + (conflicts > 1 ? 's' : '') : 'None') + '</span></div>';
-    // AI Recommendation
-    if (topLead) {
-      const name = topLead.caller_name || topLead.caller || 'top lead';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">Follow up with ' + name + ' today</span></div>';
-    } else if (totalLeads > 0) {
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">Set appointments for ' + totalLeads + ' active leads</span></div>';
+    if (!values) {
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Canonical intelligence unavailable</span></div>';
     } else {
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">Generate leads to build your pipeline</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Customer Price</span><span class="cal-polaris-value">' + esc(money(values.customerFacingPrice)) + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Scope</span><span class="cal-polaris-value">' + esc(JSON.stringify(values.service && values.service.scope)) + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Labor</span><span class="cal-polaris-value">' + esc(money(values.laborCharge)) + ' / ' + esc(values.laborHours == null ? 'Not calculated' : values.laborHours + ' hours') + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Duration</span><span class="cal-polaris-value">' + esc(values.estimatedProductionDurationHours == null ? 'Not calculated' : values.estimatedProductionDurationHours + ' hours') + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Travel</span><span class="cal-polaris-value">' + esc(JSON.stringify(values.travel)) + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Gross Profit</span><span class="cal-polaris-value">' + esc(money(values.grossProfit)) + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Confidence</span><span class="cal-polaris-value">' + esc(values.confidence && values.confidence.score != null ? values.confidence.score + '%' : 'Not calculated') + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Risk</span><span class="cal-polaris-value">' + esc(JSON.stringify(values.risk)) + '</span></div>';
+      html += '<div class="cal-polaris-row" style="border-bottom:none;"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">' + esc(actionText(values.recommendedActions && values.recommendedActions[0])) + '</span></div>';
     }
-    // Follow-up Opportunities
-    const followUp = allLeads.filter(l => l.status === 'contacted' || l.status === 'new').length;
-    html += '<div class="cal-polaris-row" style="border-bottom:none;"><span class="cal-polaris-label">Follow-up Opportunities</span><span class="cal-polaris-value">' + followUp + ' lead' + (followUp !== 1 ? 's' : '') + '</span></div>';
     html += '</div></div>';
     this.polarisSection.innerHTML = html;
   }
@@ -474,23 +435,39 @@ class CalendarData {
       }
 
       async fetchEvents() {
-        try { const r = await fetch(`${this.baseUrl}/events`, { headers: this._authHeaders() }); const d = await r.json(); return d.events || []; }
+        try {
+          await window.CanonicalIntelligence.loadCompatibility('calendar');
+          return window.syncCalendarFromAppStore ? window.syncCalendarFromAppStore() : [];
+        }
         catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); return []; }
       }
 
       async createEvent(data) {
-        try { const r = await fetch(`${this.baseUrl}/events`, { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify(data) }); const d = await r.json(); return d.event; }
-        catch(e) { console.warn('[CalendarData] createEvent:', e.message); return null; }
+        console.warn('[CalendarData] Canonical graph creation is not available from the Calendar presentation surface.');
+        return null;
       }
 
       async updateEvent(id, data) {
-        try { const r = await fetch(`${this.baseUrl}/events/${id}`, { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify(data) }); const d = await r.json(); return d.event; }
+        try {
+          var start = data.date && data.time ? new Date(data.date + 'T' + data.time).toISOString() : null;
+          var end = data.date && data.endTime ? new Date(data.date + 'T' + data.endTime).toISOString() : null;
+          var headers = Object.assign({'Content-Type':'application/json'}, this._authHeaders());
+          var context = window.CanonicalIntelligence.synchronizeAuthority();
+          if (context.sessionId) headers['X-NorthStar-Session-ID'] = context.sessionId;
+          const r = await fetch('/api/v1/canonical/appointments/' + encodeURIComponent(id), {
+            method:'PATCH', headers:headers, body:JSON.stringify({ scheduledStart:start, scheduledEnd:end, status:'scheduled' })
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d && d.error && d.error.message || 'Appointment update failed.');
+          await window.CanonicalIntelligence.loadCompatibility('calendar');
+          return d.data;
+        }
         catch(e) { console.warn('[CalendarData] updateEvent:', e.message); return null; }
       }
 
       async deleteEvent(id) {
-        try { const r = await fetch(`${this.baseUrl}/events/${id}`, { method:'DELETE', headers: this._authHeaders() }); return r.ok; }
-        catch(e) { console.warn('[CalendarData] deleteEvent:', e.message); return false; }
+        console.warn('[CalendarData] Canonical deletion is not available from the Calendar presentation surface.');
+        return false;
       }
 
       async exportICS() {
@@ -624,41 +601,35 @@ window.calModal = calModal;
 
 window.openEventModal = function() { calModal.openCreateEvent(calState.selectedDate || new Date()); };
 
-// Build events from AppStore leads + API events
+// Present authoritative calendar records. The historical function name is
+// retained for the PR #68 readiness contract; it no longer synthesizes events.
 window.syncCalendarFromAppStore = function() {
-  var allLeads = calState.getLiveLeads();
-  // Generate events from leads that have appointment-ready outcomes
-  // Also use all leads with avgPrice so pipeline values are complete
-  var today = new Date();
-  var todayStr = calState._formatDate(today);
-  // Standard appointment times spread through the day
-  var apptTimes = ['8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'];
-  var timeIdx = 0;
-  var leadEvents = [];
-  allLeads.forEach(function(l) {
-    // Include leads with appointment-related outcome OR any lead with avgPrice (for visibility)
-    var isAppointment = (l.outcome === 'appointment-set' || l.status === 'booked' || l.status === 'appointment-set' || l.appointment_date);
-    if (!isAppointment) return;
-    var time = l.appointment_time || apptTimes[timeIdx % apptTimes.length];
-    var date = l.appointment_date || todayStr;
-    timeIdx++;
-    leadEvents.push({
-      id: 'lead-' + l.id,
-      title: l.caller_name || l.caller || 'Appointment',
-      date: date,
-      time: time,
-      type: 'lead',
-      leadId: l.id,
-      phone: l.phone || '',
-      address: l.address || '',
-      serviceType: l.service_type || l.service || '',
-      estimatedPrice: parseFloat(l.avgPrice || l.estimated_price) || 0,
+  var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
+  var records = projection && Array.isArray(projection.records) ? projection.records : [];
+  return records.map(function(record) {
+    var start = record.scheduledStart ? new Date(record.scheduledStart) : null;
+    var end = record.scheduledEnd ? new Date(record.scheduledEnd) : null;
+    var values = record.canonical && record.canonical.values;
+    return {
+      id: record.id,
+      title: record.customer && record.customer.name || 'Appointment',
+      date: start && !isNaN(start.getTime()) ? calState._formatDate(start) : null,
+      time: start && !isNaN(start.getTime()) ? start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null,
+      endTime: end && !isNaN(end.getTime()) ? end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null,
+      type: 'canonical',
+      leadId: record.canonical && record.canonical.ids.opportunity,
+      phone: record.customer && record.customer.phone,
+      address: record.customer && record.customer.address,
+      serviceType: values && values.service && values.service.label,
+      estimatedPrice: values ? values.customerFacingPrice : null,
       color: '#6395ff',
-      status: l.outcome || l.status || 'scheduled',
-      duration: l.duration || '60 min'
-    });
+      status: record.status,
+      duration: values ? values.estimatedProductionDurationHours : null,
+      calculationVersion: record.canonical && record.canonical.calculationVersion,
+      snapshotDigest: record.canonical && record.canonical.snapshotDigest,
+      readOnly: true
+    };
   });
-  return leadEvents;
 };
 
 window.refreshCalendar = async function() {

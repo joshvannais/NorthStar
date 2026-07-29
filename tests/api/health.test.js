@@ -14,28 +14,27 @@ const { app } = require('../../src/server');
 describe('Phase 4 — API: Health Check System', () => {
 
   describe('Public Health Endpoints', () => {
-    test('GET /api/health returns 200 with status', async () => {
+    test('GET /api/health reports degraded when PostgreSQL is not initialized', async () => {
       const res = await request(app).get('/api/health');
       expect(res.status).toBe(200);
       expect(res.type).toMatch(/json/);
       expect(res.body).toBeDefined();
-      expect(res.body.status).toBe('ok');
+      expect(res.body.status).toBe('degraded');
     });
 
-    test('GET /api/stats returns JSON response', async () => {
+    test('GET /api/stats requires authenticated tenant context', async () => {
       const res = await request(app).get('/api/stats');
       expect(res.type).toMatch(/json/);
-      expect([200, 500]).toContain(res.status);
+      expect(res.status).toBe(401);
     });
   });
 
   describe('Polaris Status', () => {
-    test('GET /api/v1/polaris/status — returns JSON (may be 200 or 401)', async () => {
+    test('GET /api/v1/polaris/status — returns the exact retired-authority response', async () => {
       const res = await request(app).get('/api/v1/polaris/status');
-      // Pre-Phase 9 middleware order: dashboard requireAuth intercepts → 401
-      // Post-Phase 9: public → 200
-      expect([200, 401]).toContain(res.status);
+      expect(res.status).toBe(410);
       expect(res.type).toMatch(/json/);
+      expect(res.body.error.code).toBe('LEGACY_AUTHORITY_RETIRED');
     });
   });
 

@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="northstar-canonical-surfaces" content="calendar">
+  <script src="/js/canonical-intelligence.js"></script>
   <meta charset="UTF-8">
   <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"dark")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -359,6 +361,10 @@ function syncAuthoritativeCalendarLeads(loadInfo) {
 
 if (window.EventBus && typeof window.EventBus.on === 'function') {
   window.EventBus.on('store:loaded', syncAuthoritativeCalendarLeads);
+  window.EventBus.on('canonical:loaded', function(loadInfo) {
+    if (!loadInfo || loadInfo.from !== 'server' || loadInfo.surface !== 'calendar') return;
+    syncAuthoritativeCalendarLeads({ from: 'server' });
+  });
 }
 
 if (document.readyState === 'loading') {

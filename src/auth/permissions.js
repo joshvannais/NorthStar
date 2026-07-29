@@ -4,8 +4,6 @@
  * Data isolation enforced via organization_id
  */
 
-const db = require('../db');
-
 // Permission matrix: role -> [resource:action]
 const PERMISSIONS = {
   owner: {
@@ -74,43 +72,22 @@ function hasPermission(role, resource, action) {
  * Usage: requirePermission('leads', 'read')
  */
 function requirePermission(resource, action) {
-  return async (req, res, next) => {
-    try {
-      const userId = req.user?.sub;
-      const orgId = req.user?.orgId;
-
-      if (!userId) {
-        return res.status(401).json({ error: 'Authentication required' });
-      }
-
-      // Resolve role from DB
-      let role = 'viewer';
-      if (db.isAvailable()) {
-        const result = await db.query(
-          'SELECT role FROM users WHERE id = $1',
-          [userId]
-        );
-        if (result.rows.length > 0) {
-          role = result.rows[0].role;
-        }
-      }
-
-      if (!hasPermission(role, resource, action)) {
-        return res.status(403).json({
-          error: 'Insufficient permissions',
-          required: { resource, action },
-          role,
-        });
-      }
-
-      // Attach orgId for data isolation
-      req.orgId = orgId;
-      req.userRole = role;
-      next();
-    } catch (err) {
-      console.error('[Auth] Permission check error:', err.message);
-      res.status(500).json({ error: 'Authorization check failed' });
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required', requestId: req.requestId || req.correlationId || 'unavailable' });
     }
+    if (!req.tenantContext || !req.orgId || !req.userRole) {
+      return res.status(403).json({ error: 'Active organization membership required', requestId: req.requestId || req.correlationId || 'unavailable' });
+    }
+    if (!hasPermission(req.userRole, resource, action)) {
+      return res.status(403).json({
+        error: 'Insufficient permissions',
+        required: { resource, action },
+        role: req.userRole,
+        requestId: req.requestId || req.correlationId || 'unavailable',
+      });
+    }
+    return next();
   };
 }
 
@@ -119,32 +96,13 @@ function requirePermission(resource, action) {
  * Attaches orgId from the user's JWT or DB lookup.
  */
 async function requireOrgMembership(req, res, next) {
-  try {
-    const userId = req.user?.sub;
-    if (!userId) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    if (req.orgId) {
-      return next();
-    }
-
-    if (db.isAvailable()) {
-      const result = await db.query(
-        'SELECT organization_id FROM users WHERE id = $1',
-        [userId]
-      );
-      if (result.rows.length > 0) {
-        req.orgId = result.rows[0].organization_id;
-        return next();
-      }
-    }
-
-    return res.status(403).json({ error: 'No organization membership found' });
-  } catch (err) {
-    console.error('[Auth] Org membership error:', err.message);
-    res.status(500).json({ error: 'Authorization check failed' });
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required', requestId: req.requestId || req.correlationId || 'unavailable' });
   }
+  if (!req.tenantContext || !req.orgId || !req.userRole) {
+    return res.status(403).json({ error: 'Active organization membership required', requestId: req.requestId || req.correlationId || 'unavailable' });
+  }
+  return next();
 }
 
 module.exports = {

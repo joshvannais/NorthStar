@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
+  <meta name="northstar-canonical-surfaces" content="executive">
+  <script src="/js/canonical-intelligence.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Executive Brief — POLARIS™ — NorthStar Solutions</title>
@@ -555,7 +557,7 @@
                       return Promise.all([
                         Promise.resolve(exec),
                         PolarisApi.getDashboard().catch(function() { return {}; }),
-                        PolarisApi.getCustomers().catch(function() { return []; }),
+                        PolarisApi.getCustomers().then(function(data) { return data.customers || []; }).catch(function() { return []; }),
                         PolarisApi.getPipeline().catch(function() { return []; })
                       ]);
                     })

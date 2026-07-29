@@ -15,13 +15,12 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const config = require('./config');
 const apiRoutes = require('./routes/api');
-const dashboardRoutes = require('./routes/dashboard');
-const publicApiRoutes = require('./routes/publicApi');
-const polarisRoutes = require('./routes/polaris');
-const polarisEnginesRoutes = require('./routes/polaris-engines');
-const customerIntelligenceRoutes = require('./routes/customerIntelligence');
 const businessProfileRoutes = require('./routes/businessProfile');
 const voiceRoutes = require('./routes/voice');
+const voiceWebhook = require('./voice/webhook');
+const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
+const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
+const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -41,9 +40,14 @@ const PORT = config.port || 3000;
 
 // Middleware
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '1mb' }));
-app.use(securityHeaders);
 app.use(correlationId);
+app.use(express.json({
+  limit: '1mb',
+  verify(req, _res, buffer) {
+    req.rawBody = buffer.toString();
+  },
+}));
+app.use(securityHeaders);
 app.use(auditLogger);
 
 // Static assets (CSS, JS)
@@ -523,15 +527,22 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 // ── /api/v1/* routes — registered BEFORE /api to avoid interception by apiRoutes' global requireAuth
 const simulationsRoutes = require('./routes/simulations');
 app.use('/api/v1', simulationsRoutes);
-app.use('/api/v1', dashboardRoutes);
-app.use('/api/v1', publicApiRoutes);
-app.use('/api/v1/polaris', polarisRoutes);
-app.use('/api/v1', polarisEnginesRoutes);
-app.use('/api/v1/leads', customerIntelligenceRoutes);
+app.use('/api/v1/canonical', createCanonicalRouter());
+// Canonical compatibility routes precede legacy dashboard/public routers so
+// supported reads cannot be shadowed by unscoped file-era handlers.
+app.use('/api/v1', createCompatibilityRouter());
+// Specific downstream routers precede the broad dashboard router. This keeps
+// its router-wide authentication from touching paths it does not own.
 app.use('/api/v1/business-profile', businessProfileRoutes);
 app.use('/api/v1/voice', voiceRoutes);
+app.use('/api/v1', createLegacyAuthorityRetirementRouter());
 
-// API routes (global requireAuth applies to all /api/* routes EXCEPT /api/v1/* handled above)
+// Canonical /api lead adapters precede the file-era router. The compatibility
+// router authenticates only paths it owns, so public webhooks still fall through.
+app.use('/api', canonicalLeadsRoutes);
+app.use('/api', createCompatibilityRouter());
+app.use('/api', createLegacyAuthorityRetirementRouter());
+// API routes (global requireAuth applies to all remaining /api/* routes)
 app.use('/api', apiRoutes);
 
 // 404 + error handler (single instances)
@@ -540,41 +551,13 @@ app.use(errorHandler);
 
 // Start server
 async function start() {
+  voiceWebhook.start();
+
   // Initialize database, cache, and audit logging
   await db.initDatabase();
   await cache.init();
   await audit.ensureTable();
 
-  // Initialize Polaris Intelligence Engine
-  const polaris = require('./polaris/engine');
-  polaris.init();
-  // Initialize Polaris Customer Lifecycle Engine
-  const customerEngine = require('./polaris/customer-engine');
-  customerEngine.init();
-  // Initialize Polaris Communications Intelligence Engine
-  const commsEngine = require('./polaris/communications-engine');
-  commsEngine.init();
-  // Initialize Polaris Opportunity & Pipeline Intelligence Engine
-  const oppEngine = require('./polaris/opportunity-engine');
-  oppEngine.init();
-  // Initialize Polaris Workflow & Scheduling Intelligence Engine
-  const wfEngine = require('./polaris/workflow-engine');
-  wfEngine.init();
-  // Initialize Polaris Financial Intelligence Engine
-  const finEngine = require('./polaris/financial-engine');
-  finEngine.init();
-  // Initialize Polaris Asset & Equipment Intelligence Engine
-  const astEngine = require('./polaris/asset-engine');
-  astEngine.init();
-  // Initialize Polaris Crew & Resource Intelligence Engine
-  const crewEngine = require('./polaris/crew-engine');
-  crewEngine.init();
-  // Initialize Polaris Job Execution Intelligence Engine
-  const jobEngine = require('./polaris/job-engine');
-  jobEngine.init();
-  // Initialize Polaris Business Intelligence & Analytics Engine
-  const analyticsEngine = require('./polaris/analytics-engine');
-  analyticsEngine.init();
 
   const server = app.listen(PORT, () => {
     const baseUrl = `http://localhost:${PORT}`;
@@ -609,6 +592,12 @@ async function start() {
     console.log(`  GET  ${baseUrl}/api/admin/users          → All contractors`);
     console.log('');
   });
+
+  server.once('close', () => {
+    voiceWebhook.shutdown();
+  });
+
+  return server;
 }
 
 // Only auto-start when run directly (not when required via require() for testing)

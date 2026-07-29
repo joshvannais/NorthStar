@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="northstar-canonical-surfaces" content="communications">
+  <script src="/js/canonical-intelligence.js"></script>
   <meta charset="UTF-8">
   <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("northstar-theme")||"light")</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -648,9 +650,7 @@
   if (!isReload && performance && performance.navigation) {
     isReload = performance.navigation.type === 1;
   }
-  if (isReload || !sessionStorage.getItem('northstarSessionId')) {
-    sessionStorage.setItem('northstarSessionId', 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
-  }
+  // CanonicalIntelligence owns per-tab session metadata.
   window.SIM_SESSION_ID = sessionStorage.getItem('northstarSessionId');
 })();
 
@@ -862,10 +862,11 @@ function _normalizeCommunication(comm) {
 
 // ===== Fetch communications from canonical Polaris API (server source of truth) ==== 
 function fetchCommunications() {
-  return _authFetch('/api/v1/communications?limit=50').then(function(result) {
+  return PolarisApi.getCommunications({ limit: 50 }).then(function(result) {
     if (result && result.communications && result.communications.length > 0) {
       pageCalls = result.communications.map(function(comm) {
-        var n = _normalizeCommunication(comm);
+        var n = PolarisApi.normalizeCommunication(comm);
+        var values = comm.canonical && comm.canonical.values;
         return {
           id: comm.id, customerId: comm.customerId,
           caller: n.callerName || comm.customerId || 'Unknown',
@@ -873,13 +874,13 @@ function fetchCommunications() {
           customerName: n.callerName || comm.customerId || 'Unknown',
           phone: n.phone || '', phoneNumber: n.phone || '',
           service: comm.type === 'call' ? (comm.subject || 'Call') : (comm.type || 'call'),
-          avgPrice: 0, estimatedPrice: 0,
+          avgPrice: values ? values.customerFacingPrice : null, estimatedPrice: values ? values.customerFacingPrice : null,
           jobDetail: comm.content || comm.subject || '',
           description: comm.content || comm.subject || '',
           status: comm.status || 'completed', outcome: comm.status || 'completed',
           receivedAt: comm.createdAt, time: comm.createdAt, createdAt: comm.createdAt,
           duration: comm.duration || '', transcript: comm.content || '',
-          summary: comm.subject || '', source: 'polaris'
+          summary: comm.subject || '', source: 'canonical-postgresql', canonical: comm.canonical, readOnly: true
         };
       });
     } else { pageCalls = []; }
@@ -1039,36 +1040,28 @@ function sortCalls(arr, sort) {
   return sorted;
 }
 
-// ===== Stats (computed directly from canonical page data) =====
+// ===== Stats copied from the server aggregate; unavailable fields stay explicit. =====
 function upStats() {
   loadKpiGrid();
 }
 function loadKpiGrid() {
   var grid = document.getElementById('kpiGrid');
   if (!grid) return;
-  var calls = pageCalls;
-  var total = calls.length;
-  var todayCount = calls.filter(function(l) {
-    try { return isToday(new Date(l.receivedAt)); } catch(e) { return false; }
-  }).length;
-  var scheduledCount = calls.filter(function(l) { return l.outcome === 'appointment-set'; }).length;
-  var totalRevenue = calls.reduce(function(s, l) { return s + (l.avgPrice || l.estimatedPrice || 0); }, 0);
-  var avgValue = total > 0 ? Math.round(totalRevenue / total) : 0;
-  var missedCount = calls.filter(function(l) { return l.status === 'voicemail' || l.outcome === 'voicemail'; }).length;
-  var qualifiedCount = calls.filter(function(l) { return l.status === 'scheduled' || l.status === 'contacted' || l.status === 'new'; }).length;
-  var wonCount = calls.filter(function(l) { return l.status === 'completed' || l.outcome === 'appointment-set'; }).length;
-  var convRate = total > 0 ? Math.round((wonCount / total) * 100) + '%' : '\u2014';
-  var aiTransferRate = total > 0 ? Math.round((qualifiedCount / total) * 100) + '%' : '\u2014';
+  var projection = CanonicalIntelligence.getProjection('communications');
+  var metrics = projection && projection.metrics;
+  var total = metrics ? metrics.graphCount : null;
+  var appointments = metrics ? metrics.appointmentCount : null;
+  var revenue = metrics ? metrics.estimatedRevenue : null;
 
   var kpiDefinitions = [
-    { id:'today_calls', icon:'📞', label:"Today's Communications", value: todayCount, trend: todayCount > 0 ? '<span class="ds-trend-up">\u2191</span>' : '' },
-    { id:'new_leads', icon:'👤', label:'New Leads', value: total, trend: total > 0 ? '<span class="ds-trend-up">\u2191</span>' : '' },
-    { id:'appointments', icon:'📅', label:'Appointments', value: scheduledCount, trend: '' },
-    { id:'lead_conversion', icon:'📊', label:'Lead Conv.', value: convRate, trend: '' },
-    { id:'avg_job_value', icon:'💰', label:'Avg Job Value', value: avgValue > 0 ? '$'+avgValue.toLocaleString() : '\u2014', trend: '' },
-    { id:'missed_calls', icon:'🚫', label:'Missed Calls', value: missedCount, trend: '0' },
-    { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', value: total > 0 ? '2:00' : '\u2014', trend: '' },
-    { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', value: aiTransferRate, trend: '' },
+    { id:'today_calls', icon:'📞', label:"Today's Communications", value: '\u2014', trend: '' },
+    { id:'new_leads', icon:'👤', label:'Canonical Graphs', value: total == null ? '\u2014' : total, trend: '' },
+    { id:'appointments', icon:'📅', label:'Appointments', value: appointments == null ? '\u2014' : appointments, trend: '' },
+    { id:'lead_conversion', icon:'📊', label:'Lead Conv.', value: '\u2014', trend: '' },
+    { id:'avg_job_value', icon:'💰', label:'Est. Revenue', value: revenue == null ? 'Not calculated' : '$'+Number(revenue).toLocaleString(), trend: '' },
+    { id:'missed_calls', icon:'🚫', label:'Missed Calls', value: '\u2014', trend: '' },
+    { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', value: '\u2014', trend: '' },
+    { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', value: '\u2014', trend: '' },
   ];
   var html = '';
   kpiDefinitions.forEach(function(kpi) {
@@ -1085,13 +1078,7 @@ function loadKpiGrid() {
 }
 
 function clearAllCalls() {
-  if(confirm("Clear all call history?")) {
-    pageCalls = [];
-    renderCalls();
-    if (typeof NotificationService !== 'undefined') {
-      NotificationService.show("\uD83D\uDDD1 Calls cleared", "info");
-    }
-  }
+  if (typeof NotificationService !== 'undefined') NotificationService.show('Canonical communications are read-only on this surface.', 'warning');
 }
 
 // Listen for simulation events to auto-refresh

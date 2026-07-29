@@ -16,28 +16,34 @@ function createError(code, message, details = {}, statusCode = 400) {
  * Express middleware: catches errors and returns consistent format.
  */
 function errorHandler(err, req, res, _next) {
-  console.error(`[Error] ${req.method} ${req.path}:`, err.message);
+  const requestId = req.requestId || req.correlationId || 'unavailable';
+  console.error('[Error] Request failed:', {
+    requestId,
+    method: req.method,
+    path: req.path,
+    code: err.code || 'internal_error',
+  });
 
   // Handle known error types
   if (err.statusCode) {
-    return res.status(err.statusCode).json({ error: { code: err.code || 'error', message: err.message, details: err.details || {} } });
+    return res.status(err.statusCode).json({ error: { code: err.code || 'error', message: err.message, details: err.details || {}, requestId } });
   }
 
   // Validation errors (Joi, express-validator)
   if (err.name === 'ValidationError') {
     return res.status(422).json({
-      error: { code: 'validation_error', message: 'Invalid request data.', details: { errors: err.errors || err.details } }
+      error: { code: 'validation_error', message: 'Invalid request data.', details: { errors: err.errors || err.details }, requestId }
     });
   }
 
   // JWT errors
   if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
-    return res.status(401).json({ error: { code: 'invalid_token', message: 'Invalid or expired token.' } });
+    return res.status(401).json({ error: { code: 'invalid_token', message: 'Invalid or expired token.', requestId } });
   }
 
   // Default: 500 Internal Server Error
   res.status(500).json({
-    error: { code: 'internal_error', message: 'An unexpected error occurred. Please try again.' }
+    error: { code: 'internal_error', message: 'An unexpected error occurred. Please try again.', requestId }
   });
 }
 
@@ -45,8 +51,9 @@ function errorHandler(err, req, res, _next) {
  * Helper: 404 Not Found
  */
 function notFound(req, res) {
+  const requestId = req.requestId || req.correlationId || 'unavailable';
   res.status(404).json({
-    error: { code: 'not_found', message: `Endpoint ${req.method} ${req.path} not found.` }
+    error: { code: 'not_found', message: `Endpoint ${req.method} ${req.path} not found.`, requestId }
   });
 }
 

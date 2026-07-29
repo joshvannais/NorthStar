@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
+  <meta name="northstar-canonical-surfaces" content="customer-detail estimates">
+  <script src="/js/canonical-intelligence.js"></script>
+  <script src="/js/polaris-api.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lead Details — NorthStar Solutions</title>
@@ -106,20 +109,21 @@
           return;
         }
 
-        // Try AppStore first, then API
-        var lead = (typeof AppStore !== 'undefined' && AppStore.getLead) ? AppStore.getLead(leadId) : null;
-
-        if (lead) {
-          renderLead(lead);
-        } else if (typeof API !== 'undefined' && API.getLead) {
-          API.getLead(leadId).then(function(data) {
-            renderLead(data);
-          }).catch(function() {
-            document.getElementById('loadingState').innerHTML = '<div style="font-size:32px;margin-bottom:12px;">😕</div><div>Lead not found. <a href="/dashboard/leads" style="color:var(--brand-600);">Back to leads</a></div>';
+        PolarisApi.getOpportunities({ limit: 100 }).then(function(result) {
+          var records = result.opportunities || [];
+          var record = records.find(function(candidate) {
+            var ids = candidate.canonical && candidate.canonical.ids;
+            return ids && Object.keys(ids).some(function(key) { return ids[key] === leadId; });
           });
-        } else {
+          var lead = PolarisApi.normalizeLead(record);
+          if (!lead) throw new Error('not found');
+          lead.caller = lead.callerName;
+          lead.avgPrice = lead.estimatedPrice;
+          lead.polarisEstimate = PolarisEngine.generateEstimate(lead);
+          renderLead(lead);
+        }).catch(function() {
           document.getElementById('loadingState').innerHTML = '<div style="font-size:32px;margin-bottom:12px;">😕</div><div>Lead not found. <a href="/dashboard/leads" style="color:var(--brand-600);">Back to leads</a></div>';
-        }
+        });
       }
 
       function renderLead(lead) {
@@ -141,30 +145,11 @@
         // Polaris analysis — render via PolarisUI platform (after DOM is built)
         // The actual PolarisUI.render() call happens after container.innerHTML is set below
         // so that the polarisContainer div exists in the DOM first.
-        var polarisData = lead.polarisData || lead.polarisEstimate || null;
+        var polarisData = lead.polarisEstimate || (typeof PolarisEngine !== 'undefined' ? PolarisEngine.generateEstimate(lead) : null);
 
         // Generate estimate using M13 intelligence (async), fall back to client-side
         function runPolarisEstimate() {
-          if (!lead.polarisEstimate && typeof PolarisEngine !== 'undefined') {
-            if (PolarisEngine.fetchM13Intelligence) {
-              PolarisEngine.fetchM13Intelligence(lead).then(function(est) {
-                // Also fetch M13 bridge intelligence (customer + comms)
-                if (typeof PolarisM13Bridge !== 'undefined' && PolarisM13Bridge.augmentLead) {
-                  PolarisM13Bridge.augmentLead(lead).then(function() {
-                    if (document.getElementById('leadDetailContainer')) {
-                      renderLeadDetail(lead);
-                    }
-                  });
-                } else {
-                  if (est && document.getElementById('leadDetailContainer')) {
-                    renderLeadDetail(lead);
-                  }
-                }
-              });
-            } else if (PolarisEngine.generateEstimate) {
-              try { PolarisEngine.generateEstimate(lead); } catch(e) {}
-            }
-          }
+          return polarisData;
         }
         runPolarisEstimate();
 
@@ -295,18 +280,12 @@
         var ciContainer = document.getElementById('customerIntelligenceContainer');
         if (!ciContainer) return;
 
-        fetch('/api/v1/leads/' + encodeURIComponent(leadId) + '/intelligence')
-          .then(function(r) { return r.json(); })
-          .then(function(resp) {
-            if (resp.success && resp.data) {
-              renderCustomerIntelligence(ciContainer, resp.data);
-            } else {
-              ciContainer.innerHTML = '<div class="ci-placeholder">Customer intelligence unavailable.</div>';
-            }
-          })
-          .catch(function() {
-            ciContainer.innerHTML = '<div class="ci-placeholder">Could not load customer intelligence.</div>';
-          });
+        var item = PolarisEngine.generateEstimate({ id: leadId });
+        if (item && window.PolarisUI) {
+          PolarisUI.render(ciContainer, item, { context: 'lead' });
+        } else {
+          ciContainer.innerHTML = '<div class="ci-placeholder">Canonical intelligence unavailable.</div>';
+        }
       }
 
       function renderCustomerIntelligence(container, ci) {

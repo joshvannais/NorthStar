@@ -7,8 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const { getDataRoot } = require('../services/dataRoot');
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = getDataRoot();
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 function ensureDataDir() {

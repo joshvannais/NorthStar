@@ -161,14 +161,17 @@ window.PolarisApi = (function () {
   }
 
   function normalizeCommunication(record) {
-    if (!record || !record.canonical || !record.canonical.values) return null;
+    if (!record || !record.canonical || !record.canonical.ids) return null;
     var rawId = record.canonical.ids.customer;
     var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    var customer = record.customer || {};
+    var name = (typeof customer.name === 'string' && customer.name.trim()) ? customer.name.trim() : null;
+    var phone = (typeof customer.phone === 'string' && customer.phone.trim()) ? customer.phone.trim() : null;
     return {
       id: record.canonical.ids.communication,
       customerId: (typeof rawId === 'string' && UUID.test(rawId)) ? rawId : null,
-      customerName: record.customer && record.customer.name,
-      customerPhone: record.customer && record.customer.phone,
+      customerName: name,
+      customerPhone: phone,
       type: record.channel,
       direction: record.direction,
       subject: record.subject,

@@ -38,16 +38,21 @@ function requestContext(req) {
   };
 }
 
-function validateCustomerIdFilter(raw) {
-  if (raw === undefined || raw === null) return null;       // absent — no filter
-  if (raw === '') return null;                              // empty — treat as absent
-  const str = String(raw);
-  if (UUID.test(str)) return str;                           // valid UUID
-  // Malformed — fail closed
-  const error = new Error('Invalid customerId filter value');
-  error.code = 'INVALID_CUSTOMER_ID';
-  error.statusCode = 400;
-  throw error;
+function validateCustomerIdFilter(raw, keyPresent) {
+  if (!keyPresent) return null;                             // absent — no filter
+  if (raw === undefined || raw === null) return failClosed();
+  if (Array.isArray(raw)) return failClosed();
+  const str = String(raw).trim();
+  if (str === '') return failClosed();                      // empty/whitespace
+  if (UUID.test(str) && str.length === 36) return str;      // valid, exact length
+  return failClosed();                                      // partial, overlong, trailing, encoded, anything else
+
+  function failClosed() {
+    const error = new Error('Invalid customerId filter value');
+    error.code = 'INVALID_CUSTOMER_ID';
+    error.statusCode = 400;
+    throw error;
+  }
 }
 
 function queryFilters(req) {
@@ -55,7 +60,10 @@ function queryFilters(req) {
   return stableValue({
     limit,
     status: typeof req.query.status === 'string' ? req.query.status : null,
-    customerId: validateCustomerIdFilter(req.query.customerId),
+    customerId: validateCustomerIdFilter(
+      req.query.customerId,
+      Object.prototype.hasOwnProperty.call(req.query, 'customerId')
+    ),
   });
 }
 
@@ -436,23 +444,25 @@ function createDependencies(options) {
   };
 }
 
-function sendPersistenceUnavailable(res) {
+function sendPersistenceUnavailable(res, req) {
   return res.status(503).json({
     success: false,
+    requestId: (req && req.requestId) || undefined,
     error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE', message: 'Canonical PostgreSQL persistence is unavailable.' },
   });
 }
 
-function sendInvalidCustomerId(res) {
+function sendInvalidCustomerId(res, req) {
   return res.status(400).json({
     success: false,
+    requestId: (req && req.requestId) || undefined,
     error: { code: 'INVALID_CUSTOMER_ID', message: 'Invalid customerId filter value.' },
   });
 }
 
-function handleEndpointError(res, _error) {
-  if (_error && _error.code === 'INVALID_CUSTOMER_ID') return sendInvalidCustomerId(res);
-  return sendPersistenceUnavailable(res);
+function handleEndpointError(res, _error, req) {
+  if (_error && _error.code === 'INVALID_CUSTOMER_ID') return sendInvalidCustomerId(res, req);
+  return sendPersistenceUnavailable(res, req);
 }
 
 async function authoritativeItems(req, dependencies, endpoint) {
@@ -495,7 +505,7 @@ function createCanonicalRouter(options) {
         },
       });
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return sendPersistenceUnavailable(res, req);
     }
   });
 
@@ -505,7 +515,7 @@ function createCanonicalRouter(options) {
       const items = await authoritativeItems(req, dependencies, 'canonical.graphs');
       return res.json({ success: true, data: { items, count: items.length, readModelVersion: READ_MODEL_VERSION, digest: sha256(items.map(item => item.projectionDigest)) } });
     } catch (_error) {
-      return handleEndpointError(res, _error);
+      return handleEndpointError(res, _error, req);
     }
   });
 
@@ -516,7 +526,7 @@ function createCanonicalRouter(options) {
         const items = await authoritativeItems(req, dependencies, 'canonical.' + endpoint);
         return res.json({ success: true, data: { ...aggregate(items), digest: sha256(items.map(item => item.projectionDigest)), readModelVersion: READ_MODEL_VERSION } });
       } catch (_error) {
-        return handleEndpointError(res, _error);
+        return handleEndpointError(res, _error, req);
       }
     });
   }
@@ -527,7 +537,7 @@ function createCanonicalRouter(options) {
       const items = await authoritativeItems(req, dependencies, 'canonical.surface.' + req.params.surface);
       return res.json({ success: true, data: surfaceProjection(req.params.surface, items, requestContext(req)) });
     } catch (_error) {
-      return handleEndpointError(res, _error);
+      return handleEndpointError(res, _error, req);
     }
   });
 
@@ -537,7 +547,7 @@ function createCanonicalRouter(options) {
       const items = await authoritativeItems(req, dependencies, 'canonical.compat.' + req.params.surface);
       return res.json({ success: true, data: compatibilityProjection(req.params.surface, items, requestContext(req)) });
     } catch (_error) {
-      return handleEndpointError(res, _error);
+      return handleEndpointError(res, _error, req);
     }
   });
 

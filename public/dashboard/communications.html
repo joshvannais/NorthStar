@@ -588,42 +588,7 @@
 <!-- Drawer overlay -->
   
 
-  <!-- Customer Detail Drawer -->
-  <div class="customer-drawer" id="customerDrawer">
-    <div class="drawer-header">
-      <h2 id="drawerTitle">Customer Details</h2>
-      <button class="drawer-close" onclick="CustomerDrawer.close()">x</button>
-    </div>
-    <div class="drawer-body" id="drawerBody">
-      <div class="drawer-section">
-        <h3>Contact Information</h3>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="drawerName">-</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="drawerPhone">-</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="drawerAddress">-</span></div>
-      </div>
-      <div class="drawer-section">
-        <h3>Job Details</h3>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="drawerService">-</span></div>
-        <div class="drawer-detail-row drawer-detail-row-nb"><span class="drawer-detail-label">Description</span></div>
-        <div class="drawer-description-box" id="drawerDescription">-</div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Est. Value</span><span class="drawer-detail-value" id="drawerValue">-</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Status</span><span class="drawer-detail-value" id="drawerStatus">-</span></div>
-        <div class="drawer-detail-row"><span class="drawer-detail-label">Date</span><span class="drawer-detail-value" id="drawerDate">-</span></div>
-      </div>
-      <div class="drawer-section">
-        <h3>POLARIS™ Revenue Intelligence</h3>
-        <div id="drawerPolarisInsight" class="drawer-polaris-insight">No insight available.</div>
-      </div>
-      <div class="drawer-section">
-        <h3>Pricing Breakdown</h3>
-        <div id="drawerPricingBreakdown"><p style="font-size:13px;color:var(--neutral-500);">No pricing data available.</p></div>
-      </div>
-      <div class="drawer-section">
-        <h3>Call Transcript</h3>
-        <div class="drawer-transcript" id="drawerTranscript">No transcript available.</div>
-      </div>
-    </div>
-  </div>
+  <!-- CustomerDrawer removed — CustomerDetail injects its own drawer HTML -->
 </div>
 <script src="/js/event-bus.js"></script>
   <script src="/js/communications-engine.js"></script>
@@ -631,7 +596,6 @@
 <script src="/js/app-store.js"></script>
 <script src="/js/polaris-engine.js"></script>
 <script src="/js/notification-service.js"></script>
-  <script src="/js/customer-drawer.js"></script>
   <script src="/js/customer-detail.js"></script>
   <script src="/js/status-pill.js"></script>
   <script src="/js/customer-card.js"></script>
@@ -989,8 +953,6 @@ function openCallCard(el) {
   if (!lead) return;
   if (lead.customerId && typeof CustomerDetail !== 'undefined') {
     CustomerDetail.open(lead.customerId);
-  } else if (typeof CustomerDrawer !== 'undefined') {
-    CustomerDrawer.open(lead);
   }
 }
 

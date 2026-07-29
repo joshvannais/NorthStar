@@ -829,13 +829,13 @@ function fetchCommunications() {
   return PolarisApi.getCommunications({ limit: 50 }).then(function(result) {
     if (result && result.communications && result.communications.length > 0) {
       pageCalls = result.communications.map(function(comm) {
-        var n = PolarisApi.normalizeCommunication(comm);
+        var n = PolarisApi.normalizeCommunication(comm) || {};
         var values = comm.canonical && comm.canonical.values;
         return {
-          id: comm.id, customerId: comm.customerId,
-          caller: n.callerName || comm.customerId || 'Unknown',
-          callerName: n.callerName || comm.customerId || 'Unknown',
-          customerName: n.callerName || comm.customerId || 'Unknown',
+          id: comm.id, customerId: n.customerId,
+          caller: n.callerName || n.customerId || 'Unknown',
+          callerName: n.callerName || n.customerId || 'Unknown',
+          customerName: n.callerName || n.customerId || 'Unknown',
           phone: n.phone || '', phoneNumber: n.phone || '',
           service: comm.type === 'call' ? (comm.subject || 'Call') : (comm.type || 'call'),
           avgPrice: values ? values.customerFacingPrice : null, estimatedPrice: values ? values.customerFacingPrice : null,

@@ -833,10 +833,10 @@ function fetchCommunications() {
         var values = comm.canonical && comm.canonical.values;
         return {
           id: comm.id, customerId: n.customerId,
-          caller: n.callerName || n.customerId || 'Unknown',
-          callerName: n.callerName || n.customerId || 'Unknown',
-          customerName: n.callerName || n.customerId || 'Unknown',
-          phone: n.phone || '', phoneNumber: n.phone || '',
+          caller: n.customerName || 'Unknown',
+          callerName: n.customerName || 'Unknown',
+          customerName: n.customerName || 'Unknown',
+          phone: n.customerPhone || '', phoneNumber: n.customerPhone || '',
           service: comm.type === 'call' ? (comm.subject || 'Call') : (comm.type || 'call'),
           avgPrice: values ? values.customerFacingPrice : null, estimatedPrice: values ? values.customerFacingPrice : null,
           jobDetail: comm.content || comm.subject || '',

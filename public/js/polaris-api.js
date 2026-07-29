@@ -162,9 +162,11 @@ window.PolarisApi = (function () {
 
   function normalizeCommunication(record) {
     if (!record || !record.canonical || !record.canonical.values) return null;
+    var rawId = record.canonical.ids.customer;
+    var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return {
       id: record.canonical.ids.communication,
-      customerId: record.canonical.ids.customer,
+      customerId: (typeof rawId === 'string' && UUID.test(rawId)) ? rawId : null,
       customerName: record.customer && record.customer.name,
       customerPhone: record.customer && record.customer.phone,
       type: record.channel,

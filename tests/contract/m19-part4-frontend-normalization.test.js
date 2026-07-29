@@ -3,59 +3,70 @@
 /**
  * M19 Part 4 — normalizeCommunication input contract regression
  *
- * Mirrors the exact normalization logic from public/js/polaris-api.js
- * normalizeCommunication(). Tests the frozen contract: primitive strings only,
- * bounded lengths, null-or-valid UUID for customerId.
+ * Executes the COMPLETE real production file public/js/polaris-api.js
+ * in a Node VM sandbox. Every assertion runs against the real
+ * PolarisApi.normalizeCommunication — nothing is copied, mirrored,
+ * or redefined.
  */
 
-// ── Mirrored normalization (must stay in sync with polaris-api.js) ──────
+const fs   = require('fs');
+const path = require('path');
+const vm   = require('vm');
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// ── Frozen contracts ───────────────────────────────────────────────────
 
-// Shared bounds — define here as the contract, apply in production fix
 const MAX_CUSTOMER_NAME_LENGTH  = 256;
 const MAX_CUSTOMER_PHONE_LENGTH = 64;
 
-function normalizeCommunication(record) {
-  if (!record || !record.canonical || !record.canonical.ids) return null;
+// ── Load and execute the real production script ────────────────────────
 
-  const rawId = record.canonical.ids.customer;
-  const customer = record.customer || {};
+const sourcePath = path.resolve(__dirname, '../../public/js/polaris-api.js');
+const source     = fs.readFileSync(sourcePath, 'utf8');
 
-  // ── customerId: only a canonical UUID string, no coercion ──────────
-  const customerId = (typeof rawId === 'string' && UUID_RE.test(rawId)) ? rawId : null;
+/** Stub for window.CanonicalIntelligence.requireClient().loadCompatibility */
+function fakeLoadCompatibility(_surface, _filters) {
+  return Promise.resolve({ items: [], metrics: {}, readModelVersion: 1 });
+}
 
-  // ── customerName: primitive string, trim, bounded ──────────────────
-  let name = null;
-  if (typeof customer.name === 'string') {
-    const trimmed = customer.name.trim();
-    if (trimmed.length > 0 && trimmed.length <= MAX_CUSTOMER_NAME_LENGTH) {
-      name = trimmed;
-    }
-  }
+const sandbox = {
+  window: {
+    CanonicalIntelligence: {
+      loadCompatibility: fakeLoadCompatibility,
+    },
+  },
+  fetch: function () {
+    return Promise.resolve({
+      ok: true,
+      json: function () { return Promise.resolve({ success: true, data: {} }); },
+    });
+  },
+  Promise: Promise,
+  Object: Object,
+  Array: Array,
+  String: String,
+  Number: Number,
+  Boolean: Boolean,
+  console: console,
+  setTimeout: setTimeout,
+  setInterval: setInterval,
+  clearTimeout: clearTimeout,
+  clearInterval: clearInterval,
+  location: { href: 'https://test.northstar-os.ai' },
+  document: { createElement: function () { return {}; } },
+};
 
-  // ── customerPhone: primitive string, trim, bounded ─────────────────
-  let phone = null;
-  if (typeof customer.phone === 'string') {
-    const trimmed = customer.phone.trim();
-    if (trimmed.length > 0 && trimmed.length <= MAX_CUSTOMER_PHONE_LENGTH) {
-      phone = trimmed;
-    }
-  }
+vm.createContext(sandbox);
+vm.runInContext(source, sandbox, { filename: 'polaris-api.js' });
 
-  return {
-    id: record.canonical.ids.communication,
-    customerId,
-    customerName: name,
-    customerPhone: phone,
-    type: record.channel,
-    direction: record.direction,
-    subject: record.subject,
-    content: record.transcript && record.transcript.text,
-    duration: record.transcript && record.transcript.durationSeconds,
-    canonical: record.canonical,
-    readOnly: true,
-  };
+// ── Validate the harness loaded correctly ──────────────────────────────
+
+const PolarisApi = sandbox.window.PolarisApi;
+
+if (!PolarisApi || typeof PolarisApi.normalizeCommunication !== 'function') {
+  throw new Error(
+    'FAIL: real PolarisApi.normalizeCommunication not found after executing ' +
+    'public/js/polaris-api.js — test harness is not authentic'
+  );
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -82,156 +93,196 @@ function record(overrides) {
 
 // ── Tests ──────────────────────────────────────────────────────────────
 
-describe('M19 Part 4 — normalizeCommunication input contract', () => {
+describe('M19 Part 4 — normalizeCommunication production contract', () => {
+
+  test('harness loads the real production PolarisApi', () => {
+    expect(typeof PolarisApi).toBe('object');
+    expect(typeof PolarisApi.normalizeCommunication).toBe('function');
+  });
 
   describe('canonical / ids safety', () => {
-    test('canonical absent → null', () => {
-      expect(normalizeCommunication({})).toBeNull();
+
+    test('canonical absent → null, no throw', () => {
+      expect(() => PolarisApi.normalizeCommunication({})).not.toThrow();
+      expect(PolarisApi.normalizeCommunication({})).toBeNull();
     });
-    test('canonical.ids absent → null', () => {
-      expect(normalizeCommunication({ canonical: {} })).toBeNull();
+
+    test('canonical.ids absent → null, no throw', () => {
+      expect(() => PolarisApi.normalizeCommunication({ canonical: {} })).not.toThrow();
+      expect(PolarisApi.normalizeCommunication({ canonical: {} })).toBeNull();
     });
+
+    test('canonical.values absent → safe', () => {
+      const r = record();
+      delete r.canonical.values;
+      expect(() => PolarisApi.normalizeCommunication(r)).not.toThrow();
+      expect(PolarisApi.normalizeCommunication(r)).not.toBeNull();
+    });
+
     test('canonical present with ids → not null', () => {
-      expect(normalizeCommunication(record())).not.toBeNull();
+      expect(PolarisApi.normalizeCommunication(record())).not.toBeNull();
     });
   });
 
   describe('customerId', () => {
+
     test('valid lowercase UUID → preserved', () => {
-      const n = normalizeCommunication(record());
+      const n = PolarisApi.normalizeCommunication(record());
       expect(n.customerId).toBe(VALID_UUID_LOWER);
     });
+
     test('valid uppercase UUID → preserved', () => {
-      const n = normalizeCommunication(record({ canonical: { ids: { communication: 'c1', customer: VALID_UUID_UPPER } } }));
+      const r = record({ canonical: { ids: { communication: 'c1', customer: VALID_UUID_UPPER } } });
+      const n = PolarisApi.normalizeCommunication(r);
       expect(n.customerId).toBe(VALID_UUID_UPPER);
     });
+
     test('malformed UUID → null', () => {
-      const n = normalizeCommunication(record({ canonical: { ids: { communication: 'c1', customer: 'not-a-uuid' } } }));
-      expect(n.customerId).toBeNull();
+      const r = record({ canonical: { ids: { communication: 'c1', customer: 'not-a-uuid' } } });
+      expect(PolarisApi.normalizeCommunication(r).customerId).toBeNull();
     });
+
     test('empty string → null', () => {
-      const n = normalizeCommunication(record({ canonical: { ids: { communication: 'c1', customer: '' } } }));
-      expect(n.customerId).toBeNull();
+      const r = record({ canonical: { ids: { communication: 'c1', customer: '' } } });
+      expect(PolarisApi.normalizeCommunication(r).customerId).toBeNull();
     });
+
     test('whitespace-only → null', () => {
-      const n = normalizeCommunication(record({ canonical: { ids: { communication: 'c1', customer: '   ' } } }));
-      expect(n.customerId).toBeNull();
+      const r = record({ canonical: { ids: { communication: 'c1', customer: '   ' } } });
+      expect(PolarisApi.normalizeCommunication(r).customerId).toBeNull();
     });
+
     test('missing ids.customer → null', () => {
       const r = record();
       delete r.canonical.ids.customer;
-      const n = normalizeCommunication(r);
-      expect(n.customerId).toBeNull();
+      expect(PolarisApi.normalizeCommunication(r).customerId).toBeNull();
     });
   });
 
-  describe('customerName', () => {
+  describe('customerName — bounded, type-safe', () => {
+
     test('valid name preserved', () => {
-      const n = normalizeCommunication(record());
-      expect(n.customerName).toBe('Alice Johnson');
+      expect(PolarisApi.normalizeCommunication(record()).customerName).toBe('Alice Johnson');
     });
+
     test('trims surrounding whitespace', () => {
-      const n = normalizeCommunication(record({ customer: { name: '  Bob  ' } }));
+      const n = PolarisApi.normalizeCommunication(record({ customer: { name: '  Bob  ' } }));
       expect(n.customerName).toBe('Bob');
     });
+
     test('empty string → null', () => {
-      const n = normalizeCommunication(record({ customer: { name: '' } }));
+      const n = PolarisApi.normalizeCommunication(record({ customer: { name: '' } }));
       expect(n.customerName).toBeNull();
     });
+
     test('whitespace-only → null', () => {
-      const n = normalizeCommunication(record({ customer: { name: '   ' } }));
+      const n = PolarisApi.normalizeCommunication(record({ customer: { name: '   ' } }));
       expect(n.customerName).toBeNull();
     });
-    test('object name → null (no crash)', () => {
-      const n = normalizeCommunication(record({ customer: { name: { first: 'Bob' } } }));
-      expect(n.customerName).toBeNull();
+
+    test('object name → null, no throw', () => {
+      expect(() => PolarisApi.normalizeCommunication(record({ customer: { name: { first: 'Bob' } } }))).not.toThrow();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { name: { first: 'Bob' } } })).customerName).toBeNull();
     });
-    test('array name → null (no crash)', () => {
-      const n = normalizeCommunication(record({ customer: { name: ['Bob'] } }));
-      expect(n.customerName).toBeNull();
+
+    test('array name → null, no throw', () => {
+      expect(() => PolarisApi.normalizeCommunication(record({ customer: { name: ['Bob'] } }))).not.toThrow();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { name: ['Bob'] } })).customerName).toBeNull();
     });
-    test('number name → null (no crash)', () => {
-      const n = normalizeCommunication(record({ customer: { name: 42 } }));
-      expect(n.customerName).toBeNull();
+
+    test('number name → null, no throw', () => {
+      expect(() => PolarisApi.normalizeCommunication(record({ customer: { name: 42 } }))).not.toThrow();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { name: 42 } })).customerName).toBeNull();
     });
-    test('boolean name → null (no crash)', () => {
-      const n = normalizeCommunication(record({ customer: { name: true } }));
-      expect(n.customerName).toBeNull();
+
+    test('boolean name → null, no throw', () => {
+      expect(() => PolarisApi.normalizeCommunication(record({ customer: { name: true } }))).not.toThrow();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { name: true } })).customerName).toBeNull();
     });
+
     test('name at max length (256) accepted', () => {
       const long = 'A'.repeat(MAX_CUSTOMER_NAME_LENGTH);
-      const n = normalizeCommunication(record({ customer: { name: long } }));
-      expect(n.customerName).toBe(long);
+      expect(PolarisApi.normalizeCommunication(record({ customer: { name: long } })).customerName).toBe(long);
     });
+
     test('name at max+1 → null', () => {
       const tooLong = 'A'.repeat(MAX_CUSTOMER_NAME_LENGTH + 1);
-      const n = normalizeCommunication(record({ customer: { name: tooLong } }));
-      expect(n.customerName).toBeNull();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { name: tooLong } })).customerName).toBeNull();
     });
+
     test('100K name → null, no crash', () => {
       const huge = 'A'.repeat(100000);
-      const n = normalizeCommunication(record({ customer: { name: huge } }));
-      expect(n.customerName).toBeNull();
+      expect(() => PolarisApi.normalizeCommunication(record({ customer: { name: huge } }))).not.toThrow();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { name: huge } })).customerName).toBeNull();
     });
   });
 
-  describe('customerPhone', () => {
+  describe('customerPhone — bounded, type-safe', () => {
+
     test('valid phone preserved', () => {
-      const n = normalizeCommunication(record());
-      expect(n.customerPhone).toBe('512-555-0100');
+      expect(PolarisApi.normalizeCommunication(record()).customerPhone).toBe('512-555-0100');
     });
+
     test('trims surrounding whitespace', () => {
-      const n = normalizeCommunication(record({ customer: { phone: '  555-0100  ' } }));
+      const n = PolarisApi.normalizeCommunication(record({ customer: { phone: '  555-0100  ' } }));
       expect(n.customerPhone).toBe('555-0100');
     });
+
     test('empty string → null', () => {
-      const n = normalizeCommunication(record({ customer: { phone: '' } }));
-      expect(n.customerPhone).toBeNull();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { phone: '' } })).customerPhone).toBeNull();
     });
+
     test('whitespace-only → null', () => {
-      const n = normalizeCommunication(record({ customer: { phone: '   ' } }));
-      expect(n.customerPhone).toBeNull();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { phone: '   ' } })).customerPhone).toBeNull();
     });
-    test('object phone → null (no crash)', () => {
-      const n = normalizeCommunication(record({ customer: { phone: {} } }));
-      expect(n.customerPhone).toBeNull();
+
+    test('object phone → null, no throw', () => {
+      expect(() => PolarisApi.normalizeCommunication(record({ customer: { phone: {} } }))).not.toThrow();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { phone: {} } })).customerPhone).toBeNull();
     });
-    test('array phone → null (no crash)', () => {
-      const n = normalizeCommunication(record({ customer: { phone: ['555'] } }));
-      expect(n.customerPhone).toBeNull();
+
+    test('array phone → null, no throw', () => {
+      expect(() => PolarisApi.normalizeCommunication(record({ customer: { phone: ['555'] } }))).not.toThrow();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { phone: ['555'] } })).customerPhone).toBeNull();
     });
-    test('number phone → null (no crash)', () => {
-      const n = normalizeCommunication(record({ customer: { phone: 5550100 } }));
-      expect(n.customerPhone).toBeNull();
+
+    test('number phone → null, no throw', () => {
+      expect(() => PolarisApi.normalizeCommunication(record({ customer: { phone: 5550100 } }))).not.toThrow();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { phone: 5550100 } })).customerPhone).toBeNull();
     });
+
     test('phone at max length (64) accepted', () => {
       const long = '5'.repeat(MAX_CUSTOMER_PHONE_LENGTH);
-      const n = normalizeCommunication(record({ customer: { phone: long } }));
-      expect(n.customerPhone).toBe(long);
+      expect(PolarisApi.normalizeCommunication(record({ customer: { phone: long } })).customerPhone).toBe(long);
     });
+
     test('phone at max+1 → null', () => {
       const tooLong = '5'.repeat(MAX_CUSTOMER_PHONE_LENGTH + 1);
-      const n = normalizeCommunication(record({ customer: { phone: tooLong } }));
-      expect(n.customerPhone).toBeNull();
+      expect(PolarisApi.normalizeCommunication(record({ customer: { phone: tooLong } })).customerPhone).toBeNull();
     });
   });
 
   describe('no-exception safety', () => {
+
     test('null record does not throw', () => {
-      expect(() => normalizeCommunication(null)).not.toThrow();
+      expect(() => PolarisApi.normalizeCommunication(null)).not.toThrow();
     });
+
     test('undefined record does not throw', () => {
-      expect(() => normalizeCommunication(undefined)).not.toThrow();
+      expect(() => PolarisApi.normalizeCommunication(undefined)).not.toThrow();
     });
+
     test('customer absent does not throw', () => {
       const r = record();
       delete r.customer;
-      expect(() => normalizeCommunication(r)).not.toThrow();
-      expect(normalizeCommunication(r).customerName).toBeNull();
-      expect(normalizeCommunication(r).customerPhone).toBeNull();
+      expect(() => PolarisApi.normalizeCommunication(r)).not.toThrow();
+      const n = PolarisApi.normalizeCommunication(r);
+      expect(n.customerName).toBeNull();
+      expect(n.customerPhone).toBeNull();
     });
+
     test('valid data round-trips', () => {
-      const n = normalizeCommunication(record());
+      const n = PolarisApi.normalizeCommunication(record());
       expect(n.customerId).toBe(VALID_UUID_LOWER);
       expect(n.customerName).toBe('Alice Johnson');
       expect(n.customerPhone).toBe('512-555-0100');

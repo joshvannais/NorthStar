@@ -168,15 +168,7 @@ describe('M19 Part 4 — canonical customerId input contract', () => {
         const pool = trackingPool();
         const app  = createApp(function () { return pool; });
         await request(app).get(ep.path + '?customerId=%20' + VALID).set(headers(ORG_A, USER_A));
-        // After the request, pool.query may have been called for
-        // authorization / membership checks. Those are NOT canonical
-        // data queries. The canonical data query is the first SELECT
-        // that hits the canonical graph/dashboard/analytics read model.
-        // For the mock pool that always returns {rows:[]}, the test
-        // verifies at minimum that the validator rejected BEFORE the
-        // canonical read path.
-        const queryTexts = pool._calls.map(function (c) { return c[0]; }).join(' ');
-        expect(queryTexts).not.toMatch(/canonical_graphs|canonical_operations|canonical_customers|SELECT.*FROM/i);
+        expect(pool._calls.length).toBe(0);
       });
 
       // ── requestId contract ────────────────────────────────────────

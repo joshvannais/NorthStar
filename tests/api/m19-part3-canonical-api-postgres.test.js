@@ -650,4 +650,89 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(graphs.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
     expect(trends.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
   });
+
+  describe('customerId filter validation', () => {
+    const validUUID = '00000000-0000-0000-0000-000000000099';
+
+    test('missing customerId retains unfiltered organization-scoped collection', async () => {
+      const res = await request(app).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    test('valid customerId filters normally', async () => {
+      const res = await request(app).get('/api/v1/canonical/graphs?customerId=' + validUUID).set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(200);
+    });
+
+    test('empty-string customerId returns 400 INVALID_CUSTOMER_ID', async () => {
+      const res = await request(app).get('/api/v1/canonical/graphs?customerId=').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+    });
+
+    test('whitespace-only customerId returns 400', async () => {
+      const res = await request(app).get('/api/v1/canonical/graphs?customerId=%20%20').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+    });
+
+    test('malformed UUID returns 400 INVALID_CUSTOMER_ID', async () => {
+      const res = await request(app).get('/api/v1/canonical/graphs?customerId=not-a-uuid').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+    });
+
+    test('partial UUID fails closed', async () => {
+      const res = await request(app).get('/api/v1/canonical/graphs?customerId=00000000-0000').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+    });
+
+    test('malformed customerId on dashboard endpoint returns 400', async () => {
+      const res = await request(app).get('/api/v1/canonical/dashboard?customerId=bad').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(400);
+    });
+
+    test('malformed customerId on surfaces endpoint returns 400', async () => {
+      const res = await request(app).get('/api/v1/canonical/surfaces/customer-detail?customerId=bad').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(400);
+    });
+
+    test('malformed customerId on compat endpoint returns 400', async () => {
+      const res = await request(app).get('/api/v1/canonical/compat/customer-detail?customerId=bad').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(400);
+    });
+
+    test('analytics endpoint also rejects malformed customerId', async () => {
+      const res = await request(app).get('/api/v1/canonical/analytics?customerId=bad').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(400);
+    });
+
+    test('persistence outage remains 503, not 400', async () => {
+      const unavailable = createApp(function () {
+        return { query: async function () { throw new Error('connection refused'); } };
+      });
+      const res = await request(unavailable).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(503);
+      expect(res.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
+    });
+
+    test('invalid filter error body includes requestId', async () => {
+      const res = await request(app).get('/api/v1/canonical/graphs?customerId=bad').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty('requestId');
+      expect(typeof res.body.requestId).toBe('string');
+      expect(res.body.requestId.length).toBeGreaterThan(0);
+    });
+
+    test('503 error body includes requestId', async () => {
+      const unavailable = createApp(function () {
+        return { query: async function () { throw new Error('connection refused'); } };
+      });
+      const res = await request(unavailable).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
+      expect(res.status).toBe(503);
+      expect(res.body).toHaveProperty('requestId');
+    });
+  });
 });

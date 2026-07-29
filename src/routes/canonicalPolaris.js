@@ -40,12 +40,11 @@ function requestContext(req) {
 
 function validateCustomerIdFilter(raw, keyPresent) {
   if (!keyPresent) return null;                             // absent — no filter
-  if (raw === undefined || raw === null) return failClosed();
-  if (Array.isArray(raw)) return failClosed();
-  const str = String(raw).trim();
-  if (str === '') return failClosed();                      // empty/whitespace
-  if (UUID.test(str) && str.length === 36) return str;      // valid, exact length
-  return failClosed();                                      // partial, overlong, trailing, encoded, anything else
+  if (typeof raw !== 'string') return failClosed();         // arrays, objects, numbers, booleans
+  if (raw.length === 0) return failClosed();                // empty string
+  if (raw !== raw.trim()) return failClosed();              // leading/trailing whitespace — not canonical
+  if (UUID.test(raw) && raw.length === 36) return raw;      // valid, exact length, no coercion
+  return failClosed();                                      // partial, overlong, anything else
 
   function failClosed() {
     const error = new Error('Invalid customerId filter value');

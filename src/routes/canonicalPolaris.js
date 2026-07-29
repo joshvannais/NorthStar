@@ -38,12 +38,24 @@ function requestContext(req) {
   };
 }
 
+function validateCustomerIdFilter(raw) {
+  if (raw === undefined || raw === null) return null;       // absent — no filter
+  if (raw === '') return null;                              // empty — treat as absent
+  const str = String(raw);
+  if (UUID.test(str)) return str;                           // valid UUID
+  // Malformed — fail closed
+  const error = new Error('Invalid customerId filter value');
+  error.code = 'INVALID_CUSTOMER_ID';
+  error.statusCode = 400;
+  throw error;
+}
+
 function queryFilters(req) {
   const limit = Math.max(1, Math.min(100, Number.parseInt(req.query.limit, 10) || 50));
   return stableValue({
     limit,
     status: typeof req.query.status === 'string' ? req.query.status : null,
-    customerId: UUID.test(String(req.query.customerId || '')) ? String(req.query.customerId) : null,
+    customerId: validateCustomerIdFilter(req.query.customerId),
   });
 }
 
@@ -431,6 +443,18 @@ function sendPersistenceUnavailable(res) {
   });
 }
 
+function sendInvalidCustomerId(res) {
+  return res.status(400).json({
+    success: false,
+    error: { code: 'INVALID_CUSTOMER_ID', message: 'Invalid customerId filter value.' },
+  });
+}
+
+function handleEndpointError(res, _error) {
+  if (_error && _error.code === 'INVALID_CUSTOMER_ID') return sendInvalidCustomerId(res);
+  return sendPersistenceUnavailable(res);
+}
+
 async function authoritativeItems(req, dependencies, endpoint) {
   const context = requestContext(req);
   const filters = queryFilters(req);
@@ -481,7 +505,7 @@ function createCanonicalRouter(options) {
       const items = await authoritativeItems(req, dependencies, 'canonical.graphs');
       return res.json({ success: true, data: { items, count: items.length, readModelVersion: READ_MODEL_VERSION, digest: sha256(items.map(item => item.projectionDigest)) } });
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error);
     }
   });
 
@@ -492,7 +516,7 @@ function createCanonicalRouter(options) {
         const items = await authoritativeItems(req, dependencies, 'canonical.' + endpoint);
         return res.json({ success: true, data: { ...aggregate(items), digest: sha256(items.map(item => item.projectionDigest)), readModelVersion: READ_MODEL_VERSION } });
       } catch (_error) {
-        return sendPersistenceUnavailable(res);
+        return handleEndpointError(res, _error);
       }
     });
   }
@@ -503,7 +527,7 @@ function createCanonicalRouter(options) {
       const items = await authoritativeItems(req, dependencies, 'canonical.surface.' + req.params.surface);
       return res.json({ success: true, data: surfaceProjection(req.params.surface, items, requestContext(req)) });
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error);
     }
   });
 
@@ -513,7 +537,7 @@ function createCanonicalRouter(options) {
       const items = await authoritativeItems(req, dependencies, 'canonical.compat.' + req.params.surface);
       return res.json({ success: true, data: compatibilityProjection(req.params.surface, items, requestContext(req)) });
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error);
     }
   });
 

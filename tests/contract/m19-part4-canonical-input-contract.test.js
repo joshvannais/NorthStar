@@ -112,6 +112,7 @@ describe('M19 Part 4 — canonical customerId input contract', () => {
         const res  = await request(app).get(ep.path + '?customerId=').set(headers(ORG_A, USER_A));
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+        expect(pool._calls).toHaveLength(0);
       });
 
       test('whitespace-only — 400', async () => {
@@ -120,6 +121,7 @@ describe('M19 Part 4 — canonical customerId input contract', () => {
         const res  = await request(app).get(ep.path + '?customerId=%20%20').set(headers(ORG_A, USER_A));
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+        expect(pool._calls).toHaveLength(0);
       });
 
       test('valid UUID with one leading space — 400 (no trim-to-valid)', async () => {
@@ -128,6 +130,7 @@ describe('M19 Part 4 — canonical customerId input contract', () => {
         const res  = await request(app).get(ep.path + '?customerId=%20' + VALID).set(headers(ORG_A, USER_A));
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+        expect(pool._calls).toHaveLength(0);
       });
 
       test('valid UUID with one trailing space — 400 (no trim-to-valid)', async () => {
@@ -136,6 +139,7 @@ describe('M19 Part 4 — canonical customerId input contract', () => {
         const res  = await request(app).get(ep.path + '?customerId=' + VALID + '%20').set(headers(ORG_A, USER_A));
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+        expect(pool._calls).toHaveLength(0);
       });
 
       test('valid UUID surrounded by spaces — 400', async () => {
@@ -144,6 +148,16 @@ describe('M19 Part 4 — canonical customerId input contract', () => {
         const res  = await request(app).get(ep.path + '?customerId=%20' + VALID + '%20').set(headers(ORG_A, USER_A));
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+        expect(pool._calls).toHaveLength(0);
+      });
+
+      test('valid UUID with tab whitespace — 400', async () => {
+        const pool = trackingPool();
+        const app  = createApp(function () { return pool; });
+        const res  = await request(app).get(ep.path + '?customerId=%09' + VALID).set(headers(ORG_A, USER_A));
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+        expect(pool._calls).toHaveLength(0);
       });
 
       test('partial UUID — 400', async () => {
@@ -152,6 +166,7 @@ describe('M19 Part 4 — canonical customerId input contract', () => {
         const res  = await request(app).get(ep.path + '?customerId=00000000-0000').set(headers(ORG_A, USER_A));
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+        expect(pool._calls).toHaveLength(0);
       });
 
       test('overlong UUID — 400', async () => {
@@ -160,18 +175,10 @@ describe('M19 Part 4 — canonical customerId input contract', () => {
         const res  = await request(app).get(ep.path + '?customerId=' + VALID + '-extra').set(headers(ORG_A, USER_A));
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('INVALID_CUSTOMER_ID');
+        expect(pool._calls).toHaveLength(0);
       });
 
-      // ── Zero data-query assertion ──────────────────────────────────
-
-      test('invalid value — zero canonical data queries', async () => {
-        const pool = trackingPool();
-        const app  = createApp(function () { return pool; });
-        await request(app).get(ep.path + '?customerId=%20' + VALID).set(headers(ORG_A, USER_A));
-        expect(pool._calls.length).toBe(0);
-      });
-
-      // ── requestId contract ────────────────────────────────────────
+      // ── Request-ID contract ────────────────────────────────────────
 
       test('400 body requestId matches header', async () => {
         const pool = trackingPool();

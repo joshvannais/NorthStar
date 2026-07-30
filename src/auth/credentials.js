@@ -45,25 +45,6 @@ function signAccess(userId, sessionId) {
   );
 }
 
-function signIntegrationState(userId, sessionId) {
-  return jwt.sign(
-    { sub: userId, sid: sessionId, typ: 'integration_state' },
-    accessSecret(),
-    { expiresIn: '10m', issuer: 'northstar', audience: 'northstar-integration' }
-  );
-}
-
-function verifyIntegrationState(token) {
-  const decoded = jwt.verify(token, accessSecret(), {
-    issuer: 'northstar',
-    audience: 'northstar-integration',
-  });
-  if (!decoded || decoded.typ !== 'integration_state' || !decoded.sub || !decoded.sid) {
-    throw new Error('invalid integration state');
-  }
-  return decoded;
-}
-
 function verifyAccess(token, options = {}) {
   const decoded = jwt.verify(token, accessSecret(), {
     ignoreExpiration: Boolean(options.ignoreExpiration),
@@ -130,7 +111,5 @@ module.exports = {
   refreshExpiry,
   safeEqual,
   signAccess,
-  signIntegrationState,
   verifyAccess,
-  verifyIntegrationState,
 };

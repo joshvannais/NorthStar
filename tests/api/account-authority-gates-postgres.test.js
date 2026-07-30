@@ -40,12 +40,15 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     for (const key of [
       'DATABASE_URL', 'AUTH_ACCESS_SECRET', 'ACCOUNT_SIGNUP_ENABLED',
       'ACCOUNT_VERIFICATION_DELIVERY_READY', 'AUTH_BEARER_COMPAT_ENABLED',
+      'JOBBER_CLIENT_ID', 'JOBBER_CLIENT_SECRET',
     ]) original[key] = process.env[key];
     process.env.DATABASE_URL = allocation.connectionString;
     process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
     process.env.ACCOUNT_SIGNUP_ENABLED = 'true';
     process.env.ACCOUNT_VERIFICATION_DELIVERY_READY = 'true';
     process.env.AUTH_BEARER_COMPAT_ENABLED = 'true';
+    process.env.JOBBER_CLIENT_ID = 'disposable-jobber-client';
+    process.env.JOBBER_CLIENT_SECRET = 'disposable-jobber-secret';
     jest.resetModules();
     db = require('../../src/db');
     expect(await db.initDatabase()).toBe(true);
@@ -80,7 +83,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
         refresh_token: 'intercepted-jobber-refresh',
         expires_in: 3600,
       }),
-      jobberSave: jest.spyOn(jobber, 'saveTokens').mockResolvedValue(undefined),
+      jobberSave: jest.spyOn(jobber, 'saveTokens').mockResolvedValue(true),
       externalFetch: jest.spyOn(global, 'fetch').mockRejectedValue(new Error('unexpected external fetch')),
       externalHttps: jest.spyOn(https, 'request').mockImplementation(() => {
         throw new Error('unexpected external HTTPS request');

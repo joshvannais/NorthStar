@@ -90,8 +90,8 @@ async function poll(probe, description, timeoutMs = 10000) {
   throw new Error(`Timed out waiting for ${description}`);
 }
 
-async function runProductionMigrations(connectionString, migrationsDirectory = MIGRATIONS_DIRECTORY) {
-  const pool = new Pool({ connectionString, max: 2 });
+async function runProductionMigrations(connectionString, migrationsDirectory = MIGRATIONS_DIRECTORY, poolOptions = {}) {
+  const pool = new Pool({ connectionString, max: 2, ...poolOptions });
   try {
     return await runMigrations({ pool, migrationsDirectory });
   } finally {
@@ -112,24 +112,25 @@ async function queryWithClient(connectionString, work) {
 async function schemaSnapshot(connectionString) {
   return queryWithClient(connectionString, async client => {
     const columns = await client.query(
-      `SELECT table_name, ordinal_position, column_name, data_type, udt_name, is_nullable,
+      `SELECT table_name, column_name, data_type, udt_name,
+              COALESCE(character_maximum_length, 0)::int AS character_maximum_length,
+              is_nullable,
               COALESCE(column_default, '') AS column_default
          FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name <> '_migrations'
-        ORDER BY table_name, ordinal_position`
+        WHERE table_schema = 'public'
+        ORDER BY table_name, column_name`
     );
     const constraints = await client.query(
       `SELECT conrelid::regclass::text AS table_name, conname, contype,
               pg_get_constraintdef(oid) AS definition
         FROM pg_constraint
         WHERE connamespace = 'public'::regnamespace
-          AND conrelid <> 'public._migrations'::regclass
         ORDER BY table_name, conname`
     );
     const indexes = await client.query(
       `SELECT tablename, indexname, indexdef
          FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename <> '_migrations'
+        WHERE schemaname = 'public'
         ORDER BY tablename, indexname`
     );
     const triggers = await client.query(
@@ -155,6 +156,63 @@ async function schemaSnapshot(connectionString) {
       triggers: triggers.rows,
     };
   });
+}
+
+function expectCanonicalMigrationLedger(snapshot) {
+  expect(snapshot.columns.filter(row => row.table_name === '_migrations')).toEqual([
+    {
+      table_name: '_migrations', column_name: 'applied_at', data_type: 'timestamp with time zone',
+      udt_name: 'timestamptz', character_maximum_length: 0,
+      is_nullable: 'NO', column_default: 'now()',
+    },
+    {
+      table_name: '_migrations', column_name: 'checksum', data_type: 'character',
+      udt_name: 'bpchar', character_maximum_length: 64,
+      is_nullable: 'YES', column_default: '',
+    },
+    {
+      table_name: '_migrations', column_name: 'filename', data_type: 'character varying',
+      udt_name: 'varchar', character_maximum_length: 255,
+      is_nullable: 'NO', column_default: '',
+    },
+    {
+      table_name: '_migrations', column_name: 'id', data_type: 'integer', udt_name: 'int4',
+      character_maximum_length: 0, is_nullable: 'NO',
+      column_default: "nextval('_migrations_id_seq'::regclass)",
+    },
+  ]);
+  expect(snapshot.constraints.filter(row => row.table_name === '_migrations')).toEqual([
+    {
+      table_name: '_migrations', conname: '_migrations_applied_at_not_null',
+      contype: 'n', definition: 'NOT NULL applied_at',
+    },
+    {
+      table_name: '_migrations', conname: '_migrations_filename_key',
+      contype: 'u', definition: 'UNIQUE (filename)',
+    },
+    {
+      table_name: '_migrations', conname: '_migrations_filename_not_null',
+      contype: 'n', definition: 'NOT NULL filename',
+    },
+    {
+      table_name: '_migrations', conname: '_migrations_id_not_null',
+      contype: 'n', definition: 'NOT NULL id',
+    },
+    {
+      table_name: '_migrations', conname: '_migrations_pkey',
+      contype: 'p', definition: 'PRIMARY KEY (id)',
+    },
+  ]);
+  expect(snapshot.indexes.filter(row => row.tablename === '_migrations')).toEqual([
+    {
+      tablename: '_migrations', indexname: '_migrations_filename_key',
+      indexdef: 'CREATE UNIQUE INDEX _migrations_filename_key ON public._migrations USING btree (filename)',
+    },
+    {
+      tablename: '_migrations', indexname: '_migrations_pkey',
+      indexdef: 'CREATE UNIQUE INDEX _migrations_pkey ON public._migrations USING btree (id)',
+    },
+  ]);
 }
 
 async function assertMigration010Absent(connectionString) {
@@ -292,7 +350,11 @@ describe('production account migration authority on required PostgreSQL 18', () 
     });
 
     await runProductionMigrations(upgrade.connectionString);
-    expect(await schemaSnapshot(upgrade.connectionString)).toEqual(await schemaSnapshot(fresh.connectionString));
+    const freshSchema = await schemaSnapshot(fresh.connectionString);
+    const upgradeSchema = await schemaSnapshot(upgrade.connectionString);
+    expect(upgradeSchema).toEqual(freshSchema);
+    expectCanonicalMigrationLedger(freshSchema);
+    expectCanonicalMigrationLedger(upgradeSchema);
     await queryWithClient(upgrade.connectionString, async client => {
       const preserved = await client.query(
         `SELECT u.name, u.email, u.password_hash, u.phone, l.caller_name, l.service_type, l.notes
@@ -370,9 +432,109 @@ describe('production account migration authority on required PostgreSQL 18', () 
     });
   }, 120000);
 
-  test('ledger checksums and uniqueness are durable and a mismatched applied checksum fails closed', async () => {
+  test('branch-era TIMESTAMP NULL ledger is repaired without changing a legitimate applied moment', async () => {
+    const allocation = await database('migration-branch-ledger-repair');
+    const fresh = await database('migration-branch-ledger-fresh');
+    await runProductionMigrations(fresh.connectionString);
+    await applyLegacyMigrations(allocation.connectionString);
+    const timeZone = 'America/New_York';
+    let momentBeforeRepair;
+    await queryWithClient(allocation.connectionString, async client => {
+      await client.query(`SET TIME ZONE '${timeZone}'`);
+      await client.query(`
+        ALTER TABLE _migrations
+          ALTER COLUMN applied_at DROP NOT NULL,
+          ALTER COLUMN applied_at TYPE TIMESTAMP WITHOUT TIME ZONE
+            USING applied_at AT TIME ZONE current_setting('TimeZone'),
+          ALTER COLUMN applied_at SET DEFAULT NOW()
+      `);
+      await client.query(
+        "UPDATE _migrations SET applied_at = TIMESTAMP '2024-01-02 03:04:05.123456' WHERE filename = '001_initial_schema.sql'"
+      );
+      await client.query(
+        "UPDATE _migrations SET applied_at = NULL WHERE filename = '009_canonical_voice_provider_identity.sql'"
+      );
+      const branchDefinition = await client.query(
+        `SELECT data_type, udt_name, is_nullable, column_default
+           FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = '_migrations' AND column_name = 'applied_at'`
+      );
+      expect(branchDefinition.rows).toEqual([{
+        data_type: 'timestamp without time zone',
+        udt_name: 'timestamp',
+        is_nullable: 'YES',
+        column_default: 'now()',
+      }]);
+      const before = await client.query(`
+        SELECT to_char(
+                 (applied_at AT TIME ZONE current_setting('TimeZone')) AT TIME ZONE 'UTC',
+                 'YYYY-MM-DD HH24:MI:SS.US'
+               ) AS applied_moment
+          FROM _migrations
+         WHERE filename = '001_initial_schema.sql'
+      `);
+      momentBeforeRepair = before.rows[0].applied_moment;
+      expect(momentBeforeRepair).toBe('2024-01-02 08:04:05.123456');
+    });
+
+    await runProductionMigrations(
+      allocation.connectionString,
+      MIGRATIONS_DIRECTORY,
+      { options: `-c TimeZone=${timeZone}` }
+    );
+
+    const repairedSchema = await schemaSnapshot(allocation.connectionString);
+    const freshSchema = await schemaSnapshot(fresh.connectionString);
+    expect(repairedSchema).toEqual(freshSchema);
+    expectCanonicalMigrationLedger(repairedSchema);
+    expectCanonicalMigrationLedger(freshSchema);
+    await queryWithClient(allocation.connectionString, async client => {
+      const repaired = await client.query(`
+        SELECT filename,
+               applied_at IS NULL AS is_null,
+               to_char(applied_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS.US') AS applied_moment
+          FROM _migrations
+         WHERE filename IN ('001_initial_schema.sql', '009_canonical_voice_provider_identity.sql')
+         ORDER BY filename
+      `);
+      expect(repaired.rows[0]).toEqual({
+        filename: '001_initial_schema.sql',
+        is_null: false,
+        applied_moment: momentBeforeRepair,
+      });
+      expect(repaired.rows[1]).toEqual({
+        filename: '009_canonical_voice_provider_identity.sql',
+        is_null: false,
+        applied_moment: expect.any(String),
+      });
+    });
+  }, 120000);
+
+  test('genuine prior ledger timestamps, checksums, and uniqueness are durable and a mismatch fails closed', async () => {
     const allocation = await database('migration-ledger');
+    await queryWithClient(allocation.connectionString, client => client.query(`
+      CREATE TABLE _migrations (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) UNIQUE NOT NULL,
+        checksum CHAR(64),
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `));
+    await applyLegacyMigrations(allocation.connectionString);
+    expectCanonicalMigrationLedger(await schemaSnapshot(allocation.connectionString));
+    const genuinePrior = await queryWithClient(allocation.connectionString, client =>
+      client.query('SELECT id, filename, checksum, applied_at FROM _migrations ORDER BY filename').then(result => result.rows)
+    );
+    expect(genuinePrior).toHaveLength(9);
+
     await runProductionMigrations(allocation.connectionString);
+    const preservedPrior = await queryWithClient(allocation.connectionString, client =>
+      client.query(
+        'SELECT id, filename, checksum, applied_at FROM _migrations WHERE filename <> $1 ORDER BY filename',
+        [MIGRATION_010]
+      ).then(result => result.rows)
+    );
+    expect(preservedPrior).toEqual(genuinePrior);
     const before = await queryWithClient(allocation.connectionString, client =>
       client.query('SELECT id, filename, checksum, applied_at FROM _migrations ORDER BY filename').then(result => result.rows)
     );

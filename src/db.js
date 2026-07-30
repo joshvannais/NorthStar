@@ -285,10 +285,39 @@ async function runMigrations(options = {}) {
         id SERIAL PRIMARY KEY,
         filename VARCHAR(255) UNIQUE NOT NULL,
         checksum CHAR(64),
-        applied_at TIMESTAMP DEFAULT NOW()
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
     await client.query('ALTER TABLE _migrations ADD COLUMN IF NOT EXISTS checksum CHAR(64)');
+    await client.query('ALTER TABLE _migrations ADD COLUMN IF NOT EXISTS applied_at TIMESTAMPTZ');
+    await client.query(`
+      DO $migration_ledger$
+      DECLARE
+        applied_at_type REGTYPE;
+      BEGIN
+        SELECT attribute.atttypid::regtype
+          INTO applied_at_type
+          FROM pg_attribute attribute
+         WHERE attribute.attrelid = 'public._migrations'::regclass
+           AND attribute.attname = 'applied_at'
+           AND NOT attribute.attisdropped;
+
+        IF applied_at_type = 'timestamp without time zone'::regtype THEN
+          ALTER TABLE _migrations
+            ALTER COLUMN applied_at TYPE TIMESTAMPTZ
+            USING applied_at AT TIME ZONE current_setting('TimeZone');
+        ELSIF applied_at_type <> 'timestamp with time zone'::regtype THEN
+          RAISE EXCEPTION 'Unsupported _migrations.applied_at type: %', applied_at_type;
+        END IF;
+      END
+      $migration_ledger$
+    `);
+    await client.query('UPDATE _migrations SET applied_at = NOW() WHERE applied_at IS NULL');
+    await client.query(`
+      ALTER TABLE _migrations
+        ALTER COLUMN applied_at SET DEFAULT NOW(),
+        ALTER COLUMN applied_at SET NOT NULL
+    `);
 
     const appliedResult = await client.query('SELECT filename, checksum FROM _migrations ORDER BY filename');
     const applied = new Map();

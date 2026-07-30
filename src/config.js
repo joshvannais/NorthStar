@@ -7,8 +7,6 @@ const config = {
     accessSecret: process.env.AUTH_ACCESS_SECRET || process.env.JWT_SECRET,
     accessMinutes: parseInt(process.env.AUTH_ACCESS_MINUTES || '15', 10),
     refreshDays: parseInt(process.env.AUTH_REFRESH_DAYS || '30', 10),
-    signupEnabled: process.env.ACCOUNT_SIGNUP_ENABLED === 'true',
-    verificationDeliveryReady: process.env.ACCOUNT_VERIFICATION_DELIVERY_READY === 'true',
     secureCookies: process.env.NODE_ENV === 'production',
   },
 
@@ -43,12 +41,6 @@ const config = {
     pass: process.env.SMTP_PASS,
   },
 
-  // Notifications
-  notifications: {
-    phone: process.env.NOTIFICATION_PHONE,
-    email: process.env.NOTIFICATION_EMAIL,
-  },
-
   // Calendar
   calendar: {
     type: process.env.CALENDAR_TYPE || 'google',
@@ -66,9 +58,6 @@ config.validateRuntime = function validateRuntime() {
   }
   if (!Number.isInteger(config.auth.refreshDays) || config.auth.refreshDays < 1 || config.auth.refreshDays > 90) {
     failures.push('AUTH_REFRESH_DAYS must be an integer from 1 through 90');
-  }
-  if (process.env.NODE_ENV === 'production' && config.auth.signupEnabled && !config.auth.verificationDeliveryReady) {
-    failures.push('ACCOUNT_SIGNUP_ENABLED requires PR B verification delivery readiness in production');
   }
   if (failures.length) throw new Error(`Invalid runtime configuration: ${failures.join('; ')}`);
   return true;

@@ -8,7 +8,7 @@
 'use strict';
 
 const express = require('express');
-const { requireAuth } = require('../auth/middleware');
+const { requireOnboardedInternal } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const db = require('../db');
 const { sha256 } = require('../services/businessProfileAdapter');
@@ -37,7 +37,7 @@ function buildFacts(scope, evidence) {
   });
 }
 
-router.post('/simulations/leads', requireAuth, requirePermission('leads', 'create'), async function (req, res) {
+router.post('/simulations/leads', requireOnboardedInternal, requirePermission('leads', 'create'), async function (req, res) {
   const rawService = req.body && req.body.service;
   const requestedService = typeof rawService === 'string' ? rawService.trim().toLowerCase() : '';
   if (!requestedService) {

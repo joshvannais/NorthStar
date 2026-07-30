@@ -45,8 +45,14 @@ function auditLogger(req, res, next) {
     // Only log data-modifying operations and errors
     const isModifying = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
     const isError = res.statusCode >= 400;
+    // PR A's source-disabled public signup endpoint is a strict zero-write
+    // capability boundary. Its stable denial is logged above, but must not
+    // create even an anonymous audit row that could overstate signup activity.
+    const sourceDisabledSignup = req.method === 'POST' &&
+      String(req.originalUrl || req.url || '').split('?')[0] === '/api/auth/signup' &&
+      res.statusCode === 503;
 
-    if (isModifying || isError) {
+    if ((isModifying || isError) && !sourceDisabledSignup) {
       const entityType = req.path.split('/').filter(Boolean)[1] || 'unknown';
 
       audit.record({

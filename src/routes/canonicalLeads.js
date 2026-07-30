@@ -2,7 +2,11 @@
 
 const express = require('express');
 const db = require('../db');
-const { requireAuth } = require('../auth/middleware');
+const {
+  requireOnboardedInternal,
+  requireTenantAccess,
+  requireVerifiedExternalAction,
+} = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { ingestLead } = require('../services/canonicalGraphService');
 const { listCanonicalGraphs, requestContext } = require('./canonicalPolaris');
@@ -23,7 +27,7 @@ function blocked(_req, res) {
   });
 }
 
-router.post('/leads', requireAuth, requirePermission('leads', 'create'), async function (req, res) {
+router.post('/leads', requireOnboardedInternal, requirePermission('leads', 'create'), async function (req, res) {
   const key = idempotencyKey(req);
   if (!key) {
     return res.status(400).json({ success: false, error: { code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'Idempotency-Key is required for canonical writes.' } });
@@ -70,7 +74,7 @@ router.post('/leads', requireAuth, requirePermission('leads', 'create'), async f
   });
 });
 
-router.get('/leads/export', requireAuth, async function (req, res) {
+router.get('/leads/export', requireVerifiedExternalAction, requirePermission('leads', 'read'), async function (req, res) {
   try {
     const items = await listCanonicalGraphs(db.getPool(), requestContext(req), { limit: 100, status: null, customerId: null });
     const fields = ['id', 'customerId', 'customerName', 'phone', 'email', 'service', 'status', 'estimatedPrice'];
@@ -101,9 +105,9 @@ router.get('/leads/export', requireAuth, async function (req, res) {
   }
 });
 
-router.put('/leads/:id', requireAuth, requirePermission('leads', 'update'), blocked);
-router.delete('/leads/:id', requireAuth, requirePermission('leads', 'delete'), blocked);
-router.post('/leads/import', requireAuth, requirePermission('leads', 'create'), blocked);
-router.post('/leads/simulate', requireAuth, requirePermission('leads', 'create'), blocked);
+router.put('/leads/:id', requireTenantAccess, requirePermission('leads', 'update'), blocked);
+router.delete('/leads/:id', requireTenantAccess, requirePermission('leads', 'delete'), blocked);
+router.post('/leads/import', requireTenantAccess, requirePermission('leads', 'create'), blocked);
+router.post('/leads/simulate', requireTenantAccess, requirePermission('leads', 'create'), blocked);
 
 module.exports = router;

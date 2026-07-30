@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const config = require('../config');
 const credentials = require('../auth/credentials');
 const { requireSession } = require('../auth/middleware');
 const { AccountError, AccountService, accountView } = require('../accounts/service');
@@ -30,13 +29,17 @@ function handleError(req, res, error, event) {
 function createAuthRouter(options = {}) {
   const router = express.Router();
   const service = options.service || new AccountService();
+  // PR A production deliberately supplies no signup capability. Disposable
+  // tests may inject the real transaction through a test-owned app builder;
+  // no process environment value can create this source-level capability.
+  const signup = typeof options.signup === 'function' ? options.signup : null;
 
   router.post('/signup', async (req, res) => {
-    if (!config.auth.signupEnabled) {
+    if (!signup) {
       return failure(req, res, 503, 'signup_disabled', 'Account signup is not currently available');
     }
     try {
-      const result = await service.signup(req.body || {}, req.ip || 'unknown');
+      const result = await signup(req.body || {}, req.ip || 'unknown');
       credentials.issueCookies(res, result.material);
       return res.status(201).json({ success: true, account: result.account, requestId: requestId(req) });
     } catch (error) {
@@ -86,10 +89,8 @@ function createAuthRouter(options = {}) {
   });
 
   router.get('/me', requireSession, (req, res) => {
-    const cookies = credentials.parseCookies(req.headers.cookie);
     return res.json({
       account: accountView(req.accountAuthority),
-      csrfToken: cookies[credentials.CSRF_COOKIE] || null,
       requestId: requestId(req),
     });
   });

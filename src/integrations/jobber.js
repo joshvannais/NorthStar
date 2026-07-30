@@ -24,12 +24,11 @@ function isConfigured() {
 /**
  * Generate the OAuth 2.0 authorization URL for a contractor to connect their Jobber account.
  */
-function getAuthUrl(userId, redirectBase) {
+function getAuthUrl(state, redirectBase) {
   if (!isConfigured()) return null;
   const clientId = process.env.JOBBER_CLIENT_ID;
   const redirectUri = `${redirectBase}/api/integrations/jobber/callback`;
-  const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
-  return `${JOBBER_AUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}`;
+  return `${JOBBER_AUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${encodeURIComponent(state)}`;
 }
 
 /**

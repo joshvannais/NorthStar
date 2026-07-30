@@ -1,10 +1,7 @@
 'use strict';
 
 const express = require('express');
-const config = require('../config');
 const db = require('../db');
-const { rateLimit } = require('../middleware/rateLimit');
-const { createProvisionedDemoVoiceCall } = require('../services/canonicalVoiceSessionCreation');
 const { getProvisionedDemoOrganization } = require('../services/organizationAuthority');
 const { readDemoLifecycle } = require('../services/demoVoiceLifecycle');
 const scenarios = require('./simulation/scenario-catalog');
@@ -73,33 +70,14 @@ router.get('/industries', function (_req, res) {
   });
 });
 
-router.post('/call', rateLimit('public-api'), async function (req, res) {
-  try {
-    const body = req.body || {};
-    const created = await createProvisionedDemoVoiceCall({
-      pool: db.getPool(),
-      configuredOrganizationId: configuredOrganizationId(),
-      phoneNumber: body.phoneNumber,
-      service: body.industry || body.service,
-      caller: body.contactName || body.caller,
-      fromNumber: config.retell && config.retell.phoneNumber,
-    });
-    const publicId = created.session.externalSessionId;
-    return res.json({
-      success: true,
-      demoSessionId: publicId,
-      sessionId: publicId,
-      callId: publicId,
-      status: 'live',
-      canonicalStatus: created.session.status,
-      lifecycle: 'pending',
-      estimate: { status: 'not_ready', snapshot: null },
-      profile: created.session.profile,
-      providerCallCreated: true,
-    });
-  } catch (error) {
-    return errorResponse(res, error);
-  }
+router.post('/call', function (_req, res) {
+  return res.status(410).json({
+    success: false,
+    error: {
+      code: 'demo_external_action_retired',
+      message: 'Public demo outbound calls are unavailable.',
+    },
+  });
 });
 
 async function lifecycle(req, res, project) {

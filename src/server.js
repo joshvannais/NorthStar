@@ -90,6 +90,8 @@ Object.entries(pages).forEach(([route, file]) => {
 });
 
 // --- PostgreSQL Account and Session Authority ---
+// PR A intentionally omits the disposable-test signup capability. Environment
+// values cannot enable public signup; PR B must make a reviewed source change.
 app.use('/api/auth', createAuthRouter());
 app.use('/api/account', accountRoutes);
 
@@ -168,7 +170,7 @@ async function start() {
     console.log(`  ${baseUrl}/admin           → Admin panel`);
     console.log('');
     console.log('📍 Auth API:');
-    console.log(`  POST ${baseUrl}/api/auth/signup          → Create account`);
+    console.log(`  POST ${baseUrl}/api/auth/signup          → Unavailable until Account Lifecycle PR B`);
     console.log(`  POST ${baseUrl}/api/auth/login           → Sign in`);
     console.log(`  POST ${baseUrl}/api/auth/refresh         → Refresh token`);
     console.log(`  POST ${baseUrl}/api/auth/logout          → Revoke session`);

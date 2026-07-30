@@ -45,12 +45,23 @@ function signAccess(userId, sessionId) {
   );
 }
 
-function signApiCompatibility(user) {
+function signIntegrationState(userId, sessionId) {
   return jwt.sign(
-    { sub: user.id, typ: 'api_compat', role: 'contractor' },
+    { sub: userId, sid: sessionId, typ: 'integration_state' },
     accessSecret(),
-    { expiresIn: `${config.auth.accessMinutes}m`, issuer: 'northstar', audience: 'northstar-api' }
+    { expiresIn: '10m', issuer: 'northstar', audience: 'northstar-integration' }
   );
+}
+
+function verifyIntegrationState(token) {
+  const decoded = jwt.verify(token, accessSecret(), {
+    issuer: 'northstar',
+    audience: 'northstar-integration',
+  });
+  if (!decoded || decoded.typ !== 'integration_state' || !decoded.sub || !decoded.sid) {
+    throw new Error('invalid integration state');
+  }
+  return decoded;
 }
 
 function verifyAccess(token, options = {}) {
@@ -108,7 +119,6 @@ function safeEqual(left, right) {
 module.exports = {
   ACCESS_COOKIE,
   CSRF_COOKIE,
-  JWT_SECRET: config.auth.accessSecret || testSecret,
   REFRESH_COOKIE,
   accessExpiry,
   clearCookies,
@@ -120,6 +130,7 @@ module.exports = {
   refreshExpiry,
   safeEqual,
   signAccess,
-  signApiCompatibility,
+  signIntegrationState,
   verifyAccess,
+  verifyIntegrationState,
 };

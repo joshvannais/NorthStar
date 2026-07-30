@@ -1,12 +1,12 @@
 /**
  * PostgreSQL-backed session, account-state, and role authorization boundaries.
- * Browser credentials are accepted only from secure cookies. A separately
- * gated Authorization header path remains for tested API compatibility.
+ * Browser credentials are accepted only from secure cookies. User Bearer
+ * credentials are deliberately unsupported: every mounted user request must
+ * resolve a current durable session and its PostgreSQL-owned tenant state.
  */
 
 'use strict';
 
-const jwt = require('jsonwebtoken');
 const db = require('../db');
 const credentials = require('./credentials');
 const { AccountRepository } = require('../accounts/repository');
@@ -36,7 +36,8 @@ function attachTenantContext(req, authority, session) {
     status: authority.user_status || authority.status,
     organizationId,
     orgId: organizationId,
-    onboardingStatus: authority.onboarding_status || 'complete',
+    onboardingStatus: authority.onboarding_status || null,
+    emailVerified: authority.user_status === 'active',
   });
 
   Object.defineProperties(req, {
@@ -83,7 +84,8 @@ async function cookieSession(req, res, token) {
     if (new Date(authority.access_expires_at).getTime() <= Date.now()) {
       return sendAuthError(req, res, 401, 'Access credential expired', 'access_expired');
     }
-    if (authority.membership_status !== 'active' ||
+    if (!authority.user_id || !authority.organization_id || !authority.role ||
+        authority.membership_status !== 'active' ||
         !['pending_verification', 'active'].includes(authority.user_status)) {
       return sendAuthError(req, res, 403, 'Active organization membership required', 'organization_membership_required');
     }
@@ -103,63 +105,15 @@ async function cookieSession(req, res, token) {
   }
 }
 
-async function apiCompatibilitySession(req, res, token) {
-  if (process.env.NODE_ENV !== 'test' && process.env.AUTH_BEARER_COMPAT_ENABLED !== 'true') {
-    return sendAuthError(req, res, 401, 'Authentication required', 'unauthorized');
-  }
-  let decoded;
-  try {
-    decoded = jwt.verify(token, credentials.JWT_SECRET);
-    if (!decoded.sub || !['api_compat', undefined].includes(decoded.typ) ||
-        (decoded.typ === undefined && decoded.role !== 'contractor')) {
-      return sendAuthError(req, res, 403, 'Invalid API credential', 'forbidden');
-    }
-  } catch (_error) {
-    return sendAuthError(req, res, 401, 'Invalid or expired token', 'invalid_token');
-  }
-  if (!db.isAvailable()) {
-    return sendAuthError(req, res, 503, 'Organization authorization is temporarily unavailable', 'authorization_unavailable');
-  }
-  try {
-    const result = await db.query(
-      `SELECT u.id, u.organization_id, u.role, u.status, u.email, u.name
-         FROM users u
-        WHERE u.id = $1`,
-      [decoded.sub]
-    );
-    const membershipRows = result && Array.isArray(result.rows) ? result.rows : [];
-    if (membershipRows.length !== 1) {
-      return sendAuthError(req, res, 403, 'Active organization membership required', 'organization_membership_required');
-    }
-    const membership = membershipRows[0];
-    if (!membership.id || !membership.organization_id || membership.status !== 'active' || !membership.role) {
-      return sendAuthError(req, res, 403, 'Active organization membership required', 'organization_membership_required');
-    }
-    attachTenantContext(req, { ...membership, user_status: membership.status, onboarding_status: 'complete' }, {
-      id: null,
-      transport: 'authorization_header',
-    });
-    return true;
-  } catch (_error) {
-    console.warn('[Auth] Membership lookup warning:', {
-      requestId: requestId(req),
-      event: 'authorization_persistence_unavailable',
-    });
-    return sendAuthError(req, res, 503, 'Organization authorization is temporarily unavailable', 'authorization_unavailable');
-  }
-}
-
 async function requireSession(req, res, next) {
   if (trustedTenantRequests.has(req)) return next();
+  const authHeader = req.headers.authorization;
+  if (authHeader && /^Bearer(?:\s|$)/i.test(authHeader)) {
+    return sendAuthError(req, res, 401, 'Authentication required', 'unauthorized');
+  }
   const cookies = credentials.parseCookies(req.headers.cookie);
   if (cookies[credentials.ACCESS_COOKIE]) {
     const accepted = await cookieSession(req, res, cookies[credentials.ACCESS_COOKIE]);
-    if (accepted === true) return next();
-    return undefined;
-  }
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const accepted = await apiCompatibilitySession(req, res, authHeader.slice('Bearer '.length));
     if (accepted === true) return next();
     return undefined;
   }
@@ -178,16 +132,32 @@ function afterSession(predicate, code, message) {
 }
 
 const requireVerifiedAccount = afterSession(
-  req => req.user.status === 'active' && ['business_profile_required', 'complete'].includes(req.user.onboardingStatus),
+  req => req.user.status === 'active',
   'verification_required',
   'Verified account required'
 );
 
-const requireActiveAccount = afterSession(
-  req => req.user.status === 'active' && req.user.onboardingStatus === 'complete',
+const requireOnboardedInternal = afterSession(
+  req => req.user.onboardingStatus === 'complete',
   'onboarding_required',
   'Completed account onboarding required'
 );
+
+async function requireVerifiedExternalAction(req, res, next) {
+  const proceed = () => {
+    if (req.user.status !== 'active') {
+      return sendAuthError(req, res, 403, 'Verified account required', 'verification_required');
+    }
+    if (req.user.onboardingStatus !== 'complete') {
+      return sendAuthError(req, res, 403, 'Completed account onboarding required', 'onboarding_required');
+    }
+    return next();
+  };
+  if (trustedTenantRequests.has(req)) return proceed();
+  return requireSession(req, res, proceed);
+}
+
+const requireTenantAccess = requireSession;
 
 function requireRole(...roles) {
   return afterSession(
@@ -197,22 +167,19 @@ function requireRole(...roles) {
   );
 }
 
-function generateToken(user) {
-  return credentials.signApiCompatibility(user);
-}
-
 function requireAdmin(req, res) {
   return sendAuthError(req, res, 410, 'Legacy administrative authentication is disabled', 'legacy_admin_disabled');
 }
 
 module.exports = {
-  JWT_SECRET: credentials.JWT_SECRET,
   attachTenantContext,
-  generateToken,
-  requireActiveAccount,
+  requireActiveAccount: requireVerifiedExternalAction,
   requireAdmin,
-  requireAuth: requireActiveAccount,
+  requireAuth: requireTenantAccess,
+  requireOnboardedInternal,
   requireRole,
   requireSession,
+  requireTenantAccess,
   requireVerifiedAccount,
+  requireVerifiedExternalAction,
 };

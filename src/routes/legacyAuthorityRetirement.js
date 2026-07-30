@@ -2,7 +2,7 @@
 
 const express = require('express');
 const db = require('../db');
-const { requireAuth } = require('../auth/middleware');
+const { requireTenantAccess } = require('../auth/middleware');
 
 function retired(_req, res) {
   return res.status(410).json({
@@ -41,10 +41,10 @@ function createLegacyAuthorityRetirementRouter() {
 
   router.get('/polaris/status', retired);
   router.post('/contact', retired);
-  router.get('/contact/messages', requireAuth, retired);
+  router.get('/contact/messages', requireTenantAccess, retired);
 
   const retiredAuthority = /^\/(?:polaris|customers|communications|opportunities|workflows|financial|assets|crew|jobs|analytics|engines|dashboard|leads|calls|calendar)(?:\/|$)/;
-  router.all(retiredAuthority, requireAuth, retired);
+  router.all(retiredAuthority, requireTenantAccess, retired);
   return router;
 }
 

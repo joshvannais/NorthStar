@@ -30,7 +30,7 @@ function createLegacyAuthorityRetirementRouter() {
       database: postgresHealthy ? 'healthy' : 'unavailable',
       canonicalPersistence: postgresHealthy ? 'healthy' : 'unavailable',
     };
-    return res.json({
+    return res.status(postgresHealthy ? 200 : 503).json({
       status,
       service: 'northstar-solutions-api',
       persistence: 'postgresql',

@@ -1,166 +1,170 @@
 /**
- * Database connection for Northstar Solutions.
- * Supports PostgreSQL via Railway's DATABASE_URL env var.
- * Falls back to simple in-memory storage when no DB is available.
+ * PostgreSQL lifecycle and migration authority.
  *
- * Implements V3-28 Database Architecture specification:
- * - Versioned SQL migrations in migrations/
- * - Connection pooling (pg-pool, max 20 connections)
- * - UUID primary keys, organization_id on all tenant tables
- * - Proper indexes on query access patterns
+ * A configured database is either fully migrated and ready or unavailable.
+ * Authenticated/account traffic never falls back to files or process memory.
  */
 
-const { Pool } = require('pg');
+'use strict';
+
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { Pool } = require('pg');
 
 let pool = null;
 let dbAvailable = false;
+let readinessFailure = null;
 
 function getPool() {
   if (pool) return pool;
 
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    return null;
-  }
+  if (!connectionString) return null;
 
-  try {
-    pool = new Pool({
-      connectionString,
-      ssl: connectionString.includes('railway')
-        ? { rejectUnauthorized: false }
-        : false,
-      // Connection management per V3-28 §7
-      max: parseInt(process.env.DB_POOL_MAX || '20', 10),
-      connectionTimeoutMillis: 10000,
-      idleTimeoutMillis: 30000,
-    });
-    pool.on('error', (err) => {
-      console.error('[DB] Pool error:', err.message);
-    });
-    return pool;
-  } catch (err) {
-    console.warn('[DB] Failed to create pool:', err.message);
-    return null;
-  }
-}
-
-/**
- * Run all pending SQL migrations from the migrations/ directory.
- * Migrations are run in filename order, wrapped in transactions.
- * Tracks completed migrations in a `_migrations` table.
- */
-async function runMigrations() {
-  const p = getPool();
-  if (!p) return false;
-
-  try {
-    // Create migrations tracking table if it doesn't exist
-    await p.query(`
-      CREATE TABLE IF NOT EXISTS _migrations (
-        id SERIAL PRIMARY KEY,
-        filename VARCHAR(255) UNIQUE NOT NULL,
-        applied_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-
-    const migrationsDir = path.join(__dirname, '..', 'migrations');
-    if (!fs.existsSync(migrationsDir)) {
-      console.log('[DB] No migrations directory found');
-      return true;
-    }
-
-    const files = fs.readdirSync(migrationsDir)
-      .filter(f => f.endsWith('.sql'))
-      .sort();
-
-    const { rows: applied } = await p.query('SELECT filename FROM _migrations');
-    const appliedSet = new Set(applied.map(r => r.filename));
-
-    for (const file of files) {
-      if (appliedSet.has(file)) {
-        console.log(`[DB] Migration ${file} already applied, skipping`);
-        continue;
-      }
-
-      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      console.log(`[DB] Running migration: ${file}...`);
-
-      try {
-        await p.query('BEGIN');
-        await p.query(sql);
-        await p.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
-        await p.query('COMMIT');
-        console.log(`[DB] Migration ${file} applied successfully`);
-      } catch (err) {
-        await p.query('ROLLBACK');
-        console.error(`[DB] Migration ${file} failed:`, err.message);
-        throw err;
-      }
-    }
-
-    return true;
-  } catch (err) {
-    console.warn('[DB] Migration runner error:', err.message);
-    return false;
-  }
-}
-
-/**
- * Initialize the database — run migrations.
- */
-async function initDatabase() {
-  const p = getPool();
-  if (!p) {
-    console.log('[DB] No DATABASE_URL set — using in-memory/file storage');
+  pool = new Pool({
+    connectionString,
+    ssl: connectionString.includes('railway') ? { rejectUnauthorized: false } : false,
+    max: parseInt(process.env.DB_POOL_MAX || '20', 10),
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+  });
+  pool.on('error', (error) => {
     dbAvailable = false;
+    readinessFailure = 'postgres_pool_error';
+    console.error('[DB] Pool error:', error.message);
+  });
+  return pool;
+}
+
+function checksum(sql) {
+  return crypto.createHash('sha256').update(sql, 'utf8').digest('hex');
+}
+
+function stripOuterTransaction(sql) {
+  const normalized = String(sql).replace(/^\uFEFF/, '').trim();
+  const match = normalized.match(/^BEGIN\s*;([\s\S]*)COMMIT\s*;\s*$/i);
+  return match ? match[1].trim() : normalized;
+}
+
+async function runMigrations() {
+  const targetPool = getPool();
+  if (!targetPool) throw new Error('DATABASE_URL is required for PostgreSQL authority');
+
+  await targetPool.query(`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      id SERIAL PRIMARY KEY,
+      filename VARCHAR(255) UNIQUE NOT NULL,
+      checksum CHAR(64),
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await targetPool.query('ALTER TABLE _migrations ADD COLUMN IF NOT EXISTS checksum CHAR(64)');
+
+  const migrationsDir = path.join(__dirname, '..', 'migrations');
+  if (!fs.existsSync(migrationsDir)) throw new Error('migrations directory is required');
+
+  const files = fs.readdirSync(migrationsDir).filter(file => file.endsWith('.sql')).sort();
+  const appliedResult = await targetPool.query('SELECT filename, checksum FROM _migrations');
+  const applied = new Map(appliedResult.rows.map(row => [row.filename, row.checksum]));
+
+  for (const file of files) {
+    const rawSql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+    const digest = checksum(rawSql);
+    if (applied.has(file)) {
+      const recorded = applied.get(file);
+      if (recorded && recorded !== digest) {
+        throw new Error(`Applied migration checksum mismatch: ${file}`);
+      }
+      if (!recorded) {
+        await targetPool.query(
+          'UPDATE _migrations SET checksum = $2 WHERE filename = $1 AND checksum IS NULL',
+          [file, digest]
+        );
+      }
+      continue;
+    }
+
+    const client = await targetPool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(stripOuterTransaction(rawSql));
+      await client.query(
+        'INSERT INTO _migrations (filename, checksum) VALUES ($1, $2)',
+        [file, digest]
+      );
+      await client.query('COMMIT');
+      console.log(`[DB] Migration applied: ${file}`);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw new Error(`Migration ${file} failed: ${error.message}`);
+    } finally {
+      client.release();
+    }
+  }
+
+  return true;
+}
+
+async function initDatabase() {
+  dbAvailable = false;
+  readinessFailure = null;
+  const targetPool = getPool();
+  if (!targetPool) {
+    readinessFailure = 'database_url_missing';
     return false;
   }
 
   try {
-    // Test connection
-    await p.query('SELECT 1');
-    console.log('[DB] PostgreSQL connected');
-
-    // Run migrations
+    await targetPool.query('SELECT 1');
     await runMigrations();
-
-    console.log('[DB] PostgreSQL ready');
     dbAvailable = true;
     return true;
-  } catch (err) {
-    console.warn('[DB] PostgreSQL init failed:', err.message);
-    console.log('[DB] Falling back to in-memory/file storage');
+  } catch (error) {
+    readinessFailure = 'postgres_initialization_failed';
+    console.error('[DB] PostgreSQL initialization failed:', error.message);
     dbAvailable = false;
     return false;
   }
 }
 
-/**
- * Check if database is available.
- */
 function isAvailable() {
   return dbAvailable;
 }
 
-/**
- * Execute a query (if database is available).
- */
+function readiness() {
+  return Object.freeze({ ready: dbAvailable, failure: readinessFailure });
+}
+
 async function query(text, params) {
-  const p = getPool();
-  if (!p || !dbAvailable) return null;
-  try {
-    return await p.query(text, params);
-  } catch (err) {
-    console.error('[DB] Query error:', err.message);
-    throw err;
-  }
+  const targetPool = getPool();
+  if (!targetPool || !dbAvailable) return null;
+  return targetPool.query(text, params);
+}
+
+async function close() {
+  const targetPool = pool;
+  pool = null;
+  dbAvailable = false;
+  readinessFailure = null;
+  if (targetPool) await targetPool.end();
+}
+
+function resetForTests() {
+  if (process.env.NODE_ENV !== 'test') throw new Error('resetForTests is test-only');
+  pool = null;
+  dbAvailable = false;
+  readinessFailure = null;
 }
 
 module.exports = {
+  close,
+  getPool,
   initDatabase,
   isAvailable,
   query,
-  getPool,
+  readiness,
+  resetForTests,
+  runMigrations,
+  stripOuterTransaction,
 };

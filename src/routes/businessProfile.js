@@ -9,7 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { requireAuth } = require('../auth/middleware');
+const { requireVerifiedAccount } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { getActiveBusinessProfile, putBusinessProfile } = require('../services/organizationAuthority');
 const {
@@ -74,7 +74,7 @@ async function persist(req, rawProfile) {
   return stored;
 }
 
-router.get('/', requireAuth, async function (req, res) {
+router.get('/', requireVerifiedAccount, async function (req, res) {
   try {
     return res.json({ success: true, data: response(await active(req)) });
   } catch (error) {
@@ -82,7 +82,7 @@ router.get('/', requireAuth, async function (req, res) {
   }
 });
 
-router.put('/', requireAuth, requirePermission('settings', 'update'), async function (req, res) {
+router.put('/', requireVerifiedAccount, requirePermission('settings', 'update'), async function (req, res) {
   try {
     return res.json({ success: true, data: response(await persist(req, req.body || {})) });
   } catch (error) {
@@ -91,7 +91,7 @@ router.put('/', requireAuth, requirePermission('settings', 'update'), async func
   }
 });
 
-router.put('/:section', requireAuth, requirePermission('settings', 'update'), async function (req, res) {
+router.put('/:section', requireVerifiedAccount, requirePermission('settings', 'update'), async function (req, res) {
   const section = req.params.section;
   if (!VALID_SECTIONS.has(section)) {
     return res.status(400).json({ success: false, error: { code: 'INVALID_PROFILE_SECTION', message: 'Business Profile section is invalid.' } });
@@ -106,7 +106,7 @@ router.put('/:section', requireAuth, requirePermission('settings', 'update'), as
   }
 });
 
-router.get('/:section', requireAuth, async function (req, res) {
+router.get('/:section', requireVerifiedAccount, async function (req, res) {
   const section = req.params.section;
   if (!VALID_SECTIONS.has(section)) {
     return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Business Profile section not found.' } });

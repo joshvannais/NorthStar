@@ -5,6 +5,41 @@
   var pendingLoad = null;
   var refreshInFlight = null;
   var logoutInFlight = null;
+  var authGeneration = 0;
+  var requestSequence = 0;
+  var failedWaves = Object.create(null);
+  var seenCoordinationMessages = Object.create(null);
+  var coordinationDatabase = null;
+  var coordinationDatabasePromise = null;
+  var REFRESH_LOCK_NAME = 'northstar-account-refresh-v1';
+  var COORDINATION_PROTOCOL = 'northstar-account-refresh-v1';
+  var COORDINATION_STATE_KEY = 'northstar-coordination-v1';
+  var COORDINATION_DATABASE = 'northstar-coordination-v1';
+  var COORDINATION_STORE = 'leases';
+  var COORDINATION_PHASE_MILLISECONDS = 1000;
+  var FALLBACK_LEASE_MILLISECONDS = 3000;
+  var FALLBACK_HEARTBEAT_MILLISECONDS = 750;
+  var FALLBACK_RECOVERY_MILLISECONDS = 6500;
+
+  function nonSecretId(prefix) {
+    var random = '';
+    if (global.crypto && typeof global.crypto.randomUUID === 'function') {
+      random = global.crypto.randomUUID();
+    } else if (global.crypto && typeof global.crypto.getRandomValues === 'function') {
+      var values = new Uint32Array(4);
+      global.crypto.getRandomValues(values);
+      random = Array.prototype.map.call(values, function (value) { return value.toString(16); }).join('-');
+    } else {
+      random = String(Date.now()) + '-' + String(Math.random()).slice(2);
+    }
+    return prefix + '-' + random;
+  }
+
+  var documentId = nonSecretId('document');
+  var coordinationChannel = null;
+  if (typeof global.BroadcastChannel === 'function') {
+    try { coordinationChannel = new global.BroadcastChannel(COORDINATION_PROTOCOL); } catch (_error) { coordinationChannel = null; }
+  }
 
   function cookie(name) {
     var prefix = name + '=';
@@ -38,32 +73,469 @@
     return response.clone().json().then(function (body) { return body && body.code; }).catch(function () { return null; });
   }
 
-  function refresh() {
-    if (refreshInFlight) return refreshInFlight;
+  function delay(milliseconds) {
+    return new Promise(function (resolve) { global.setTimeout(resolve, milliseconds); });
+  }
+
+  function openCoordinationDatabase() {
+    if (coordinationDatabase) return Promise.resolve(coordinationDatabase);
+    if (coordinationDatabasePromise) return coordinationDatabasePromise;
+    if (!global.indexedDB || typeof global.indexedDB.open !== 'function') return Promise.resolve(null);
+    var pending = new Promise(function (resolve) {
+      var settled = false;
+      var request;
+      var timeout = global.setTimeout(function () { finish(null); }, COORDINATION_PHASE_MILLISECONDS);
+      function finish(value) {
+        if (settled) {
+          if (value && typeof value.close === 'function') value.close();
+          return;
+        }
+        settled = true;
+        global.clearTimeout(timeout);
+        if (value) {
+          coordinationDatabase = value;
+          value.onversionchange = function () {
+            value.close();
+            if (coordinationDatabase === value) coordinationDatabase = null;
+          };
+        }
+        resolve(value);
+      }
+      try { request = global.indexedDB.open(COORDINATION_DATABASE, 1); } catch (_error) { finish(null); return; }
+      request.onupgradeneeded = function () {
+        var database = request.result;
+        if (!database.objectStoreNames.contains(COORDINATION_STORE)) database.createObjectStore(COORDINATION_STORE);
+      };
+      request.onsuccess = function () { finish(request.result); };
+      request.onerror = function () { finish(null); };
+      request.onblocked = function () { finish(null); };
+    });
+    coordinationDatabasePromise = pending;
+    pending.finally(function () {
+      if (coordinationDatabasePromise === pending) coordinationDatabasePromise = null;
+    });
+    return pending;
+  }
+
+  function resetCoordinationDatabase(database) {
+    if (database && coordinationDatabase === database) {
+      try { database.close(); } catch (_error) { /* A failed handle is already unusable. */ }
+      coordinationDatabase = null;
+    }
+  }
+
+  function claimFallbackLease(attemptId) {
+    return openCoordinationDatabase().then(function (database) {
+      if (!database) return { available: false, claimed: false };
+      return new Promise(function (resolve) {
+        var settled = false;
+        var claimed = false;
+        var transaction;
+        var timeout = global.setTimeout(function () {
+          try { if (transaction) transaction.abort(); } catch (_error) { /* Timeout already owns failure. */ }
+          resetCoordinationDatabase(database);
+          finish({ available: false, claimed: false });
+        }, COORDINATION_PHASE_MILLISECONDS);
+        function finish(value) {
+          if (settled) return;
+          settled = true;
+          global.clearTimeout(timeout);
+          resolve(value);
+        }
+        try {
+          transaction = database.transaction(COORDINATION_STORE, 'readwrite');
+          var store = transaction.objectStore(COORDINATION_STORE);
+          var read = store.get(REFRESH_LOCK_NAME);
+          read.onsuccess = function () {
+            var current = read.result;
+            var now = Date.now();
+            var valid = current && typeof current.owner === 'string' &&
+              typeof current.expiresAt === 'number' && current.expiresAt > now &&
+              current.expiresAt <= now + FALLBACK_LEASE_MILLISECONDS;
+            if (!valid || current.owner === attemptId) {
+              claimed = true;
+              store.put(Object.freeze({ owner: attemptId, expiresAt: now + FALLBACK_LEASE_MILLISECONDS }), REFRESH_LOCK_NAME);
+            }
+          };
+          read.onerror = function () { try { transaction.abort(); } catch (_error) { /* Transaction failure is bounded. */ } };
+          transaction.oncomplete = function () { finish({ available: true, claimed: claimed }); };
+          transaction.onerror = function () {
+            resetCoordinationDatabase(database);
+            finish({ available: false, claimed: false });
+          };
+          transaction.onabort = function () {
+            resetCoordinationDatabase(database);
+            finish({ available: false, claimed: false });
+          };
+        } catch (_error) {
+          resetCoordinationDatabase(database);
+          finish({ available: false, claimed: false });
+        }
+      });
+    });
+  }
+
+  function releaseFallbackLease(attemptId) {
+    return openCoordinationDatabase().then(function (database) {
+      if (!database) return false;
+      return new Promise(function (resolve) {
+        var settled = false;
+        var transaction;
+        var timeout = global.setTimeout(function () {
+          try { if (transaction) transaction.abort(); } catch (_error) { /* Timeout already owns failure. */ }
+          resetCoordinationDatabase(database);
+          finish(false);
+        }, COORDINATION_PHASE_MILLISECONDS);
+        function finish(value) {
+          if (settled) return;
+          settled = true;
+          global.clearTimeout(timeout);
+          resolve(value);
+        }
+        try {
+          transaction = database.transaction(COORDINATION_STORE, 'readwrite');
+          var store = transaction.objectStore(COORDINATION_STORE);
+          var read = store.get(REFRESH_LOCK_NAME);
+          read.onsuccess = function () {
+            if (read.result && read.result.owner === attemptId) store.delete(REFRESH_LOCK_NAME);
+          };
+          read.onerror = function () { try { transaction.abort(); } catch (_error) { /* Transaction failure is bounded. */ } };
+          transaction.oncomplete = function () { finish(true); };
+          transaction.onerror = function () { resetCoordinationDatabase(database); finish(false); };
+          transaction.onabort = function () { resetCoordinationDatabase(database); finish(false); };
+        } catch (_error) {
+          resetCoordinationDatabase(database);
+          finish(false);
+        }
+      });
+    });
+  }
+
+  function renewFallbackLease(attemptId) {
+    return openCoordinationDatabase().then(function (database) {
+      if (!database) return false;
+      return new Promise(function (resolve) {
+        var settled = false;
+        var renewed = false;
+        var transaction;
+        var timeout = global.setTimeout(function () {
+          try { if (transaction) transaction.abort(); } catch (_error) { /* Timeout already owns failure. */ }
+          resetCoordinationDatabase(database);
+          finish(false);
+        }, COORDINATION_PHASE_MILLISECONDS);
+        function finish(value) {
+          if (settled) return;
+          settled = true;
+          global.clearTimeout(timeout);
+          resolve(value);
+        }
+        try {
+          transaction = database.transaction(COORDINATION_STORE, 'readwrite');
+          var store = transaction.objectStore(COORDINATION_STORE);
+          var read = store.get(REFRESH_LOCK_NAME);
+          read.onsuccess = function () {
+            if (read.result && read.result.owner === attemptId) {
+              renewed = true;
+              store.put(Object.freeze({
+                owner: attemptId,
+                expiresAt: Date.now() + FALLBACK_LEASE_MILLISECONDS,
+              }), REFRESH_LOCK_NAME);
+            }
+          };
+          read.onerror = function () { try { transaction.abort(); } catch (_error) { /* Transaction failure is bounded. */ } };
+          transaction.oncomplete = function () { finish(renewed); };
+          transaction.onerror = function () { resetCoordinationDatabase(database); finish(false); };
+          transaction.onabort = function () { resetCoordinationDatabase(database); finish(false); };
+        } catch (_error) {
+          resetCoordinationDatabase(database);
+          finish(false);
+        }
+      });
+    });
+  }
+
+  function coordinationMessage(type, attemptId, success, generation) {
+    return Object.freeze({
+      protocol: COORDINATION_PROTOCOL,
+      type: type,
+      documentId: documentId,
+      attemptId: attemptId,
+      success: success === true,
+      generation: generation,
+      timestamp: Date.now(),
+    });
+  }
+
+  function postCoordination(message) {
+    if (!coordinationChannel) return;
+    try { coordinationChannel.postMessage(message); } catch (_error) { /* Coordination remains best-effort. */ }
+  }
+
+  function readCoordinationState() {
+    var empty = { epoch: 0, outcomes: [] };
+    var parsed;
+    try { parsed = JSON.parse(global.localStorage.getItem(COORDINATION_STATE_KEY) || 'null'); } catch (_error) { return empty; }
+    if (!parsed || !Number.isSafeInteger(parsed.epoch) || parsed.epoch < 0 || parsed.epoch > 1000000000 ||
+        !Array.isArray(parsed.outcomes)) return empty;
+    var seenEpochs = Object.create(null);
+    var seenAttempts = Object.create(null);
+    var outcomes = parsed.outcomes.filter(function (outcome) {
+      return outcome && Number.isSafeInteger(outcome.epoch) && outcome.epoch > 0 && outcome.epoch <= parsed.epoch &&
+        typeof outcome.success === 'boolean' && typeof outcome.attemptId === 'string' &&
+        /^attempt-[A-Za-z0-9-]+$/.test(outcome.attemptId);
+    }).sort(function (left, right) { return left.epoch - right.epoch; }).filter(function (outcome) {
+      if (seenEpochs[outcome.epoch] || seenAttempts[outcome.attemptId]) return false;
+      seenEpochs[outcome.epoch] = true;
+      seenAttempts[outcome.attemptId] = true;
+      return true;
+    }).map(function (outcome) {
+      return Object.freeze({
+        epoch: outcome.epoch,
+        success: outcome.success,
+        attemptId: outcome.attemptId
+      });
+    }).slice(-64);
+    return { epoch: parsed.epoch, outcomes: outcomes };
+  }
+
+  function recordCoordinationOutcome(success, attemptId, generation) {
+    var state = readCoordinationState();
+    var existing = state.outcomes.find(function (outcome) { return outcome.attemptId === attemptId; });
+    if (!existing) {
+      var epoch = state.epoch + 1;
+      existing = Object.freeze({ epoch: epoch, success: success === true, attemptId: attemptId });
+      state = { epoch: epoch, outcomes: state.outcomes.concat([existing]).slice(-64) };
+      try { global.localStorage.setItem(COORDINATION_STATE_KEY, JSON.stringify(state)); } catch (_error) { /* Server authority remains fail-closed. */ }
+    }
+    postCoordination(coordinationMessage('result', attemptId, success, generation));
+    return existing;
+  }
+
+  function sharedOutcomeFor(capture) {
+    var state = readCoordinationState();
+    var outcome = state.outcomes.find(function (candidate) { return candidate.epoch > capture.coordinationEpoch; });
+    if (!outcome) return null;
+    return outcome.success
+      ? successOutcome(capture.generation, outcome.attemptId, 'shared_coordination', false)
+      : failureOutcome(capture.generation, outcome.attemptId, 'shared_coordination', false);
+  }
+
+  function successOutcome(generation, attemptId, source, shouldBroadcast) {
+    if (generation < authGeneration) {
+      return Object.freeze({ success: true, generation: generation, currentGeneration: authGeneration, source: source });
+    }
+    if (generation !== authGeneration) {
+      return Object.freeze({ success: false, generation: generation, currentGeneration: authGeneration, source: source });
+    }
+    authGeneration += 1;
+    var outcome = Object.freeze({ success: true, generation: generation, currentGeneration: authGeneration, source: source });
+    if (shouldBroadcast) postCoordination(coordinationMessage('result', attemptId, true, generation));
+    global.dispatchEvent(new CustomEvent('northstar:auth-generation', {
+      detail: Object.freeze({ generation: authGeneration, outcome: 'success', source: source }),
+    }));
+    return outcome;
+  }
+
+  function failureOutcome(generation, attemptId, source, shouldBroadcast) {
+    if (generation < authGeneration) {
+      return Object.freeze({ success: true, generation: generation, currentGeneration: authGeneration, source: source });
+    }
+    var completedAt = Date.now();
+    var priorFailure = failedWaves[String(generation)];
+    failedWaves[String(generation)] = Object.freeze({
+      generation: generation,
+      cutoffSequence: Math.max(priorFailure ? priorFailure.cutoffSequence : 0, requestSequence),
+      completedAt: Math.max(priorFailure ? priorFailure.completedAt : 0, completedAt),
+      attemptId: attemptId,
+    });
+    var outcome = Object.freeze({ success: false, generation: generation, currentGeneration: authGeneration, source: source });
+    if (shouldBroadcast) postCoordination(coordinationMessage('result', attemptId, false, generation));
+    global.dispatchEvent(new CustomEvent('northstar:auth-generation', {
+      detail: Object.freeze({ generation: authGeneration, outcome: 'failure', source: source }),
+    }));
+    return outcome;
+  }
+
+  function outcomeFor(capture) {
+    var failedWave = failedWaves[String(capture.generation)];
+    if (failedWave && capture.sequence <= failedWave.cutoffSequence && capture.startedAt <= failedWave.completedAt) {
+      return Object.freeze({ success: false, generation: capture.generation, currentGeneration: authGeneration, source: 'failed_wave' });
+    }
+    if (capture.generation < authGeneration) {
+      return Object.freeze({ success: true, generation: capture.generation, currentGeneration: authGeneration, source: 'completed_generation' });
+    }
+    return null;
+  }
+
+  function rawRefresh(capture, attemptId, leaseGuard) {
+    var completed = outcomeFor(capture);
+    if (completed) return Promise.resolve(completed);
     var csrf = cookie('northstar_csrf');
-    if (!csrf) return Promise.reject(new Error('No refreshable browser session'));
-    refreshInFlight = global.fetch('/api/auth/refresh', optionsWithSession({ method: 'POST' }))
+    if (!csrf) {
+      recordCoordinationOutcome(false, attemptId, capture.generation);
+      return Promise.resolve(failureOutcome(capture.generation, attemptId, 'missing_csrf', false));
+    }
+    var ownership = leaseGuard ? leaseGuard() : Promise.resolve(true);
+    return ownership.then(function (owned) {
+      if (!owned) {
+        recordCoordinationOutcome(false, attemptId, capture.generation);
+        return failureOutcome(capture.generation, attemptId, 'coordination_lease_lost', false);
+      }
+      return global.fetch('/api/auth/refresh', optionsWithSession({ method: 'POST' }));
+    })
       .then(function (response) {
-        if (!response.ok) throw new Error('Browser session refresh failed');
-        return true;
-      })
-      .finally(function () { refreshInFlight = null; });
-    return refreshInFlight;
+        if (!response || typeof response.ok !== 'boolean') return response;
+        recordCoordinationOutcome(response.ok, attemptId, capture.generation);
+        return response.ok
+          ? successOutcome(capture.generation, attemptId, 'refresh', false)
+          : failureOutcome(capture.generation, attemptId, 'refresh', false);
+      }).catch(function () {
+        recordCoordinationOutcome(false, attemptId, capture.generation);
+        return failureOutcome(capture.generation, attemptId, 'network', false);
+      });
+  }
+
+  function probeThenRefresh(capture, attemptId, leaseGuard) {
+    var completed = outcomeFor(capture);
+    if (completed) return Promise.resolve(completed);
+    var shared = sharedOutcomeFor(capture);
+    if (shared) return Promise.resolve(shared);
+    return global.fetch('/api/auth/me', optionsWithSession({ method: 'GET', cache: 'no-store' }))
+      .then(function (response) {
+        var concurrent = outcomeFor(capture);
+        if (concurrent) return concurrent;
+        var sharedAfterProbe = sharedOutcomeFor(capture);
+        if (sharedAfterProbe) return sharedAfterProbe;
+        if (response.ok) {
+          recordCoordinationOutcome(true, attemptId, capture.generation);
+          return successOutcome(capture.generation, attemptId, 'authority_probe', false);
+        }
+        if (response.status !== 401) {
+          recordCoordinationOutcome(false, attemptId, capture.generation);
+          return failureOutcome(capture.generation, attemptId, 'authority_probe', false);
+        }
+        return responseCode(response).then(function (code) {
+          if (code !== 'access_expired' && code !== 'invalid_token' && code !== 'session_inactive') {
+            recordCoordinationOutcome(false, attemptId, capture.generation);
+            return failureOutcome(capture.generation, attemptId, 'authority_probe', false);
+          }
+          return rawRefresh(capture, attemptId, leaseGuard);
+        });
+      }).catch(function () {
+        recordCoordinationOutcome(false, attemptId, capture.generation);
+        return failureOutcome(capture.generation, attemptId, 'authority_probe_network', false);
+      });
+  }
+
+  function runWithFallbackLease(capture, attemptId) {
+    var stopped = false;
+    var leaseOwned = true;
+    var heartbeatTimer = null;
+    var renewal = Promise.resolve(true);
+    function verifyLease() {
+      if (!leaseOwned) return Promise.resolve(false);
+      return renewFallbackLease(attemptId).then(function (renewed) {
+        leaseOwned = renewed;
+        return renewed;
+      }).catch(function () {
+        leaseOwned = false;
+        return false;
+      });
+    }
+    function scheduleHeartbeat() {
+      heartbeatTimer = global.setTimeout(function () {
+        renewal = verifyLease().then(function (renewed) {
+          if (!stopped && renewed) scheduleHeartbeat();
+          return renewed;
+        });
+      }, FALLBACK_HEARTBEAT_MILLISECONDS);
+    }
+    scheduleHeartbeat();
+    return probeThenRefresh(capture, attemptId, verifyLease).finally(function () {
+      stopped = true;
+      if (heartbeatTimer) global.clearTimeout(heartbeatTimer);
+      return renewal.then(function () { return releaseFallbackLease(attemptId); });
+    });
+  }
+
+  function coordinateWithoutLocks(capture, attemptId) {
+    var deadline = Date.now() + FALLBACK_RECOVERY_MILLISECONDS;
+    function attempt() {
+      var completed = outcomeFor(capture) || sharedOutcomeFor(capture);
+      if (completed) return Promise.resolve(completed);
+      return claimFallbackLease(attemptId).then(function (lease) {
+          if (!lease.available) {
+            recordCoordinationOutcome(false, attemptId, capture.generation);
+            return failureOutcome(capture.generation, attemptId, 'coordination_unavailable', false);
+          }
+          if (lease.claimed) {
+            return runWithFallbackLease(capture, attemptId);
+          }
+          if (Date.now() >= deadline) {
+            recordCoordinationOutcome(false, attemptId, capture.generation);
+            return failureOutcome(capture.generation, attemptId, 'coordination_timeout', false);
+          }
+          return delay(50).then(attempt);
+      });
+    }
+    return attempt();
+  }
+
+  function coordinateRefresh(capture, attemptId) {
+    var locks = global.navigator && global.navigator.locks;
+    if (!locks || typeof locks.request !== 'function') {
+      return coordinateWithoutLocks(capture, attemptId);
+    }
+    return locks.request(REFRESH_LOCK_NAME, { mode: 'exclusive' }, function () {
+      return probeThenRefresh(capture, attemptId);
+    }).catch(function () {
+      recordCoordinationOutcome(false, attemptId, capture.generation);
+      return failureOutcome(capture.generation, attemptId, 'coordination_lock_failed', false);
+    });
+  }
+
+  function ensureRefresh(capture) {
+    var completed = outcomeFor(capture);
+    if (completed) return Promise.resolve(completed);
+    if (refreshInFlight && refreshInFlight.generation === capture.generation) return refreshInFlight.promise;
+    var attemptId = nonSecretId('attempt');
+    var promise = coordinateRefresh(capture, attemptId);
+    refreshInFlight = { generation: capture.generation, attemptId: attemptId, capture: capture, promise: promise };
+    return promise.finally(function () {
+      if (refreshInFlight && refreshInFlight.attemptId === attemptId) refreshInFlight = null;
+    });
+  }
+
+  if (coordinationChannel) {
+    coordinationChannel.onmessage = function (event) {
+      var message = event && event.data;
+      if (!message || message.protocol !== COORDINATION_PROTOCOL || message.documentId === documentId ||
+          typeof message.attemptId !== 'string' || seenCoordinationMessages[message.attemptId + ':' + message.type]) return;
+      seenCoordinationMessages[message.attemptId + ':' + message.type] = true;
+      if (message.type !== 'result' || typeof message.success !== 'boolean' ||
+          typeof message.generation !== 'number' || typeof message.timestamp !== 'number') return;
+      if (refreshInFlight) sharedOutcomeFor(refreshInFlight.capture);
+    };
   }
 
   function request(url, options) {
+    var capture = Object.freeze({
+      generation: authGeneration,
+      coordinationEpoch: readCoordinationState().epoch,
+      sequence: ++requestSequence,
+      startedAt: Date.now(),
+    });
     var prepared = optionsWithSession(options);
     return global.fetch(url, prepared).then(function (response) {
-      if (response.status !== 401 || String(url).indexOf('/api/auth/refresh') === 0 || prepared.__retried) {
+      if (response.status !== 401 || String(url).indexOf('/api/auth/refresh') === 0) {
         return response;
       }
       return responseCode(response).then(function (code) {
         if (code !== 'access_expired' && code !== 'invalid_token' && code !== 'session_inactive') return response;
-        return refresh().then(function () {
-          var retry = optionsWithSession(options);
-          retry.__retried = true;
-          delete retry.__retried;
-          return global.fetch(url, retry);
+        return ensureRefresh(capture).then(function (outcome) {
+          // The raw retry deliberately bypasses request(): one retry can never
+          // recurse into another refresh, even if it receives another 401.
+          return outcome.success ? global.fetch(url, optionsWithSession(options)) : response;
         }).catch(function () { return response; });
       });
     });

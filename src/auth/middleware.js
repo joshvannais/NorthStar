@@ -1,346 +1,218 @@
 /**
- * Auth middleware for Northstar Solutions.
- * Handles JWT token verification, refresh tokens, and protected routes.
- * Implements V3-01 Authentication System specification.
- *
- * Tokens:
- * - Access tokens: short-lived (24h contractor, 30m admin)
- * - Refresh tokens: long-lived, one-way hashed in DB, rotate on use
- * - Password reset tokens: one-way hashed, 1-hour expiry
+ * PostgreSQL-backed session, account-state, and role authorization boundaries.
+ * Browser credentials are accepted only from secure cookies. A separately
+ * gated Authorization header path remains for tested API compatibility.
  */
+
+'use strict';
 
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
 const db = require('../db');
+const credentials = require('./credentials');
+const { AccountRepository } = require('../accounts/repository');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'northstar-dev-secret-change-in-production';
-const ACCESS_TOKEN_EXPIRY = '24h';
-const ADMIN_TOKEN_EXPIRY = '30m';
-const REFRESH_TOKEN_EXPIRY_DAYS = 30;
-const RESET_TOKEN_EXPIRY_HOURS = 1;
 const trustedTenantRequests = new WeakSet();
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-/**
- * Hash a token for database storage (SHA-256).
- */
-function hashToken(token) {
-  return crypto.createHash('sha256').update(token).digest('hex');
-}
-
-/**
- * Generate a random token string.
- */
-function randomToken() {
-  return crypto.randomBytes(32).toString('hex');
-}
-
-/**
- * Generate a JWT access token for a contractor user.
- */
-function generateToken(user) {
-  return jwt.sign(
-    {
-      sub: user.id,
-      email: user.email,
-      name: user.name || user.businessName || '',
-      role: 'contractor',
-      iat: Math.floor(Date.now() / 1000),
-    },
-    JWT_SECRET,
-    { expiresIn: ACCESS_TOKEN_EXPIRY }
-  );
-}
-
-/**
- * Generate a JWT token for the admin.
- */
-function generateAdminToken() {
-  return jwt.sign(
-    { sub: 'admin', role: 'admin', iat: Math.floor(Date.now() / 1000) },
-    JWT_SECRET,
-    { expiresIn: ADMIN_TOKEN_EXPIRY }
-  );
-}
-
-/**
- * Generate a refresh token, store its hash in the database.
- * Returns the raw token (to give to the client).
- */
-async function generateRefreshToken(userId) {
-  const raw = randomToken();
-  const hash = hashToken(raw);
-  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-
-  if (db.isAvailable()) {
-    await db.query(
-      'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
-      [userId, hash, expiresAt]
-    );
-  }
-
-  return raw;
-}
-
-/**
- * Validate a refresh token. Returns the user_id if valid, null otherwise.
- * If valid, revokes the used token (rotation).
- */
-async function validateRefreshToken(rawToken) {
-  if (!db.isAvailable()) return null;
-
-  const hash = hashToken(rawToken);
-  const result = await db.query(
-    `SELECT id, user_id FROM refresh_tokens
-     WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()`,
-    [hash]
-  );
-
-  if (result.rows.length === 0) return null;
-
-  const row = result.rows[0];
-
-  // Revoke the used token (rotation)
-  await db.query(
-    'UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1',
-    [row.id]
-  );
-
-  return row.user_id;
-}
-
-/**
- * Revoke all refresh tokens for a user (force logout all sessions).
- */
-async function revokeAllUserTokens(userId) {
-  if (!db.isAvailable()) return;
-  await db.query(
-    'UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL',
-    [userId]
-  );
-}
-
-/**
- * Generate a password reset token, store its hash.
- * Returns the raw token (to email to the user).
- */
-async function generateResetToken(userId) {
-  const raw = randomToken();
-  const hash = hashToken(raw);
-  const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
-
-  if (db.isAvailable()) {
-    await db.query(
-      'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
-      [userId, hash, expiresAt]
-    );
-  }
-
-  return raw;
-}
-
-/**
- * Validate a password reset token. Returns the user_id if valid, null otherwise.
- */
-async function validateResetToken(rawToken) {
-  if (!db.isAvailable()) return null;
-
-  const hash = hashToken(rawToken);
-  const result = await db.query(
-    `SELECT id, user_id FROM password_reset_tokens
-     WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()`,
-    [hash]
-  );
-
-  if (result.rows.length === 0) return null;
-
-  const row = result.rows[0];
-
-  // Mark as used
-  await db.query(
-    'UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1',
-    [row.id]
-  );
-
-  return row.user_id;
-}
-
-/**
- * Check login rate limit: max 5 failed attempts per IP per 15 minutes.
- */
-async function checkRateLimit(ip) {
-  if (!db.isAvailable()) return true; // Allow if no DB
-
-  const result = await db.query(
-    `SELECT COUNT(*) as count FROM login_attempts
-     WHERE ip_address = $1 AND success = false AND attempted_at > NOW() - INTERVAL '15 minutes'`,
-    [ip]
-  );
-
-  return parseInt(result.rows[0].count, 10) < 5;
-}
-
-/**
- * Record a login attempt.
- */
-async function recordLoginAttempt(ip, userId, success) {
-  if (!db.isAvailable()) return;
-
-  await db.query(
-    'INSERT INTO login_attempts (ip_address, user_id, success) VALUES ($1, $2, $3)',
-    [ip, userId, success]
-  );
-
-  // Cleanup old records (>24h)
-  await db.query(
-    'DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL \'24 hours\''
-  );
-}
-
-// ============================================================
-// Express Middleware
-// ============================================================
-
-/**
- * Middleware: require a valid contractor JWT.
- * Attaches user info to req.user.
- */
 function requestId(req) {
   return req.requestId || req.correlationId || 'unavailable';
 }
 
 function sendAuthError(req, res, status, message, code) {
-  return res.status(status).json({
-    error: message,
-    code,
-    requestId: requestId(req),
-  });
+  return res.status(status).json({ error: message, code, requestId: requestId(req) });
 }
 
-function attachTenantContext(req, membership) {
-  const context = Object.freeze({
-    userId: membership.id,
-    organizationId: membership.organization_id,
-    role: membership.role,
-  });
+function attachTenantContext(req, authority, session) {
+  const userId = authority.user_id || authority.id;
+  const organizationId = authority.organization_id;
+  const role = authority.role;
+  const context = Object.freeze({ userId, organizationId, role });
   const trustedUser = Object.freeze({
-    id: membership.id,
-    sub: membership.id,
-    email: membership.email || '',
-    name: membership.name || '',
-    role: membership.role,
-    organizationId: membership.organization_id,
-    orgId: membership.organization_id,
+    id: userId,
+    sub: userId,
+    email: authority.email || '',
+    name: authority.name || '',
+    role,
+    status: authority.user_status || authority.status,
+    organizationId,
+    orgId: organizationId,
+    onboardingStatus: authority.onboarding_status || 'complete',
   });
 
   Object.defineProperties(req, {
     user: { value: trustedUser, enumerable: true, configurable: false, writable: false },
     tenantContext: { value: context, enumerable: true, configurable: false, writable: false },
-    orgId: { value: context.organizationId, enumerable: true, configurable: false, writable: false },
-    userRole: { value: context.role, enumerable: true, configurable: false, writable: false },
+    orgId: { value: organizationId, enumerable: true, configurable: false, writable: false },
+    userRole: { value: role, enumerable: true, configurable: false, writable: false },
+    authSession: { value: session ? Object.freeze(session) : null, enumerable: true, configurable: false, writable: false },
+    accountAuthority: { value: Object.freeze({ ...authority }), enumerable: false, configurable: false, writable: false },
   });
   trustedTenantRequests.add(req);
 }
 
-async function requireAuth(req, res, next) {
-  if (trustedTenantRequests.has(req)) return next();
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return sendAuthError(req, res, 401, 'Authentication required', 'unauthorized');
+function validateCookieCsrf(req, res, authority) {
+  if (SAFE_METHODS.has(String(req.method || 'GET').toUpperCase())) return true;
+  const cookies = credentials.parseCookies(req.headers.cookie);
+  const header = req.headers['x-csrf-token'];
+  const cookie = cookies[credentials.CSRF_COOKIE];
+  if (!header || !cookie || !credentials.safeEqual(header, cookie) ||
+      !credentials.safeEqual(credentials.hashToken(header), authority.csrf_token_hash)) {
+    sendAuthError(req, res, 403, 'CSRF validation failed', 'csrf_invalid');
+    return false;
   }
-  const token = authHeader.split(' ')[1];
+  return true;
+}
+
+async function cookieSession(req, res, token) {
   let decoded;
   try {
-    decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.role !== 'contractor') {
-      return sendAuthError(req, res, 403, 'Invalid user token', 'forbidden');
-    }
-  } catch (err) {
-    return sendAuthError(req, res, 401, 'Invalid or expired token', 'invalid_token');
+    decoded = credentials.verifyAccess(token);
+    if (decoded.typ !== 'access' || !decoded.sid) throw new Error('invalid browser access type');
+  } catch (error) {
+    const code = error && error.name === 'TokenExpiredError' ? 'access_expired' : 'invalid_token';
+    return sendAuthError(req, res, 401, 'Invalid or expired session', code);
   }
+  if (!db.isAvailable()) {
+    return sendAuthError(req, res, 503, 'Account authorization is temporarily unavailable', 'authorization_unavailable');
+  }
+  try {
+    const authority = await new AccountRepository().sessionAuthority(decoded.sid, decoded.sub);
+    if (!authority || authority.session_status !== 'active') {
+      return sendAuthError(req, res, 401, 'Session is no longer active', 'session_inactive');
+    }
+    if (new Date(authority.access_expires_at).getTime() <= Date.now()) {
+      return sendAuthError(req, res, 401, 'Access credential expired', 'access_expired');
+    }
+    if (authority.membership_status !== 'active' ||
+        !['pending_verification', 'active'].includes(authority.user_status)) {
+      return sendAuthError(req, res, 403, 'Active organization membership required', 'organization_membership_required');
+    }
+    if (!validateCookieCsrf(req, res, authority)) return undefined;
+    attachTenantContext(req, authority, {
+      id: authority.session_id,
+      transport: 'cookie',
+      csrfTokenHash: authority.csrf_token_hash,
+    });
+    return true;
+  } catch (_error) {
+    console.warn('[Auth] Session lookup warning:', {
+      requestId: requestId(req),
+      event: 'authorization_persistence_unavailable',
+    });
+    return sendAuthError(req, res, 503, 'Account authorization is temporarily unavailable', 'authorization_unavailable');
+  }
+}
 
-  if (!decoded.sub) {
+async function apiCompatibilitySession(req, res, token) {
+  if (process.env.NODE_ENV !== 'test' && process.env.AUTH_BEARER_COMPAT_ENABLED !== 'true') {
+    return sendAuthError(req, res, 401, 'Authentication required', 'unauthorized');
+  }
+  let decoded;
+  try {
+    decoded = jwt.verify(token, credentials.JWT_SECRET);
+    if (!decoded.sub || !['api_compat', undefined].includes(decoded.typ) ||
+        (decoded.typ === undefined && decoded.role !== 'contractor')) {
+      return sendAuthError(req, res, 403, 'Invalid API credential', 'forbidden');
+    }
+  } catch (_error) {
     return sendAuthError(req, res, 401, 'Invalid or expired token', 'invalid_token');
   }
   if (!db.isAvailable()) {
-    return sendAuthError(
-      req,
-      res,
-      503,
-      'Organization authorization is temporarily unavailable',
-      'authorization_unavailable'
-    );
+    return sendAuthError(req, res, 503, 'Organization authorization is temporarily unavailable', 'authorization_unavailable');
   }
-
   try {
     const result = await db.query(
-      `SELECT id, organization_id, role, status, email, name
-         FROM users
-        WHERE id = $1`,
+      `SELECT u.id, u.organization_id, u.role, u.status, u.email, u.name
+         FROM users u
+        WHERE u.id = $1`,
       [decoded.sub]
     );
-    const rows = result && Array.isArray(result.rows) ? result.rows : [];
-    if (rows.length !== 1) {
+    const membershipRows = result && Array.isArray(result.rows) ? result.rows : [];
+    if (membershipRows.length !== 1) {
       return sendAuthError(req, res, 403, 'Active organization membership required', 'organization_membership_required');
     }
-
-    const membership = rows[0];
-    if (!membership.id ||
-        !membership.organization_id ||
-        membership.status !== 'active' ||
-        !membership.role) {
+    const membership = membershipRows[0];
+    if (!membership.id || !membership.organization_id || membership.status !== 'active' || !membership.role) {
       return sendAuthError(req, res, 403, 'Active organization membership required', 'organization_membership_required');
     }
-
-    attachTenantContext(req, membership);
-    return next();
-  } catch (_err) {
+    attachTenantContext(req, { ...membership, user_status: membership.status, onboarding_status: 'complete' }, {
+      id: null,
+      transport: 'authorization_header',
+    });
+    return true;
+  } catch (_error) {
     console.warn('[Auth] Membership lookup warning:', {
       requestId: requestId(req),
       event: 'authorization_persistence_unavailable',
     });
-    return sendAuthError(
-      req,
-      res,
-      503,
-      'Organization authorization is temporarily unavailable',
-      'authorization_unavailable'
-    );
+    return sendAuthError(req, res, 503, 'Organization authorization is temporarily unavailable', 'authorization_unavailable');
   }
 }
 
-/**
- * Middleware: require admin JWT.
- */
-function requireAdmin(req, res, next) {
+async function requireSession(req, res, next) {
+  if (trustedTenantRequests.has(req)) return next();
+  const cookies = credentials.parseCookies(req.headers.cookie);
+  if (cookies[credentials.ACCESS_COOKIE]) {
+    const accepted = await cookieSession(req, res, cookies[credentials.ACCESS_COOKIE]);
+    if (accepted === true) return next();
+    return undefined;
+  }
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Admin authentication required' });
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const accepted = await apiCompatibilitySession(req, res, authHeader.slice('Bearer '.length));
+    if (accepted === true) return next();
+    return undefined;
   }
-  const token = authHeader.split(' ')[1];
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    req.admin = decoded;
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
+  return sendAuthError(req, res, 401, 'Authentication required', 'unauthorized');
+}
+
+function afterSession(predicate, code, message) {
+  return async function accountBoundary(req, res, next) {
+    const proceed = () => {
+      if (!predicate(req)) return sendAuthError(req, res, 403, message, code);
+      return next();
+    };
+    if (trustedTenantRequests.has(req)) return proceed();
+    return requireSession(req, res, proceed);
+  };
+}
+
+const requireVerifiedAccount = afterSession(
+  req => req.user.status === 'active' && ['business_profile_required', 'complete'].includes(req.user.onboardingStatus),
+  'verification_required',
+  'Verified account required'
+);
+
+const requireActiveAccount = afterSession(
+  req => req.user.status === 'active' && req.user.onboardingStatus === 'complete',
+  'onboarding_required',
+  'Completed account onboarding required'
+);
+
+function requireRole(...roles) {
+  return afterSession(
+    req => roles.includes(req.userRole),
+    'role_required',
+    'Required account role is unavailable'
+  );
+}
+
+function generateToken(user) {
+  return credentials.signApiCompatibility(user);
+}
+
+function requireAdmin(req, res) {
+  return sendAuthError(req, res, 410, 'Legacy administrative authentication is disabled', 'legacy_admin_disabled');
 }
 
 module.exports = {
-  generateToken,
-  generateAdminToken,
-  generateRefreshToken,
-  validateRefreshToken,
-  revokeAllUserTokens,
-  generateResetToken,
-  validateResetToken,
-  checkRateLimit,
-  recordLoginAttempt,
-  requireAuth,
-  requireAdmin,
+  JWT_SECRET: credentials.JWT_SECRET,
   attachTenantContext,
-  JWT_SECRET,
+  generateToken,
+  requireActiveAccount,
+  requireAdmin,
+  requireAuth: requireActiveAccount,
+  requireRole,
+  requireSession,
+  requireVerifiedAccount,
 };

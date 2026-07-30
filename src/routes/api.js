@@ -55,7 +55,7 @@ router.get('/health', (req, res) => {
   const allHealthy = Object.values(components).every(s => s === 'healthy' || s === 'unconfigured');
   const status = allHealthy ? 'ok' : 'degraded';
 
-  res.json({
+  res.status(dbOk ? 200 : 503).json({
     status,
     service: 'northstar-solutions',
     version: '1.0.0',

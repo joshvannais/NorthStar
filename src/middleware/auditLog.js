@@ -18,6 +18,7 @@ function correlationId(req, res, next) {
     correlationId: { value: generated, enumerable: true, configurable: false, writable: false },
   });
   res.setHeader('X-Correlation-ID', generated);
+  res.setHeader('X-Request-ID', generated);
   next();
 }
 

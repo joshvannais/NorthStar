@@ -19,6 +19,8 @@ This change establishes PostgreSQL as the only runtime authority for account ide
 
 `public/js/auth-session.js` is the only browser authentication client. It retains account projections only in memory, loads identity through `/api/auth/me`, retries once after a successful refresh, routes lifecycle states, and performs server-side logout. Browser storage may still contain presentation theme and per-tab simulation metadata, but never access tokens, refresh tokens, users, organizations, or roles.
 
+Each protected request captures a non-secret authentication generation before transmission. Responses from one expired-access wave join one refresh rotation; callers whose captured generation is already stale retry once without another rotation. Same-origin tabs coordinate that rotation with Web Locks and a non-authoritative BroadcastChannel outcome, with a bounded IndexedDB lease fallback where Web Locks are unavailable. Local storage contains only a bounded history of non-secret coordination epochs, outcomes, and attempt identifiers. Forged coordination metadata can affect retry timing only: PostgreSQL sessions, memberships, tenants, roles, verification, and onboarding remain the sole authority, and a retry never recursively refreshes.
+
 User Bearer compatibility is retired. A Bearer request receives the same stable unauthorized response regardless of environment flags or claims; the browser client never constructs an Authorization header.
 
 ## Session and replay behavior
@@ -38,6 +40,8 @@ The generic `organization_account_preferences` row retains only unrelated intern
 Migration `010_account_session_authority.sql` aborts on normalized-email collisions, null ownership, unsupported roles/statuses, or multiple current subscriptions. It backfills memberships and onboarding only from existing PostgreSQL rows, revokes legacy refresh tokens, and disables the known source-seeded demo and admin credentials. It never reads a JSON data file and is transaction-body-only.
 
 The production migration runner owns one transaction that acquires a PostgreSQL advisory transaction lock, verifies the ledger/checksums, executes every pending migration body, inserts every ledger row, and commits. Schema and ledger therefore roll back together on SQL failure, ledger failure, or pre-commit process/database termination. A lexical verifier removes only the exact outer transaction envelope in legacy migrations 001-009, including valid comment/BOM variants; arbitrary nested transaction statements are rejected. Migrations 001-009 remain byte-identical. PostgreSQL connection or migration failure leaves readiness false.
+
+Inside that same advisory-locked transaction, the runner creates or normalizes the migration ledger to one canonical timestamp definition: `_migrations.applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`. A branch-era `TIMESTAMP NULL` ledger is converted using the database session time zone, null values are deterministically repaired before `NOT NULL` is applied, and legitimate existing moments and ledger records are retained. Fresh, genuine-upgrade, and divergent-upgrade schema comparison includes the ledger columns, types, nullability, defaults, constraints, and indexes.
 
 ## Operations
 

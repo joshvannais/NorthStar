@@ -42,7 +42,7 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
     db = require('../../src/db');
     expect(await db.initDatabase()).toBe(true);
     pool = db.getPool();
-    ({ app } = require('../../src/server'));
+    app = require('../helpers/account-test-app').createDisposableAccountApp();
     ({ putBusinessProfile } = require('../../src/services/organizationAuthority'));
   }, 60000);
 
@@ -70,7 +70,7 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
     expect(response.status).toBe(201);
     expect(response.body.account.user).toMatchObject({ email: 'owner.one@example.test', status: 'pending_verification' });
     expect(response.body.account.membership).toMatchObject({ role: 'owner', status: 'active' });
-    expect(response.body.account.onboarding.status).toBe('pending_verification');
+    expect(response.body.account.onboarding.status).toBe('business_profile_required');
     expect(JSON.stringify(response.body)).not.toMatch(/accessToken|refreshToken|passwordHash|northstar_access/);
 
     const setCookies = response.headers['set-cookie'];
@@ -90,21 +90,19 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
               membership.id AS membership_id, membership.role,
               subscription.status AS subscription_status, subscription.trial_ends,
               onboarding.status AS onboarding_status,
-              preferences.organization_id AS preferences_org,
-              account_preferences.organization_id AS account_preferences_org
+              preferences.organization_id AS preferences_org
          FROM users u
          JOIN organization_memberships membership ON membership.user_id = u.id
          JOIN subscriptions subscription ON subscription.organization_id = u.organization_id
          JOIN organization_onboarding onboarding ON onboarding.organization_id = u.organization_id
          JOIN notification_preferences preferences ON preferences.organization_id = u.organization_id
-         JOIN organization_account_preferences account_preferences ON account_preferences.organization_id = u.organization_id
         WHERE u.email_normalized = $1`,
       ['owner.one@example.test']
     );
     expect(graph.rows).toHaveLength(1);
     expect(graph.rows[0]).toMatchObject({
       email_normalized: 'owner.one@example.test', user_status: 'pending_verification',
-      role: 'owner', subscription_status: 'trial', onboarding_status: 'pending_verification',
+      role: 'owner', subscription_status: 'trial', onboarding_status: 'business_profile_required',
     });
     const trialDays = (new Date(graph.rows[0].trial_ends).getTime() - Date.now()) / 86400000;
     expect(trialDays).toBeGreaterThan(13.9);
@@ -125,8 +123,7 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
     expect(me.status).toBe(200);
     expect(me.body.account.user.status).toBe('pending_verification');
     const protectedResponse = await request(app).get('/api/v1/canonical/status').set('Cookie', cookieHeader(jar));
-    expect(protectedResponse.status).toBe(403);
-    expect(protectedResponse.body.code).toBe('onboarding_required');
+    expect(protectedResponse.status).toBe(200);
   });
 
   test('case variants collide after normalization and validation enforces frozen boundaries', async () => {

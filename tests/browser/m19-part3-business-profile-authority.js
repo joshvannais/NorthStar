@@ -1,15 +1,15 @@
 'use strict';
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
+const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
-const PLAYWRIGHT = 'C:/Users/joshv/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright-core';
-const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const WEBKIT = 'C:/Users/joshv/AppData/Local/Temp/NorthStar-PR66-dbf3b553-WebKit-1.61.1/webkit-2311/Playwright.exe';
 const ROOT = path.resolve(__dirname, '..', '..');
 const ORG_A = '43000000-0000-0000-0000-000000000001';
 const ORG_B = '43000000-0000-0000-0000-000000000002';
@@ -38,16 +38,6 @@ function completeProfile(companyName, overrides) {
   return base;
 }
 
-function auth(generateToken, userId) {
-  return {
-    Authorization: 'Bearer ' + generateToken({
-      id: userId,
-      email: userId + '@profile-browser.test',
-      name: userId,
-    }),
-  };
-}
-
 async function listen(app) {
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
@@ -73,10 +63,10 @@ async function waitForValue(page, selector, expected) {
 async function main() {
   const selected = (process.argv.find((value) => value.startsWith('--browser=')) || '--browser=chrome').split('=')[1];
   assert.ok(selected === 'chrome' || selected === 'webkit', 'browser must be chrome or webkit');
-  const executablePath = selected === 'chrome' ? CHROME : WEBKIT;
-  assert.ok(fs.existsSync(executablePath), selected + ' executable is unavailable');
+  const { browserType, executablePath } = resolveBrowserRuntime(selected);
 
   const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalAccessSecret = process.env.AUTH_ACCESS_SECRET;
   const originalRetellKey = process.env.RETELL_API_KEY;
   const suiteDatabase = await createSuiteDatabase('profile-browser-' + selected);
   let db;
@@ -88,6 +78,7 @@ async function main() {
   let providerBoundaryRequests = 0;
   try {
     process.env.DATABASE_URL = suiteDatabase.connectionString;
+    process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
     process.env.RETELL_API_KEY = '';
     db = require('../../src/db');
     assert.strictEqual(await db.initDatabase(), true, 'disposable PostgreSQL must initialize');
@@ -122,31 +113,32 @@ async function main() {
       }),
     });
     const { app } = require('../../src/server');
-    const { generateToken } = require('../../src/auth/middleware');
-    const ownerAAuth = auth(generateToken, OWNER_A);
+    const ownerASession = await provisionDurableSession(pool, {
+      userId: OWNER_A, organizationId: ORG_A, role: 'owner',
+    });
+    const ownerAAuth = ownerASession.headers;
     server = await listen(app);
     const origin = 'http://127.0.0.1:' + server.address().port;
 
-    const { chromium, webkit } = require(PLAYWRIGHT);
-    browser = await (selected === 'chrome' ? chromium : webkit).launch({
+    browser = await browserType.launch({
       headless: true,
       executablePath,
     });
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-    await context.addInitScript(({ token, userId, organizationId }) => {
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify({ id: userId, organizationId }));
-    }, {
-      token: ownerAAuth.Authorization.slice('Bearer '.length),
-      userId: OWNER_A,
-      organizationId: ORG_A,
-    });
+    await context.addCookies([
+      { name: 'northstar_access', value: ownerASession.accessToken, url: origin, httpOnly: true, sameSite: 'Lax' },
+      { name: 'northstar_csrf', value: ownerASession.csrfToken, url: origin, httpOnly: false, sameSite: 'Lax' },
+    ]);
     await context.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
     await context.route('https://fonts.gstatic.com/**', (route) => route.fulfill({ status: 200, contentType: 'font/woff2', body: '' }));
 
     const page = await context.newPage();
     page.on('request', (browserRequest) => {
-      requestLedger.push({ method: browserRequest.method(), url: browserRequest.url() });
+      requestLedger.push({
+        method: browserRequest.method(),
+        url: browserRequest.url(),
+        authorization: browserRequest.headers().authorization || null,
+      });
       if (/retell|twilio|provider/i.test(browserRequest.url())) providerBoundaryRequests += 1;
     });
     page.on('console', (message) => {
@@ -249,6 +241,7 @@ async function main() {
     assert.deepStrictEqual(pageErrors, [], 'page errors');
     assert.deepStrictEqual(consoleErrors, [], 'console errors');
     assert.strictEqual(providerBoundaryRequests, 0, 'provider boundary is never contacted');
+    assert.ok(requestLedger.every(entry => entry.authorization === null), 'browser sends no Authorization headers');
 
     const result = {
       browser: selected,
@@ -273,6 +266,8 @@ async function main() {
     if (db && db.getPool()) await db.getPool().end();
     if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = originalDatabaseUrl;
+    if (originalAccessSecret === undefined) delete process.env.AUTH_ACCESS_SECRET;
+    else process.env.AUTH_ACCESS_SECRET = originalAccessSecret;
     if (originalRetellKey === undefined) delete process.env.RETELL_API_KEY;
     else process.env.RETELL_API_KEY = originalRetellKey;
     await suiteDatabase.cleanup();

@@ -5,10 +5,8 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { EXTREME_FENCE_SUBTOTAL } = require('../helpers/m19-part3-business-profile');
+const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
-const PLAYWRIGHT = 'C:/Users/joshv/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright-core';
-const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const WEBKIT = 'C:/Users/joshv/AppData/Local/Temp/NorthStar-PR66-dbf3b553-WebKit-1.61.1/webkit-2311/Playwright.exe';
 const ROOT = path.resolve(__dirname, '..', '..');
 const PUBLIC = path.join(ROOT, 'public');
 
@@ -242,10 +240,7 @@ async function waitForRejection(page) {
 async function main() {
   const selected = (process.argv.find((value) => value.startsWith('--browser=')) || '--browser=chrome').split('=')[1];
   assert.ok(selected === 'chrome' || selected === 'webkit', 'browser must be chrome or webkit');
-  const { chromium, webkit } = require(PLAYWRIGHT);
-  const browserType = selected === 'chrome' ? chromium : webkit;
-  const executablePath = selected === 'chrome' ? CHROME : WEBKIT;
-  assert.ok(fs.existsSync(executablePath), `${selected} executable is unavailable: ${executablePath}`);
+  const { browserType, executablePath } = resolveBrowserRuntime(selected);
 
   const { server, origin } = await startStaticServer();
   let browser;
@@ -262,7 +257,11 @@ async function main() {
       const request = route.request();
       const method = request.method();
       const url = new URL(request.url());
-      requestLedger.push({ method, path: url.pathname });
+      requestLedger.push({
+        method,
+        path: url.pathname,
+        authorization: request.headers().authorization || null,
+      });
       if (method !== 'GET' && method !== 'HEAD') {
         await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNEXPECTED_MUTATION' } }) });
         return;
@@ -402,7 +401,8 @@ async function main() {
 
     const automaticMutations = requestLedger.filter((entry) => !['GET', 'HEAD'].includes(entry.method));
     assert.deepStrictEqual(automaticMutations, [], 'page loads issue zero automatic browser mutations');
-    console.log(JSON.stringify({ browser: selected, assertions: 126, surfaces: equality, automaticMutations: automaticMutations.length }, null, 2));
+    assert.ok(requestLedger.every((entry) => entry.authorization === null), 'stale localStorage identity never creates Authorization headers');
+    console.log(JSON.stringify({ browser: selected, assertions: 127, surfaces: equality, automaticMutations: automaticMutations.length, authorizationHeaders: 0 }, null, 2));
     await context.close();
   } finally {
     if (browser) await browser.close();

@@ -12,9 +12,8 @@ const root = path.join(parent, 'w' + (process.env.JEST_WORKER_ID || '0') + '-' +
 const repositoryData = path.resolve(__dirname, '../../data');
 
 // Test-only, process-random credentials keep production free of source-known
-// auth defaults while preserving the explicitly tested Authorization path.
+// authentication defaults.
 if (!process.env.AUTH_ACCESS_SECRET) process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
-process.env.AUTH_BEARER_COMPAT_ENABLED = 'true';
 
 if (fs.existsSync(root)) fs.rmSync(root, { recursive: true, force: true });
 fs.mkdirSync(parent, { recursive: true });

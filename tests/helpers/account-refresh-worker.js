@@ -9,8 +9,13 @@ async function main() {
 
   process.once('message', async message => {
     try {
-      await service.refresh(message.refreshToken, message.csrfToken, message.csrfToken);
-      if (process.send) process.send({ type: 'result', outcome: 'rotated' });
+      if (message.action === 'logout') {
+        await service.logout(message.refreshToken, message.csrfToken, message.csrfToken);
+        if (process.send) process.send({ type: 'result', outcome: 'logged_out' });
+      } else {
+        await service.refresh(message.refreshToken, message.csrfToken, message.csrfToken);
+        if (process.send) process.send({ type: 'result', outcome: 'rotated' });
+      }
     } catch (error) {
       if (process.send) process.send({ type: 'result', outcome: error.code || 'worker_error' });
     } finally {

@@ -145,7 +145,6 @@ function headers(organizationId, userId, sessionId) {
     'X-Test-Organization': organizationId,
     'X-Test-User': userId,
     'X-NorthStar-Session-ID': sessionId,
-    Authorization: 'Bearer test-' + userId,
   };
 }
 

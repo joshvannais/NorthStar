@@ -3,13 +3,10 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
-
-const execFileAsync = promisify(execFile);
+const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
 jest.mock('../../src/leads/store', () => {
   const actual = jest.requireActual('../../src/leads/store');
@@ -105,7 +102,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
   let suiteDatabase;
   let db;
   let app;
-  let generateToken;
+  let authHeaders;
   let putBusinessProfile;
   let bindIntegrationOwner;
   let voiceSessions;
@@ -124,12 +121,8 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
   let dataBefore;
   let legacyCountsBefore;
 
-  function token(userId) {
-    return generateToken({ id: userId, email: userId + '@m19.test', name: userId });
-  }
-
   function auth(userId) {
-    return { Authorization: 'Bearer ' + token(userId) };
+    return authHeaders.get(userId) || {};
   }
 
   beforeAll(async () => {
@@ -190,10 +183,23 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       externalIntegrationId: 'agent-mounted-b',
       metadata: { source: 'mounted-test' },
     });
+    authHeaders = new Map();
+    for (const [userId, organizationId, role, membershipStatus] of [
+      [USERS.owner, ORG_A, 'owner', 'active'],
+      [USERS.admin, ORG_A, 'admin', 'active'],
+      [USERS.member, ORG_A, 'member', 'active'],
+      [USERS.viewer, ORG_A, 'viewer', 'active'],
+      [USERS.inactive, ORG_A, 'member', 'suspended'],
+      [USERS.other, ORG_B, 'owner', 'active'],
+    ]) {
+      const session = await provisionDurableSession(pool, {
+        userId, organizationId, role, membershipStatus,
+      });
+      authHeaders.set(userId, session.headers);
+    }
     voiceSessions = require('../../src/services/voiceSessionAuthority');
     retell = require('../../src/retell/client');
     ({ app } = require('../../src/server'));
-    ({ generateToken } = require('../../src/auth/middleware'));
     leadStore = require('../../src/leads/store');
     sheets = require('../../src/sheets/client');
     legacyCountsBefore = (await pool.query(
@@ -239,7 +245,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     const denied = [
       [USERS.viewer, 403],
       [USERS.inactive, 403],
-      [USERS.missing, 403],
+      [USERS.missing, 401],
     ];
     for (const [userId, expected] of denied) {
       const response = await request(app)
@@ -253,26 +259,21 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     expect(afterDenied).toBe(afterAllowed);
   });
 
-  test('ambiguous and unavailable authorization fail closed through the mounted app with zero mutation', async () => {
+  test('missing durable authority and repository outage fail closed through the mounted app with zero mutation', async () => {
     const pool = db.getPool();
     const before = (await pool.query('SELECT count(*)::int AS count FROM canonical_operations')).rows[0].count;
-    const originalQuery = db.query;
-    db.query = async function (statement, values) {
-      if (/FROM users/i.test(statement)) {
-        const row = { id: USERS.owner, organization_id: ORG_A, role: 'owner', status: 'active', email: 'owner@m19.test', name: 'Owner' };
-        return { rows: [row, { ...row }] };
-      }
-      return originalQuery(statement, values);
-    };
-    const ambiguous = await request(app)
-      .post('/api/leads').set(auth(USERS.owner)).set('Idempotency-Key', 'ambiguous')
-      .send({ customerName: 'Ambiguous', service: 'general' });
-    db.query = async function () { throw new Error('authorization database unavailable'); };
+    const repository = require('../../src/accounts/repository').AccountRepository.prototype;
+    const authority = jest.spyOn(repository, 'sessionAuthority').mockResolvedValueOnce(null);
+    const missing = await request(app)
+      .post('/api/leads').set(auth(USERS.owner)).set('Idempotency-Key', 'missing-authority')
+      .send({ customerName: 'Missing', service: 'general' });
+    authority.mockRejectedValueOnce(new Error('authorization database unavailable'));
     const unavailable = await request(app)
       .post('/api/leads').set(auth(USERS.owner)).set('Idempotency-Key', 'unavailable')
       .send({ customerName: 'Unavailable', service: 'general' });
-    db.query = originalQuery;
-    expect(ambiguous.status).toBe(403);
+    authority.mockRestore();
+    expect(missing.status).toBe(401);
+    expect(missing.body.code).toBe('session_inactive');
     expect(unavailable.status).toBe(503);
     expect(unavailable.body.code).toBe('authorization_unavailable');
     expect((await pool.query('SELECT count(*)::int AS count FROM canonical_operations')).rows[0].count).toBe(before);
@@ -632,22 +633,33 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     }
   });
 
-  test('public demo is safely unavailable unless server-owned persisted demo authority is provisioned', async () => {
+  test('absent demo authority cannot reopen the retired public outbound endpoint', async () => {
+    const pool = db.getPool();
     delete process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
     const provider = jest.spyOn(retell, 'createCall');
+    const before = await pool.query(
+      "SELECT count(*)::int AS count FROM canonical_voice_sessions WHERE external_session_id LIKE 'demo-%'"
+    );
     try {
-      const unavailable = await request(app)
+      const retired = await request(app)
         .post('/api/demo/call')
         .send({ businessName: 'Caller Business', industry: 'General Contracting', phoneNumber: '+15555553201' });
-      expect(unavailable.status).toBe(503);
-      expect(unavailable.body.error).toEqual({ code: 'demo_unavailable', message: 'The public demo is unavailable.' });
+      expect(retired.status).toBe(410);
+      expect(retired.body).toEqual({
+        success: false,
+        error: { code: 'demo_external_action_retired', message: 'Public demo outbound calls are unavailable.' },
+      });
       expect(provider).not.toHaveBeenCalled();
+      const after = await pool.query(
+        "SELECT count(*)::int AS count FROM canonical_voice_sessions WHERE external_session_id LIKE 'demo-%'"
+      );
+      expect(after.rows[0].count).toBe(before.rows[0].count);
     } finally {
       provider.mockRestore();
     }
   });
 
-  test('provisioned public demo uses one stable PostgreSQL identity through pending, cross-process, completion, estimate, and replay', async () => {
+  test('persisted demo authority and caller-forged tenant/profile fields cannot reopen the retired endpoint', async () => {
     const pool = db.getPool();
     await pool.query(
       `INSERT INTO canonical_demo_authority (organization_id, status)
@@ -655,20 +667,12 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       [ORG_B]
     );
     process.env.NORTHSTAR_DEMO_ORGANIZATION_ID = ORG_B;
-    let providerContext;
-    const provider = jest.spyOn(retell, 'createCall').mockImplementation(async (phone, agentId, options) => {
-      providerContext = { agentId, options };
-      const pending = await pool.query(
-        `SELECT organization_id, business_profile_id FROM canonical_voice_sessions
-          WHERE organization_id = $1 AND external_session_id LIKE 'demo-%' AND to_number = $2`,
-        [ORG_B, phone]
-      );
-      expect(pending.rows).toHaveLength(1);
-      expect(pending.rows[0].business_profile_id).toBe(profileAuthorityB.id);
-      return { call_id: 'provider-demo-isolated', call_status: 'registered' };
-    });
+    const provider = jest.spyOn(retell, 'createCall');
+    const before = await pool.query(
+      "SELECT count(*)::int AS count FROM canonical_voice_sessions WHERE external_session_id LIKE 'demo-%'"
+    );
     try {
-      const response = await request(app)
+      const retired = await request(app)
         .post('/api/demo/call')
         .send({
           businessName: 'Mounted Test Company',
@@ -679,102 +683,19 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
           contactName: 'Bounded Scenario',
           phoneNumber: '+15555553202',
         });
-      expect(response.status).toBe(200);
-      expect(response.body.demoSessionId).toMatch(/^demo-[0-9a-f-]{36}$/);
-      expect(response.body.callId).toBe(response.body.demoSessionId);
-      expect(response.body.lifecycle).toBe('pending');
-      expect(response.body.estimate).toEqual({ status: 'not_ready', snapshot: null });
-      expect(response.body.profile.id).toBe(profileAuthorityB.id);
-      expect(providerContext.agentId).toBe('agent-mounted-b');
-      expect(providerContext.options.executiveContext.businessProfile.company.name).toBe('Other Company');
-      const persisted = await pool.query(
-        `SELECT organization_id, business_profile_id, external_session_id, provider_session_id, metadata
-           FROM canonical_voice_sessions WHERE external_session_id = $1`,
-        [response.body.demoSessionId]
+      expect(retired.status).toBe(410);
+      expect(retired.body.error.code).toBe('demo_external_action_retired');
+      expect(provider).not.toHaveBeenCalled();
+      const after = await pool.query(
+        "SELECT count(*)::int AS count FROM canonical_voice_sessions WHERE external_session_id LIKE 'demo-%'"
       );
-      expect(persisted.rows).toEqual([{
-        organization_id: ORG_B,
-        business_profile_id: profileAuthorityB.id,
-        external_session_id: response.body.demoSessionId,
-        provider_session_id: 'provider-demo-isolated',
-        metadata: expect.objectContaining({ source: 'public-demo', providerSessionId: 'provider-demo-isolated' }),
-      }]);
-
-      const pendingStatus = await request(app).get('/api/demo/' + response.body.demoSessionId + '/status');
-      expect(pendingStatus.status).toBe(200);
-      expect(pendingStatus.body).toMatchObject({
-        sessionId: response.body.demoSessionId,
-        lifecycle: 'pending',
-        persistence: 'postgresql',
-        estimate: { status: 'not_ready', snapshot: null },
-        polarisEstimate: null,
-      });
-      const pendingEstimate = await request(app).get('/api/demo/' + response.body.demoSessionId + '/polaris-estimate');
-      expect(pendingEstimate.body.estimate).toEqual({ status: 'not_ready', snapshot: null });
-
-      const child = await execFileAsync(process.execPath, [
-        path.join(__dirname, '../helpers/read-demo-lifecycle-child.js'),
-        response.body.demoSessionId,
-      ], {
-        cwd: path.resolve(__dirname, '../..'),
-        env: {
-          ...process.env,
-          DATABASE_URL: suiteDatabase.connectionString,
-          NORTHSTAR_DEMO_ORGANIZATION_ID: ORG_B,
-        },
-      });
-      expect(JSON.parse(child.stdout)).toMatchObject({
-        sessionId: response.body.demoSessionId,
-        lifecycle: 'pending',
-        estimateStatus: 'not_ready',
-      });
-
-      const completion = {
-        event: 'call_ended',
-        event_id: 'evt-demo-complete',
-        call: {
-          call_id: 'provider-demo-isolated',
-          agent_id: 'agent-mounted-b',
-          from_number: '+15555553202',
-          transcript_object: [
-            { role: 'agent', words: 'How can I help?' },
-            { role: 'user', words: 'I need a 100 foot cedar fence replacement with one walk gate and permit.' },
-          ],
-          call_analysis: {
-            customer_name: 'Bounded Scenario',
-            service_requested: 'fence',
-            job_scope: {
-              jobType: 'replace', linearFeet: 100, material: 'cedar', removalRequired: true,
-              gates: [{ type: 'walk', width: 4 }], permitsRequired: true,
-            },
-          },
-        },
-      };
-      const completed = await request(app).post('/api/retell/webhook').send(completion);
-      expect(completed.status).toBe(201);
-      const ready = await request(app).get('/api/demo/' + response.body.demoSessionId + '/polaris-estimate');
-      expect(ready.status).toBe(200);
-      expect(ready.body.lifecycle).toBe('completed');
-      expect(ready.body.estimate.status).toBe('ready');
-      expect(ready.body.estimate.snapshot.businessProfileInputId).toBe(profileAuthorityB.id);
-      expect(ready.body.estimate.snapshot.customerFacingPrice).not.toBe(77777);
-      expect(ready.body.polarisEstimate).toEqual(ready.body.estimate.snapshot);
-      const transcript = await request(app).get('/api/demo/' + response.body.demoSessionId + '/transcript');
-      const timeline = await request(app).get('/api/demo/' + response.body.demoSessionId + '/timeline');
-      expect(transcript.body.lines).toContainEqual(expect.objectContaining({ text: expect.stringContaining('cedar fence') }));
-      expect(timeline.body.entries.some(entry => entry.event === 'call_ended')).toBe(true);
-
-      const replay = await request(app).post('/api/retell/webhook').send({ ...completion, event_id: 'evt-demo-replay' });
-      expect(replay.status).toBe(201);
-      expect(replay.body.replayed).toBe(true);
-      const afterReplay = await request(app).get('/api/demo/' + response.body.demoSessionId + '/polaris-estimate');
-      expect(afterReplay.body.estimate.snapshotDigest).toBe(ready.body.estimate.snapshotDigest);
+      expect(after.rows[0].count).toBe(before.rows[0].count);
     } finally {
       provider.mockRestore();
     }
   });
 
-  test('public demo provider failure is durable and visible through the stable canonical identifier', async () => {
+  test('provider failure configuration remains unreachable behind the retired public endpoint', async () => {
     const pool = db.getPool();
     await pool.query(
       `INSERT INTO canonical_demo_authority (organization_id, status)
@@ -786,23 +707,20 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       code: 'RETELL_INTERCEPTED_FAILURE', status: 502,
     });
     const provider = jest.spyOn(retell, 'createCall').mockRejectedValue(failure);
+    const before = await pool.query(
+      "SELECT count(*)::int AS count FROM canonical_voice_sessions WHERE external_session_id LIKE 'demo-%'"
+    );
     try {
-      const failed = await request(app).post('/api/demo/call').send({
+      const retired = await request(app).post('/api/demo/call').send({
         industry: 'fence', contactName: 'Provider Failure', phoneNumber: '+15555553203',
       });
-      expect(failed.status).toBe(502);
-      expect(failed.body.error.code).toBe('retell_intercepted_failure');
-      expect(failed.body.demoSessionId).toMatch(/^demo-[0-9a-f-]{36}$/);
-      const status = await request(app).get('/api/demo/' + failed.body.demoSessionId + '/status');
-      expect(status.status).toBe(200);
-      expect(status.body).toMatchObject({
-        sessionId: failed.body.demoSessionId,
-        lifecycle: 'failed',
-        canonicalStatus: 'failed',
-        estimate: { status: 'unavailable', snapshot: null },
-      });
-      expect(status.body.providerFailure.event).toBe('provider_creation_failed');
-      expect(status.body.providerFailure.payload.code).toBe('RETELL_INTERCEPTED_FAILURE');
+      expect(retired.status).toBe(410);
+      expect(retired.body.error.code).toBe('demo_external_action_retired');
+      expect(provider).not.toHaveBeenCalled();
+      const after = await pool.query(
+        "SELECT count(*)::int AS count FROM canonical_voice_sessions WHERE external_session_id LIKE 'demo-%'"
+      );
+      expect(after.rows[0].count).toBe(before.rows[0].count);
     } finally {
       provider.mockRestore();
     }
@@ -980,7 +898,9 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     const pool = db.getPool();
     const originalQuery = pool.query.bind(pool);
     pool.query = async function (statement, values) {
-      if (/canonical_/i.test(String(statement))) throw new Error('connection unavailable');
+      if (/canonical_/i.test(String(statement)) && !/FROM auth_sessions/i.test(String(statement))) {
+        throw new Error('connection unavailable');
+      }
       return originalQuery(statement, values);
     };
     const unavailable = await request(app).get('/api/leads').set(auth(USERS.owner));
@@ -1001,14 +921,15 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
   });
 
   test('retired method ownership performs one membership lookup and never touches repository data', async () => {
-    const originalQuery = db.query;
+    const pool = db.getPool();
+    const originalQuery = pool.query.bind(pool);
     const originalRead = fs.readFileSync;
     const originalWrite = fs.writeFileSync;
     const originalAppend = fs.appendFileSync;
     const isolatedRoot = path.resolve(process.env.NORTHSTAR_DATA_DIR) + path.sep;
     let membershipLookups = 0;
-    db.query = async function (statement, values) {
-      if (/FROM users/i.test(String(statement))) membershipLookups += 1;
+    pool.query = async function (statement, values) {
+      if (/FROM auth_sessions/i.test(String(statement))) membershipLookups += 1;
       return originalQuery(statement, values);
     };
     function rejectRepositoryAccess(target) {
@@ -1030,7 +951,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       expect(options.status).toBe(204);
       expect(membershipLookups).toBe(beforeOptions);
     } finally {
-      db.query = originalQuery;
+      pool.query = originalQuery;
       fs.readFileSync = originalRead;
       fs.writeFileSync = originalWrite;
       fs.appendFileSync = originalAppend;

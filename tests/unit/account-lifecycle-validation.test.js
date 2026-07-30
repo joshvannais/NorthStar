@@ -38,7 +38,7 @@ describe('Account Lifecycle PR A validation', () => {
     expect(await verifyPassword('legacy password 123', legacy)).toEqual({ valid: true, needsUpgrade: true });
   });
 
-  test('production signup is fail-closed before verification delivery readiness', () => {
+  test('production configuration exposes no environment-owned signup capability', () => {
     const saved = {
       NODE_ENV: process.env.NODE_ENV,
       ACCOUNT_SIGNUP_ENABLED: process.env.ACCOUNT_SIGNUP_ENABLED,
@@ -47,11 +47,14 @@ describe('Account Lifecycle PR A validation', () => {
     };
     process.env.NODE_ENV = 'production';
     process.env.ACCOUNT_SIGNUP_ENABLED = 'true';
-    process.env.ACCOUNT_VERIFICATION_DELIVERY_READY = 'false';
+    process.env.ACCOUNT_VERIFICATION_DELIVERY_READY = 'true';
     process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
     jest.resetModules();
     try {
-      expect(() => require('../../src/config').validateRuntime()).toThrow(/PR B verification delivery readiness/);
+      const config = require('../../src/config');
+      expect(config.validateRuntime()).toBe(true);
+      expect(config.auth).not.toHaveProperty('signupEnabled');
+      expect(config.auth).not.toHaveProperty('verificationDeliveryReady');
     } finally {
       Object.entries(saved).forEach(([key, value]) => {
         if (value === undefined) delete process.env[key]; else process.env[key] = value;

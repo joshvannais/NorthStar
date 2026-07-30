@@ -1,14 +1,21 @@
 'use strict';
 
-const jwt = require('jsonwebtoken');
+const mockSessionAuthority = jest.fn();
 
 jest.mock('../../src/db', () => ({
   isAvailable: jest.fn(),
   query: jest.fn(),
 }));
 
+jest.mock('../../src/accounts/repository', () => ({
+  AccountRepository: jest.fn().mockImplementation(() => ({
+    sessionAuthority: mockSessionAuthority,
+  })),
+}));
+
 const db = require('../../src/db');
 const auth = require('../../src/auth/middleware');
+const credentials = require('../../src/auth/credentials');
 const permissions = require('../../src/auth/permissions');
 const audit = require('../../src/audit/client');
 const { correlationId } = require('../../src/middleware/auditLog');
@@ -25,21 +32,30 @@ function responseRecorder() {
 }
 
 function contractorToken(subject, extra = {}) {
-  return jwt.sign(
-    Object.assign({ sub: subject, role: 'contractor' }, extra),
-    auth.JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+  void extra;
+  return credentials.signAccess(subject, 'session-a');
 }
 
 async function authenticate(rows, options = {}) {
   db.isAvailable.mockReset();
-  db.query.mockReset();
+  mockSessionAuthority.mockReset();
   db.isAvailable.mockReturnValue(options.available !== false);
-  if (options.error) db.query.mockRejectedValueOnce(options.error);
-  else db.query.mockResolvedValueOnce({ rows });
+  if (options.error) mockSessionAuthority.mockRejectedValueOnce(options.error);
+  else if (rows.length !== 1) mockSessionAuthority.mockResolvedValueOnce(null);
+  else mockSessionAuthority.mockResolvedValueOnce({
+    ...rows[0],
+    session_id: 'session-a',
+    session_status: 'active',
+    access_expires_at: new Date(Date.now() + 60_000),
+    csrf_token_hash: credentials.hashToken('csrf-test'),
+    user_id: rows[0].id,
+    user_status: rows[0].user_status || rows[0].status,
+    membership_status: rows[0].membership_status || (rows[0].status === 'active' ? 'active' : 'suspended'),
+    onboarding_status: rows[0].onboarding_status || 'complete',
+  });
   const req = {
-    headers: { authorization: `Bearer ${contractorToken(options.subject || 'user-a', options.claims)}` },
+    method: 'GET',
+    headers: { cookie: `northstar_access=${encodeURIComponent(contractorToken(options.subject || 'user-a', options.claims))}` },
     body: options.body || {},
     query: options.query || {},
     params: options.params || {},
@@ -56,6 +72,7 @@ describe('Mission 19 Part 3 durable tenant context', () => {
     jest.clearAllMocks();
     db.isAvailable.mockReset();
     db.query.mockReset();
+    mockSessionAuthority.mockReset();
   });
 
   test('active persisted membership becomes the immutable trusted tenant context', async () => {
@@ -89,7 +106,7 @@ describe('Mission 19 Part 3 durable tenant context', () => {
     await auth.requireAuth(result.req, result.res, secondNext);
     expect(result.next).toHaveBeenCalledTimes(1);
     expect(secondNext).toHaveBeenCalledTimes(1);
-    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(mockSessionAuthority).toHaveBeenCalledTimes(1);
 
     const untrusted = {
       headers: {},
@@ -108,20 +125,20 @@ describe('Mission 19 Part 3 durable tenant context', () => {
   });
 
   test.each([
-    ['missing', []],
+    ['missing', [], 401, 'session_inactive'],
     ['ambiguous', [
       { id: 'user-a', organization_id: 'org-a', role: 'owner', status: 'active' },
       { id: 'user-a', organization_id: 'org-b', role: 'owner', status: 'active' },
-    ]],
-    ['inactive', [{ id: 'user-a', organization_id: 'org-a', role: 'owner', status: 'disabled' }]],
-    ['null organization', [{ id: 'user-a', organization_id: null, role: 'owner', status: 'active' }]],
-    ['null role', [{ id: 'user-a', organization_id: 'org-a', role: null, status: 'active' }]],
-  ])('denies %s membership', async (_name, rows) => {
+    ], 401, 'session_inactive'],
+    ['inactive', [{ id: 'user-a', organization_id: 'org-a', role: 'owner', status: 'disabled' }], 403, 'organization_membership_required'],
+    ['null organization', [{ id: 'user-a', organization_id: null, role: 'owner', status: 'active' }], 403, 'organization_membership_required'],
+    ['null role', [{ id: 'user-a', organization_id: 'org-a', role: null, status: 'active' }], 403, 'organization_membership_required'],
+  ])('denies %s membership', async (_name, rows, status, code) => {
     const result = await authenticate(rows);
     expect(result.next).not.toHaveBeenCalled();
-    expect(result.res.statusCode).toBe(403);
+    expect(result.res.statusCode).toBe(status);
     expect(result.res.body).toMatchObject({
-      code: 'organization_membership_required',
+      code,
       requestId: 'request-commit1',
     });
   });
@@ -135,7 +152,7 @@ describe('Mission 19 Part 3 durable tenant context', () => {
     const outage = await authenticate([], { error: new Error('secret database detail') });
     expect(outage.res.statusCode).toBe(503);
     expect(outage.res.body).not.toEqual(expect.objectContaining({ detail: expect.anything() }));
-    expect(warning).toHaveBeenCalledWith('[Auth] Membership lookup warning:', {
+    expect(warning).toHaveBeenCalledWith('[Auth] Session lookup warning:', {
       requestId: 'request-commit1',
       event: 'authorization_persistence_unavailable',
     });

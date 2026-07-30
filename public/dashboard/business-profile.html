@@ -61,6 +61,7 @@
     .bp-half { grid-column: span 1; }
     .bp-section-desc { font-size: 13px; color: var(--neutral-500); margin-bottom: 16px; line-height: 1.5; }
   </style>
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>
   <div class="app-layout">
@@ -358,11 +359,8 @@
 
     function profileRequest(url, options) {
       var request = options || {};
-      var headers = request.headers || {};
-      var token = localStorage.getItem('token');
-      if (token) headers.Authorization = 'Bearer ' + token;
-      request.headers = headers;
-      return fetch(url, request);
+      request.headers = request.headers || {};
+      return NorthStarAccountSession.fetch(url, request);
     }
 
     // ====================================================================

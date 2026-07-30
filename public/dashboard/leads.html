@@ -166,6 +166,7 @@
   color: var(--neutral-700);
 }
 </style>
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>  <div class="dashboard-layout">
     <main class="main-content">
@@ -332,9 +333,7 @@
     function fmtTime(t) { if (!t) return '-'; try { var d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
 
     function _authHeaders() {
-      var h = {}; var t = localStorage.getItem('token');
-      if (t) h['Authorization'] = 'Bearer ' + t;
-      return h;
+      return {};
     }
     function _authFetch(url, opts) {
       opts = opts || {}; opts.headers = Object.assign(_authHeaders(), opts.headers || {});
@@ -342,7 +341,7 @@
         var sep = url.indexOf('?') >= 0 ? '&' : '?';
         url = url + sep + 'sessionId=' + encodeURIComponent(window.SIM_SESSION_ID);
       }
-      return fetch(url, opts).then(function(r) {
+      return NorthStarAccountSession.fetch(url, opts).then(function(r) {
         if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Request failed'); });
         return r.json();
       });

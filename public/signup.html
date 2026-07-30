@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>
 
@@ -86,17 +87,8 @@
       };
 
       try {
-        const res = await fetch('/api/auth/signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
-        const result = await res.json();
-        if (!res.ok) throw new Error(result.error || 'Signup failed');
-
-        localStorage.setItem('token', result.token);
-        localStorage.setItem('user', JSON.stringify(result.user));
-        window.location.href = '/dashboard';
+        const account = await NorthStarAccountSession.signup(data);
+        window.location.href = NorthStarAccountSession.destination(account);
       } catch (err) {
         showToast(err.message || 'Signup failed. Please try again.');
         btn.disabled = false;

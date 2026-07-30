@@ -444,6 +444,7 @@
   color: var(--neutral-700);
 }
 </style>
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>
 <a href="#mainContent" class="skip-link">Skip to main content</a><div class="dashboard-layout">
@@ -797,9 +798,7 @@ function safeNum(v, fallback) {
 
 // === Auth helpers ===
 function _authHeaders() {
-  var h = {}; var t = localStorage.getItem('token');
-  if (t) h['Authorization'] = 'Bearer ' + t;
-  return h;
+  return {};
 }
 function _authFetch(url, opts) {
   opts = opts || {}; opts.headers = Object.assign(_authHeaders(), opts.headers || {});
@@ -807,7 +806,7 @@ function _authFetch(url, opts) {
     var sep = url.indexOf('?') >= 0 ? '&' : '?';
     url = url + sep + 'sessionId=' + encodeURIComponent(window.SIM_SESSION_ID);
   }
-  return fetch(url, opts).then(function(r) {
+  return NorthStarAccountSession.fetch(url, opts).then(function(r) {
     if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Request failed'); });
     return r.json();
   });

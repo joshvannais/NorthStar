@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/auth-session.js"></script>
 </head>
 <body><div class="dashboard-layout">
 <main class="main-content">
@@ -70,17 +71,7 @@
     function saveNumber() {
       const num = document.getElementById("businessNumber").value;
       if (num.length < 10) { showToast("Please enter a full phone number"); return; }
-      localStorage.setItem("northstar_business_number", num);
-      document.getElementById("displayedNumber").textContent = num;
-      document.getElementById("savedNumber").style.display = "block";
-      showToast("Number saved: " + num);
-    }
-    // Load saved number
-    const saved = localStorage.getItem("northstar_business_number");
-    if (saved) {
-      document.getElementById("businessNumber").value = saved;
-      document.getElementById("displayedNumber").textContent = saved;
-      document.getElementById("savedNumber").style.display = "block";
+      showToast("Business number changes require canonical provider provisioning.");
     }
     function showToast(m) {
       const e = document.getElementById("toast");

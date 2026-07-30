@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>
 
@@ -43,18 +44,8 @@
         <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Sign In</button>
       </form>
 
-      <!-- Demo Access Link -->
-      <div style="margin-top:20px;padding:16px;background:#fef3c7;border-radius:8px;border:1px solid #fde68a;text-align:center;">
-        <p style="font-size:14px;font-weight:600;color:#92400e;margin-bottom:8px;">🔑 Owner / Admin Access</p>
-        <a href="/admin" style="display:inline-block;padding:8px 20px;background:var(--brand-600);color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Go to Admin Panel</a>
-        <p style="font-size:11px;color:#92400e;margin-top:8px;">View all contractors and platform settings.</p>
-      </div>
-
       <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--neutral-500);">
         Don't have an account? <a href="/signup" style="color:var(--brand-600);font-weight:600;text-decoration:none;">Create one</a>
-      </p>
-      <p style="text-align:center;margin-top:8px;font-size:13px;color:var(--neutral-400);">
-        Or <a href="/demo-login" style="color:var(--neutral-500);text-decoration:none;border-bottom:1px dashed var(--neutral-300);">try the demo dashboard</a> instantly
       </p>
     </div>
   </main>
@@ -68,35 +59,10 @@
       const password = document.getElementById('password').value;
 
       try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Login failed');
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        window.location.href = '/dashboard';
+        const account = await NorthStarAccountSession.login(email, password);
+        window.location.href = NorthStarAccountSession.destination(account);
       } catch (err) {
-        // Demo fallback — get a valid demo token so API calls don't fail with 401
-        try {
-          const demoRes = await fetch('/api/auth/demo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email || 'demo@northstar.solutions', name: 'Demo Contractor' }),
-          });
-          const demoData = await demoRes.json();
-          if (demoData.token) {
-            localStorage.setItem('token', demoData.token);
-            localStorage.setItem('user', JSON.stringify(demoData.user));
-          }
-        } catch (demoErr) {
-          // Last resort: store minimal demo info without token
-          console.warn('[Login] Demo token unavailable:', demoErr.message);
-          localStorage.setItem('user', JSON.stringify({ name: 'Demo Contractor', email, role: 'admin' }));
-        }
-        window.location.href = '/dashboard';
+        showToast(err.message || 'Login failed. Please try again.');
       }
     });
   </script>

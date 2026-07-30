@@ -217,6 +217,7 @@
       .cc-pipe-stage::after { display: none !important; }
     }
   </style>
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>
 
@@ -338,14 +339,12 @@
       function apiFetch(url, opts) {
         opts = opts || {};
         opts.headers = opts.headers || {};
-        var token = localStorage.getItem('token');
-        if (token) opts.headers['Authorization'] = 'Bearer ' + token;
         if (opts.body) opts.headers['Content-Type'] = 'application/json';
         if (window.SIM_SESSION_ID) {
           var sep = url.indexOf('?') >= 0 ? '&' : '?';
           url = url + sep + 'sessionId=' + encodeURIComponent(window.SIM_SESSION_ID);
         }
-        return fetch(url, opts);
+        return NorthStarAccountSession.fetch(url, opts);
       }
 
       function fetchWithTimeout(url, timeoutMs) {

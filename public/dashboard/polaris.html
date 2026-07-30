@@ -456,6 +456,7 @@
       .polaris-conversation-header { padding: 12px 16px 10px; }
     }
 </style>
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>  <script src="/js/event-bus.js"></script>
 <div class="app-layout">
@@ -903,8 +904,7 @@
         var xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/v1/polaris/chat', true);
         xhr.setRequestHeader('Content-Type', 'application/json');
-        var token = localStorage.getItem('token');
-        if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        NorthStarAccountSession.prepareXhr(xhr, 'POST');
 
         xhr.onload = function() {
           hideTyping();
@@ -960,8 +960,7 @@
         var xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/v1/polaris/chat', true);
         xhr.setRequestHeader('Content-Type', 'application/json');
-        var token = localStorage.getItem('token');
-        if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        NorthStarAccountSession.prepareXhr(xhr, 'POST');
 
         xhr.onload = function() {
           hideTyping();

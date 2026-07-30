@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify your account — NorthStar</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/auth-session.js"></script>
+</head>
+<body style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">
+  <main class="card" style="max-width:580px;text-align:center;padding:32px;">
+    <img src="/assets/logo.png" alt="NorthStar" style="width:72px;height:72px;object-fit:contain;">
+    <h1 style="margin:16px 0 8px;">Verify your email to continue</h1>
+    <p style="color:var(--neutral-500);">Your account and 14-day trial are safely provisioned. Email verification delivery is introduced in Account Lifecycle PR B; until then this account remains restricted.</p>
+    <p id="verificationIdentity" style="margin-top:16px;font-weight:600;"></p>
+    <button class="btn btn-ghost" type="button" onclick="NorthStarAccountSession.logout()" style="margin-top:20px;">Sign out</button>
+  </main>
+  <script>
+    NorthStarAccountSession.load().then(function(account) {
+      document.getElementById('verificationIdentity').textContent = account.user.email || '';
+    }).catch(function() {});
+  </script>
+</body>
+</html>

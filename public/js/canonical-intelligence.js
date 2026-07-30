@@ -61,24 +61,14 @@
     global.SIM_SESSION_ID = sessionId;
   }
 
-  function parseUser(value) {
-    if (!value) return null;
-    try {
-      var user = JSON.parse(value);
-      return user && typeof user === 'object' ? user : null;
-    } catch (_error) {
-      return null;
-    }
-  }
-
   function authorityContext() {
-    var token = safeStorage(global.localStorage, 'token');
-    var user = parseUser(safeStorage(global.localStorage, 'user'));
+    var account = global.NorthStarAccountSession && global.NorthStarAccountSession.getAccount();
+    var user = account && account.user;
+    var organization = account && account.organization;
     var sessionId = safeStorage(global.sessionStorage, 'northstarSessionId');
     var userId = user && (user.id || user.userId || user.user_id);
-    var organizationId = user && (user.organizationId || user.organization_id || user.orgId || user.org_id);
+    var organizationId = organization && organization.id;
     return {
-      token: token ? String(token) : null,
       userId: userId ? String(userId) : null,
       organizationId: organizationId ? String(organizationId) : null,
       sessionId: sessionId ? String(sessionId) : null,
@@ -87,7 +77,6 @@
 
   function contextKey(context) {
     return JSON.stringify([
-      context.token || null,
       context.userId || null,
       context.organizationId || null,
       context.sessionId || null,
@@ -225,8 +214,13 @@
   function request(surface, compatibility, filters) {
     if (!ALLOWED_SURFACES[surface]) return Promise.reject(new Error('Unsupported canonical surface.'));
     var context = synchronizeAuthority();
-    if (!context.token || !context.userId) {
+    if (!context.userId) {
       clear('authentication-required');
+      if (global.NorthStarAccountSession) {
+        return global.NorthStarAccountSession.load().then(function () {
+          return request(surface, compatibility, filters);
+        });
+      }
       return Promise.reject(new Error('A current authenticated user is required.'));
     }
     var initialKey = contextKey(context);
@@ -236,10 +230,10 @@
     if (state.pending[requestKey]) return state.pending[requestKey];
     var version = (state.requestVersions[requestKey] || 0) + 1;
     state.requestVersions[requestKey] = version;
-    var headers = { Authorization: 'Bearer ' + context.token, Accept: 'application/json' };
+    var headers = { Accept: 'application/json' };
     if (context.sessionId) headers['X-NorthStar-Session-ID'] = context.sessionId;
     var prefix = compatibility ? '/api/v1/canonical/compat/' : '/api/v1/canonical/surfaces/';
-    var pending = global.fetch(prefix + encodeURIComponent(surface) + suffix, {
+    var pending = global.NorthStarAccountSession.fetch(prefix + encodeURIComponent(surface) + suffix, {
       method: 'GET',
       headers: headers,
       credentials: 'same-origin',
@@ -334,10 +328,11 @@
   ensureSessionMetadata();
 
   global.addEventListener('storage', function (event) {
-    if (event.key === 'token' || event.key === 'user' || event.key === 'northstarSessionId' || event.key === null) {
+    if (event.key === 'northstarSessionId' || event.key === null) {
       synchronizeAuthority();
     }
   });
+  global.addEventListener('northstar:account', synchronizeAuthority);
   global.addEventListener('pageshow', synchronizeAuthority);
   global.addEventListener('popstate', synchronizeAuthority);
   global.setInterval(function () {

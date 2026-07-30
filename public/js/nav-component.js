@@ -76,7 +76,7 @@
         '<nav class="sidebar-nav">' +
           makeNavLinks(false) +
         '</nav>' +
-        '<a href="/" onclick="localStorage.removeItem(\'user\');localStorage.removeItem(\'northstar_token\');return true;" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">' +
+        '<a href="/login" data-account-logout style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>' +
           '<span>Sign Out</span>' +
         '</a>' +
@@ -128,17 +128,20 @@
       var closeBtn = document.getElementById('navCloseBtn');
       var overlay = document.getElementById('mobileOverlay');
       var signOut = document.getElementById('navSignOut');
+      var desktopSignOut = document.querySelector('[data-account-logout]');
       var themeBtn = document.getElementById('navThemeToggle');
 
       if (hamburger) hamburger.onclick = toggleMobileMenu;
       if (closeBtn) closeBtn.onclick = toggleMobileMenu;
       if (overlay) overlay.onclick = toggleMobileMenu;
-      if (signOut) signOut.onclick = function() {
-        localStorage.removeItem('user');
-        localStorage.removeItem('northstar_token');
+      function signOutAccount(event) {
+        if (event) event.preventDefault();
         closeMenu();
-        return true;
-      };
+        if (window.NorthStarAccountSession) window.NorthStarAccountSession.logout();
+        return false;
+      }
+      if (signOut) signOut.onclick = signOutAccount;
+      if (desktopSignOut) desktopSignOut.onclick = signOutAccount;
       if (themeBtn) themeBtn.onclick = function() {
         if (window.NorthStarTheme && window.NorthStarTheme.toggleTheme) {
           window.NorthStarTheme.toggleTheme();

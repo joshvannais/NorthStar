@@ -7,8 +7,10 @@
   var logoutInFlight = null;
   var authGeneration = 0;
   var requestSequence = 0;
-  var failedWaves = Object.create(null);
-  var seenCoordinationMessages = Object.create(null);
+  var activeRequestCaptures = new Map();
+  var failedWaves = new Map();
+  var seenCoordinationMessages = new Map();
+  var coordinationOrderByDocument = new Map();
   var coordinationDatabase = null;
   var coordinationDatabasePromise = null;
   var REFRESH_LOCK_NAME = 'northstar-account-refresh-v1';
@@ -20,17 +22,39 @@
   var FALLBACK_LEASE_MILLISECONDS = 3000;
   var FALLBACK_HEARTBEAT_MILLISECONDS = 750;
   var FALLBACK_RECOVERY_MILLISECONDS = 6500;
+  var COORDINATION_MESSAGE_MAX_KEYS = 7;
+  var COORDINATION_MESSAGE_MAX_BYTES = 512;
+  var COORDINATION_DOCUMENT_ID_LENGTH = 41;
+  var COORDINATION_ATTEMPT_ID_LENGTH = 40;
+  var COORDINATION_MAX_GENERATION_LAG = 2;
+  var COORDINATION_MAX_GENERATION_DRIFT = 1024;
+  var COORDINATION_MAX_PAST_MILLISECONDS = 120000;
+  var COORDINATION_MAX_FUTURE_MILLISECONDS = 30000;
+  var COORDINATION_DEDUPE_MAX_ENTRIES = 256;
+  var COORDINATION_DEDUPE_TTL_MILLISECONDS = 60000;
+  var COORDINATION_ORDER_MAX_ENTRIES = 128;
+  var COORDINATION_ORDER_TTL_MILLISECONDS = 60000;
+  var FAILED_WAVE_MAX_ENTRIES = 64;
+  var FAILED_WAVE_TTL_MILLISECONDS = 120000;
+  var COORDINATION_TYPES = Object.freeze({ result: true });
+  var COORDINATION_KEYS = Object.freeze([
+    'attemptId', 'documentId', 'generation', 'protocol', 'success', 'timestamp', 'type'
+  ]);
+  var DOCUMENT_ID_PATTERN = /^document-[a-f0-9]{32}$/;
+  var ATTEMPT_ID_PATTERN = /^attempt-[a-f0-9]{32}$/;
 
   function nonSecretId(prefix) {
+    var values = new Uint8Array(16);
     var random = '';
-    if (global.crypto && typeof global.crypto.randomUUID === 'function') {
-      random = global.crypto.randomUUID();
-    } else if (global.crypto && typeof global.crypto.getRandomValues === 'function') {
-      var values = new Uint32Array(4);
+    if (global.crypto && typeof global.crypto.getRandomValues === 'function') {
       global.crypto.getRandomValues(values);
-      random = Array.prototype.map.call(values, function (value) { return value.toString(16); }).join('-');
     } else {
-      random = String(Date.now()) + '-' + String(Math.random()).slice(2);
+      // Coordination IDs are non-authoritative. This format-preserving fallback
+      // only keeps old browsers functional; server cookies remain the authority.
+      for (var index = 0; index < values.length; index += 1) values[index] = Math.floor(Math.random() * 256);
+    }
+    for (var offset = 0; offset < values.length; offset += 1) {
+      random += values[offset].toString(16).padStart(2, '0');
     }
     return prefix + '-' + random;
   }
@@ -75,6 +99,92 @@
 
   function delay(milliseconds) {
     return new Promise(function (resolve) { global.setTimeout(resolve, milliseconds); });
+  }
+
+  function evictOldest(map, maximum) {
+    while (map.size >= maximum) {
+      var oldest = map.keys().next();
+      if (oldest.done) return;
+      map.delete(oldest.value);
+    }
+  }
+
+  function pruneCoordinationRetention(now) {
+    seenCoordinationMessages.forEach(function (receivedAt, key) {
+      if (!Number.isSafeInteger(receivedAt) || now - receivedAt > COORDINATION_DEDUPE_TTL_MILLISECONDS || receivedAt > now) {
+        seenCoordinationMessages.delete(key);
+      }
+    });
+    coordinationOrderByDocument.forEach(function (entry, key) {
+      if (!entry || !Number.isSafeInteger(entry.receivedAt) ||
+          now - entry.receivedAt > COORDINATION_ORDER_TTL_MILLISECONDS || entry.receivedAt > now) {
+        coordinationOrderByDocument.delete(key);
+      }
+    });
+    failedWaves.forEach(function (entry, key) {
+      if (!entry || !Number.isSafeInteger(entry.retainedAt) ||
+          now - entry.retainedAt > FAILED_WAVE_TTL_MILLISECONDS || entry.retainedAt > now) {
+        failedWaves.delete(key);
+      }
+    });
+  }
+
+  function isPlainObject(value) {
+    if (!value || Object.prototype.toString.call(value) !== '[object Object]') return false;
+    var prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  function hasExactCoordinationKeys(message) {
+    var keys;
+    try { keys = Reflect.ownKeys(message); } catch (_error) { return false; }
+    if (keys.length !== COORDINATION_MESSAGE_MAX_KEYS || keys.some(function (key) { return typeof key !== 'string'; })) return false;
+    return keys.slice().sort().every(function (key, index) { return key === COORDINATION_KEYS[index]; });
+  }
+
+  function validateCoordinationMessage(value) {
+    var receivedAt = Date.now();
+    pruneCoordinationRetention(receivedAt);
+    if (!isPlainObject(value) || !hasExactCoordinationKeys(value)) return null;
+    var serialized;
+    try { serialized = JSON.stringify(value); } catch (_error) { return null; }
+    if (typeof serialized !== 'string' || serialized.length > COORDINATION_MESSAGE_MAX_BYTES) return null;
+    if (value.protocol !== COORDINATION_PROTOCOL || COORDINATION_TYPES[value.type] !== true) return null;
+    if (typeof value.documentId !== 'string' || value.documentId.length !== COORDINATION_DOCUMENT_ID_LENGTH ||
+        !DOCUMENT_ID_PATTERN.test(value.documentId) || value.documentId === documentId) return null;
+    if (typeof value.attemptId !== 'string' || value.attemptId.length !== COORDINATION_ATTEMPT_ID_LENGTH ||
+        !ATTEMPT_ID_PATTERN.test(value.attemptId)) return null;
+    if (typeof value.success !== 'boolean') return null;
+    if (!Number.isSafeInteger(value.generation) ||
+        value.generation < Math.max(0, authGeneration - COORDINATION_MAX_GENERATION_LAG) ||
+        value.generation > authGeneration + COORDINATION_MAX_GENERATION_DRIFT) return null;
+    if (!Number.isSafeInteger(value.timestamp) ||
+        value.timestamp < receivedAt - COORDINATION_MAX_PAST_MILLISECONDS ||
+        value.timestamp > receivedAt + COORDINATION_MAX_FUTURE_MILLISECONDS) return null;
+
+    var dedupeKey = value.attemptId + ':' + value.type;
+    if (seenCoordinationMessages.has(dedupeKey)) return null;
+    var prior = coordinationOrderByDocument.get(value.documentId);
+    if (prior && (value.generation < prior.generation || value.timestamp < prior.timestamp)) return null;
+
+    // Mutation begins only after the complete payload, duplicate, and ordering
+    // checks have passed. No sender-owned payload object is retained.
+    evictOldest(seenCoordinationMessages, COORDINATION_DEDUPE_MAX_ENTRIES);
+    seenCoordinationMessages.set(dedupeKey, receivedAt);
+    if (prior) coordinationOrderByDocument.delete(value.documentId);
+    else evictOldest(coordinationOrderByDocument, COORDINATION_ORDER_MAX_ENTRIES);
+    coordinationOrderByDocument.set(value.documentId, Object.freeze({
+      generation: value.generation,
+      timestamp: value.timestamp,
+      receivedAt: receivedAt,
+    }));
+    return Object.freeze({
+      type: value.type,
+      attemptId: value.attemptId,
+      success: value.success,
+      generation: value.generation,
+      timestamp: value.timestamp,
+    });
   }
 
   function openCoordinationDatabase() {
@@ -276,13 +386,16 @@
     var parsed;
     try { parsed = JSON.parse(global.localStorage.getItem(COORDINATION_STATE_KEY) || 'null'); } catch (_error) { return empty; }
     if (!parsed || !Number.isSafeInteger(parsed.epoch) || parsed.epoch < 0 || parsed.epoch > 1000000000 ||
-        !Array.isArray(parsed.outcomes)) return empty;
+        !Array.isArray(parsed.outcomes) || parsed.outcomes.length > 64 ||
+        Object.keys(parsed).length !== 2 || Object.keys(parsed).some(function (key) { return key !== 'epoch' && key !== 'outcomes'; })) return empty;
     var seenEpochs = Object.create(null);
     var seenAttempts = Object.create(null);
     var outcomes = parsed.outcomes.filter(function (outcome) {
-      return outcome && Number.isSafeInteger(outcome.epoch) && outcome.epoch > 0 && outcome.epoch <= parsed.epoch &&
+      return isPlainObject(outcome) && Object.keys(outcome).length === 3 &&
+        Object.keys(outcome).every(function (key) { return key === 'epoch' || key === 'success' || key === 'attemptId'; }) &&
+        Number.isSafeInteger(outcome.epoch) && outcome.epoch > 0 && outcome.epoch <= parsed.epoch &&
         typeof outcome.success === 'boolean' && typeof outcome.attemptId === 'string' &&
-        /^attempt-[A-Za-z0-9-]+$/.test(outcome.attemptId);
+        outcome.attemptId.length === COORDINATION_ATTEMPT_ID_LENGTH && ATTEMPT_ID_PATTERN.test(outcome.attemptId);
     }).sort(function (left, right) { return left.epoch - right.epoch; }).filter(function (outcome) {
       if (seenEpochs[outcome.epoch] || seenAttempts[outcome.attemptId]) return false;
       seenEpochs[outcome.epoch] = true;
@@ -299,6 +412,7 @@
   }
 
   function recordCoordinationOutcome(success, attemptId, generation) {
+    pruneCoordinationRetention(Date.now());
     var state = readCoordinationState();
     var existing = state.outcomes.find(function (outcome) { return outcome.attemptId === attemptId; });
     if (!existing) {
@@ -321,6 +435,7 @@
   }
 
   function successOutcome(generation, attemptId, source, shouldBroadcast) {
+    pruneCoordinationRetention(Date.now());
     if (generation < authGeneration) {
       return Object.freeze({ success: true, generation: generation, currentGeneration: authGeneration, source: source });
     }
@@ -337,17 +452,30 @@
   }
 
   function failureOutcome(generation, attemptId, source, shouldBroadcast) {
+    pruneCoordinationRetention(Date.now());
     if (generation < authGeneration) {
       return Object.freeze({ success: true, generation: generation, currentGeneration: authGeneration, source: source });
     }
     var completedAt = Date.now();
-    var priorFailure = failedWaves[String(generation)];
-    failedWaves[String(generation)] = Object.freeze({
+    var cutoffSequence = requestSequence;
+    activeRequestCaptures.forEach(function (capture) {
+      if (capture.generation === generation && capture.sequence <= cutoffSequence && capture.startedAt <= completedAt) {
+        capture.localOutcome.failed = true;
+        capture.localOutcome.completedAt = completedAt;
+        capture.localOutcome.attemptId = attemptId;
+      }
+    });
+    var key = String(generation);
+    var priorFailure = failedWaves.get(key);
+    if (priorFailure) failedWaves.delete(key);
+    else evictOldest(failedWaves, FAILED_WAVE_MAX_ENTRIES);
+    failedWaves.set(key, Object.freeze({
       generation: generation,
-      cutoffSequence: Math.max(priorFailure ? priorFailure.cutoffSequence : 0, requestSequence),
+      cutoffSequence: Math.max(priorFailure ? priorFailure.cutoffSequence : 0, cutoffSequence),
       completedAt: Math.max(priorFailure ? priorFailure.completedAt : 0, completedAt),
       attemptId: attemptId,
-    });
+      retainedAt: completedAt,
+    }));
     var outcome = Object.freeze({ success: false, generation: generation, currentGeneration: authGeneration, source: source });
     if (shouldBroadcast) postCoordination(coordinationMessage('result', attemptId, false, generation));
     global.dispatchEvent(new CustomEvent('northstar:auth-generation', {
@@ -357,7 +485,11 @@
   }
 
   function outcomeFor(capture) {
-    var failedWave = failedWaves[String(capture.generation)];
+    if (capture.localOutcome.failed) {
+      return Object.freeze({ success: false, generation: capture.generation, currentGeneration: authGeneration, source: 'capture_failed_wave' });
+    }
+    pruneCoordinationRetention(Date.now());
+    var failedWave = failedWaves.get(String(capture.generation));
     if (failedWave && capture.sequence <= failedWave.cutoffSequence && capture.startedAt <= failedWave.completedAt) {
       return Object.freeze({ success: false, generation: capture.generation, currentGeneration: authGeneration, source: 'failed_wave' });
     }
@@ -508,25 +640,24 @@
 
   if (coordinationChannel) {
     coordinationChannel.onmessage = function (event) {
-      var message = event && event.data;
-      if (!message || message.protocol !== COORDINATION_PROTOCOL || message.documentId === documentId ||
-          typeof message.attemptId !== 'string' || seenCoordinationMessages[message.attemptId + ':' + message.type]) return;
-      seenCoordinationMessages[message.attemptId + ':' + message.type] = true;
-      if (message.type !== 'result' || typeof message.success !== 'boolean' ||
-          typeof message.generation !== 'number' || typeof message.timestamp !== 'number') return;
+      var message = validateCoordinationMessage(event && event.data);
+      if (!message) return;
       if (refreshInFlight) sharedOutcomeFor(refreshInFlight.capture);
     };
   }
 
   function request(url, options) {
+    var localOutcome = { failed: false, completedAt: 0, attemptId: '' };
+    var prepared = optionsWithSession(options);
     var capture = Object.freeze({
       generation: authGeneration,
       coordinationEpoch: readCoordinationState().epoch,
       sequence: ++requestSequence,
       startedAt: Date.now(),
+      localOutcome: localOutcome,
     });
-    var prepared = optionsWithSession(options);
-    return global.fetch(url, prepared).then(function (response) {
+    activeRequestCaptures.set(capture.sequence, capture);
+    return Promise.resolve().then(function () { return global.fetch(url, prepared); }).then(function (response) {
       if (response.status !== 401 || String(url).indexOf('/api/auth/refresh') === 0) {
         return response;
       }
@@ -538,6 +669,8 @@
           return outcome.success ? global.fetch(url, optionsWithSession(options)) : response;
         }).catch(function () { return response; });
       });
+    }).finally(function () {
+      activeRequestCaptures.delete(capture.sequence);
     });
   }
 

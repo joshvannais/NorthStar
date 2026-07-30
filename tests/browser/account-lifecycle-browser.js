@@ -2,6 +2,9 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const request = require('supertest');
 const { Client } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
@@ -172,7 +175,75 @@ async function installBrowserInstrumentation(context) {
       indexedDbOpens: [],
       waveCompletions: Object.create(null),
       authGenerationEvents: [],
+      coordinationMaps: [],
       initialGlobals,
+    };
+    const nativeMapSet = Map.prototype.set;
+    const nativeMapDelete = Map.prototype.delete;
+    const nativeMapClear = Map.prototype.clear;
+    const nativeMapEntries = Map.prototype.entries;
+    const mapRecords = new WeakMap();
+    function classifyCoordinationMap(key, value) {
+      if (typeof key === 'string' && /^attempt-[a-f0-9]{32}:result$/.test(key) && Number.isSafeInteger(value)) {
+        return 'dedupe';
+      }
+      if (typeof key === 'string' && /^document-[a-f0-9]{32}$/.test(key) && value &&
+          Object.keys(value).sort().join(',') === 'generation,receivedAt,timestamp') {
+        return 'ordering';
+      }
+      if (typeof key === 'string' && /^\d+$/.test(key) && value &&
+          Object.keys(value).sort().join(',') === 'attemptId,completedAt,cutoffSequence,generation,retainedAt') {
+        return 'failed-waves';
+      }
+      return null;
+    }
+    function boundedValue(value) {
+      if (value === null || ['boolean', 'number', 'string'].includes(typeof value)) return value;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return 'unsupported';
+      const copy = {};
+      for (const key of Object.keys(value).slice(0, 12)) copy[key] = boundedValue(value[key]);
+      return copy;
+    }
+    function snapshotCoordinationMap(map, kind) {
+      let record = mapRecords.get(map);
+      if (!record) {
+        record = { kind, setCount: 0, deleteCount: 0, clearCount: 0, currentSize: 0, maxSize: 0, entries: [] };
+        mapRecords.set(map, record);
+        evidence.coordinationMaps.push(record);
+      }
+      record.currentSize = map.size;
+      record.maxSize = Math.max(record.maxSize, map.size);
+      record.entries = Array.from(nativeMapEntries.call(map), ([key, value]) => [boundedValue(key), boundedValue(value)]);
+      return record;
+    }
+    Map.prototype.set = function (key, value) {
+      const result = nativeMapSet.apply(this, arguments);
+      const known = mapRecords.get(this);
+      const kind = known ? known.kind : classifyCoordinationMap(key, value);
+      if (kind) {
+        const record = snapshotCoordinationMap(this, kind);
+        record.setCount += 1;
+      }
+      return result;
+    };
+    Map.prototype.delete = function () {
+      const result = nativeMapDelete.apply(this, arguments);
+      const record = mapRecords.get(this);
+      if (record) {
+        snapshotCoordinationMap(this, record.kind);
+        if (result) record.deleteCount += 1;
+      }
+      return result;
+    };
+    Map.prototype.clear = function () {
+      const hadEntries = this.size > 0;
+      const result = nativeMapClear.apply(this, arguments);
+      const record = mapRecords.get(this);
+      if (record) {
+        snapshotCoordinationMap(this, record.kind);
+        if (hadEntries) record.clearCount += 1;
+      }
+      return result;
     };
     const addEventListener = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function (type) {
@@ -211,6 +282,224 @@ async function newTrackedContext(browser, baseUrl, viewport, totals, storageStat
   const context = await browser.newContext({ viewport, ...(storageState ? { storageState } : {}) });
   await installBrowserInstrumentation(context);
   return { context, tracker: trackerFor(context, baseUrl, totals) };
+}
+
+async function launchPersistentTrackedContext(runtime, profileDirectory, baseUrl, viewport, totals, disableWebLocks) {
+  const context = await runtime.browserType.launchPersistentContext(profileDirectory, {
+    executablePath: runtime.executablePath,
+    headless: true,
+    viewport,
+  });
+  await installBrowserInstrumentation(context);
+  if (disableWebLocks) {
+    await context.addInitScript(() => {
+      try { Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined }); }
+      catch (_error) {
+        try { Object.defineProperty(Navigator.prototype, 'locks', { configurable: true, get: () => undefined }); }
+        catch (_ignored) { /* The caller's capability assertion fails closed. */ }
+      }
+    });
+  }
+  const page = context.pages()[0] || await context.newPage();
+  return { context, page, tracker: trackerFor(context, baseUrl, totals) };
+}
+
+async function removeVerifiedRestartProfile(profileDirectory) {
+  const temporaryRoot = path.resolve(os.tmpdir());
+  const resolved = path.resolve(profileDirectory);
+  assert.strictEqual(path.dirname(resolved), temporaryRoot, 'restart profile is an exact child of the system temporary directory');
+  assert.match(path.basename(resolved), /^northstar-auth-process-restart-/, 'restart profile has the task-specific prefix');
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      fs.rmSync(resolved, { recursive: true, force: true });
+      break;
+    } catch (error) {
+      if (attempt === 4) throw error;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  assert.strictEqual(fs.existsSync(resolved), false, 'verified restart profile is removed');
+}
+
+async function coordinationMapSnapshot(page) {
+  return page.evaluate(() => window.__northstarRatification.coordinationMaps.map(record => ({
+    kind: record.kind,
+    setCount: record.setCount,
+    deleteCount: record.deleteCount,
+    clearCount: record.clearCount,
+    currentSize: record.currentSize,
+    maxSize: record.maxSize,
+    entries: record.entries,
+  })));
+}
+
+function coordinationRecord(snapshot, kind) {
+  const records = snapshot.filter(record => record.kind === kind);
+  assert.ok(records.length <= 1, `one instrumented ${kind} retention map per document`);
+  return records[0] || { kind, setCount: 0, deleteCount: 0, clearCount: 0, currentSize: 0, maxSize: 0, entries: [] };
+}
+
+function assertBoundedCoordinationMaps(snapshot) {
+  const limits = { dedupe: 256, ordering: 128, 'failed-waves': 64 };
+  for (const record of snapshot) {
+    assert.ok(Object.hasOwn(limits, record.kind), `known coordination map kind: ${record.kind}`);
+    assert.ok(record.currentSize <= limits[record.kind], `${record.kind} current size is bounded`);
+    assert.ok(record.maxSize <= limits[record.kind], `${record.kind} never exceeded its maximum`);
+    for (const [key, value] of record.entries) {
+      assert.ok(['string', 'number', 'boolean'].includes(typeof key), `${record.kind} retains a primitive key`);
+      assert.ok(typeof key !== 'string' || key.length <= 64, `${record.kind} key length is bounded`);
+      if (value && typeof value === 'object') {
+        assert.ok(!Array.isArray(value), `${record.kind} retains no nested array`);
+        assert.ok(Object.keys(value).length <= 5, `${record.kind} retained record key count is bounded`);
+        for (const nested of Object.values(value)) {
+          assert.ok(['string', 'number', 'boolean'].includes(typeof nested), `${record.kind} retained fields are primitives`);
+          assert.ok(typeof nested !== 'string' || nested.length <= 64, `${record.kind} retained string is bounded`);
+        }
+      } else {
+        assert.ok(['string', 'number', 'boolean'].includes(typeof value), `${record.kind} retained value is primitive`);
+      }
+    }
+  }
+  assert.doesNotMatch(
+    JSON.stringify(snapshot),
+    /\bBearer\s+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.|accessToken|refreshToken|csrfToken|sessionId|organizationId|userId|email|password|secret/i,
+    'coordination memory inventory contains no credential or identity material'
+  );
+}
+
+async function currentBrowserGeneration(page) {
+  return page.evaluate(() => {
+    const events = window.__northstarRatification.authGenerationEvents;
+    return events.length ? events[events.length - 1].generation : 0;
+  });
+}
+
+async function sendCoordinationBatch(page, input) {
+  const before = coordinationRecord(await coordinationMapSnapshot(page), 'dedupe');
+  const result = await page.evaluate(async options => {
+    const protocol = 'northstar-account-refresh-v1';
+    const channel = new BroadcastChannel(protocol);
+    const hex = number => Number(number).toString(16).padStart(32, '0').slice(-32);
+    const documentId = `document-${hex(options.seed * 100000 + 1)}`;
+    const attempt = index => `attempt-${hex(options.seed * 100000 + 100 + index)}`;
+    const now = Date.now();
+    const valid = (index, overrides = {}) => ({
+      protocol,
+      type: 'result',
+      documentId,
+      attemptId: attempt(index),
+      success: true,
+      generation: options.generation,
+      timestamp: now + index,
+      ...overrides,
+    });
+    let sentinel;
+    let targetAttempt = null;
+    let drainCount = 1;
+    async function waitForProductionDrain(attemptId) {
+      const key = `${attemptId}:result`;
+      const deadline = performance.now() + 5000;
+      while (performance.now() < deadline) {
+        const record = window.__northstarRatification.coordinationMaps.find(candidate => candidate.kind === 'dedupe');
+        if (record && record.entries.some(([retained]) => retained === key)) return;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      throw new Error('Production coordination drain acknowledgement timed out');
+    }
+    if (options.kind === 'malformed') {
+      for (let index = 0; index < options.count; index += 1) channel.postMessage({ malformed: `unique-${options.seed}-${index}` });
+      sentinel = valid(options.count + 1);
+      channel.postMessage(sentinel);
+    } else if (options.kind === 'unsupported') {
+      for (let index = 0; index < options.count; index += 1) channel.postMessage(valid(index, { type: 'unsupported-result' }));
+      sentinel = valid(options.count + 1);
+      channel.postMessage(sentinel);
+    } else if (options.kind === 'edge-cases') {
+      const invalid = [
+        null,
+        'not-an-object',
+        [valid(1)],
+        new Date(now),
+        valid(2, { protocol: 'northstar-account-refresh-v2' }),
+        valid(3, { type: 'unknown' }),
+        valid(4, { success: 'true' }),
+        valid(5, { documentId: `document-${'a'.repeat(33)}` }),
+        valid(6, { attemptId: `attempt-${'b'.repeat(33)}` }),
+        { ...valid(7), oversized: 'x'.repeat(2000) },
+        { ...valid(8), a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8 },
+        valid(9, { success: { nested: true } }),
+        valid(10, { generation: -1 }),
+        valid(11, { generation: 1.5 }),
+        valid(12, { generation: Number.MAX_SAFE_INTEGER + 1 }),
+        valid(13, { generation: Math.max(0, options.generation - 3) }),
+        valid(14, { generation: options.generation + 1025 }),
+        valid(15, { timestamp: -1 }),
+        valid(16, { timestamp: now + 0.5 }),
+        valid(17, { timestamp: Number.MAX_SAFE_INTEGER + 1 }),
+        valid(18, { timestamp: now - 120001 }),
+        // Keep this invalid after ordinary delivery latency; +30,001 ms could
+        // cross the production +30-second receive-time boundary in transit.
+        valid(19, { timestamp: now + (60 * 60 * 1000) }),
+        valid(20, { protocol: 'x'.repeat(1000) }),
+      ];
+      for (const message of invalid) channel.postMessage(message);
+      sentinel = valid(100);
+      channel.postMessage(sentinel);
+    } else if (options.kind === 'capacity') {
+      for (let index = 0; index < options.count; index += 1) {
+        sentinel = valid(index);
+        channel.postMessage(sentinel);
+      }
+    } else if (options.kind === 'ordering-capacity') {
+      for (let index = 0; index < options.count; index += 1) {
+        sentinel = valid(index, { documentId: `document-${hex(options.seed * 100000 + 1000 + index)}` });
+        channel.postMessage(sentinel);
+      }
+    } else if (options.kind === 'duplicate') {
+      const duplicate = valid(1);
+      targetAttempt = duplicate.attemptId;
+      const chunkSize = 250;
+      drainCount = Math.ceil(options.count / chunkSize);
+      for (let offset = 0; offset < options.count; offset += chunkSize) {
+        const end = Math.min(options.count, offset + chunkSize);
+        for (let index = offset; index < end; index += 1) channel.postMessage(duplicate);
+        const drainNumber = Math.floor(offset / chunkSize) + 1;
+        sentinel = valid(options.count + drainNumber + 2, {
+          timestamp: now + options.count + drainNumber + 2,
+        });
+        channel.postMessage(sentinel);
+        await waitForProductionDrain(sentinel.attemptId);
+      }
+    } else if (options.kind === 'out-of-order') {
+      const first = valid(1, { timestamp: now + 10 });
+      const older = valid(2, { timestamp: now + 9 });
+      const olderGeneration = valid(4, { generation: options.generation - 1, timestamp: now + 12 });
+      channel.postMessage(first);
+      channel.postMessage(older);
+      channel.postMessage(olderGeneration);
+      sentinel = valid(3, { timestamp: now + 11 });
+      channel.postMessage(sentinel);
+    } else if (options.kind === 'reuse') {
+      targetAttempt = options.targetAttempt;
+      channel.postMessage(valid(1, { attemptId: targetAttempt }));
+      sentinel = valid(2, { timestamp: now + 2 });
+      channel.postMessage(sentinel);
+    } else {
+      channel.close();
+      throw new Error(`Unknown coordination batch: ${options.kind}`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 0));
+    channel.close();
+    return { sentinel: sentinel.attemptId, targetAttempt, drainCount };
+  }, input);
+  await page.waitForFunction(attemptId => {
+    const record = window.__northstarRatification.coordinationMaps.find(candidate => candidate.kind === 'dedupe');
+    return Boolean(record && record.entries.some(([key]) => key === `${attemptId}:result`));
+  }, result.sentinel);
+  const snapshot = await coordinationMapSnapshot(page);
+  assertBoundedCoordinationMaps(snapshot);
+  const after = coordinationRecord(snapshot, 'dedupe');
+  return { before, after, added: after.setCount - before.setCount, ...result, snapshot };
 }
 
 async function assertCredentialCookieShape(context, baseUrl, rawSetCookies) {
@@ -334,7 +623,7 @@ async function assertNoBrowserAuthority(page, requireCoordinationState = false) 
       assert.deepStrictEqual(Object.keys(outcome).sort(), ['attemptId', 'epoch', 'success'], 'coordination outcomes contain only non-authoritative metadata');
       assert.ok(Number.isSafeInteger(outcome.epoch) && outcome.epoch > 0 && outcome.epoch <= evidence.coordinationState.value.epoch, 'coordination outcome epoch is bounded');
       assert.strictEqual(typeof outcome.success, 'boolean', 'coordination outcome success is boolean');
-      assert.match(outcome.attemptId, /^attempt-[A-Za-z0-9-]+$/, 'coordination attempt id is non-secret metadata');
+      assert.match(outcome.attemptId, /^attempt-[a-f0-9]{32}$/, 'coordination attempt id is strict non-secret metadata');
     }
     assert.doesNotMatch(
       evidence.coordinationState.raw,
@@ -348,7 +637,7 @@ async function assertNoBrowserAuthority(page, requireCoordinationState = false) 
     for (const lease of evidence.coordinationDatabase.leases) {
       assert.strictEqual(lease.key, 'northstar-account-refresh-v1', 'one fixed non-secret lease key');
       assert.deepStrictEqual(Object.keys(lease.value).sort(), ['expiresAt', 'owner'], 'lease stores only owner and bounded expiry');
-      assert.match(lease.value.owner, /^attempt-[A-Za-z0-9-]+$/, 'lease owner is a non-secret attempt id');
+      assert.match(lease.value.owner, /^attempt-[a-f0-9]{32}$/, 'lease owner is a strict non-secret attempt id');
       assert.ok(Number.isFinite(lease.value.expiresAt), 'lease expiry is finite');
       assert.ok(lease.value.expiresAt <= evidence.coordinationDatabase.observedAt + 3000, 'lease expiry is bounded');
     }
@@ -356,6 +645,7 @@ async function assertNoBrowserAuthority(page, requireCoordinationState = false) 
   assert.ok(evidence.accountListeners <= 2, 'account event listeners remain bounded');
   assert.strictEqual(evidence.accountScriptCount, 1, 'one browser session client');
   assert.strictEqual(evidence.singletonFrozen, true, 'browser session client is immutable');
+  return evidence;
 }
 
 async function assertVisibleLogoutFailure(page, originalUrl) {
@@ -537,25 +827,39 @@ async function main() {
       }, waveName);
     }
 
-    async function delayedSuccessfulWave(run, sessionId, waveName, count) {
+    async function delayedSuccessfulWave(run, sessionId, waveName, count, duringRefresh) {
       await expireAccess(sessionId);
       const controller = await captureMounted401Wave(run.context, waveName, count);
+      const refreshStarted = deferred();
+      const refreshRelease = deferred();
+      const refreshHandler = async route => {
+        refreshStarted.resolve();
+        await refreshRelease.promise;
+        await route.continue();
+      };
+      if (duringRefresh) await run.context.route('**/api/auth/refresh', refreshHandler);
       const mark = run.tracker.mark();
       run.tracker.allow('POST', '/api/auth/refresh');
       const operation = observePending(browserWave(run.page, waveName, count));
       await controller.ready;
       controller.release(0);
+      if (duringRefresh) {
+        await refreshStarted.promise;
+        try { await duringRefresh(); }
+        finally { refreshRelease.resolve(); }
+      }
       const leadingCompletion = await waitForBrowserWaveCompletions(run.page, waveName, 1);
       assert.strictEqual(leadingCompletion.statuses.filter(status => status === 200).length, 1, `${waveName} leading caller completes after refresh cleanup`);
       controller.releaseAll(1);
       const statuses = await operation;
+      if (duringRefresh) await run.context.unroute('**/api/auth/refresh', refreshHandler);
       await controller.dispose();
       assert.deepStrictEqual(statuses, Array(count).fill(200), `${waveName} retries all mounted 401 responses`);
       assert.strictEqual(run.tracker.requestCount('POST', '/api/auth/refresh', mark), 1, `${waveName} exact refresh count`);
       return 1;
     }
 
-    async function failedRefreshAndRecovery(run, sessionId, waveName, failureMode, holdOriginalThroughRecovery = false) {
+    async function failedRefreshAndRecovery(run, sessionId, waveName, failureMode, holdOriginalThroughRecovery = false, afterFailure) {
       await expireAccess(sessionId);
       const controller = await captureMounted401Wave(run.context, waveName, 8);
       const refreshHandler = async route => {
@@ -578,6 +882,7 @@ async function main() {
       assert.strictEqual(releasedCompletion.statuses.filter(status => status === 401).length, releasedCount, `${waveName} released callers complete the failed refresh wave`);
       assert.strictEqual(run.tracker.requestCount('POST', '/api/auth/refresh', failedMark), 1, `${waveName} failed refresh count`);
       await run.context.unroute('**/api/auth/refresh', refreshHandler);
+      if (afterFailure) await afterFailure();
 
       const recoveryMark = run.tracker.mark();
       run.tracker.allow('POST', '/api/auth/refresh');
@@ -592,6 +897,81 @@ async function main() {
       assert.strictEqual(run.tracker.requestCount('POST', '/api/auth/refresh', failedMark), 2, `${waveName} has one failed attempt and one later recovery only`);
       await controller.dispose();
       return { failed: 1, recovery: 1 };
+    }
+
+    async function stressFailedWaveRetention(run, count) {
+      let stressMode = null;
+      const calls = new Map();
+      const handler = async route => {
+        const url = new URL(route.request().url());
+        if (url.pathname !== '/api/auth/me') {
+          await route.continue();
+          return;
+        }
+        if (url.searchParams.get('failedMapStress') === 'true') {
+          const key = url.searchParams.get('case');
+          const call = (calls.get(key) || 0) + 1;
+          calls.set(key, call);
+          stressMode = url.searchParams.get('mode');
+          if (call === 1) {
+            await route.fulfill({
+              status: 401,
+              contentType: 'application/json',
+              body: JSON.stringify({ code: 'access_expired', error: 'Injected bounded failure transition' }),
+            });
+          } else {
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ account: {} }) });
+          }
+          return;
+        }
+        if (!url.search && stressMode) {
+          if (stressMode === 'failure') {
+            await route.fulfill({
+              status: 503,
+              contentType: 'application/json',
+              body: JSON.stringify({ code: 'account_authority_unavailable', error: 'Injected authority failure' }),
+            });
+          } else {
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ account: {} }) });
+          }
+          return;
+        }
+        await route.continue();
+      };
+      await run.context.route('**/api/auth/me**', handler);
+      try {
+        const statuses = await run.page.evaluate(async total => {
+          const observed = [];
+          for (let index = 0; index < total; index += 1) {
+            const failed = await window.NorthStarAccountSession.fetch(
+              `/api/auth/me?failedMapStress=true&mode=failure&case=failure-${index}`,
+              { cache: 'no-store' }
+            );
+            observed.push(failed.status);
+            const advanced = await window.NorthStarAccountSession.fetch(
+              `/api/auth/me?failedMapStress=true&mode=advance&case=advance-${index}`,
+              { cache: 'no-store' }
+            );
+            observed.push(advanced.status);
+          }
+          return observed;
+        }, count);
+        assert.deepStrictEqual(
+          statuses,
+          Array.from({ length: count }, () => [401, 200]).flat(),
+          'authentic production failure and advancement transitions complete in order'
+        );
+      } finally {
+        await run.context.unroute('**/api/auth/me**', handler);
+      }
+      const snapshot = await coordinationMapSnapshot(run.page);
+      assertBoundedCoordinationMaps(snapshot);
+      const failed = coordinationRecord(snapshot, 'failed-waves');
+      assert.ok(failed.setCount >= count, 'more than 64 authentic failure transitions reached production retention');
+      assert.strictEqual(failed.currentSize, 64, 'failed-wave retention keeps exactly its newest 64 generations');
+      assert.strictEqual(failed.maxSize, 64, 'failed-wave retention never exceeds 64');
+      assert.ok(failed.deleteCount >= count - 64, 'oldest failed generations are evicted at the bound');
+      return failed;
     }
 
     // Authentic pending journey: the browser uses the real mounted signup
@@ -661,8 +1041,77 @@ async function main() {
 
     const active = await provisionVerifiedFixture('browser-active@example.test');
 
+    async function ratifyBrowserProcessRestart(runtime, viewport, label) {
+      const profileDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-auth-process-restart-'));
+      let openContext = null;
+      try {
+        const first = await launchPersistentTrackedContext(
+          runtime, profileDirectory, baseUrl, viewport, totals, true
+        );
+        openContext = first.context;
+        await first.page.goto(`${baseUrl}/login`, { waitUntil: 'networkidle' });
+        await first.page.fill('#email', 'browser-active@example.test');
+        await first.page.fill('#password', password);
+        first.tracker.allow('POST', '/api/auth/login');
+        await Promise.all([
+          first.page.waitForURL(url => url.pathname === '/dashboard'),
+          first.page.click('#loginForm button[type=submit]'),
+        ]);
+        await first.page.waitForFunction(() => window.NorthStarAccountSession && window.NorthStarAccountSession.getAccount());
+        assert.strictEqual(
+          await first.page.evaluate(() => Boolean(navigator.locks && typeof navigator.locks.request === 'function')),
+          false,
+          `${label} persistent-process fixture forces the IndexedDB coordination path`
+        );
+        const persistentSessionId = await currentSession(active.id);
+        await expireAccess(persistentSessionId);
+        const firstMark = first.tracker.mark();
+        first.tracker.allow('POST', '/api/auth/refresh');
+        const refreshed = await first.page.evaluate(() => (
+          window.NorthStarAccountSession.fetch('/api/auth/me?processRestart=prime', { cache: 'no-store' })
+            .then(response => response.status)
+        ));
+        assert.strictEqual(refreshed, 200, `${label} process-restart fixture performs a real refresh`);
+        assert.strictEqual(first.tracker.requestCount('POST', '/api/auth/refresh', firstMark), 1, `${label} process-restart priming rotates once`);
+        const primedStorage = await assertNoBrowserAuthority(first.page, true);
+        assert.strictEqual(primedStorage.coordinationDatabase.present, true, `${label} no-Web-Locks refresh creates the coordination IndexedDB`);
+        await first.tracker.assertClean();
+        await first.context.close();
+        openContext = null;
+
+        const restarted = await launchPersistentTrackedContext(
+          runtime, profileDirectory, baseUrl, viewport, totals, false
+        );
+        openContext = restarted.context;
+        await restarted.page.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
+        await restarted.page.waitForFunction(() => window.NorthStarAccountSession && window.NorthStarAccountSession.getAccount());
+        assert.strictEqual(new URL(restarted.page.url()).pathname, '/dashboard', `${label} new browser process restores the durable session`);
+        assert.strictEqual(restarted.tracker.requestCount('POST', '/api/auth/refresh'), 0, `${label} process restart has no refresh storm`);
+        assert.strictEqual(coordinationRecord(await coordinationMapSnapshot(restarted.page), 'dedupe').currentSize, 0, `${label} process restart begins with no in-memory dedupe entries`);
+        const restartedStorage = await assertNoBrowserAuthority(restarted.page, true);
+        assert.strictEqual(restartedStorage.coordinationDatabase.present, true, `${label} new process reopens the persisted coordination IndexedDB`);
+        const durable = await pool.query(
+          `SELECT session.status,
+                  count(*) FILTER (WHERE token.status = 'active')::int AS active_tokens,
+                  count(*) FILTER (WHERE token.status = 'reused')::int AS reused_tokens
+             FROM auth_sessions session
+             JOIN auth_refresh_tokens token ON token.session_id = session.id
+            WHERE session.id = $1 GROUP BY session.id`,
+          [persistentSessionId]
+        );
+        assert.deepStrictEqual(durable.rows, [{ status: 'active', active_tokens: 1, reused_tokens: 0 }], `${label} process restart preserves replay protection`);
+        await restarted.tracker.assertClean();
+        await restarted.context.close();
+        openContext = null;
+        return { primingRefreshes: 1, restartRefreshes: 0, durableSession: 'active' };
+      } finally {
+        if (openContext) await openContext.close().catch(() => {});
+        await removeVerifiedRestartProfile(profileDirectory);
+      }
+    }
+
     // Actual installed Chrome and actual Playwright WebKit, never physical Safari.
-    for (const { engine, label, browser } of launchedEngines) {
+    for (const { engine, label, browser, runtime } of launchedEngines) {
       for (const viewport of VIEWPORTS) {
         const run = await loginContext(browser, viewport, 'browser-active@example.test');
         assert.strictEqual(await run.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${label} ${viewport.label} overflow`);
@@ -688,6 +1137,20 @@ async function main() {
           idbFallbackRefreshes: 0,
           restartRefreshes: 0,
           maxConcurrentRefreshes: 0,
+          coordinationRetention: {
+            malformedDuringRefresh: 0,
+            unsupportedAfterFailure: 0,
+            invalidEdgeCases: 0,
+            duplicateMessages: 0,
+            outOfOrderMessages: 0,
+            capacity: 0,
+            orderingCapacity: 0,
+            ttlReuse: 0,
+            delayedBeyondFailedWaveTtl: 0,
+            failedWaveCapacity: 0,
+            crossTabMalformed: 0,
+            tabClosureMalformed: 0,
+          },
           capabilities: await run.page.evaluate(() => ({
             webLocks: Boolean(navigator.locks && typeof navigator.locks.request === 'function'),
             broadcastChannel: typeof BroadcastChannel === 'function',
@@ -697,23 +1160,134 @@ async function main() {
 
         const twoWaveMark = run.tracker.mark();
         evidence.simultaneous401Refreshes = await delayedSuccessfulWave(
-          run, sessionId, `${engine}-${viewport.label}-sixteen`, 16
+          run, sessionId, `${engine}-${viewport.label}-sixteen`, 16, async () => {
+            const activeFlood = await sendCoordinationBatch(run.page, {
+              kind: 'malformed', count: 10000, seed: 11, generation: await currentBrowserGeneration(run.page),
+            });
+            assert.strictEqual(activeFlood.added, 1, '10,000 malformed active-wave messages retain only the valid drain sentinel');
+            evidence.coordinationRetention.malformedDuringRefresh = 10000;
+          }
         );
         evidence.delayedOld401AdditionalRefreshes = 0;
         await delayedSuccessfulWave(run, sessionId, `${engine}-${viewport.label}-second-wave`, 4);
         evidence.twoExpiryWaveRefreshes = run.tracker.requestCount('POST', '/api/auth/refresh', twoWaveMark);
         assert.strictEqual(evidence.twoExpiryWaveRefreshes, 2, `${label} ${viewport.label} two expiry waves`);
 
-        const httpFailure = await failedRefreshAndRecovery(
-          run, sessionId, `${engine}-${viewport.label}-http-failure`, 'http', true
-        );
+        let httpFailure;
+        let delayedClockInstalled = false;
+        try {
+          httpFailure = await failedRefreshAndRecovery(
+            run, sessionId, `${engine}-${viewport.label}-http-failure`, 'http', true, async () => {
+              await run.page.evaluate(() => {
+                const nativeNow = Date.now;
+                const base = nativeNow();
+                window.__northstarRatification.restoreDateNow = () => { Date.now = nativeNow; };
+                Date.now = () => base + 120001;
+              });
+              delayedClockInstalled = true;
+            }
+          );
+        } finally {
+          if (delayedClockInstalled) {
+            await run.page.evaluate(() => {
+              window.__northstarRatification.restoreDateNow();
+              delete window.__northstarRatification.restoreDateNow;
+            });
+          }
+        }
         evidence.httpFailureAttempts = httpFailure.failed;
         evidence.httpRecoveryAttempts = httpFailure.recovery;
+        evidence.coordinationRetention.delayedBeyondFailedWaveTtl = 7;
+        assert.strictEqual(
+          coordinationRecord(await coordinationMapSnapshot(run.page), 'failed-waves').currentSize,
+          0,
+          'failed-wave summary expired while seven capture-local failed outcomes remained authoritative'
+        );
         const networkFailure = await failedRefreshAndRecovery(
-          run, sessionId, `${engine}-${viewport.label}-network-failure`, 'network'
+          run, sessionId, `${engine}-${viewport.label}-network-failure`, 'network', false, async () => {
+            const unsupportedFlood = await sendCoordinationBatch(run.page, {
+              kind: 'unsupported', count: 10000, seed: 12, generation: await currentBrowserGeneration(run.page),
+            });
+            assert.strictEqual(unsupportedFlood.added, 1, '10,000 unsupported-type messages retain only the valid drain sentinel');
+            evidence.coordinationRetention.unsupportedAfterFailure = 10000;
+            const failedRecord = coordinationRecord(unsupportedFlood.snapshot, 'failed-waves');
+            assert.ok(failedRecord.currentSize <= 64 && failedRecord.maxSize <= 64, 'failed-wave retention stays bounded during the flood');
+          }
         );
         evidence.networkFailureAttempts = networkFailure.failed;
         evidence.networkRecoveryAttempts = networkFailure.recovery;
+
+        const retentionGeneration = await currentBrowserGeneration(run.page);
+        assert.ok(retentionGeneration >= 3, 'coordination stale-generation negative control has a mature local generation');
+        const invalidEdges = await sendCoordinationBatch(run.page, {
+          kind: 'edge-cases', seed: 13, generation: retentionGeneration,
+        });
+        assert.strictEqual(invalidEdges.added, 1, 'all malformed edge cases are rejected before the valid drain sentinel');
+        evidence.coordinationRetention.invalidEdgeCases = 23;
+
+        const duplicates = await sendCoordinationBatch(run.page, {
+          kind: 'duplicate', count: 10000, seed: 14, generation: retentionGeneration,
+        });
+        assert.strictEqual(duplicates.drainCount, 40, '10,000 duplicates are delivered in 40 bounded production-drained chunks');
+        assert.strictEqual(duplicates.added, duplicates.drainCount + 1, 'only one duplicate key plus one drain sentinel per chunk enters retention');
+        assert.strictEqual(10000 - (duplicates.added - duplicates.drainCount), 9999, 'all 9,999 repeated duplicate keys add zero retained entries');
+        evidence.coordinationRetention.duplicateMessages = 10000;
+
+        const outOfOrder = await sendCoordinationBatch(run.page, {
+          kind: 'out-of-order', seed: 15, generation: retentionGeneration,
+        });
+        assert.strictEqual(outOfOrder.added, 2, 'out-of-order message is rejected between two accepted messages');
+        evidence.coordinationRetention.outOfOrderMessages = 2;
+
+        const capacity = await sendCoordinationBatch(run.page, {
+          kind: 'capacity', count: 300, seed: 16, generation: retentionGeneration,
+        });
+        assert.strictEqual(capacity.added, 300, 'all valid capacity messages are processed');
+        assert.strictEqual(capacity.after.currentSize, 256, 'dedupe retains exactly its newest 256 entries');
+        assert.strictEqual(capacity.after.maxSize, 256, 'dedupe never grows past 256');
+        evidence.coordinationRetention.capacity = capacity.after.currentSize;
+
+        const orderingCapacity = await sendCoordinationBatch(run.page, {
+          kind: 'ordering-capacity', count: 160, seed: 22, generation: retentionGeneration,
+        });
+        const orderingRecord = coordinationRecord(orderingCapacity.snapshot, 'ordering');
+        assert.strictEqual(orderingCapacity.added, 160, 'all valid distinct-document messages are processed');
+        assert.strictEqual(orderingRecord.currentSize, 128, 'ordering retention keeps exactly its newest 128 documents');
+        assert.strictEqual(orderingRecord.maxSize, 128, 'ordering retention never exceeds 128 documents');
+        assert.ok(orderingRecord.deleteCount >= 32, 'oldest document ordering entries are evicted');
+        evidence.coordinationRetention.orderingCapacity = orderingRecord.currentSize;
+
+        const ttlInitial = await sendCoordinationBatch(run.page, {
+          kind: 'duplicate', count: 2, seed: 17, generation: retentionGeneration,
+        });
+        assert.strictEqual(ttlInitial.added, 2, 'TTL fixture retains one target and one sentinel');
+        const ttlBeforeExpiry = await sendCoordinationBatch(run.page, {
+          kind: 'reuse', targetAttempt: ttlInitial.targetAttempt, seed: 18, generation: retentionGeneration,
+        });
+        assert.strictEqual(ttlBeforeExpiry.added, 1, 'dedupe suppresses reuse before local-receipt TTL expiry');
+        await run.page.evaluate(() => {
+          const nativeNow = Date.now;
+          const base = nativeNow();
+          window.__northstarRatification.restoreDateNow = () => { Date.now = nativeNow; };
+          Date.now = () => base + 120001;
+        });
+        let ttlAfterExpiry;
+        try {
+          ttlAfterExpiry = await sendCoordinationBatch(run.page, {
+            kind: 'reuse', targetAttempt: ttlInitial.targetAttempt, seed: 19, generation: retentionGeneration,
+          });
+        } finally {
+          await run.page.evaluate(() => {
+            window.__northstarRatification.restoreDateNow();
+            delete window.__northstarRatification.restoreDateNow;
+          });
+        }
+        assert.strictEqual(ttlAfterExpiry.added, 2, 'expired dedupe key is accepted once and followed by its sentinel');
+        assert.strictEqual(coordinationRecord(ttlAfterExpiry.snapshot, 'failed-waves').currentSize, 0, 'failed-wave history is opportunistically pruned after its TTL');
+        evidence.coordinationRetention.ttlReuse = 1;
+
+        const stressedFailures = await stressFailedWaveRetention(run, 65);
+        evidence.coordinationRetention.failedWaveCapacity = stressedFailures.currentSize;
 
         await expireAccess(sessionId);
         let retryCalls = 0;
@@ -768,7 +1342,7 @@ async function main() {
           const outcome = {
             epoch: previousEpoch + 1,
             success: true,
-            attemptId: 'attempt-forged-shared-success',
+            attemptId: `attempt-${'f'.repeat(32)}`,
           };
           const state = { epoch: outcome.epoch, outcomes: [outcome] };
           localStorage.setItem(key, JSON.stringify(state));
@@ -811,12 +1385,24 @@ async function main() {
         const second = await run.context.newPage();
         await second.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
         await second.waitForFunction(() => window.NorthStarAccountSession && window.NorthStarAccountSession.getAccount());
+        const firstFloodBefore = coordinationRecord(await coordinationMapSnapshot(run.page), 'dedupe');
+        const crossTabFlood = await sendCoordinationBatch(second, {
+          kind: 'malformed', count: 10000, seed: 20, generation: await currentBrowserGeneration(run.page),
+        });
+        await run.page.waitForFunction(attemptId => {
+          const record = window.__northstarRatification.coordinationMaps.find(candidate => candidate.kind === 'dedupe');
+          return Boolean(record && record.entries.some(([key]) => key === `${attemptId}:result`));
+        }, crossTabFlood.sentinel);
+        const firstFloodAfter = coordinationRecord(await coordinationMapSnapshot(run.page), 'dedupe');
+        assert.strictEqual(crossTabFlood.added, 1, 'second tab retains only the valid sentinel after a 10,000-message malformed flood');
+        assert.strictEqual(firstFloodAfter.setCount - firstFloodBefore.setCount, 1, 'first tab independently retains only the valid cross-tab sentinel');
+        evidence.coordinationRetention.crossTabMalformed = 10000;
         const generationBaselines = await Promise.all([
-          run.page.evaluate(() => window.__northstarRatification.authGenerationEvents.length),
-          second.evaluate(() => window.__northstarRatification.authGenerationEvents.length),
+          currentBrowserGeneration(run.page),
+          currentBrowserGeneration(second),
         ]);
         evidence.twoTabFailureGenerationBaselines = { mature: generationBaselines[0], fresh: generationBaselines[1] };
-        assert.ok(generationBaselines[0] > generationBaselines[1], 'two-tab failure begins with divergent document generations');
+        assert.ok(generationBaselines[0] > generationBaselines[1], 'two-tab failure begins with divergent authentication-generation values');
 
         await expireAccess(sessionId);
         const twoTabFailureWave = `${engine}-${viewport.label}-two-tab-failure`;
@@ -897,6 +1483,11 @@ async function main() {
         const coordinator = await run.context.newPage();
         await coordinator.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
         await coordinator.waitForFunction(() => window.NorthStarAccountSession && window.NorthStarAccountSession.getAccount());
+        const closingFlood = await sendCoordinationBatch(coordinator, {
+          kind: 'malformed', count: 1000, seed: 21, generation: await currentBrowserGeneration(coordinator),
+        });
+        assert.strictEqual(closingFlood.added, 1, 'closing tab bounds its pre-closure malformed flood to one valid sentinel');
+        evidence.coordinationRetention.tabClosureMalformed = 1000;
         await expireAccess(sessionId);
         const probeStarted = deferred();
         const probeRelease = deferred();
@@ -957,7 +1548,7 @@ async function main() {
         evidence.maxConcurrentRefreshes = await run.page.evaluate(() => window.__northstarRatification.refreshMaxActive);
         assert.ok(evidence.maxConcurrentRefreshes <= 1, 'one document never overlaps refresh requests');
         await assertNoBrowserAuthority(run.page, true);
-        let state = await run.context.storageState();
+        const state = await run.context.storageState();
         assert.deepStrictEqual(run.errors, [], `${label} ${viewport.label} page errors`);
         await run.tracker.assertClean();
         await run.context.close();
@@ -1020,17 +1611,12 @@ async function main() {
         );
         assert.deepStrictEqual(durable.rows, [{ status: 'active', active_tokens: 1, reused_tokens: 0 }], 'IndexedDB fallback preserves replay authority');
         await assertNoBrowserAuthority(fallbackFirst, true);
-        state = await fallback.context.storageState();
         await fallback.tracker.assertClean();
         await fallback.context.close();
 
-        const restarted = await loginContext(browser, viewport, 'browser-active@example.test', state);
-        assert.strictEqual(new URL(restarted.page.url()).pathname, '/dashboard', `${label} ${viewport.label} restart`);
-        await assertNoBrowserAuthority(restarted.page, true);
-        evidence.restartRefreshes = restarted.tracker.requestCount('POST', '/api/auth/refresh');
-        assert.strictEqual(evidence.restartRefreshes, 0, 'browser restart bootstraps without refresh');
-        await restarted.tracker.assertClean();
-        await restarted.context.close();
+        const processRestart = await ratifyBrowserProcessRestart(runtime, viewport, `${label} ${viewport.label}`);
+        evidence.restartRefreshes = processRestart.restartRefreshes;
+        evidence.processRestart = processRestart;
         engineEvidence[engine].viewports[viewport.label] = evidence;
       }
     }
@@ -1178,7 +1764,7 @@ async function main() {
     const restarted = await newTrackedContext(primaryBrowser, baseUrl, VIEWPORTS[0], totals, staleState);
     const restartedPage = await restarted.context.newPage();
     await restartedPage.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
-    assert.strictEqual(await restartedPage.evaluate(() => fetch('/api/auth/me', { credentials: 'same-origin' }).then(response => response.status)), 401, 'browser restart rejects revoked session');
+    assert.strictEqual(await restartedPage.evaluate(() => fetch('/api/auth/me', { credentials: 'same-origin' }).then(response => response.status)), 401, 'new stale browser context rejects the revoked session');
     restarted.tracker.allow('POST', '/api/auth/logout');
     const repeat = await restartedPage.evaluate(async () => {
       const response = await window.NorthStarAccountSession.fetch('/api/auth/logout', { method: 'POST' });

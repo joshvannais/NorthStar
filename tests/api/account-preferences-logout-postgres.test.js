@@ -283,6 +283,26 @@ describe('mounted PostgreSQL notification preferences and durable logout', () =>
     expect(staleAccess.status).toBe(401);
     expect(await runRefreshWorker(allocation.connectionString, secret, jar)).toBe('csrf_invalid');
 
+    const durableAuthority = await pool.query(
+      `SELECT session.id AS session_id, token.family_id
+         FROM auth_sessions session
+         JOIN auth_refresh_tokens token ON token.session_id = session.id
+         JOIN users account ON account.id = session.user_id
+        WHERE account.email_normalized = 'durable-logout@example.test'
+        LIMIT 1`
+    );
+    const activeSiblingId = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO auth_refresh_tokens (
+         id, session_id, family_id, token_hash, status, expires_at
+       ) VALUES ($1, $2, $3, $4, 'active', NOW() + INTERVAL '1 day')`,
+      [
+        activeSiblingId,
+        durableAuthority.rows[0].session_id,
+        durableAuthority.rows[0].family_id,
+        crypto.randomBytes(32).toString('hex'),
+      ]
+    );
     const repeated = await request(app)
       .post('/api/auth/logout')
       .set('Cookie', cookieHeader(jar))
@@ -291,6 +311,13 @@ describe('mounted PostgreSQL notification preferences and durable logout', () =>
     expect((repeated.headers['set-cookie'] || []).filter(value =>
       /northstar_(?:access|refresh|csrf)=/.test(value)
     )).toHaveLength(3);
+    const repeatedState = await pool.query(
+      `SELECT status, revoke_reason
+         FROM auth_refresh_tokens
+        WHERE id = $1`,
+      [activeSiblingId]
+    );
+    expect(repeatedState.rows).toEqual([{ status: 'revoked', revoke_reason: 'logout' }]);
   }, 60000);
 
   test('a refresh-token revocation fault rolls back the earlier session update and a retry succeeds exactly once', async () => {

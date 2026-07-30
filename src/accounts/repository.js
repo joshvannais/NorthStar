@@ -483,34 +483,37 @@ class AccountRepository {
         );
         const authority = rows(authorityResult)[0];
         const csrfMatches = authority && authority.csrf_token_hash === input.csrfTokenHash;
-        if (csrfMatches && authority.token_status === 'revoked' &&
+        const confirmedLogout = csrfMatches && authority.token_status === 'revoked' &&
             authority.session_status === 'revoked' &&
             authority.token_revoke_reason === 'logout' &&
-            authority.session_revoke_reason === 'logout') {
-          return { outcome: 'confirmed_revoked', sessionId: authority.session_id };
-        }
-        const invalid = !csrfMatches || authority.token_status !== 'active' ||
+            authority.session_revoke_reason === 'logout';
+        const invalid = !confirmedLogout && (!csrfMatches || authority.token_status !== 'active' ||
           authority.session_status !== 'active' ||
           new Date(authority.token_expires_at).getTime() <= Date.now() ||
-          new Date(authority.refresh_expires_at).getTime() <= Date.now();
+          new Date(authority.refresh_expires_at).getTime() <= Date.now());
         if (invalid) return { outcome: 'invalid' };
 
-        await client.query(
-          `SELECT id
+        const familyResult = await client.query(
+          `SELECT id, status
              FROM auth_refresh_tokens
             WHERE session_id = $1 OR family_id = $2
             FOR UPDATE`,
           [authority.session_id, authority.family_id]
         );
-        const sessionResult = await client.query(
-          `UPDATE auth_sessions
-              SET status = 'revoked', revoked_at = NOW(), revoke_reason = 'logout'
-            WHERE id = $1 AND status = 'active'
-            RETURNING id`,
-          [authority.session_id]
-        );
-        if (sessionResult.rowCount !== 1) {
-          throw new Error('Durable logout session revocation was incomplete');
+        if (!familyResult.rows.some(row => row.id === authority.token_id)) {
+          throw new Error('Durable logout refresh family lock was incomplete');
+        }
+        if (!confirmedLogout) {
+          const sessionResult = await client.query(
+            `UPDATE auth_sessions
+                SET status = 'revoked', revoked_at = NOW(), revoke_reason = 'logout'
+              WHERE id = $1 AND status = 'active'
+              RETURNING id`,
+            [authority.session_id]
+          );
+          if (sessionResult.rowCount !== 1) {
+            throw new Error('Durable logout session revocation was incomplete');
+          }
         }
         const tokenResult = await client.query(
           `UPDATE auth_refresh_tokens
@@ -519,10 +522,23 @@ class AccountRepository {
             RETURNING id`,
           [authority.session_id, authority.family_id]
         );
-        if (tokenResult.rowCount < 1 || !tokenResult.rows.some(row => row.id === authority.token_id)) {
+        if (!confirmedLogout &&
+            (tokenResult.rowCount < 1 || !tokenResult.rows.some(row => row.id === authority.token_id))) {
           throw new Error('Durable logout refresh revocation was incomplete');
         }
-        return { outcome: 'revoked', sessionId: authority.session_id };
+        const remainingResult = await client.query(
+          `SELECT count(*)::int AS active_count
+             FROM auth_refresh_tokens
+            WHERE (session_id = $1 OR family_id = $2) AND status = 'active'`,
+          [authority.session_id, authority.family_id]
+        );
+        if (remainingResult.rows[0].active_count !== 0) {
+          throw new Error('Durable logout left an active refresh credential');
+        }
+        return {
+          outcome: confirmedLogout ? 'confirmed_revoked' : 'revoked',
+          sessionId: authority.session_id,
+        };
       });
     } catch (error) {
       if (error instanceof AccountPersistenceError) throw error;

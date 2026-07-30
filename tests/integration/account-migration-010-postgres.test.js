@@ -260,6 +260,34 @@ describe('production account migration authority on required PostgreSQL 18', () 
          VALUES ($1, $2, 'Preserved Lead', '+18605550113', 'roofing', 'unchanged note')`,
         [leadId, organizationId]
       );
+      await client.query(
+        `INSERT INTO notification_preferences (
+           organization_id, email_new_lead, email_call_summary,
+           email_appointment, sms_new_lead, sms_urgent,
+           notification_email, notification_phone
+         ) VALUES ($1, TRUE, NULL, TRUE, TRUE, NULL, $2, $3)`,
+        [organizationId, 'legacy-alerts@example.test', '+18605550114']
+      );
+      await client.query(`
+        CREATE TABLE organization_account_preferences (
+          organization_id UUID PRIMARY KEY REFERENCES organizations(id) ON DELETE RESTRICT,
+          preferences JSONB NOT NULL DEFAULT '{}',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          CONSTRAINT organization_account_preferences_object_check
+            CHECK (jsonb_typeof(preferences) = 'object')
+        )
+      `);
+      await client.query(
+        `INSERT INTO organization_account_preferences (organization_id, preferences)
+         VALUES ($1, $2::jsonb)`,
+        [organizationId, JSON.stringify({
+          theme: 'dark',
+          density: 'compact',
+          emailEnabled: true,
+          notifications: { smsUrgent: true },
+        })]
+      );
       await client.query('ALTER TABLE _migrations DROP COLUMN checksum');
     });
 
@@ -280,6 +308,61 @@ describe('production account migration authority on required PostgreSQL 18', () 
         password_hash: 'unchanged-hash',
         phone: '+18605550112',
         service_type: 'roofing',
+      }]);
+      const notification = await client.query(
+        `SELECT email_new_lead, email_call_summary, email_appointment,
+                sms_new_lead, sms_urgent, notification_email, notification_phone
+           FROM notification_preferences
+          WHERE organization_id = $1`,
+        [organizationId]
+      );
+      expect(notification.rows).toEqual([{
+        email_new_lead: false,
+        email_call_summary: false,
+        email_appointment: false,
+        sms_new_lead: false,
+        sms_urgent: false,
+        notification_email: 'legacy-alerts@example.test',
+        notification_phone: '+18605550114',
+      }]);
+      const generic = await client.query(
+        'SELECT preferences FROM organization_account_preferences WHERE organization_id = $1',
+        [organizationId]
+      );
+      expect(generic.rows).toEqual([{ preferences: { theme: 'dark', density: 'compact' } }]);
+      await expect(client.query(
+        `UPDATE organization_account_preferences
+            SET preferences = preferences || '{"smsEnabled":true}'::jsonb
+          WHERE organization_id = $1`,
+        [organizationId]
+      )).rejects.toMatchObject({ code: '23514' });
+
+      const defaultOrganizationId = '72000000-0000-0000-0000-000000000004';
+      await client.query(
+        `INSERT INTO organizations (id, name, owner_name, email, phone)
+         VALUES ($1, 'Default Preference Company', 'Default Owner',
+                 'default-preference@example.test', '+18605550115')`,
+        [defaultOrganizationId]
+      );
+      await client.query(
+        'INSERT INTO notification_preferences (organization_id) VALUES ($1)',
+        [defaultOrganizationId]
+      );
+      const defaults = await client.query(
+        `SELECT email_new_lead, email_call_summary, email_appointment,
+                sms_new_lead, sms_urgent, notification_email, notification_phone
+           FROM notification_preferences
+          WHERE organization_id = $1`,
+        [defaultOrganizationId]
+      );
+      expect(defaults.rows).toEqual([{
+        email_new_lead: false,
+        email_call_summary: false,
+        email_appointment: false,
+        sms_new_lead: false,
+        sms_urgent: false,
+        notification_email: '',
+        notification_phone: '',
       }]);
       const ledger = await client.query('SELECT filename, checksum FROM _migrations ORDER BY filename');
       expect(ledger.rows).toHaveLength(10);

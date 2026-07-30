@@ -13,6 +13,22 @@ const ROOT = path.resolve(__dirname, '../..');
 const MIGRATIONS_DIRECTORY = path.join(ROOT, 'migrations');
 const MIGRATION_WORKER = path.join(ROOT, 'tests', 'helpers', 'account-migration-worker.js');
 const MIGRATION_010 = '010_account_session_authority.sql';
+const MIGRATION_011 = '011_oauth_authorization_states.sql';
+const GENUINE_BASE_LEDGER_DDL = `
+  CREATE TABLE IF NOT EXISTS _migrations (
+    id SERIAL PRIMARY KEY,
+    filename VARCHAR(255) UNIQUE NOT NULL,
+    applied_at TIMESTAMP DEFAULT NOW()
+  )
+`;
+const BRANCH_ERA_LEDGER_DDL = `
+  CREATE TABLE _migrations (
+    id SERIAL PRIMARY KEY,
+    filename VARCHAR(255) UNIQUE NOT NULL,
+    checksum CHAR(64),
+    applied_at TIMESTAMP NULL DEFAULT NOW()
+  )
+`;
 const LEGACY_HASHES = Object.freeze({
   '001_initial_schema.sql': 'dbbcad4947474777a61a3b230aa8aca54b9a3ef4257301368e39731fa05307e9',
   '002_seed_data.sql': '4b124ac5713caaddc4f2316e8c055c6235eb17881c5b4ba5d0edef481a8a63ff',
@@ -24,6 +40,14 @@ const LEGACY_HASHES = Object.freeze({
   '008_canonical_demo_authority.sql': 'c157ac2c10f07bf933b4774ac14584ecc580f93108926b5e53acbfed28263ef2',
   '009_canonical_voice_provider_identity.sql': '6ec531dbb385607818c4a70ae69bab7f5d85ff98565d61ad8026c20ef68634fe',
 });
+const PROTECTED_MIGRATION_HASHES = Object.freeze({
+  ...LEGACY_HASHES,
+  [MIGRATION_010]: '0087278b1fb0062ba88a4dd7e4699e2e5c4c98d78e822193e2e7c0bff5c9ca48',
+});
+
+function productionMigrationFiles() {
+  return fs.readdirSync(MIGRATIONS_DIRECTORY).filter(file => file.endsWith('.sql')).sort();
+}
 
 function sha256(contents) {
   return crypto.createHash('sha256').update(contents).digest('hex');
@@ -109,29 +133,92 @@ async function queryWithClient(connectionString, work) {
   }
 }
 
-async function schemaSnapshot(connectionString) {
+function normalizedPath(value) {
+  return String(value || '').replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+}
+
+function negativeControlConfiguration(connectionString, expectedDatabase) {
+  if (!['pr71_negative_fresh', 'pr71_negative_upgrade'].includes(expectedDatabase)) {
+    throw new Error('Unsupported migration negative-control database identity');
+  }
+  const admin = new URL(process.env.M19_PG_ADMIN_URL);
+  const parsed = new URL(connectionString);
+  const expectedPort = Number(process.env.M19_EXPECTED_PG_PORT);
+  const database = parsed.pathname.replace(/^\//, '');
+  if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || parsed.hostname !== '127.0.0.1' ||
+      Number(parsed.port || 5432) !== expectedPort || database !== expectedDatabase ||
+      parsed.username !== admin.username || parsed.password !== admin.password ||
+      parsed.search !== '' || parsed.hash !== '') {
+    throw new Error('Migration negative-control URL is outside the disposable PostgreSQL allowlist');
+  }
+  return {
+    connectionString,
+    expectedDatabase,
+    expectedDataDirectory: process.env.M19_EXPECTED_PG_DATA_DIR,
+    expectedPort,
+  };
+}
+
+async function verifyNegativeControlIdentity(client, configuration) {
+  const result = await client.query(`
+    SELECT current_database() AS database,
+           current_setting('server_version_num')::int AS server_version_num,
+           current_setting('data_directory') AS data_directory,
+           host(inet_server_addr()) AS server_address,
+           inet_server_port() AS server_port,
+           current_setting('listen_addresses') AS listen_addresses
+  `);
+  const identity = result.rows[0];
+  if (identity.database !== configuration.expectedDatabase ||
+      Math.floor(identity.server_version_num / 10000) !== 18 ||
+      normalizedPath(identity.data_directory) !== normalizedPath(configuration.expectedDataDirectory) ||
+      identity.server_address !== '127.0.0.1' || identity.server_port !== configuration.expectedPort ||
+      identity.listen_addresses !== '127.0.0.1') {
+    throw new Error('Migration negative-control PostgreSQL identity mismatch');
+  }
+}
+
+async function schemaSnapshot(connectionString, expectedNegativeDatabase = null) {
+  const negativeControl = expectedNegativeDatabase
+    ? negativeControlConfiguration(connectionString, expectedNegativeDatabase)
+    : null;
   return queryWithClient(connectionString, async client => {
+    if (negativeControl) await verifyNegativeControlIdentity(client, negativeControl);
     const columns = await client.query(
-      `SELECT table_name, column_name, data_type, udt_name,
+      `SELECT table_name, ordinal_position, column_name, data_type, udt_name,
               COALESCE(character_maximum_length, 0)::int AS character_maximum_length,
               is_nullable,
               COALESCE(column_default, '') AS column_default
          FROM information_schema.columns
         WHERE table_schema = 'public'
-        ORDER BY table_name, column_name`
+        ORDER BY table_name, ordinal_position`
     );
     const constraints = await client.query(
       `SELECT conrelid::regclass::text AS table_name, conname, contype,
-              pg_get_constraintdef(oid) AS definition
+              pg_get_constraintdef(oid) AS definition,
+              condeferrable, condeferred, convalidated,
+              CASE WHEN conindid = 0 THEN '' ELSE conindid::regclass::text END AS backing_index
         FROM pg_constraint
         WHERE connamespace = 'public'::regnamespace
         ORDER BY table_name, conname`
     );
     const indexes = await client.query(
-      `SELECT tablename, indexname, indexdef
-         FROM pg_indexes
-        WHERE schemaname = 'public'
-        ORDER BY tablename, indexname`
+      `SELECT indexes.tablename, indexes.indexname, indexes.indexdef,
+              index_record.indisunique, index_record.indisprimary,
+              index_record.indisvalid, index_record.indisready,
+              COALESCE(owner_constraint.conname, '') AS owning_constraint
+         FROM pg_indexes indexes
+         JOIN pg_class index_class ON index_class.relname = indexes.indexname
+         JOIN pg_namespace index_namespace
+           ON index_namespace.oid = index_class.relnamespace
+          AND index_namespace.nspname = indexes.schemaname
+         JOIN pg_index index_record ON index_record.indexrelid = index_class.oid
+         LEFT JOIN pg_constraint owner_constraint
+           ON owner_constraint.conindid = index_class.oid
+          AND owner_constraint.conrelid = index_record.indrelid
+          AND owner_constraint.contype IN ('p', 'u')
+        WHERE indexes.schemaname = 'public'
+        ORDER BY indexes.tablename, indexes.indexname`
     );
     const triggers = await client.query(
       `SELECT event_object_table AS table_name, trigger_name, action_timing,
@@ -148,11 +235,54 @@ async function schemaSnapshot(connectionString) {
         WHERE n.nspname = 'public' AND p.prokind = 'f'
         ORDER BY p.proname, arguments`
     );
+    const migrationSequence = await client.query(`
+      SELECT sequence_namespace.nspname AS sequence_schema,
+             sequence_class.relname AS sequence_name,
+             table_namespace.nspname AS owned_table_schema,
+             table_class.relname AS owned_table,
+             attribute.attname AS owned_column,
+             dependency.deptype AS dependency_type,
+             format_type(sequence.seqtypid, NULL) AS data_type,
+             sequence.seqstart::text AS start_value,
+             sequence.seqincrement::text AS increment_by,
+             sequence.seqmin::text AS minimum_value,
+             sequence.seqmax::text AS maximum_value,
+             sequence.seqcache::text AS cache_size,
+             sequence.seqcycle AS cycles,
+             pg_sequence_last_value(sequence_class.oid)::text AS last_value
+        FROM pg_class sequence_class
+        JOIN pg_namespace sequence_namespace ON sequence_namespace.oid = sequence_class.relnamespace
+        JOIN pg_sequence sequence ON sequence.seqrelid = sequence_class.oid
+        JOIN pg_depend dependency
+          ON dependency.classid = 'pg_class'::regclass
+         AND dependency.objid = sequence_class.oid
+         AND dependency.refclassid = 'pg_class'::regclass
+         AND dependency.deptype IN ('a', 'i')
+        JOIN pg_class table_class ON table_class.oid = dependency.refobjid
+        JOIN pg_namespace table_namespace ON table_namespace.oid = table_class.relnamespace
+        JOIN pg_attribute attribute
+          ON attribute.attrelid = table_class.oid
+         AND attribute.attnum = dependency.refobjsubid
+       WHERE table_namespace.nspname = 'public'
+         AND table_class.relname = '_migrations'
+       ORDER BY sequence_schema, sequence_name
+    `);
+    let migrationSequenceState = [];
+    if (migrationSequence.rows.length === 1) {
+      migrationSequenceState = (await client.query(`
+        SELECT last_value::text AS last_value,
+               is_called,
+               CASE WHEN is_called THEN last_value + 1 ELSE last_value END::text AS next_value
+          FROM public._migrations_id_seq
+      `)).rows;
+    }
     return {
       columns: columns.rows,
       constraints: constraints.rows,
       functions: functions.rows,
       indexes: indexes.rows,
+      migrationSequence: migrationSequence.rows,
+      migrationSequenceState,
       triggers: triggers.rows,
     };
   });
@@ -161,58 +291,111 @@ async function schemaSnapshot(connectionString) {
 function expectCanonicalMigrationLedger(snapshot) {
   expect(snapshot.columns.filter(row => row.table_name === '_migrations')).toEqual([
     {
-      table_name: '_migrations', column_name: 'applied_at', data_type: 'timestamp with time zone',
-      udt_name: 'timestamptz', character_maximum_length: 0,
-      is_nullable: 'NO', column_default: 'now()',
+      table_name: '_migrations', ordinal_position: 1, column_name: 'id', data_type: 'integer',
+      udt_name: 'int4', character_maximum_length: 0, is_nullable: 'NO',
+      column_default: "nextval('_migrations_id_seq'::regclass)",
     },
     {
-      table_name: '_migrations', column_name: 'checksum', data_type: 'character',
-      udt_name: 'bpchar', character_maximum_length: 64,
-      is_nullable: 'YES', column_default: '',
-    },
-    {
-      table_name: '_migrations', column_name: 'filename', data_type: 'character varying',
-      udt_name: 'varchar', character_maximum_length: 255,
+      table_name: '_migrations', ordinal_position: 2, column_name: 'filename',
+      data_type: 'character varying', udt_name: 'varchar', character_maximum_length: 255,
       is_nullable: 'NO', column_default: '',
     },
     {
-      table_name: '_migrations', column_name: 'id', data_type: 'integer', udt_name: 'int4',
-      character_maximum_length: 0, is_nullable: 'NO',
-      column_default: "nextval('_migrations_id_seq'::regclass)",
+      table_name: '_migrations', ordinal_position: 3, column_name: 'checksum',
+      data_type: 'character', udt_name: 'bpchar', character_maximum_length: 64,
+      is_nullable: 'YES', column_default: '',
+    },
+    {
+      table_name: '_migrations', ordinal_position: 4, column_name: 'applied_at',
+      data_type: 'timestamp with time zone', udt_name: 'timestamptz',
+      character_maximum_length: 0, is_nullable: 'NO', column_default: 'now()',
     },
   ]);
   expect(snapshot.constraints.filter(row => row.table_name === '_migrations')).toEqual([
     {
       table_name: '_migrations', conname: '_migrations_applied_at_not_null',
-      contype: 'n', definition: 'NOT NULL applied_at',
+      contype: 'n', definition: 'NOT NULL applied_at', condeferrable: false,
+      condeferred: false, convalidated: true, backing_index: '',
     },
     {
       table_name: '_migrations', conname: '_migrations_filename_key',
-      contype: 'u', definition: 'UNIQUE (filename)',
+      contype: 'u', definition: 'UNIQUE (filename)', condeferrable: false,
+      condeferred: false, convalidated: true, backing_index: '_migrations_filename_key',
     },
     {
       table_name: '_migrations', conname: '_migrations_filename_not_null',
-      contype: 'n', definition: 'NOT NULL filename',
+      contype: 'n', definition: 'NOT NULL filename', condeferrable: false,
+      condeferred: false, convalidated: true, backing_index: '',
     },
     {
       table_name: '_migrations', conname: '_migrations_id_not_null',
-      contype: 'n', definition: 'NOT NULL id',
+      contype: 'n', definition: 'NOT NULL id', condeferrable: false,
+      condeferred: false, convalidated: true, backing_index: '',
     },
     {
       table_name: '_migrations', conname: '_migrations_pkey',
-      contype: 'p', definition: 'PRIMARY KEY (id)',
+      contype: 'p', definition: 'PRIMARY KEY (id)', condeferrable: false,
+      condeferred: false, convalidated: true, backing_index: '_migrations_pkey',
     },
   ]);
   expect(snapshot.indexes.filter(row => row.tablename === '_migrations')).toEqual([
     {
       tablename: '_migrations', indexname: '_migrations_filename_key',
       indexdef: 'CREATE UNIQUE INDEX _migrations_filename_key ON public._migrations USING btree (filename)',
+      indisunique: true, indisprimary: false, indisvalid: true, indisready: true,
+      owning_constraint: '_migrations_filename_key',
     },
     {
       tablename: '_migrations', indexname: '_migrations_pkey',
       indexdef: 'CREATE UNIQUE INDEX _migrations_pkey ON public._migrations USING btree (id)',
+      indisunique: true, indisprimary: true, indisvalid: true, indisready: true,
+      owning_constraint: '_migrations_pkey',
     },
   ]);
+  expect(snapshot.migrationSequence).toEqual([{
+    sequence_schema: 'public',
+    sequence_name: '_migrations_id_seq',
+    owned_table_schema: 'public',
+    owned_table: '_migrations',
+    owned_column: 'id',
+    dependency_type: 'a',
+    data_type: 'integer',
+    start_value: '1',
+    increment_by: '1',
+    minimum_value: '1',
+    maximum_value: '2147483647',
+    cache_size: '1',
+    cycles: false,
+    last_value: snapshot.migrationSequence[0] && snapshot.migrationSequence[0].last_value,
+  }]);
+  expect(snapshot.migrationSequenceState).toEqual([{
+    last_value: expect.stringMatching(/^\d+$/),
+    is_called: expect.any(Boolean),
+    next_value: expect.stringMatching(/^\d+$/),
+  }]);
+}
+
+async function installGenuineBaseFixture(connectionString, options = {}) {
+  const files = Object.keys(LEGACY_HASHES);
+  await queryWithClient(connectionString, async client => {
+    await client.query(options.ledgerDdl || GENUINE_BASE_LEDGER_DDL);
+    for (const file of files) {
+      const contents = fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, file), 'utf8');
+      const migration = stripOuterTransaction(contents);
+      await client.query('BEGIN');
+      try {
+        await client.query(migration.sql);
+        await client.query(
+          'INSERT INTO _migrations (filename, applied_at) VALUES ($1, $2)',
+          [file, options.appliedAt === undefined ? new Date('2020-01-01T00:00:00.000Z') : options.appliedAt]
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
+    }
+  });
 }
 
 async function assertMigration010Absent(connectionString) {
@@ -235,19 +418,65 @@ async function assertMigration010Absent(connectionString) {
   });
 }
 
+async function migrationLedgerPreservationSnapshot(connectionString) {
+  return queryWithClient(connectionString, async client => {
+    const rows = await client.query(
+      `SELECT id, filename, applied_at::text AS applied_at
+         FROM _migrations
+        ORDER BY id`
+    );
+    const columns = await client.query(
+      `SELECT ordinal_position, column_name, data_type, is_nullable, COALESCE(column_default, '') AS column_default
+         FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = '_migrations'
+        ORDER BY ordinal_position`
+    );
+    const metadata = await client.query(`
+      SELECT table_class.relacl::text AS table_acl,
+             obj_description(table_class.oid, 'pg_class') AS table_comment,
+             table_class.reloptions AS table_options,
+             pg_get_userbyid(table_class.relowner) AS table_owner,
+             sequence_class.relacl::text AS sequence_acl,
+             obj_description(sequence_class.oid, 'pg_class') AS sequence_comment,
+             sequence_class.reloptions AS sequence_options,
+             pg_get_userbyid(sequence_class.relowner) AS sequence_owner
+        FROM pg_class table_class
+        JOIN pg_namespace namespace ON namespace.oid = table_class.relnamespace
+        JOIN pg_class sequence_class ON sequence_class.oid = 'public._migrations_id_seq'::regclass
+       WHERE namespace.nspname = 'public' AND table_class.relname = '_migrations'
+    `);
+    return { rows: rows.rows, columns: columns.rows, metadata: metadata.rows };
+  });
+}
+
 describe('production account migration authority on required PostgreSQL 18', () => {
   const allocations = [];
   const children = new Set();
   let legacyDirectory;
+  let preOauthStateDirectory;
 
   beforeAll(() => {
     if (!process.env.M19_PG_ADMIN_URL || !process.env.M19_EXPECTED_PG_DATA_DIR ||
-        !process.env.M19_EXPECTED_PG_PORT || !process.env.M19_TEST_RUN_ID) {
+        !process.env.M19_EXPECTED_PG_PORT || !process.env.M19_TEST_RUN_ID ||
+        !process.env.ACCOUNT_MIGRATION_NEGATIVE_FRESH_URL ||
+        !process.env.ACCOUNT_MIGRATION_NEGATIVE_UPGRADE_URL) {
       throw new Error('Required disposable PostgreSQL 18 identity is missing');
     }
+    negativeControlConfiguration(
+      process.env.ACCOUNT_MIGRATION_NEGATIVE_FRESH_URL,
+      'pr71_negative_fresh'
+    );
+    negativeControlConfiguration(
+      process.env.ACCOUNT_MIGRATION_NEGATIVE_UPGRADE_URL,
+      'pr71_negative_upgrade'
+    );
     legacyDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-migrations-001-009-'));
     for (const file of Object.keys(LEGACY_HASHES)) {
       fs.copyFileSync(path.join(MIGRATIONS_DIRECTORY, file), path.join(legacyDirectory, file));
+    }
+    preOauthStateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-migrations-001-010-'));
+    for (const file of Object.keys(PROTECTED_MIGRATION_HASHES)) {
+      fs.copyFileSync(path.join(MIGRATIONS_DIRECTORY, file), path.join(preOauthStateDirectory, file));
     }
   });
 
@@ -258,6 +487,7 @@ describe('production account migration authority on required PostgreSQL 18', () 
     }
     for (const allocation of allocations) await allocation.cleanup();
     if (legacyDirectory) fs.rmSync(legacyDirectory, { recursive: true, force: true });
+    if (preOauthStateDirectory) fs.rmSync(preOauthStateDirectory, { recursive: true, force: true });
   }, 120000);
 
   async function database(name) {
@@ -270,16 +500,23 @@ describe('production account migration authority on required PostgreSQL 18', () 
     await runProductionMigrations(connectionString, legacyDirectory);
   }
 
-  test('real lexer handles exact legacy envelopes and protected migrations 001-009 remain byte-identical', () => {
-    for (const [file, expected] of Object.entries(LEGACY_HASHES)) {
+  async function applyPreOauthStateMigrations(connectionString) {
+    await runProductionMigrations(connectionString, preOauthStateDirectory);
+  }
+
+  test('real lexer handles exact legacy envelopes and protected migrations 001-010 remain byte-identical', () => {
+    for (const [file, expected] of Object.entries(PROTECTED_MIGRATION_HASHES)) {
       const contents = fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, file));
       expect(sha256(contents)).toBe(expected);
       const prepared = stripOuterTransaction(contents.toString('utf8'));
-      expect(prepared.hadOuterTransaction).toBe(true);
-      expect(prepared.sql).not.toMatch(/^\s*BEGIN\s*;/i);
-      expect(prepared.sql).not.toMatch(/COMMIT\s*;\s*$/i);
+      if (LEGACY_HASHES[file]) {
+        expect(prepared.hadOuterTransaction).toBe(true);
+        expect(prepared.sql).not.toMatch(/^\s*BEGIN\s*;/i);
+        expect(prepared.sql).not.toMatch(/COMMIT\s*;\s*$/i);
+      } else {
+        expect(prepared.hadOuterTransaction).toBe(false);
+      }
     }
-    expect(stripOuterTransaction(fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, MIGRATION_010), 'utf8')).hadOuterTransaction).toBe(false);
 
     const variant = '\uFEFF\n-- leading line comment\n/* leading /* nested */ block */\nBEGIN -- owner\n;\n' +
       'DO $body$ BEGIN PERFORM 1; END; $body$;\nSELECT \'COMMIT; -- data\';\n' +
@@ -297,7 +534,7 @@ describe('production account migration authority on required PostgreSQL 18', () 
     const fresh = await database('migration-fresh');
     const upgrade = await database('migration-upgrade');
     await runProductionMigrations(fresh.connectionString);
-    await applyLegacyMigrations(upgrade.connectionString);
+    await installGenuineBaseFixture(upgrade.connectionString);
 
     const organizationId = '72000000-0000-0000-0000-000000000001';
     const userId = '72000000-0000-0000-0000-000000000002';
@@ -346,7 +583,6 @@ describe('production account migration authority on required PostgreSQL 18', () 
           notifications: { smsUrgent: true },
         })]
       );
-      await client.query('ALTER TABLE _migrations DROP COLUMN checksum');
     });
 
     await runProductionMigrations(upgrade.connectionString);
@@ -427,25 +663,22 @@ describe('production account migration authority on required PostgreSQL 18', () 
         notification_phone: '',
       }]);
       const ledger = await client.query('SELECT filename, checksum FROM _migrations ORDER BY filename');
-      expect(ledger.rows).toHaveLength(10);
+      expect(ledger.rows).toHaveLength(productionMigrationFiles().length);
       expect(ledger.rows.every(row => /^[0-9a-f]{64}$/.test(String(row.checksum).trim()))).toBe(true);
     });
   }, 120000);
 
-  test('branch-era TIMESTAMP NULL ledger is repaired without changing a legitimate applied moment', async () => {
+  test('branch-era TIMESTAMP NULL ledger is physically rebuilt, preserves a known moment, and marks unknown time', async () => {
     const allocation = await database('migration-branch-ledger-repair');
     const fresh = await database('migration-branch-ledger-fresh');
     await runProductionMigrations(fresh.connectionString);
-    await applyLegacyMigrations(allocation.connectionString);
+    await installGenuineBaseFixture(allocation.connectionString, { ledgerDdl: BRANCH_ERA_LEDGER_DDL });
     const timeZone = 'America/New_York';
     let momentBeforeRepair;
     await queryWithClient(allocation.connectionString, async client => {
       await client.query(`SET TIME ZONE '${timeZone}'`);
       await client.query(`
         ALTER TABLE _migrations
-          ALTER COLUMN applied_at DROP NOT NULL,
-          ALTER COLUMN applied_at TYPE TIMESTAMP WITHOUT TIME ZONE
-            USING applied_at AT TIME ZONE current_setting('TimeZone'),
           ALTER COLUMN applied_at SET DEFAULT NOW()
       `);
       await client.query(
@@ -505,23 +738,43 @@ describe('production account migration authority on required PostgreSQL 18', () 
       expect(repaired.rows[1]).toEqual({
         filename: '009_canonical_voice_provider_identity.sql',
         is_null: false,
-        applied_moment: expect.any(String),
+        applied_moment: null,
       });
+      const unknownTime = await client.query(
+        "SELECT applied_at::text AS applied_at FROM _migrations WHERE filename = '009_canonical_voice_provider_identity.sql'"
+      );
+      expect(unknownTime.rows).toEqual([{ applied_at: '-infinity' }]);
+      const newlyExecuted = await client.query(
+        `SELECT filename, isfinite(applied_at) AS is_finite
+           FROM _migrations
+          WHERE filename = ANY($1::text[])
+          ORDER BY filename`,
+        [[MIGRATION_010, MIGRATION_011]]
+      );
+      expect(newlyExecuted.rows).toEqual([
+        { filename: MIGRATION_010, is_finite: true },
+        { filename: MIGRATION_011, is_finite: true },
+      ]);
     });
   }, 120000);
 
-  test('genuine prior ledger timestamps, checksums, and uniqueness are durable and a mismatch fails closed', async () => {
+  test('genuine prior ledger rows, known timestamps, sequence state, checksums, and uniqueness are durable', async () => {
     const allocation = await database('migration-ledger');
-    await queryWithClient(allocation.connectionString, client => client.query(`
-      CREATE TABLE _migrations (
-        id SERIAL PRIMARY KEY,
-        filename VARCHAR(255) UNIQUE NOT NULL,
-        checksum CHAR(64),
-        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `));
-    await applyLegacyMigrations(allocation.connectionString);
-    expectCanonicalMigrationLedger(await schemaSnapshot(allocation.connectionString));
+    await installGenuineBaseFixture(allocation.connectionString);
+    await queryWithClient(allocation.connectionString, async client => {
+      await client.query(`
+        ALTER TABLE _migrations
+          ALTER COLUMN applied_at TYPE TIMESTAMPTZ
+            USING applied_at AT TIME ZONE 'UTC',
+          ALTER COLUMN applied_at SET NOT NULL,
+          ALTER COLUMN applied_at SET DEFAULT NOW()
+      `);
+      await client.query('ALTER TABLE _migrations ADD COLUMN checksum CHAR(64)');
+      await client.query(
+        "UPDATE _migrations SET applied_at = TIMESTAMPTZ '2021-06-07 08:09:10.123456+00' WHERE filename = '001_initial_schema.sql'"
+      );
+      await client.query("SELECT setval('public._migrations_id_seq', 750, true)");
+    });
     const genuinePrior = await queryWithClient(allocation.connectionString, client =>
       client.query('SELECT id, filename, checksum, applied_at FROM _migrations ORDER BY filename').then(result => result.rows)
     );
@@ -530,15 +783,19 @@ describe('production account migration authority on required PostgreSQL 18', () 
     await runProductionMigrations(allocation.connectionString);
     const preservedPrior = await queryWithClient(allocation.connectionString, client =>
       client.query(
-        'SELECT id, filename, checksum, applied_at FROM _migrations WHERE filename <> $1 ORDER BY filename',
-        [MIGRATION_010]
+        `SELECT id, filename, applied_at
+           FROM _migrations
+          WHERE filename = ANY($1::text[])
+          ORDER BY filename`,
+        [Object.keys(LEGACY_HASHES)]
       ).then(result => result.rows)
     );
-    expect(preservedPrior).toEqual(genuinePrior);
+    expect(preservedPrior).toEqual(genuinePrior.map(({ id, filename, applied_at }) => ({ id, filename, applied_at })));
+    expectCanonicalMigrationLedger(await schemaSnapshot(allocation.connectionString));
     const before = await queryWithClient(allocation.connectionString, client =>
       client.query('SELECT id, filename, checksum, applied_at FROM _migrations ORDER BY filename').then(result => result.rows)
     );
-    expect(before).toHaveLength(10);
+    expect(before).toHaveLength(productionMigrationFiles().length);
     for (const row of before) {
       expect(String(row.checksum).trim()).toBe(sha256(fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, row.filename))));
     }
@@ -550,6 +807,11 @@ describe('production account migration authority on required PostgreSQL 18', () 
     expect(after).toEqual(before);
 
     await queryWithClient(allocation.connectionString, async client => {
+      const nextId = (await client.query(
+        "INSERT INTO _migrations (filename, checksum) VALUES ('999_sequence_probe.sql', repeat('f', 64)) RETURNING id"
+      )).rows[0].id;
+      expect(nextId).toBe(751 + (productionMigrationFiles().length - Object.keys(LEGACY_HASHES).length));
+      await client.query("DELETE FROM _migrations WHERE filename = '999_sequence_probe.sql'");
       await expect(client.query(
         'INSERT INTO _migrations (filename, checksum) VALUES ($1, $2)',
         [MIGRATION_010, '0'.repeat(64)]
@@ -557,6 +819,68 @@ describe('production account migration authority on required PostgreSQL 18', () 
       await client.query('UPDATE _migrations SET checksum = $2 WHERE filename = $1', [MIGRATION_010, '0'.repeat(64)]);
     });
     await expect(runProductionMigrations(allocation.connectionString)).rejects.toThrow('checksum mismatch');
+  }, 60000);
+
+  test('catalog comparator detects the exact archived 9ec fresh/upgrade physical ordinal mismatch', async () => {
+    const fresh = await schemaSnapshot(
+      process.env.ACCOUNT_MIGRATION_NEGATIVE_FRESH_URL,
+      'pr71_negative_fresh'
+    );
+    const upgrade = await schemaSnapshot(
+      process.env.ACCOUNT_MIGRATION_NEGATIVE_UPGRADE_URL,
+      'pr71_negative_upgrade'
+    );
+    expect(fresh.columns.filter(row => row.table_name === '_migrations').map(row => row.column_name)).toEqual([
+      'id', 'filename', 'checksum', 'applied_at',
+    ]);
+    expect(upgrade.columns.filter(row => row.table_name === '_migrations').map(row => row.column_name)).toEqual([
+      'id', 'filename', 'applied_at', 'checksum',
+    ]);
+    expect(upgrade).not.toEqual(fresh);
+    expectCanonicalMigrationLedger(fresh);
+    expect(() => expectCanonicalMigrationLedger(upgrade)).toThrow();
+  }, 60000);
+
+  test('canonical physical shape with stale sequence state is transactionally repaired beyond the greatest ID', async () => {
+    const allocation = await database('migration-canonical-stale-sequence');
+    await runProductionMigrations(allocation.connectionString);
+    await queryWithClient(allocation.connectionString, async client => {
+      await client.query(
+        "UPDATE _migrations SET id = 250 WHERE filename = '001_initial_schema.sql'"
+      );
+      await client.query("SELECT setval('public._migrations_id_seq', 1, false)");
+    });
+
+    await runProductionMigrations(allocation.connectionString);
+    expectCanonicalMigrationLedger(await schemaSnapshot(allocation.connectionString));
+    await queryWithClient(allocation.connectionString, async client => {
+      const inserted = await client.query(
+        "INSERT INTO _migrations (filename, checksum) VALUES ('999_stale_sequence_probe.sql', repeat('e', 64)) RETURNING id"
+      );
+      expect(inserted.rows).toEqual([{ id: 251 }]);
+      await client.query("DELETE FROM _migrations WHERE filename = '999_stale_sequence_probe.sql'");
+    });
+  }, 60000);
+
+  test('supported legacy shape with swap-sensitive metadata fails closed without changing rows or metadata', async () => {
+    const allocation = await database('migration-ledger-metadata');
+    await installGenuineBaseFixture(allocation.connectionString);
+    await queryWithClient(allocation.connectionString, async client => {
+      await client.query("COMMENT ON TABLE _migrations IS 'historical migration ledger comment'");
+      await client.query("COMMENT ON SEQUENCE _migrations_id_seq IS 'historical sequence comment'");
+      await client.query('GRANT SELECT ON _migrations TO PUBLIC');
+      await client.query('GRANT USAGE ON SEQUENCE _migrations_id_seq TO PUBLIC');
+      await client.query('ALTER TABLE _migrations SET (fillfactor = 80)');
+    });
+    const before = await migrationLedgerPreservationSnapshot(allocation.connectionString);
+
+    await expect(runProductionMigrations(allocation.connectionString)).rejects.toThrow(
+      'Unsupported _migrations rebuild metadata'
+    );
+
+    const after = await migrationLedgerPreservationSnapshot(allocation.connectionString);
+    expect(after).toEqual(before);
+    await assertMigration010Absent(allocation.connectionString);
   }, 60000);
 
   test('ledger insertion failure rolls migration 010 schema back and a fault-free retry commits exactly once', async () => {
@@ -589,6 +913,65 @@ describe('production account migration authority on required PostgreSQL 18', () 
     await queryWithClient(allocation.connectionString, async client => {
       expect((await client.query('SELECT count(*)::int AS count FROM _migrations WHERE filename = $1', [MIGRATION_010])).rows[0].count).toBe(1);
       expect((await client.query("SELECT to_regclass('public.auth_sessions') AS table_name")).rows[0].table_name).toBe('auth_sessions');
+    });
+  }, 120000);
+
+  test('migration 011 schema and ledger insertion roll back together and retry exactly once', async () => {
+    const allocation = await database('migration-oauth-state-ledger-fault');
+    await applyPreOauthStateMigrations(allocation.connectionString);
+    await queryWithClient(allocation.connectionString, client => client.query(`
+      CREATE FUNCTION reject_oauth_state_migration_ledger() RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.filename = '${MIGRATION_011}' THEN
+          RAISE EXCEPTION 'injected oauth-state migration ledger rejection';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+      CREATE TRIGGER reject_oauth_state_migration_ledger_trigger
+        BEFORE INSERT ON _migrations
+        FOR EACH ROW EXECUTE FUNCTION reject_oauth_state_migration_ledger();
+    `));
+
+    await expect(runProductionMigrations(allocation.connectionString)).rejects.toThrow(
+      'injected oauth-state migration ledger rejection'
+    );
+    await queryWithClient(allocation.connectionString, async client => {
+      const rolledBack = await client.query(
+        `SELECT to_regclass('public.oauth_authorization_states') AS oauth_states,
+                (SELECT count(*)::int
+                   FROM pg_constraint
+                  WHERE conrelid = 'public.auth_sessions'::regclass
+                    AND conname = 'auth_sessions_organization_user_identity') AS session_identity_constraints,
+                (SELECT count(*)::int FROM _migrations WHERE filename = $1) AS ledger_rows`,
+        [MIGRATION_011]
+      );
+      expect(rolledBack.rows).toEqual([{
+        oauth_states: null,
+        session_identity_constraints: 0,
+        ledger_rows: 0,
+      }]);
+      await client.query('DROP TRIGGER reject_oauth_state_migration_ledger_trigger ON _migrations');
+      await client.query('DROP FUNCTION reject_oauth_state_migration_ledger()');
+    });
+
+    await runProductionMigrations(allocation.connectionString);
+    await runProductionMigrations(allocation.connectionString);
+    await queryWithClient(allocation.connectionString, async client => {
+      const committed = await client.query(
+        `SELECT to_regclass('public.oauth_authorization_states')::text AS oauth_states,
+                (SELECT count(*)::int
+                   FROM pg_constraint
+                  WHERE conrelid = 'public.auth_sessions'::regclass
+                    AND conname = 'auth_sessions_organization_user_identity') AS session_identity_constraints,
+                (SELECT count(*)::int FROM _migrations WHERE filename = $1) AS ledger_rows`,
+        [MIGRATION_011]
+      );
+      expect(committed.rows).toEqual([{
+        oauth_states: 'oauth_authorization_states',
+        session_identity_constraints: 1,
+        ledger_rows: 1,
+      }]);
     });
   }, 120000);
 
@@ -660,7 +1043,7 @@ describe('production account migration authority on required PostgreSQL 18', () 
       const active = await client.query(
         `SELECT pid, application_name FROM pg_stat_activity
           WHERE application_name = $1 AND state = 'active'
-            AND query LIKE 'INSERT INTO _migrations%' AND wait_event = 'PgSleep'`,
+            AND query LIKE 'INSERT INTO public._migrations%' AND wait_event = 'PgSleep'`,
         [applicationName]
       );
       return active.rows[0] || null;
@@ -709,7 +1092,7 @@ describe('production account migration authority on required PostgreSQL 18', () 
     }, 'email normalization collision'],
   ])('%s aborts through the real runner without partial migration state', async (_name, arrange, diagnostic) => {
     const allocation = await database(`migration-${_name}`);
-    await applyLegacyMigrations(allocation.connectionString);
+    await installGenuineBaseFixture(allocation.connectionString);
     await queryWithClient(allocation.connectionString, async client => {
       const organizationId = crypto.randomUUID();
       await client.query(
@@ -720,5 +1103,9 @@ describe('production account migration authority on required PostgreSQL 18', () 
     });
     await expect(runProductionMigrations(allocation.connectionString)).rejects.toThrow(diagnostic);
     await assertMigration010Absent(allocation.connectionString);
+    const rolledBackLedger = await schemaSnapshot(allocation.connectionString);
+    expect(rolledBackLedger.columns.filter(row => row.table_name === '_migrations').map(row => row.column_name)).toEqual([
+      'id', 'filename', 'applied_at',
+    ]);
   }, 120000);
 });

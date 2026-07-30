@@ -111,7 +111,7 @@ describe('Phase 4 — API: Auth Endpoints', () => {
 describe('Phase 4 — API: Health & Generic Routes', () => {
   test('GET /api/health reports degraded when PostgreSQL is uninitialized', async () => {
     const res = await request(app).get('/api/health');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
     expect(res.type).toMatch(/json/);
     expect(res.body.status).toBe('degraded');
     expect(res.body.components.database).toBe('unavailable');

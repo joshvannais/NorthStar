@@ -28,6 +28,8 @@ const migrations = [
   '006_canonical_voice_sessions.sql',
   '007_canonical_tax_authority.sql',
   '008_canonical_demo_authority.sql',
+  '009_canonical_voice_provider_identity.sql',
+  '010_account_session_authority.sql',
 ];
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const ORG_B = '00000000-0000-0000-0000-000000000010';

@@ -1,8 +1,6 @@
 -- Account Lifecycle PR A - PostgreSQL account, session, and onboarding authority.
 -- This migration is intentionally additive and imports no filesystem data.
 
-BEGIN;
-
 DO $$
 DECLARE
   collision TEXT;
@@ -143,8 +141,34 @@ CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_one_current_per_organization
   ON subscriptions(organization_id)
   WHERE status IN ('trial', 'active', 'past_due');
 
+-- No durable explicit-consent provenance exists for the legacy operational
+-- notification booleans. Preserve the configured destinations, but make the
+-- deterministic upgrade disposition opt-in by disabling every delivery type.
+UPDATE notification_preferences
+   SET email_new_lead = FALSE,
+       email_call_summary = FALSE,
+       email_appointment = FALSE,
+       sms_new_lead = FALSE,
+       sms_urgent = FALSE,
+       notification_email = COALESCE(notification_email, ''),
+       notification_phone = COALESCE(notification_phone, '');
+
 ALTER TABLE notification_preferences
-  ALTER COLUMN organization_id SET NOT NULL;
+  ALTER COLUMN organization_id SET NOT NULL,
+  ALTER COLUMN email_new_lead SET DEFAULT FALSE,
+  ALTER COLUMN email_new_lead SET NOT NULL,
+  ALTER COLUMN email_call_summary SET DEFAULT FALSE,
+  ALTER COLUMN email_call_summary SET NOT NULL,
+  ALTER COLUMN email_appointment SET DEFAULT FALSE,
+  ALTER COLUMN email_appointment SET NOT NULL,
+  ALTER COLUMN sms_new_lead SET DEFAULT FALSE,
+  ALTER COLUMN sms_new_lead SET NOT NULL,
+  ALTER COLUMN sms_urgent SET DEFAULT FALSE,
+  ALTER COLUMN sms_urgent SET NOT NULL,
+  ALTER COLUMN notification_email SET DEFAULT '',
+  ALTER COLUMN notification_email SET NOT NULL,
+  ALTER COLUMN notification_phone SET DEFAULT '',
+  ALTER COLUMN notification_phone SET NOT NULL;
 
 CREATE TABLE IF NOT EXISTS organization_account_preferences (
   organization_id UUID PRIMARY KEY REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -157,6 +181,30 @@ CREATE TABLE IF NOT EXISTS organization_account_preferences (
 INSERT INTO organization_account_preferences (organization_id)
 SELECT id FROM organizations
 ON CONFLICT (organization_id) DO NOTHING;
+
+-- This generic JSON document retains only unrelated internal settings. It is
+-- not an operational email/SMS authority and cannot acquire notification keys.
+UPDATE organization_account_preferences
+   SET preferences = preferences - ARRAY[
+     'emailEnabled', 'emailCallSummary', 'emailAppointment', 'smsEnabled',
+     'smsUrgent', 'emailAddress', 'smsNumber', 'email_new_lead',
+     'email_call_summary', 'email_appointment', 'sms_new_lead', 'sms_urgent',
+     'notification_email', 'notification_phone', 'notificationPreferences',
+     'notifications'
+   ]::TEXT[];
+
+ALTER TABLE organization_account_preferences
+  DROP CONSTRAINT IF EXISTS organization_account_preferences_no_notifications;
+ALTER TABLE organization_account_preferences
+  ADD CONSTRAINT organization_account_preferences_no_notifications CHECK (
+    NOT (preferences ?| ARRAY[
+      'emailEnabled', 'emailCallSummary', 'emailAppointment', 'smsEnabled',
+      'smsUrgent', 'emailAddress', 'smsNumber', 'email_new_lead',
+      'email_call_summary', 'email_appointment', 'sms_new_lead', 'sms_urgent',
+      'notification_email', 'notification_phone', 'notificationPreferences',
+      'notifications'
+    ]::TEXT[])
+  );
 
 CREATE TABLE IF NOT EXISTS organization_onboarding (
   organization_id UUID PRIMARY KEY REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -294,5 +342,3 @@ UPDATE organization_memberships
    SET status = 'suspended', updated_at = NOW()
  WHERE user_id = '00000000-0000-0000-0000-000000000002'
    AND status = 'active';
-
-COMMIT;

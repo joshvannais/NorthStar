@@ -57,7 +57,7 @@
             <p>Get a text message for every new lead</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" checked id="smsEnabled">
+            <input type="checkbox" id="smsEnabled">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -72,13 +72,24 @@
             <p>Get an email summary for every new lead</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" checked id="emailEnabled">
+            <input type="checkbox" id="emailEnabled">
             <span class="toggle-slider"></span>
           </label>
         </div>
         <div class="form-group" style="margin-top:8px;">
           <label for="emailAddress">Notification Email</label>
           <input type="email" id="emailAddress" placeholder="you@example.com">
+        </div>
+        <div class="integration-card" aria-live="polite">
+          <div class="icon">🔒</div>
+          <div class="info">
+            <h4>Account-security email</h4>
+            <p>Mandatory and not controlled by operational notification preferences. <span id="securityEmailAddress"></span></p>
+          </div>
+          <label class="toggle" aria-label="Account-security email is mandatory">
+            <input type="checkbox" checked disabled>
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
 
@@ -260,8 +271,8 @@
       const user = account.user || {};
       const organization = account.organization || {};
       if (organization.name) document.getElementById('companyName').value = organization.name;
-      if (user.email) document.getElementById('emailAddress').value = user.email;
       if (user.phone) document.getElementById('companyPhone').value = user.phone;
+      document.getElementById('securityEmailAddress').textContent = settingsState.securityEmailAddress || user.email || '';
       Object.entries(settingsState).forEach(([key, val]) => {
         const el = document.getElementById(key);
         if (el) {
@@ -285,6 +296,9 @@
         const el = document.getElementById(id);
         if (el) settings[id] = el.checked;
       });
+      settings.emailCallSummary = settingsState.emailCallSummary === true;
+      settings.emailAppointment = settingsState.emailAppointment === true;
+      settings.smsUrgent = settingsState.smsUrgent === true;
 
       // Save contacts too
       const contacts = getContacts();
@@ -292,7 +306,7 @@
 
       settingsState = settings;
       await NorthStarAccountSession.json('/api/account/preferences', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsState),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(settingsState)),
       });
       showToast('✅ Settings saved successfully!');
     }
@@ -303,10 +317,17 @@
       return Array.isArray(settingsState.contacts) ? settingsState.contacts : [];
     }
 
+    function writableSettings(value) {
+      const result = Object.assign({}, value || {});
+      delete result.securityEmailMandatory;
+      delete result.securityEmailAddress;
+      return result;
+    }
+
     function saveContacts(contacts) {
       settingsState.contacts = contacts;
       NorthStarAccountSession.json('/api/account/preferences', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsState),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(settingsState)),
       }).catch(function(error) { showToast(error.message, 'error'); });
       renderContacts();
     }

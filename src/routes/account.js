@@ -1,50 +1,155 @@
 'use strict';
 
 const express = require('express');
-const db = require('../db');
-const { requireActiveAccount } = require('../auth/middleware');
+const { AccountRepository } = require('../accounts/repository');
+const { requireTenantAccess } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 
 const router = express.Router();
+const INTERNAL_KEYS = new Set([
+  'companyName', 'companyPhone', 'services', 'companyInfo', 'greeting',
+  'smartRouting', 'contacts',
+]);
+const NOTIFICATION_KEYS = new Set([
+  'emailEnabled', 'emailCallSummary', 'emailAppointment', 'smsEnabled',
+  'smsUrgent', 'emailAddress', 'smsNumber',
+]);
+const READ_ONLY_KEYS = new Set(['securityEmailMandatory', 'securityEmailAddress']);
 
 function requestId(req) {
   return req.requestId || req.correlationId || 'unavailable';
 }
 
-router.get('/preferences', requireActiveAccount, async (req, res) => {
-  try {
-    const result = await db.query(
-      'SELECT preferences FROM organization_account_preferences WHERE organization_id = $1',
-      [req.tenantContext.organizationId]
-    );
-    if (!result || result.rows.length !== 1) {
-      return res.status(503).json({ error: 'Account preferences are unavailable', code: 'preferences_unavailable', requestId: requestId(req) });
+function unavailable(req, res) {
+  return res.status(503).json({
+    error: 'Account preferences are unavailable',
+    code: 'preferences_unavailable',
+    requestId: requestId(req),
+  });
+}
+
+function invalid(req, res) {
+  return res.status(400).json({
+    error: 'Account preferences are invalid',
+    code: 'invalid_preferences',
+    requestId: requestId(req),
+  });
+}
+
+function cleanInternalPreferences(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const result = {};
+  for (const key of INTERNAL_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+    const item = source[key];
+    if (key === 'smartRouting') {
+      if (typeof item === 'boolean') result[key] = item;
+      continue;
     }
-    return res.json({ preferences: result.rows[0].preferences, requestId: requestId(req) });
+    if (key === 'contacts') {
+      if (!Array.isArray(item) || item.length > 100) continue;
+      const contacts = [];
+      let valid = true;
+      for (const contact of item) {
+        if (!contact || typeof contact !== 'object' || Array.isArray(contact)) {
+          valid = false;
+          break;
+        }
+        const name = typeof contact.name === 'string' ? contact.name.trim() : '';
+        const phone = typeof contact.phone === 'string' ? contact.phone.trim() : '';
+        if (!name || name.length > 100 || !phone || phone.length > 50) {
+          valid = false;
+          break;
+        }
+        contacts.push({ name, phone });
+      }
+      if (valid) result[key] = contacts;
+      continue;
+    }
+    if (typeof item === 'string' && item.length <= 10000) result[key] = item;
+  }
+  return result;
+}
+
+function projectPreferences(row, securityEmail) {
+  return {
+    ...cleanInternalPreferences(row.internal_preferences),
+    emailEnabled: Boolean(row.email_new_lead),
+    emailCallSummary: Boolean(row.email_call_summary),
+    emailAppointment: Boolean(row.email_appointment),
+    smsEnabled: Boolean(row.sms_new_lead),
+    smsUrgent: Boolean(row.sms_urgent),
+    emailAddress: row.notification_email || '',
+    smsNumber: row.notification_phone || '',
+    securityEmailMandatory: true,
+    securityEmailAddress: securityEmail || '',
+  };
+}
+
+function parsePreferences(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      Buffer.byteLength(JSON.stringify(body), 'utf8') > 32768) return null;
+  const keys = Object.keys(body);
+  if (keys.some(key => READ_ONLY_KEYS.has(key) ||
+      (!NOTIFICATION_KEYS.has(key) && !INTERNAL_KEYS.has(key)))) return null;
+  if ([...NOTIFICATION_KEYS].some(key => !Object.prototype.hasOwnProperty.call(body, key))) return null;
+  for (const key of ['emailEnabled', 'emailCallSummary', 'emailAppointment', 'smsEnabled', 'smsUrgent']) {
+    if (typeof body[key] !== 'boolean') return null;
+  }
+  if (typeof body.emailAddress !== 'string' || typeof body.smsNumber !== 'string') return null;
+  const email = body.emailAddress.trim().toLowerCase();
+  const phone = body.smsNumber.trim();
+  if (email.length > 254 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return null;
+  if (phone.length > 50 || (phone && !/^[+\d\s().-]+$/.test(phone))) return null;
+
+  const internal = cleanInternalPreferences(body);
+  for (const key of INTERNAL_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(body, key) &&
+        !Object.prototype.hasOwnProperty.call(internal, key)) return null;
+  }
+  return {
+    notification: {
+      emailNewLead: body.emailEnabled,
+      emailCallSummary: body.emailCallSummary,
+      emailAppointment: body.emailAppointment,
+      smsNewLead: body.smsEnabled,
+      smsUrgent: body.smsUrgent,
+      notificationEmail: email,
+      notificationPhone: phone,
+    },
+    internal,
+  };
+}
+
+router.get('/preferences', requireTenantAccess, async (req, res) => {
+  try {
+    const stored = await new AccountRepository().accountPreferences(req.tenantContext.organizationId);
+    if (!stored) return unavailable(req, res);
+    return res.json({
+      preferences: projectPreferences(stored, req.user.email),
+      requestId: requestId(req),
+    });
   } catch (_error) {
-    return res.status(503).json({ error: 'Account preferences are unavailable', code: 'preferences_unavailable', requestId: requestId(req) });
+    return unavailable(req, res);
   }
 });
 
-router.put('/preferences', requireActiveAccount, requirePermission('settings', 'update'), async (req, res) => {
-  const preferences = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : null;
-  if (!preferences || Buffer.byteLength(JSON.stringify(preferences), 'utf8') > 32768) {
-    return res.status(400).json({ error: 'Account preferences are invalid', code: 'invalid_preferences', requestId: requestId(req) });
-  }
+router.put('/preferences', requireTenantAccess, requirePermission('settings', 'update'), async (req, res) => {
+  const parsed = parsePreferences(req.body);
+  if (!parsed) return invalid(req, res);
   try {
-    const result = await db.query(
-      `UPDATE organization_account_preferences
-          SET preferences = $2::jsonb, updated_at = NOW()
-        WHERE organization_id = $1
-        RETURNING preferences`,
-      [req.tenantContext.organizationId, JSON.stringify(preferences)]
+    const stored = await new AccountRepository().updateAccountPreferences(
+      req.tenantContext.organizationId,
+      parsed.notification,
+      parsed.internal
     );
-    if (!result || result.rows.length !== 1) {
-      return res.status(503).json({ error: 'Account preferences are unavailable', code: 'preferences_unavailable', requestId: requestId(req) });
-    }
-    return res.json({ preferences: result.rows[0].preferences, requestId: requestId(req) });
+    if (!stored) return unavailable(req, res);
+    return res.json({
+      preferences: projectPreferences(stored, req.user.email),
+      requestId: requestId(req),
+    });
   } catch (_error) {
-    return res.status(503).json({ error: 'Account preferences are unavailable', code: 'preferences_unavailable', requestId: requestId(req) });
+    return unavailable(req, res);
   }
 });
 

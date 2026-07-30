@@ -128,20 +128,14 @@
       var closeBtn = document.getElementById('navCloseBtn');
       var overlay = document.getElementById('mobileOverlay');
       var signOut = document.getElementById('navSignOut');
-      var desktopSignOut = document.querySelector('[data-account-logout]');
       var themeBtn = document.getElementById('navThemeToggle');
 
       if (hamburger) hamburger.onclick = toggleMobileMenu;
       if (closeBtn) closeBtn.onclick = toggleMobileMenu;
       if (overlay) overlay.onclick = toggleMobileMenu;
-      function signOutAccount(event) {
-        if (event) event.preventDefault();
-        closeMenu();
-        if (window.NorthStarAccountSession) window.NorthStarAccountSession.logout();
-        return false;
-      }
-      if (signOut) signOut.onclick = signOutAccount;
-      if (desktopSignOut) desktopSignOut.onclick = signOutAccount;
+      // The shared account client owns one delegated logout listener so every
+      // surface receives the same durable success/failure behavior.
+      if (signOut) signOut.setAttribute('data-account-logout', '');
       if (themeBtn) themeBtn.onclick = function() {
         if (window.NorthStarTheme && window.NorthStarTheme.toggleTheme) {
           window.NorthStarTheme.toggleTheme();

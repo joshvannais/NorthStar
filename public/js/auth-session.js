@@ -4,6 +4,7 @@
   var account = null;
   var pendingLoad = null;
   var refreshInFlight = null;
+  var logoutInFlight = null;
 
   function cookie(name) {
     var prefix = name + '=';
@@ -83,8 +84,29 @@
     });
   }
 
+  function showVerificationStatus(next) {
+    if (!document.body) return;
+    var id = 'northstar-verification-status';
+    var notice = document.getElementById(id);
+    var pending = Boolean(next && next.user && next.user.status === 'pending_verification');
+    var protectedPage = global.location.pathname === '/dashboard' || global.location.pathname.indexOf('/dashboard/') === 0;
+    if (!pending || !protectedPage) {
+      if (notice) notice.remove();
+      return;
+    }
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.id = id;
+      notice.setAttribute('role', 'status');
+      notice.style.cssText = 'position:relative;z-index:50;padding:10px 16px;text-align:center;background:#fff7d6;color:#5c4700;border-bottom:1px solid #ecd36a;font:600 13px/1.4 system-ui,sans-serif;';
+      document.body.insertBefore(notice, document.body.firstChild);
+    }
+    notice.textContent = 'Email verification is pending. Your tenant dashboard and Business Profile remain available; external actions stay disabled.';
+  }
+
   function publish(next) {
     account = next || null;
+    showVerificationStatus(account);
     global.dispatchEvent(new CustomEvent('northstar:account', { detail: account }));
     return account;
   }
@@ -101,8 +123,7 @@
 
   function destination(value) {
     if (!value || !value.user) return '/login';
-    if (value.user.status === 'pending_verification') return '/account/pending';
-    if (value.onboarding && value.onboarding.status === 'business_profile_required') {
+    if (value.onboarding && value.onboarding.status !== 'complete') {
       return '/dashboard/business-profile';
     }
     return '/dashboard';
@@ -113,11 +134,14 @@
     var protectedPage = path === '/dashboard' || path.indexOf('/dashboard/') === 0 || path === '/account/pending';
     if (!protectedPage) return Promise.resolve(null);
     return load().then(function (value) {
-      var target = destination(value);
-      var allowedBusinessProfile = path === '/dashboard/business-profile' && target === '/dashboard/business-profile';
-      var allowedPending = path === '/account/pending' && target === '/account/pending';
-      var completeDashboard = target === '/dashboard' && (path === '/dashboard' || path.indexOf('/dashboard/') === 0);
-      if (!allowedBusinessProfile && !allowedPending && !completeDashboard) global.location.replace(target);
+      // A current tenant session may load its dashboard and onboarding pages
+      // regardless of email verification. Server-side action gates enforce
+      // onboarding, verification, membership, role, and tenant boundaries.
+      var verified = value && value.user && value.user.status === 'active';
+      var incomplete = !value || !value.onboarding || value.onboarding.status !== 'complete';
+      if (verified && incomplete && path !== '/dashboard/business-profile') {
+        global.location.replace('/dashboard/business-profile');
+      }
       return value;
     }).catch(function () {
       if (path !== '/login') global.location.replace('/login');
@@ -141,13 +165,77 @@
     }).then(function () { return load(true); });
   }
 
+  function logoutFailureMessage(error) {
+    if (error && error.code === 'csrf_invalid') {
+      return 'Logout could not be confirmed. Refresh this page and try again.';
+    }
+    if (error && (error.status === 503 || error.code === 'account_authority_unavailable')) {
+      return 'Logout could not be confirmed because the account service is temporarily unavailable. Please retry.';
+    }
+    return 'Logout could not be confirmed. Check your connection and try again.';
+  }
+
+  function showLogoutFailure(error) {
+    if (!document.body) return;
+    var status = document.getElementById('northstar-logout-status');
+    if (!status) {
+      status = document.createElement('div');
+      status.id = 'northstar-logout-status';
+      status.setAttribute('data-account-logout-error', '');
+      status.setAttribute('role', 'alert');
+      status.style.cssText = 'position:fixed;z-index:10000;right:16px;bottom:16px;max-width:420px;padding:12px 16px;border-radius:8px;background:#7f1d1d;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.24);font:600 14px/1.4 system-ui,sans-serif;';
+      document.body.appendChild(status);
+    }
+    status.textContent = logoutFailureMessage(error);
+    status.hidden = false;
+  }
+
+  function clearLogoutFailure() {
+    var status = document.getElementById('northstar-logout-status');
+    if (status) status.remove();
+  }
+
   function logout() {
-    return json('/api/auth/logout', { method: 'POST' })
-      .catch(function () { return null; })
-      .then(function () {
+    if (logoutInFlight) return logoutInFlight;
+    clearLogoutFailure();
+    logoutInFlight = json('/api/auth/logout', { method: 'POST' })
+      .then(function (body) {
+        if (!body || body.success !== true) {
+          var error = new Error('Logout was not confirmed');
+          error.code = 'logout_unconfirmed';
+          throw error;
+        }
         publish(null);
         global.location.assign('/login');
+        return true;
+      })
+      .catch(function (error) {
+        showLogoutFailure(error);
+        global.dispatchEvent(new CustomEvent('northstar:logout-failed', {
+          detail: Object.freeze({
+            code: error && error.code ? error.code : 'logout_unconfirmed',
+            status: error && error.status ? error.status : 0,
+          }),
+        }));
+        throw error;
+      })
+      .finally(function () { logoutInFlight = null; });
+    return logoutInFlight;
+  }
+
+  function bindLogoutControls() {
+    var root = document.documentElement;
+    if (root.getAttribute('data-northstar-logout-bound') === 'true') return;
+    root.setAttribute('data-northstar-logout-bound', 'true');
+    document.addEventListener('click', function (event) {
+      var target = event.target && event.target.closest
+        ? event.target.closest('[data-account-logout]') : null;
+      if (!target) return;
+      event.preventDefault();
+      logout().catch(function () {
+        // The durable failure is already rendered and remains retryable.
       });
+    });
   }
 
   global.NorthStarAccountSession = Object.freeze({
@@ -180,6 +268,13 @@
     };
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', guard);
-  else guard();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      bindLogoutControls();
+      guard();
+    });
+  } else {
+    bindLogoutControls();
+    guard();
+  }
 })(window);

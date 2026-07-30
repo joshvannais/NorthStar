@@ -227,8 +227,16 @@ class AccountService {
   }
 
   async logout(rawRefresh, headerCsrf, cookieCsrf) {
-    const csrf = await this.validateRefreshCsrf(rawRefresh, headerCsrf, cookieCsrf);
-    await this.repository.revokeSession(csrf.authority.session_id, 'logout');
+    if (!rawRefresh || !headerCsrf || !cookieCsrf || !credentials.safeEqual(headerCsrf, cookieCsrf)) {
+      throw new AccountError(403, 'csrf_invalid', 'CSRF validation failed');
+    }
+    const result = await this.repository.revokeSessionForLogout({
+      presentedTokenHash: credentials.hashToken(rawRefresh),
+      csrfTokenHash: credentials.hashToken(headerCsrf),
+    });
+    if (!result || !['revoked', 'confirmed_revoked'].includes(result.outcome)) {
+      throw new AccountError(403, 'csrf_invalid', 'CSRF validation failed');
+    }
   }
 }
 

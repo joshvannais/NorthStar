@@ -68,8 +68,10 @@ class AccountRepository {
       );
       await client.query(
         `INSERT INTO notification_preferences (
-           id, organization_id, notification_email, notification_phone
-         ) VALUES ($1, $2, $3, $4)`,
+           id, organization_id, email_new_lead, email_call_summary,
+           email_appointment, sms_new_lead, sms_urgent,
+           notification_email, notification_phone
+         ) VALUES ($1, $2, FALSE, FALSE, FALSE, FALSE, FALSE, $3, $4)`,
         [input.preferencesId, input.organizationId, input.email, input.phone]
       );
       await client.query(
@@ -79,7 +81,7 @@ class AccountRepository {
       );
       await client.query(
         `INSERT INTO organization_onboarding (organization_id, status)
-         VALUES ($1, 'pending_verification')`,
+         VALUES ($1, 'business_profile_required')`,
         [input.organizationId]
       );
       await client.query(
@@ -111,7 +113,7 @@ class AccountRepository {
         userStatus: 'pending_verification',
         membershipStatus: 'active',
         role: 'owner',
-        onboardingStatus: 'pending_verification',
+        onboardingStatus: 'business_profile_required',
       };
     });
   }
@@ -257,6 +259,84 @@ class AccountRepository {
     return rows(result)[0] || null;
   }
 
+  async accountPreferences(organizationId) {
+    const result = await this.requirePool().query(
+      `SELECT notification.email_new_lead,
+              notification.email_call_summary,
+              notification.email_appointment,
+              notification.sms_new_lead,
+              notification.sms_urgent,
+              notification.notification_email,
+              notification.notification_phone,
+              account.preferences AS internal_preferences
+         FROM notification_preferences notification
+         JOIN organization_account_preferences account
+           ON account.organization_id = notification.organization_id
+        WHERE notification.organization_id = $1`,
+      [organizationId]
+    );
+    return rows(result)[0] || null;
+  }
+
+  async updateAccountPreferences(organizationId, notification, internalPreferences) {
+    try {
+      return await this.transaction(async client => {
+        const authority = await client.query(
+          `SELECT notification.organization_id
+             FROM notification_preferences notification
+             JOIN organization_account_preferences account
+               ON account.organization_id = notification.organization_id
+            WHERE notification.organization_id = $1
+            FOR UPDATE OF notification, account`,
+          [organizationId]
+        );
+        if (authority.rowCount !== 1) return null;
+
+        const notificationResult = await client.query(
+          `UPDATE notification_preferences
+              SET email_new_lead = $2,
+                  email_call_summary = $3,
+                  email_appointment = $4,
+                  sms_new_lead = $5,
+                  sms_urgent = $6,
+                  notification_email = $7,
+                  notification_phone = $8,
+                  updated_at = NOW()
+            WHERE organization_id = $1
+            RETURNING email_new_lead, email_call_summary, email_appointment,
+                      sms_new_lead, sms_urgent, notification_email, notification_phone`,
+          [
+            organizationId,
+            notification.emailNewLead,
+            notification.emailCallSummary,
+            notification.emailAppointment,
+            notification.smsNewLead,
+            notification.smsUrgent,
+            notification.notificationEmail,
+            notification.notificationPhone,
+          ]
+        );
+        const internalResult = await client.query(
+          `UPDATE organization_account_preferences
+              SET preferences = $2::jsonb, updated_at = NOW()
+            WHERE organization_id = $1
+            RETURNING preferences`,
+          [organizationId, JSON.stringify(internalPreferences)]
+        );
+        if (notificationResult.rowCount !== 1 || internalResult.rowCount !== 1) {
+          throw new Error('Account preference authority update was incomplete');
+        }
+        return {
+          ...notificationResult.rows[0],
+          internal_preferences: internalResult.rows[0].preferences,
+        };
+      });
+    } catch (error) {
+      if (error instanceof AccountPersistenceError) throw error;
+      throw new AccountPersistenceError('PostgreSQL account preferences are unavailable', error);
+    }
+  }
+
   async rotateRefresh(input) {
     return this.transaction(async client => {
       const result = await client.query(
@@ -381,21 +461,73 @@ class AccountRepository {
     return rows(result)[0] || null;
   }
 
-  async revokeSession(sessionId, reason) {
-    return this.transaction(async client => {
-      await client.query(
-        `UPDATE auth_sessions
-            SET status = 'revoked', revoked_at = NOW(), revoke_reason = $2
-          WHERE id = $1 AND status = 'active'`,
-        [sessionId, reason]
-      );
-      await client.query(
-        `UPDATE auth_refresh_tokens
-            SET status = 'revoked', revoked_at = NOW(), revoke_reason = $2
-          WHERE session_id = $1 AND status = 'active'`,
-        [sessionId, reason]
-      );
-    });
+  async revokeSessionForLogout(input) {
+    try {
+      return await this.transaction(async client => {
+        const authorityResult = await client.query(
+          `SELECT token.id AS token_id,
+                  token.session_id,
+                  token.family_id,
+                  token.status AS token_status,
+                  token.revoke_reason AS token_revoke_reason,
+                  token.expires_at AS token_expires_at,
+                  session.status AS session_status,
+                  session.revoke_reason AS session_revoke_reason,
+                  session.refresh_expires_at,
+                  session.csrf_token_hash
+             FROM auth_refresh_tokens token
+             JOIN auth_sessions session ON session.id = token.session_id
+            WHERE token.token_hash = $1
+            FOR UPDATE OF token, session`,
+          [input.presentedTokenHash]
+        );
+        const authority = rows(authorityResult)[0];
+        const csrfMatches = authority && authority.csrf_token_hash === input.csrfTokenHash;
+        if (csrfMatches && authority.token_status === 'revoked' &&
+            authority.session_status === 'revoked' &&
+            authority.token_revoke_reason === 'logout' &&
+            authority.session_revoke_reason === 'logout') {
+          return { outcome: 'confirmed_revoked', sessionId: authority.session_id };
+        }
+        const invalid = !csrfMatches || authority.token_status !== 'active' ||
+          authority.session_status !== 'active' ||
+          new Date(authority.token_expires_at).getTime() <= Date.now() ||
+          new Date(authority.refresh_expires_at).getTime() <= Date.now();
+        if (invalid) return { outcome: 'invalid' };
+
+        await client.query(
+          `SELECT id
+             FROM auth_refresh_tokens
+            WHERE session_id = $1 OR family_id = $2
+            FOR UPDATE`,
+          [authority.session_id, authority.family_id]
+        );
+        const sessionResult = await client.query(
+          `UPDATE auth_sessions
+              SET status = 'revoked', revoked_at = NOW(), revoke_reason = 'logout'
+            WHERE id = $1 AND status = 'active'
+            RETURNING id`,
+          [authority.session_id]
+        );
+        if (sessionResult.rowCount !== 1) {
+          throw new Error('Durable logout session revocation was incomplete');
+        }
+        const tokenResult = await client.query(
+          `UPDATE auth_refresh_tokens
+              SET status = 'revoked', revoked_at = NOW(), revoke_reason = 'logout'
+            WHERE (session_id = $1 OR family_id = $2) AND status = 'active'
+            RETURNING id`,
+          [authority.session_id, authority.family_id]
+        );
+        if (tokenResult.rowCount < 1 || !tokenResult.rows.some(row => row.id === authority.token_id)) {
+          throw new Error('Durable logout refresh revocation was incomplete');
+        }
+        return { outcome: 'revoked', sessionId: authority.session_id };
+      });
+    } catch (error) {
+      if (error instanceof AccountPersistenceError) throw error;
+      throw new AccountPersistenceError('PostgreSQL logout revocation is unavailable', error);
+    }
   }
 
   async consumeRateLimit(eventType, keyHash, options) {

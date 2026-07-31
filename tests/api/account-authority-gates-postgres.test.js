@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
+const { fork } = require('child_process');
 const jwt = require('jsonwebtoken');
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
@@ -21,6 +22,33 @@ function cookies(response) {
 
 function cookieHeader(values) {
   return Object.entries(values).map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join('; ');
+}
+
+function runProductionCapabilityWorker(connectionString, configuration, marker, expectEnabled = false) {
+  return new Promise((resolve, reject) => {
+    const child = fork(path.resolve(__dirname, '../helpers/account-production-capability-worker.js'), [], {
+      cwd: path.resolve(__dirname, '../..'),
+      env: {
+        ...process.env,
+        DATABASE_URL: connectionString,
+        AUTH_ACCESS_SECRET: crypto.randomBytes(48).toString('hex'),
+      },
+      silent: true,
+    });
+    let stderr = '';
+    let outcome;
+    child.stderr.on('data', chunk => { stderr += chunk.toString(); });
+    child.on('message', message => {
+      if (message.type === 'result') outcome = message;
+      if (message.type === 'error') reject(new Error(`${message.message}\n${stderr}`));
+    });
+    child.on('error', reject);
+    child.on('exit', code => {
+      if (code !== 0 || !outcome) reject(new Error(`capability worker exited ${code}\n${stderr}`));
+      else resolve(outcome);
+    });
+    child.send({ configuration, marker, expectEnabled });
+  });
 }
 
 describe('mounted account authority gates on required PostgreSQL 18', () => {
@@ -184,6 +212,71 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     const after = await pool.query('SELECT count(*)::int AS count FROM organizations');
     expect(after.rows[0].count).toBe(before.rows[0].count);
   });
+
+  test('fresh production construction rejects every malformed SMTP capability before mounted signup effects', async () => {
+    const valid = {
+      PUBLIC_ORIGIN: 'https://app.example.test', SMTP_HOST: 'smtp.example.test',
+      SMTP_PORT: '587', SMTP_USER: 'smtp-user', SMTP_PASS: 'private-secret',
+      TRANSACTIONAL_EMAIL_FROM: 'security@example.test', ACCOUNT_SIGNUP_ENABLED: 'true',
+      ACCOUNT_VERIFICATION_DELIVERY_READY: 'true',
+    };
+    const invalid = [
+      ['dot', { SMTP_HOST: '.' }], ['double-dot-only', { SMTP_HOST: '..' }],
+      ['leading-dot', { SMTP_HOST: '.smtp.example.test' }],
+      ['trailing-dot', { SMTP_HOST: 'smtp.example.test.' }],
+      ['empty-label', { SMTP_HOST: 'smtp..example.test' }],
+      ['leading-hyphen', { SMTP_HOST: '-smtp.example.test' }],
+      ['trailing-hyphen', { SMTP_HOST: 'smtp-.example.test' }],
+      ['oversized-label', { SMTP_HOST: `smtp.${'a'.repeat(64)}.test` }],
+      ['oversized-host', { SMTP_HOST: `${Array.from({ length: 43 }, () => 'aaaaa').join('.')}.test` }],
+      ['leading-space', { SMTP_HOST: ' smtp.example.test' }],
+      ['trailing-space', { SMTP_HOST: 'smtp.example.test ' }],
+      ['scheme', { SMTP_HOST: 'https://smtp.example.test' }],
+      ['port', { SMTP_HOST: 'smtp.example.test:587' }],
+      ['credentials', { SMTP_HOST: 'user@smtp.example.test' }],
+      ['path', { SMTP_HOST: 'smtp.example.test/path' }],
+      ['backslash', { SMTP_HOST: 'smtp\\example.test' }],
+      ['cr', { SMTP_HOST: 'smtp\r.example.test' }],
+      ['lf', { SMTP_HOST: 'smtp\n.example.test' }],
+      ['del', { SMTP_HOST: `smtp${String.fromCharCode(127)}.example.test` }],
+      ['unicode', { SMTP_HOST: 'smtp.exÃ¤mple.test' }],
+      ['one-label', { SMTP_HOST: 'localhost' }],
+      ['missing-user', { SMTP_USER: '' }],
+      ['user-controls', { SMTP_USER: 'smtp-user\r\nAUTH attacker' }],
+      ['missing-password', { SMTP_PASS: '' }],
+      ['password-control', { SMTP_PASS: 'private\nsecret' }],
+      ['invalid-port', { SMTP_PORT: '25' }],
+      ['suffixed-port', { SMTP_PORT: '587suffix' }],
+      ['missing-sender', { TRANSACTIONAL_EMAIL_FROM: '' }],
+      ['sender-injection', { TRANSACTIONAL_EMAIL_FROM: 'security@example.test\r\nBcc:x@example.test' }],
+      ['sender-list', { TRANSACTIONAL_EMAIL_FROM: 'one@example.test,two@example.test' }],
+      ['sender-domain', { TRANSACTIONAL_EMAIL_FROM: 'security@localhost' }],
+      ['insecure-origin', { PUBLIC_ORIGIN: 'http://app.example.test' }],
+      ['origin-path', { PUBLIC_ORIGIN: 'https://app.example.test/path' }],
+    ];
+    for (const [label, mutation] of invalid) {
+      const result = await runProductionCapabilityWorker(
+        allocation.connectionString, { ...valid, ...mutation }, `invalid-${label}`
+      );
+      expect(result.status).toBe(503);
+      expect(result.cookies).toEqual([]);
+      expect(result.after).toEqual(result.before);
+      expect(result.transportConstructions).toBe(0);
+      expect(result.sends).toBe(0);
+      expect(result.dnsCalls + result.netCalls + result.tlsCalls).toBe(0);
+      const rejectedValue = String(Object.values(mutation)[0]);
+      if (rejectedValue.length >= 8) expect(result.disclosure).not.toContain(rejectedValue);
+    }
+
+    const positive = await runProductionCapabilityWorker(
+      allocation.connectionString, valid, 'valid-local-capture', true
+    );
+    expect(positive.status).toBe(202);
+    expect(positive.cookies).toEqual([]);
+    expect(positive.transportConstructions).toBe(1);
+    expect(positive.sends).toBe(1);
+    expect(positive.dnsCalls + positive.netCalls + positive.tlsCalls).toBe(0);
+  }, 180000);
 
   test('pending user reads its tenant dashboard, opens/saves onboarding, and remains unverified', async () => {
     const created = await signup('pending-gates@example.test');

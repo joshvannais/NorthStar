@@ -223,7 +223,7 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
   });
 
   async function createVerifiedOwner(label) {
-    const email = `jobber-${label}-${crypto.randomUUID()}@example.test`;
+    const email = `jobber-${crypto.randomUUID()}@example.test`;
     await pool.query("DELETE FROM auth_rate_limits WHERE event_type = 'signup_ip'");
     const signup = await request(app).post('/api/auth/signup').send({
       name: `Jobber ${label} Owner`,

@@ -421,8 +421,8 @@ async function assertMigration010Absent(connectionString) {
 async function migrationLedgerPreservationSnapshot(connectionString) {
   return queryWithClient(connectionString, async client => {
     const rows = await client.query(
-      `SELECT id, filename, applied_at::text AS applied_at
-         FROM _migrations
+      `SELECT to_jsonb(migration_row) AS row
+         FROM _migrations migration_row
         ORDER BY id`
     );
     const columns = await client.query(
@@ -432,10 +432,12 @@ async function migrationLedgerPreservationSnapshot(connectionString) {
         ORDER BY ordinal_position`
     );
     const metadata = await client.query(`
-      SELECT table_class.relacl::text AS table_acl,
+      SELECT table_class.oid::text AS table_oid,
+             table_class.relacl::text AS table_acl,
              obj_description(table_class.oid, 'pg_class') AS table_comment,
              table_class.reloptions AS table_options,
              pg_get_userbyid(table_class.relowner) AS table_owner,
+             sequence_class.oid::text AS sequence_oid,
              sequence_class.relacl::text AS sequence_acl,
              obj_description(sequence_class.oid, 'pg_class') AS sequence_comment,
              sequence_class.reloptions AS sequence_options,
@@ -445,9 +447,133 @@ async function migrationLedgerPreservationSnapshot(connectionString) {
         JOIN pg_class sequence_class ON sequence_class.oid = 'public._migrations_id_seq'::regclass
        WHERE namespace.nspname = 'public' AND table_class.relname = '_migrations'
     `);
-    return { rows: rows.rows, columns: columns.rows, metadata: metadata.rows };
+    const constraintComments = await client.query(`
+      SELECT constraint_record.oid::text AS oid,
+             constraint_record.conname,
+             obj_description(constraint_record.oid, 'pg_constraint') AS comment
+        FROM pg_constraint constraint_record
+       WHERE constraint_record.conrelid = 'public._migrations'::regclass
+       ORDER BY constraint_record.conname
+    `);
+    const indexComments = await client.query(`
+      SELECT index_class.oid::text AS oid,
+             index_class.relname AS index_name,
+             obj_description(index_class.oid, 'pg_class') AS comment
+        FROM pg_index index_record
+        JOIN pg_class index_class ON index_class.oid = index_record.indexrelid
+       WHERE index_record.indrelid = 'public._migrations'::regclass
+       ORDER BY index_class.relname
+    `);
+    const sequenceState = await client.query(`
+      SELECT last_value::text AS last_value,
+             is_called,
+             CASE WHEN is_called THEN last_value + 1 ELSE last_value END::text AS next_value
+        FROM public._migrations_id_seq
+    `);
+    const containment = await client.query(
+      `SELECT to_regclass('public._migrations__canonical_rebuild')::text AS rebuild_relation,
+              (SELECT count(*)::int FROM _migrations WHERE filename = $1) AS migration_010_rows,
+              (SELECT count(*)::int FROM _migrations WHERE filename = $2) AS migration_011_rows`,
+      [MIGRATION_010, MIGRATION_011]
+    );
+    const applicationTables = await client.query(`
+      SELECT table_record.relname AS table_name
+        FROM pg_class table_record
+        JOIN pg_namespace namespace ON namespace.oid = table_record.relnamespace
+       WHERE namespace.nspname = 'public'
+         AND table_record.relkind IN ('r', 'p')
+         AND table_record.relname NOT IN ('_migrations', '_migrations__canonical_rebuild')
+       ORDER BY table_record.relname
+    `);
+    const applicationData = [];
+    let applicationRowCount = 0;
+    for (const { table_name: tableName } of applicationTables.rows) {
+      const quotedTable = '"' + tableName.replace(/"/g, '""') + '"';
+      const tableRows = await client.query(
+        `SELECT to_jsonb(application_row) AS row
+           FROM public.${quotedTable} application_row
+          ORDER BY to_jsonb(application_row)::text`
+      );
+      applicationData.push({ tableName, rows: tableRows.rows });
+      applicationRowCount += tableRows.rowCount;
+    }
+    return {
+      rows: rows.rows,
+      columns: columns.rows,
+      metadata: metadata.rows,
+      constraintComments: constraintComments.rows,
+      indexComments: indexComments.rows,
+      sequenceState: sequenceState.rows,
+      containment: containment.rows,
+      applicationData,
+      applicationRowCount,
+    };
   });
 }
+
+const LEDGER_COMMENT_TARGETS = Object.freeze({
+  primaryConstraint: 'COMMENT ON CONSTRAINT _migrations_pkey ON _migrations IS ',
+  primaryIndex: 'COMMENT ON INDEX _migrations_pkey IS ',
+  filenameConstraint: 'COMMENT ON CONSTRAINT _migrations_filename_key ON _migrations IS ',
+  filenameIndex: 'COMMENT ON INDEX _migrations_filename_key IS ',
+});
+
+function sqlCommentLiteral(value) {
+  return value === null ? 'NULL' : "'" + String(value).replace(/'/g, "''") + "'";
+}
+
+async function setLedgerCatalogComments(client, targetNames, value) {
+  for (const targetName of targetNames) {
+    const statement = LEDGER_COMMENT_TARGETS[targetName];
+    if (!statement) throw new Error('Unknown test-only migration ledger comment target');
+    const targetValue = value && typeof value === 'object' ? value[targetName] : value;
+    await client.query(statement + sqlCommentLiteral(targetValue));
+  }
+}
+
+async function expectCatalogCommentRejection(connectionString, commentValue) {
+  let failure;
+  try {
+    await runProductionMigrations(connectionString);
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(Error);
+  expect(failure.message).toBe('Migration run failed: Unsupported _migrations catalog comments');
+  const forbiddenValues = commentValue && typeof commentValue === 'object'
+    ? Object.values(commentValue)
+    : [commentValue];
+  for (const forbiddenValue of forbiddenValues) {
+    expect(failure.message).not.toContain(String(forbiddenValue));
+  }
+}
+
+const ALL_LEDGER_COMMENT_TARGETS = Object.freeze(Object.keys(LEDGER_COMMENT_TARGETS));
+const LEDGER_CATALOG_COMMENT_CASES = Object.freeze([
+  {
+    name: 'primary-key constraint',
+    targets: ['primaryConstraint'],
+    value: 'primary key constraint comment',
+    canonicalFixture: true,
+  },
+  { name: 'primary-key index', targets: ['primaryIndex'], value: 'primary key index comment' },
+  { name: 'filename unique constraint', targets: ['filenameConstraint'], value: 'filename constraint comment' },
+  { name: 'filename unique index', targets: ['filenameIndex'], value: 'filename index comment' },
+  {
+    name: 'all four catalog objects',
+    targets: ALL_LEDGER_COMMENT_TARGETS,
+    value: Object.freeze({
+      primaryConstraint: 'primary constraint sentinel',
+      primaryIndex: 'primary index sentinel',
+      filenameConstraint: 'filename constraint sentinel',
+      filenameIndex: 'filename index sentinel',
+    }),
+  },
+  { name: 'Unicode content', targets: ['primaryConstraint'], value: 'Ledger Ω 中 🚀 café — проверка' },
+  { name: 'whitespace content', targets: ['primaryIndex'], value: ' \t\n  \r\n ' },
+  { name: 'punctuation content', targets: ['filenameConstraint'], value: "!@#$%^&*()[]{};:'\"<>,.?/\\|`~" },
+  { name: 'long content', targets: ['filenameIndex'], value: '0123456789abcdef'.repeat(1024) },
+]);
 
 describe('production account migration authority on required PostgreSQL 18', () => {
   const allocations = [];
@@ -516,6 +642,21 @@ describe('production account migration authority on required PostgreSQL 18', () 
       } else {
         expect(prepared.hadOuterTransaction).toBe(false);
       }
+    }
+
+    const tamperedDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-migration-010-one-byte-'));
+    try {
+      const sourcePath = path.join(MIGRATIONS_DIRECTORY, MIGRATION_010);
+      const copiedPath = path.join(tamperedDirectory, MIGRATION_010);
+      fs.copyFileSync(sourcePath, copiedPath);
+      const tampered = fs.readFileSync(copiedPath);
+      const byteOffset = Math.floor(tampered.length / 2);
+      tampered[byteOffset] ^= 0x01;
+      fs.writeFileSync(copiedPath, tampered);
+      expect(sha256(fs.readFileSync(sourcePath))).toBe(PROTECTED_MIGRATION_HASHES[MIGRATION_010]);
+      expect(sha256(fs.readFileSync(copiedPath))).not.toBe(PROTECTED_MIGRATION_HASHES[MIGRATION_010]);
+    } finally {
+      fs.rmSync(tamperedDirectory, { recursive: true, force: true });
     }
 
     const variant = '\uFEFF\n-- leading line comment\n/* leading /* nested */ block */\nBEGIN -- owner\n;\n' +
@@ -882,6 +1023,131 @@ describe('production account migration authority on required PostgreSQL 18', () 
     expect(after).toEqual(before);
     await assertMigration010Absent(allocation.connectionString);
   }, 60000);
+
+  test.each(LEDGER_CATALOG_COMMENT_CASES)(
+    '$name comment fails closed with exact catalog, data, sequence, and containment preservation',
+    async ({ name, targets, value, canonicalFixture }) => {
+      const allocation = await database(`migration-ledger-comment-${name}`);
+      if (canonicalFixture) await applyLegacyMigrations(allocation.connectionString);
+      else await installGenuineBaseFixture(allocation.connectionString);
+      await queryWithClient(allocation.connectionString, client =>
+        setLedgerCatalogComments(client, targets, value)
+      );
+      const before = await migrationLedgerPreservationSnapshot(allocation.connectionString);
+      expect(before.applicationRowCount).toBeGreaterThan(0);
+      expect(before.constraintComments.filter(row => row.comment !== null)).toHaveLength(
+        targets.filter(target => target.endsWith('Constraint')).length
+      );
+      expect(before.indexComments.filter(row => row.comment !== null)).toHaveLength(
+        targets.filter(target => target.endsWith('Index')).length
+      );
+      if (value && typeof value === 'object') {
+        const expectedComments = targets.map(target => value[target]);
+        expect(new Set(expectedComments).size).toBe(targets.length);
+        expect([
+          ...before.constraintComments.map(row => row.comment),
+          ...before.indexComments.map(row => row.comment),
+        ].filter(comment => comment !== null).sort()).toEqual(expectedComments.sort());
+      }
+
+      await expectCatalogCommentRejection(allocation.connectionString, value);
+
+      const after = await migrationLedgerPreservationSnapshot(allocation.connectionString);
+      expect(after).toEqual(before);
+      await assertMigration010Absent(allocation.connectionString);
+    },
+    120000
+  );
+
+  test('NULL catalog comments are supported and comment removal retries migrations exactly once', async () => {
+    const allocation = await database('migration-ledger-comment-retry');
+    await installGenuineBaseFixture(allocation.connectionString);
+    const value = 'temporary comment before bounded retry';
+    await queryWithClient(allocation.connectionString, client =>
+      setLedgerCatalogComments(client, ALL_LEDGER_COMMENT_TARGETS, value)
+    );
+    const rejectedBefore = await migrationLedgerPreservationSnapshot(allocation.connectionString);
+    await expectCatalogCommentRejection(allocation.connectionString, value);
+    expect(await migrationLedgerPreservationSnapshot(allocation.connectionString)).toEqual(rejectedBefore);
+
+    await queryWithClient(allocation.connectionString, client =>
+      setLedgerCatalogComments(client, ALL_LEDGER_COMMENT_TARGETS, null)
+    );
+    await runProductionMigrations(allocation.connectionString);
+    await runProductionMigrations(allocation.connectionString);
+    await queryWithClient(allocation.connectionString, async client => {
+      const state = await client.query(
+        `SELECT
+           (SELECT count(*)::int FROM _migrations WHERE filename = $1) AS migration_010_rows,
+           (SELECT count(*)::int FROM _migrations WHERE filename = $2) AS migration_011_rows,
+           to_regclass('public._migrations__canonical_rebuild')::text AS rebuild_relation,
+           (SELECT count(*)::int
+              FROM pg_constraint constraint_record
+             WHERE constraint_record.conrelid = 'public._migrations'::regclass
+               AND obj_description(constraint_record.oid, 'pg_constraint') IS NOT NULL) AS constraint_comments,
+           (SELECT count(*)::int
+              FROM pg_index index_record
+             WHERE index_record.indrelid = 'public._migrations'::regclass
+               AND obj_description(index_record.indexrelid, 'pg_class') IS NOT NULL) AS index_comments`,
+        [MIGRATION_010, MIGRATION_011]
+      );
+      expect(state.rows).toEqual([{
+        migration_010_rows: 1,
+        migration_011_rows: 1,
+        rebuild_relation: null,
+        constraint_comments: 0,
+        index_comments: 0,
+      }]);
+    });
+  }, 120000);
+
+  test('two concurrent production runners both reject catalog comments without mutation', async () => {
+    const allocation = await database('migration-ledger-comment-concurrency');
+    await installGenuineBaseFixture(allocation.connectionString);
+    const value = 'concurrent catalog comment rejection';
+    await queryWithClient(allocation.connectionString, client =>
+      setLedgerCatalogComments(client, ALL_LEDGER_COMMENT_TARGETS, value)
+    );
+    const before = await migrationLedgerPreservationSnapshot(allocation.connectionString);
+    const blocker = new Client({ connectionString: allocation.connectionString });
+    await blocker.connect();
+    await blocker.query('BEGIN');
+    await blocker.query('LOCK TABLE _migrations IN ACCESS EXCLUSIVE MODE');
+
+    const names = [`migration-comment-a-${process.pid}`, `migration-comment-b-${process.pid}`];
+    const workers = names.map(name => startMigrationWorker(allocation.connectionString, name));
+    workers.forEach(child => children.add(child));
+    try {
+      await Promise.all(workers.map(child => waitForMessage(child, 'ready')));
+      const results = workers.map(child =>
+        waitForMessage(child, 'result', 30000).then(() => 'unexpected_success', error => error.message)
+      );
+      workers.forEach(child => child.send({ type: 'run' }));
+      const locks = await queryWithClient(allocation.connectionString, client => poll(async () => {
+        const result = await client.query(
+          `SELECT application.application_name, lock_record.granted
+             FROM pg_locks lock_record
+             JOIN pg_stat_activity application ON application.pid = lock_record.pid
+            WHERE lock_record.locktype = 'advisory'
+              AND application.application_name = ANY($1::text[])
+            ORDER BY application.application_name, lock_record.granted`,
+          [names]
+        );
+        return result.rows.some(row => row.granted === true) && result.rows.some(row => row.granted === false)
+          ? result.rows : null;
+      }, 'serialized catalog-comment rejection'));
+      expect(locks.filter(row => row.granted)).toHaveLength(1);
+      expect(locks.filter(row => !row.granted)).toHaveLength(1);
+      await blocker.query('COMMIT');
+      expect(await Promise.all(results)).toEqual(['migration_failed', 'migration_failed']);
+      await Promise.all(workers.map(child => waitForExit(child)));
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      await blocker.end();
+    }
+    expect(await migrationLedgerPreservationSnapshot(allocation.connectionString)).toEqual(before);
+    await assertMigration010Absent(allocation.connectionString);
+  }, 120000);
 
   test('ledger insertion failure rolls migration 010 schema back and a fault-free retry commits exactly once', async () => {
     const allocation = await database('migration-ledger-fault');

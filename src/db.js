@@ -616,6 +616,23 @@ async function createCanonicalMigrationLedger(client) {
   `);
 }
 
+async function assertMigrationLedgerCatalogCommentsAbsent(client) {
+  const comments = await client.query(`
+    SELECT
+      (SELECT count(*)::int
+         FROM pg_constraint constraint_record
+        WHERE constraint_record.conrelid = 'public._migrations'::regclass
+          AND obj_description(constraint_record.oid, 'pg_constraint') IS NOT NULL) AS constraint_comments,
+      (SELECT count(*)::int
+         FROM pg_index index_record
+        WHERE index_record.indrelid = 'public._migrations'::regclass
+          AND obj_description(index_record.indexrelid, 'pg_class') IS NOT NULL) AS index_comments
+  `);
+  if (comments.rows[0].constraint_comments !== 0 || comments.rows[0].index_comments !== 0) {
+    throw new Error('Unsupported _migrations catalog comments');
+  }
+}
+
 async function readMigrationLedgerSequencePosition(client) {
   const state = (await client.query(`
     SELECT last_value::text AS last_value, is_called
@@ -634,11 +651,13 @@ async function normalizeMigrationLedger(client) {
   let ledger = await inspectMigrationLedger(client);
   if (!ledger) {
     await createCanonicalMigrationLedger(client);
+    await assertMigrationLedgerCatalogCommentsAbsent(client);
     return;
   }
 
   await client.query('LOCK TABLE public._migrations IN ACCESS EXCLUSIVE MODE');
   ledger = await inspectMigrationLedger(client);
+  await assertMigrationLedgerCatalogCommentsAbsent(client);
   const canonicalShape = isCanonicalMigrationLedger(ledger);
   if (!canonicalShape) validateSupportedLegacyLedger(ledger);
   const sequencePosition = await readMigrationLedgerSequencePosition(client);

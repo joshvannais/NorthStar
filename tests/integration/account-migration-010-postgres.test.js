@@ -6,7 +6,13 @@ const os = require('os');
 const path = require('path');
 const { fork, spawnSync } = require('child_process');
 const { Client, Pool } = require('pg');
-const { runMigrations, stripOuterTransaction } = require('../../src/db');
+const {
+  PROTECTED_LEGACY_MIGRATION_CHECKSUMS,
+  canonicalizeMigrationChecksumBytes,
+  loadMigrations,
+  runMigrations,
+  stripOuterTransaction,
+} = require('../../src/db');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 
 const ROOT = path.resolve(__dirname, '../..');
@@ -45,17 +51,7 @@ const BRANCH_ERA_LEDGER_DDL = `
     applied_at TIMESTAMP NULL DEFAULT NOW()
   )
 `;
-const LEGACY_HASHES = Object.freeze({
-  '001_initial_schema.sql': 'dbbcad4947474777a61a3b230aa8aca54b9a3ef4257301368e39731fa05307e9',
-  '002_seed_data.sql': '4b124ac5713caaddc4f2316e8c055c6235eb17881c5b4ba5d0edef481a8a63ff',
-  '003_voice_sessions.sql': 'd37d402df2792a015b6d1f9d3e0f72226298f9a4d9ec7551f629e52c677f41c2',
-  '004_canonical_persistence_v2.sql': '946b1819dd4c5205637e9fae91f3b36c28c1688e401f1f2f5b67ffba7d2e1651',
-  '005_canonical_organization_authority.sql': '4065d873dd204935cfbd8ea8abe45d2b0b44e80df38ef203359d2863d37c5379',
-  '006_canonical_voice_sessions.sql': '236809d3b87367804bbd6c28ccaaca27408fa340020ab3d3b48e3e81da203ec2',
-  '007_canonical_tax_authority.sql': 'a5f2c8c78fc339790f2993c997ea2cd50134a9ed97de93267cd470b18ea408a6',
-  '008_canonical_demo_authority.sql': 'c157ac2c10f07bf933b4774ac14584ecc580f93108926b5e53acbfed28263ef2',
-  '009_canonical_voice_provider_identity.sql': '6ec531dbb385607818c4a70ae69bab7f5d85ff98565d61ad8026c20ef68634fe',
-});
+const LEGACY_HASHES = PROTECTED_LEGACY_MIGRATION_CHECKSUMS;
 const PROTECTED_MIGRATION_HASHES = Object.freeze({
   ...LEGACY_HASHES,
   [MIGRATION_010]: '0087278b1fb0062ba88a4dd7e4699e2e5c4c98d78e822193e2e7c0bff5c9ca48',
@@ -433,11 +429,14 @@ function expectCanonicalMigrationLedger(snapshot) {
 
 async function installGenuineBaseFixture(connectionString, options = {}) {
   const files = Object.keys(LEGACY_HASHES);
+  const migrations = new Map(
+    loadMigrations(MIGRATIONS_DIRECTORY).map(migration => [migration.file, migration])
+  );
   await queryWithClient(connectionString, async client => {
     await client.query(options.ledgerDdl || GENUINE_BASE_LEDGER_DDL);
     for (const file of files) {
-      const contents = fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, file), 'utf8');
-      const migration = stripOuterTransaction(contents);
+      const migration = migrations.get(file);
+      if (!migration) throw new Error(`Required historical migration fixture is missing: ${file}`);
       await client.query('BEGIN');
       try {
         await client.query(migration.sql);
@@ -1047,7 +1046,9 @@ describe('production account migration authority on required PostgreSQL 18', () 
     );
     expect(before).toHaveLength(productionMigrationFiles().length);
     for (const row of before) {
-      expect(String(row.checksum).trim()).toBe(sha256(fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, row.filename))));
+      expect(String(row.checksum).trim()).toBe(sha256(
+        canonicalizeMigrationChecksumBytes(fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, row.filename)))
+      ));
     }
 
     await runProductionMigrations(allocation.connectionString);

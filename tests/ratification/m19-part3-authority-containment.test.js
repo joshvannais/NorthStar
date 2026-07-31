@@ -36,13 +36,13 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
       for (const match of browserAuthority.matchAll(expression)) storageKeys.push(match[1]);
     }
     expect(new Set(storageKeys)).toEqual(new Set([
-      'northstarSessionOwner', 'northstarSessionId', 'token', 'user', 'northstar-theme',
+      'northstarSessionOwner', 'northstarSessionId', 'northstar-theme',
     ]));
     expect(appStore.match(/localStorage\.setItem/g) || []).toHaveLength(1);
     expect(appStore).toContain("localStorage.setItem('northstar-theme', value)");
     expect(appStore).not.toMatch(/sessionStorage\.(?:getItem|setItem|removeItem)/);
-    expect(canonicalClient).toContain("safeStorage(global.localStorage, 'token')");
-    expect(canonicalClient).toContain("safeStorage(global.localStorage, 'user')");
+    expect(canonicalClient).not.toContain("safeStorage(global.localStorage, 'token')");
+    expect(canonicalClient).not.toContain("safeStorage(global.localStorage, 'user')");
     expect(canonicalClient).toContain("safeStorage(global.sessionStorage, 'northstarSessionId')");
   });
 

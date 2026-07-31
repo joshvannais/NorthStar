@@ -24,12 +24,11 @@ function isConfigured() {
 /**
  * Generate the OAuth 2.0 authorization URL for a contractor to connect their Jobber account.
  */
-function getAuthUrl(userId, redirectBase) {
+function getAuthUrl(state, redirectBase) {
   if (!isConfigured()) return null;
   const clientId = process.env.JOBBER_CLIENT_ID;
   const redirectUri = `${redirectBase}/api/integrations/jobber/callback`;
-  const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
-  return `${JOBBER_AUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}`;
+  return `${JOBBER_AUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${encodeURIComponent(state)}`;
 }
 
 /**
@@ -49,11 +48,14 @@ function exchangeCode(code, redirectBase) {
       headers: { 'Content-Type': 'application/json', 'Content-Length': data.length }
     }, (res) => {
       let body = '';
-      res.on('data', chunk => body += chunk);
+      const accepted = Number(res.statusCode) >= 200 && Number(res.statusCode) < 300;
+      res.on('data', chunk => { if (accepted) body += chunk; });
       res.on('end', () => {
+        if (!accepted) return reject(new Error('Jobber token exchange rejected'));
         try { resolve(JSON.parse(body)); }
         catch (e) { reject(new Error('Failed to parse token response')); }
       });
+      res.on('error', reject);
     });
     req.on('error', reject);
     req.write(data);
@@ -145,15 +147,17 @@ async function getTokens(userId) {
  * Save Jobber tokens for a user.
  */
 async function saveTokens(userId, accessToken, refreshToken, expiresIn) {
-  if (!db.isAvailable()) return;
+  if (!db.isAvailable()) return false;
   const expiresAt = new Date(Date.now() + (expiresIn || 3600) * 1000);
   try {
-    await db.query(
+    const result = await db.query(
       'UPDATE users SET jobber_access_token = $1, jobber_refresh_token = $2, jobber_token_expires = $3 WHERE id = $4',
       [accessToken, refreshToken, expiresAt, userId]
     );
+    return Boolean(result && result.rowCount === 1);
   } catch (err) {
-    console.error('[Jobber] Save tokens error:', err.message);
+    console.error('[Jobber] Token persistence failed');
+    return false;
   }
 }
 

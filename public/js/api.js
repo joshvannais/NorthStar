@@ -19,14 +19,10 @@ const API = {
   async request(method, path, body) {
     const headers = { 'Content-Type': 'application/json' };
     
-    // Attach auth token if available
-    const token = localStorage.getItem('token');
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
     const options = { method, headers };
     if (body) options.body = JSON.stringify(body);
 
-    const res = await fetch(`${this.base}${path}`, options);
+    const res = await window.NorthStarAccountSession.fetch(`${this.base}${path}`, options);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Request failed');
     return data;

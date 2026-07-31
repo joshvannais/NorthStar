@@ -3,7 +3,7 @@
 const express = require('express');
 const db = require('../db');
 const config = require('../config');
-const { requireAuth } = require('../auth/middleware');
+const { requireTenantAccess, requireVerifiedExternalAction } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { handleWebhook, rawBodyCapture } = require('../voice/webhook');
 const { createCanonicalVoiceCall } = require('../services/canonicalVoiceSessionCreation');
@@ -29,7 +29,7 @@ router.post('/webhook',
   handleWebhook
 );
 
-router.get('/sessions', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+router.get('/sessions', requireTenantAccess, requirePermission('calls', 'read'), async function (req, res) {
   try {
     const sessions = await voiceSessions.listSessions(db.getPool(), organizationId(req), req.query.all === 'true');
     return res.json({ sessions, count: sessions.length });
@@ -38,7 +38,7 @@ router.get('/sessions', requireAuth, requirePermission('calls', 'read'), async f
   }
 });
 
-router.get('/sessions/:id', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+router.get('/sessions/:id', requireTenantAccess, requirePermission('calls', 'read'), async function (req, res) {
   try {
     return res.json({ session: await voiceSessions.getSession(db.getPool(), organizationId(req), req.params.id) });
   } catch (error) {
@@ -46,7 +46,7 @@ router.get('/sessions/:id', requireAuth, requirePermission('calls', 'read'), asy
   }
 });
 
-router.post('/call', requireAuth, requirePermission('leads', 'create'), async function (req, res) {
+router.post('/call', requireVerifiedExternalAction, requirePermission('calls', 'create'), async function (req, res) {
   try {
     const created = await createCanonicalVoiceCall({
       pool: db.getPool(),
@@ -79,8 +79,8 @@ async function sessionTimeline(req, res) {
   }
 }
 
-router.get('/sessions/:id/timeline', requireAuth, requirePermission('calls', 'read'), sessionTimeline);
-router.get('/sessions/:id/transcript', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+router.get('/sessions/:id/timeline', requireTenantAccess, requirePermission('calls', 'read'), sessionTimeline);
+router.get('/sessions/:id/transcript', requireTenantAccess, requirePermission('calls', 'read'), async function (req, res) {
   try {
     const entries = await voiceSessions.timeline(db.getPool(), organizationId(req), req.params.id);
     const segments = entries.filter(function (entry) { return entry.event === 'transcript' || entry.event === 'transcript_ready'; });
@@ -89,7 +89,7 @@ router.get('/sessions/:id/transcript', requireAuth, requirePermission('calls', '
     return errorResponse(res, error);
   }
 });
-router.get('/sessions/:id/guidance', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+router.get('/sessions/:id/guidance', requireTenantAccess, requirePermission('calls', 'read'), async function (req, res) {
   try {
     const entries = await voiceSessions.timeline(db.getPool(), organizationId(req), req.params.id);
     const guidance = entries.filter(function (entry) { return entry.event === 'guidance'; });
@@ -98,7 +98,7 @@ router.get('/sessions/:id/guidance', requireAuth, requirePermission('calls', 're
     return errorResponse(res, error);
   }
 });
-router.get('/sessions/:id/escalation', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+router.get('/sessions/:id/escalation', requireTenantAccess, requirePermission('calls', 'read'), async function (req, res) {
   try {
     const session = await voiceSessions.getSession(db.getPool(), organizationId(req), req.params.id);
     return res.json({ sessionId: req.params.id, isEscalating: session.status === 'escalating', status: session.status });
@@ -123,14 +123,14 @@ async function runtimeAction(req, res, action) {
   }
 }
 
-router.post('/sessions/:id/handoff', requireAuth, requirePermission('calls', 'update'), function (req, res) {
+router.post('/sessions/:id/handoff', requireVerifiedExternalAction, requirePermission('calls', 'update'), function (req, res) {
   return runtimeAction(req, res, 'handoff');
 });
-router.post('/sessions/:id/cancel', requireAuth, requirePermission('calls', 'update'), function (req, res) {
+router.post('/sessions/:id/cancel', requireVerifiedExternalAction, requirePermission('calls', 'update'), function (req, res) {
   return runtimeAction(req, res, 'cancel');
 });
 
-router.get('/status', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+router.get('/status', requireTenantAccess, requirePermission('calls', 'read'), async function (req, res) {
   try {
     const sessions = await voiceSessions.listSessions(db.getPool(), organizationId(req), false);
     return res.json({
@@ -143,7 +143,7 @@ router.get('/status', requireAuth, requirePermission('calls', 'read'), async fun
   }
 });
 
-router.get('/dashboard', requireAuth, requirePermission('calls', 'read'), async function (req, res) {
+router.get('/dashboard', requireTenantAccess, requirePermission('calls', 'read'), async function (req, res) {
   try {
     const sessions = await voiceSessions.listSessions(db.getPool(), organizationId(req), true);
     return res.json({
@@ -158,7 +158,7 @@ router.get('/dashboard', requireAuth, requirePermission('calls', 'read'), async 
 function retired(_req, res) {
   return res.status(410).json({ success: false, error: { code: 'LEGACY_AUTHORITY_RETIRED', message: 'This process-local voice endpoint has been retired.' } });
 }
-router.post('/context/refresh', requireAuth, retired);
-router.get('/events/history', requireAuth, retired);
+router.post('/context/refresh', requireTenantAccess, retired);
+router.get('/events/history', requireTenantAccess, retired);
 
 module.exports = router;

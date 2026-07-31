@@ -242,15 +242,11 @@ window.CustomerDetail = (function() {
   // ── Data Fetching ──
 
   function _authHeaders() {
-    var headers = {};
-    var token = null;
-    try { token = localStorage.getItem('token'); } catch(e) {}
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    return headers;
+    return {};
   }
 
   function _authFetch(url) {
-    return fetch(url, { headers: _authHeaders() }).then(function(r) { return r.json(); });
+    return window.NorthStarAccountSession.fetch(url, { headers: _authHeaders() }).then(function(r) { return r.json(); });
   }
 
   function fetchAll(customerId) {

@@ -113,20 +113,18 @@ window.PolarisApi = (function () {
   function simulateLead(data) {
     data = data || {};
     var context = requireClient().synchronizeAuthority();
-    var token = localStorage.getItem('token');
-    if (!token || !context.userId) return Promise.reject(new Error('Authentication is required.'));
+    if (!context.userId) return Promise.reject(new Error('Authentication is required.'));
     var key = data.idempotencyKey;
     if (!key && window.crypto && typeof window.crypto.randomUUID === 'function') key = window.crypto.randomUUID();
     if (!key) return Promise.reject(new Error('An idempotency key is required.'));
     var body = Object.assign({}, data);
     delete body.idempotencyKey;
     var headers = {
-      Authorization: 'Bearer ' + token,
       'Content-Type': 'application/json',
       'Idempotency-Key': String(key),
     };
     if (context.sessionId) headers['X-NorthStar-Session-ID'] = context.sessionId;
-    return fetch('/api/v1/simulations/leads', {
+    return window.NorthStarAccountSession.fetch('/api/v1/simulations/leads', {
       method: 'POST',
       headers: headers,
       credentials: 'same-origin',

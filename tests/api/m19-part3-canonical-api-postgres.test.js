@@ -30,6 +30,7 @@ const migrations = [
   '007_canonical_tax_authority.sql',
   '008_canonical_demo_authority.sql',
   '009_canonical_voice_provider_identity.sql',
+  '010_account_session_authority.sql',
 ];
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const USER_A = '00000000-0000-0000-0000-000000000002';
@@ -144,7 +145,6 @@ function headers(organizationId, userId, sessionId) {
     'X-Test-Organization': organizationId,
     'X-Test-User': userId,
     'X-NorthStar-Session-ID': sessionId,
-    Authorization: 'Bearer test-' + userId,
   };
 }
 

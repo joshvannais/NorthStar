@@ -3,7 +3,11 @@
 const express = require('express');
 const db = require('../db');
 const audit = require('../audit/client');
-const { requireAuth } = require('../auth/middleware');
+const {
+  requireOnboardedInternal,
+  requireTenantAccess,
+  requireVerifiedExternalAction,
+} = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
 const { bindIntegrationOwner } = require('../services/organizationAuthority');
@@ -437,7 +441,9 @@ function createDependencies(options) {
   const supplied = options || {};
   return {
     poolProvider: supplied.poolProvider || function () { return db.getPool(); },
-    auth: supplied.auth || requireAuth,
+    auth: supplied.auth || requireTenantAccess,
+    onboardedAuth: supplied.onboardedAuth || supplied.auth || requireOnboardedInternal,
+    externalAuth: supplied.externalAuth || supplied.auth || requireVerifiedExternalAction,
     permission: supplied.permission || requirePermission,
     audit: supplied.audit || audit,
   };
@@ -550,7 +556,7 @@ function createCanonicalRouter(options) {
     }
   });
 
-  router.patch('/appointments/:id', dependencies.auth, requireCanonicalContext, dependencies.permission('calendar', 'update'), express.json(), async function (req, res) {
+  router.patch('/appointments/:id', dependencies.onboardedAuth, requireCanonicalContext, dependencies.permission('calendar', 'update'), express.json(), async function (req, res) {
     const context = requestContext(req);
     if (!UUID.test(req.params.id)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } });
     try {
@@ -605,7 +611,7 @@ function createCanonicalRouter(options) {
     }
   });
 
-  router.put('/integrations/:provider', dependencies.auth, requireCanonicalContext, dependencies.permission('integrations', 'update'), express.json(), async function (req, res) {
+  router.put('/integrations/:provider', dependencies.externalAuth, requireCanonicalContext, dependencies.permission('integrations', 'update'), express.json(), async function (req, res) {
     const context = requestContext(req);
     const provider = String(req.params.provider || '').toLowerCase();
     if (!['retell', 'voice'].includes(provider)) {

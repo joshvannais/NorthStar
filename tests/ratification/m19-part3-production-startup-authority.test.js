@@ -59,16 +59,17 @@ describe('production startup calculation authority', () => {
     const originalPort = process.env.PORT;
     const originalDatabaseUrl = process.env.DATABASE_URL;
     const originalDemoOrganizationId = process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
+    const originalAuthAccessSecret = process.env.AUTH_ACCESS_SECRET;
     delete process.env.DATABASE_URL;
     delete process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
+    process.env.AUTH_ACCESS_SECRET = require('crypto').randomBytes(48).toString('hex');
     process.env.PORT = '0';
     jest.resetModules();
-    let server;
     try {
       const normal = require('../../src/server');
-      server = await normal.start();
-      const mounted = request(server);
-      expect((await mounted.get('/api/health')).status).toBe(200);
+      await expect(normal.start()).rejects.toThrow('PostgreSQL startup authority is unavailable');
+      const mounted = request(normal.app);
+      expect((await mounted.get('/api/health')).status).toBe(503);
       expect((await mounted.get('/api/v1/polaris/status')).status).toBe(410);
       expect((await mounted.get('/api/v1/financial/metrics')).status).toBe(401);
       expect((await mounted.post('/api/v1/simulations/leads').send({ service: 'fence' })).status).toBe(401);
@@ -79,11 +80,12 @@ describe('production startup calculation authority', () => {
       for (const banned of BANNED_FILES) expect(loaded).not.toContain(banned);
       expect(loaded.filter(file => /^src\/polaris\/.*-engine\.js$/.test(file))).toEqual([]);
     } finally {
-      if (server) await new Promise(resolve => server.close(resolve));
       if (originalPort === undefined) delete process.env.PORT; else process.env.PORT = originalPort;
       if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = originalDatabaseUrl;
       if (originalDemoOrganizationId === undefined) delete process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
       else process.env.NORTHSTAR_DEMO_ORGANIZATION_ID = originalDemoOrganizationId;
+      if (originalAuthAccessSecret === undefined) delete process.env.AUTH_ACCESS_SECRET;
+      else process.env.AUTH_ACCESS_SECRET = originalAuthAccessSecret;
     }
   }, 30000);
 });

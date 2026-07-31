@@ -428,10 +428,7 @@ class CalendarData {
       constructor() { this.baseUrl = '/api/v1/calendar'; }
 
       _authHeaders() {
-        var headers = {};
-        var token = localStorage.getItem('token');
-        if (token) headers['Authorization'] = 'Bearer ' + token;
-        return headers;
+        return {};
       }
 
       async fetchEvents() {
@@ -454,7 +451,7 @@ class CalendarData {
           var headers = Object.assign({'Content-Type':'application/json'}, this._authHeaders());
           var context = window.CanonicalIntelligence.synchronizeAuthority();
           if (context.sessionId) headers['X-NorthStar-Session-ID'] = context.sessionId;
-          const r = await fetch('/api/v1/canonical/appointments/' + encodeURIComponent(id), {
+          const r = await window.NorthStarAccountSession.fetch('/api/v1/canonical/appointments/' + encodeURIComponent(id), {
             method:'PATCH', headers:headers, body:JSON.stringify({ scheduledStart:start, scheduledEnd:end, status:'scheduled' })
           });
           const d = await r.json();
@@ -471,12 +468,12 @@ class CalendarData {
       }
 
       async exportICS() {
-        try { const r = await fetch(`${this.baseUrl}/export/ics`, { headers: this._authHeaders() }); const blob = await r.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'calendar.ics'; a.click(); URL.revokeObjectURL(url); }
+        try { const r = await window.NorthStarAccountSession.fetch(`${this.baseUrl}/export/ics`, { headers: this._authHeaders() }); const blob = await r.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'calendar.ics'; a.click(); URL.revokeObjectURL(url); }
         catch(e) { console.warn('[CalendarData] exportICS:', e.message); }
       }
 
       async importICS(icsContent) {
-        try { const r = await fetch(`${this.baseUrl}/import/ics`, { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify({icsContent}) }); return await r.json(); }
+        try { const r = await window.NorthStarAccountSession.fetch(`${this.baseUrl}/import/ics`, { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, this._authHeaders()), body:JSON.stringify({icsContent}) }); return await r.json(); }
         catch(e) { console.warn('[CalendarData] importICS:', e.message); return null; }
       }
     }

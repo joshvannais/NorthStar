@@ -8,15 +8,20 @@ import subprocess
 
 
 PAGES = (
+    "public/account/pending.html",
     "public/dashboard.html",
     "public/dashboard/business-profile.html",
     "public/dashboard/calendar.html",
     "public/dashboard/command-center.html",
     "public/dashboard/communications.html",
     "public/dashboard/executive-brief.html",
+    "public/dashboard/integrations.html",
     "public/dashboard/lead.html",
     "public/dashboard/leads.html",
     "public/dashboard/polaris.html",
+    "public/dashboard/settings.html",
+    "public/login.html",
+    "public/signup.html",
 )
 
 

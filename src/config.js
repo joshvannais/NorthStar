@@ -3,6 +3,13 @@ require('dotenv').config();
 const config = {
   port: parseInt(process.env.PORT || '3000', 10),
 
+  auth: {
+    accessSecret: process.env.AUTH_ACCESS_SECRET || process.env.JWT_SECRET,
+    accessMinutes: parseInt(process.env.AUTH_ACCESS_MINUTES || '15', 10),
+    refreshDays: parseInt(process.env.AUTH_REFRESH_DAYS || '30', 10),
+    secureCookies: process.env.NODE_ENV === 'production',
+  },
+
   // Retell AI
   retell: {
     apiKey: process.env.RETELL_API_KEY,
@@ -34,17 +41,26 @@ const config = {
     pass: process.env.SMTP_PASS,
   },
 
-  // Notifications
-  notifications: {
-    phone: process.env.NOTIFICATION_PHONE,
-    email: process.env.NOTIFICATION_EMAIL,
-  },
-
   // Calendar
   calendar: {
     type: process.env.CALENDAR_TYPE || 'google',
     credentials: process.env.GOOGLE_CALENDAR_CREDENTIALS,
   },
+};
+
+config.validateRuntime = function validateRuntime() {
+  const failures = [];
+  if (!config.auth.accessSecret || Buffer.byteLength(config.auth.accessSecret, 'utf8') < 32) {
+    failures.push('AUTH_ACCESS_SECRET must contain at least 32 bytes');
+  }
+  if (!Number.isInteger(config.auth.accessMinutes) || config.auth.accessMinutes < 1 || config.auth.accessMinutes > 60) {
+    failures.push('AUTH_ACCESS_MINUTES must be an integer from 1 through 60');
+  }
+  if (!Number.isInteger(config.auth.refreshDays) || config.auth.refreshDays < 1 || config.auth.refreshDays > 90) {
+    failures.push('AUTH_REFRESH_DAYS must be an integer from 1 through 90');
+  }
+  if (failures.length) throw new Error(`Invalid runtime configuration: ${failures.join('; ')}`);
+  return true;
 };
 
 module.exports = config;

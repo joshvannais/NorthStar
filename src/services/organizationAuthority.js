@@ -112,6 +112,17 @@ async function putBusinessProfile(pool, input) {
       [input.organizationId, versionNumber, versionLabel, JSON.stringify(rawProfile),
         JSON.stringify(normalized), normalized.hash, input.userId || null]
     );
+    await client.query(
+      `INSERT INTO organization_onboarding (
+         organization_id, status, active_business_profile_id, completed_at
+       ) VALUES ($1, 'complete', $2, NOW())
+       ON CONFLICT (organization_id) DO UPDATE SET
+         status = 'complete',
+         active_business_profile_id = EXCLUDED.active_business_profile_id,
+         completed_at = NOW(),
+         updated_at = NOW()`,
+      [input.organizationId, inserted.rows[0].id]
+    );
     return projectProfile(inserted.rows[0]);
   });
 }

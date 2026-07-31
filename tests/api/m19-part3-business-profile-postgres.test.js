@@ -3,6 +3,7 @@
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
+const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ORG_A = '41000000-0000-0000-0000-000000000001';
@@ -34,13 +35,13 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
   let originalDatabaseUrl;
   let db;
   let app;
-  let generateToken;
+  let authHeaders;
   let putBusinessProfile;
   let getActiveBusinessProfile;
   let baselineA;
 
   function auth(userId) {
-    return { Authorization: 'Bearer ' + generateToken({ id: userId, email: userId + '@profile.test', name: userId }) };
+    return authHeaders.get(userId);
   }
 
   beforeAll(async () => {
@@ -70,7 +71,6 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     }
     ({ putBusinessProfile, getActiveBusinessProfile } = require('../../src/services/organizationAuthority'));
     ({ app } = require('../../src/server'));
-    ({ generateToken } = require('../../src/auth/middleware'));
   }, 60000);
 
   beforeEach(async () => {
@@ -86,6 +86,15 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       userId: OWNER_B,
       profile: profileFor('Canonical Editor B', { taxRatePercent: 4, emergencyMultiplier: 2, travelCustomerChargePerMile: 3 }),
     });
+    authHeaders = new Map();
+    for (const [userId, organizationId, role] of [
+      [OWNER_A, ORG_A, 'owner'],
+      [VIEWER_A, ORG_A, 'viewer'],
+      [OWNER_B, ORG_B, 'owner'],
+    ]) {
+      const session = await provisionDurableSession(pool, { userId, organizationId, role });
+      authHeaders.set(userId, session.headers);
+    }
   });
 
   afterAll(async () => {

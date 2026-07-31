@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>
 
@@ -56,7 +57,7 @@
             <p>Get a text message for every new lead</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" checked id="smsEnabled">
+            <input type="checkbox" id="smsEnabled">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -71,13 +72,24 @@
             <p>Get an email summary for every new lead</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" checked id="emailEnabled">
+            <input type="checkbox" id="emailEnabled">
             <span class="toggle-slider"></span>
           </label>
         </div>
         <div class="form-group" style="margin-top:8px;">
           <label for="emailAddress">Notification Email</label>
           <input type="email" id="emailAddress" placeholder="you@example.com">
+        </div>
+        <div class="integration-card" aria-live="polite">
+          <div class="icon">🔒</div>
+          <div class="info">
+            <h4>Account-security email</h4>
+            <p>Mandatory and not controlled by operational notification preferences. <span id="securityEmailAddress"></span></p>
+          </div>
+          <label class="toggle" aria-label="Account-security email is mandatory">
+            <input type="checkbox" checked disabled>
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
 
@@ -248,23 +260,30 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    // Load saved settings
-    const saved = JSON.parse(localStorage.getItem('settings') || '{}');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    let settingsState = {};
 
-    if (user.businessName) document.getElementById('companyName').value = user.businessName;
-    if (user.email) document.getElementById('emailAddress').value = user.email;
-    if (user.phone) document.getElementById('companyPhone').value = user.phone;
+    async function loadSettings() {
+      const [account, stored] = await Promise.all([
+        NorthStarAccountSession.load(),
+        NorthStarAccountSession.json('/api/account/preferences', { method: 'GET' }),
+      ]);
+      settingsState = stored.preferences || {};
+      const user = account.user || {};
+      const organization = account.organization || {};
+      if (organization.name) document.getElementById('companyName').value = organization.name;
+      if (user.phone) document.getElementById('companyPhone').value = user.phone;
+      document.getElementById('securityEmailAddress').textContent = settingsState.securityEmailAddress || user.email || '';
+      Object.entries(settingsState).forEach(([key, val]) => {
+        const el = document.getElementById(key);
+        if (el) {
+          if (el.type === 'checkbox') el.checked = val;
+          else el.value = val;
+        }
+      });
+      renderContacts();
+    }
 
-    Object.entries(saved).forEach(([key, val]) => {
-      const el = document.getElementById(key);
-      if (el) {
-        if (el.type === 'checkbox') el.checked = val;
-        else el.value = val;
-      }
-    });
-
-    function saveSettings() {
+    async function saveSettings() {
       const fields = ['companyName', 'companyPhone', 'services', 'companyInfo', 'smsNumber', 'emailAddress', 'greeting'];
       const checkboxes = ['smsEnabled', 'emailEnabled', 'smartRouting'];
       const settings = {};
@@ -277,23 +296,39 @@
         const el = document.getElementById(id);
         if (el) settings[id] = el.checked;
       });
+      settings.emailCallSummary = settingsState.emailCallSummary === true;
+      settings.emailAppointment = settingsState.emailAppointment === true;
+      settings.smsUrgent = settingsState.smsUrgent === true;
 
       // Save contacts too
       const contacts = getContacts();
       settings.contacts = contacts;
 
-      localStorage.setItem('settings', JSON.stringify(settings));
+      settingsState = settings;
+      await NorthStarAccountSession.json('/api/account/preferences', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(settingsState)),
+      });
       showToast('✅ Settings saved successfully!');
     }
 
     // ======== Known Contacts (VIP Numbers) ========
 
     function getContacts() {
-      return JSON.parse(localStorage.getItem('vipContacts') || '[]');
+      return Array.isArray(settingsState.contacts) ? settingsState.contacts : [];
+    }
+
+    function writableSettings(value) {
+      const result = Object.assign({}, value || {});
+      delete result.securityEmailMandatory;
+      delete result.securityEmailAddress;
+      return result;
     }
 
     function saveContacts(contacts) {
-      localStorage.setItem('vipContacts', JSON.stringify(contacts));
+      settingsState.contacts = contacts;
+      NorthStarAccountSession.json('/api/account/preferences', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(settingsState)),
+      }).catch(function(error) { showToast(error.message, 'error'); });
       renderContacts();
     }
 
@@ -407,7 +442,7 @@
     }
 
     // Load contacts on page load
-    renderContacts();
+    loadSettings().catch(function(error) { showToast(error.message || 'Settings unavailable', 'error'); });
   </script>
   <script src="/js/api.js"></script>
 <script src="/js/theme.js"></script>

@@ -43,7 +43,10 @@ async function sendLeadNotification(lead, toNumber) {
   const client = getClient();
   if (!client) return;
 
-  const to = toNumber || config.notifications.phone;
+  // Operational recipients are supplied only from the tenant-scoped
+  // notification_preferences projection. Environment and Business Profile
+  // values are not notification authority.
+  const to = typeof toNumber === 'string' ? toNumber.trim() : '';
   const from = config.twilio.phoneNumber;
 
   if (!to || !from) {

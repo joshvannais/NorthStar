@@ -7,8 +7,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Command Center — POLARIS™ — NorthStar Solutions</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <style>
     /* ── Only what's unique to Command Center ── */
@@ -217,6 +215,7 @@
       .cc-pipe-stage::after { display: none !important; }
     }
   </style>
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>
 
@@ -338,14 +337,12 @@
       function apiFetch(url, opts) {
         opts = opts || {};
         opts.headers = opts.headers || {};
-        var token = localStorage.getItem('token');
-        if (token) opts.headers['Authorization'] = 'Bearer ' + token;
         if (opts.body) opts.headers['Content-Type'] = 'application/json';
         if (window.SIM_SESSION_ID) {
           var sep = url.indexOf('?') >= 0 ? '&' : '?';
           url = url + sep + 'sessionId=' + encodeURIComponent(window.SIM_SESSION_ID);
         }
-        return fetch(url, opts);
+        return NorthStarAccountSession.fetch(url, opts);
       }
 
       function fetchWithTimeout(url, timeoutMs) {

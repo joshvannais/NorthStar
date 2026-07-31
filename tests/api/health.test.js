@@ -16,7 +16,7 @@ describe('Phase 4 — API: Health Check System', () => {
   describe('Public Health Endpoints', () => {
     test('GET /api/health reports degraded when PostgreSQL is not initialized', async () => {
       const res = await request(app).get('/api/health');
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(503);
       expect(res.type).toMatch(/json/);
       expect(res.body).toBeDefined();
       expect(res.body.status).toBe('degraded');
@@ -43,8 +43,9 @@ describe('Phase 4 — API: Health Check System', () => {
     endpoints.forEach(ep => {
       test(`GET ${ep} responds appropriately`, async () => {
         const res = await request(app).get(ep);
-        // May be served by frontend (404) or by API (200) or auth-blocked (401)
-        expect([200, 401, 404]).toContain(res.status);
+        // May be served by frontend (404), by API (200), auth-blocked (401),
+        // or fail readiness while PostgreSQL is unavailable (503).
+        expect([200, 401, 404, 503]).toContain(res.status);
       });
     });
   });

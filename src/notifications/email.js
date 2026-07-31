@@ -56,7 +56,10 @@ async function sendLeadNotification(lead, toEmail) {
   const transport = getTransporter();
   if (!transport) return;
 
-  const to = toEmail || config.notifications.email;
+  // Operational recipients are supplied only from the tenant-scoped
+  // notification_preferences projection. Environment and Business Profile
+  // values are not notification authority.
+  const to = typeof toEmail === 'string' ? toEmail.trim() : '';
   if (!to) {
     console.log('[Email] No recipient configured — skipping.');
     return;

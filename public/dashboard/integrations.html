@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/auth-session.js"></script>
 </head>
 <body>
 
@@ -182,10 +183,9 @@
         if (!config) return;
 
         // If already connected, disconnect
-        const saved = localStorage.getItem('northstar_integration_' + type);
+        const saved = null;
         if (saved) {
           if (!confirm('Disconnect from ' + config.title.replace('Connect ', '') + '?')) return;
-          localStorage.removeItem('northstar_integration_' + type);
           updateIntegrationUI(type);
           return;
         }
@@ -229,17 +229,15 @@
           }
         }
 
-        // Store the connection
-        const name = config.fields[0] ? (data[config.fields[0].id] || 'Connected') : 'Connected';
-        const store = { name: name, connectedAt: new Date().toISOString(), ...data };
-        localStorage.setItem('northstar_integration_' + currentIntegration, JSON.stringify(store));
+        // Integration credentials require a canonical server-side provisioning flow.
+        const integrationType = currentIntegration;
         closeModal();
-        updateIntegrationUI(currentIntegration);
-        showToast('✅ Connected to ' + config.title.replace('Connect ', '') + '!');
+        updateIntegrationUI(integrationType);
+        showToast('Server-side integration provisioning is not available from this screen.');
       }
 
       function updateIntegrationUI(type) {
-        const saved = localStorage.getItem('northstar_integration_' + type);
+        const saved = null;
         const statusEl = document.getElementById(type + '-status');
         const btnEl = document.getElementById(type + '-btn');
         const cardEl = document.getElementById('integration-' + type);
@@ -288,42 +286,60 @@
 
       // Jobber integration
       async function connectJobber() {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        if (!user.id) { showToast('Please sign in to connect Jobber'); return; }
         try {
-          const r = await fetch('/api/integrations/jobber/status?userId=' + user.id);
+          const r = await NorthStarAccountSession.fetch('/api/integrations/jobber/status');
           const status = await r.json();
-          if (!status.configured) { showToast('Jobber integration not configured yet. Contact NorthStar support.'); return; }
+          if (!r.ok || status.available !== true || status.configured !== true) {
+            showToast('Jobber integration is not currently available.');
+            return;
+          }
           if (status.connected) {
             if (!confirm('Disconnect Jobber? This will stop lead sync.')) return;
-            await fetch('/api/integrations/jobber/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) });
+            const disconnected = await NorthStarAccountSession.fetch('/api/integrations/jobber/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const result = await disconnected.json();
+            if (!disconnected.ok || result.success !== true) {
+              showToast('Jobber integration is not currently available.');
+              return;
+            }
             document.getElementById('jobber-status').innerHTML = '<span class="status-dot disconnected"></span>Not connected';
             document.getElementById('jobber-btn').textContent = 'Connect';
             showToast('Jobber disconnected');
           } else {
-            window.location.href = '/api/integrations/jobber/auth?userId=' + user.id;
+            window.location.href = '/api/integrations/jobber/auth';
           }
         } catch(e) { showToast('Failed to check Jobber status'); }
       }
       // Check Jobber status on load
       (async function() {
         try {
-          const user = JSON.parse(localStorage.getItem('user') || '{}');
-          if (user.id) {
-            const r = await fetch('/api/integrations/jobber/status?userId=' + user.id);
+          const account = await NorthStarAccountSession.load();
+          if (account.user.id) {
+            const r = await NorthStarAccountSession.fetch('/api/integrations/jobber/status');
             const status = await r.json();
-            if (status.connected) {
+            if (r.ok && status.available === true && status.connected === true) {
               document.getElementById('jobber-status').innerHTML = '<span class="status-dot connected"></span>Connected';
               document.getElementById('jobber-btn').textContent = 'Disconnect';
             }
           }
         } catch(e) {}
       })();
-      // Handle ?jobber=connected from OAuth callback
-      if (window.location.search.includes('jobber=connected')) {
-        showToast('Jobber connected successfully!');
+      // A query string is not evidence of connection. Confirm the durable
+      // server projection before presenting success.
+      (async function confirmJobberCallback() {
+        if (new URLSearchParams(window.location.search).get('jobber') !== 'connected') return;
         window.history.replaceState({}, '', window.location.pathname);
-      }
+        try {
+          const r = await NorthStarAccountSession.fetch('/api/integrations/jobber/status');
+          const status = await r.json();
+          if (r.ok && status.available === true && status.connected === true) {
+            showToast('Jobber connected successfully!');
+          } else {
+            showToast('Jobber connection could not be confirmed.');
+          }
+        } catch (_error) {
+          showToast('Jobber connection could not be confirmed.');
+        }
+      })();
       </script>
       </main>
   </div>

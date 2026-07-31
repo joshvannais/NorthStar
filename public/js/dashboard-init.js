@@ -3,10 +3,11 @@
     // ═══════════════════════════════════════════════════════════════
     // Application State
     // ═══════════════════════════════════════════════════════════════
-    var user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (user.name) {
-      document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your business overview.`;
-    }
+    var user = {};
+    window.NorthStarAccountSession.load().then(function(account) {
+      user = account.user || {};
+      if (user.name) document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}! Here's your business overview.`;
+    }).catch(function() {});
 
     // Dashboard data (live reference to AppStore)
     function getLiveLeads() { if (typeof CommunicationsEngine !== 'undefined' && CommunicationsEngine.getConversations) { return CommunicationsEngine.getConversations(); } return AppStore.getLeads(); }
@@ -19,14 +20,13 @@
     // ═══════════════════════════════════════════════════════════════
     const API_BASE = '/api/v1';
     function getAuthHeaders() {
-      const token = localStorage.getItem('token');
-      return token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+      return { 'Content-Type': 'application/json' };
     }
     async function apiFetch(endpoint, params) {
       var url = API_BASE + endpoint;
       if (params) url += '?' + new URLSearchParams(params).toString();
       try {
-        var resp = await fetch(url, { headers: getAuthHeaders() });
+        var resp = await window.NorthStarAccountSession.fetch(url, { headers: getAuthHeaders() });
         if (!resp.ok) { console.warn('[API] ' + endpoint + ' returned ' + resp.status); return null; }
         var json = await resp.json();
         return json.data || json;
@@ -517,4 +517,3 @@ if (document.readyState === 'loading') {
 } else {
   loadDashboard();
 }
-  

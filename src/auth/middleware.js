@@ -10,6 +10,11 @@
 const db = require('../db');
 const credentials = require('./credentials');
 const { AccountRepository } = require('../accounts/repository');
+const {
+  canMutateInternal,
+  canPerformExternal,
+  projectSubscription,
+} = require('../accounts/subscriptionPolicy');
 
 const trustedTenantRequests = new WeakSet();
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -39,6 +44,7 @@ function attachTenantContext(req, authority, session) {
     onboardingStatus: authority.onboarding_status || null,
     emailVerified: authority.user_status === 'active',
   });
+  const subscription = projectSubscription(authority);
 
   Object.defineProperties(req, {
     user: { value: trustedUser, enumerable: true, configurable: false, writable: false },
@@ -47,6 +53,7 @@ function attachTenantContext(req, authority, session) {
     userRole: { value: role, enumerable: true, configurable: false, writable: false },
     authSession: { value: session ? Object.freeze(session) : null, enumerable: true, configurable: false, writable: false },
     accountAuthority: { value: Object.freeze({ ...authority }), enumerable: false, configurable: false, writable: false },
+    subscriptionAuthority: { value: subscription, enumerable: true, configurable: false, writable: false },
   });
   trustedTenantRequests.add(req);
 }
@@ -77,7 +84,13 @@ async function cookieSession(req, res, token) {
     return sendAuthError(req, res, 503, 'Account authorization is temporarily unavailable', 'authorization_unavailable');
   }
   try {
-    const authority = await new AccountRepository().sessionAuthority(decoded.sid, decoded.sub);
+    // Test applications may inject a repository with a controllable clock at
+    // construction time. Production leaves this absent and always reloads
+    // PostgreSQL clock authority. Request data can never select the repository.
+    const repository = req.app && req.app.locals && req.app.locals.accountRepository;
+    const authority = await (repository && typeof repository.sessionAuthority === 'function'
+      ? repository
+      : new AccountRepository()).sessionAuthority(decoded.sid, decoded.sub);
     if (!authority || authority.session_status !== 'active') {
       return sendAuthError(req, res, 401, 'Session is no longer active', 'session_inactive');
     }
@@ -138,9 +151,15 @@ const requireVerifiedAccount = afterSession(
 );
 
 const requireOnboardedInternal = afterSession(
-  req => req.user.onboardingStatus === 'complete',
-  'onboarding_required',
-  'Completed account onboarding required'
+  req => req.user.onboardingStatus === 'complete' && canMutateInternal(req.subscriptionAuthority),
+  'product_access_required',
+  'Completed onboarding and current subscription access are required'
+);
+
+const requireAccountMutation = afterSession(
+  req => canMutateInternal(req.subscriptionAuthority, { allowPending: true }),
+  'subscription_read_only',
+  'Organization subscription access is read-only'
 );
 
 async function requireVerifiedExternalAction(req, res, next) {
@@ -150,6 +169,9 @@ async function requireVerifiedExternalAction(req, res, next) {
     }
     if (req.user.onboardingStatus !== 'complete') {
       return sendAuthError(req, res, 403, 'Completed account onboarding required', 'onboarding_required');
+    }
+    if (!canPerformExternal(req.subscriptionAuthority)) {
+      return sendAuthError(req, res, 403, 'Organization subscription access is read-only', 'subscription_read_only');
     }
     return next();
   };
@@ -176,6 +198,7 @@ module.exports = {
   requireActiveAccount: requireVerifiedExternalAction,
   requireAdmin,
   requireAuth: requireTenantAccess,
+  requireAccountMutation,
   requireOnboardedInternal,
   requireRole,
   requireSession,

@@ -4,6 +4,8 @@ const db = require('../db');
 const { ingestRetell, ingestVoice } = require('./canonicalGraphService');
 const { getActiveBusinessProfile, resolveIntegrationOwner } = require('./organizationAuthority');
 const voiceSessions = require('./voiceSessionAuthority');
+const { AccountRepository } = require('../accounts/repository');
+const { canPerformExternal, projectSubscription } = require('../accounts/subscriptionPolicy');
 
 const TERMINAL_EVENTS = new Set(['call_ended', 'call_analyzed']);
 const KNOWN_SERVICES = ['fence', 'roofing', 'hvac', 'plumbing', 'electrical', 'concrete'];
@@ -132,6 +134,14 @@ async function ingestRetellPayload(payload, options) {
     const callId = callIdentifier(payload);
     if (!callId) {
       return { status: 400, body: { success: false, error: { code: 'RETELL_CALL_ID_REQUIRED', message: 'Retell call identifier is required.' } } };
+    }
+    const subscription = projectSubscription(
+      await new AccountRepository(pool).expireAndReadSubscription(ownership.organizationId)
+    );
+    if (!canPerformExternal(subscription)) {
+      throw Object.assign(new Error('Organization subscription access is read-only.'), {
+        code: 'SUBSCRIPTION_READ_ONLY', status: 403,
+      });
     }
     const call = callFrom(payload);
     let voiceSession = await voiceSessions.findSessionByProviderIdentity(pool, 'retell', callId);

@@ -21,6 +21,8 @@ const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/c
 const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
 const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const { createAuthRouter } = require('./routes/auth');
+const { AccountService } = require('./accounts/service');
+const { createProductionTransactionalEmail } = require('./email/transactional');
 const accountRoutes = require('./routes/account');
 const db = require('./db');
 const cache = require('./cache/client');
@@ -54,6 +56,9 @@ const pages = {
   '/': 'public/index.html',
   '/login': 'public/login.html',
   '/signup': 'public/signup.html',
+  '/verify-email': 'public/verify-email.html',
+  '/forgot-password': 'public/forgot-password.html',
+  '/reset-password': 'public/reset-password.html',
   '/account/pending': 'public/account/pending.html',
   '/dashboard': 'public/dashboard/command-center.html',
   '/dashboard/executive-brief': 'public/dashboard/executive-brief.html',
@@ -90,9 +95,19 @@ Object.entries(pages).forEach(([route, file]) => {
 });
 
 // --- PostgreSQL Account and Session Authority ---
-// PR A intentionally omits the disposable-test signup capability. Environment
-// values cannot enable public signup; PR B must make a reviewed source change.
-app.use('/api/auth', createAuthRouter());
+// Signup capability exists only when the source-owned production constructor
+// validates complete SMTP delivery configuration and a canonical HTTPS origin.
+// No boolean or request field can enable this boundary.
+const productionTransactionalEmail = createProductionTransactionalEmail(process.env);
+const productionAccountService = new AccountService(undefined, {
+  transactionalEmail: productionTransactionalEmail,
+});
+app.use('/api/auth', createAuthRouter({
+  service: productionAccountService,
+  signup: productionTransactionalEmail
+    ? productionAccountService.signup.bind(productionAccountService)
+    : null,
+}));
 app.use('/api/account', accountRoutes);
 
 // Legacy demo credential minting is retired. Canonical demo access requires a
@@ -170,7 +185,7 @@ async function start() {
     console.log(`  ${baseUrl}/admin           → Admin panel`);
     console.log('');
     console.log('📍 Auth API:');
-    console.log(`  POST ${baseUrl}/api/auth/signup          → Unavailable until Account Lifecycle PR B`);
+    console.log(`  POST ${baseUrl}/api/auth/signup          → Requires validated transactional email delivery`);
     console.log(`  POST ${baseUrl}/api/auth/login           → Sign in`);
     console.log(`  POST ${baseUrl}/api/auth/refresh         → Refresh token`);
     console.log(`  POST ${baseUrl}/api/auth/logout          → Revoke session`);

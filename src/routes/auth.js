@@ -29,9 +29,9 @@ function handleError(req, res, error, event) {
 function createAuthRouter(options = {}) {
   const router = express.Router();
   const service = options.service || new AccountService();
-  // PR A production deliberately supplies no signup capability. Disposable
-  // tests may inject the real transaction through a test-owned app builder;
-  // no process environment value can create this source-level capability.
+  // B1 production supplies signup only through a source-constructed validated
+  // transactional-email capability. Tests may inject a disposable capture
+  // adapter; a boolean or request value cannot create this capability.
   const signup = typeof options.signup === 'function' ? options.signup : null;
 
   router.post('/signup', async (req, res) => {
@@ -39,9 +39,13 @@ function createAuthRouter(options = {}) {
       return failure(req, res, 503, 'signup_disabled', 'Account signup is not currently available');
     }
     try {
-      const result = await signup(req.body || {}, req.ip || 'unknown');
-      credentials.issueCookies(res, result.material);
-      return res.status(201).json({ success: true, account: result.account, requestId: requestId(req) });
+      await signup(req.body || {}, req.ip || 'unknown');
+      return res.status(202).json({
+        success: true,
+        code: 'verification_required',
+        message: 'If signup was accepted, check your email for a verification link.',
+        requestId: requestId(req),
+      });
     } catch (error) {
       return handleError(req, res, error, 'signup_failed');
     }
@@ -103,14 +107,64 @@ function createAuthRouter(options = {}) {
     });
   });
 
+  router.post('/verify-email', async (req, res) => {
+    try {
+      const result = await service.verifyEmail(req.body && req.body.token);
+      return res.json({
+        success: true,
+        code: 'email_verified',
+        trialStartedAt: result.trialStartedAt,
+        trialEndsAt: result.trialEndsAt,
+        requestId: requestId(req),
+      });
+    } catch (error) {
+      return handleError(req, res, error, 'verification_failed');
+    }
+  });
+
+  router.post('/resend-verification', requireSession, async (req, res) => {
+    try {
+      await service.resendVerification(req.accountAuthority, req.ip || 'unknown');
+      return res.json({
+        success: true,
+        code: 'verification_requested',
+        message: 'If verification is still required, a new link was sent.',
+        requestId: requestId(req),
+      });
+    } catch (error) {
+      return handleError(req, res, error, 'verification_resend_failed');
+    }
+  });
+
   router.post('/demo', (req, res) => {
     return failure(req, res, 410, 'demo_auth_retired', 'Legacy demo authentication is retired');
   });
-  router.post('/forgot-password', (req, res) => {
-    return failure(req, res, 503, 'recovery_unavailable', 'Password recovery will be enabled in Account Lifecycle PR B');
+  router.post('/forgot-password', async (req, res) => {
+    try {
+      await service.forgotPassword(req.body || {}, req.ip || 'unknown');
+      return res.status(202).json({
+        success: true,
+        code: 'recovery_requested',
+        message: 'If the account is eligible and delivery succeeds, a reset link will be sent.',
+        requestId: requestId(req),
+      });
+    } catch (error) {
+      return handleError(req, res, error, 'recovery_request_failed');
+    }
   });
-  router.post('/reset-password', (req, res) => {
-    return failure(req, res, 503, 'recovery_unavailable', 'Password recovery will be enabled in Account Lifecycle PR B');
+  router.post('/reset-password', async (req, res) => {
+    try {
+      await service.resetPassword(req.body || {}, req.ip || 'unknown');
+      credentials.clearCookies(res);
+      return res.json({
+        success: true,
+        code: 'password_reset',
+        redirect: '/login',
+        requestId: requestId(req),
+      });
+    } catch (error) {
+      return handleError(req, res, error, 'password_reset_failed');
+    }
   });
 
   return router;

@@ -51,7 +51,7 @@
         </div>
         <div class="form-group">
           <label for="password">Password</label>
-          <input type="password" id="password" placeholder="Create a password" required minlength="8">
+            <input type="password" id="password" placeholder="Create a password" required minlength="12" maxlength="128">
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px 24px;font-size:15px;">
           Create Free Account
@@ -85,8 +85,9 @@
       };
 
       try {
-        const account = await NorthStarAccountSession.signup(data);
-        window.location.href = NorthStarAccountSession.destination(account);
+        const result = await NorthStarAccountSession.signup(data);
+        showToast(result.message || 'Check your email for a verification link. Your trial starts after verification.', 'success');
+        document.getElementById('signupForm').reset();
       } catch (err) {
         showToast(err.message || 'Signup failed. Please try again.');
         btn.disabled = false;

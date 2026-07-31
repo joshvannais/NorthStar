@@ -15,12 +15,23 @@ function rows(result) {
 }
 
 class AccountRepository {
-  constructor(pool) {
+  constructor(pool, options = {}) {
+    this.explicitPool = Boolean(pool);
     this.pool = pool || db.getPool();
+    this.testClock = typeof options.testClock === 'function' ? options.testClock : null;
+  }
+
+  currentTimeOverride() {
+    if (!this.testClock) return null;
+    const value = this.testClock();
+    if (value === null || value === undefined) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(date.getTime())) throw new Error('Invalid test clock');
+    return date.toISOString();
   }
 
   requirePool() {
-    if (!this.pool || !db.isAvailable()) {
+    if (!this.pool || (!this.explicitPool && !db.isAvailable())) {
       throw new AccountPersistenceError('PostgreSQL account authority is unavailable');
     }
     return this.pool;
@@ -62,8 +73,8 @@ class AccountRepository {
       );
       await client.query(
         `INSERT INTO subscriptions (
-           id, organization_id, plan_type, status, trial_ends, current_period_start, current_period_end
-         ) VALUES ($1, $2, 'Trial', 'trial', NOW() + INTERVAL '14 days', NOW(), NOW() + INTERVAL '14 days')`,
+           id, organization_id, plan_type, status, trial_started_at, trial_ends_at
+         ) VALUES ($1, $2, 'Trial', 'pending_verification', NULL, NULL)`,
         [input.subscriptionId, input.organizationId]
       );
       await client.query(
@@ -81,39 +92,28 @@ class AccountRepository {
       );
       await client.query(
         `INSERT INTO organization_onboarding (organization_id, status)
-         VALUES ($1, 'business_profile_required')`,
+         VALUES ($1, 'pending_verification')`,
         [input.organizationId]
       );
       await client.query(
-        `INSERT INTO auth_sessions (
-           id, user_id, organization_id, membership_id, access_expires_at,
-           refresh_expires_at, csrf_token_hash
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO account_action_tokens (
+           id, user_id, organization_id, purpose, token_hash, expires_at
+         ) VALUES ($1, $2, $3, 'email_verification', $4, NOW() + INTERVAL '24 hours')`,
         [
-          input.sessionId,
+          input.verificationTokenId,
           input.userId,
           input.organizationId,
-          input.membershipId,
-          input.accessExpiresAt,
-          input.refreshExpiresAt,
-          input.csrfTokenHash,
+          input.verificationTokenHash,
         ]
-      );
-      await client.query(
-        `INSERT INTO auth_refresh_tokens (
-           id, session_id, family_id, token_hash, expires_at
-         ) VALUES ($1, $2, $3, $4, $5)`,
-        [input.refreshTokenId, input.sessionId, input.refreshFamilyId, input.refreshTokenHash, input.refreshExpiresAt]
       );
       return {
         userId: input.userId,
         organizationId: input.organizationId,
         membershipId: input.membershipId,
-        sessionId: input.sessionId,
         userStatus: 'pending_verification',
         membershipStatus: 'active',
         role: 'owner',
-        onboardingStatus: 'business_profile_required',
+        onboardingStatus: 'pending_verification',
       };
     });
   }
@@ -232,7 +232,9 @@ class AccountRepository {
               CASE WHEN active_profile.id IS NOT NULL THEN 'complete' ELSE onboarding.status END AS onboarding_status,
               subscription.plan_type,
               subscription.status AS subscription_status,
-              subscription.trial_ends
+              subscription.trial_started_at,
+              subscription.trial_ends_at,
+              COALESCE($3::timestamptz, clock_timestamp()) AS server_now
          FROM auth_sessions session
          JOIN users u ON u.id = session.user_id
          JOIN organizations organization ON organization.id = session.organization_id
@@ -246,17 +248,246 @@ class AccountRepository {
            ON active_profile.organization_id = session.organization_id
           AND active_profile.is_active = TRUE
          LEFT JOIN LATERAL (
-           SELECT plan_type, status, trial_ends
+           SELECT plan_type, status, trial_started_at, trial_ends_at
              FROM subscriptions
             WHERE organization_id = session.organization_id
-              AND status IN ('trial', 'active', 'past_due')
-            ORDER BY created_at DESC
             LIMIT 1
          ) subscription ON TRUE
         WHERE session.id = $1 AND session.user_id = $2`,
-      [sessionId, userId]
+      [sessionId, userId, this.currentTimeOverride()]
     );
     return rows(result)[0] || null;
+  }
+
+  async replaceVerificationToken(input) {
+    return this.transaction(async client => {
+      const authorityResult = await client.query(
+        `SELECT u.id AS user_id, u.organization_id, u.email, u.status AS user_status,
+                s.status AS subscription_status
+           FROM users u
+           JOIN organization_memberships m
+             ON m.user_id = u.id AND m.organization_id = u.organization_id
+           JOIN subscriptions s ON s.organization_id = u.organization_id
+          WHERE u.id = $1 AND u.organization_id = $2 AND m.status = 'active'
+          FOR UPDATE OF u, m, s`,
+        [input.userId, input.organizationId]
+      );
+      const authority = rows(authorityResult)[0];
+      if (!authority || authority.user_status !== 'pending_verification' ||
+          authority.subscription_status !== 'pending_verification') return null;
+      const prior = await client.query(
+        `SELECT id FROM account_action_tokens
+          WHERE user_id = $1 AND purpose = 'email_verification'
+            AND consumed_at IS NULL AND revoked_at IS NULL
+          FOR UPDATE`,
+        [input.userId]
+      );
+      if (prior.rowCount > 0) {
+        await client.query(
+          `UPDATE account_action_tokens
+              SET revoked_at = NOW(), superseded_by_token_id = $2
+            WHERE id = $1`,
+          [prior.rows[0].id, input.tokenId]
+        );
+      }
+      await client.query(
+        `INSERT INTO account_action_tokens (
+           id, user_id, organization_id, purpose, token_hash, expires_at
+         ) VALUES ($1, $2, $3, 'email_verification', $4, NOW() + INTERVAL '24 hours')`,
+        [input.tokenId, input.userId, input.organizationId, input.tokenHash]
+      );
+      return authority;
+    });
+  }
+
+  async verifyEmailToken(tokenHash) {
+    return this.transaction(async client => {
+      const currentTime = this.currentTimeOverride();
+      const result = await client.query(
+        `SELECT t.id AS token_id, t.user_id, t.organization_id, t.purpose,
+                t.expires_at, t.consumed_at, t.revoked_at,
+                t.expires_at > COALESCE($2::timestamptz, clock_timestamp()) AS token_valid,
+                u.status AS user_status, s.status AS subscription_status
+           FROM account_action_tokens t
+           JOIN users u ON u.id = t.user_id AND u.organization_id = t.organization_id
+           JOIN organization_memberships m
+             ON m.user_id = t.user_id AND m.organization_id = t.organization_id
+           JOIN subscriptions s ON s.organization_id = t.organization_id
+          WHERE t.token_hash = $1
+          FOR UPDATE OF t, u, m, s`,
+        [tokenHash, currentTime]
+      );
+      const authority = rows(result)[0];
+      if (!authority || authority.purpose !== 'email_verification' ||
+          authority.consumed_at || authority.revoked_at || authority.token_valid !== true) return null;
+      if (authority.user_status === 'active') return null;
+      if (authority.user_status !== 'pending_verification' ||
+          authority.subscription_status !== 'pending_verification') return null;
+
+      const subscription = await client.query(
+        `UPDATE subscriptions
+            SET status = 'trialing',
+                trial_started_at = COALESCE($2::timestamptz, transaction_timestamp()),
+                trial_ends_at = COALESCE($2::timestamptz, transaction_timestamp()) + INTERVAL '14 days',
+                updated_at = COALESCE($2::timestamptz, transaction_timestamp())
+          WHERE organization_id = $1 AND status = 'pending_verification'
+          RETURNING trial_started_at, trial_ends_at`,
+        [authority.organization_id, currentTime]
+      );
+      if (subscription.rowCount !== 1) return null;
+      await client.query(
+        `UPDATE users SET status = 'active', updated_at = clock_timestamp()
+          WHERE id = $1 AND status = 'pending_verification'`,
+        [authority.user_id]
+      );
+      await client.query(
+        `UPDATE organization_onboarding
+            SET status = CASE
+                  WHEN active_business_profile_id IS NULL THEN 'business_profile_required'
+                  ELSE 'complete'
+                END,
+                updated_at = clock_timestamp()
+          WHERE organization_id = $1`,
+        [authority.organization_id]
+      );
+      await client.query(
+        `UPDATE account_action_tokens SET consumed_at = clock_timestamp()
+          WHERE id = $1 AND consumed_at IS NULL AND revoked_at IS NULL`,
+        [authority.token_id]
+      );
+      return {
+        userId: authority.user_id,
+        organizationId: authority.organization_id,
+        trialStartedAt: subscription.rows[0].trial_started_at,
+        trialEndsAt: subscription.rows[0].trial_ends_at,
+      };
+    });
+  }
+
+  async findRecoveryAuthority(emailNormalized) {
+    const result = await this.requirePool().query(
+      `SELECT u.id AS user_id, u.organization_id, u.email, u.status AS user_status,
+              m.status AS membership_status
+         FROM users u
+         JOIN organization_memberships m
+           ON m.user_id = u.id AND m.organization_id = u.organization_id
+        WHERE u.email_normalized = $1`,
+      [emailNormalized]
+    );
+    return rows(result)[0] || null;
+  }
+
+  async replaceResetToken(input) {
+    return this.transaction(async client => {
+      const locked = await client.query(
+        `SELECT u.id, u.organization_id, u.email, u.status, m.status AS membership_status
+           FROM users u
+           JOIN organization_memberships m
+             ON m.user_id = u.id AND m.organization_id = u.organization_id
+          WHERE u.id = $1 AND u.organization_id = $2
+          FOR UPDATE OF u, m`,
+        [input.userId, input.organizationId]
+      );
+      const authority = rows(locked)[0];
+      if (!authority || authority.status !== 'active' || authority.membership_status !== 'active') return null;
+      const prior = await client.query(
+        `SELECT id FROM account_action_tokens
+          WHERE user_id = $1 AND purpose = 'password_reset'
+            AND consumed_at IS NULL AND revoked_at IS NULL
+          FOR UPDATE`,
+        [input.userId]
+      );
+      if (prior.rowCount > 0) {
+        await client.query(
+          `UPDATE account_action_tokens
+              SET revoked_at = NOW(), superseded_by_token_id = $2
+            WHERE id = $1`,
+          [prior.rows[0].id, input.tokenId]
+        );
+      }
+      await client.query(
+        `INSERT INTO account_action_tokens (
+           id, user_id, organization_id, purpose, token_hash, expires_at
+         ) VALUES ($1, $2, $3, 'password_reset', $4, NOW() + INTERVAL '30 minutes')`,
+        [input.tokenId, input.userId, input.organizationId, input.tokenHash]
+      );
+      return authority;
+    });
+  }
+
+  async resetPasswordWithToken(input) {
+    return this.transaction(async client => {
+      const currentTime = this.currentTimeOverride();
+      const result = await client.query(
+        `SELECT t.id AS token_id, t.user_id, t.organization_id, t.purpose,
+                t.expires_at, t.consumed_at, t.revoked_at,
+                t.expires_at > COALESCE($2::timestamptz, clock_timestamp()) AS token_valid
+           FROM account_action_tokens t
+           JOIN users u ON u.id = t.user_id AND u.organization_id = t.organization_id
+          WHERE t.token_hash = $1
+          FOR UPDATE OF t, u`,
+        [input.tokenHash, currentTime]
+      );
+      const token = rows(result)[0];
+      if (!token || token.purpose !== 'password_reset' || token.consumed_at || token.revoked_at ||
+          token.token_valid !== true) return null;
+      await client.query(
+        `UPDATE users SET password_hash = $2, updated_at = clock_timestamp() WHERE id = $1`,
+        [token.user_id, input.passwordHash]
+      );
+      await client.query(
+        `UPDATE auth_sessions
+            SET status = 'revoked', revoked_at = clock_timestamp(), revoke_reason = 'password_reset'
+          WHERE user_id = $1 AND status = 'active'`,
+        [token.user_id]
+      );
+      await client.query(
+        `UPDATE auth_refresh_tokens token
+            SET status = 'revoked', revoked_at = clock_timestamp(), revoke_reason = 'password_reset'
+           FROM auth_sessions session
+          WHERE token.session_id = session.id AND session.user_id = $1
+            AND token.status = 'active'`,
+        [token.user_id]
+      );
+      await client.query(
+        `UPDATE account_action_tokens SET consumed_at = clock_timestamp()
+          WHERE id = $1 AND consumed_at IS NULL AND revoked_at IS NULL`,
+        [token.token_id]
+      );
+      const remaining = await client.query(
+        `SELECT
+           (SELECT count(*)::int FROM auth_sessions
+             WHERE user_id = $1 AND status = 'active') AS sessions,
+           (SELECT count(*)::int FROM auth_refresh_tokens token
+              JOIN auth_sessions session ON session.id = token.session_id
+             WHERE session.user_id = $1 AND token.status = 'active') AS refresh_tokens`,
+        [token.user_id]
+      );
+      if (remaining.rows[0].sessions !== 0 || remaining.rows[0].refresh_tokens !== 0) {
+        throw new Error('Password reset left active credential authority');
+      }
+      return { userId: token.user_id, organizationId: token.organization_id };
+    });
+  }
+
+  async expireAndReadSubscription(organizationId) {
+    return this.transaction(async client => {
+      const currentTime = this.currentTimeOverride();
+      await client.query(
+        `UPDATE subscriptions
+            SET status = 'expired', updated_at = clock_timestamp()
+          WHERE organization_id = $1 AND status = 'trialing'
+            AND trial_ends_at <= COALESCE($2::timestamptz, clock_timestamp())`,
+        [organizationId, currentTime]
+      );
+      const result = await client.query(
+        `SELECT status AS subscription_status, trial_started_at, trial_ends_at,
+                COALESCE($2::timestamptz, clock_timestamp()) AS server_now
+           FROM subscriptions WHERE organization_id = $1`,
+        [organizationId, currentTime]
+      );
+      return rows(result)[0] || null;
+    });
   }
 
   async accountPreferences(organizationId) {

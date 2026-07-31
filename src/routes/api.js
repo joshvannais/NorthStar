@@ -9,10 +9,9 @@ const { handleCanonicalRetellWebhook } = require('../services/canonicalRetellIng
 const demoRouter = require('./demo');
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
-const jobber = require('../integrations/jobber');
-const oauthAuthorizationState = require('../integrations/oauthAuthorizationState');
 const config = require('../config');
 const { AccountRepository } = require('../accounts/repository');
+const { createJobberIntegrationRouter } = require('./jobberIntegration');
 const {
   requireOnboardedInternal,
   requireTenantAccess,
@@ -497,139 +496,9 @@ router.post('/retell/send-sms', requireVerifiedExternalAction, requirePermission
   }
 });
 
-/**
- * Jobber Integration Routes
- */
-
-/**
- * GET /api/integrations/jobber/status
- * Check if Jobber is connected for the current user.
- */
-router.get('/integrations/jobber/status', requireVerifiedExternalAction, requirePermission('integrations', 'read'), async (req, res) => {
-  const userId = req.tenantContext.userId;
-  const debug = {
-    hasClientId: !!process.env.JOBBER_CLIENT_ID,
-    hasClientSecret: !!process.env.JOBBER_CLIENT_SECRET,
-    clientIdLength: process.env.JOBBER_CLIENT_ID ? process.env.JOBBER_CLIENT_ID.length : 0,
-    configured: jobber.isConfigured()
-  };
-  if (!userId) return res.json({ connected: false, ...debug });
-  const status = await jobber.getStatus(userId);
-  res.json({ ...status, ...debug });
-});
-
-/**
- * GET /api/integrations/jobber/auth
- * Start the OAuth flow to connect Jobber.
- */
-router.get('/integrations/jobber/auth', requireVerifiedExternalAction, requirePermission('integrations', 'update'), async (req, res) => {
-  if (!jobber.isConfigured()) {
-    return res.status(503).json({
-      error: 'Jobber integration is unavailable',
-      code: 'jobber_unavailable',
-    });
-  }
-  try {
-    const state = await oauthAuthorizationState.issueAuthorizationState({
-      provider: 'jobber',
-      organizationId: req.tenantContext.organizationId,
-      userId: req.tenantContext.userId,
-      sessionId: req.authSession.id,
-    });
-    if (!state) {
-      return res.status(403).json({
-        error: 'Integration authorization state is invalid',
-        code: 'integration_state_invalid',
-      });
-    }
-    const authUrl = jobber.getAuthUrl(state, `${req.protocol}://${req.get('host')}`);
-    if (!authUrl) {
-      return res.status(503).json({
-        error: 'Jobber integration is unavailable',
-        code: 'jobber_unavailable',
-      });
-    }
-    return res.redirect(authUrl);
-  } catch (error) {
-    if (error instanceof oauthAuthorizationState.OAuthStatePersistenceError) {
-      return res.status(503).json({
-        error: 'Integration authorization is temporarily unavailable',
-        code: 'integration_state_unavailable',
-      });
-    }
-    console.error('[Jobber] OAuth authorization failed');
-    return res.status(500).json({
-      error: 'Failed to begin Jobber authorization',
-      code: 'jobber_authorization_failed',
-    });
-  }
-});
-
-/**
- * GET /api/integrations/jobber/callback
- * Handle the OAuth callback from Jobber.
- */
-router.get('/integrations/jobber/callback', requireVerifiedExternalAction, requirePermission('integrations', 'update'), async (req, res) => {
-  const { code, state } = req.query;
-  if (!code || !state) return res.status(400).send('Missing integration callback parameters');
-
-  let callback;
-  try {
-    try {
-      callback = await oauthAuthorizationState.consumeAuthorizationState({
-        provider: 'jobber',
-        rawState: state,
-        organizationId: req.tenantContext.organizationId,
-        userId: req.tenantContext.userId,
-        sessionId: req.authSession.id,
-      });
-    } catch (error) {
-      if (error instanceof oauthAuthorizationState.OAuthStatePersistenceError) {
-        return res.status(503).json({
-          error: 'Integration authorization is temporarily unavailable',
-          code: 'integration_state_unavailable',
-        });
-      }
-      throw error;
-    }
-    if (!callback) {
-      return res.status(403).json({ error: 'Integration authorization state is invalid', code: 'integration_state_invalid' });
-    }
-    const tokens = await jobber.exchangeCode(code, `${req.protocol}://${req.get('host')}`);
-    if (!tokens || typeof tokens.access_token !== 'string' || tokens.access_token.trim().length === 0) {
-      return res.status(502).json({
-        error: 'Failed to connect Jobber',
-        code: 'jobber_connection_failed',
-      });
-    }
-    const persisted = await jobber.saveTokens(
-      callback.userId,
-      tokens.access_token,
-      tokens.refresh_token,
-      tokens.expires_in
-    );
-    if (persisted !== true) {
-      return res.status(503).json({
-        error: 'Jobber connection could not be confirmed',
-        code: 'jobber_connection_unavailable',
-      });
-    }
-
-    return res.redirect('/dashboard/integrations?jobber=connected');
-  } catch (err) {
-    console.error('[Jobber] OAuth callback failed');
-    return res.status(500).send('Failed to connect Jobber. Please try again.');
-  }
-});
-
-/**
- * POST /api/integrations/jobber/disconnect
- * Disconnect Jobber for a user.
- */
-router.post('/integrations/jobber/disconnect', requireVerifiedExternalAction, requirePermission('integrations', 'update'), async (req, res) => {
-  await jobber.disconnect(req.tenantContext.userId);
-  res.json({ success: true });
-});
+// A reviewed source change is required before production can enable Jobber
+// OAuth. Process environment and request values cannot create this capability.
+router.use('/integrations/jobber', createJobberIntegrationRouter());
 
 /**
  * GET /api/contact/messages

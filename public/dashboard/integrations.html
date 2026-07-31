@@ -289,10 +289,18 @@
         try {
           const r = await NorthStarAccountSession.fetch('/api/integrations/jobber/status');
           const status = await r.json();
-          if (!status.configured) { showToast('Jobber integration not configured yet. Contact NorthStar support.'); return; }
+          if (!r.ok || status.available !== true || status.configured !== true) {
+            showToast('Jobber integration is not currently available.');
+            return;
+          }
           if (status.connected) {
             if (!confirm('Disconnect Jobber? This will stop lead sync.')) return;
-            await NorthStarAccountSession.fetch('/api/integrations/jobber/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const disconnected = await NorthStarAccountSession.fetch('/api/integrations/jobber/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const result = await disconnected.json();
+            if (!disconnected.ok || result.success !== true) {
+              showToast('Jobber integration is not currently available.');
+              return;
+            }
             document.getElementById('jobber-status').innerHTML = '<span class="status-dot disconnected"></span>Not connected';
             document.getElementById('jobber-btn').textContent = 'Connect';
             showToast('Jobber disconnected');
@@ -308,18 +316,30 @@
           if (account.user.id) {
             const r = await NorthStarAccountSession.fetch('/api/integrations/jobber/status');
             const status = await r.json();
-            if (status.connected) {
+            if (r.ok && status.available === true && status.connected === true) {
               document.getElementById('jobber-status').innerHTML = '<span class="status-dot connected"></span>Connected';
               document.getElementById('jobber-btn').textContent = 'Disconnect';
             }
           }
         } catch(e) {}
       })();
-      // Handle ?jobber=connected from OAuth callback
-      if (window.location.search.includes('jobber=connected')) {
-        showToast('Jobber connected successfully!');
+      // A query string is not evidence of connection. Confirm the durable
+      // server projection before presenting success.
+      (async function confirmJobberCallback() {
+        if (new URLSearchParams(window.location.search).get('jobber') !== 'connected') return;
         window.history.replaceState({}, '', window.location.pathname);
-      }
+        try {
+          const r = await NorthStarAccountSession.fetch('/api/integrations/jobber/status');
+          const status = await r.json();
+          if (r.ok && status.available === true && status.connected === true) {
+            showToast('Jobber connected successfully!');
+          } else {
+            showToast('Jobber connection could not be confirmed.');
+          }
+        } catch (_error) {
+          showToast('Jobber connection could not be confirmed.');
+        }
+      })();
       </script>
       </main>
   </div>

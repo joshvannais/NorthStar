@@ -13,7 +13,9 @@ function getCspDirectives() {
     'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
     'font-src': ["'self'", "https://fonts.gstatic.com"],
     'img-src': ["'self'", "data:", "https:"],
-    'connect-src': ["'self'", "https://api.retellai.com", "https://api.getjobber.com"],
+    // Mounted Jobber OAuth remains source-disabled until canonical token
+    // persistence exists, so browsers have no Jobber connection destination.
+    'connect-src': ["'self'", "https://api.retellai.com"],
     'frame-src': ["'none'"],
     'object-src': ["'none'"]
   };

@@ -15,16 +15,16 @@ const { Pool } = require('pg');
 const DEFAULT_MIGRATIONS_DIRECTORY = path.join(__dirname, '..', 'migrations');
 const MIGRATION_LOCK_KEY = '5643944089238424905';
 const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
-const LEGACY_TRANSACTION_MIGRATIONS = Object.freeze({
-  '001_initial_schema.sql': 'dbbcad4947474777a61a3b230aa8aca54b9a3ef4257301368e39731fa05307e9',
-  '002_seed_data.sql': '4b124ac5713caaddc4f2316e8c055c6235eb17881c5b4ba5d0edef481a8a63ff',
-  '003_voice_sessions.sql': 'd37d402df2792a015b6d1f9d3e0f72226298f9a4d9ec7551f629e52c677f41c2',
-  '004_canonical_persistence_v2.sql': '946b1819dd4c5205637e9fae91f3b36c28c1688e401f1f2f5b67ffba7d2e1651',
-  '005_canonical_organization_authority.sql': '4065d873dd204935cfbd8ea8abe45d2b0b44e80df38ef203359d2863d37c5379',
-  '006_canonical_voice_sessions.sql': '236809d3b87367804bbd6c28ccaaca27408fa340020ab3d3b48e3e81da203ec2',
-  '007_canonical_tax_authority.sql': 'a5f2c8c78fc339790f2993c997ea2cd50134a9ed97de93267cd470b18ea408a6',
-  '008_canonical_demo_authority.sql': 'c157ac2c10f07bf933b4774ac14584ecc580f93108926b5e53acbfed28263ef2',
-  '009_canonical_voice_provider_identity.sql': '6ec531dbb385607818c4a70ae69bab7f5d85ff98565d61ad8026c20ef68634fe',
+const PROTECTED_LEGACY_MIGRATION_CHECKSUMS = Object.freeze({
+  '001_initial_schema.sql': '74ee47a852a376c3f5f8b2a5bf24579d24eb6a20dc8284e8b233a0159e858c14',
+  '002_seed_data.sql': '370b2b2cd466817724f4788e104adef3f93d3d8a02bd877f252d1e3d6f588cd5',
+  '003_voice_sessions.sql': '535a47115df60e96a7d18d8b7c557b378aa18391a19eb658750f86faa18d1e1f',
+  '004_canonical_persistence_v2.sql': '097f398d0bf37982947d35b04890c396dee2d84ce8acdb34fa5434e13ba1263a',
+  '005_canonical_organization_authority.sql': 'b45c61d2da94d6aba753d3d2bbd1ebf657af4626ff1bcbabd2e45434e0e529f6',
+  '006_canonical_voice_sessions.sql': 'acde20fd0cfa4ef8e8899f036cac4dd82d9052c12c50cec28014c2ac3cc0daf7',
+  '007_canonical_tax_authority.sql': 'c1838c6ea7cd83d12d2b9c3f9bf7740f0c5344d21f06873968527ad1318ac5a0',
+  '008_canonical_demo_authority.sql': 'a71a0c49be60943ee52e041139c9db3b64c64cbeaf4449dec46571c721fbd1e0',
+  '009_canonical_voice_provider_identity.sql': 'a521efdcf96cd90d11e505018f034fd2b93a4998da97823491b5195aa78aef98',
 });
 
 let pool = null;
@@ -54,6 +54,43 @@ function getPool() {
 
 function checksum(contents) {
   return crypto.createHash('sha256').update(contents).digest('hex');
+}
+
+function canonicalizeMigrationChecksumBytes(contents) {
+  if (!Buffer.isBuffer(contents)) throw new TypeError('Migration checksum input must be a Buffer');
+
+  let crlfCount = 0;
+  let lfCount = 0;
+  for (let index = 0; index < contents.length; index += 1) {
+    if (contents[index] === 0x0d) {
+      if (contents[index + 1] !== 0x0a) {
+        throw new Error('Migration contains a lone carriage return');
+      }
+      crlfCount += 1;
+      index += 1;
+    } else if (contents[index] === 0x0a) {
+      lfCount += 1;
+    }
+  }
+
+  if (crlfCount > 0 && lfCount > 0) {
+    throw new Error('Migration contains mixed line endings');
+  }
+  if (crlfCount === 0) return contents;
+
+  const canonical = Buffer.allocUnsafe(contents.length - crlfCount);
+  let target = 0;
+  for (let source = 0; source < contents.length; source += 1) {
+    if (contents[source] === 0x0d) {
+      canonical[target] = 0x0a;
+      target += 1;
+      source += 1;
+    } else {
+      canonical[target] = contents[source];
+      target += 1;
+    }
+  }
+  return canonical;
 }
 
 function dollarQuoteAt(sql, offset) {
@@ -248,9 +285,15 @@ function loadMigrations(migrationsDirectory) {
     if (identities.has(match[1])) throw new Error(`Duplicate migration identity: ${match[1]}`);
     identities.add(match[1]);
 
-    const contents = fs.readFileSync(path.join(migrationsDirectory, file));
+    const runtimeContents = fs.readFileSync(path.join(migrationsDirectory, file));
+    let contents;
+    try {
+      contents = canonicalizeMigrationChecksumBytes(runtimeContents);
+    } catch (_) {
+      throw new Error(`Migration has unsupported line endings: ${file}`);
+    }
     const digest = checksum(contents);
-    const legacyDigest = LEGACY_TRANSACTION_MIGRATIONS[file];
+    const legacyDigest = PROTECTED_LEGACY_MIGRATION_CHECKSUMS[file];
     if (legacyDigest && digest !== legacyDigest) {
       throw new Error(`Protected legacy migration checksum mismatch: ${file}`);
     }
@@ -767,8 +810,8 @@ async function runMigrations(options = {}) {
       if (applied.has(migration.file)) {
         const recorded = applied.get(migration.file);
         if (recorded === null) {
-          if (!LEGACY_TRANSACTION_MIGRATIONS[migration.file] ||
-              LEGACY_TRANSACTION_MIGRATIONS[migration.file] !== migration.digest) {
+          if (!PROTECTED_LEGACY_MIGRATION_CHECKSUMS[migration.file] ||
+              PROTECTED_LEGACY_MIGRATION_CHECKSUMS[migration.file] !== migration.digest) {
             throw new Error(`Applied migration checksum is missing: ${migration.file}`);
           }
           const updated = await client.query(
@@ -861,6 +904,8 @@ function resetForTests() {
 }
 
 module.exports = {
+  PROTECTED_LEGACY_MIGRATION_CHECKSUMS,
+  canonicalizeMigrationChecksumBytes,
   close,
   getPool,
   initDatabase,
@@ -868,6 +913,7 @@ module.exports = {
   query,
   readiness,
   resetForTests,
+  loadMigrations,
   runMigrations,
   stripOuterTransaction,
 };

@@ -65,7 +65,7 @@ function projectSubscription(authority) {
     daysRemaining,
     endsToday,
     readOnly,
-    upgradeAvailable: readOnly,
+    upgradeAvailable: false,
     showTrialBanner: state === 'trialing',
     safe: true,
   });

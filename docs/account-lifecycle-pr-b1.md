@@ -99,6 +99,10 @@ derived remaining days, read-only status, unavailable upgrade status, and
 banner visibility. Remaining days are `ceil((trial_ends_at - server_now) /
 86400000)` while the instant is valid, so an unexpired trial never displays
 zero. The last positive calendar window is rendered as `Trial ends today`.
+`upgradeAvailable` is `false` for every B1 projection, including pending,
+trialing, expired, active, past-due, canceled, missing, malformed, and
+contradictory authority. An `active` PostgreSQL fixture proves only banner
+suppression; it does not prove payment or upgrade capability.
 
 At and after the exact end instant, the row is transactionally observed as
 `expired`. Authentication, logout, `/me`, account/security access, safe
@@ -118,8 +122,8 @@ organization status read, stores no authority, creates one accessible status
 region and listener set, and remains idempotent across repeated bootstrap and
 navigation. Pending accounts see a verification banner. Valid trials see the
 organization-wide daily countdown. Expiration replaces it with restricted
-upgrade-required messaging whose billing action is explicitly unavailable
-until B2. Active organizations see no banner. Unsafe or contradictory responses
+upgrade-required messaging with no enabled billing action; billing is
+explicitly unavailable until B2. Active organizations see no banner. Unsafe or contradictory responses
 show restricted/unavailable state and never false paid state. Styles cover
 1440x900 and 390x844 without navigation collision and use keyboard-readable,
 high-contrast semantics.
@@ -142,22 +146,73 @@ the migration for explicit resolution.
 
 ## Email configuration and limitations
 
-The production constructor requires validated SMTP host, port 465/587,
-credentials, bounded sender, and canonical public HTTPS origin with no path,
-query, credentials, or fragment. It derives recipients, sender, templates, and
-callbacks on the server; rejects header injection, unsafe origins, unbounded
+The production constructor requires a multi-label DNS SMTP hostname whose
+labels have valid length and hyphen placement, the exact port 465 or 587,
+bounded control-free identity/password fields, an explicit single mailbox
+sender, and a canonical ASCII HTTPS public origin with no path, query,
+credentials, or fragment. It rejects empty labels, dot-only/leading/trailing
+dot hosts, schemes, ports, paths, whitespace, controls, malformed mailbox
+local/domain parts, and coercible non-string identity input. It derives
+recipients, sender, templates, and callbacks on the server; rejects header injection, unsafe origins, unbounded
 values, and raw HTML; never exposes or logs secrets/tokens; and returns stable
 internal outcomes. Environment booleans cannot enable signup. With no valid
-provider configuration, production signup remains disabled; therefore B1 does
-not claim live production signup readiness.
+provider configuration, production signup remains disabled with stable
+`503 signup_disabled`, zero account-graph/token rows, zero cookies, and zero
+transport, send, DNS, network, or TLS effects. Therefore B1 does not claim live
+production signup readiness.
 
 Only the in-app daily countdown ships. A later email-capable release should
 send transactional reminders at seven, three, and one day remaining using a
 durable scheduler/outbox. B1 deliberately adds no unreliable in-process timer.
 
+## Targeted independent-audit correction
+
+The independent audit identified three historical blockers: verification and
+reset tokens reached the same-origin stylesheet through `Referer` before URL
+cleanup; malformed SMTP identities could construct production signup
+capability; and restricted B1 states falsely reported upgrade availability.
+Those three findings, and only those findings, are corrected by the additive
+delta after original PR head `c3475457b60f193f6db15c52fa80f6eba9e810b2`.
+
+Both token pages now install page-level `no-referrer` before every subresource.
+The first executable head script captures exactly one syntactically valid token
+into a lexical closure and synchronously replaces the query-bearing history
+entry with the fixed page path before CSS can load. The token is cleared after
+terminal validation, success, server error, or network error. It is never put
+in the DOM, a window property, cookies, local/session storage, IndexedDB, logs,
+or response bodies. The browser harness explicitly inventories request URLs,
+methods, resource types, redirect chains, `Referer`, main-frame navigation and
+retained back/forward history, storage, IndexedDB, globals, console, page
+errors, cookies, and API bodies. The unavoidable initial user navigation is
+recorded once; every initiated subresource has an empty `Referer`, and retained
+history and subsequent requests contain no raw or encoded token.
+
+The additive correction touches exactly these eleven files:
+
+- `public/verify-email.html`
+- `public/reset-password.html`
+- `src/email/transactional.js`
+- `src/accounts/subscriptionPolicy.js`
+- `tests/browser/account-lifecycle-b1-browser.js`
+- `tests/helpers/account-production-capability-worker.js`
+- `tests/unit/account-lifecycle-b1-policy.test.js`
+- `tests/api/account-authority-gates-postgres.test.js`
+- `tests/api/account-lifecycle-b1-postgres.test.js`
+- `tests/api/jobber-oauth-state-postgres.test.js`
+- `docs/account-lifecycle-pr-b1.md`
+
+The intended linear additive subjects are `fix: contain account action tokens
+before subresources`, `fix: reject invalid production email capability`, and
+`fix: keep b1 upgrade capability unavailable`. The exact published SHA of this
+document's own containing commit is necessarily external metadata (a Git
+commit cannot contain its own hash); the live draft PR description and final
+publication report record the exact final head, parent, all commit SHAs, and
+the final diff after publication.
+
 ## Validation evidence
 
-The frozen local campaign used disposable PostgreSQL 18.4 only:
+The original B1 campaign used disposable PostgreSQL 18.4 only and recorded the
+following pre-correction implementation totals:
 
 - focused migration: 24/24;
 - focused signup, verification, and reset: 28/28;
@@ -171,20 +226,38 @@ The frozen local campaign used disposable PostgreSQL 18.4 only:
 - authenticated HTML: 14/14 documents import the shared component exactly once;
 - `git diff --check`: passed.
 
-The lifecycle ran in installed Chrome and actual Playwright WebKit at 1440x900
-and 390x844. Chrome recorded 200 and 205 requests with 49 safe API responses in
-each viewport. WebKit recorded 205 requests in each viewport with 63 and 58 safe
-API responses. Every journey captured exactly two local security emails, one
-verification attempt, and one reset attempt. Every HTTP destination was the
-disposable loopback app; no Authorization header or credential-bearing API body
-was observed. The test inventoried methods, responses, cookies, local/session
-storage, IndexedDB, globals, duplicate listener/banner state, provider attempts,
-forged browser state, restart/two-tab behavior, expiration mutation denial, and
-the explicit active PostgreSQL fixture. No physical Safari claim is made.
+The targeted correction campaign then passed focused migration 24/24, focused
+account-lifecycle 53/53 across five suites, complete API 143/143 across eleven
+suites, and complete serial Jest 1,157/1,157 across 57 suites with
+`--detectOpenHandles` and no open-handle report. Four-worker Jest was not rerun:
+focused, API, and serial execution exposed no correction-attributable
+concurrency or interference.
+
+The corrected complete lifecycle ran once in installed Chrome and actual
+Playwright WebKit at 1440x900 and 390x844. Each of the four implementation
+journeys recorded 470 loopback requests, 40 method/path families, 16 explicit
+verification/reset confidentiality cases, 38 initiated requests with captured
+Referer values, 12 deliberately recorded initial raw main-frame navigations,
+six synthetic token API posts, exactly two captured local security emails, one
+mounted verification, and one mounted reset. Chrome recorded 58 and 59 safe API
+response bodies; WebKit recorded 69 and 70. These are the final implementation
+run totals, not a promise that incidental request counts are identical in every
+execution. The prior independent audit separately proved the historical
+stylesheet-Referer disclosure; its incidental request/API totals were not
+supplied as authoritative correction evidence and are not relabeled here.
+
+Every HTTP destination was the disposable loopback app; no Authorization
+header, credential-bearing API body, unexpected mutation, enabled upgrade
+action, Stripe/payment navigation, or false paid state was observed. Reload,
+back, forward, duplicate initialization, two tabs, browser restart, forged
+browser authority, expiration, mutation denial, and active-fixture banner
+suppression were exercised. No physical Safari claim is made.
 
 Required skipped tests were not counted as passing. GitHub CI availability is
 reported from the published draft; zero checks will be recorded as unavailable,
-never passing.
+never passing. No merge, deployment, Railway or production configuration,
+production database/account access, live email, SMTP provider, Stripe, payment,
+or provider action occurred during the correction.
 
 ## Explicit PR B2 deferral
 

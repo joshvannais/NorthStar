@@ -550,9 +550,14 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     const memberStatus = (await request(app)
       .get('/api/account/subscription?organizationId=foreign&state=active')
       .set('Cookie', cookies(memberLogin))).body.subscription;
-    for (const key of ['state', 'trialStart', 'trialEnd', 'daysRemaining', 'readOnly', 'showTrialBanner']) {
+    for (const key of [
+      'state', 'trialStart', 'trialEnd', 'daysRemaining', 'readOnly',
+      'showTrialBanner', 'upgradeAvailable',
+    ]) {
       expect(memberStatus[key]).toEqual(ownerStatus[key]);
     }
+    expect(ownerStatus.upgradeAvailable).toBe(false);
+    expect(memberStatus.upgradeAvailable).toBe(false);
 
     const foreignOrganization = crypto.randomUUID();
     await pool.query(
@@ -584,7 +589,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     expect(status.status).toBe(200);
     expect(status.body.subscription).toEqual(expect.objectContaining({
       state: 'trialing', daysRemaining: 14, readOnly: false,
-      showTrialBanner: true, safe: true,
+      showTrialBanner: true, safe: true, upgradeAvailable: false,
     }));
 
     const owner = await pool.query(
@@ -594,13 +599,14 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     const finalInstant = await request(app).get('/api/account/subscription').set('Cookie', jar);
     expect(finalInstant.body.subscription).toEqual(expect.objectContaining({
       state: 'trialing', daysRemaining: 1, endsToday: true, readOnly: false,
+      upgradeAvailable: false,
     }));
     controlledNow = new Date(status.body.subscription.trialEnd);
     const expired = await request(app).get('/api/account/subscription').set('Cookie', jar);
     expect(expired.status).toBe(200);
     expect(expired.body.subscription).toEqual(expect.objectContaining({
       state: 'expired', daysRemaining: 0, readOnly: true,
-      upgradeAvailable: true, showTrialBanner: false,
+      upgradeAvailable: false, showTrialBanner: false,
     }));
     expect((await request(app).get('/api/auth/me').set('Cookie', jar)).status).toBe(200);
     expect((await request(app).get('/api/account/preferences').set('Cookie', jar)).status).toBe(200);
@@ -618,8 +624,61 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     );
     const active = await request(app).get('/api/account/subscription').set('Cookie', jar);
     expect(active.body.subscription).toEqual(expect.objectContaining({
-      state: 'active', readOnly: false, showTrialBanner: false,
+      state: 'active', readOnly: false, showTrialBanner: false, upgradeAvailable: false,
     }));
     controlledNow = null;
+  });
+
+  test('mounted subscription projection keeps B1 upgrade capability false for every durable state and forgery', async () => {
+    await pool.query('DELETE FROM auth_rate_limits');
+    await request(app).post('/api/auth/signup').send({
+      name: 'No Upgrade Owner', businessName: 'No Upgrade Company',
+      email: 'no-upgrade.b1@example.test', password: 'No-upgrade-password-123!', phone: '',
+    });
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'no-upgrade.b1@example.test', password: 'No-upgrade-password-123!',
+    });
+    const jar = cookies(login);
+    const organizationId = (await pool.query(
+      "SELECT organization_id FROM users WHERE email_normalized = 'no-upgrade.b1@example.test'"
+    )).rows[0].organization_id;
+
+    const states = [
+      ['pending_verification', null, null],
+      ['trialing', '2026-08-01T00:00:00.000Z', '2026-08-15T00:00:00.000Z'],
+      ['expired', null, null], ['active', null, null],
+      ['past_due', null, null], ['canceled', null, null],
+    ];
+    for (const [state, start, end] of states) {
+      await pool.query(
+        `UPDATE subscriptions
+            SET status = $2, trial_started_at = $3, trial_ends_at = $4
+          WHERE organization_id = $1`,
+        [organizationId, state, start, end]
+      );
+      const response = await request(app)
+        .get('/api/account/subscription?upgrade=true&paid=true&success=true&organizationId=foreign')
+        .set('Cookie', jar)
+        .set('X-Upgrade-Available', 'true');
+      expect(response.status).toBe(200);
+      expect(response.body.subscription.state).toBe(state);
+      expect(response.body.subscription.upgradeAvailable).toBe(false);
+    }
+
+    await expect(pool.query(
+      `UPDATE subscriptions
+          SET status = 'trialing', trial_started_at = NULL, trial_ends_at = NULL
+        WHERE organization_id = $1`,
+      [organizationId]
+    )).rejects.toMatchObject({ code: '23514' });
+
+    await pool.query('DELETE FROM subscriptions WHERE organization_id = $1', [organizationId]);
+    const missing = await request(app)
+      .get('/api/account/subscription?upgrade=true&paid=true&success=true')
+      .set('Cookie', jar);
+    expect(missing.status).toBe(200);
+    expect(missing.body.subscription).toEqual(expect.objectContaining({
+      state: 'unavailable', safe: false, upgradeAvailable: false,
+    }));
   });
 });

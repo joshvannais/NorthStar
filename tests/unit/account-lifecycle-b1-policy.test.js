@@ -35,7 +35,7 @@ describe('Account Lifecycle PR B1 shared subscription policy', () => {
       const projection = trialAt(now);
       expect(projection).toEqual(expect.objectContaining({
         state: 'expired', daysRemaining: 0, readOnly: true,
-        showTrialBanner: false, upgradeAvailable: true,
+        showTrialBanner: false, upgradeAvailable: false,
       }));
       expect(canMutateInternal(projection)).toBe(false);
       expect(canPerformExternal(projection)).toBe(false);
@@ -47,6 +47,7 @@ describe('Account Lifecycle PR B1 shared subscription policy', () => {
     state => {
       const projection = projectSubscription({ subscription_status: state, server_now: '2026-08-01T00:00:00Z' });
       expect(projection.readOnly).toBe(true);
+      expect(projection.upgradeAvailable).toBe(false);
       expect(canMutateInternal(projection)).toBe(false);
       expect(canPerformExternal(projection)).toBe(false);
     }
@@ -54,13 +55,15 @@ describe('Account Lifecycle PR B1 shared subscription policy', () => {
 
   test('active is banner-free but cannot be fabricated from contradictory or missing input', () => {
     expect(projectSubscription({ subscription_status: 'active', server_now: '2026-08-01T00:00:00Z' }))
-      .toEqual(expect.objectContaining({ state: 'active', readOnly: false, showTrialBanner: false }));
+      .toEqual(expect.objectContaining({
+        state: 'active', readOnly: false, showTrialBanner: false, upgradeAvailable: false,
+      }));
     for (const authority of [null, {}, { subscription_status: 'bogus', server_now: '2026-08-01T00:00:00Z' }, {
       subscription_status: 'trialing', trial_started_at: 'invalid',
       trial_ends_at: '2026-08-15T00:00:00Z', server_now: '2026-08-01T00:00:00Z',
     }]) {
       expect(projectSubscription(authority)).toEqual(expect.objectContaining({
-        state: 'unavailable', readOnly: true, safe: false,
+        state: 'unavailable', readOnly: true, safe: false, upgradeAvailable: false,
       }));
     }
   });
@@ -72,9 +75,10 @@ describe('Account Lifecycle PR B1 shared subscription policy', () => {
     expect(canMutateInternal(pending)).toBe(false);
     expect(canMutateInternal(pending, { allowPending: true })).toBe(true);
     expect(canPerformExternal(pending)).toBe(false);
+    expect(pending.upgradeAvailable).toBe(false);
   });
 
-  test('production email capability requires complete SMTP and canonical HTTPS origin without a boolean', () => {
+  test('production email capability requires strict SMTP identity and canonical HTTPS origin', () => {
     const valid = {
       PUBLIC_ORIGIN: 'https://app.example.test', SMTP_HOST: 'smtp.example.test',
       SMTP_PORT: '587', SMTP_USER: 'smtp-user', SMTP_PASS: 'private-secret',
@@ -83,11 +87,36 @@ describe('Account Lifecycle PR B1 shared subscription policy', () => {
     expect(validatedProductionConfiguration(valid)).toEqual(expect.objectContaining({
       origin: 'https://app.example.test', secure: false, from: 'security@example.test',
     }));
+    const invalidHosts = [
+      '.', '..', '.smtp.example.test', 'smtp.example.test.', 'smtp..example.test',
+      '-smtp.example.test', 'smtp-.example.test', `smtp.${'a'.repeat(64)}.test`,
+      `${Array.from({ length: 43 }, () => 'aaaaa').join('.')}.test`,
+      ' smtp.example.test', 'smtp.example.test ', 'https://smtp.example.test',
+      'smtp.example.test:587', 'user@smtp.example.test', 'smtp.example.test/path',
+      'smtp\\example.test', 'smtp\r.example.test', 'smtp\n.example.test',
+      'smtp\0.example.test', `smtp${String.fromCharCode(31)}.example.test`,
+      `smtp${String.fromCharCode(127)}.example.test`, 'smtp.exÃ¤mple.test',
+      'localhost', '', ['smtp.example.test'], { host: 'smtp.example.test' },
+    ];
+    for (const SMTP_HOST of invalidHosts) {
+      expect(validatedProductionConfiguration({ ...valid, SMTP_HOST })).toBeNull();
+    }
     for (const mutation of [
       { PUBLIC_ORIGIN: 'http://app.example.test' },
       { PUBLIC_ORIGIN: 'https://app.example.test/path' },
-      { SMTP_PASS: '' }, { SMTP_PORT: '25' }, { SMTP_HOST: 'smtp.example.test\r\nBcc:x@example.test' },
+      { PUBLIC_ORIGIN: ['https://app.example.test'] },
+      { SMTP_PASS: '' }, { SMTP_PASS: `secret${String.fromCharCode(0)}` },
+      { SMTP_PASS: `secret${String.fromCharCode(127)}` },
+      { SMTP_PORT: '25' }, { SMTP_PORT: '587suffix' }, { SMTP_PORT: ['587'] },
+      { SMTP_PORT: { value: 587 } }, { SMTP_PORT: 587.5 },
+      { SMTP_USER: '' }, { SMTP_USER: ' smtp-user' },
+      { SMTP_USER: 'smtp-user\r\nAUTH injected' },
+      { TRANSACTIONAL_EMAIL_FROM: '' },
       { TRANSACTIONAL_EMAIL_FROM: 'security@example.test\r\nBcc:x@example.test' },
+      { TRANSACTIONAL_EMAIL_FROM: 'NorthStar <security@example.test>' },
+      { TRANSACTIONAL_EMAIL_FROM: 'one@example.test,two@example.test' },
+      { TRANSACTIONAL_EMAIL_FROM: 'security@localhost' },
+      { TRANSACTIONAL_EMAIL_FROM: 'security@.example.test' },
     ]) {
       expect(validatedProductionConfiguration({ ...valid, ...mutation })).toBeNull();
     }

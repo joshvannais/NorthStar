@@ -1,37 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Verify Email | NorthStar</title><link rel="stylesheet" href="/css/style.css">
+  <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
+  <script>
+    (function () {
+      var values = new URLSearchParams(window.location.search).getAll('token');
+      var token = values.length === 1 && /^[A-Za-z0-9_-]{43}$/.test(values[0]) ? values[0] : '';
+      window.history.replaceState(null, '', '/verify-email');
+      document.addEventListener('DOMContentLoaded', function () {
+        var status = document.getElementById('verifyStatus');
+        if (!token) {
+          status.textContent = 'This verification link is invalid or expired.';
+          token = '';
+          return;
+        }
+        fetch('/api/auth/verify-email', {
+          method: 'POST', credentials: 'same-origin', referrerPolicy: 'no-referrer',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token })
+        }).then(function (response) {
+          token = '';
+          return response.json().catch(function () { return {}; }).then(function (body) {
+            if (!response.ok) throw new Error(body.error || 'Verification failed');
+            status.textContent = 'Email verified. Your organization\'s 14-day trial has started. Sign in to continue.';
+          });
+        }).catch(function () {
+          token = '';
+          status.textContent = 'This verification link is invalid or expired.';
+        });
+      }, { once: true });
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Email | NorthStar</title>
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <main class="auth-page"><section class="auth-card" aria-labelledby="verifyTitle">
     <h1 id="verifyTitle">Verify your email</h1>
-    <p id="verifyStatus" role="status" aria-live="polite">Checking your verification link…</p>
+    <p id="verifyStatus" role="status" aria-live="polite">Checking your verification link&hellip;</p>
     <p><a href="/login">Return to sign in</a></p>
   </section></main>
-  <script>
-    (function () {
-      var params = new URLSearchParams(window.location.search);
-      var token = params.get('token') || '';
-      history.replaceState(null, '', '/verify-email');
-      var status = document.getElementById('verifyStatus');
-      if (!token) { status.textContent = 'This verification link is invalid or expired.'; return; }
-      fetch('/api/auth/verify-email', {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token })
-      }).then(function (response) {
-        token = '';
-        return response.json().catch(function () { return {}; }).then(function (body) {
-          if (!response.ok) throw new Error(body.error || 'Verification failed');
-          status.textContent = 'Email verified. Your organization’s 14-day trial has started. Sign in to continue.';
-        });
-      }).catch(function () {
-        token = '';
-        status.textContent = 'This verification link is invalid or expired.';
-      });
-    })();
-  </script>
 </body>
 </html>

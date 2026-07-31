@@ -689,29 +689,8 @@
     });
   }
 
-  function showVerificationStatus(next) {
-    if (!document.body) return;
-    var id = 'northstar-verification-status';
-    var notice = document.getElementById(id);
-    var pending = Boolean(next && next.user && next.user.status === 'pending_verification');
-    var protectedPage = global.location.pathname === '/dashboard' || global.location.pathname.indexOf('/dashboard/') === 0;
-    if (!pending || !protectedPage) {
-      if (notice) notice.remove();
-      return;
-    }
-    if (!notice) {
-      notice = document.createElement('div');
-      notice.id = id;
-      notice.setAttribute('role', 'status');
-      notice.style.cssText = 'position:relative;z-index:50;padding:10px 16px;text-align:center;background:#fff7d6;color:#5c4700;border-bottom:1px solid #ecd36a;font:600 13px/1.4 system-ui,sans-serif;';
-      document.body.insertBefore(notice, document.body.firstChild);
-    }
-    notice.textContent = 'Email verification is pending. Your tenant dashboard and Business Profile remain available; external actions stay disabled.';
-  }
-
   function publish(next) {
     account = next || null;
-    showVerificationStatus(account);
     global.dispatchEvent(new CustomEvent('northstar:account', { detail: account }));
     return account;
   }
@@ -767,7 +746,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
-    }).then(function () { return load(true); });
+    });
   }
 
   function logoutFailureMessage(error) {

@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { fork } = require('child_process');
+const { fork, spawnSync } = require('child_process');
 const { Client, Pool } = require('pg');
 const { runMigrations, stripOuterTransaction } = require('../../src/db');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
@@ -14,6 +14,22 @@ const MIGRATIONS_DIRECTORY = path.join(ROOT, 'migrations');
 const MIGRATION_WORKER = path.join(ROOT, 'tests', 'helpers', 'account-migration-worker.js');
 const MIGRATION_010 = '010_account_session_authority.sql';
 const MIGRATION_011 = '011_oauth_authorization_states.sql';
+const MIGRATION_010_REPOSITORY_PATH = `migrations/${MIGRATION_010}`;
+const MIGRATION_011_REPOSITORY_PATH = `migrations/${MIGRATION_011}`;
+const BASE_SHA = 'dfff096241d3be4fd1580a741cfe21ee64a5dfb3';
+const MIGRATION_010_INTRODUCTION_SHA = '137ad6d473fac69fd5b7ee81aea5e513f3a1e7b4';
+const PRE_PROVENANCE_CORRECTION_SHA = '43752350fc9acbce57a80cc87c212cd9d9bbf53c';
+const REVIEWED_MIGRATION_010_HEADS = Object.freeze([
+  '9ec1812630a54be3811ec94155824abc868cecdd',
+  'b794033e22874145fe7de8708b66c28b5e509b75',
+  PRE_PROVENANCE_CORRECTION_SHA,
+]);
+const MIGRATION_010_INTRODUCTION_LENGTH = 12043;
+const MIGRATION_010_INTRODUCTION_HASH = 'cac651ea70624f013377e21e74b393a5133f5f6551aed20939a12014ea040a1b';
+const MIGRATION_010_GIT_BLOB_LENGTH = 14419;
+const MIGRATION_010_GIT_BLOB_HASH = '0087278b1fb0062ba88a4dd7e4699e2e5c4c98d78e822193e2e7c0bff5c9ca48';
+const MIGRATION_010_CRLF_LENGTH = 14763;
+const MIGRATION_010_CRLF_HASH = 'fe78838214f05ea4a76325fd0881e1b8168103d2cff84d1636ad3b0baeae4fcb';
 const GENUINE_BASE_LEDGER_DDL = `
   CREATE TABLE IF NOT EXISTS _migrations (
     id SERIAL PRIMARY KEY,
@@ -51,6 +67,46 @@ function productionMigrationFiles() {
 
 function sha256(contents) {
   return crypto.createHash('sha256').update(contents).digest('hex');
+}
+
+function runRequiredGit(args, { allowFailure = false } = {}) {
+  const gitExecutable = process.env.M19_GIT_EXECUTABLE || 'git';
+  const safeRoot = ROOT.replace(/\\/g, '/');
+  const result = spawnSync(
+    gitExecutable,
+    ['-c', `safe.directory=${safeRoot}`, '-C', ROOT, ...args],
+    {
+      encoding: null,
+      maxBuffer: 16 * 1024 * 1024,
+      shell: false,
+      windowsHide: true,
+    }
+  );
+  if (result.error) {
+    throw new Error(`Required Git executable failed: ${result.error.message}`);
+  }
+  const stdout = Buffer.isBuffer(result.stdout) ? result.stdout : Buffer.from(result.stdout || '');
+  const stderr = Buffer.isBuffer(result.stderr) ? result.stderr : Buffer.from(result.stderr || '');
+  const stderrText = stderr.toString('utf8');
+  if (!allowFailure) {
+    if (result.status !== 0) {
+      throw new Error(
+        `Required Git command failed with exit ${result.status}: ${stderrText.trim() || 'no diagnostic'}`
+      );
+    }
+    if (/\bfatal:/i.test(stderrText)) {
+      throw new Error(`Required Git command emitted a fatal diagnostic: ${stderrText.trim()}`);
+    }
+  }
+  return { status: result.status, stderr, stdout };
+}
+
+function readRequiredGitBlob(ref, repositoryPath) {
+  const result = runRequiredGit(['cat-file', 'blob', `${ref}:${repositoryPath}`]);
+  if (result.stdout.length === 0) {
+    throw new Error(`Required Git blob is empty: ${ref}:${repositoryPath}`);
+  }
+  return result.stdout;
 }
 
 function waitForMessage(child, expectedType, timeoutMs = 15000) {
@@ -630,10 +686,78 @@ describe('production account migration authority on required PostgreSQL 18', () 
     await runProductionMigrations(connectionString, preOauthStateDirectory);
   }
 
-  test('real lexer handles exact legacy envelopes and protected migrations 001-010 remain byte-identical', () => {
-    for (const [file, expected] of Object.entries(PROTECTED_MIGRATION_HASHES)) {
+  test('real lexer handles exact legacy envelopes and protected provenance uses raw Git blobs', () => {
+    const verifiedBase = runRequiredGit(['rev-parse', '--verify', `${BASE_SHA}^{commit}`]);
+    expect(verifiedBase.stdout.length).toBeGreaterThan(0);
+
+    const absentFromBase = runRequiredGit(
+      ['cat-file', '-e', `${BASE_SHA}:${MIGRATION_010_REPOSITORY_PATH}`],
+      { allowFailure: true }
+    );
+    expect(absentFromBase.status).toBe(128);
+    expect(absentFromBase.stdout).toHaveLength(0);
+
+    const introductionBlob = readRequiredGitBlob(
+      MIGRATION_010_INTRODUCTION_SHA,
+      MIGRATION_010_REPOSITORY_PATH
+    );
+    expect(introductionBlob).toHaveLength(MIGRATION_010_INTRODUCTION_LENGTH);
+    expect(sha256(introductionBlob)).toBe(MIGRATION_010_INTRODUCTION_HASH);
+    const absentFromIntroductionParent = runRequiredGit(
+      ['cat-file', '-e', `${MIGRATION_010_INTRODUCTION_SHA}^:${MIGRATION_010_REPOSITORY_PATH}`],
+      { allowFailure: true }
+    );
+    expect(absentFromIntroductionParent.status).toBe(128);
+    expect(absentFromIntroductionParent.stdout).toHaveLength(0);
+
+    const currentBlob = readRequiredGitBlob('HEAD', MIGRATION_010_REPOSITORY_PATH);
+    expect(currentBlob).toHaveLength(MIGRATION_010_GIT_BLOB_LENGTH);
+    expect(sha256(currentBlob)).toBe(MIGRATION_010_GIT_BLOB_HASH);
+    for (const ref of REVIEWED_MIGRATION_010_HEADS) {
+      const reviewedBlob = readRequiredGitBlob(ref, MIGRATION_010_REPOSITORY_PATH);
+      expect(reviewedBlob).toHaveLength(MIGRATION_010_GIT_BLOB_LENGTH);
+      expect(sha256(reviewedBlob)).toBe(MIGRATION_010_GIT_BLOB_HASH);
+      expect(reviewedBlob.equals(currentBlob)).toBe(true);
+    }
+
+    for (const file of Object.keys(LEGACY_HASHES)) {
+      const repositoryPath = `migrations/${file}`;
+      const baseBlob = readRequiredGitBlob(BASE_SHA, repositoryPath);
+      const currentLegacyBlob = readRequiredGitBlob('HEAD', repositoryPath);
+      expect(currentLegacyBlob.equals(baseBlob)).toBe(true);
+    }
+    const migration011BeforeCorrection = readRequiredGitBlob(
+      PRE_PROVENANCE_CORRECTION_SHA,
+      MIGRATION_011_REPOSITORY_PATH
+    );
+    const migration011Current = readRequiredGitBlob('HEAD', MIGRATION_011_REPOSITORY_PATH);
+    expect(migration011Current.equals(migration011BeforeCorrection)).toBe(true);
+
+    const tampered = Buffer.from(currentBlob);
+    const byteOffset = Math.floor(tampered.length / 2);
+    tampered[byteOffset] ^= 0x01;
+    expect(tampered.reduce(
+      (differences, byte, index) => differences + (byte === currentBlob[index] ? 0 : 1),
+      0
+    )).toBe(1);
+    expect(sha256(tampered)).not.toBe(MIGRATION_010_GIT_BLOB_HASH);
+
+    const checkoutBytes = fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, MIGRATION_010));
+    const checkoutMatchesGitBlob = checkoutBytes.equals(currentBlob);
+    if (process.platform === 'win32' && !checkoutMatchesGitBlob) {
+      expect(checkoutBytes).toHaveLength(MIGRATION_010_CRLF_LENGTH);
+      expect(sha256(checkoutBytes)).toBe(MIGRATION_010_CRLF_HASH);
+    }
+    console.info('[Migration Provenance]', {
+      checkoutLength: checkoutBytes.length,
+      checkoutMatchesGitBlob,
+      checkoutSha256: sha256(checkoutBytes),
+      gitBlobLength: currentBlob.length,
+      gitBlobSha256: sha256(currentBlob),
+    });
+
+    for (const file of Object.keys(PROTECTED_MIGRATION_HASHES)) {
       const contents = fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, file));
-      expect(sha256(contents)).toBe(expected);
       const prepared = stripOuterTransaction(contents.toString('utf8'));
       if (LEGACY_HASHES[file]) {
         expect(prepared.hadOuterTransaction).toBe(true);
@@ -642,21 +766,6 @@ describe('production account migration authority on required PostgreSQL 18', () 
       } else {
         expect(prepared.hadOuterTransaction).toBe(false);
       }
-    }
-
-    const tamperedDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-migration-010-one-byte-'));
-    try {
-      const sourcePath = path.join(MIGRATIONS_DIRECTORY, MIGRATION_010);
-      const copiedPath = path.join(tamperedDirectory, MIGRATION_010);
-      fs.copyFileSync(sourcePath, copiedPath);
-      const tampered = fs.readFileSync(copiedPath);
-      const byteOffset = Math.floor(tampered.length / 2);
-      tampered[byteOffset] ^= 0x01;
-      fs.writeFileSync(copiedPath, tampered);
-      expect(sha256(fs.readFileSync(sourcePath))).toBe(PROTECTED_MIGRATION_HASHES[MIGRATION_010]);
-      expect(sha256(fs.readFileSync(copiedPath))).not.toBe(PROTECTED_MIGRATION_HASHES[MIGRATION_010]);
-    } finally {
-      fs.rmSync(tamperedDirectory, { recursive: true, force: true });
     }
 
     const variant = '\uFEFF\n-- leading line comment\n/* leading /* nested */ block */\nBEGIN -- owner\n;\n' +

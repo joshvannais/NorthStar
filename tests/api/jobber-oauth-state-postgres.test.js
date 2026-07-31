@@ -232,14 +232,19 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
       email,
       password: 'durable oauth password',
     });
-    expect(signup.status).toBe(201);
-    const cookies = responseCookies(signup);
+    expect(signup.status).toBe(202);
+    const login = await request(app).post('/api/auth/login').send({
+      email,
+      password: 'durable oauth password',
+    });
+    expect(login.status).toBe(200);
+    const cookies = responseCookies(login);
     const cookie = cookieHeader(cookies);
     const headers = { Cookie: cookie, 'X-CSRF-Token': cookies.northstar_csrf };
     const pending = await request(app).get('/api/auth/me').set('Cookie', cookie);
     expect(pending.status).toBe(200);
     expect(pending.body.account.user.status).toBe('pending_verification');
-    expect(pending.body.account.onboarding.status).toBe('business_profile_required');
+    expect(pending.body.account.onboarding.status).toBe('pending_verification');
     const profile = await request(app).put('/api/v1/business-profile').set(headers)
       .send(canonicalFenceProfile({ companyName: `Jobber ${label} Company` }));
     expect(profile.status).toBe(200);
@@ -268,8 +273,24 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     );
     expect(authority.rows).toHaveLength(1);
     // TEST PROVISIONING ONLY: mounted pending signup and Business Profile
-    // onboarding were proven immediately above. PR B owns verification.
-    await pool.query("UPDATE users SET status = 'active' WHERE id = $1", [authority.rows[0].user_id]);
+    // onboarding were proven immediately above. No public path creates this
+    // active fixture; B1's signed-email verification path is covered separately.
+    await pool.query(
+      `WITH activated AS (
+         UPDATE users
+            SET status = 'active', updated_at = clock_timestamp()
+          WHERE id = $1
+          RETURNING organization_id
+       )
+       UPDATE subscriptions subscription
+          SET status = 'trialing',
+              trial_started_at = transaction_timestamp(),
+              trial_ends_at = transaction_timestamp() + INTERVAL '14 days',
+              updated_at = transaction_timestamp()
+         FROM activated
+        WHERE subscription.organization_id = activated.organization_id`,
+      [authority.rows[0].user_id]
+    );
     return {
       ...authority.rows[0],
       cookie,

@@ -8,12 +8,31 @@ function createDisposableAccountApp(options = {}) {
   const express = require('express');
   const path = require('path');
   const { AccountService } = require('../../src/accounts/service');
+  const { TransactionalEmail } = require('../../src/email/transactional');
   const { createAuthRouter } = require('../../src/routes/auth');
   const { createCanonicalRouter, createCompatibilityRouter } = require('../../src/routes/canonicalPolaris');
   const { createJobberIntegrationRouter } = require('../../src/routes/jobberIntegration');
   const { createLegacyAuthorityRetirementRouter } = require('../../src/routes/legacyAuthorityRetirement');
-  const service = new AccountService();
+  const capture = options.emailCapture || {
+    messages: [],
+    async send(message) {
+      this.messages.push(JSON.parse(JSON.stringify(message)));
+      return { accepted: true };
+    },
+  };
+  const transactionalEmail = options.transactionalEmail || new TransactionalEmail({
+    adapter: capture,
+    publicOrigin: options.publicOrigin || 'http://127.0.0.1',
+    from: 'security@northstar.example.test',
+    production: false,
+  });
+  const { AccountRepository } = require('../../src/accounts/repository');
+  const repository = options.repository || new AccountRepository(undefined, {
+    testClock: options.testClock,
+  });
+  const service = new AccountService(repository, { transactionalEmail });
   const app = express();
+  app.locals.accountRepository = repository;
 
   app.use(express.json({ limit: '1mb' }));
   const publicRoot = path.resolve(__dirname, '../../public');
@@ -23,6 +42,10 @@ function createDisposableAccountApp(options = {}) {
   for (const [route, file] of Object.entries({
     '/login': 'login.html',
     '/signup': 'signup.html',
+    '/verify-email': 'verify-email.html',
+    '/forgot-password': 'forgot-password.html',
+    '/reset-password': 'reset-password.html',
+    '/account/pending': 'account/pending.html',
     '/dashboard': 'dashboard/command-center.html',
     '/dashboard/business-profile': 'dashboard/business-profile.html',
     '/dashboard/settings': 'dashboard/settings.html',
@@ -49,6 +72,7 @@ function createDisposableAccountApp(options = {}) {
     }));
   }
   app.use('/api', require('../../src/routes/api'));
+  app.accountEmailCapture = capture;
   return app;
 }
 

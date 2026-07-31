@@ -116,10 +116,44 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
 
   async function signup(email) {
     await pool.query("DELETE FROM auth_rate_limits WHERE event_type = 'signup_ip'");
-    return request(app).post('/api/auth/signup').send({
+    const created = await request(app).post('/api/auth/signup').send({
       name: 'Gate Owner', businessName: `Gate ${email}`, phone: '8605550101',
       email, password: 'durable gate password',
     });
+    expect(created.status).toBe(202);
+    const login = await request(app).post('/api/auth/login').send({
+      email, password: 'durable gate password',
+    });
+    expect(login.status).toBe(200);
+    return login;
+  }
+
+  async function activateTrialForEmail(email) {
+    const result = await pool.query(
+      `WITH activated_user AS (
+         UPDATE users SET status = 'active', updated_at = clock_timestamp()
+          WHERE email_normalized = $1
+          RETURNING organization_id
+       ), activated_subscription AS (
+         UPDATE subscriptions subscription
+            SET status = 'trialing',
+                trial_started_at = transaction_timestamp(),
+                trial_ends_at = transaction_timestamp() + INTERVAL '14 days',
+                updated_at = transaction_timestamp()
+           FROM activated_user
+          WHERE subscription.organization_id = activated_user.organization_id
+          RETURNING subscription.organization_id
+       )
+       UPDATE organization_onboarding onboarding
+          SET status = CASE WHEN onboarding.active_business_profile_id IS NULL
+                            THEN 'business_profile_required' ELSE 'complete' END,
+              updated_at = clock_timestamp()
+         FROM activated_subscription
+        WHERE onboarding.organization_id = activated_subscription.organization_id
+        RETURNING onboarding.organization_id`,
+      [email.trim().toLowerCase()]
+    );
+    expect(result.rows).toHaveLength(1);
   }
 
   function clearProviderSpies() {
@@ -153,7 +187,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
 
   test('pending user reads its tenant dashboard, opens/saves onboarding, and remains unverified', async () => {
     const created = await signup('pending-gates@example.test');
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     const jar = cookies(created);
     const headers = { Cookie: cookieHeader(jar), 'X-CSRF-Token': jar.northstar_csrf };
 
@@ -173,8 +207,8 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(me.body.account.onboarding.status).toBe('complete');
 
     const internal = await request(app).post('/api/v1/simulations/leads').set(headers).send({});
-    expect(internal.status).toBe(422);
-    expect(internal.body.error.code).toBe('service_required');
+    expect(internal.status).toBe(403);
+    expect(internal.body.code).toBe('product_access_required');
 
     const external = await request(app).put('/api/v1/canonical/integrations/retell').set(headers).send({
       externalIntegrationId: 'pending-must-not-bind', organizationId: crypto.randomUUID(), role: 'owner',
@@ -189,9 +223,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     const created = await signup('verified-incomplete@example.test');
     const jar = cookies(created);
     const headers = { Cookie: cookieHeader(jar), 'X-CSRF-Token': jar.northstar_csrf };
-    const user = await pool.query("SELECT id FROM users WHERE email_normalized = 'verified-incomplete@example.test'");
-    // Test provisioning only; this is not verification-flow evidence (PR B owns that flow).
-    await pool.query("UPDATE users SET status = 'active' WHERE id = $1", [user.rows[0].id]);
+    await activateTrialForEmail('verified-incomplete@example.test');
     expect((await request(app).get('/api/v1/canonical/status').set(headers)).status).toBe(200);
     const denied = await request(app).post('/api/v1/voice/call').set(headers).send({ phoneNumber: '8605550103' });
     expect(denied.status).toBe(403);
@@ -200,7 +232,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
 
   test('verified completed authority is PostgreSQL-owned and ignores forged tenant/role fields', async () => {
     const created = await signup('verified-complete-gates@example.test');
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     const createdJar = cookies(created);
     const saved = await request(app).put('/api/v1/business-profile')
       .set({ Cookie: cookieHeader(createdJar), 'X-CSRF-Token': createdJar.northstar_csrf })
@@ -208,8 +240,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(saved.status).toBe(200);
     const user = await pool.query("SELECT id, organization_id FROM users WHERE email_normalized = 'verified-complete-gates@example.test'");
     expect(user.rows).toHaveLength(1);
-    // Test provisioning only; this is not verification-flow evidence (PR B owns that flow).
-    await pool.query("UPDATE users SET status = 'active' WHERE id = $1", [user.rows[0].id]);
+    await activateTrialForEmail('verified-complete-gates@example.test');
     const login = await request(app).post('/api/auth/login').send({
       email: 'verified-complete-gates@example.test', password: 'durable gate password',
     });
@@ -232,7 +263,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     const tenantPrivateMarker = `tenant-private-${crypto.randomUUID()}`;
     const foreignOrganizationId = crypto.randomUUID();
     const created = await signup('pending-external-families@example.test');
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     const jar = cookies(created);
     const headers = {
       Cookie: cookieHeader(jar),
@@ -338,11 +369,79 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(after.rows[0]).toEqual(before.rows[0]);
   }, 30000);
 
+  test('expired organizations preserve reads and deny internal and external mutation families at shared boundaries', async () => {
+    clearProviderSpies();
+    const created = await signup('expired-mutation-families@example.test');
+    const jar = cookies(created);
+    const headers = { Cookie: cookieHeader(jar), 'X-CSRF-Token': jar.northstar_csrf };
+    expect((await request(app).put('/api/v1/business-profile').set(headers)
+      .send(canonicalFenceProfile({ companyName: 'Expired Mutation Company' }))).status).toBe(200);
+    await activateTrialForEmail('expired-mutation-families@example.test');
+    const authority = (await pool.query(
+      "SELECT id, organization_id FROM users WHERE email_normalized = 'expired-mutation-families@example.test'"
+    )).rows[0];
+    await pool.query(
+      `UPDATE subscriptions
+          SET status = 'expired',
+              trial_started_at = transaction_timestamp() - INTERVAL '15 days',
+              trial_ends_at = transaction_timestamp() - INTERVAL '1 day'
+        WHERE organization_id = $1`,
+      [authority.organization_id]
+    );
+    expect((await request(app).get('/api/auth/me').set(headers)).status).toBe(200);
+    expect((await request(app).get('/api/account/preferences').set(headers)).status).toBe(200);
+    expect((await request(app).get('/api/v1/canonical/status').set(headers)).status).toBe(200);
+
+    const marker = `expired-${crypto.randomUUID()}`;
+    const querySpy = jest.spyOn(pool, 'query');
+    const account = await request(app).put('/api/account/preferences').set(headers).send({ companyName: marker });
+    const profile = await request(app).put('/api/v1/business-profile').set(headers)
+      .send(canonicalFenceProfile({ companyName: marker }));
+    const lead = await request(app).post('/api/leads').set(headers)
+      .set('Idempotency-Key', marker).send({ customerName: marker, serviceKey: 'fence-installation' });
+    const simulation = await request(app).post('/api/v1/simulations/leads').set(headers).send({ serviceKey: marker });
+    const exported = await request(app).get('/api/leads/export').set(headers);
+    const retellAgent = await request(app).post('/api/retell/create-agent').set(headers).send({ name: marker });
+    const retellSms = await request(app).post('/api/retell/send-sms').set(headers)
+      .send({ phoneNumber: '8605550188', message: marker });
+    const jobber = await request(app).get('/api/integrations/jobber/auth').set(headers);
+    const integration = await request(app).put('/api/v1/canonical/integrations/retell').set(headers)
+      .send({ externalIntegrationId: marker });
+    const outbound = await request(app).post('/api/v1/voice/call').set(headers)
+      .send({ phoneNumber: '8605550189' });
+    const handoff = await request(app).post(`/api/v1/voice/sessions/${marker}/handoff`).set(headers)
+      .set('Idempotency-Key', `${marker}-handoff`).send({ reason: marker });
+    const cancel = await request(app).post(`/api/v1/voice/sessions/${marker}/cancel`).set(headers)
+      .set('Idempotency-Key', `${marker}-cancel`).send({ reason: marker });
+    const writes = querySpy.mock.calls.filter(([statement]) => (
+      /^(?:\s|\/\*[\s\S]*?\*\/)*(?:INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP|TRUNCATE)\b/i.test(String(statement))
+    ));
+    querySpy.mockRestore();
+
+    for (const denied of [account, profile, exported, retellAgent, retellSms, jobber, integration, outbound, handoff, cancel]) {
+      expect(denied.status).toBe(403);
+      expect(denied.body.code).toBe('subscription_read_only');
+      expect(denied.text).not.toContain(marker);
+    }
+    for (const denied of [lead, simulation]) {
+      expect(denied.status).toBe(403);
+      expect(denied.body.code).toBe('product_access_required');
+      expect(denied.text).not.toContain(marker);
+    }
+    expectNoProviderCalls();
+    expect(writes).toEqual([]);
+    expect((await pool.query(
+      `SELECT count(*)::int AS count FROM leads
+        WHERE organization_id = $1 AND caller_name = $2`,
+      [authority.organization_id, marker]
+    )).rows[0].count).toBe(0);
+  }, 30000);
+
   test('verified mounted families reach intercepted contracts with PostgreSQL-owned role and tenant', async () => {
     clearProviderSpies();
     const foreignOrganizationId = crypto.randomUUID();
     const created = await signup('verified-external-families@example.test');
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     const createdJar = cookies(created);
     const createdHeaders = {
       Cookie: cookieHeader(createdJar),
@@ -351,6 +450,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     const saved = await request(app).put('/api/v1/business-profile').set(createdHeaders)
       .send(canonicalFenceProfile({ companyName: 'PostgreSQL External Authority Company' }));
     expect(saved.status).toBe(200);
+    await activateTrialForEmail('verified-external-families@example.test');
     const ownExportMarker = `Own Tenant ${crypto.randomUUID()}`;
     const ownLead = await request(app).post('/api/leads').set(createdHeaders)
       .set('Idempotency-Key', `own-export-${crypto.randomUUID()}`)
@@ -358,7 +458,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(ownLead.status).toBe(201);
 
     const foreignCreated = await signup('foreign-export-scope@example.test');
-    expect(foreignCreated.status).toBe(201);
+    expect(foreignCreated.status).toBe(200);
     const foreignJar = cookies(foreignCreated);
     const foreignHeaders = {
       Cookie: cookieHeader(foreignJar),
@@ -366,6 +466,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     };
     expect((await request(app).put('/api/v1/business-profile').set(foreignHeaders)
       .send(canonicalFenceProfile({ companyName: 'Foreign Export Scope Company' }))).status).toBe(200);
+    await activateTrialForEmail('foreign-export-scope@example.test');
     const foreignExportMarker = `Foreign Tenant ${crypto.randomUUID()}`;
     const foreignLead = await request(app).post('/api/leads').set(foreignHeaders)
       .set('Idempotency-Key', `foreign-export-${crypto.randomUUID()}`)
@@ -379,8 +480,6 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     );
     expect(authority.rows).toHaveLength(1);
     const { id: userId, organization_id: organizationId, membership_id: membershipId } = authority.rows[0];
-    // Test provisioning only; this is not verification-flow evidence (PR B owns that flow).
-    await pool.query("UPDATE users SET status = 'active' WHERE id = $1", [userId]);
     await pool.query("UPDATE organization_memberships SET role = 'viewer' WHERE id = $1", [membershipId]);
     const login = await request(app).post('/api/auth/login').send({
       email: 'verified-external-families@example.test', password: 'durable gate password',

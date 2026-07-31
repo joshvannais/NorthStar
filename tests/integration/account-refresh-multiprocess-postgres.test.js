@@ -72,18 +72,24 @@ realPostgres('Account refresh authority across Node processes', () => {
 
   test('two processes racing one refresh token yield one rotation and one replay, then revoke the family', async () => {
     const { AccountService } = require('../../src/accounts/service');
-    const service = new AccountService();
-    const signup = await service.signup({
+    const service = new AccountService(undefined, {
+      transactionalEmail: { verification: async () => ({ accepted: true }) },
+    });
+    await service.signup({
       name: 'Process Owner',
       businessName: 'Process Refresh Company',
       phone: '8605550188',
       email: 'process-refresh@example.test',
       password: 'process password 123',
     }, '127.0.0.1');
+    const login = await service.login({
+      email: 'process-refresh@example.test',
+      password: 'process password 123',
+    }, '127.0.0.1');
 
     const outcomes = await Promise.all([
-      runWorker(allocation.connectionString, process.env.AUTH_ACCESS_SECRET, signup.material),
-      runWorker(allocation.connectionString, process.env.AUTH_ACCESS_SECRET, signup.material),
+      runWorker(allocation.connectionString, process.env.AUTH_ACCESS_SECRET, login.material),
+      runWorker(allocation.connectionString, process.env.AUTH_ACCESS_SECRET, login.material),
     ]);
     expect(outcomes.sort()).toEqual(['refresh_replay', 'rotated']);
 
@@ -95,7 +101,7 @@ realPostgres('Account refresh authority across Node processes', () => {
          JOIN auth_refresh_tokens token ON token.session_id = session.id
         WHERE session.id = $1
         GROUP BY session.id`,
-      [signup.material.sessionId]
+      [login.material.sessionId]
     );
     expect(state.rows).toEqual([{ session_status: 'revoked', active_tokens: 0, reused_tokens: 1 }]);
   }, 60000);

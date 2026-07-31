@@ -58,6 +58,12 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     const smsNotifications = require('../../src/notifications/sms');
     const retell = require('../../src/retell/client');
     const jobber = require('../../src/integrations/jobber');
+    const connectionCapability = {
+      stateAuthority: require('../../src/integrations/oauthAuthorizationState'),
+      persistConnection: async () => true,
+      readConnectionStatus: async () => ({ connected: false }),
+      disconnectConnection: async () => true,
+    };
     voiceSessions = require('../../src/services/voiceSessionAuthority');
     providerSpies = {
       calendarSchedule: jest.spyOn(calendar, 'scheduleEstimate').mockResolvedValue({
@@ -83,13 +89,17 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
         refresh_token: 'intercepted-jobber-refresh',
         expires_in: 3600,
       }),
-      jobberSave: jest.spyOn(jobber, 'saveTokens').mockResolvedValue(true),
+      jobberSave: jest.spyOn(connectionCapability, 'persistConnection').mockResolvedValue(true),
+      jobberStatus: jest.spyOn(connectionCapability, 'readConnectionStatus')
+        .mockResolvedValue({ connected: false }),
       externalFetch: jest.spyOn(global, 'fetch').mockRejectedValue(new Error('unexpected external fetch')),
       externalHttps: jest.spyOn(https, 'request').mockImplementation(() => {
         throw new Error('unexpected external HTTPS request');
       }),
     };
-    app = require('../helpers/account-test-app').createDisposableAccountApp();
+    app = require('../helpers/account-test-app').createDisposableAccountApp({
+      jobberConnectionCapability: connectionCapability,
+    });
   }, 60000);
 
   afterAll(async () => {
@@ -376,6 +386,16 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       email: 'verified-external-families@example.test', password: 'durable gate password',
     });
     expect(login.status).toBe(200);
+    const session = await pool.query(
+      `SELECT id
+         FROM auth_sessions
+        WHERE user_id = $1 AND organization_id = $2 AND status = 'active'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [userId, organizationId]
+    );
+    expect(session.rows).toHaveLength(1);
+    const sessionId = session.rows[0].id;
     const jar = cookies(login);
     const headers = {
       Cookie: cookieHeader(jar),
@@ -529,9 +549,15 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(providerSpies.jobberAuth).toHaveBeenCalledTimes(1);
     expect(providerSpies.jobberExchange).toHaveBeenCalledTimes(1);
     expect(providerSpies.jobberExchange.mock.calls[0][0]).toBe('intercepted-jobber-code');
-    expect(providerSpies.jobberSave).toHaveBeenCalledWith(
-      userId, 'intercepted-jobber-access', 'intercepted-jobber-refresh', 3600
-    );
+    expect(providerSpies.jobberSave).toHaveBeenCalledWith({
+      provider: 'jobber',
+      organizationId,
+      userId,
+      sessionId,
+      accessToken: 'intercepted-jobber-access',
+      refreshToken: 'intercepted-jobber-refresh',
+      expiresIn: 3600,
+    });
 
     const outbound = await request(app).post('/api/v1/voice/call').set(headers).send({
       organizationId: foreignOrganizationId,

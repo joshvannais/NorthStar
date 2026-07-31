@@ -15,6 +15,7 @@ PAGES = (
     "public/dashboard/command-center.html",
     "public/dashboard/communications.html",
     "public/dashboard/executive-brief.html",
+    "public/dashboard/integrations.html",
     "public/dashboard/lead.html",
     "public/dashboard/leads.html",
     "public/dashboard/polaris.html",

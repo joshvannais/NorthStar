@@ -4,12 +4,13 @@
  * Disposable-test application capability for Account Lifecycle PR A.
  * Production src/server.js never imports this module and never passes signup.
  */
-function createDisposableAccountApp() {
+function createDisposableAccountApp(options = {}) {
   const express = require('express');
   const path = require('path');
   const { AccountService } = require('../../src/accounts/service');
   const { createAuthRouter } = require('../../src/routes/auth');
   const { createCanonicalRouter, createCompatibilityRouter } = require('../../src/routes/canonicalPolaris');
+  const { createJobberIntegrationRouter } = require('../../src/routes/jobberIntegration');
   const { createLegacyAuthorityRetirementRouter } = require('../../src/routes/legacyAuthorityRetirement');
   const service = new AccountService();
   const app = express();
@@ -42,6 +43,11 @@ function createDisposableAccountApp() {
   app.use('/api', require('../../src/routes/canonicalLeads'));
   app.use('/api', createCompatibilityRouter());
   app.use('/api', createLegacyAuthorityRetirementRouter());
+  if (options.jobberConnectionCapability) {
+    app.use('/api/integrations/jobber', createJobberIntegrationRouter({
+      connectionCapability: options.jobberConnectionCapability,
+    }));
+  }
   app.use('/api', require('../../src/routes/api'));
   return app;
 }

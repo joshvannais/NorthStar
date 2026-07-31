@@ -36,7 +36,7 @@ function identifierRepresentations(value) {
   ]);
 }
 
-function startCallbackWorker(connectionString, secret) {
+function startCallbackWorker(connectionString, secret, oauthEnabled = true, additionalEnvironment = {}) {
   const child = fork(path.resolve(__dirname, '../helpers/jobber-oauth-callback-worker.js'), [], {
     cwd: path.resolve(__dirname, '../..'),
     env: {
@@ -45,6 +45,10 @@ function startCallbackWorker(connectionString, secret) {
       AUTH_ACCESS_SECRET: secret,
       JOBBER_CLIENT_ID: 'disposable-jobber-client',
       JOBBER_CLIENT_SECRET: 'disposable-jobber-secret',
+      JOBBER_TEST_CONNECTION_CAPABILITY: oauthEnabled
+        ? 'intercepted-canonical-postgresql'
+        : 'absent',
+      ...additionalEnvironment,
     },
     silent: true,
   });
@@ -102,11 +106,20 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
   let db;
   let pool;
   let app;
+  let productionApp;
   let jobber;
+  let stateAuthority;
   let realExchangeCode;
   let realSaveTokens;
+  let authUrlSpy;
   let exchangeSpy;
   let saveSpy;
+  let legacySaveSpy;
+  let legacyDisconnectSpy;
+  let statusSpy;
+  let disconnectSpy;
+  let issueStateSpy;
+  let consumeStateSpy;
   let httpsSpy;
   let fetchSpy;
   const originals = {};
@@ -123,6 +136,9 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
       'ACCOUNT_VERIFICATION_DELIVERY_READY',
       'JOBBER_CLIENT_ID',
       'JOBBER_CLIENT_SECRET',
+      'JOBBER_INTEGRATION_ENABLED',
+      'JOBBER_OAUTH_ENABLED',
+      'JOBBER_TOKEN_PERSISTENCE_ENABLED',
     ]) originals[key] = process.env[key];
     process.env.DATABASE_URL = allocation.connectionString;
     process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
@@ -136,28 +152,55 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     expect(await db.initDatabase()).toBe(true);
     pool = db.getPool();
     jobber = require('../../src/integrations/jobber');
+    stateAuthority = require('../../src/integrations/oauthAuthorizationState');
     realExchangeCode = jobber.exchangeCode.bind(jobber);
     realSaveTokens = jobber.saveTokens.bind(jobber);
+    authUrlSpy = jest.spyOn(jobber, 'getAuthUrl');
     exchangeSpy = jest.spyOn(jobber, 'exchangeCode').mockResolvedValue({
       access_token: 'intercepted-jobber-access',
       refresh_token: 'intercepted-jobber-refresh',
       expires_in: 3600,
     });
-    saveSpy = jest.spyOn(jobber, 'saveTokens').mockResolvedValue(true);
+    legacySaveSpy = jest.spyOn(jobber, 'saveTokens').mockResolvedValue(false);
+    legacyDisconnectSpy = jest.spyOn(jobber, 'disconnect').mockResolvedValue(undefined);
+    const connectionCapability = {
+      stateAuthority,
+      persistConnection: async () => true,
+      readConnectionStatus: async () => ({ connected: false }),
+      disconnectConnection: async () => true,
+    };
+    saveSpy = jest.spyOn(connectionCapability, 'persistConnection').mockResolvedValue(true);
+    statusSpy = jest.spyOn(connectionCapability, 'readConnectionStatus')
+      .mockResolvedValue({ connected: false });
+    disconnectSpy = jest.spyOn(connectionCapability, 'disconnectConnection')
+      .mockResolvedValue(true);
     httpsSpy = jest.spyOn(https, 'request').mockImplementation(() => {
       throw new Error('unexpected provider transmission');
     });
     if (typeof global.fetch === 'function') {
       fetchSpy = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('unexpected provider fetch'));
     }
-    app = require('../helpers/account-test-app').createDisposableAccountApp();
+    issueStateSpy = jest.spyOn(stateAuthority, 'issueAuthorizationState');
+    consumeStateSpy = jest.spyOn(stateAuthority, 'consumeAuthorizationState');
+    const { createDisposableAccountApp } = require('../helpers/account-test-app');
+    app = createDisposableAccountApp({
+      jobberConnectionCapability: connectionCapability,
+    });
+    productionApp = require('../../src/server').app;
   }, 60000);
 
   afterAll(async () => {
     if (fetchSpy) fetchSpy.mockRestore();
     if (httpsSpy) httpsSpy.mockRestore();
+    if (statusSpy) statusSpy.mockRestore();
+    if (disconnectSpy) disconnectSpy.mockRestore();
     if (saveSpy) saveSpy.mockRestore();
+    if (legacyDisconnectSpy) legacyDisconnectSpy.mockRestore();
+    if (legacySaveSpy) legacySaveSpy.mockRestore();
+    if (consumeStateSpy) consumeStateSpy.mockRestore();
+    if (issueStateSpy) issueStateSpy.mockRestore();
     if (exchangeSpy) exchangeSpy.mockRestore();
+    if (authUrlSpy) authUrlSpy.mockRestore();
     if (db) await db.close();
     if (allocation) await allocation.cleanup();
     for (const [key, value] of Object.entries(originals)) {
@@ -167,7 +210,14 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
 
   beforeEach(() => {
     exchangeSpy.mockClear();
+    authUrlSpy.mockClear();
     saveSpy.mockClear();
+    legacyDisconnectSpy.mockClear();
+    legacySaveSpy.mockClear();
+    statusSpy.mockClear();
+    disconnectSpy.mockClear();
+    issueStateSpy.mockClear();
+    consumeStateSpy.mockClear();
     httpsSpy.mockClear();
     if (fetchSpy) fetchSpy.mockClear();
   });
@@ -273,6 +323,46 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
   function expectNoTransmission() {
     expect(httpsSpy).not.toHaveBeenCalled();
     if (fetchSpy) expect(fetchSpy).not.toHaveBeenCalled();
+  }
+
+  async function sessionStateCount(authority) {
+    const result = await pool.query(
+      'SELECT count(*)::int AS count FROM oauth_authorization_states WHERE auth_session_id = $1',
+      [authority.session_id]
+    );
+    return result.rows[0].count;
+  }
+
+  function expectProductionUnavailable(response) {
+    expect(response.status).toBe(503);
+    expect(response.headers.location).toBeUndefined();
+    expect(response.headers['set-cookie']).toBeUndefined();
+    expect(response.body).toMatchObject({
+      error: 'Jobber integration is unavailable',
+      code: 'jobber_unavailable',
+    });
+    if (response.headers['x-request-id']) {
+      expect(response.body.requestId).toEqual(expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      ));
+      expect(response.headers['x-request-id']).toBe(response.body.requestId);
+      expect(response.headers['x-correlation-id']).toBe(response.body.requestId);
+    } else {
+      expect(response.body.requestId).toBe('unavailable');
+    }
+  }
+
+  function expectNoJobberCapabilityUse() {
+    expect(authUrlSpy).not.toHaveBeenCalled();
+    expect(exchangeSpy).not.toHaveBeenCalled();
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(legacySaveSpy).not.toHaveBeenCalled();
+    expect(legacyDisconnectSpy).not.toHaveBeenCalled();
+    expect(statusSpy).not.toHaveBeenCalled();
+    expect(disconnectSpy).not.toHaveBeenCalled();
+    expect(issueStateSpy).not.toHaveBeenCalled();
+    expect(consumeStateSpy).not.toHaveBeenCalled();
+    expectNoTransmission();
   }
 
   test('migration 011 catalogs define the exact durable state contract', async () => {
@@ -422,6 +512,109 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     expect(sequence.rows).toEqual([{ sequence_name: null }]);
   });
 
+  test('production-mounted Jobber status and OAuth fail closed before state, redirect, exchange, or persistence', async () => {
+    const authority = await createVerifiedOwner('production-unavailable');
+    const beforeCount = await sessionStateCount(authority);
+    expect(beforeCount).toBe(0);
+    for (const name of [
+      'JOBBER_INTEGRATION_ENABLED',
+      'JOBBER_OAUTH_ENABLED',
+      'JOBBER_TOKEN_PERSISTENCE_ENABLED',
+    ]) process.env[name] = 'true';
+
+    const forged = {
+      code: `provider-code-${crypto.randomUUID()}`,
+      state: crypto.randomBytes(32).toString('base64url'),
+      organizationId: `foreign-${crypto.randomUUID()}`,
+      userId: `forged-${crypto.randomUUID()}`,
+      role: 'owner',
+      email: `private-${crypto.randomUUID()}@example.test`,
+    };
+    const status = await request(productionApp).get('/api/integrations/jobber/status')
+      .set('Cookie', authority.cookie)
+      .query(forged);
+    expect(status.status).toBe(200);
+    expect(status.body).toEqual({
+      available: false,
+      configured: false,
+      connected: false,
+      requestId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      ),
+    });
+    expect(status.headers['x-request-id']).toBe(status.body.requestId);
+    expect(status.headers['x-correlation-id']).toBe(status.body.requestId);
+    expect(status.body).not.toHaveProperty('hasClientId');
+    expect(status.body).not.toHaveProperty('hasClientSecret');
+    expect(status.body).not.toHaveProperty('clientIdLength');
+
+    const start = await request(productionApp).get('/api/integrations/jobber/auth')
+      .set('Cookie', authority.cookie)
+      .query(forged);
+    const callbackResponse = await request(productionApp).get('/api/integrations/jobber/callback')
+      .set('Cookie', authority.cookie)
+      .query(forged);
+    const disconnectResponse = await request(productionApp).post('/api/integrations/jobber/disconnect')
+      .set(authority.headers)
+      .send({ ...forged });
+    expectProductionUnavailable(start);
+    expectProductionUnavailable(callbackResponse);
+    expectProductionUnavailable(disconnectResponse);
+    expect(await sessionStateCount(authority)).toBe(0);
+
+    const surface = [
+      status.text,
+      start.text,
+      callbackResponse.text,
+      JSON.stringify(status.headers),
+      JSON.stringify(start.headers),
+      JSON.stringify(callbackResponse.headers),
+      disconnectResponse.text,
+      JSON.stringify(disconnectResponse.headers),
+    ].join('\n');
+    for (const privateValue of [
+      ...Object.values(forged),
+      authority.user_id,
+      authority.session_id,
+      authority.organization_id,
+      authority.role,
+      authority.email,
+      process.env.JOBBER_CLIENT_ID,
+      process.env.JOBBER_CLIENT_SECRET,
+      'api.getjobber.com',
+      'oauth_authorization_states',
+    ]) {
+      expect(surface).not.toContain(String(privateValue));
+    }
+    expectNoJobberCapabilityUse();
+  }, 30000);
+
+  test('pending and viewer callers are denied before the production capability response', async () => {
+    const pending = await createVerifiedOwner('production-pending');
+    await pool.query("UPDATE users SET status = 'pending_verification' WHERE id = $1", [pending.user_id]);
+    const pendingResponse = await request(productionApp).get('/api/integrations/jobber/auth')
+      .set('Cookie', pending.cookie);
+    expect(pendingResponse.status).toBe(403);
+    expect(pendingResponse.body.code).toBe('verification_required');
+    expect(pendingResponse.body.code).not.toBe('jobber_unavailable');
+
+    const viewer = await createVerifiedOwner('production-viewer');
+    await pool.query(
+      "UPDATE organization_memberships SET role = 'viewer', updated_at = NOW() WHERE id = $1",
+      [viewer.membership_id]
+    );
+    const viewerResponse = await request(productionApp).get('/api/integrations/jobber/auth')
+      .set('Cookie', viewer.cookie)
+      .query({ role: 'owner', organizationId: pending.organization_id });
+    expect(viewerResponse.status).toBe(403);
+    expect(viewerResponse.body.error).toBe('Insufficient permissions');
+    expect(viewerResponse.body).not.toHaveProperty('code', 'jobber_unavailable');
+
+    expect(await sessionStateCount(pending)).toBe(0);
+    expect(await sessionStateCount(viewer)).toBe(0);
+    expectNoJobberCapabilityUse();
+  }, 30000);
+
   test('authorization redirects expose only distinct 256-bit opaque state and PostgreSQL stores only hashes', async () => {
     const authority = await createVerifiedOwner('opacity');
     const first = await authorize(authority);
@@ -488,7 +681,7 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
   test('an unexpected authorization URL failure returns a bounded response without error or identity disclosure', async () => {
     const authority = await createVerifiedOwner('authorization-error');
     const privateDiagnostic = `private-diagnostic-${crypto.randomUUID()}`;
-    const urlSpy = jest.spyOn(jobber, 'getAuthUrl').mockImplementationOnce(() => {
+    authUrlSpy.mockImplementationOnce(() => {
       throw new Error(privateDiagnostic);
     });
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -499,6 +692,7 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
       expect(response.body).toEqual({
         error: 'Failed to begin Jobber authorization',
         code: 'jobber_authorization_failed',
+        requestId: 'unavailable',
       });
       expect(response.text).not.toContain(privateDiagnostic);
       expect(response.text).not.toContain(authority.user_id);
@@ -507,14 +701,13 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
       expect(consoleSpy).toHaveBeenCalledWith('[Jobber] OAuth authorization failed');
     } finally {
       consoleSpy.mockRestore();
-      urlSpy.mockRestore();
     }
     expect(exchangeSpy).not.toHaveBeenCalled();
     expect(saveSpy).not.toHaveBeenCalled();
     expectNoTransmission();
   }, 30000);
 
-  test('callback never reports connected without an access token and one-row token persistence', async () => {
+  test('test-only route capability never reports connected without accepted persistence', async () => {
     const authority = await createVerifiedOwner('honest-persistence');
 
     const noToken = await authorize(authority);
@@ -525,6 +718,7 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     expect(noTokenResponse.body).toEqual({
       error: 'Failed to connect Jobber',
       code: 'jobber_connection_failed',
+      requestId: 'unavailable',
     });
     expect(saveSpy).not.toHaveBeenCalled();
 
@@ -536,6 +730,7 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     expect(unpersistedResponse.body).toEqual({
       error: 'Jobber connection could not be confirmed',
       code: 'jobber_connection_unavailable',
+      requestId: 'unavailable',
     });
 
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -552,6 +747,39 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     }
     expect(exchangeSpy).toHaveBeenCalledTimes(2);
     expect(saveSpy).toHaveBeenCalledTimes(1);
+    expectNoTransmission();
+  }, 30000);
+
+  test('test-only disconnect capability reports success only after exact durable confirmation', async () => {
+    const authority = await createVerifiedOwner('disconnect-contract');
+    const success = await request(app).post('/api/integrations/jobber/disconnect')
+      .set(authority.headers)
+      .send({});
+    expect(success.status).toBe(200);
+    expect(success.body).toEqual({ success: true, requestId: 'unavailable' });
+    expect(disconnectSpy).toHaveBeenCalledWith({
+      provider: 'jobber',
+      organizationId: authority.organization_id,
+      userId: authority.user_id,
+      sessionId: authority.session_id,
+    });
+
+    for (const outcome of [false, undefined]) {
+      disconnectSpy.mockResolvedValueOnce(outcome);
+      const failed = await request(app).post('/api/integrations/jobber/disconnect')
+        .set(authority.headers)
+        .send({});
+      expectProductionUnavailable(failed);
+    }
+    disconnectSpy.mockRejectedValueOnce(new Error('private test-only persistence failure'));
+    const rejected = await request(app).post('/api/integrations/jobber/disconnect')
+      .set(authority.headers)
+      .send({});
+    expectProductionUnavailable(rejected);
+    expect(disconnectSpy).toHaveBeenCalledTimes(4);
+    expect(legacyDisconnectSpy).not.toHaveBeenCalled();
+    expect(exchangeSpy).not.toHaveBeenCalled();
+    expect(saveSpy).not.toHaveBeenCalled();
     expectNoTransmission();
   }, 30000);
 
@@ -579,7 +807,11 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
       const response = await callback(authority, issued.state);
       expect(response.status).toBe(500);
       expect(response.headers.location).toBeUndefined();
-      expect(response.text).toBe('Failed to connect Jobber. Please try again.');
+      expect(response.body).toEqual({
+        error: 'Failed to connect Jobber',
+        code: 'jobber_connection_failed',
+        requestId: 'unavailable',
+      });
       expect(response.text).not.toContain(privateProviderBody);
       expect(consoleSpy).toHaveBeenCalledWith('[Jobber] OAuth callback failed');
     } finally {
@@ -590,7 +822,7 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     if (fetchSpy) expect(fetchSpy).not.toHaveBeenCalled();
   }, 30000);
 
-  test('successful mounted callback consumes once and replay is denied before exchange', async () => {
+  test('test-only route capability consumes once and denies replay before exchange', async () => {
     const authority = await createVerifiedOwner('single-use');
     const { state } = await authorize(authority);
     const success = await callback(authority, state);
@@ -598,12 +830,15 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     expect(success.headers.location).toBe('/dashboard/integrations?jobber=connected');
     expect(exchangeSpy).toHaveBeenCalledTimes(1);
     expect(exchangeSpy.mock.calls[0][0]).toBe('intercepted-jobber-code');
-    expect(saveSpy).toHaveBeenCalledWith(
-      authority.user_id,
-      'intercepted-jobber-access',
-      'intercepted-jobber-refresh',
-      3600
-    );
+    expect(saveSpy).toHaveBeenCalledWith({
+      provider: 'jobber',
+      organizationId: authority.organization_id,
+      userId: authority.user_id,
+      sessionId: authority.session_id,
+      accessToken: 'intercepted-jobber-access',
+      refreshToken: 'intercepted-jobber-refresh',
+      expiresIn: 3600,
+    });
     const row = await stateRow(authority, state);
     expect(row.status).toBe('consumed');
     expect(row.consumed_at).toBeInstanceOf(Date);
@@ -613,6 +848,7 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     expect(replay.body).toEqual({
       error: 'Integration authorization state is invalid',
       code: 'integration_state_invalid',
+      requestId: 'unavailable',
     });
     expect(exchangeSpy).toHaveBeenCalledTimes(1);
     expect(saveSpy).toHaveBeenCalledTimes(1);
@@ -840,6 +1076,7 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
       expect(failed.body).toEqual({
         error: 'Integration authorization is temporarily unavailable',
         code: 'integration_state_unavailable',
+        requestId: 'unavailable',
       });
       const after = await pool.query(
         'SELECT count(*)::int AS count FROM oauth_authorization_states WHERE auth_session_id = $1',
@@ -884,6 +1121,7 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
       expect(failed.body).toEqual({
         error: 'Integration authorization is temporarily unavailable',
         code: 'integration_state_unavailable',
+        requestId: 'unavailable',
       });
       expect(exchangeSpy).not.toHaveBeenCalled();
       expect(saveSpy).not.toHaveBeenCalled();
@@ -971,5 +1209,71 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     expect(exchangeSpy).not.toHaveBeenCalled();
     expect(saveSpy).not.toHaveBeenCalled();
     expectNoTransmission();
+  }, 60000);
+
+  test('fresh production construction stays unavailable across every environment-boolean combination', async () => {
+    const authority = await createVerifiedOwner('production-processes');
+    const { state } = await authorize(authority);
+    authUrlSpy.mockClear();
+    issueStateSpy.mockClear();
+
+    const combinations = [];
+    for (const integration of ['false', 'true']) {
+      for (const oauth of ['false', 'true']) {
+        for (const persistence of ['false', 'true']) {
+          combinations.push({
+            JOBBER_INTEGRATION_ENABLED: integration,
+            JOBBER_OAUTH_ENABLED: oauth,
+            JOBBER_TOKEN_PERSISTENCE_ENABLED: persistence,
+          });
+        }
+      }
+    }
+    const workers = combinations.map(environment =>
+      startCallbackWorker(
+        allocation.connectionString,
+        process.env.AUTH_ACCESS_SECRET,
+        false,
+        environment
+      )
+    );
+    await Promise.all(workers.map(worker => worker.ready));
+    const outcomes = await Promise.all(workers.map(worker => worker.run({
+      cookie: authority.cookie,
+      state,
+    })));
+    expect(outcomes).toHaveLength(8);
+    for (const outcome of outcomes) {
+      expect(outcome).toMatchObject({
+        status: 503,
+        code: 'jobber_unavailable',
+        exchangeCalls: 0,
+        saveCalls: 0,
+      });
+    }
+    expect((await stateRow(authority, state)).status).toBe('pending');
+    expect(exchangeSpy).not.toHaveBeenCalled();
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(legacySaveSpy).not.toHaveBeenCalled();
+    expect(consumeStateSpy).not.toHaveBeenCalled();
+    expectNoTransmission();
+  }, 120000);
+
+  test('a real PostgreSQL authority outage fails before the unavailable Jobber capability boundary', async () => {
+    const authority = await createVerifiedOwner('production-database-outage');
+    await db.close();
+    try {
+      const response = await request(productionApp).get('/api/integrations/jobber/auth')
+        .set('Cookie', authority.cookie);
+      expect(response.status).toBe(503);
+      expect(response.body.code).toBe('authorization_unavailable');
+      expect(response.body.code).not.toBe('jobber_unavailable');
+      expect(response.headers.location).toBeUndefined();
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expectNoJobberCapabilityUse();
+    } finally {
+      expect(await db.initDatabase()).toBe(true);
+      pool = db.getPool();
+    }
   }, 60000);
 });

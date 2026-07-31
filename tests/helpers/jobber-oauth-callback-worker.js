@@ -24,12 +24,24 @@ async function main() {
       expires_in: 3600,
     };
   };
-  jobber.saveTokens = async function interceptedSave() {
-    saveCalls += 1;
-    return true;
-  };
 
-  const app = require('./account-test-app').createDisposableAccountApp();
+  const appOptions = {};
+  if (process.env.JOBBER_TEST_CONNECTION_CAPABILITY === 'intercepted-canonical-postgresql') {
+    appOptions.jobberConnectionCapability = {
+      stateAuthority: require('../../src/integrations/oauthAuthorizationState'),
+      async persistConnection() {
+        saveCalls += 1;
+        return true;
+      },
+      async readConnectionStatus() {
+        return { connected: false };
+      },
+      async disconnectConnection() {
+        return true;
+      },
+    };
+  }
+  const app = require('./account-test-app').createDisposableAccountApp(appOptions);
   if (process.send) process.send({ type: 'ready' });
   process.once('message', async message => {
     try {

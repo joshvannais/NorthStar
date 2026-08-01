@@ -8,7 +8,7 @@ const request = require('supertest');
 
 const CONFIGURATION_KEYS = [
   'PUBLIC_ORIGIN', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS',
-  'TRANSACTIONAL_EMAIL_FROM', 'ACCOUNT_SIGNUP_ENABLED',
+  'TRANSACTIONAL_EMAIL_FROM', 'TRANSACTIONAL_EMAIL_FROM_NAME', 'ACCOUNT_SIGNUP_ENABLED',
   'ACCOUNT_VERIFICATION_DELIVERY_READY',
 ];
 
@@ -51,12 +51,14 @@ process.once('message', async message => {
 
     let transportConstructions = 0;
     let sends = 0;
+    const sentMessages = [];
     const nodemailer = require('nodemailer');
     nodemailer.createTransport = () => {
       transportConstructions += 1;
       return {
-        async sendMail() {
+        async sendMail(mail) {
           sends += 1;
+          sentMessages.push(JSON.parse(JSON.stringify(mail)));
           return { accepted: ['mounted-positive@example.test'] };
         },
       };
@@ -94,7 +96,7 @@ process.once('message', async message => {
     process.send({
       type: 'result', status: response.status, cookies: response.headers['set-cookie'] || [],
       before, after, transportConstructions, sends, dnsCalls, netCalls, tlsCalls,
-      disclosure,
+      disclosure, sentMessages,
     });
   } catch (error) {
     process.send({ type: 'error', message: error && error.stack || String(error) });

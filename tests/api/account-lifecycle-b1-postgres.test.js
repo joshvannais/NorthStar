@@ -24,6 +24,13 @@ function linkToken(message, pathname) {
   return link.searchParams.get('token');
 }
 
+function expectSourceOwnedSender(message, address = 'security@account-b1.example.test') {
+  expect(message).toEqual(expect.objectContaining({
+    from: { name: 'NorthStar Notifications', address },
+  }));
+  expect(message).not.toHaveProperty('replyTo');
+}
+
 function runActionWorker(connectionString, message) {
   return new Promise((resolve, reject) => {
     const child = fork(path.resolve(__dirname, '../helpers/account-b1-action-worker.js'), [], {
@@ -122,6 +129,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     }));
     expect(response.headers['set-cookie']).toBeUndefined();
     expect(capture.messages).toHaveLength(1);
+    expectSourceOwnedSender(capture.messages[0]);
 
     const durable = await pool.query(
       `SELECT u.email, u.email_normalized, u.status AS user_status,
@@ -189,6 +197,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     });
     expect(signup.status).toBe(202);
     const originalToken = linkToken(capture.messages.at(-1), '/verify-email');
+    expectSourceOwnedSender(capture.messages.at(-1));
 
     const login = await request(app).post('/api/auth/login').send({
       email: 'verify.b1@example.test', password: 'Verification-password-123!',
@@ -200,6 +209,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       .set('X-CSRF-Token', csrf(login));
     expect(resend.status).toBe(200);
     const currentToken = linkToken(capture.messages.at(-1), '/verify-email');
+    expectSourceOwnedSender(capture.messages.at(-1));
     expect(currentToken).not.toBe(originalToken);
 
     const superseded = await request(app).post('/api/auth/verify-email').send({ token: originalToken });
@@ -383,6 +393,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     const forgot = await request(app).post('/api/auth/forgot-password').send({ email: 'RESET.B1@example.test' });
     expect(forgot.status).toBe(202);
     const resetToken = linkToken(capture.messages.at(-1), '/reset-password');
+    expectSourceOwnedSender(capture.messages.at(-1));
     const reset = await request(app).post('/api/auth/reset-password').send({
       token: resetToken, password: 'Replacement-password-456!',
     });

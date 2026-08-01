@@ -1,7 +1,7 @@
 'use strict';
 
 const { projectSubscription, canMutateInternal, canPerformExternal } = require('../../src/accounts/subscriptionPolicy');
-const { validatedProductionConfiguration } = require('../../src/email/transactional');
+const { TransactionalEmail, validatedProductionConfiguration } = require('../../src/email/transactional');
 
 function trialAt(serverNow) {
   return projectSubscription({
@@ -121,5 +121,35 @@ describe('Account Lifecycle PR B1 shared subscription policy', () => {
       expect(validatedProductionConfiguration({ ...valid, ...mutation })).toBeNull();
     }
     expect(validatedProductionConfiguration({ ACCOUNT_SIGNUP_ENABLED: 'true' })).toBeNull();
+  });
+
+  test('transactional messages use one source-owned structured sender without changing contents or links', async () => {
+    const messages = [];
+    const email = new TransactionalEmail({
+      adapter: { async send(message) { messages.push(message); return { accepted: true }; } },
+      publicOrigin: 'https://app.example.test',
+      from: 'notifications@northstar-os.ai',
+      fromName: 'Attacker Controlled',
+      production: true,
+    });
+
+    await email.verification('owner@example.test', 'verification-token');
+    await email.passwordReset('owner@example.test', 'reset-token');
+
+    expect(messages).toEqual([
+      {
+        from: { name: 'NorthStar Notifications', address: 'notifications@northstar-os.ai' },
+        to: 'owner@example.test',
+        subject: 'Verify your NorthStar email',
+        text: 'Verify your email within 24 hours: https://app.example.test/verify-email?token=verification-token\n\nYour 14-day trial begins only after verification.',
+      },
+      {
+        from: { name: 'NorthStar Notifications', address: 'notifications@northstar-os.ai' },
+        to: 'owner@example.test',
+        subject: 'Reset your NorthStar password',
+        text: 'Reset your password within 30 minutes: https://app.example.test/reset-password?token=reset-token\n\nIf you did not request this, no action is required.',
+      },
+    ]);
+    expect(messages.every(message => !Object.hasOwn(message, 'replyTo'))).toBe(true);
   });
 });

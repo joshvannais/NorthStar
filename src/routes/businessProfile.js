@@ -9,7 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { requireTenantAccess } = require('../auth/middleware');
+const { requireAccountMutation, requireTenantAccess } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { getActiveBusinessProfile, putBusinessProfile } = require('../services/organizationAuthority');
 const {
@@ -146,7 +146,7 @@ router.get('/', requireTenantAccess, async function (req, res) {
   }
 });
 
-router.put('/', requireTenantAccess, requirePermission('settings', 'update'), async function (req, res) {
+router.put('/', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
   try {
     return res.json({ success: true, data: response(await persist(req, req.body || {})) });
   } catch (error) {
@@ -155,7 +155,7 @@ router.put('/', requireTenantAccess, requirePermission('settings', 'update'), as
   }
 });
 
-router.put('/:section', requireTenantAccess, requirePermission('settings', 'update'), async function (req, res) {
+router.put('/:section', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
   const section = req.params.section;
   if (!VALID_SECTIONS.has(section)) {
     return res.status(400).json({ success: false, error: { code: 'INVALID_PROFILE_SECTION', message: 'Business Profile section is invalid.' } });

@@ -21,7 +21,7 @@ function cookieHeader(values) {
   return Object.entries(values).map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('; ');
 }
 
-realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
+realPostgres('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
   let suiteDatabase;
   let db;
   let pool;
@@ -65,60 +65,54 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
     });
   }
 
-  test('signup atomically creates the restricted canonical graph and cookie-only credentials', async () => {
-    const response = await signup('  OWNER.One@Example.Test  ');
-    expect(response.status).toBe(201);
-    expect(response.body.account.user).toMatchObject({ email: 'owner.one@example.test', status: 'pending_verification' });
-    expect(response.body.account.membership).toMatchObject({ role: 'owner', status: 'active' });
-    expect(response.body.account.onboarding.status).toBe('business_profile_required');
-    expect(JSON.stringify(response.body)).not.toMatch(/accessToken|refreshToken|passwordHash|northstar_access/);
+  async function signupAndLogin(email, password = 'twelve chars!') {
+    const signupResponse = await signup(email, password);
+    expect(signupResponse.status).toBe(202);
+    const loginResponse = await request(app).post('/api/auth/login').send({ email, password });
+    expect(loginResponse.status).toBe(200);
+    return loginResponse;
+  }
 
-    const setCookies = response.headers['set-cookie'];
-    const accessCookie = setCookies.find(value => value.startsWith('northstar_access='));
-    const refreshCookie = setCookies.find(value => value.startsWith('northstar_refresh='));
-    const csrfCookie = setCookies.find(value => value.startsWith('northstar_csrf='));
-    for (const value of [accessCookie, refreshCookie, csrfCookie]) {
-      expect(value).toMatch(/Path=\//i);
-      expect(value).toMatch(/SameSite=Lax/i);
-    }
-    expect(accessCookie).toMatch(/HttpOnly/i);
-    expect(refreshCookie).toMatch(/HttpOnly/i);
-    expect(csrfCookie).not.toMatch(/HttpOnly/i);
+  test('signup atomically creates a pending graph without login credentials', async () => {
+    const response = await signup('  OWNER.One@Example.Test  ');
+    expect(response.status).toBe(202);
+    expect(response.body).toMatchObject({ code: 'verification_required' });
+    expect(JSON.stringify(response.body)).not.toMatch(/accessToken|refreshToken|passwordHash|northstar_access/);
+    expect(response.headers['set-cookie']).toBeUndefined();
 
     const graph = await pool.query(
       `SELECT u.id AS user_id, u.email_normalized, u.status AS user_status,
               membership.id AS membership_id, membership.role,
-              subscription.status AS subscription_status, subscription.trial_ends,
+              subscription.status AS subscription_status, subscription.trial_started_at,
+              subscription.trial_ends_at,
               onboarding.status AS onboarding_status,
-              preferences.organization_id AS preferences_org
+              preferences.organization_id AS preferences_org,
+              token.token_hash, token.expires_at
          FROM users u
          JOIN organization_memberships membership ON membership.user_id = u.id
          JOIN subscriptions subscription ON subscription.organization_id = u.organization_id
          JOIN organization_onboarding onboarding ON onboarding.organization_id = u.organization_id
          JOIN notification_preferences preferences ON preferences.organization_id = u.organization_id
+         JOIN account_action_tokens token ON token.user_id = u.id
         WHERE u.email_normalized = $1`,
       ['owner.one@example.test']
     );
     expect(graph.rows).toHaveLength(1);
     expect(graph.rows[0]).toMatchObject({
       email_normalized: 'owner.one@example.test', user_status: 'pending_verification',
-      role: 'owner', subscription_status: 'trial', onboarding_status: 'business_profile_required',
+      role: 'owner', subscription_status: 'pending_verification', onboarding_status: 'pending_verification',
     });
-    const trialDays = (new Date(graph.rows[0].trial_ends).getTime() - Date.now()) / 86400000;
-    expect(trialDays).toBeGreaterThan(13.9);
-    expect(trialDays).toBeLessThanOrEqual(14.01);
+    expect(graph.rows[0].trial_started_at).toBeNull();
+    expect(graph.rows[0].trial_ends_at).toBeNull();
+    expect(graph.rows[0].token_hash).toMatch(/^[0-9a-f]{64}$/);
 
-    const sessions = await pool.query(
-      `SELECT session.status, session.csrf_token_hash, token.token_hash, token.family_id
-         FROM auth_sessions session JOIN auth_refresh_tokens token ON token.session_id = session.id
-        WHERE session.user_id = $1`,
-      [graph.rows[0].user_id]
-    );
-    expect(sessions.rows).toHaveLength(1);
-    expect(sessions.rows[0].csrf_token_hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(sessions.rows[0].token_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect((await pool.query('SELECT id FROM auth_sessions WHERE user_id = $1', [graph.rows[0].user_id])).rows).toHaveLength(0);
 
-    const jar = cookieMap(response);
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'owner.one@example.test', password: 'twelve chars!',
+    });
+    expect(login.status).toBe(200);
+    const jar = cookieMap(login);
     const me = await request(app).get('/api/auth/me').set('Cookie', cookieHeader(jar));
     expect(me.status).toBe(200);
     expect(me.body.account.user.status).toBe('pending_verification');
@@ -127,10 +121,10 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
   });
 
   test('case variants collide after normalization and validation enforces frozen boundaries', async () => {
-    expect((await signup('Case.Owner@Example.Test')).status).toBe(201);
+    expect((await signup('Case.Owner@Example.Test')).status).toBe(202);
     const duplicate = await signup('  case.owner@example.test ');
-    expect(duplicate.status).toBe(409);
-    expect(duplicate.body.code).toBe('account_exists');
+    expect(duplicate.status).toBe(202);
+    expect(duplicate.body.code).toBe('verification_required');
     const count = await pool.query("SELECT count(*)::int AS count FROM users WHERE email_normalized = 'case.owner@example.test'");
     expect(count.rows[0].count).toBe(1);
 
@@ -140,8 +134,8 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
   });
 
   test('missing, wrong, and cross-session CSRF are rejected before mutation', async () => {
-    const first = cookieMap(await signup('csrf-one@example.test'));
-    const second = cookieMap(await signup('csrf-two@example.test'));
+    const first = cookieMap(await signupAndLogin('csrf-one@example.test'));
+    const second = cookieMap(await signupAndLogin('csrf-two@example.test'));
     const firstHeader = cookieHeader(first);
 
     const missing = await request(app).post('/api/auth/logout').set('Cookie', firstHeader);
@@ -158,7 +152,7 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
   });
 
   test('refresh rotates once, replay revokes the family, and the replacement cannot continue', async () => {
-    const original = cookieMap(await signup('rotate@example.test'));
+    const original = cookieMap(await signupAndLogin('rotate@example.test'));
     const rotatedResponse = await request(app)
       .post('/api/auth/refresh')
       .set('Cookie', cookieHeader(original))
@@ -193,7 +187,7 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
   });
 
   test('logout revokes the session and clears all browser credentials', async () => {
-    const jar = cookieMap(await signup('logout@example.test'));
+    const jar = cookieMap(await signupAndLogin('logout@example.test'));
     const logout = await request(app)
       .post('/api/auth/logout')
       .set('Cookie', cookieHeader(jar))
@@ -209,8 +203,8 @@ realPostgres('Account Lifecycle PR A mounted PostgreSQL authority', () => {
   });
 
   test('an active Business Profile satisfies onboarding and later suspension fails closed', async () => {
-    const signupResponse = await signup('active-profile@example.test');
-    const jar = cookieMap(signupResponse);
+    const loginResponse = await signupAndLogin('active-profile@example.test');
+    const jar = cookieMap(loginResponse);
     const user = await pool.query("SELECT id, organization_id FROM users WHERE email_normalized = 'active-profile@example.test'");
     await pool.query("UPDATE users SET status = 'active' WHERE id = $1", [user.rows[0].id]);
     await putBusinessProfile(pool, {

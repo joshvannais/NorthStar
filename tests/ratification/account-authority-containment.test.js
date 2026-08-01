@@ -27,7 +27,8 @@ describe('Account Lifecycle PR A authority containment', () => {
     const server = read('src/server.js');
     const authRouter = read('src/routes/auth.js');
     const accountRepository = read('src/accounts/repository.js');
-    expect(server).toContain("app.use('/api/auth', createAuthRouter())");
+    expect(server).toContain('const productionTransactionalEmail = createProductionTransactionalEmail(process.env)');
+    expect(server).toContain("app.use('/api/auth', createAuthRouter({");
     expect(server).not.toMatch(/users\/store|addUser|getAllUsers|getUser/);
     expect(authRouter).not.toMatch(/users\/store|data\/users\.json/);
     expect(accountRepository).not.toMatch(/users\/store|data\/users\.json/);

@@ -51,6 +51,17 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
         ($3,$4,'Voice B','voice-user-b@m19.test','unused','owner','active')`,
       [USER_A, ORG_A, USER_B, ORG_B]
     );
+    // TEST PROVISIONING ONLY: public B1 routes cannot create active/paid state.
+    // These canonical voice tests require unexpired PostgreSQL subscription
+    // authority before any provider-side mutation may execute.
+    await pool.query(
+      `INSERT INTO subscriptions
+         (organization_id, plan_type, status, trial_started_at, trial_ends_at)
+       VALUES
+         ($1, 'Trial', 'trialing', transaction_timestamp(), transaction_timestamp() + INTERVAL '14 days'),
+         ($2, 'Trial', 'trialing', transaction_timestamp(), transaction_timestamp() + INTERVAL '14 days')`,
+      [ORG_A, ORG_B]
+    );
     profileA = await putBusinessProfile(pool, { organizationId: ORG_A, userId: USER_A, profile: PROFILE });
     profileB = await putBusinessProfile(pool, { organizationId: ORG_B, userId: USER_B, profile: { ...PROFILE, company: { name: 'Voice B', currency: 'USD' } } });
     integrationA = await bindIntegrationOwner(pool, { organizationId: ORG_A, userId: USER_A, provider: 'retell', externalIntegrationId: 'voice-agent-a' });

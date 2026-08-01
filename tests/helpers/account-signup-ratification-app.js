@@ -8,8 +8,23 @@ function createSignupRatificationApp(options = {}) {
   const crypto = require('crypto');
   const express = require('express');
   const { AccountService } = require('../../src/accounts/service');
+  const { TransactionalEmail } = require('../../src/email/transactional');
   const { createAuthRouter } = require('../../src/routes/auth');
-  const service = options.service || new AccountService();
+  const capture = options.emailCapture || {
+    messages: [],
+    async send(message) {
+      this.messages.push(JSON.parse(JSON.stringify(message)));
+      return { accepted: true };
+    },
+  };
+  const service = options.service || new AccountService(undefined, {
+    transactionalEmail: new TransactionalEmail({
+      adapter: capture,
+      publicOrigin: 'http://127.0.0.1',
+      from: 'security@northstar.example.test',
+      production: false,
+    }),
+  });
   const app = express();
 
   // Supertest connects over loopback. Trust only that hop so each adversarial
@@ -26,6 +41,7 @@ function createSignupRatificationApp(options = {}) {
     service,
     signup: service.signup.bind(service),
   }));
+  app.accountEmailCapture = capture;
   return app;
 }
 

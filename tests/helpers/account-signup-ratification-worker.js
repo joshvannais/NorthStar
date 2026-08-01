@@ -32,19 +32,22 @@ async function main(message) {
         .set('X-Forwarded-For', `198.51.100.${index + 1}`)
         .send(signupBody(message.email, index));
     }));
-    return responses.map(response => ({
-      status: response.status,
-      code: response.body && response.body.code || null,
-      cookieCount: (response.headers['set-cookie'] || []).length,
-    }));
+    return {
+      deliveryCount: app.accountEmailCapture.messages.length,
+      responses: responses.map(response => ({
+        status: response.status,
+        code: response.body && response.body.code || null,
+        cookieCount: (response.headers['set-cookie'] || []).length,
+      })),
+    };
   } finally {
     await db.close();
   }
 }
 
 process.once('message', message => {
-  main(message).then(results => {
-    if (process.send) process.send({ type: 'result', processId: process.pid, results });
+  main(message).then(result => {
+    if (process.send) process.send({ type: 'result', processId: process.pid, ...result });
   }).catch(error => {
     process.exitCode = 1;
     if (process.send) process.send({ type: 'error', code: error.message || 'signup_worker_failed' });

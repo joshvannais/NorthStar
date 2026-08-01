@@ -5,7 +5,9 @@ const crypto = require('crypto');
 /**
  * Test provisioning for legacy mounted suites that predate the account signup
  * route. This creates the same durable membership/onboarding/session authority
- * that production middleware resolves. It is not an authentication-flow test.
+ * that production middleware resolves. Its default `active` subscription is
+ * an explicitly test-owned PostgreSQL fixture; no public production path can
+ * create that paid state. It is not an authentication-flow or payment test.
  */
 async function provisionDurableSession(pool, input) {
   const credentials = require('../../src/auth/credentials');
@@ -50,6 +52,18 @@ async function provisionDurableSession(pool, input) {
       onboardingStatus === 'complete' ? profileId : null,
       onboardingStatus === 'complete' ? new Date() : null,
     ]
+  );
+  await pool.query(
+    `INSERT INTO subscriptions (
+       id, organization_id, plan_type, status, trial_started_at, trial_ends_at
+     ) VALUES ($1,$2,'Test fixture',$3,NULL,NULL)
+     ON CONFLICT (organization_id) DO UPDATE SET
+       plan_type = EXCLUDED.plan_type,
+       status = EXCLUDED.status,
+       trial_started_at = NULL,
+       trial_ends_at = NULL,
+       updated_at = NOW()`,
+    [crypto.randomUUID(), input.organizationId, input.subscriptionStatus || 'active']
   );
   await pool.query(
     `INSERT INTO auth_sessions (

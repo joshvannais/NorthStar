@@ -14,8 +14,7 @@ const SIGNUP_GRAPH_TABLES = Object.freeze([
   'notification_preferences',
   'organization_account_preferences',
   'organization_onboarding',
-  'auth_sessions',
-  'auth_refresh_tokens',
+  'account_action_tokens',
 ]);
 
 function signupBody(email, index) {
@@ -200,12 +199,12 @@ describe('mounted signup transaction ratification on physical PostgreSQL', () =>
       }),
     ]);
     expect(new Set([first.processId, second.processId, process.pid]).size).toBe(3);
-    const results = first.results.concat(second.results);
+    const results = first.responses.concat(second.responses);
     expect(results).toHaveLength(32);
-    expect(results.filter(result => result.status === 201 && result.cookieCount === 3)).toHaveLength(1);
-    expect(results.filter(result => (
-      result.status === 409 && result.code === 'account_exists' && result.cookieCount === 0
-    ))).toHaveLength(31);
+    expect(results.every(result => (
+      result.status === 202 && result.code === 'verification_required' && result.cookieCount === 0
+    ))).toBe(true);
+    expect(first.deliveryCount + second.deliveryCount).toBe(1);
 
     const graph = await pool.query(
       `SELECT account.id AS user_id,
@@ -217,6 +216,7 @@ describe('mounted signup transaction ratification on physical PostgreSQL', () =>
               (SELECT count(*)::int FROM notification_preferences WHERE organization_id = account.organization_id) AS notification_preferences,
               (SELECT count(*)::int FROM organization_account_preferences WHERE organization_id = account.organization_id) AS account_preferences,
               (SELECT count(*)::int FROM organization_onboarding WHERE organization_id = account.organization_id) AS onboarding,
+              (SELECT count(*)::int FROM account_action_tokens WHERE user_id = account.id AND purpose = 'email_verification') AS verification_tokens,
               (SELECT count(*)::int FROM auth_sessions WHERE user_id = account.id) AS sessions,
               (SELECT count(*)::int
                  FROM auth_refresh_tokens token
@@ -235,8 +235,9 @@ describe('mounted signup transaction ratification on physical PostgreSQL', () =>
       notification_preferences: 1,
       account_preferences: 1,
       onboarding: 1,
-      sessions: 1,
-      refresh_tokens: 1,
+      verification_tokens: 1,
+      sessions: 0,
+      refresh_tokens: 0,
     });
   }, 180000);
 });

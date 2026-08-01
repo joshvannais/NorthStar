@@ -90,8 +90,16 @@ describe('mounted PostgreSQL notification preferences and durable logout', () =>
   function mountApplication(targetPool) {
     const { AccountRepository } = require('../../src/accounts/repository');
     const { AccountService } = require('../../src/accounts/service');
+    const { TransactionalEmail } = require('../../src/email/transactional');
     const { createAuthRouter } = require('../../src/routes/auth');
-    const service = new AccountService(new AccountRepository(targetPool));
+    const service = new AccountService(new AccountRepository(targetPool), {
+      transactionalEmail: new TransactionalEmail({
+        adapter: { async send() { return { accepted: true }; } },
+        publicOrigin: 'http://127.0.0.1',
+        from: 'security@northstar.example.test',
+        production: false,
+      }),
+    });
     const mounted = express();
     mounted.use(express.json({ limit: '64kb' }));
     mounted.use((req, _res, next) => {
@@ -134,18 +142,24 @@ describe('mounted PostgreSQL notification preferences and durable logout', () =>
 
   async function signup(email, phone = '8605550100') {
     await pool.query("DELETE FROM auth_rate_limits WHERE event_type = 'signup_ip'");
-    return request(app).post('/api/auth/signup').send({
+    const created = await request(app).post('/api/auth/signup').send({
       name: 'Preference Owner',
       businessName: `Preference ${email}`,
       phone,
       email,
       password: 'preference password 123',
     });
+    expect(created.status).toBe(202);
+    const login = await request(app).post('/api/auth/login').send({
+      email, password: 'preference password 123',
+    });
+    expect(login.status).toBe(200);
+    return login;
   }
 
-  test('signup creates exactly one opt-in notification row and pending accounts receive the server projection', async () => {
+  test('signup creates exactly one all-false notification row and pending accounts receive the server projection', async () => {
     const response = await signup('preference-defaults@example.test', '8605550199');
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     const jar = cookieMap(response);
     const state = await pool.query(
       `SELECT count(*)::int AS row_count,

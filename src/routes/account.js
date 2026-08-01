@@ -2,7 +2,8 @@
 
 const express = require('express');
 const { AccountRepository } = require('../accounts/repository');
-const { requireTenantAccess } = require('../auth/middleware');
+const { AccountService } = require('../accounts/service');
+const { requireAccountMutation, requireTenantAccess } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 
 const router = express.Router();
@@ -134,7 +135,7 @@ router.get('/preferences', requireTenantAccess, async (req, res) => {
   }
 });
 
-router.put('/preferences', requireTenantAccess, requirePermission('settings', 'update'), async (req, res) => {
+router.put('/preferences', requireAccountMutation, requirePermission('settings', 'update'), async (req, res) => {
   const parsed = parsePreferences(req.body);
   if (!parsed) return invalid(req, res);
   try {
@@ -150,6 +151,24 @@ router.put('/preferences', requireTenantAccess, requirePermission('settings', 'u
     });
   } catch (_error) {
     return unavailable(req, res);
+  }
+});
+
+router.get('/subscription', requireTenantAccess, async (req, res) => {
+  try {
+    const injected = req.app && req.app.locals && req.app.locals.accountRepository;
+    const repository = injected && typeof injected.expireAndReadSubscription === 'function'
+      ? injected
+      : new AccountRepository();
+    const subscription = await new AccountService(repository)
+      .subscriptionStatus(req.tenantContext.organizationId);
+    return res.json({ subscription, requestId: requestId(req) });
+  } catch (_error) {
+    return res.status(503).json({
+      error: 'Subscription authority is temporarily unavailable',
+      code: 'subscription_authority_unavailable',
+      requestId: requestId(req),
+    });
   }
 });
 

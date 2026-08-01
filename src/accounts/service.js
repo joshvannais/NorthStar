@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const credentials = require('../auth/credentials');
 const { AccountPersistenceError, AccountRepository } = require('./repository');
+const { projectSubscription } = require('./subscriptionPolicy');
 
 class AccountError extends Error {
   constructor(status, code, message) {
@@ -63,6 +64,31 @@ function sessionMaterial() {
   };
 }
 
+function boundedText(value, maximum, code, message, required = true) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if ((required && !normalized) || normalized.length > maximum || /[\u0000-\u001f\u007f]/.test(normalized)) {
+    throw new AccountError(400, code, message);
+  }
+  return normalized;
+}
+
+function actionToken() {
+  const rawToken = crypto.randomBytes(32).toString('base64url');
+  return {
+    id: crypto.randomUUID(),
+    rawToken,
+    tokenHash: credentials.hashToken(rawToken),
+  };
+}
+
+function tokenHash(value) {
+  const token = typeof value === 'string' ? value.trim() : '';
+  if (token.length !== 43 || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
+    throw new AccountError(400, 'invalid_token', 'The account action link is invalid or expired');
+  }
+  return credentials.hashToken(token);
+}
+
 function accountView(authority) {
   const effectiveOnboarding = authority.active_business_profile_id || authority.activeBusinessProfileId
     ? 'complete'
@@ -87,7 +113,8 @@ function accountView(authority) {
     subscription: authority.plan_type ? {
       plan: authority.plan_type,
       status: authority.subscription_status,
-      trialEnds: authority.trial_ends,
+      trialStartedAt: authority.trial_started_at,
+      trialEndsAt: authority.trial_ends_at,
     } : null,
     onboarding: {
       status: effectiveOnboarding,
@@ -97,8 +124,9 @@ function accountView(authority) {
 }
 
 class AccountService {
-  constructor(repository) {
+  constructor(repository, options = {}) {
     this.repository = repository || new AccountRepository();
+    this.transactionalEmail = options.transactionalEmail || null;
   }
 
   async consumeLimit(eventType, value, options) {
@@ -109,17 +137,22 @@ class AccountService {
   }
 
   async signup(input, requestIp) {
-    const email = normalizeEmail(input.email);
-    const name = String(input.name || '').trim();
-    const businessName = String(input.businessName || '').trim();
-    if (!name || !businessName) {
-      throw new AccountError(400, 'invalid_signup', 'Name and business name are required');
+    if (!this.transactionalEmail || typeof this.transactionalEmail.verification !== 'function') {
+      throw new AccountError(503, 'signup_disabled', 'Account signup is not currently available');
     }
+    const email = normalizeEmail(input.email);
+    const name = boundedText(input.name, 120, 'invalid_signup', 'Enter a valid name of at most 120 characters');
+    const businessName = boundedText(
+      input.businessName, 160, 'invalid_signup', 'Enter a valid business name of at most 160 characters'
+    );
+    const phone = boundedText(
+      input.phone || '', 32, 'invalid_signup', 'Enter a valid phone number of at most 32 characters', false
+    );
     const signupKey = await this.consumeLimit('signup_ip', requestIp, {
       limit: 5, windowSeconds: 3600, blockSeconds: 3600,
     });
     const passwordHash = await hashPassword(input.password);
-    const material = sessionMaterial();
+    const verification = actionToken();
     const ids = {
       organizationId: crypto.randomUUID(),
       userId: crypto.randomUUID(),
@@ -130,24 +163,114 @@ class AccountService {
     try {
       const authority = await this.repository.createSignupGraph({
         ...ids,
-        ...material,
+        verificationTokenId: verification.id,
+        verificationTokenHash: verification.tokenHash,
         name,
         businessName,
         email,
-        phone: String(input.phone || '').trim(),
+        phone,
         passwordHash,
       });
-      material.accessToken = credentials.signAccess(ids.userId, material.sessionId);
-      return { authority, account: accountView({ ...authority, name, email, phone: input.phone, organization_name: businessName }), material };
+      try {
+        await this.transactionalEmail.verification(email, verification.rawToken);
+      } catch (_error) {
+        throw new AccountError(
+          503,
+          'verification_delivery_failed',
+          'Account created, but verification delivery failed. Sign in and request a new link.'
+        );
+      }
+      return {
+        authority,
+        account: accountView({ ...authority, name, email, phone, organization_name: businessName }),
+      };
     } catch (error) {
       if (error && error.code === '23505') {
-        throw new AccountError(409, 'account_exists', 'An account already exists for this email address');
+        return { duplicate: true };
       }
       if (error instanceof AccountPersistenceError) throw error;
       throw error;
     } finally {
       void signupKey;
     }
+  }
+
+  async verifyEmail(rawToken) {
+    const verified = await this.repository.verifyEmailToken(tokenHash(rawToken));
+    if (!verified) {
+      throw new AccountError(400, 'verification_invalid', 'The verification link is invalid or expired');
+    }
+    return verified;
+  }
+
+  async resendVerification(authority, requestIp) {
+    await this.consumeLimit('verification_ip', requestIp, {
+      limit: 8, windowSeconds: 3600, blockSeconds: 3600,
+    });
+    await this.consumeLimit('verification_user', authority.user_id, {
+      limit: 4, windowSeconds: 3600, blockSeconds: 3600,
+    });
+    if (!this.transactionalEmail || typeof this.transactionalEmail.verification !== 'function') {
+      throw new AccountError(503, 'verification_delivery_unavailable', 'Verification delivery is temporarily unavailable');
+    }
+    const token = actionToken();
+    const pending = await this.repository.replaceVerificationToken({
+      userId: authority.user_id,
+      organizationId: authority.organization_id,
+      tokenId: token.id,
+      tokenHash: token.tokenHash,
+    });
+    if (!pending) return { accepted: true };
+    try {
+      await this.transactionalEmail.verification(pending.email, token.rawToken);
+    } catch (_error) {
+      throw new AccountError(503, 'verification_delivery_failed', 'Verification delivery failed. Try again later.');
+    }
+    return { accepted: true };
+  }
+
+  async forgotPassword(input, requestIp) {
+    await this.consumeLimit('forgot_ip', requestIp, {
+      limit: 8, windowSeconds: 3600, blockSeconds: 3600,
+    });
+    let email;
+    try { email = normalizeEmail(input && input.email); } catch (_error) { return { accepted: true }; }
+    const authority = await this.repository.findRecoveryAuthority(email);
+    if (!authority || authority.user_status !== 'active' || authority.membership_status !== 'active' ||
+        !this.transactionalEmail || typeof this.transactionalEmail.passwordReset !== 'function') {
+      return { accepted: true };
+    }
+    const token = actionToken();
+    const current = await this.repository.replaceResetToken({
+      userId: authority.user_id,
+      organizationId: authority.organization_id,
+      tokenId: token.id,
+      tokenHash: token.tokenHash,
+    });
+    if (!current) return { accepted: true };
+    try {
+      await this.transactionalEmail.passwordReset(current.email, token.rawToken);
+    } catch (_error) {
+      console.warn('[Auth] Password reset delivery was not accepted');
+    }
+    return { accepted: true };
+  }
+
+  async resetPassword(input, requestIp) {
+    await this.consumeLimit('reset_ip', requestIp, {
+      limit: 8, windowSeconds: 3600, blockSeconds: 3600,
+    });
+    const passwordHash = await hashPassword(input && input.password);
+    const reset = await this.repository.resetPasswordWithToken({
+      tokenHash: tokenHash(input && input.token),
+      passwordHash,
+    });
+    if (!reset) throw new AccountError(400, 'reset_invalid', 'The reset link is invalid or expired');
+    return reset;
+  }
+
+  async subscriptionStatus(organizationId) {
+    return projectSubscription(await this.repository.expireAndReadSubscription(organizationId));
   }
 
   async login(input, requestIp) {
@@ -248,4 +371,7 @@ module.exports = {
   normalizeEmail,
   validatePassword,
   verifyPassword,
+  actionToken,
+  boundedText,
+  tokenHash,
 };

@@ -161,6 +161,13 @@ provider configuration, production signup remains disabled with stable
 transport, send, DNS, network, or TLS effects. Therefore B1 does not claim live
 production signup readiness.
 
+`TRANSACTIONAL_EMAIL_FROM` remains a strictly validated bare mailbox; the
+required value is `notifications@northstar-os.ai`. The adapter supplies the
+source-owned display name `NorthStar Notifications` through Nodemailer's
+structured `{ name, address }` representation rather than concatenating a
+header string. Configuration cannot override the display name, formatted
+display-name input remains invalid, and this boundary adds no `Reply-To`.
+
 Only the in-app daily countdown ships. A later email-capable release should
 send transactional reminders at seven, three, and one day remaining using a
 durable scheduler/outbox. B1 deliberately adds no unreliable in-process timer.

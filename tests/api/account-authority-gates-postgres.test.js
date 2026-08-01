@@ -217,7 +217,8 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     const valid = {
       PUBLIC_ORIGIN: 'https://app.example.test', SMTP_HOST: 'smtp.example.test',
       SMTP_PORT: '587', SMTP_USER: 'smtp-user', SMTP_PASS: 'private-secret',
-      TRANSACTIONAL_EMAIL_FROM: 'security@example.test', ACCOUNT_SIGNUP_ENABLED: 'true',
+      TRANSACTIONAL_EMAIL_FROM: 'notifications@northstar-os.ai',
+      TRANSACTIONAL_EMAIL_FROM_NAME: 'Attacker Controlled', ACCOUNT_SIGNUP_ENABLED: 'true',
       ACCOUNT_VERIFICATION_DELIVERY_READY: 'true',
     };
     const invalid = [
@@ -248,7 +249,11 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       ['invalid-port', { SMTP_PORT: '25' }],
       ['suffixed-port', { SMTP_PORT: '587suffix' }],
       ['missing-sender', { TRANSACTIONAL_EMAIL_FROM: '' }],
+      ['formatted-sender', {
+        TRANSACTIONAL_EMAIL_FROM: 'NorthStar Notifications <notifications@northstar-os.ai>',
+      }],
       ['sender-injection', { TRANSACTIONAL_EMAIL_FROM: 'security@example.test\r\nBcc:x@example.test' }],
+      ['sender-nul', { TRANSACTIONAL_EMAIL_FROM: `security${String.fromCharCode(0)}@example.test` }],
       ['sender-list', { TRANSACTIONAL_EMAIL_FROM: 'one@example.test,two@example.test' }],
       ['sender-domain', { TRANSACTIONAL_EMAIL_FROM: 'security@localhost' }],
       ['insecure-origin', { PUBLIC_ORIGIN: 'http://app.example.test' }],
@@ -276,6 +281,15 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(positive.transportConstructions).toBe(1);
     expect(positive.sends).toBe(1);
     expect(positive.dnsCalls + positive.netCalls + positive.tlsCalls).toBe(0);
+    expect(positive.sentMessages).toEqual([
+      expect.objectContaining({
+        from: {
+          name: 'NorthStar Notifications',
+          address: 'notifications@northstar-os.ai',
+        },
+      }),
+    ]);
+    expect(positive.sentMessages[0]).not.toHaveProperty('replyTo');
   }, 180000);
 
   test('pending user reads its tenant dashboard, opens/saves onboarding, and remains unverified', async () => {

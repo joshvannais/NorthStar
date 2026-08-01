@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 
 const MAX_SUBJECT = 160;
 const MAX_TEXT = 12000;
+const TRANSACTIONAL_SENDER_NAME = 'NorthStar Notifications';
 const CONTROL = /[\u0000-\u001f\u007f]/;
 const LOCAL_PART = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+$/;
 const DNS_LABEL = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
@@ -116,7 +117,10 @@ class TransactionalEmail {
     if (!origin) throw new Error('Canonical public origin is invalid');
     this.adapter = options.adapter;
     this.publicOrigin = origin;
-    this.from = emailAddress(options.from, 'sender');
+    this.from = Object.freeze({
+      name: TRANSACTIONAL_SENDER_NAME,
+      address: emailAddress(options.from, 'sender'),
+    });
   }
 
   async deliver(recipient, subject, text) {

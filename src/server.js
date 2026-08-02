@@ -96,7 +96,7 @@ Object.entries(pages).forEach(([route, file]) => {
 
 // --- PostgreSQL Account and Session Authority ---
 // Signup capability exists only when the source-owned production constructor
-// validates complete SMTP delivery configuration and a canonical HTTPS origin.
+// validates complete Resend delivery configuration and the canonical HTTPS origin.
 // No boolean or request field can enable this boundary.
 const productionTransactionalEmail = createProductionTransactionalEmail(process.env);
 const productionAccountService = new AccountService(undefined, {

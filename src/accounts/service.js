@@ -89,6 +89,41 @@ function tokenHash(value) {
   return credentials.hashToken(token);
 }
 
+function deliveryContext(context, deliveryId) {
+  return {
+    deliveryId,
+    requestId: context && context.requestId,
+  };
+}
+
+function safeDiagnostic(value, fallback) {
+  return typeof value === 'string' && value.length <= 64 && /^[a-z0-9_]+$/.test(value)
+    ? value
+    : fallback;
+}
+
+function logDeliveryFailure(error, context) {
+  const resend = error && error.provider === 'resend';
+  const requestId = resend ? error.requestId : context && context.requestId;
+  const safe = {
+    provider: resend ? 'resend' : 'transactional',
+    accepted: false,
+    category: resend ? safeDiagnostic(error.category, 'unknown') : 'unknown',
+    code: resend ? safeDiagnostic(error.code, 'transactional_delivery_failed') : 'transactional_delivery_failed',
+    httpStatus: resend && Number.isInteger(error.httpStatus) && error.httpStatus >= 100 && error.httpStatus <= 599
+      ? error.httpStatus
+      : null,
+    providerMessageIdPresent: false,
+    attemptedAt: resend && typeof error.attemptedAt === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(error.attemptedAt)
+      ? error.attemptedAt
+      : null,
+    requestId: typeof requestId === 'string' && requestId.length <= 128 && /^[A-Za-z0-9._:-]+$/.test(requestId)
+      ? requestId
+      : 'unavailable',
+  };
+  console.warn('[Auth] Transactional delivery failed:', safe);
+}
+
 function accountView(authority) {
   const effectiveOnboarding = authority.active_business_profile_id || authority.activeBusinessProfileId
     ? 'complete'
@@ -136,7 +171,7 @@ class AccountService {
     return key;
   }
 
-  async signup(input, requestIp) {
+  async signup(input, requestIp, context = {}) {
     if (!this.transactionalEmail || typeof this.transactionalEmail.verification !== 'function') {
       throw new AccountError(503, 'signup_disabled', 'Account signup is not currently available');
     }
@@ -172,8 +207,13 @@ class AccountService {
         passwordHash,
       });
       try {
-        await this.transactionalEmail.verification(email, verification.rawToken);
-      } catch (_error) {
+        await this.transactionalEmail.verification(
+          email,
+          verification.rawToken,
+          deliveryContext(context, verification.id)
+        );
+      } catch (error) {
+        logDeliveryFailure(error, context);
         throw new AccountError(
           503,
           'verification_delivery_failed',
@@ -203,7 +243,7 @@ class AccountService {
     return verified;
   }
 
-  async resendVerification(authority, requestIp) {
+  async resendVerification(authority, requestIp, context = {}) {
     await this.consumeLimit('verification_ip', requestIp, {
       limit: 8, windowSeconds: 3600, blockSeconds: 3600,
     });
@@ -222,14 +262,19 @@ class AccountService {
     });
     if (!pending) return { accepted: true };
     try {
-      await this.transactionalEmail.verification(pending.email, token.rawToken);
-    } catch (_error) {
+      await this.transactionalEmail.verification(
+        pending.email,
+        token.rawToken,
+        deliveryContext(context, token.id)
+      );
+    } catch (error) {
+      logDeliveryFailure(error, context);
       throw new AccountError(503, 'verification_delivery_failed', 'Verification delivery failed. Try again later.');
     }
     return { accepted: true };
   }
 
-  async forgotPassword(input, requestIp) {
+  async forgotPassword(input, requestIp, context = {}) {
     await this.consumeLimit('forgot_ip', requestIp, {
       limit: 8, windowSeconds: 3600, blockSeconds: 3600,
     });
@@ -249,9 +294,13 @@ class AccountService {
     });
     if (!current) return { accepted: true };
     try {
-      await this.transactionalEmail.passwordReset(current.email, token.rawToken);
-    } catch (_error) {
-      console.warn('[Auth] Password reset delivery was not accepted');
+      await this.transactionalEmail.passwordReset(
+        current.email,
+        token.rawToken,
+        deliveryContext(context, token.id)
+      );
+    } catch (error) {
+      logDeliveryFailure(error, context);
     }
     return { accepted: true };
   }

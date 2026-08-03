@@ -18,14 +18,14 @@
     var element = document.createElement('style');
     element.id = STYLE_ID;
     element.textContent = '' +
-      '#' + BANNER_ID + '{position:relative;z-index:900;box-sizing:border-box;margin-left:240px;width:calc(100% - 240px);padding:11px 18px;display:flex;align-items:center;justify-content:center;gap:12px;text-align:center;font:600 14px/1.4 system-ui,sans-serif;border-bottom:1px solid transparent;}' +
-      '#' + BANNER_ID + '[data-state="trialing"]{background:#eff6ff;color:#1e3a8a;border-color:#93c5fd;}' +
+      '#' + BANNER_ID + '{position:relative;z-index:900;box-sizing:border-box;margin-left:240px;width:calc(100% - 240px);padding:10px 18px;display:flex;align-items:center;justify-content:center;gap:10px;text-align:center;font:600 14px/1.4 system-ui,sans-serif;border-bottom:1px solid transparent;box-shadow:0 1px 0 rgba(15,23,42,.04);}' +
+      '#' + BANNER_ID + '[data-state="trialing"]{background:linear-gradient(90deg,#fff8e7,#fffbf2);color:#5c4506;border-color:#d4af37;}' +
       '#' + BANNER_ID + '[data-state="pending_verification"]{background:#fff7d6;color:#5c4700;border-color:#ecd36a;}' +
-      '#' + BANNER_ID + '[data-state="restricted"],#' + BANNER_ID + '[data-state="unavailable"]{background:#fef2f2;color:#7f1d1d;border-color:#fca5a5;}' +
+      '#' + BANNER_ID + '[data-state="restricted"],#' + BANNER_ID + '[data-state="unavailable"]{background:#fff7ed;color:#7c2d12;border-color:#fdba74;}' +
+      '#' + BANNER_ID + ' .northstar-trial-support{font-weight:500;color:inherit;opacity:.82;}' +
       '#' + BANNER_ID + ' button{border:1px solid currentColor;border-radius:6px;background:transparent;color:inherit;padding:5px 10px;font:inherit;cursor:pointer;}' +
       '#' + BANNER_ID + ' button:focus-visible{outline:3px solid #2563eb;outline-offset:2px;}' +
-      '#' + BANNER_ID + ' button[disabled]{cursor:not-allowed;opacity:.65;}' +
-      '@media(max-width:768px){#' + BANNER_ID + '{margin-left:0;width:100%;padding:10px 12px;flex-direction:column;gap:7px;font-size:13px;}}';
+      '@media(max-width:768px){#' + BANNER_ID + '{margin-left:0;width:100%;padding:9px 12px;flex-direction:column;gap:3px;font-size:13px;}}';
     document.head.appendChild(element);
   }
 
@@ -40,6 +40,7 @@
     element.setAttribute('data-state', state);
     element.setAttribute('role', role || 'status');
     element.setAttribute('aria-live', role === 'alert' ? 'assertive' : 'polite');
+    element.setAttribute('aria-atomic', 'true');
     element.replaceChildren(document.createTextNode(message));
     return element;
   }
@@ -103,18 +104,16 @@
         ? 'Trial ends today.'
         : subscription.daysRemaining + ' days remaining in your trial.';
       var trial = banner('trialing', message, 'status');
-      var upgrade = document.createElement('button');
-      upgrade.type = 'button';
-      upgrade.disabled = true;
-      upgrade.title = 'Billing becomes available in Account Lifecycle PR B2';
-      upgrade.textContent = 'Upgrade unavailable until PR B2';
-      trial.appendChild(upgrade);
+      var support = document.createElement('span');
+      support.className = 'northstar-trial-support';
+      support.textContent = 'Enjoy full access during your trial.';
+      trial.appendChild(support);
       scheduleRefresh(subscription);
       return;
     }
     banner(
       'restricted',
-      'Upgrade required. Your organization is in restricted read-only access; billing is unavailable until PR B2.',
+      'Your trial has ended. Your organization remains available in restricted read-only mode. Upgrade options are coming soon.',
       'alert'
     );
     scheduleRefresh(subscription);

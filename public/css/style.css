@@ -217,6 +217,186 @@ img, svg, video, canvas {
   font-size: 13px;
 }
 
+/* Account lifecycle entry and confirmation surfaces */
+.auth-recovery {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.auth-recovery-link {
+  color: var(--brand-700);
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.auth-recovery-link:hover,
+.auth-recovery-link:active {
+  color: var(--brand-900);
+}
+
+.auth-recovery-link:focus,
+.auth-recovery-link:focus-visible {
+  outline: 3px solid var(--brand-500);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
+.verification-page {
+  min-height: 100vh;
+  min-height: 100svh;
+  color: #e2e4eb;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(212,175,55,0.15), transparent 34rem),
+    #0b0d17;
+}
+
+.verification-brand {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(212,175,55,0.16);
+}
+
+.verification-brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #f2c94c;
+  font-size: 18px;
+  font-weight: 750;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+
+.verification-brand-link:focus,
+.verification-brand-link:focus-visible,
+.verification-action:focus,
+.verification-action:focus-visible {
+  outline: 3px solid #f2c94c;
+  outline-offset: 4px;
+}
+
+.verification-brand-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.verification-shell {
+  min-height: calc(100vh - 64px);
+  min-height: calc(100svh - 64px);
+  display: grid;
+  place-items: center;
+  width: 100%;
+  padding: clamp(24px, 6vw, 72px) 16px;
+}
+
+.verification-card {
+  width: min(100%, 520px);
+  padding: clamp(28px, 6vw, 48px);
+  text-align: center;
+  background: rgba(19,22,36,0.96);
+  border: 1px solid rgba(212,175,55,0.28);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.42);
+}
+
+.verification-mark {
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 20px;
+  color: #f2c94c;
+  background: rgba(212,175,55,0.12);
+  border: 1px solid rgba(242,201,76,0.42);
+  border-radius: 50%;
+}
+
+.verification-mark svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.verification-card[data-state="failure"] .verification-mark {
+  color: #fbbf24;
+  background: rgba(251,191,36,0.1);
+}
+
+.verification-alert { display: none; }
+.verification-card[data-state="failure"] .verification-check { display: none; }
+.verification-card[data-state="failure"] .verification-alert { display: block; }
+
+.verification-eyebrow {
+  margin-bottom: 8px;
+  color: #f2c94c;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.verification-card h1 {
+  margin: 0;
+  color: #f1f2f6;
+  font-size: clamp(30px, 7vw, 42px);
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.verification-card #verifyStatus {
+  max-width: 38ch;
+  margin: 16px auto 0;
+  color: #c4c8d4;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.verification-action {
+  width: min(100%, 280px);
+  min-height: 48px;
+  margin-top: 28px;
+  color: #0b0d17;
+  background: #d4af37;
+  box-shadow: 0 8px 28px rgba(212,175,55,0.2);
+}
+
+.verification-action:hover,
+.verification-action:active {
+  color: #0b0d17;
+  background: #f2c94c;
+}
+
+.verification-help {
+  margin-top: 18px;
+  color: #a0a5b8;
+  font-size: 13px;
+}
+
+@media (max-width: 480px) {
+  .verification-brand { min-height: 58px; }
+  .verification-shell {
+    min-height: calc(100vh - 58px);
+    min-height: calc(100svh - 58px);
+    padding: 24px 14px 32px;
+  }
+  .verification-card { padding: 30px 22px; border-radius: var(--radius-lg); }
+  .verification-mark { width: 60px; height: 60px; margin-bottom: 18px; }
+  .verification-card #verifyStatus { font-size: 15px; }
+}
+
 /* Hero Section */
 .hero {
   padding: 60px 16px 50px;
@@ -1109,6 +1289,15 @@ tr:hover td { background: var(--neutral-50); }
 
 [data-theme="dark"] .btn-ghost:hover {
   background: var(--neutral-200);
+}
+
+[data-theme="dark"] .auth-recovery-link {
+  color: var(--brand-200);
+}
+
+[data-theme="dark"] .auth-recovery-link:hover,
+[data-theme="dark"] .auth-recovery-link:active {
+  color: #fff8e7;
 }
 
 [data-theme="dark"] .btn-demo {

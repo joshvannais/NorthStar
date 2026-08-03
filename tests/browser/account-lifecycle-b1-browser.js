@@ -517,7 +517,10 @@ async function runJourney(spec, viewport, state) {
 
     state.controlledNow.value = new Date(trial.trial_ends_at);
     await restarted.evaluate(() => NorthStarTrialStatus.refresh());
-    await bannerEvidence(restarted, /Upgrade required/);
+    await bannerEvidence(
+      restarted,
+      /Your trial has ended\. Your organization remains available in restricted read-only mode\. Upgrade options are coming soon\./
+    );
     const expiredProjection = await restarted.evaluate(async () => {
       const response = await NorthStarAccountSession.fetch(
         '/api/account/subscription?upgrade=true&paid=true&success=true'
@@ -536,7 +539,9 @@ async function runJourney(spec, viewport, state) {
       { enabledButtons: upgradeUi.enabledButtons, paymentLinks: upgradeUi.paymentLinks },
       { enabledButtons: 0, paymentLinks: 0 }
     );
-    assert.match(upgradeUi.text, /billing is unavailable until PR B2/i);
+    assert.match(upgradeUi.text, /Your trial has ended/i);
+    assert.match(upgradeUi.text, /Upgrade options are coming soon/i);
+    assert.doesNotMatch(upgradeUi.text, /PR B2|pull request|internal phase/i);
     const denied = await restarted.evaluate(async () => {
       const response = await NorthStarAccountSession.fetch('/api/account/preferences', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{}',

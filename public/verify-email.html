@@ -9,9 +9,16 @@
       var token = values.length === 1 && /^[A-Za-z0-9_-]{43}$/.test(values[0]) ? values[0] : '';
       window.history.replaceState(null, '', '/verify-email');
       document.addEventListener('DOMContentLoaded', function () {
+        var card = document.getElementById('verifyCard');
+        var title = document.getElementById('verifyTitle');
         var status = document.getElementById('verifyStatus');
-        if (!token) {
+        function showFailure() {
+          card.setAttribute('data-state', 'failure');
+          title.textContent = 'Verification link unavailable';
           status.textContent = 'This verification link is invalid or expired.';
+        }
+        if (!token) {
+          showFailure();
           token = '';
           return;
         }
@@ -23,11 +30,13 @@
           token = '';
           return response.json().catch(function () { return {}; }).then(function (body) {
             if (!response.ok) throw new Error(body.error || 'Verification failed');
-            status.textContent = 'Email verified. Your organization\'s 14-day trial has started. Sign in to continue.';
+            card.setAttribute('data-state', 'success');
+            title.textContent = 'Email verified';
+            status.textContent = 'Your organization\'s 14-day trial has started.';
           });
         }).catch(function () {
           token = '';
-          status.textContent = 'This verification link is invalid or expired.';
+          showFailure();
         });
       }, { once: true });
     })();
@@ -36,11 +45,27 @@
   <title>Verify Email | NorthStar</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
-  <main class="auth-page"><section class="auth-card" aria-labelledby="verifyTitle">
-    <h1 id="verifyTitle">Verify your email</h1>
-    <p id="verifyStatus" role="status" aria-live="polite">Checking your verification link&hellip;</p>
-    <p><a href="/login">Return to sign in</a></p>
-  </section></main>
+<body class="verification-page">
+  <header class="verification-brand" aria-label="NorthStar">
+    <a href="/" class="verification-brand-link">
+      <img src="/assets/logo.png" alt="" class="verification-brand-logo">
+      <span>NorthStar</span>
+    </a>
+  </header>
+  <main class="verification-shell">
+    <section class="verification-card" id="verifyCard" data-state="checking" aria-labelledby="verifyTitle">
+      <div class="verification-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path class="verification-check" d="M5 12.5l4.2 4.2L19 7"></path>
+          <path class="verification-alert" d="M12 7v6m0 4h.01"></path>
+        </svg>
+      </div>
+      <p class="verification-eyebrow">NorthStar account</p>
+      <h1 id="verifyTitle">Checking your email</h1>
+      <p id="verifyStatus" role="status" aria-live="polite" aria-atomic="true">Checking your verification link&hellip;</p>
+      <a href="/login" class="btn verification-action" id="verifySignIn">Sign in to NorthStar</a>
+      <p class="verification-help">You can safely close this page without signing in.</p>
+    </section>
+  </main>
 </body>
 </html>

@@ -151,8 +151,12 @@ construction requires all three of `RESEND_API_KEY`, the exact canonical
 `PUBLIC_ORIGIN=https://www.northstar-os.ai`, and the strict bare mailbox
 `TRANSACTIONAL_EMAIL_FROM=notifications@northstar-os.ai`. The display name is
 source-owned as `NorthStar Notifications`; environment display-name values
-cannot override it. Missing, empty, whitespace/control-bearing, oversized, or
-wrong-shape keys fail closed. The key remains server-side and is never placed
+cannot override it. The key contract preserves the exact nonempty value and
+accepts visible ASCII without assuming a provider prefix or undocumented
+provider grammar. Whitespace, C0 controls, DEL, non-ASCII, and values beyond
+NorthStar's 4,096-character internal Authorization-header safety bound fail
+closed. That bound is a NorthStar transport-safety policy, not a documented
+Resend key maximum. The key remains server-side and is never placed
 in browser code, public JSON, logs, snapshots, documentation, or source.
 
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS` no longer construct,
@@ -166,7 +170,8 @@ enumeration-safe with no reset-token creation.
 
 Each intended delivery performs one no-retry `POST` to the fixed
 `https://api.resend.com/emails` endpoint with manual redirect handling, a
-bounded timeout, Bearer authorization, JSON content type, the exact structured
+single bounded whole-operation timeout, Bearer authorization, JSON content
+type, the exact structured
 sender `NorthStar Notifications <notifications@northstar-os.ai>`, one
 normalized recipient, the existing bounded subject, and bounded source-owned
 text and HTML bodies. It emits no `Reply-To`, CC, BCC, or caller-controlled
@@ -179,9 +184,12 @@ contains no email, raw token, user, organization, session, password, role, or
 tenant data. It is neither logged nor returned publicly. The adapter accepts
 only a 2xx response containing bounded well-formed JSON and a bounded nonempty
 provider message ID. Redirects, network/timeout failures, authentication,
-validation, idempotency conflict, rate limiting, server rejection, malformed or
-oversized JSON, and missing/invalid IDs produce typed bounded internal
-categories without retaining provider response bodies or sensitive identity.
+provider access rejection, request rejection, provider conflict, rate limiting,
+provider unavailability, malformed or oversized JSON, and missing/invalid IDs
+produce coarse typed internal categories supported by observed transport status
+without parsing provider text or retaining response bodies or sensitive
+identity. A status alone is not claimed to distinguish authentication from
+authorization or to identify provider-side validation semantics.
 
 Resend sending-domain verification for `northstar-os.ai` is user-confirmed
 configuration context only; this implementation did not independently exercise
@@ -362,6 +370,35 @@ relabeled as Resend evidence, and no physical Safari claim is made. Migrations
 001-012, package manifests/lockfile, all tracked data files, and browser-auth/
 trial component paths remain object-identical to the immutable base. No new
 dependency or migration was added.
+
+### Targeted timeout and contract correction
+
+At draft head `e64576d15ca86e43204cc473f1b5fa12a08057c5`, the adapter cleared its
+abort timer as soon as `fetch` returned response headers. The authentic negative
+control returned headers immediately, delayed a valid JSON body by about 200 ms
+under a 20 ms timeout, and incorrectly produced `accepted=true`. The corrected
+adapter starts one deadline before request construction and keeps it active
+through connection, headers, every incrementally bounded response chunk, UTF-8
+decoding, JSON parsing, provider-ID validation, and the final acceptance check.
+An incomplete reader is canceled and its lock released where supported, the
+timer is cleared once in final cleanup, and no retry or second provider request
+is introduced.
+
+The same additive correction replaces status-only overclaims with stable coarse
+categories: 400/422 `provider_request_rejected`, 401/403
+`provider_access_rejected`, 409 `provider_conflict`, 429
+`provider_rate_limited`, 500-599 `provider_unavailable`, manual redirects
+`provider_redirect_rejected`, transport errors `network_failure`, deadline-led
+abort `timeout`, and invalid content/body/JSON/message-ID evidence
+`malformed_provider_response`. Public envelopes remain unchanged, and provider
+response text is neither parsed for classification nor logged or returned.
+
+The final campaign passed the direct adapter suite 19/19, the combined affected
+unit suites 33/33, the mounted correction set 47/47 across four suites, complete
+API 146/146 across twelve suites, and complete serial Jest 1,180/1,180 across
+59 suites with `--detectOpenHandles` and no open-handle report. Production,
+Railway, a live API key, current domain/provider state, and real email delivery
+remain unproven.
 
 ## Explicit PR B2 deferral
 

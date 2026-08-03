@@ -206,7 +206,7 @@ describe('mounted Account Lifecycle B1 delivery through the production Resend ad
       trial_started_at: null, trial_ends_at: null, tokens: 1, sessions: 0,
     }]);
     const diagnostics = JSON.stringify(warningSpy.mock.calls);
-    expect(diagnostics).toContain('authorization_rejection');
+    expect(diagnostics).toContain('provider_access_rejected');
     for (const forbidden of [testKey, email, 'notifications@northstar-os.ai', 'Bearer ', 'token=',
       'Idempotency-Key', 'capture-only provider rejection']) {
       expect(diagnostics).not.toContain(forbidden);

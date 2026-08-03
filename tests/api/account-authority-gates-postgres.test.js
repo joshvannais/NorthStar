@@ -230,8 +230,8 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       ['key-lf', { RESEND_API_KEY: 're_local\ncapture' }],
       ['key-nul', { RESEND_API_KEY: `re_local${String.fromCharCode(0)}capture` }],
       ['key-del', { RESEND_API_KEY: `re_local${String.fromCharCode(127)}capture` }],
-      ['key-oversized', { RESEND_API_KEY: `re_${'a'.repeat(511)}` }],
-      ['key-wrong-shape', { RESEND_API_KEY: 'local_capture_only' }],
+      ['key-oversized', { RESEND_API_KEY: 'a'.repeat(4097) }],
+      ['key-non-ascii', { RESEND_API_KEY: 'opaque-é' }],
       ['missing-sender', { TRANSACTIONAL_EMAIL_FROM: '' }],
       ['formatted-sender', {
         TRANSACTIONAL_EMAIL_FROM: 'NorthStar Notifications <notifications@northstar-os.ai>',

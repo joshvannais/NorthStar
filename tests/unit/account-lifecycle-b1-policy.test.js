@@ -87,6 +87,14 @@ describe('Account Lifecycle PR B1 shared subscription policy', () => {
     expect(validatedProductionConfiguration(valid)).toEqual(expect.objectContaining({
       origin: 'https://www.northstar-os.ai', from: 'notifications@northstar-os.ai',
     }));
+    for (const RESEND_API_KEY of [
+      'future-format-opaque-key',
+      'opaque.key:segment/with+punctuation=value',
+    ]) {
+      expect(validatedProductionConfiguration({ ...valid, RESEND_API_KEY })).toEqual(expect.objectContaining({
+        apiKey: RESEND_API_KEY,
+      }));
+    }
     const retiredSmtpHosts = [
       '.', '..', '.smtp.example.test', 'smtp.example.test.', 'smtp..example.test',
       '-smtp.example.test', 'smtp-.example.test', `smtp.${'a'.repeat(64)}.test`,
@@ -106,8 +114,11 @@ describe('Account Lifecycle PR B1 shared subscription policy', () => {
       { PUBLIC_ORIGIN: 'https://northstar-os.ai' },
       { PUBLIC_ORIGIN: 'https://www.northstar-os.ai/path' },
       { RESEND_API_KEY: '' },
-      { RESEND_API_KEY: 'invalid' },
       { RESEND_API_KEY: 're_invalid key' },
+      { RESEND_API_KEY: 're_invalid\tkey' },
+      { RESEND_API_KEY: `opaque${String.fromCharCode(127)}key` },
+      { RESEND_API_KEY: 'opaque-é' },
+      { RESEND_API_KEY: 'a'.repeat(4097) },
       { TRANSACTIONAL_EMAIL_FROM: '' },
       { TRANSACTIONAL_EMAIL_FROM: 'notifications@northstar-os.ai\r\nBcc:x@example.test' },
       { TRANSACTIONAL_EMAIL_FROM: 'NorthStar Notifications <notifications@northstar-os.ai>' },

@@ -68,7 +68,7 @@ process.once('message', async message => {
       requestEvidence.push({
         url: String(url), method: options.method, redirect: options.redirect,
         contentType: options.headers['Content-Type'],
-        authorizationPresent: /^Bearer re_[A-Za-z0-9_-]+$/.test(authorization),
+        authorizationPresent: authorization === `Bearer ${process.env.RESEND_API_KEY}`,
         idempotencyPresent: /^northstar-b1-email-verification-[0-9a-f]{64}$/.test(idempotency),
         idempotencyLength: idempotency.length,
         from: body.from,

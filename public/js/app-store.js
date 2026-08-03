@@ -19,7 +19,11 @@ window.AppStore = (function () {
     polarisHistory: [],
     notifications: [],
     canonical: null,
-    settings: { theme: localStorage.getItem('northstar-theme') || 'light' },
+    settings: {
+      theme: window.NorthStarTheme && window.NorthStarTheme.getTheme
+        ? window.NorthStarTheme.getTheme()
+        : 'light',
+    },
     ui: {
       selectedLeadId: null,
       drawerOpen: false,
@@ -107,7 +111,9 @@ window.AppStore = (function () {
   function setSetting(key, value) {
     state.settings[key] = value;
     bus.emit('setting:changed', { key: key, value: value });
-    if (key === 'theme') localStorage.setItem('northstar-theme', value);
+    if (key === 'theme' && window.NorthStarTheme && window.NorthStarTheme.setTheme) {
+      state.settings[key] = window.NorthStarTheme.setTheme(value);
+    }
   }
   function getSetting(key) { return state.settings[key]; }
   function setUi(key, value) { state.ui[key] = value; bus.emit('ui:changed', { key: key, value: value }); }

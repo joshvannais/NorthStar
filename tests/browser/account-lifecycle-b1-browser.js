@@ -517,7 +517,10 @@ async function runJourney(spec, viewport, state) {
 
     state.controlledNow.value = new Date(trial.trial_ends_at);
     await restarted.evaluate(() => NorthStarTrialStatus.refresh());
-    await bannerEvidence(restarted, /Upgrade required/);
+    await bannerEvidence(
+      restarted,
+      /Your trial has ended\. Your organization remains available in restricted read-only mode\. Upgrade options are coming soon\./
+    );
     const expiredProjection = await restarted.evaluate(async () => {
       const response = await NorthStarAccountSession.fetch(
         '/api/account/subscription?upgrade=true&paid=true&success=true'

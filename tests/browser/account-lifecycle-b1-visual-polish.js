@@ -11,7 +11,7 @@ const VIEWPORTS = [
   { label: '1440x900', width: 1440, height: 900 },
   { label: '390x844', width: 390, height: 844 },
 ];
-const INTERNAL_LANGUAGE = /Account Lifecycle PR|PR B2|pull request|internal phase|development milestone|implementation availability/i;
+const INTERNAL_LANGUAGE = /\bPR (?:A|B1|B2)\b|PR #|pull request|phase B[12]\b|internal phase|development milestone|implementation availability/i;
 const TOKEN = 'A'.repeat(43);
 const EXPIRED_TOKEN = 'B'.repeat(43);
 
@@ -31,6 +31,7 @@ function safePublicFile(pathname) {
     '/login': 'login.html',
     '/account/pending': 'account/pending.html',
     '/dashboard': 'dashboard/command-center.html',
+    '/admin': 'admin.html',
   };
   const relative = pageFiles[pathname] || (
     /^\/(?:css|js|assets)\/[A-Za-z0-9._/-]+$/.test(pathname) ? pathname.slice(1) : ''
@@ -235,6 +236,20 @@ async function loginRecoveryLink(page, origin) {
   await assertLayout(page, 'h1');
 }
 
+async function customerSurfaceTerminology(page, origin) {
+  for (const forbidden of ['PR A', 'PR B1', 'PR B2', 'PR #76', 'pull request', 'phase B1', 'phase B2']) {
+    assert.match(forbidden, INTERNAL_LANGUAGE, `scanner recognizes ${forbidden}`);
+  }
+  for (const pathname of ['/admin', '/login', '/account/pending']) {
+    await page.goto(`${origin}${pathname}`);
+    const visibleText = await page.locator('body').innerText();
+    assert.doesNotMatch(visibleText, INTERNAL_LANGUAGE, pathname);
+    if (pathname === '/admin') {
+      assert.ok(visibleText.includes('Monitor NorthStar account and platform activity.'));
+    }
+  }
+}
+
 async function trialMatrix(page, authority, origin, listenerEvidence) {
   authority.subscription = trialProjection(14);
   await page.goto(`${origin}/account/pending`);
@@ -324,6 +339,7 @@ async function runEngineViewport(engine, viewport, mounted) {
     listenerEvidence = await page.evaluate(() => window.__visualPolishListeners);
     assert.strictEqual(listenerEvidence, 1);
     await trialMatrix(page, mounted.authority, mounted.origin, listenerEvidence);
+    await customerSurfaceTerminology(page, mounted.origin);
     assert.strictEqual(requests.some(item => item.method !== 'GET' && ![
       '/api/auth/verify-email', '/api/auth/resend-verification',
     ].includes(new URL(item.url).pathname)), false);

@@ -26,20 +26,26 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
   test('browser storage is identity metadata only and never a business projection authority', () => {
     const canonicalClient = source('public/js/canonical-intelligence.js');
     const appStore = source('public/js/app-store.js');
-    const browserAuthority = canonicalClient + '\n' + appStore;
+    const themeController = source('public/js/theme.js');
+    const browserAuthority = canonicalClient + '\n' + appStore + '\n' + themeController;
 
     const storageKeys = [];
     for (const expression of [
       /(?:localStorage|sessionStorage)\s*,\s*['"]([^'"]+)['"]/g,
       /(?:localStorage|sessionStorage)\.(?:getItem|setItem|removeItem)\(\s*['"]([^'"]+)['"]/g,
+      /\bSTORAGE_KEY\s*=\s*['"]([^'"]+)['"]/g,
     ]) {
       for (const match of browserAuthority.matchAll(expression)) storageKeys.push(match[1]);
     }
     expect(new Set(storageKeys)).toEqual(new Set([
       'northstarSessionOwner', 'northstarSessionId', 'northstar-theme',
     ]));
-    expect(appStore.match(/localStorage\.setItem/g) || []).toHaveLength(1);
-    expect(appStore).toContain("localStorage.setItem('northstar-theme', value)");
+    expect(appStore.match(/localStorage\.setItem/g) || []).toHaveLength(0);
+    expect(appStore).toContain('window.NorthStarTheme.setTheme(value)');
+    expect(themeController).toContain("var STORAGE_KEY = 'northstar-theme'");
+    expect(themeController).toContain('global.localStorage.getItem(STORAGE_KEY)');
+    expect(themeController).toContain('global.localStorage.setItem(STORAGE_KEY, theme)');
+    expect(themeController).not.toMatch(/(?:user|organization|membership|session|subscription|trial|role|token|credential)(?:Id|_id|:)/i);
     expect(appStore).not.toMatch(/sessionStorage\.(?:getItem|setItem|removeItem)/);
     expect(canonicalClient).not.toContain("safeStorage(global.localStorage, 'token')");
     expect(canonicalClient).not.toContain("safeStorage(global.localStorage, 'user')");

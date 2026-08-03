@@ -6,6 +6,9 @@ const MAX_SUBJECT = 160;
 const MAX_TEXT = 12000;
 const MAX_HTML = 16000;
 const MAX_PROVIDER_RESPONSE = 16384;
+// NorthStar's internal Authorization-header safety bound. This is not a
+// provider key-format or provider key-length claim.
+const MAX_API_KEY_HEADER_VALUE = 4096;
 const RESEND_TIMEOUT_MS = 10000;
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const PRODUCTION_ORIGIN = 'https://www.northstar-os.ai';
@@ -63,9 +66,8 @@ function canonicalOrigin(raw, production = true) {
 }
 
 function resendApiKey(value) {
-  if (typeof value !== 'string' || value.length < 4 || value.length > 512 ||
-      value !== value.trim() || CONTROL.test(value) || /\s/.test(value) || /[^\x21-\x7e]/.test(value) ||
-      !/^re_[A-Za-z0-9_-]+$/.test(value)) return null;
+  if (typeof value !== 'string' || !value || value.length > MAX_API_KEY_HEADER_VALUE ||
+      !/^[\x21-\x7e]+$/.test(value)) return null;
   return value;
 }
 
@@ -131,23 +133,33 @@ async function boundedResponseText(response) {
     const reader = response.body.getReader();
     const chunks = [];
     let total = 0;
-    while (true) {
-      const item = await reader.read();
-      if (item.done) break;
-      total += item.value.byteLength;
-      if (total > MAX_PROVIDER_RESPONSE) {
-        try { await reader.cancel(); } catch (_error) { /* bounded best effort */ }
-        throw new Error('provider_response_too_large');
+    let completed = false;
+    try {
+      while (true) {
+        const item = await reader.read();
+        if (item.done) break;
+        total += item.value.byteLength;
+        if (total > MAX_PROVIDER_RESPONSE) throw new Error('provider_response_too_large');
+        chunks.push(item.value);
       }
-      chunks.push(item.value);
+      completed = true;
+      const merged = new Uint8Array(total);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return new TextDecoder('utf-8', { fatal: true }).decode(merged);
+    } finally {
+      if (!completed && typeof reader.cancel === 'function') {
+        try {
+          await reader.cancel();
+        } catch (_error) { /* preserve the authoritative read failure */ }
+      }
+      if (typeof reader.releaseLock === 'function') {
+        try { reader.releaseLock(); } catch (_error) { /* bounded best effort */ }
+      }
     }
-    const merged = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-      merged.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    return new TextDecoder('utf-8', { fatal: true }).decode(merged);
   }
   const text = await response.text();
   if (Buffer.byteLength(text, 'utf8') > MAX_PROVIDER_RESPONSE) throw new Error('provider_response_too_large');
@@ -155,11 +167,11 @@ async function boundedResponseText(response) {
 }
 
 function categoryForStatus(status) {
-  if (status === 401 || status === 403) return 'authorization_rejection';
-  if (status === 400 || status === 422) return 'validation_rejection';
-  if (status === 409) return 'idempotency_conflict';
-  if (status === 429) return 'rate_limited';
-  if (status >= 500) return 'provider_failure';
+  if (status === 400 || status === 422) return 'provider_request_rejected';
+  if (status === 401 || status === 403) return 'provider_access_rejected';
+  if (status === 409) return 'provider_conflict';
+  if (status === 429) return 'provider_rate_limited';
+  if (status >= 500) return 'provider_unavailable';
   return 'provider_rejection';
 }
 
@@ -184,81 +196,94 @@ function createResendAdapter(configuration, options = {}) {
     async send(message, context = {}) {
       const attemptedAt = attemptTimestamp(now);
       const requestId = safeRequestId(context.requestId);
-      if (typeof context.idempotencyKey !== 'string' || !IDEMPOTENCY_KEY.test(context.idempotencyKey)) {
-        throw deliveryError('invalid_operation', { attemptedAt, requestId });
-      }
-      let payload;
-      try {
-        payload = {
-          from: structuredSender(message, configuration),
-          to: [emailAddress(message.to, 'recipient')],
-          subject: bounded(message.subject, MAX_SUBJECT, 'subject'),
-          text: bounded(message.text, MAX_TEXT, 'text body', true),
-          html: bounded(message.html, MAX_HTML, 'HTML body', true),
-        };
-      } catch (_error) {
-        throw deliveryError('invalid_message', { attemptedAt, requestId });
-      }
-
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const deadline = Date.now() + timeoutMs;
+      let deadlineAborted = false;
+      const timeout = setTimeout(() => {
+        deadlineAborted = true;
+        controller.abort();
+      }, timeoutMs);
       if (typeof timeout.unref === 'function') timeout.unref();
-      let response;
       try {
-        response = await fetchImpl(RESEND_ENDPOINT, {
-          method: 'POST',
-          redirect: 'manual',
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${configuration.apiKey}`,
-            'Content-Type': 'application/json',
-            'Idempotency-Key': context.idempotencyKey,
-          },
-          body: JSON.stringify(payload),
+        if (typeof context.idempotencyKey !== 'string' || !IDEMPOTENCY_KEY.test(context.idempotencyKey)) {
+          throw deliveryError('invalid_operation', { attemptedAt, requestId });
+        }
+        let payload;
+        try {
+          payload = {
+            from: structuredSender(message, configuration),
+            to: [emailAddress(message.to, 'recipient')],
+            subject: bounded(message.subject, MAX_SUBJECT, 'subject'),
+            text: bounded(message.text, MAX_TEXT, 'text body', true),
+            html: bounded(message.html, MAX_HTML, 'HTML body', true),
+          };
+        } catch (_error) {
+          throw deliveryError('invalid_message', { attemptedAt, requestId });
+        }
+        if (Date.now() >= deadline) throw deliveryError('timeout', { attemptedAt, requestId });
+
+        const response = await fetchImpl(RESEND_ENDPOINT, {
+            method: 'POST',
+            redirect: 'manual',
+            signal: controller.signal,
+            headers: {
+              Authorization: `Bearer ${configuration.apiKey}`,
+              'Content-Type': 'application/json',
+              'Idempotency-Key': context.idempotencyKey,
+            },
+            body: JSON.stringify(payload),
+          });
+
+        const httpStatus = response && Number.isInteger(response.status) ? response.status : null;
+        if (httpStatus !== null && httpStatus >= 300 && httpStatus < 400) {
+          await cancelResponse(response);
+          throw deliveryError('provider_redirect_rejected', { attemptedAt, requestId, httpStatus });
+        }
+        if (httpStatus === null || httpStatus < 200 || httpStatus >= 300) {
+          await cancelResponse(response);
+          throw deliveryError(categoryForStatus(httpStatus || 0), { attemptedAt, requestId, httpStatus });
+        }
+
+        let providerBody;
+        try {
+          const contentType = String(response.headers && response.headers.get('content-type') || '');
+          if (!/^application\/json(?:\s*;|$)/i.test(contentType)) throw new Error('provider_content_type_invalid');
+          const raw = await boundedResponseText(response);
+          providerBody = JSON.parse(raw);
+        } catch (_error) {
+          throw deliveryError('malformed_provider_response', { attemptedAt, requestId, httpStatus });
+        }
+        if (!providerBody || typeof providerBody !== 'object' || Array.isArray(providerBody) ||
+            !PROVIDER_ID.test(providerBody.id || '')) {
+          throw deliveryError('malformed_provider_response', { attemptedAt, requestId, httpStatus });
+        }
+        if (deadlineAborted || Date.now() >= deadline) {
+          throw deliveryError('timeout', { attemptedAt, requestId, httpStatus });
+        }
+        return Object.freeze({
+          provider: 'resend',
+          accepted: true,
+          category: 'accepted',
+          code: 'resend_accepted',
+          httpStatus,
+          providerMessageIdPresent: true,
+          providerMessageId: providerBody.id,
+          attemptedAt,
+          requestId,
         });
       } catch (error) {
-        const category = controller.signal.aborted || (error && error.name === 'AbortError')
-          ? 'timeout'
-          : 'network_failure';
-        throw deliveryError(category, { attemptedAt, requestId });
+        if (deadlineAborted || Date.now() >= deadline) {
+          throw deliveryError('timeout', {
+            attemptedAt,
+            requestId,
+            httpStatus: error && error.httpStatus,
+          });
+        }
+        if (error instanceof TransactionalDeliveryError) throw error;
+        throw deliveryError('network_failure', { attemptedAt, requestId });
       } finally {
         clearTimeout(timeout);
       }
-
-      const httpStatus = response && Number.isInteger(response.status) ? response.status : null;
-      if (httpStatus !== null && httpStatus >= 300 && httpStatus < 400) {
-        await cancelResponse(response);
-        throw deliveryError('unexpected_redirect', { attemptedAt, requestId, httpStatus });
-      }
-      if (httpStatus === null || httpStatus < 200 || httpStatus >= 300) {
-        await cancelResponse(response);
-        throw deliveryError(categoryForStatus(httpStatus || 0), { attemptedAt, requestId, httpStatus });
-      }
-
-      let providerBody;
-      try {
-        const contentType = String(response.headers && response.headers.get('content-type') || '');
-        if (!/^application\/json(?:\s*;|$)/i.test(contentType)) throw new Error('provider_content_type_invalid');
-        const raw = await boundedResponseText(response);
-        providerBody = JSON.parse(raw);
-      } catch (_error) {
-        throw deliveryError('malformed_response', { attemptedAt, requestId, httpStatus });
-      }
-      if (!providerBody || typeof providerBody !== 'object' || Array.isArray(providerBody) ||
-          !PROVIDER_ID.test(providerBody.id || '')) {
-        throw deliveryError('malformed_response', { attemptedAt, requestId, httpStatus });
-      }
-      return Object.freeze({
-        provider: 'resend',
-        accepted: true,
-        category: 'accepted',
-        code: 'resend_accepted',
-        httpStatus,
-        providerMessageIdPresent: true,
-        providerMessageId: providerBody.id,
-        attemptedAt,
-        requestId,
-      });
     },
   });
 }

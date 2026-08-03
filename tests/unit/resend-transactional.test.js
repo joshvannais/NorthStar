@@ -29,6 +29,79 @@ function jsonResponse(status, value, headers = {}) {
   });
 }
 
+function scriptedBodyFetch(steps, evidence = {}) {
+  evidence.calls = 0;
+  evidence.aborts = 0;
+  evidence.cancels = 0;
+  evidence.releases = 0;
+  return async (_url, options) => {
+    evidence.calls += 1;
+    let index = 0;
+    let pending = null;
+    let closed = false;
+    const timers = new Set();
+    const cleanup = () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+      options.signal.removeEventListener('abort', abort);
+    };
+    const abort = () => {
+      evidence.aborts += 1;
+      if (pending) {
+        const error = new Error('deadline');
+        error.name = 'AbortError';
+        pending.reject(error);
+        pending = null;
+      }
+    };
+    options.signal.addEventListener('abort', abort);
+    const reader = {
+      read() {
+        const step = steps[index++] || { never: true, safetyMs: 250 };
+        return new Promise((resolve, reject) => {
+          pending = { reject };
+          const finish = value => {
+            pending = null;
+            resolve(value);
+          };
+          if (step.never) {
+            const safety = setTimeout(() => {
+              timers.delete(safety);
+              pending = null;
+              reject(new Error('test safety deadline'));
+            }, step.safetyMs || 250);
+            timers.add(safety);
+            return;
+          }
+          const timer = setTimeout(() => {
+            timers.delete(timer);
+            if (closed) return;
+            if (step.done) closed = true;
+            finish(step.done
+              ? { done: true }
+              : { done: false, value: new TextEncoder().encode(step.value) });
+          }, step.delayMs || 0);
+          timers.add(timer);
+        });
+      },
+      async cancel() {
+        evidence.cancels += 1;
+        closed = true;
+        cleanup();
+      },
+      releaseLock() {
+        evidence.releases += 1;
+        cleanup();
+      },
+    };
+    return {
+      status: 200,
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      body: { getReader: () => reader },
+    };
+  };
+}
+
 function createEmail(fetchImpl, options = {}) {
   const configuration = validatedProductionConfiguration(validEnvironment());
   expect(configuration).not.toBeNull();
@@ -82,15 +155,30 @@ describe('production Resend transactional delivery', () => {
     expect(valid).not.toBeNull();
     expect(valid.origin).toBe(ORIGIN);
     expect(valid.from).toBe(FROM);
+    expect(valid.apiKey).toBe(TEST_KEY);
+
+    for (const apiKey of [
+      'future-format-opaque-key',
+      'opaque.key:segment/with+punctuation=value',
+      '!#$%&\'()*+,-./:;<=>?@[]^_`{|}~',
+    ]) {
+      const future = validatedProductionConfiguration(validEnvironment({ RESEND_API_KEY: apiKey }));
+      expect(future).not.toBeNull();
+      expect(future.apiKey).toBe(apiKey);
+    }
 
     for (const mutation of [
       { RESEND_API_KEY: undefined },
       { RESEND_API_KEY: '' },
-      { RESEND_API_KEY: ' re_invalid' },
-      { RESEND_API_KEY: 're_invalid key' },
+      { RESEND_API_KEY: ' leading-space' },
+      { RESEND_API_KEY: 'trailing-space ' },
+      { RESEND_API_KEY: 'embedded space' },
+      { RESEND_API_KEY: 'embedded\ttab' },
       { RESEND_API_KEY: 're_invalid\r\nInjected: yes' },
       { RESEND_API_KEY: `re_invalid${String.fromCharCode(0)}` },
-      { RESEND_API_KEY: `re_${'a'.repeat(510)}` },
+      { RESEND_API_KEY: `visible${String.fromCharCode(127)}del` },
+      { RESEND_API_KEY: 'opaque-é' },
+      { RESEND_API_KEY: 'a'.repeat(4097) },
       { PUBLIC_ORIGIN: 'https://northstar-os.ai' },
       { PUBLIC_ORIGIN: 'http://www.northstar-os.ai' },
       { PUBLIC_ORIGIN: 'https://www.northstar-os.ai/path' },
@@ -167,15 +255,15 @@ describe('production Resend transactional delivery', () => {
   });
 
   test.each([
-    [400, 'validation_rejection'],
-    [401, 'authorization_rejection'],
-    [403, 'authorization_rejection'],
-    [409, 'idempotency_conflict'],
-    [422, 'validation_rejection'],
-    [429, 'rate_limited'],
-    [500, 'provider_failure'],
-    [502, 'provider_failure'],
-    [503, 'provider_failure'],
+    [400, 'provider_request_rejected'],
+    [401, 'provider_access_rejected'],
+    [403, 'provider_access_rejected'],
+    [409, 'provider_conflict'],
+    [422, 'provider_request_rejected'],
+    [429, 'provider_rate_limited'],
+    [500, 'provider_unavailable'],
+    [502, 'provider_unavailable'],
+    [503, 'provider_unavailable'],
   ])('classifies provider HTTP %i without consuming its body', async (status, category) => {
     const error = await rejectedOutcome(async () => jsonResponse(status, {
       message: `${TEST_KEY} owner@example.test Bounded text`,
@@ -208,6 +296,68 @@ describe('production Resend transactional delivery', () => {
     expect(timeoutCalls).toBe(1);
   });
 
+  test('keeps one timeout across headers and every response-body chunk', async () => {
+    const cases = [
+      {
+        name: 'first body chunk delayed',
+        steps: [
+          { delayMs: 200, value: '{"id":"late"}' },
+          { done: true },
+        ],
+      },
+      {
+        name: 'first chunk arrives then remainder stalls',
+        steps: [
+          { value: '{"id":' },
+          { delayMs: 200, value: '"late"}' },
+          { done: true },
+        ],
+      },
+      {
+        name: 'body remains indefinitely open',
+        steps: [{ never: true, safetyMs: 250 }],
+      },
+    ];
+    for (const testCase of cases) {
+      const evidence = {};
+      const started = Date.now();
+      const error = await rejectedOutcome(scriptedBodyFetch(testCase.steps, evidence), { timeoutMs: 20 });
+      expect(error.category).toBe('timeout');
+      expect(Date.now() - started).toBeLessThan(150);
+      expect(evidence).toEqual(expect.objectContaining({
+        calls: 1, aborts: 1, cancels: 1, releases: 1,
+      }));
+    }
+  });
+
+  test('accepts an immediate pre-deadline body and clears response resources once', async () => {
+    const evidence = {};
+    const adapter = createResendAdapter(validatedProductionConfiguration(validEnvironment()), {
+      fetchImpl: scriptedBodyFetch([
+        { delayMs: 5, value: '{"id":"just-in-time"}' },
+        { done: true },
+      ], evidence),
+      timeoutMs: 50,
+    });
+    const outcome = await adapter.send(validMessage(), validContext());
+    expect(outcome.accepted).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect(evidence).toEqual(expect.objectContaining({
+      calls: 1, aborts: 0, cancels: 0, releases: 1,
+    }));
+  });
+
+  test('preserves the incremental response limit for chunked bodies', async () => {
+    const evidence = {};
+    const error = await rejectedOutcome(scriptedBodyFetch([
+      { value: 'a'.repeat(9000) },
+      { value: 'b'.repeat(9000) },
+      { done: true },
+    ], evidence), { timeoutMs: 100 });
+    expect(error.category).toBe('malformed_provider_response');
+    expect(evidence).toEqual(expect.objectContaining({ calls: 1, cancels: 1, releases: 1 }));
+  });
+
   test('rejects redirects and every malformed or oversized success response', async () => {
     const cases = [
       async () => new Response(null, { status: 302, headers: { Location: 'https://attacker.invalid/' } }),
@@ -226,7 +376,7 @@ describe('production Resend transactional delivery', () => {
     ];
     for (const fetchImpl of cases) {
       const error = await rejectedOutcome(fetchImpl);
-      expect(['unexpected_redirect', 'malformed_response']).toContain(error.category);
+      expect(['provider_redirect_rejected', 'malformed_provider_response']).toContain(error.category);
     }
   });
 

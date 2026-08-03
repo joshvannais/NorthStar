@@ -17,7 +17,7 @@ provider configuration, or real email transmission is part of this slice.
 
 | Concern | Mounted executable owner | B1 disposition |
 | --- | --- | --- |
-| Production construction | `src/server.js` | Builds `AccountService` and injects signup only when the transactional-email constructor validates complete SMTP configuration and a canonical HTTPS origin. |
+| Production construction | `src/server.js` | Builds `AccountService` and injects signup only when the transactional-email constructor validates the Resend API key, exact source-owned sender mailbox, and exact canonical HTTPS origin. SMTP variables have no B1 capability authority. |
 | Signup | `POST /api/auth/signup`, `src/routes/auth.js`, `src/accounts/service.js`, `src/accounts/repository.js` | Source-disabled with stable `503 signup_disabled` unless the validated capability exists. One durable transaction owns the account graph. No session or cookie is created. |
 | Login/refresh/logout/me | `src/routes/auth.js`, `src/auth/middleware.js`, account service/repository | PostgreSQL sessions and refresh-token families remain canonical. Pending and expired users can authenticate; authorization is reloaded from PostgreSQL. |
 | Verification status | `GET /api/auth/verification-status` | Returns the authenticated user's safe verification projection. |
@@ -30,7 +30,7 @@ provider configuration, or real email transmission is part of this slice.
 | Dashboard reads | canonical/compatibility routers and `src/auth/middleware.js` | Pending low-risk reads and expired restricted reads remain available. |
 | Internal mutations | `requireAccountMutation` / `requireOnboardedInternal` in `src/auth/middleware.js` | One current PostgreSQL subscription evaluation; expired, paid-restricted, missing, contradictory, and unavailable authority fail closed. |
 | External actions | `requireVerifiedExternalAction` and `src/services/canonicalRetellIngestion.js` | Verification, onboarding, role, membership, and unexpired trial/active subscription are all required. Public Retell ingestion reloads the owning organization's subscription before mutation. |
-| Email | `src/email/transactional.js` | Provider-agnostic text-only security-email boundary. The operational notification mailer is not reused as identity authority. |
+| Email | `src/email/transactional.js` | Provider-agnostic security-message boundary over a mounted, source-owned Resend Email API adapter. Both bounded text and HTML bodies are emitted; the operational notification mailer and SMTP are not reused as identity authority. |
 | Navigation/bootstrap | `public/js/auth-session.js`, `public/js/trial-status.js` | Auth bootstrap consumes the safe server projection; the shared trial component owns one banner and listener set. |
 | Customer HTML | `/account/pending`, legacy dashboard, command center, executive brief, leads, communications, calendar, AI settings, Business Profile, My Number, settings, integrations, lead detail, and Polaris | Every authenticated surface imports exactly one shared trial-status component. |
 | Tests | `tests/helpers/account-test-app.js`, PostgreSQL suites, two-process workers, lifecycle browser script | Test construction alone may inject a capture adapter and controllable clock. Production construction cannot accept either from a request or boolean. |
@@ -146,27 +146,64 @@ the migration for explicit resolution.
 
 ## Email configuration and limitations
 
-The production constructor requires a multi-label DNS SMTP hostname whose
-labels have valid length and hyphen placement, the exact port 465 or 587,
-bounded control-free identity/password fields, an explicit single mailbox
-sender, and a canonical ASCII HTTPS public origin with no path, query,
-credentials, or fragment. It rejects empty labels, dot-only/leading/trailing
-dot hosts, schemes, ports, paths, whitespace, controls, malformed mailbox
-local/domain parts, and coercible non-string identity input. It derives
-recipients, sender, templates, and callbacks on the server; rejects header injection, unsafe origins, unbounded
-values, and raw HTML; never exposes or logs secrets/tokens; and returns stable
-internal outcomes. Environment booleans cannot enable signup. With no valid
-provider configuration, production signup remains disabled with stable
-`503 signup_disabled`, zero account-graph/token rows, zero cookies, and zero
-transport, send, DNS, network, or TLS effects. Therefore B1 does not claim live
-production signup readiness.
+The mounted B1 production provider is the Resend Email API. Production
+construction requires all three of `RESEND_API_KEY`, the exact canonical
+`PUBLIC_ORIGIN=https://www.northstar-os.ai`, and the strict bare mailbox
+`TRANSACTIONAL_EMAIL_FROM=notifications@northstar-os.ai`. The display name is
+source-owned as `NorthStar Notifications`; environment display-name values
+cannot override it. The key contract preserves the exact nonempty value and
+accepts visible ASCII without assuming a provider prefix or undocumented
+provider grammar. Whitespace, C0 controls, DEL, non-ASCII, and values beyond
+NorthStar's 4,096-character internal Authorization-header safety bound fail
+closed. That bound is a NorthStar transport-safety policy, not a documented
+Resend key maximum. The key remains server-side and is never placed
+in browser code, public JSON, logs, snapshots, documentation, or source.
 
-`TRANSACTIONAL_EMAIL_FROM` remains a strictly validated bare mailbox; the
-required value is `notifications@northstar-os.ai`. The adapter supplies the
-source-owned display name `NorthStar Notifications` through Nodemailer's
-structured `{ name, address }` representation rather than concatenating a
-header string. Configuration cannot override the display name, formatted
-display-name input remains invalid, and this boundary adds no `Reply-To`.
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS` no longer construct,
+enable, override, or restore B1 delivery. They may still serve unrelated legacy
+operational mail code, but there is no mounted Gmail/Nodemailer fallback for
+signup, verification resend, or password recovery. Invalid or incomplete
+Resend configuration leaves signup at stable `503 signup_disabled` before any
+account/token row, cookie, transport, or network effect. Authenticated resend
+does not mutate a token when capability is absent, and forgot-password remains
+enumeration-safe with no reset-token creation.
+
+Each intended delivery performs one no-retry `POST` to the fixed
+`https://api.resend.com/emails` endpoint with manual redirect handling, a
+single bounded whole-operation timeout, Bearer authorization, JSON content
+type, the exact structured
+sender `NorthStar Notifications <notifications@northstar-os.ai>`, one
+normalized recipient, the existing bounded subject, and bounded source-owned
+text and HTML bodies. It emits no `Reply-To`, CC, BCC, or caller-controlled
+headers. Verification/reset links use only the canonical HTTPS origin.
+
+The `Idempotency-Key` is a domain-separated SHA-256 digest of the durable action
+token row UUID and its purpose. It is stable for one intended delivery,
+different after authorized token supersession, at most 96 characters, and
+contains no email, raw token, user, organization, session, password, role, or
+tenant data. It is neither logged nor returned publicly. The adapter accepts
+only a 2xx response containing bounded well-formed JSON and a bounded nonempty
+provider message ID. Redirects, network/timeout failures, authentication,
+provider access rejection, request rejection, provider conflict, rate limiting,
+provider unavailability, malformed or oversized JSON, and missing/invalid IDs
+produce coarse typed internal categories supported by observed transport status
+without parsing provider text or retaining response bodies or sensitive
+identity. A status alone is not claimed to distinguish authentication from
+authorization or to identify provider-side validation semantics.
+
+Resend sending-domain verification for `northstar-os.ai` is user-confirmed
+configuration context only; this implementation did not independently exercise
+or reconfirm provider/domain state. Google Workspace remains the monitored
+reply inbox for `notifications@northstar-os.ai`; this code adds no `Reply-To`
+and does not enable Resend inbound receiving. No API key was created, requested,
+retrieved, inspected, printed, hashed, stored, or used. Production activation,
+deployment, and real delivery remain unproven, so local capture success is not
+a provider-readiness claim.
+
+Official contract references: [Send Email API](https://resend.com/docs/api-reference/emails/send-email),
+[API keys](https://resend.com/docs/dashboard/api-keys/introduction),
+[idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys), and
+[domains](https://resend.com/docs/dashboard/domains/introduction).
 
 Only the in-app daily countdown ships. A later email-capable release should
 send transactional reminders at seven, three, and one day remaining using a
@@ -265,6 +302,103 @@ reported from the published draft; zero checks will be recorded as unavailable,
 never passing. No merge, deployment, Railway or production configuration,
 production database/account access, live email, SMTP provider, Stripe, payment,
 or provider action occurred during the correction.
+
+## Resend transactional-email correction evidence
+
+The Resend correction replaces only the mounted B1 Gmail/Nodemailer SMTP path.
+It changes no migration, browser-auth code, trial component, password policy,
+admin UI, business authority, Stripe/B2 behavior, or operational notification
+mailer. Its exact eleven-file inventory is:
+
+- `.env.example`
+- `docs/account-lifecycle-pr-b1.md`
+- `src/accounts/service.js`
+- `src/email/transactional.js`
+- `src/routes/auth.js`
+- `src/server.js`
+- `tests/api/account-authority-gates-postgres.test.js`
+- `tests/api/resend-account-lifecycle-postgres.test.js`
+- `tests/helpers/account-production-capability-worker.js`
+- `tests/unit/account-lifecycle-b1-policy.test.js`
+- `tests/unit/resend-transactional.test.js`
+
+Authentic red-first coverage initially failed all four foundational assertions:
+SMTP still constructed capability, Resend-only configuration did not, and the
+Resend adapter plus typed error did not exist. After the bounded implementation,
+the final focused campaign passed 56/56 across five suites; complete API passed
+146/146 across twelve suites; and complete serial Jest with
+`--detectOpenHandles` passed 1,177/1,177 across 59 suites with no open-handle
+report. PostgreSQL evidence came from loopback PostgreSQL 18.4 with verified
+data directory, port, listen address, and server address.
+
+The mounted capture evidence issued exactly one provider-bound request per
+signup, authenticated resend, or eligible forgot-password operation. It covered
+accepted and rejected signup, accepted and rejected resend, token supersession,
+accepted and rejected enumeration-safe recovery, reset/session revocation, no
+trial before verification, and one exact 14-day trial only after token
+verification. Direct adapter coverage exercised 400, 401, 403, 409, 422, 429,
+500, 502, 503, network rejection, timeout/abort, redirect, empty/malformed/
+oversized/non-JSON success, and missing/invalid provider IDs. Every destination
+was an injected capture boundary for the fixed Resend URL; no DNS lookup,
+provider socket, SMTP construction, Google destination, real Resend request, or
+automatic retry occurred.
+
+Safe diagnostic assertions excluded the API key, Authorization value,
+recipient, sender mailbox, raw action token, message body/link, idempotency key,
+user/session/organization identifiers, and provider response body. Public
+failure envelopes remained `verification_delivery_failed` or the existing
+enumeration-safe recovery response. A rejected signup retained one pending
+graph and one hash-only token, with no cookie, session, trial start, duplicate
+graph, or paid state.
+
+Intermediate harness evidence is retained: an isolated-checkout Jest invocation
+first lacked local `node_modules` and was corrected to the verified sibling
+dependency tree; sandboxed `pg_ctl` could not create a Windows restricted token
+and the approved disposable cluster was started through the authorized host
+boundary; the first complete-serial invocation omitted two required migration
+negative-control URLs (1,153 tests passed and 24 fixture cases failed); the next
+invocation found those controls empty (1,176 tests passed and one fixture case
+failed); and the established archived runner rebuilt their genuine fresh and
+upgrade catalogs before the final green campaign. One PowerShell `$1` expansion
+also made the first upgrade-seed command syntactically invalid; the disposable
+database was recreated and the corrected parameterized command succeeded. No
+product source was changed to accommodate these harness corrections.
+
+No HTML or browser JavaScript changed, so the proportionate correction campaign
+did not rerun Chrome or Playwright WebKit; prior B1 browser evidence is not
+relabeled as Resend evidence, and no physical Safari claim is made. Migrations
+001-012, package manifests/lockfile, all tracked data files, and browser-auth/
+trial component paths remain object-identical to the immutable base. No new
+dependency or migration was added.
+
+### Targeted timeout and contract correction
+
+At draft head `e64576d15ca86e43204cc473f1b5fa12a08057c5`, the adapter cleared its
+abort timer as soon as `fetch` returned response headers. The authentic negative
+control returned headers immediately, delayed a valid JSON body by about 200 ms
+under a 20 ms timeout, and incorrectly produced `accepted=true`. The corrected
+adapter starts one deadline before request construction and keeps it active
+through connection, headers, every incrementally bounded response chunk, UTF-8
+decoding, JSON parsing, provider-ID validation, and the final acceptance check.
+An incomplete reader is canceled and its lock released where supported, the
+timer is cleared once in final cleanup, and no retry or second provider request
+is introduced.
+
+The same additive correction replaces status-only overclaims with stable coarse
+categories: 400/422 `provider_request_rejected`, 401/403
+`provider_access_rejected`, 409 `provider_conflict`, 429
+`provider_rate_limited`, 500-599 `provider_unavailable`, manual redirects
+`provider_redirect_rejected`, transport errors `network_failure`, deadline-led
+abort `timeout`, and invalid content/body/JSON/message-ID evidence
+`malformed_provider_response`. Public envelopes remain unchanged, and provider
+response text is neither parsed for classification nor logged or returned.
+
+The final campaign passed the direct adapter suite 19/19, the combined affected
+unit suites 33/33, the mounted correction set 47/47 across four suites, complete
+API 146/146 across twelve suites, and complete serial Jest 1,180/1,180 across
+59 suites with `--detectOpenHandles` and no open-handle report. Production,
+Railway, a live API key, current domain/provider state, and real email delivery
+remain unproven.
 
 ## Explicit PR B2 deferral
 

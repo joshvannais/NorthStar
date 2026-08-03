@@ -24,7 +24,7 @@ function cookieHeader(values) {
   return Object.entries(values).map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join('; ');
 }
 
-function runProductionCapabilityWorker(connectionString, configuration, marker, expectEnabled = false) {
+function runProductionCapabilityWorker(connectionString, configuration, marker, expectEnabled = false, providerStatus = 200) {
   return new Promise((resolve, reject) => {
     const child = fork(path.resolve(__dirname, '../helpers/account-production-capability-worker.js'), [], {
       cwd: path.resolve(__dirname, '../..'),
@@ -47,7 +47,7 @@ function runProductionCapabilityWorker(connectionString, configuration, marker, 
       if (code !== 0 || !outcome) reject(new Error(`capability worker exited ${code}\n${stderr}`));
       else resolve(outcome);
     });
-    child.send({ configuration, marker, expectEnabled });
+    child.send({ configuration, marker, expectEnabled, providerStatus });
   });
 }
 
@@ -213,51 +213,37 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(after.rows[0].count).toBe(before.rows[0].count);
   });
 
-  test('fresh production construction rejects every malformed SMTP capability before mounted signup effects', async () => {
+  test('fresh production construction requires valid Resend authority and never falls back to SMTP', async () => {
     const valid = {
-      PUBLIC_ORIGIN: 'https://app.example.test', SMTP_HOST: 'smtp.example.test',
-      SMTP_PORT: '587', SMTP_USER: 'smtp-user', SMTP_PASS: 'private-secret',
+      PUBLIC_ORIGIN: 'https://www.northstar-os.ai', RESEND_API_KEY: 're_local_capture_only',
       TRANSACTIONAL_EMAIL_FROM: 'notifications@northstar-os.ai',
       TRANSACTIONAL_EMAIL_FROM_NAME: 'Attacker Controlled', ACCOUNT_SIGNUP_ENABLED: 'true',
-      ACCOUNT_VERIFICATION_DELIVERY_READY: 'true',
+      ACCOUNT_VERIFICATION_DELIVERY_READY: 'true', SMTP_HOST: 'smtp.example.test',
+      SMTP_PORT: '587', SMTP_USER: 'smtp-user', SMTP_PASS: 'retired-secret',
     };
     const invalid = [
-      ['dot', { SMTP_HOST: '.' }], ['double-dot-only', { SMTP_HOST: '..' }],
-      ['leading-dot', { SMTP_HOST: '.smtp.example.test' }],
-      ['trailing-dot', { SMTP_HOST: 'smtp.example.test.' }],
-      ['empty-label', { SMTP_HOST: 'smtp..example.test' }],
-      ['leading-hyphen', { SMTP_HOST: '-smtp.example.test' }],
-      ['trailing-hyphen', { SMTP_HOST: 'smtp-.example.test' }],
-      ['oversized-label', { SMTP_HOST: `smtp.${'a'.repeat(64)}.test` }],
-      ['oversized-host', { SMTP_HOST: `${Array.from({ length: 43 }, () => 'aaaaa').join('.')}.test` }],
-      ['leading-space', { SMTP_HOST: ' smtp.example.test' }],
-      ['trailing-space', { SMTP_HOST: 'smtp.example.test ' }],
-      ['scheme', { SMTP_HOST: 'https://smtp.example.test' }],
-      ['port', { SMTP_HOST: 'smtp.example.test:587' }],
-      ['credentials', { SMTP_HOST: 'user@smtp.example.test' }],
-      ['path', { SMTP_HOST: 'smtp.example.test/path' }],
-      ['backslash', { SMTP_HOST: 'smtp\\example.test' }],
-      ['cr', { SMTP_HOST: 'smtp\r.example.test' }],
-      ['lf', { SMTP_HOST: 'smtp\n.example.test' }],
-      ['del', { SMTP_HOST: `smtp${String.fromCharCode(127)}.example.test` }],
-      ['unicode', { SMTP_HOST: 'smtp.exÃ¤mple.test' }],
-      ['one-label', { SMTP_HOST: 'localhost' }],
-      ['missing-user', { SMTP_USER: '' }],
-      ['user-controls', { SMTP_USER: 'smtp-user\r\nAUTH attacker' }],
-      ['missing-password', { SMTP_PASS: '' }],
-      ['password-control', { SMTP_PASS: 'private\nsecret' }],
-      ['invalid-port', { SMTP_PORT: '25' }],
-      ['suffixed-port', { SMTP_PORT: '587suffix' }],
+      ['missing-key', { RESEND_API_KEY: '' }],
+      ['key-leading-space', { RESEND_API_KEY: ' re_local_capture_only' }],
+      ['key-trailing-space', { RESEND_API_KEY: 're_local_capture_only ' }],
+      ['key-tab', { RESEND_API_KEY: 're_local\tcapture' }],
+      ['key-cr', { RESEND_API_KEY: 're_local\rcapture' }],
+      ['key-lf', { RESEND_API_KEY: 're_local\ncapture' }],
+      ['key-nul', { RESEND_API_KEY: `re_local${String.fromCharCode(0)}capture` }],
+      ['key-del', { RESEND_API_KEY: `re_local${String.fromCharCode(127)}capture` }],
+      ['key-oversized', { RESEND_API_KEY: 'a'.repeat(4097) }],
+      ['key-non-ascii', { RESEND_API_KEY: 'opaque-é' }],
       ['missing-sender', { TRANSACTIONAL_EMAIL_FROM: '' }],
       ['formatted-sender', {
         TRANSACTIONAL_EMAIL_FROM: 'NorthStar Notifications <notifications@northstar-os.ai>',
       }],
-      ['sender-injection', { TRANSACTIONAL_EMAIL_FROM: 'security@example.test\r\nBcc:x@example.test' }],
-      ['sender-nul', { TRANSACTIONAL_EMAIL_FROM: `security${String.fromCharCode(0)}@example.test` }],
+      ['sender-injection', { TRANSACTIONAL_EMAIL_FROM: 'notifications@northstar-os.ai\r\nBcc:x@example.test' }],
+      ['sender-nul', { TRANSACTIONAL_EMAIL_FROM: `notifications${String.fromCharCode(0)}@northstar-os.ai` }],
       ['sender-list', { TRANSACTIONAL_EMAIL_FROM: 'one@example.test,two@example.test' }],
-      ['sender-domain', { TRANSACTIONAL_EMAIL_FROM: 'security@localhost' }],
-      ['insecure-origin', { PUBLIC_ORIGIN: 'http://app.example.test' }],
-      ['origin-path', { PUBLIC_ORIGIN: 'https://app.example.test/path' }],
+      ['sender-mailbox', { TRANSACTIONAL_EMAIL_FROM: 'attacker@northstar-os.ai' }],
+      ['insecure-origin', { PUBLIC_ORIGIN: 'http://www.northstar-os.ai' }],
+      ['foreign-origin', { PUBLIC_ORIGIN: 'https://attacker.example' }],
+      ['origin-path', { PUBLIC_ORIGIN: 'https://www.northstar-os.ai/path' }],
+      ['origin-query', { PUBLIC_ORIGIN: 'https://www.northstar-os.ai?next=attacker' }],
     ];
     for (const [label, mutation] of invalid) {
       const result = await runProductionCapabilityWorker(
@@ -267,29 +253,62 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       expect(result.cookies).toEqual([]);
       expect(result.after).toEqual(result.before);
       expect(result.transportConstructions).toBe(0);
-      expect(result.sends).toBe(0);
+      expect(result.providerRequests).toBe(0);
       expect(result.dnsCalls + result.netCalls + result.tlsCalls).toBe(0);
       const rejectedValue = String(Object.values(mutation)[0]);
       if (rejectedValue.length >= 8) expect(result.disclosure).not.toContain(rejectedValue);
     }
+
+    const smtpOnly = await runProductionCapabilityWorker(
+      allocation.connectionString,
+      { ...valid, RESEND_API_KEY: undefined },
+      'smtp-only-disabled'
+    );
+    expect(smtpOnly.status).toBe(503);
+    expect(smtpOnly.after).toEqual(smtpOnly.before);
+    expect(smtpOnly.providerRequests).toBe(0);
+    expect(smtpOnly.transportConstructions).toBe(0);
 
     const positive = await runProductionCapabilityWorker(
       allocation.connectionString, valid, 'valid-local-capture', true
     );
     expect(positive.status).toBe(202);
     expect(positive.cookies).toEqual([]);
-    expect(positive.transportConstructions).toBe(1);
-    expect(positive.sends).toBe(1);
+    expect(positive.transportConstructions).toBe(0);
+    expect(positive.providerRequests).toBe(1);
     expect(positive.dnsCalls + positive.netCalls + positive.tlsCalls).toBe(0);
-    expect(positive.sentMessages).toEqual([
-      expect.objectContaining({
-        from: {
-          name: 'NorthStar Notifications',
-          address: 'notifications@northstar-os.ai',
-        },
-      }),
-    ]);
-    expect(positive.sentMessages[0]).not.toHaveProperty('replyTo');
+    expect(positive.requestEvidence).toEqual([{
+      url: 'https://api.resend.com/emails', method: 'POST', redirect: 'manual',
+      contentType: 'application/json', authorizationPresent: true,
+      idempotencyPresent: true, idempotencyLength: 96,
+      from: 'NorthStar Notifications <notifications@northstar-os.ai>',
+      normalizedRecipient: true, subject: 'Verify your NorthStar email',
+      hasCanonicalTextLink: true, hasCanonicalHtmlLink: true,
+      forbiddenFieldsAbsent: true,
+      headerNames: ['Authorization', 'Content-Type', 'Idempotency-Key'],
+    }]);
+    for (const relation of Object.keys(positive.before)) {
+      expect(positive.after[relation] - positive.before[relation]).toBe(1);
+    }
+    expect(positive.authority).toEqual({
+      state: 'pending_verification', trialStarted: false, trialEnds: false, sessionCount: 0,
+    });
+
+    const rejected = await runProductionCapabilityWorker(
+      allocation.connectionString, valid, 'rejected-local-capture', true, 422
+    );
+    expect(rejected.status).toBe(503);
+    expect(rejected.cookies).toEqual([]);
+    expect(rejected.transportConstructions).toBe(0);
+    expect(rejected.providerRequests).toBe(1);
+    for (const relation of Object.keys(rejected.before)) {
+      expect(rejected.after[relation] - rejected.before[relation]).toBe(1);
+    }
+    expect(rejected.authority).toEqual({
+      state: 'pending_verification', trialStarted: false, trialEnds: false, sessionCount: 0,
+    });
+    expect(rejected.disclosure).toContain('verification_delivery_failed');
+    expect(rejected.disclosure).not.toContain(valid.RESEND_API_KEY);
   }, 180000);
 
   test('pending user reads its tenant dashboard, opens/saves onboarding, and remains unverified', async () => {

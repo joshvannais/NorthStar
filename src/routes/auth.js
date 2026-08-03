@@ -39,7 +39,7 @@ function createAuthRouter(options = {}) {
       return failure(req, res, 503, 'signup_disabled', 'Account signup is not currently available');
     }
     try {
-      await signup(req.body || {}, req.ip || 'unknown');
+      await signup(req.body || {}, req.ip || 'unknown', { requestId: requestId(req) });
       return res.status(202).json({
         success: true,
         code: 'verification_required',
@@ -124,7 +124,11 @@ function createAuthRouter(options = {}) {
 
   router.post('/resend-verification', requireSession, async (req, res) => {
     try {
-      await service.resendVerification(req.accountAuthority, req.ip || 'unknown');
+      await service.resendVerification(
+        req.accountAuthority,
+        req.ip || 'unknown',
+        { requestId: requestId(req) }
+      );
       return res.json({
         success: true,
         code: 'verification_requested',
@@ -141,7 +145,11 @@ function createAuthRouter(options = {}) {
   });
   router.post('/forgot-password', async (req, res) => {
     try {
-      await service.forgotPassword(req.body || {}, req.ip || 'unknown');
+      await service.forgotPassword(
+        req.body || {},
+        req.ip || 'unknown',
+        { requestId: requestId(req) }
+      );
       return res.status(202).json({
         success: true,
         code: 'recovery_requested',

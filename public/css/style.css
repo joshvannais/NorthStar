@@ -10,8 +10,8 @@
   --brand-300: #E5B93E;
   --brand-400: #D4AF37;
   --brand-500: #C89B2C;
-  --brand-600: #B8860B;
-  --brand-700: #9A7209;
+  --brand-600: #7A5C08;
+  --brand-700: #6D5005;
   --brand-800: #7A5C08;
   --brand-900: #5C4506;
 
@@ -22,16 +22,16 @@
   --neutral-100: #f1f5f9;
   --neutral-200: #e2e8f0;
   --neutral-300: #cbd5e1;
-  --neutral-400: #94a3b8;
-  --neutral-500: #64748b;
+  --neutral-400: #5F6F83;
+  --neutral-500: #526173;
   --neutral-600: #475569;
   --neutral-700: #334155;
   --neutral-800: #1e293b;
   --neutral-900: #0f172a;
 
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  --success: #047857;
+  --warning: #92400e;
+  --danger: #b91c1c;
 
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -79,6 +79,8 @@
   --theme-header: rgba(255,255,255,0.84);
   --theme-control: rgba(255,255,255,0.96);
   --theme-control-shadow: 0 10px 30px rgba(15,23,42,0.18);
+  --theme-focus: #7A5C08;
+  --theme-field-border: #5F6F83;
 }
 
 /* Reset */
@@ -128,7 +130,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid var(--brand-400);
+  outline: 3px solid var(--theme-focus);
   outline-offset: 3px;
 }
 
@@ -523,7 +525,7 @@ textarea:focus-visible {
   border-radius: var(--radius-sm);
   font: inherit;
 }
-.account-auth-field input::placeholder { color: var(--theme-muted); opacity: 0.8; }
+.account-auth-field input::placeholder { color: var(--theme-muted); opacity: 1; }
 .account-auth-field input:focus { border-color: var(--brand-400); box-shadow: 0 0 0 3px rgba(212,175,55,0.16); }
 .account-auth-form .btn { width: 100%; min-height: 48px; }
 .account-auth-form .btn:disabled { cursor: wait; opacity: 0.64; transform: none; }
@@ -1445,12 +1447,16 @@ tr:hover td { background: var(--neutral-50); }
   --neutral-100: #131624;
   --neutral-200: #1E2235;
   --neutral-300: #2A2F45;
-  --neutral-400: #4A5068;
-  --neutral-500: #7C8298;
-  --neutral-600: #A0A5B8;
-  --neutral-700: #C4C8D4;
+  --neutral-400: #9BA3B8;
+  --neutral-500: #A9B0C1;
+  --neutral-600: #BDC2CF;
+  --neutral-700: #CDD1DA;
   --neutral-800: #E2E4EB;
   --neutral-900: #F1F2F6;
+
+  --success: #6ee7b7;
+  --warning: #fbbf24;
+  --danger: #fca5a5;
 
   --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
   --shadow-md: 0 4px 6px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.25);
@@ -1466,6 +1472,8 @@ tr:hover td { background: var(--neutral-50); }
   --theme-header: rgba(11,13,23,0.88);
   --theme-control: rgba(19,22,36,0.97);
   --theme-control-shadow: 0 12px 34px rgba(0,0,0,0.48);
+  --theme-focus: #F2C94C;
+  --theme-field-border: #9BA3B8;
 }
 
 /* Dark theme overrides for specific elements */
@@ -1741,7 +1749,7 @@ html[data-theme="dark"] body {
   color: var(--brand-400);
 }
 
-.theme-toggle:focus-visible { outline: 3px solid var(--brand-400); outline-offset: 3px; }
+.theme-toggle:focus-visible { outline: 3px solid var(--theme-focus); outline-offset: 3px; }
 /* Dark mode overrides for admin page */
 [data-theme="dark"] .admin-login {
   background: var(--neutral-100);
@@ -3574,4 +3582,254 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 @keyframes toastOut {
   from { transform: translateX(0); opacity: 1; }
   to { transform: translateX(100%); opacity: 0; }
+}
+
+/* ============================================
+   Site-wide accessible presentation contract
+   ============================================ */
+
+::placeholder {
+  color: var(--theme-muted);
+  opacity: 1;
+}
+
+.footer-trust,
+.footer-trust span,
+.footer-links a,
+.footer p,
+.legal-content .last-updated {
+  color: var(--neutral-500);
+}
+
+.verification-eyebrow,
+.account-auth-eyebrow,
+.standalone-eyebrow,
+.nav-logo,
+.mobile-menu-header a,
+.auth-recovery-link {
+  color: var(--brand-700);
+}
+
+.theme-preview-content h1 span {
+  color: var(--brand-800);
+}
+
+.btn-primary,
+.btn-demo,
+.demo-btn-call,
+.cc-sim-btn,
+.cal-new-event-btn,
+.cal-polaris-badge,
+.polaris-badge,
+.skip-link {
+  color: #0b0d17 !important;
+}
+
+.cc-sim-btn,
+.cal-new-event-btn,
+.cal-polaris-badge,
+.polaris-prompt-send,
+.bp-save-btn,
+.demo-btn-call {
+  color: #0b0d17 !important;
+}
+
+.cc-sim-btn,
+.bp-save-btn,
+.demo-btn-call {
+  background: var(--accent) !important;
+}
+
+.polaris-prompt-send {
+  opacity: 1 !important;
+}
+
+.cal-new-event-btn {
+  color: #0b0d17 !important;
+}
+
+.cal-polaris-badge {
+  color: #0b0d17 !important;
+}
+
+.cal-month-cell-today .cal-month-cell-day {
+  color: #1D4ED8 !important;
+}
+
+.cal-polaris-section .polaris-header h2 {
+  color: var(--brand-800) !important;
+}
+
+.cal-polaris-section .polaris-header h2 span {
+  color: var(--neutral-700) !important;
+}
+
+.cal-polaris-label {
+  color: var(--neutral-500) !important;
+}
+
+.coming-soon-badge {
+  color: var(--brand-800) !important;
+}
+
+.integration-card[style*="opacity"] {
+  opacity: 1 !important;
+}
+
+.integration-card[style*="opacity"] > span {
+  color: var(--brand-700) !important;
+}
+
+.badge-new {
+  color: #0b0d17 !important;
+}
+
+.polaris-badge {
+  color: #fff !important;
+  background: var(--brand-800) !important;
+}
+
+button:disabled,
+.btn:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 1;
+}
+
+.account-auth-form .btn:disabled,
+.demo-btn-call:disabled {
+  color: #0b0d17;
+  background: #D4AF37;
+  border-color: #7A5C08;
+}
+
+[data-theme="dark"] .verification-eyebrow,
+[data-theme="dark"] .account-auth-eyebrow,
+[data-theme="dark"] .standalone-eyebrow,
+[data-theme="dark"] .mobile-menu-header a {
+  color: var(--brand-200) !important;
+}
+
+[data-theme="dark"] .pricing-card .btn-primary,
+[data-theme="dark"] .btn-primary,
+[data-theme="dark"] .btn-demo,
+[data-theme="dark"] .cc-sim-btn,
+[data-theme="dark"] .demo-btn-call,
+[data-theme="dark"] .cal-new-event-btn,
+[data-theme="dark"] .cal-polaris-badge {
+  color: #0b0d17;
+}
+
+[data-theme="dark"] .demo-hero h1 span,
+[data-theme="dark"] .demo-container .card p a,
+[data-theme="dark"] .card p a,
+[data-theme="dark"] main > div > p > a,
+[data-theme="dark"] .lead-detail-container a,
+[data-theme="dark"] .settings-section details > summary {
+  color: var(--brand-200) !important;
+}
+
+[data-theme="dark"] .cal-polaris-section .polaris-header h2,
+[data-theme="dark"] .cal-polaris-section .polaris-header h2 span {
+  color: var(--brand-200) !important;
+}
+
+[data-theme="dark"] .cal-month-cell-today .cal-month-cell-day {
+  color: #93C5FD !important;
+}
+
+[data-theme="dark"] .coming-soon-badge,
+[data-theme="dark"] .integration-card[style*="opacity"] > span {
+  color: var(--brand-200) !important;
+}
+
+[data-theme="dark"] .badge-new {
+  color: var(--brand-200) !important;
+}
+
+/* Reserve one shared non-interactive rail for the persistent 44px theme control. */
+body {
+  padding-right: calc(64px + env(safe-area-inset-right)) !important;
+}
+
+:where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+  outline: 3px solid var(--theme-focus) !important;
+  outline-offset: 3px !important;
+  transition: none !important;
+}
+
+#northstar-trial-status button:focus-visible {
+  outline-color: #0B0D17 !important;
+  box-shadow: 0 0 0 6px #F2C94C !important;
+}
+
+/* Keep transient notices fully opaque so their text never crosses a low-contrast fade. */
+.bp-toast {
+  opacity: 1 !important;
+  visibility: hidden;
+  transition: transform 0.3s ease, visibility 0s linear 0.3s !important;
+}
+
+.bp-toast.show {
+  opacity: 1 !important;
+  visibility: visible;
+  transition-delay: 0s !important;
+}
+
+/* Normalize the legacy unvarianted integration action across browser engines. */
+.integration-card > .btn.btn-sm:not(.btn-primary):not(.btn-secondary):not(.btn-ghost):not(.btn-demo) {
+  color: var(--neutral-800);
+  background: var(--neutral-100);
+  border: 1px solid var(--theme-field-border);
+}
+
+:where(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea) {
+  border-color: var(--theme-field-border) !important;
+}
+
+[data-theme="dark"] .cc-sim-text .cc-sim-heading,
+[data-theme="dark"] .cc-header-left h1,
+[data-theme="dark"] .cc-kpi-value,
+[data-theme="dark"] .cc-pipe-count,
+[data-theme="dark"] .cc-rev-val,
+[data-theme="dark"] .coming-soon-title {
+  color: var(--neutral-900) !important;
+}
+
+[data-theme="dark"] .cc-summary-text,
+[data-theme="dark"] .cc-action-btn,
+[data-theme="dark"] .cc-priority-title,
+[data-theme="dark"] .cc-cust-name,
+[data-theme="dark"] .coming-soon-desc {
+  color: var(--neutral-700) !important;
+}
+
+[data-theme="dark"] .cc-refresh-btn {
+  color: var(--neutral-500) !important;
+  border-color: var(--neutral-400) !important;
+}
+
+[data-theme="dark"] .demo-hero p,
+[data-theme="dark"] .hero-stat-label,
+[data-theme="dark"] .demo-form-card > p {
+  color: var(--neutral-500) !important;
+}
+
+[data-theme="dark"] .hero-stat-value {
+  color: var(--brand-200) !important;
+}
+
+[data-theme="dark"] .demo-form-card input::placeholder,
+[data-theme="dark"] .demo-form-card textarea::placeholder,
+[data-theme="dark"] .demo-form-card select::placeholder {
+  color: var(--neutral-500) !important;
+  opacity: 1;
+}
+
+@media (max-width: 480px) {
+  .northstar-theme-control {
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+  }
 }

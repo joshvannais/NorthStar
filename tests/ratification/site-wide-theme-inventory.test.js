@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
 const request = require('supertest');
 const { app } = require('../../src/server');
 const { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS } = require('../helpers/site-theme-pages');
@@ -9,12 +10,38 @@ const { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS } = require('../helpers/site-them
 const ROOT = path.resolve(__dirname, '../..');
 const INTERNAL_LANGUAGE = /\bPR (?:A|B1|B2)\b|PR #|pull request|phase B[12]\b|internal phase|development milestone|implementation availability/i;
 
-function mountedGetRoutes() {
-  return app._router.stack
-    .filter(layer => layer.route && layer.route.methods && layer.route.methods.get)
-    .map(layer => layer.route.path)
-    .filter(route => typeof route === 'string' && !route.startsWith('/api'))
-    .sort();
+function joinMountPath(prefix, routePath) {
+  const joined = `${prefix}/${routePath}`.replace(/\/{2,}/g, '/');
+  return joined.length > 1 && joined.endsWith('/') ? joined.slice(0, -1) : joined;
+}
+
+function staticMountPath(layer) {
+  if (layer.regexp && layer.regexp.fast_slash) return '';
+  const source = layer.regexp && layer.regexp.source;
+  const match = typeof source === 'string'
+    ? source.match(/^\^\\\/((?:\\.|[^\\])+)\\\/\?\(\?=\\\/\|\$\)$/)
+    : null;
+  if (!match) {
+    throw new Error(`mounted theme inventory cannot safely decode router mount ${String(source)}`);
+  }
+  return `/${match[1].replace(/\\\//g, '/').replace(/\\(.)/g, '$1')}`;
+}
+
+function mountedGetRoutes(router = app._router, prefix = '') {
+  const routes = [];
+  for (const layer of router.stack) {
+    if (layer.route && layer.route.methods && layer.route.methods.get) {
+      const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
+      for (const routePath of paths) {
+        if (typeof routePath === 'string') routes.push(joinMountPath(prefix, routePath));
+      }
+      continue;
+    }
+    if (layer.handle && Array.isArray(layer.handle.stack)) {
+      routes.push(...mountedGetRoutes(layer.handle, joinMountPath(prefix, staticMountPath(layer))));
+    }
+  }
+  return routes.filter(route => !route.startsWith('/api')).sort();
 }
 
 function htmlFiles(directory) {
@@ -51,6 +78,21 @@ describe('mounted site-wide theme inventory', () => {
       'public/design-system.html', // Deliberately unmounted internal design reference.
     ].sort();
     expect(htmlFiles(path.join(ROOT, 'public')).sort()).toEqual(expectedHtml);
+  });
+
+  test('nested Express routers cannot hide a newly mounted customer HTML route', () => {
+    const synthetic = express();
+    const child = express.Router();
+    const grandchild = express.Router();
+    synthetic.get('/known', (_req, res) => res.type('html').send('<h1>known</h1>'));
+    grandchild.get('/hidden', (_req, res) => res.type('html').send('<h1>hidden</h1>'));
+    child.use('/child', grandchild);
+    synthetic.use('/nested', child);
+
+    const allowlist = ['/known'];
+    const discovered = mountedGetRoutes(synthetic._router);
+    expect(discovered).toEqual(['/known', '/nested/child/hidden']);
+    expect(discovered).not.toEqual(allowlist);
   });
 
   test.each(MOUNTED_THEME_PAGES)('$route mounts exactly one shared early theme system', async page => {

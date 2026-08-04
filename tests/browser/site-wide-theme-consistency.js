@@ -4,6 +4,7 @@ const assert = require('assert');
 const { app } = require('../../src/server');
 const { MOUNTED_THEME_PAGES } = require('../helpers/site-theme-pages');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const { assertAccessibilityAudit, auditInteractiveStates, auditMountedAccessibility } = require('../helpers/theme-accessibility-audit');
 
 const VIEWPORTS = Object.freeze([
   { label: '1440x900', width: 1440, height: 900 },
@@ -45,18 +46,27 @@ async function installLocalApiBoundary(context, origin, evidence, options = {}) 
     const framePath = (() => {
       try { return new URL(request.frame().url()).pathname; } catch (_error) { return ''; }
     })();
-    evidence.api.push({ method: request.method(), path: url.pathname });
+    const referrer = request.headers().referer || '';
+    evidence.api.push({ method: request.method(), path: url.pathname, referrerHasActionToken: /[?&]token=/.test(referrer) });
 
     if (request.method() === 'POST' && options.recovery === true) {
+      const outcomes = options.outcomes || {};
+      await new Promise(resolve => setTimeout(resolve, options.delayMs || 80));
       if (url.pathname === '/api/auth/forgot-password') {
-        await new Promise(resolve => setTimeout(resolve, 40));
+        if (outcomes.forgot === 'unavailable') return route.fulfill(jsonResponse({ error: 'temporarily_unavailable' }, 503));
         return route.fulfill(jsonResponse({
           accepted: true,
           message: 'If the account is eligible, password-reset instructions will be sent.',
         }, 202));
       }
       if (url.pathname === '/api/auth/reset-password') {
-        await new Promise(resolve => setTimeout(resolve, 40));
+        const resetStatus = { invalid: 400, expired: 410, replay: 409, unavailable: 503 }[outcomes.reset];
+        if (resetStatus) return route.fulfill(jsonResponse({ error: 'reset_unavailable' }, resetStatus));
+        return route.fulfill(jsonResponse({ success: true }, 200));
+      }
+      if (url.pathname === '/api/auth/verify-email') {
+        const verifyStatus = { invalid: 400, expired: 410, replay: 409, unavailable: 503 }[outcomes.verify];
+        if (verifyStatus) return route.fulfill(jsonResponse({ error: 'verification_unavailable' }, verifyStatus));
         return route.fulfill(jsonResponse({ success: true }, 200));
       }
     }
@@ -277,6 +287,10 @@ async function assertMountedTheme(page, route, expectedTheme) {
   const toggleContrast = await computedContrast(page.locator('[data-northstar-theme-toggle]'));
   assert.ok(bodyContrast.ratio >= 4.5, `body contrast at ${route}: ${JSON.stringify({ bodyContrast, result })}`);
   assert.ok(toggleContrast.ratio >= 4.5, `toggle contrast at ${route}: ${JSON.stringify(toggleContrast)}`);
+  // Let source-owned entrance transitions settle before evaluating steady-state contrast.
+  await page.waitForTimeout(650);
+  const accessibility = await auditMountedAccessibility(page);
+  const interactiveStates = await auditInteractiveStates(page);
 
   const toggledTheme = expectedTheme === 'dark' ? 'light' : 'dark';
   await page.locator('[data-northstar-theme-toggle]').click();
@@ -300,13 +314,14 @@ async function assertMountedTheme(page, route, expectedTheme) {
   });
   assert.deepStrictEqual(listenerCounts, { toggles: 1, controls: 1, storage: 1, system: 1 });
 
-  return result;
+  return { ...result, accessibility, interactiveStates };
 }
 
 async function runMountedMatrix(engine, viewport, origin) {
   const runtime = resolveBrowserRuntime(engine);
   const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
   const evidence = [];
+  const accessibilityFailures = [];
   try {
     const selectedThemes = process.env.NORTHSTAR_THEME_ONLY
       ? THEMES.filter(theme => theme === process.env.NORTHSTAR_THEME_ONLY)
@@ -335,7 +350,27 @@ async function runMountedMatrix(engine, viewport, origin) {
             process.stderr.write(`THEME_PROGRESS ${engine} ${viewport.label} ${theme} ${mounted.route}\n`);
           }
           const result = await assertMountedTheme(page, `${origin}${mounted.route}`, theme);
-          evidence.push({ route: mounted.route, theme, background: result.background, color: result.color });
+          evidence.push({
+            route: mounted.route,
+            theme,
+            background: result.background,
+            color: result.color,
+            auditedTextElements: result.accessibility.auditedTextElements,
+            interactiveStateGroups: result.interactiveStates.groups,
+          });
+          if (result.accessibility.contrastFailures.length || result.accessibility.uiFailures.length || result.accessibility.overlaps.length || result.accessibility.clipped.length
+            || result.interactiveStates.hoverFailures.length || result.interactiveStates.focusFailures.length) {
+            accessibilityFailures.push({
+              route: mounted.route,
+              theme,
+              contrastFailures: result.accessibility.contrastFailures,
+              uiFailures: result.accessibility.uiFailures,
+              overlaps: result.accessibility.overlaps,
+              clipped: result.accessibility.clipped,
+              hoverFailures: result.interactiveStates.hoverFailures,
+              focusFailures: result.interactiveStates.focusFailures,
+            });
+          }
         }
         assert.deepStrictEqual(pageErrors, []);
         assert.deepStrictEqual(consoleErrors, []);
@@ -348,6 +383,18 @@ async function runMountedMatrix(engine, viewport, origin) {
   } finally {
     await browser.close();
   }
+  const accessibilityDiagnostic = accessibilityFailures.map(failure => ({
+    route: failure.route,
+    theme: failure.theme,
+    contrastCount: failure.contrastFailures.length,
+    contrastFailures: failure.contrastFailures.slice(0, 12),
+    uiFailures: failure.uiFailures.slice(0, 12),
+    overlaps: failure.overlaps,
+    clipped: failure.clipped,
+    hoverFailures: failure.hoverFailures,
+    focusFailures: failure.focusFailures,
+  }));
+  assert.strictEqual(accessibilityFailures.length, 0, `${engine} ${viewport.label} mounted accessibility failures: ${JSON.stringify(accessibilityDiagnostic)}`);
   if (!process.env.NORTHSTAR_THEME_ONLY && !process.env.NORTHSTAR_THEME_ROUTE) {
     for (const mounted of MOUNTED_THEME_PAGES) {
       const dark = evidence.find(item => item.route === mounted.route && item.theme === 'dark');
@@ -357,7 +404,13 @@ async function runMountedMatrix(engine, viewport, origin) {
       assert.notStrictEqual(dark.color, light.color, `page text changes for ${mounted.route}`);
     }
   }
-  return { engine, viewport: viewport.label, pages: evidence.length };
+  return {
+    engine,
+    viewport: viewport.label,
+    pages: evidence.length,
+    auditedTextElements: evidence.reduce((total, item) => total + item.auditedTextElements, 0),
+    interactiveStateGroups: evidence.reduce((total, item) => total + item.interactiveStateGroups, 0),
+  };
 }
 
 async function runPreferenceMatrix(engine, origin) {
@@ -432,61 +485,215 @@ async function runPreferenceMatrix(engine, origin) {
   return { engine, systemPreference: true, systemChange: true, explicitPersistence: true, corruptStorage: true, unavailableStorage: true };
 }
 
-async function runRecoveryMatrix(engine, origin) {
+async function runAccessibilityAuditNegativeControl(engine) {
   const runtime = resolveBrowserRuntime(engine);
   const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
-  const evidence = { requests: [], api: [] };
   try {
-    await installLocalApiBoundary(context, origin, evidence, { recovery: true });
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.setContent(`<!doctype html><html><body style="margin:0;background:#0b0d17;color:#f1f2f6;min-height:100vh">
+      <div style="background:transparent"><span id="hiddenContrast" style="color:#131624">Unreadable nested text</span></div>
+      <input id="weakBoundary" aria-label="Fixture field" style="border:1px solid #131624;background:#0b0d17;color:#f1f2f6">
+      <button id="overlap" style="position:fixed;right:10px;bottom:10px;width:60px;height:50px">Action</button>
+      <div data-northstar-theme-control style="position:fixed;right:10px;bottom:10px"><button data-northstar-theme-toggle aria-label="Fixture theme" style="width:44px;height:44px">T</button></div>
+    </body></html>`);
+    const audit = await auditMountedAccessibility(page);
+    assert.strictEqual(audit.contrastFailures.some(failure => failure.path === '#hiddenContrast' && failure.ratio < 1.2), true);
+    assert.strictEqual(audit.uiFailures.some(failure => failure.path === '#weakBoundary'), true);
+    assert.strictEqual(audit.overlaps.some(overlap => overlap.path === '#overlap'), true);
+    return { engine, inheritedBackgroundContrast: true, componentBoundary: true, overlap: true };
+  } finally {
+    await browser.close();
+  }
+}
+
+async function assertPresentationState(page, label, expectedTheme) {
+  await page.locator('[data-northstar-theme-toggle]').waitFor({ state: 'visible', timeout: 3000 });
+  assert.strictEqual(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), expectedTheme, `${label} theme`);
+  assert.strictEqual(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${label} horizontal overflow`);
+  const audit = await auditMountedAccessibility(page);
+  assertAccessibilityAudit(audit, label);
+  return audit;
+}
+
+async function assertActionTokensAbsent(page, tokens, label) {
+  const surfaces = await page.evaluate(values => {
+    function contains(value) {
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+      return values.some(token => serialized.includes(token));
+    }
+    const globalsContainToken = Object.getOwnPropertyNames(window).some(name => {
+      try { return typeof window[name] === 'string' && contains(window[name]); } catch (_error) { return false; }
+    });
+    return {
+      visibleUrl: contains(location.href),
+      dom: contains(document.documentElement.outerHTML),
+      localStorage: contains(Object.fromEntries(Object.entries(localStorage))),
+      sessionStorage: contains(Object.fromEntries(Object.entries(sessionStorage))),
+      globals: globalsContainToken,
+      resourceUrls: performance.getEntriesByType('resource').some(entry => contains(entry.name)),
+    };
+  }, tokens);
+  assert.deepStrictEqual(surfaces, {
+    visibleUrl: false,
+    dom: false,
+    localStorage: false,
+    sessionStorage: false,
+    globals: false,
+    resourceUrls: false,
+  }, `${label} action-token surface`);
+}
+
+async function runRecoveryMatrix(engine, viewport, theme, origin) {
+  const runtime = resolveBrowserRuntime(engine);
+  const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
+  const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, colorScheme: theme });
+  const evidence = { requests: [], api: [] };
+  const outcomes = { forgot: 'accepted', reset: 'success', verify: 'success' };
+  const actionTokens = [RESET_TOKEN, 'U'.repeat(43), 'V'.repeat(43), 'W'.repeat(43), 'X'.repeat(43), 'Y'.repeat(43)];
+  try {
+    await installThemeInstrumentation(context, theme);
+    await installLocalApiBoundary(context, origin, evidence, { recovery: true, outcomes, delayMs: 250 });
     installRequestInventory(context, origin, evidence);
     const page = await context.newPage();
 
-    if (process.env.NORTHSTAR_THEME_PROGRESS === '1') process.stderr.write(`THEME_RECOVERY ${engine} forgot\n`);
+    if (process.env.NORTHSTAR_THEME_PROGRESS === '1') process.stderr.write(`THEME_RECOVERY ${engine} ${viewport.label} ${theme} forgot-validation\n`);
     await page.goto(`${origin}/forgot-password`);
     assert.strictEqual(await page.locator('h1').textContent(), 'Reset your password');
     assert.strictEqual(await page.locator('#email').getAttribute('type'), 'email');
     assert.strictEqual(await page.locator('.account-auth-return a').getAttribute('href'), '/login');
-    assert.ok((await computedContrast(page.locator('#forgotForm button[type="submit"]'))).ratio >= 4.5);
-    assert.ok((await computedContrast(page.locator('.account-auth-return a'))).ratio >= 4.5);
+    await assertPresentationState(page, `${engine} ${viewport.label} ${theme} forgot initial`, theme);
+    const validationStart = evidence.api.length;
+    await page.locator('#forgotForm').evaluate(form => form.requestSubmit());
+    assert.strictEqual(evidence.api.length, validationStart, 'forgot validation creates no request');
+    assert.strictEqual(await page.locator('#email').evaluate(input => input.matches(':invalid')), true);
+
     await page.fill('#email', 'theme-fixture@example.test');
     await page.locator('#forgotForm button[type="submit"]').click();
     assert.strictEqual(await page.locator('#forgotForm button[type="submit"]').isDisabled(), true);
+    assert.strictEqual(await page.locator('#forgotForm').getAttribute('aria-busy'), 'true');
+    await assertPresentationState(page, `${engine} ${viewport.label} ${theme} forgot loading`, theme);
     await page.waitForFunction(() => document.getElementById('forgotStatus').dataset.state === 'success', null, { timeout: 3000 });
+    await page.waitForTimeout(220);
     assert.match(await page.locator('#forgotStatus').textContent(), /eligible/i);
+    await assertPresentationState(page, `${engine} ${viewport.label} ${theme} forgot enumeration-safe success`, theme);
 
-    if (process.env.NORTHSTAR_THEME_PROGRESS === '1') process.stderr.write(`THEME_RECOVERY ${engine} reset-valid\n`);
-    await page.goto(`${origin}/reset-password?token=${RESET_TOKEN}`);
-    assert.strictEqual(page.url(), `${origin}/reset-password`);
-    assert.strictEqual(await page.locator('#resetForm').isVisible(), true);
-    assert.ok((await computedContrast(page.locator('#resetForm button[type="submit"]'))).ratio >= 4.5);
-    await page.fill('#password', 'NorthStar-theme-fixture-123!');
-    await page.locator('#resetForm button[type="submit"]').click();
-    assert.strictEqual(await page.locator('#resetForm button[type="submit"]').isDisabled(), true);
-    await page.waitForFunction(() => document.getElementById('resetStatus').dataset.state === 'success', null, { timeout: 3000 });
-    assert.match(await page.locator('#resetStatus').textContent(), /Password reset/i);
-    const tokenSurfaces = await page.evaluate(() => ({
-      url: location.href,
-      html: document.documentElement.outerHTML,
-      local: Object.fromEntries(Object.entries(localStorage)),
-      session: Object.fromEntries(Object.entries(sessionStorage)),
-    }));
-    assert.strictEqual(JSON.stringify(tokenSurfaces).includes('T'.repeat(43)), false);
+    outcomes.forgot = 'unavailable';
+    await page.reload();
+    await page.fill('#email', 'other-theme-fixture@example.test');
+    await page.locator('#forgotForm button[type="submit"]').click();
+    assert.strictEqual(await page.locator('#forgotForm button[type="submit"]').isDisabled(), true);
+    await assertPresentationState(page, `${engine} ${viewport.label} ${theme} forgot unavailable loading`, theme);
+    await page.waitForFunction(() => document.getElementById('forgotStatus').dataset.state === 'error', null, { timeout: 3000 });
+    await page.waitForTimeout(220);
+    assert.strictEqual(await page.locator('#forgotStatus').textContent(), 'The request could not be completed. Try again later.');
+    await assertPresentationState(page, `${engine} ${viewport.label} ${theme} forgot unavailable`, theme);
 
-    if (process.env.NORTHSTAR_THEME_PROGRESS === '1') process.stderr.write(`THEME_RECOVERY ${engine} reset-malformed\n`);
+    if (process.env.NORTHSTAR_THEME_PROGRESS === '1') process.stderr.write(`THEME_RECOVERY ${engine} ${viewport.label} ${theme} reset-missing-malformed\n`);
+    const resetPostsBeforeMissing = evidence.api.filter(item => item.path === '/api/auth/reset-password').length;
+    await page.goto(`${origin}/reset-password`);
+    assert.strictEqual(await page.locator('#resetForm').isVisible(), false);
+    assert.match(await page.locator('#resetStatus').textContent(), /invalid or expired/i);
+    await assertPresentationState(page, `${engine} ${viewport.label} ${theme} reset missing`, theme);
     await page.goto(`${origin}/reset-password?token=malformed`);
     assert.strictEqual(page.url(), `${origin}/reset-password`);
     assert.strictEqual(await page.locator('#resetForm').isVisible(), false);
     assert.match(await page.locator('#resetStatus').textContent(), /invalid or expired/i);
-    assert.deepStrictEqual(evidence.api.filter(item => item.method === 'POST').map(item => item.path), [
-      '/api/auth/forgot-password',
-      '/api/auth/reset-password',
-    ]);
+    await assertPresentationState(page, `${engine} ${viewport.label} ${theme} reset malformed`, theme);
+    assert.strictEqual(evidence.api.filter(item => item.path === '/api/auth/reset-password').length, resetPostsBeforeMissing);
+
+    const resetCases = [
+      { outcome: 'success', token: actionTokens[0], state: 'success' },
+      { outcome: 'invalid', token: actionTokens[1], state: 'error' },
+      { outcome: 'expired', token: actionTokens[2], state: 'error' },
+      { outcome: 'replay', token: actionTokens[3], state: 'error' },
+      { outcome: 'unavailable', token: actionTokens[4], state: 'error' },
+    ];
+    for (const resetCase of resetCases) {
+      outcomes.reset = resetCase.outcome;
+      if (process.env.NORTHSTAR_THEME_PROGRESS === '1') process.stderr.write(`THEME_RECOVERY ${engine} ${viewport.label} ${theme} reset-${resetCase.outcome}\n`);
+      await page.goto(`${origin}/reset-password?token=${resetCase.token}`);
+      assert.strictEqual(page.url(), `${origin}/reset-password`);
+      assert.strictEqual(await page.locator('meta[name="referrer"]').getAttribute('content'), 'no-referrer');
+      assert.strictEqual(await page.locator('#resetForm').isVisible(), true);
+      if (resetCase.outcome === 'success') {
+        const weakStart = evidence.api.length;
+        await page.fill('#password', 'too-short');
+        await page.locator('#resetForm').evaluate(form => form.requestSubmit());
+        assert.strictEqual(evidence.api.length, weakStart, 'weak password creates no reset request');
+        assert.strictEqual(await page.locator('#password').evaluate(input => input.matches(':invalid')), true);
+      }
+      await page.fill('#password', 'NorthStar-theme-fixture-123!');
+      await page.locator('#resetForm button[type="submit"]').click();
+      assert.strictEqual(await page.locator('#resetForm button[type="submit"]').isDisabled(), true);
+      await assertPresentationState(page, `${engine} ${viewport.label} ${theme} reset ${resetCase.outcome} loading`, theme);
+      await page.waitForFunction(expected => document.getElementById('resetStatus').dataset.state === expected, resetCase.state, { timeout: 3000 });
+      await page.waitForTimeout(220);
+      if (resetCase.state === 'success') assert.match(await page.locator('#resetStatus').textContent(), /Password reset/i);
+      else assert.match(await page.locator('#resetStatus').textContent(), /invalid or expired/i);
+      await assertPresentationState(page, `${engine} ${viewport.label} ${theme} reset ${resetCase.outcome}`, theme);
+      await assertActionTokensAbsent(page, actionTokens, `reset ${resetCase.outcome}`);
+    }
+
+    if (process.env.NORTHSTAR_THEME_PROGRESS === '1') process.stderr.write(`THEME_RECOVERY ${engine} ${viewport.label} ${theme} verify-missing-malformed\n`);
+    const verifyPostsBeforeMissing = evidence.api.filter(item => item.path === '/api/auth/verify-email').length;
+    await page.goto(`${origin}/verify-email`);
+    assert.strictEqual(await page.locator('#verifyCard').getAttribute('data-state'), 'failure');
+    await assertPresentationState(page, `${engine} ${viewport.label} ${theme} verify missing`, theme);
+    await page.goto(`${origin}/verify-email?token=malformed`);
+    assert.strictEqual(page.url(), `${origin}/verify-email`);
+    assert.strictEqual(await page.locator('#verifyCard').getAttribute('data-state'), 'failure');
+    await assertPresentationState(page, `${engine} ${viewport.label} ${theme} verify malformed`, theme);
+    assert.strictEqual(evidence.api.filter(item => item.path === '/api/auth/verify-email').length, verifyPostsBeforeMissing);
+
+    const verifyCases = [
+      { outcome: 'success', token: actionTokens[0], state: 'success' },
+      { outcome: 'invalid', token: actionTokens[1], state: 'failure' },
+      { outcome: 'expired', token: actionTokens[2], state: 'failure' },
+      { outcome: 'replay', token: actionTokens[3], state: 'failure' },
+      { outcome: 'unavailable', token: actionTokens[5], state: 'failure' },
+    ];
+    for (const verifyCase of verifyCases) {
+      outcomes.verify = verifyCase.outcome;
+      if (process.env.NORTHSTAR_THEME_PROGRESS === '1') process.stderr.write(`THEME_RECOVERY ${engine} ${viewport.label} ${theme} verify-${verifyCase.outcome}\n`);
+      await page.goto(`${origin}/verify-email?token=${verifyCase.token}`);
+      assert.strictEqual(page.url(), `${origin}/verify-email`);
+      assert.strictEqual(await page.locator('meta[name="referrer"]').getAttribute('content'), 'no-referrer');
+      assert.strictEqual(await page.locator('#verifyCard').getAttribute('data-state'), 'checking');
+      await assertPresentationState(page, `${engine} ${viewport.label} ${theme} verify ${verifyCase.outcome} checking`, theme);
+      await page.waitForFunction(expected => document.getElementById('verifyCard').dataset.state === expected, verifyCase.state, { timeout: 3000 });
+      await page.waitForTimeout(220);
+      if (verifyCase.state === 'success') {
+        assert.strictEqual(await page.locator('#verifyTitle').textContent(), 'Email verified');
+        assert.match(await page.locator('#verifyStatus').textContent(), /14-day trial/i);
+      } else {
+        assert.strictEqual(await page.locator('#verifyTitle').textContent(), 'Verification link unavailable');
+        assert.match(await page.locator('#verifyStatus').textContent(), /invalid or expired/i);
+      }
+      await assertPresentationState(page, `${engine} ${viewport.label} ${theme} verify ${verifyCase.outcome}`, theme);
+      await assertActionTokensAbsent(page, actionTokens, `verify ${verifyCase.outcome}`);
+    }
+
+    const postPaths = evidence.api.filter(item => item.method === 'POST').map(item => item.path);
+    assert.strictEqual(postPaths.filter(path => path === '/api/auth/forgot-password').length, 2);
+    assert.strictEqual(postPaths.filter(path => path === '/api/auth/reset-password').length, 5);
+    assert.strictEqual(postPaths.filter(path => path === '/api/auth/verify-email').length, 5);
+    assert.strictEqual(evidence.api.some(item => item.referrerHasActionToken), false);
+    assert.strictEqual(evidence.requests.some(item => !['GET', 'POST'].includes(item.method)), false);
   } finally {
     await context.close();
     await browser.close();
   }
-  return { engine, forgotPosts: 1, resetPosts: 1, rawTokenRetained: false };
+  return {
+    engine,
+    viewport: viewport.label,
+    theme,
+    forgotPosts: 2,
+    resetPosts: 5,
+    verifyPosts: 5,
+    presentationStates: 29,
+    rawTokenRetained: false,
+    providerDestinations: 0,
+  };
 }
 
 async function main() {
@@ -508,13 +715,19 @@ async function main() {
   const matrix = [];
   const preferences = [];
   const recovery = [];
+  const auditNegativeControls = [];
   try {
     for (const engine of engines) {
       if (phase === 'all' || phase === 'matrix') {
         for (const viewport of selectedViewports) matrix.push(await runMountedMatrix(engine, viewport, origin));
       }
       if (phase === 'all' || phase === 'preference') preferences.push(await runPreferenceMatrix(engine, origin));
-      if (phase === 'all' || phase === 'recovery') recovery.push(await runRecoveryMatrix(engine, origin));
+      if (phase === 'all' || phase === 'matrix') auditNegativeControls.push(await runAccessibilityAuditNegativeControl(engine));
+      if (phase === 'all' || phase === 'recovery') {
+        for (const viewport of selectedViewports) {
+          for (const theme of THEMES) recovery.push(await runRecoveryMatrix(engine, viewport, theme, origin));
+        }
+      }
     }
     process.stdout.write(`${JSON.stringify({
       success: true,
@@ -525,6 +738,7 @@ async function main() {
       matrix,
       preferences,
       recovery,
+      auditNegativeControls,
     })}\n`);
   } finally {
     await new Promise(resolve => server.close(resolve));

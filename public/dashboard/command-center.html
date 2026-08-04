@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta name="northstar-canonical-surfaces" content="command-center">
   <script src="/js/canonical-intelligence.js"></script>
@@ -7,6 +7,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Command Center — POLARIS™ — NorthStar Solutions</title>
+  <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <style>
     /* ── Only what's unique to Command Center ── */
@@ -60,10 +61,13 @@
     .cc-refresh-btn {
       font-size: 11px; padding: 6px 14px; border-radius: 6px;
       border: 1px solid var(--neutral-200); background: var(--neutral-50);
-      color: var(--neutral-500); cursor: pointer; transition: all 0.15s; font-weight: 500;
+      color: var(--neutral-500); cursor: pointer;
+      transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s, transform 0.15s;
+      font-weight: 500;
     }
     [data-theme="dark"] .cc-refresh-btn { color: var(--neutral-400); }
     .cc-refresh-btn:hover { border-color: var(--brand-500); color: var(--brand-500); }
+    [data-theme="light"] .cc-refresh-btn:hover { color: var(--brand-700); }
 
     /* ── Cards — uses shared design tokens ── */
     .cc-card { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: 10px; padding: 14px 18px; }
@@ -167,11 +171,13 @@
       display: flex; align-items: center; justify-content: center; gap: 5px;
       padding: 8px 10px; border-radius: 7px; border: 1px solid var(--neutral-200);
       background: var(--neutral-50); color: var(--neutral-700); font-size: 12px;
-      font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.12s;
+      font-weight: 500; cursor: pointer; text-decoration: none;
+      transition: border-color 0.12s, background-color 0.12s, transform 0.12s, box-shadow 0.12s;
       min-height: 38px;
     }
     [data-theme="dark"] .cc-action-btn { color: var(--neutral-600); }
     .cc-action-btn:hover { border-color: var(--brand-500); color: var(--brand-500); transform: translateY(-1px); }
+    [data-theme="light"] .cc-action-btn:hover { color: var(--brand-700); }
 
     /* ── Grid ── */
     .cc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
@@ -266,7 +272,6 @@
   </div>
 
   <!-- Shared JS — load order matters -->
-  <script src="/js/theme.js"></script>
   <script src="/js/event-bus.js"></script>
   <script src="/js/app-store.js"></script>
   <script src="/js/simulator.js"></script>
@@ -293,31 +298,6 @@
       };
 
       // ── Theme sync ──
-      function syncThemeUI() {
-        var theme = document.documentElement.getAttribute('data-theme') || 'light';
-        var icon = document.getElementById('themeToggleIcon');
-        var label = document.getElementById('themeToggleLabel');
-        if (icon) icon.textContent = theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
-        if (label) label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
-      }
-      window.toggleFallback = function() {
-        var theme = document.documentElement.getAttribute('data-theme') || 'light';
-        var next = theme === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', next);
-        try { localStorage.setItem('northstar-theme', next); } catch(e) {}
-        syncThemeUI();
-      };
-      if (window.NorthStarTheme) {
-        var origToggle = window.NorthStarTheme.toggleTheme;
-        window.NorthStarTheme.toggleTheme = function() { origToggle(); syncThemeUI(); };
-      }
-      function initTheme() {
-        if (window.NorthStarTheme) window.NorthStarTheme.loadTheme();
-        syncThemeUI();
-      }
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initTheme);
-      else initTheme();
-
       // ── Demo session lifecycle — clean state on page reload ──
       (function() {
         var isReload = false;

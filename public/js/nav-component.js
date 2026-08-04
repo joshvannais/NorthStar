@@ -61,7 +61,6 @@
         '</nav>' +
         '<div class="mobile-menu-footer">' +
           '<a href="/" id="navSignOut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>' +
-          '<button id="navThemeToggle" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--neutral-500);width:100%;text-align:left;">&#127769; Toggle Theme</button>' +
         '</div>' +
       '</div>';
   }
@@ -80,7 +79,6 @@
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>' +
           '<span>Sign Out</span>' +
         '</a>' +
-        '<button class="theme-toggle" onclick="NorthStarTheme.toggleTheme()" title="Toggle theme">&#127769;</button>' +
       '</aside>';
   }
 
@@ -128,7 +126,6 @@
       var closeBtn = document.getElementById('navCloseBtn');
       var overlay = document.getElementById('mobileOverlay');
       var signOut = document.getElementById('navSignOut');
-      var themeBtn = document.getElementById('navThemeToggle');
 
       if (hamburger) hamburger.onclick = toggleMobileMenu;
       if (closeBtn) closeBtn.onclick = toggleMobileMenu;
@@ -136,11 +133,6 @@
       // The shared account client owns one delegated logout listener so every
       // surface receives the same durable success/failure behavior.
       if (signOut) signOut.setAttribute('data-account-logout', '');
-      if (themeBtn) themeBtn.onclick = function() {
-        if (window.NorthStarTheme && window.NorthStarTheme.toggleTheme) {
-          window.NorthStarTheme.toggleTheme();
-        }
-      };
 
       // Close on Escape
       document.addEventListener('keydown', function(e) {

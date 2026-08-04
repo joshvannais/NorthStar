@@ -1,13 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta name="northstar-canonical-surfaces" content="executive">
   <script src="/js/canonical-intelligence.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Executive Brief — POLARIS™ — NorthStar Solutions</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <style>
     :root {
@@ -40,6 +39,11 @@
 
     .eb-header {
       margin-bottom: 24px;
+    }
+
+    .sidebar-footer {
+      position: relative;
+      bottom: 18px;
     }
 
     .eb-header h1 {
@@ -464,7 +468,7 @@
         </a>
       </nav>
       <div class="sidebar-footer">
-        <a href="/login" class="sidebar-item" data-account-logout>Sign Out</a>
+        <a href="/login" class="sidebar-item" data-account-logout tabindex="0">Sign Out</a>
       </div>
     </aside>
     <main class="main-content" id="mainContent">
@@ -780,7 +784,6 @@
       setInterval(render, 60000);
     })();
   </script>
-  <script src="/js/theme.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>
     var preservedSidebar = document.querySelector('.sidebar');

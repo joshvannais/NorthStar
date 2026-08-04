@@ -1,0 +1,39 @@
+'use strict';
+
+const MOUNTED_THEME_PAGES = Object.freeze([
+  { route: '/', file: 'public/index.html', surface: 'public' },
+  { route: '/login', file: 'public/login.html', surface: 'auth' },
+  { route: '/signup', file: 'public/signup.html', surface: 'auth' },
+  { route: '/verify-email', file: 'public/verify-email.html', surface: 'auth' },
+  { route: '/forgot-password', file: 'public/forgot-password.html', surface: 'auth' },
+  { route: '/reset-password', file: 'public/reset-password.html', surface: 'auth' },
+  { route: '/account/pending', file: 'public/account/pending.html', surface: 'account' },
+  { route: '/dashboard', file: 'public/dashboard/command-center.html', surface: 'dashboard' },
+  { route: '/dashboard/executive-brief', file: 'public/dashboard/executive-brief.html', surface: 'dashboard' },
+  { route: '/dashboard/legacy', file: 'public/dashboard.html', surface: 'dashboard' },
+  { route: '/dashboard/leads', file: 'public/dashboard/leads.html', surface: 'dashboard' },
+  { route: '/dashboard/communications', file: 'public/dashboard/communications.html', surface: 'dashboard' },
+  { route: '/dashboard/calendar', file: 'public/dashboard/calendar.html', surface: 'dashboard' },
+  { route: '/dashboard/ai-settings', file: 'public/dashboard/ai-settings.html', surface: 'dashboard' },
+  { route: '/dashboard/business-profile', file: 'public/dashboard/business-profile.html', surface: 'dashboard' },
+  { route: '/dashboard/my-number', file: 'public/dashboard/my-number.html', surface: 'dashboard' },
+  { route: '/dashboard/settings', file: 'public/dashboard/settings.html', surface: 'dashboard' },
+  { route: '/dashboard/integrations', file: 'public/dashboard/integrations.html', surface: 'dashboard' },
+  { route: '/dashboard/lead', file: 'public/dashboard/lead.html', surface: 'dashboard' },
+  { route: '/dashboard/polaris', file: 'public/dashboard/polaris.html', surface: 'dashboard' },
+  { route: '/contact', file: 'public/contact.html', surface: 'public' },
+  { route: '/privacy', file: 'public/privacy.html', surface: 'public' },
+  { route: '/terms', file: 'public/terms.html', surface: 'public' },
+  { route: '/refund', file: 'public/refund.html', surface: 'public' },
+  { route: '/legal', file: 'public/legal.html', surface: 'public' },
+  { route: '/admin', file: 'public/admin.html', surface: 'unavailable' },
+  { route: '/preview-dark', file: 'public/previews/dark.html', surface: 'public' },
+  { route: '/preview-light', file: 'public/previews/light.html', surface: 'public' },
+]);
+
+const MOUNTED_REDIRECTS = Object.freeze([
+  '/dashboard/calls',
+  '/demo-login',
+]);
+
+module.exports = { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS };

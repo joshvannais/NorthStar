@@ -4,14 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Administrative Access Unavailable — NorthStar</title>
+  <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">
-  <main class="card" style="max-width:560px;text-align:center;padding:32px;">
-    <img src="/assets/logo.png" alt="NorthStar" style="width:72px;height:72px;object-fit:contain;">
-    <h1 style="margin:16px 0 8px;">Administrative access is unavailable</h1>
-    <p style="color:var(--neutral-500);">Monitor NorthStar account and platform activity.</p>
-    <a class="btn btn-primary" href="/login" style="margin-top:20px;">Return to sign in</a>
+<body class="standalone-page">
+  <header class="standalone-brand" aria-label="NorthStar">
+    <a href="/"><img src="/assets/logo.png" alt=""><span>NorthStar</span></a>
+  </header>
+  <main class="standalone-shell">
+    <section class="standalone-card" aria-labelledby="adminTitle">
+      <img src="/assets/logo.png" alt="">
+      <p class="standalone-eyebrow">NorthStar account</p>
+      <h1 id="adminTitle">Administrative access is unavailable</h1>
+      <p class="standalone-support">Monitor NorthStar account and platform activity.</p>
+      <a class="btn btn-primary" href="/login">Return to sign in</a>
+    </section>
   </main>
 </body>
 </html>

@@ -1,13 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Business Profile — NorthStar Solutions</title>
+  <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: var(--font-sans); color: var(--neutral-800); background: var(--neutral-50); }
+    body { font-family: var(--font-sans); color: inherit; background: inherit; }
     .bp-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
     .bp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
     .bp-title { font-size: 24px; font-weight: 700; color: var(--neutral-900); }
@@ -38,7 +39,7 @@
     .bp-field .bp-toggle .slider::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: transform 0.2s; }
     .bp-field .bp-toggle input:checked + .slider { background: var(--brand-500); }
     .bp-field .bp-toggle input:checked + .slider::after { transform: translateX(16px); }
-    .bp-save-btn { padding: 10px 24px; background: var(--brand-600); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .bp-save-btn { padding: 10px 24px; background: var(--brand-600); color: #0b0d17; border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
     .bp-save-btn:hover { background: var(--brand-700); }
     .bp-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .bp-toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; z-index: 999; opacity: 0; transform: translateY(20px); transition: all 0.3s; }

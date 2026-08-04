@@ -16,6 +16,20 @@ const COMPLETE_ENV = Object.freeze({
   STRIPE_TAX_ID_COLLECTION_ENABLED: 'true',
 });
 
+const CHECKOUT_REDIRECT_URL_MAX_LENGTH = 2048;
+const CHECKOUT_REDIRECT_PREFIX =
+  'https://checkout.stripe.com/c/pay/cs_synthetic_checkout#fidkdWxOYHwnPyd1blpxYHZxWjA0S1BNT0xQ';
+
+function hostedCheckoutUrl(length, suffix = '') {
+  if (!Number.isSafeInteger(length) || length < CHECKOUT_REDIRECT_PREFIX.length + suffix.length) {
+    throw new Error('Synthetic hosted Checkout URL length is invalid');
+  }
+  return CHECKOUT_REDIRECT_PREFIX +
+    'x'.repeat(length - CHECKOUT_REDIRECT_PREFIX.length - suffix.length) + suffix;
+}
+
+const DOCUMENTED_SHAPE_CHECKOUT_URL = hostedCheckoutUrl(640, 'opaque_fragment');
+
 function signature(secret, rawBody, timestamp) {
   return crypto.createHmac('sha256', secret)
     .update(Buffer.concat([Buffer.from(String(timestamp) + '.', 'utf8'), rawBody]))
@@ -85,7 +99,7 @@ describe('Account Lifecycle PR B2 billing boundary', () => {
       calls.push({ url, options });
       return new Response(JSON.stringify({
         id: 'cs_synthetic_checkout',
-        url: 'https://checkout.stripe.com/c/pay/synthetic',
+        url: DOCUMENTED_SHAPE_CHECKOUT_URL,
         expires_at: 1785846600,
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     });
@@ -103,9 +117,11 @@ describe('Account Lifecycle PR B2 billing boundary', () => {
     });
     expect(result).toEqual({
       id: 'cs_synthetic_checkout',
-      url: 'https://checkout.stripe.com/c/pay/synthetic',
+      url: DOCUMENTED_SHAPE_CHECKOUT_URL,
       expiresAt: '2026-08-04T12:30:00.000Z',
     });
+    expect(result.url.length).toBeGreaterThan(334);
+    expect(new URL(result.url).hash).toBe('#' + result.url.split('#')[1]);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(calls[0].url).toBe('https://api.stripe.com/v1/checkout/sessions');
     expect(calls[0].options.redirect).toBe('manual');
@@ -123,6 +139,123 @@ describe('Account Lifecycle PR B2 billing boundary', () => {
     expect(form.get('payment_method_configuration')).toBe('pmc_placeholder');
     expect(form.get('unit_amount')).toBeNull();
     expect(JSON.stringify(calls)).not.toContain('9900');
+  });
+
+  test('Checkout redirect validation preserves the exact application-bound hosted URL and fails closed', async () => {
+    const { buildBillingConfiguration } = require('../../src/billing/config');
+    const { StripeProvider } = require('../../src/billing/stripeProvider');
+    const exactBoundary = hostedCheckoutUrl(CHECKOUT_REDIRECT_URL_MAX_LENGTH, 'boundary');
+    const makeProvider = candidate => {
+      const fetchImpl = jest.fn(async () => new Response(JSON.stringify({
+        id: 'cs_synthetic_checkout',
+        url: candidate,
+        expires_at: 1785846600,
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+      return {
+        fetchImpl,
+        provider: new StripeProvider(buildBillingConfiguration(COMPLETE_ENV), {
+          fetchImpl,
+          timeoutMs: 1000,
+          now: () => new Date('2026-08-04T12:00:00.000Z'),
+        }),
+      };
+    };
+    const checkoutInput = {
+      organizationId: '00000000-0000-4000-8000-000000000001',
+      email: 'owner@example.test',
+      planKey: 'starter',
+      idempotencyKey: 'northstar-b2-' + 'f'.repeat(64),
+    };
+
+    const boundary = makeProvider(exactBoundary);
+    await expect(boundary.provider.createCheckout(checkoutInput)).resolves.toEqual({
+      id: 'cs_synthetic_checkout',
+      url: exactBoundary,
+      expiresAt: '2026-08-04T12:30:00.000Z',
+    });
+    expect(boundary.fetchImpl).toHaveBeenCalledTimes(1);
+
+    for (const candidate of [
+      'http://checkout.stripe.com/c/pay/cs_synthetic#protocol_sentinel',
+      'https://checkout.stripe.com.evil.example/c/pay/cs_synthetic#host_sentinel',
+      'https://user@checkout.stripe.com/c/pay/cs_synthetic#credential_sentinel',
+      hostedCheckoutUrl(CHECKOUT_REDIRECT_URL_MAX_LENGTH + 1, 'over_bound_sentinel'),
+    ]) {
+      const rejected = makeProvider(candidate);
+      let failure;
+      try {
+        await rejected.provider.createCheckout(checkoutInput);
+      } catch (error) {
+        failure = error;
+      }
+      expect(rejected.fetchImpl).toHaveBeenCalledTimes(1);
+      expect(failure).toEqual(expect.objectContaining({
+        code: 'billing_provider_malformed_response', indeterminate: true,
+      }));
+      expect(String(failure && failure.message)).not.toContain(candidate);
+      expect(JSON.stringify(failure)).not.toContain(candidate);
+    }
+  });
+
+  test('repository stores Checkout ID and the complete hosted redirect independently', async () => {
+    const { BillingRepository } = require('../../src/billing/repository');
+    const expiresAt = new Date('2026-08-04T12:30:00.000Z');
+    const pool = {
+      query: jest.fn(async () => ({
+        rowCount: 1,
+        rows: [{
+          id: '00000000-0000-4000-8000-000000000010',
+          status: 'accepted',
+          provider_object_id: 'cs_synthetic_checkout',
+          provider_redirect_url: DOCUMENTED_SHAPE_CHECKOUT_URL,
+          expires_at: expiresAt,
+        }],
+      })),
+    };
+    const repository = new BillingRepository(pool);
+
+    await expect(repository.finishCheckoutOperation(
+      '00000000-0000-4000-8000-000000000010',
+      'accepted',
+      { id: 'cs_synthetic_checkout', url: DOCUMENTED_SHAPE_CHECKOUT_URL },
+      null
+    )).resolves.toEqual({
+      url: DOCUMENTED_SHAPE_CHECKOUT_URL,
+      expiresAt: expiresAt.toISOString(),
+    });
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query.mock.calls[0][1]).toContain('cs_synthetic_checkout');
+    expect(pool.query.mock.calls[0][1]).toContain(DOCUMENTED_SHAPE_CHECKOUT_URL);
+  });
+
+  test('repository rejects unsafe or over-bound Checkout redirects before any database query', async () => {
+    const { BillingRepository } = require('../../src/billing/repository');
+    for (const candidate of [
+      'http://checkout.stripe.com/c/pay/cs_synthetic#protocol_repository_sentinel',
+      'https://checkout.stripe.com.evil.example/c/pay/cs_synthetic#host_repository_sentinel',
+      'https://user@checkout.stripe.com/c/pay/cs_synthetic#credential_repository_sentinel',
+      hostedCheckoutUrl(CHECKOUT_REDIRECT_URL_MAX_LENGTH + 1, 'over_bound_repository_sentinel'),
+    ]) {
+      const pool = { query: jest.fn() };
+      const repository = new BillingRepository(pool);
+      let failure;
+      try {
+        await repository.finishCheckoutOperation(
+          '00000000-0000-4000-8000-000000000010',
+          'accepted',
+          { id: 'cs_synthetic_checkout', url: candidate },
+          null
+        );
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toEqual(expect.objectContaining({
+        name: 'BillingPersistenceError', code: 'billing_checkout_result_unavailable',
+      }));
+      expect(String(failure && failure.message)).not.toContain(candidate);
+      expect(JSON.stringify(failure)).not.toContain(candidate);
+      expect(pool.query).not.toHaveBeenCalled();
+    }
   });
 
   test('provider failures are bounded, single-attempt, and never expose response bodies', async () => {

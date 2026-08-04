@@ -1,6 +1,8 @@
 'use strict';
 
 const CANONICAL_ORIGIN = 'https://www.northstar-os.ai';
+const STRIPE_CHECKOUT_ORIGIN = 'https://checkout.stripe.com';
+const CHECKOUT_REDIRECT_URL_MAX_LENGTH = 2048;
 
 const PLANS = Object.freeze({
   starter: Object.freeze({ name: 'Starter', monthlyAmountCents: 9900, environmentKey: 'STRIPE_PRICE_STARTER' }),
@@ -27,6 +29,17 @@ function validOrigin(value, allowLoopback) {
   } catch (_error) {
     return false;
   }
+}
+
+function safeCheckoutRedirectUrl(value) {
+  if (typeof value !== 'string' || value.length === 0 ||
+      value.length > CHECKOUT_REDIRECT_URL_MAX_LENGTH) return null;
+  let parsed;
+  try { parsed = new URL(value); } catch (_error) { return null; }
+  if (parsed.origin !== STRIPE_CHECKOUT_ORIGIN || parsed.protocol !== 'https:' ||
+      parsed.hostname !== 'checkout.stripe.com' || parsed.username || parsed.password ||
+      parsed.href !== value) return null;
+  return value;
 }
 
 function buildBillingConfiguration(environment, options = {}) {
@@ -72,4 +85,10 @@ function buildBillingConfiguration(environment, options = {}) {
   return Object.freeze(configuration);
 }
 
-module.exports = { CANONICAL_ORIGIN, PLANS, buildBillingConfiguration };
+module.exports = {
+  CANONICAL_ORIGIN,
+  CHECKOUT_REDIRECT_URL_MAX_LENGTH,
+  PLANS,
+  buildBillingConfiguration,
+  safeCheckoutRedirectUrl,
+};

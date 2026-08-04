@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { TextDecoder } = require('util');
+const { safeCheckoutRedirectUrl } = require('./config');
 
 const STRIPE_API_ORIGIN = 'https://api.stripe.com';
 const MAX_PROVIDER_RESPONSE_BYTES = 16 * 1024;
@@ -276,15 +277,13 @@ class StripeProvider {
         response.expires_at !== expiresAtSeconds) {
       throw new StripeProviderError('billing_provider_malformed_response', { indeterminate: true });
     }
-    let url;
-    try { url = new URL(response.url); } catch (_error) { url = null; }
-    if (!url || url.protocol !== 'https:' || url.hostname !== 'checkout.stripe.com' ||
-        url.username || url.password || url.hash) {
+    const url = safeCheckoutRedirectUrl(response.url);
+    if (!url) {
       throw new StripeProviderError('billing_provider_malformed_response', { indeterminate: true });
     }
     return Object.freeze({
       id: response.id,
-      url: url.toString(),
+      url,
       expiresAt: new Date(response.expires_at * 1000).toISOString(),
     });
   }

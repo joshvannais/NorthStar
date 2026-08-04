@@ -1,8 +1,8 @@
 'use strict';
 
 const db = require('../db');
+const { safeCheckoutRedirectUrl } = require('./config');
 
-const CHECKOUT_RESULT_SEPARATOR = '|';
 const PERMANENT_WEBHOOK_REJECTIONS = new Set([
   'billing_event_unsupported_schema',
   'billing_invoice_identity_conflict',
@@ -24,38 +24,22 @@ function one(result) {
   return result && Array.isArray(result.rows) ? result.rows[0] || null : null;
 }
 
-function safeCheckoutUrl(value) {
-  let url;
-  try { url = new URL(value); } catch (_error) { return null; }
-  if (url.protocol !== 'https:' || url.hostname !== 'checkout.stripe.com' ||
-      url.username || url.password || url.hash) return null;
-  return url.toString();
-}
-
-function encodeCheckoutResult(value) {
+function validateCheckoutResult(value) {
   const checkoutId = value && typeof value.id === 'string' && value.id.length <= 255 &&
     /^cs_[A-Za-z0-9_]+$/.test(value.id) ? value.id : null;
-  const url = safeCheckoutUrl(value && value.url);
-  if (!checkoutId || !url || url.includes(CHECKOUT_RESULT_SEPARATOR)) {
+  const url = safeCheckoutRedirectUrl(value && value.url);
+  if (!checkoutId || !url) {
     throw new BillingPersistenceError('billing_checkout_result_unavailable');
   }
-  const encoded = checkoutId + CHECKOUT_RESULT_SEPARATOR + url;
-  if (encoded.length > 255) {
-    throw new BillingPersistenceError('billing_checkout_result_unavailable');
-  }
-  return encoded;
+  return Object.freeze({ providerObjectId: checkoutId, providerRedirectUrl: url });
 }
 
-function decodeCheckoutResult(value, expiresAt) {
-  if (typeof value !== 'string') return null;
-  const separator = value.indexOf(CHECKOUT_RESULT_SEPARATOR);
-  if (separator < 1 || separator !== value.lastIndexOf(CHECKOUT_RESULT_SEPARATOR)) return null;
-  const checkoutId = value.slice(0, separator);
-  const storedUrl = value.slice(separator + 1);
-  const url = safeCheckoutUrl(storedUrl);
+function decodeCheckoutResult(providerObjectId, providerRedirectUrl, expiresAt) {
+  const checkoutId = typeof providerObjectId === 'string' ? providerObjectId : '';
+  const url = safeCheckoutRedirectUrl(providerRedirectUrl);
   const expiry = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
   if (!/^cs_[A-Za-z0-9_]+$/.test(checkoutId) || checkoutId.length > 255 ||
-      !url || url !== storedUrl || !Number.isFinite(expiry.getTime())) return null;
+      !url || !Number.isFinite(expiry.getTime())) return null;
   return Object.freeze({ url, expiresAt: expiry.toISOString() });
 }
 
@@ -155,7 +139,8 @@ class BillingRepository {
         [input.organizationId, now]
       );
       const current = one(await client.query(
-        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id, expires_at
+        `SELECT id, request_fingerprint, idempotency_key, status,
+                provider_object_id, provider_redirect_url, expires_at
            FROM billing_provider_operations
           WHERE organization_id = $1 AND operation_type = 'checkout'
             AND status IN ('requested', 'accepted', 'indeterminate')
@@ -170,7 +155,11 @@ class BillingRepository {
         if (current.status === 'indeterminate') {
           return { disposition: 'checkout_indeterminate', authority, operation: current };
         }
-        const checkout = decodeCheckoutResult(current.provider_object_id, current.expires_at);
+        const checkout = decodeCheckoutResult(
+          current.provider_object_id,
+          current.provider_redirect_url,
+          current.expires_at
+        );
         if (!checkout) return { disposition: 'checkout_replay_unavailable', authority, operation: current };
         return { disposition: 'replay', authority, operation: current, checkout };
       }
@@ -181,7 +170,8 @@ class BillingRepository {
          ) VALUES ($1, $2, $3, 'checkout', $4, $5, 'requested', $6,
                    COALESCE($7::timestamptz, clock_timestamp()),
                    COALESCE($7::timestamptz, clock_timestamp()))
-         RETURNING id, request_fingerprint, idempotency_key, status, provider_object_id, expires_at`,
+         RETURNING id, request_fingerprint, idempotency_key, status,
+                   provider_object_id, provider_redirect_url, expires_at`,
         [
           input.operationId,
           input.organizationId,
@@ -197,16 +187,28 @@ class BillingRepository {
   }
 
   async finishCheckoutOperation(operationId, status, providerResult, failureCode) {
-    const storedResult = status === 'accepted' ? encodeCheckoutResult(providerResult) : null;
+    const storedResult = status === 'accepted'
+      ? validateCheckoutResult(providerResult)
+      : { providerObjectId: null, providerRedirectUrl: null };
     let result;
     try {
       result = await this.requirePool().query(
         `UPDATE billing_provider_operations
-            SET status = $2, provider_object_id = $3, failure_code = $4, updated_at = clock_timestamp()
+            SET status = $2,
+                provider_object_id = $3,
+                provider_redirect_url = $4,
+                failure_code = $5,
+                updated_at = clock_timestamp()
           WHERE id = $1 AND operation_type = 'checkout'
             AND status IN ('requested', 'accepted', 'indeterminate')
-        RETURNING id, status, provider_object_id, expires_at`,
-        [operationId, status, storedResult, failureCode || null]
+        RETURNING id, status, provider_object_id, provider_redirect_url, expires_at`,
+        [
+          operationId,
+          status,
+          storedResult.providerObjectId,
+          storedResult.providerRedirectUrl,
+          failureCode || null,
+        ]
       );
     } catch (error) {
       if (error instanceof BillingPersistenceError) throw error;
@@ -214,7 +216,11 @@ class BillingRepository {
     }
     if (result.rowCount !== 1) throw new BillingPersistenceError('billing_operation_conflict');
     if (status !== 'accepted') return null;
-    const checkout = decodeCheckoutResult(result.rows[0].provider_object_id, result.rows[0].expires_at);
+    const checkout = decodeCheckoutResult(
+      result.rows[0].provider_object_id,
+      result.rows[0].provider_redirect_url,
+      result.rows[0].expires_at
+    );
     if (!checkout) throw new BillingPersistenceError('billing_checkout_result_unavailable');
     return checkout;
   }
@@ -352,7 +358,7 @@ class BillingRepository {
         `UPDATE billing_provider_operations
           SET status = 'completed', updated_at = clock_timestamp()
         WHERE organization_id = $1 AND operation_type = 'checkout'
-          AND split_part(provider_object_id, '${CHECKOUT_RESULT_SEPARATOR}', 1) = $2
+          AND provider_object_id = $2
           AND status IN ('accepted', 'indeterminate')`,
       [row.organization_id, input.checkoutId]
     );

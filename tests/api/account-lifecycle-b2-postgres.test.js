@@ -18,6 +18,20 @@ const TEST_ENV = Object.freeze({
   STRIPE_TAX_ID_COLLECTION_ENABLED: 'true',
 });
 
+const CHECKOUT_REDIRECT_URL_MAX_LENGTH = 2048;
+const CHECKOUT_REDIRECT_PREFIX =
+  'https://checkout.stripe.com/c/pay/cs_synthetic_b2#fidkdWxOYHwnPyd1blpxYHZxWjA0S1BNT0xQ';
+
+function hostedCheckoutUrl(length, suffix = '') {
+  if (!Number.isSafeInteger(length) || length < CHECKOUT_REDIRECT_PREFIX.length + suffix.length) {
+    throw new Error('Synthetic hosted Checkout URL length is invalid');
+  }
+  return CHECKOUT_REDIRECT_PREFIX +
+    'x'.repeat(length - CHECKOUT_REDIRECT_PREFIX.length - suffix.length) + suffix;
+}
+
+const DOCUMENTED_SHAPE_CHECKOUT_URL = hostedCheckoutUrl(640, 'opaque_fragment');
+
 function cookieHeader(response) {
   return (response.headers['set-cookie'] || []).map(value => value.split(';')[0]).join('; ');
 }
@@ -127,6 +141,7 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
   let releaseCheckout;
   let checkoutStarted;
   let checkoutResponseMode = 'success';
+  let checkoutResponseUrl = 'https://checkout.stripe.com/c/pay/synthetic-b2';
 
   async function postWebhook(rawBody, signatureHeader = signed(rawBody, Math.floor(controlledNow.getTime() / 1000))) {
     return request(app)
@@ -197,7 +212,7 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
         }
         return new Response(JSON.stringify({
           id: 'cs_synthetic_b2',
-          url: 'https://checkout.stripe.com/c/pay/synthetic-b2',
+          url: checkoutResponseUrl,
           expires_at: Number(form.get('expires_at')),
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
@@ -338,8 +353,10 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
 
   test('an unexpired accepted Checkout replays its durable safe result without another provider call', async () => {
     const originalNow = controlledNow;
+    const originalUrl = checkoutResponseUrl;
     const callStart = providerCalls.length;
     try {
+      checkoutResponseUrl = DOCUMENTED_SHAPE_CHECKOUT_URL;
       const signup = await request(app).post('/api/auth/signup').send({
         name: 'Accepted Replay Owner', businessName: 'Accepted Replay Company',
         email: 'accepted-replay.b2@example.test', password: 'Accepted-replay-password-123!', phone: '',
@@ -363,14 +380,18 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
         .set('X-CSRF-Token', headers.csrf)
         .send({ planKey: 'starter' });
       expect(first.status).toBe(201);
+      expect(first.body.checkout.url).toBe(DOCUMENTED_SHAPE_CHECKOUT_URL);
+      expect(first.body.checkout.url.length).toBeGreaterThan(334);
       expect(providerCalls).toHaveLength(callStart + 1);
       const firstOperation = (await pool.query(
-        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id,
-                failure_code, created_at, updated_at, expires_at
+        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id, provider_redirect_url,
+                 failure_code, created_at, updated_at, expires_at
            FROM billing_provider_operations WHERE organization_id = $1`,
         [identity.organization_id]
       )).rows[0];
       expect(firstOperation.status).toBe('accepted');
+      expect(firstOperation.provider_object_id).toBe('cs_synthetic_b2');
+      expect(firstOperation.provider_redirect_url).toBe(DOCUMENTED_SHAPE_CHECKOUT_URL);
 
       const replay = await request(app)
         .post('/api/billing/checkout')
@@ -381,8 +402,8 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
       expect(replay.body).toEqual(first.body);
       expect(providerCalls).toHaveLength(callStart + 1);
       const replayOperation = (await pool.query(
-        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id,
-                failure_code, created_at, updated_at, expires_at
+        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id, provider_redirect_url,
+                 failure_code, created_at, updated_at, expires_at
            FROM billing_provider_operations WHERE organization_id = $1`,
         [identity.organization_id]
       )).rows[0];
@@ -397,8 +418,8 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
       expect(conflictingPlan.body.code).toBe('billing_checkout_pending');
       expect(providerCalls).toHaveLength(callStart + 1);
       expect((await pool.query(
-        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id,
-                failure_code, created_at, updated_at, expires_at
+        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id, provider_redirect_url,
+                 failure_code, created_at, updated_at, expires_at
            FROM billing_provider_operations WHERE organization_id = $1`,
         [identity.organization_id]
       )).rows[0]).toEqual(firstOperation);
@@ -423,8 +444,109 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
     } finally {
       controlledNow = originalNow;
       checkoutResponseMode = 'success';
+      checkoutResponseUrl = originalUrl;
       providerCalls.length = callStart;
     }
+  });
+
+  test('mounted Checkout rejects unsafe or over-bound hosted redirects without leaking or retrying', async () => {
+    const originalUrl = checkoutResponseUrl;
+    const originalNow = controlledNow;
+    const callStart = providerCalls.length;
+    const candidates = [
+      'http://checkout.stripe.com/c/pay/cs_synthetic#protocol_sentinel',
+      'https://checkout.stripe.com.evil.example/c/pay/cs_synthetic#host_sentinel',
+      'https://user@checkout.stripe.com/c/pay/cs_synthetic#credential_sentinel',
+      hostedCheckoutUrl(CHECKOUT_REDIRECT_URL_MAX_LENGTH + 1, 'over_bound_sentinel'),
+    ];
+    try {
+      const email = 'redirect-boundary.b2@example.test';
+      const password = 'Redirect-boundary-password!';
+      const signup = await request(app).post('/api/auth/signup').send({
+        name: 'Redirect Boundary',
+        businessName: 'Redirect Boundary Company',
+        email,
+        password,
+        phone: '',
+      });
+      expect(signup.status).toBe(202);
+      const verification = await request(app).post('/api/auth/verify-email').send({
+        token: linkToken(capture.messages.at(-1)),
+      });
+      expect(verification.status).toBe(200);
+      const login = await request(app).post('/api/auth/login').send({ email, password });
+      const identity = (await pool.query(
+        'SELECT organization_id FROM users WHERE email_normalized = $1',
+        [email]
+      )).rows[0];
+      const headers = { cookie: cookieHeader(login), csrf: csrf(login) };
+
+      for (const [index, candidate] of candidates.entries()) {
+        controlledNow = new Date(originalNow.getTime() + index * 31 * 60000);
+        checkoutResponseUrl = candidate;
+        const callsBefore = providerCalls.length;
+
+        const first = await request(app)
+          .post('/api/billing/checkout')
+          .set('Cookie', headers.cookie)
+          .set('X-CSRF-Token', headers.csrf)
+          .send({ planKey: 'starter' });
+        expect(first.status).toBe(503);
+        expect(first.body.code).toBe('billing_provider_malformed_response');
+        expect(JSON.stringify(first.body)).not.toContain(candidate);
+        expect(providerCalls).toHaveLength(callsBefore + 1);
+        expect(providerCalls.at(-1).url).toBe('https://api.stripe.com/v1/checkout/sessions');
+        const operation = (await pool.query(
+          `SELECT status, failure_code, provider_object_id, provider_redirect_url
+             FROM billing_provider_operations
+            WHERE organization_id = $1 AND status = 'indeterminate'`,
+          [identity.organization_id]
+        )).rows[0];
+        expect(operation).toEqual(expect.objectContaining({
+          status: 'indeterminate',
+          failure_code: 'billing_provider_malformed_response',
+          provider_object_id: null,
+          provider_redirect_url: null,
+        }));
+
+        const replay = await request(app)
+          .post('/api/billing/checkout')
+          .set('Cookie', headers.cookie)
+          .set('X-CSRF-Token', headers.csrf)
+          .send({ planKey: 'starter' });
+        expect(replay.status).toBe(409);
+        expect(replay.body.code).toBe('billing_checkout_indeterminate');
+        expect(providerCalls).toHaveLength(callsBefore + 1);
+      }
+      expect(providerCalls).toHaveLength(callStart + candidates.length);
+      const operations = (await pool.query(
+        `SELECT idempotency_key, status FROM billing_provider_operations
+          WHERE organization_id = $1 ORDER BY created_at, id`,
+        [identity.organization_id]
+      )).rows;
+      expect(operations).toHaveLength(candidates.length);
+      expect(operations.filter(item => item.status === 'expired')).toHaveLength(candidates.length - 1);
+      expect(operations.filter(item => item.status === 'indeterminate')).toHaveLength(1);
+      expect(new Set(operations.map(item => item.idempotency_key)).size).toBe(candidates.length);
+    } finally {
+      controlledNow = originalNow;
+      checkoutResponseUrl = originalUrl;
+      providerCalls.length = callStart;
+    }
+  });
+
+  test('migration 013 gives the hosted Checkout redirect its independent application bound', async () => {
+    const column = (await pool.query(
+      `SELECT data_type, character_maximum_length
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'billing_provider_operations'
+          AND column_name = 'provider_redirect_url'`
+    )).rows[0];
+    expect(column).toEqual({
+      data_type: 'character varying',
+      character_maximum_length: CHECKOUT_REDIRECT_URL_MAX_LENGTH,
+    });
   });
 
   test('owner-only Checkout ignores tenant and amount tampering and is concurrency bounded', async () => {
@@ -548,7 +670,7 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
     });
     expect((await pool.query(
       `SELECT status FROM billing_provider_operations
-        WHERE organization_id = $1 AND split_part(provider_object_id, '|', 1) = 'cs_synthetic_b2'`,
+        WHERE organization_id = $1 AND provider_object_id = 'cs_synthetic_b2'`,
       [owner.organization_id]
     )).rows[0].status).toBe('completed');
   });

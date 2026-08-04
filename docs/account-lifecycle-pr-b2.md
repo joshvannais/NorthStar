@@ -50,6 +50,12 @@ response bodies are not parsed for failures, logged, or returned. Checkout and
 portal responses expose only allowlisted HTTPS destinations (and Checkout
 expiry), never provider object IDs or raw provider bodies.
 
+Stripe-hosted Checkout redirects are accepted only at the exact
+`https://checkout.stripe.com` origin, without credentials, and are preserved
+including an opaque fragment. NorthStar applies a 2,048-character application
+and storage safety bound consistently in the adapter, repository, and schema;
+that reviewed bound is not a claim about Stripe's maximum URL guarantee.
+
 Browser return URLs are fixed same-origin settings URLs. A Checkout redirect or
 `checkout.session.completed` can bind provider ownership but cannot activate a
 paid state. Only a valid signed `invoice.paid` event matching the source plan,
@@ -97,7 +103,7 @@ Checkout creation uses a per-organization advisory transaction lock, a durable
 operation row, one active-operation partial unique index, and a stable server
 idempotency key. A concurrent duplicate cannot produce a second provider call.
 The accepted row retains only a bounded provider Checkout ID plus the already
-validated allowlisted URL and expiry. An identical unexpired accepted request
+validated allowlisted URL in independent columns plus the expiry. An identical unexpired accepted request
 returns that durable safe result without provider I/O or row mutation. Accepted
 and indeterminate outcomes remain blocked until their bounded expiry; recovery
 then expires the old row and creates a new operation with a new idempotency key.
@@ -127,7 +133,10 @@ Migrations 001-012 remain protected and byte-identical. New migration
 runner owns the advisory lock, transaction, checksum ledger, and automatic
 application. The migration adds billing evidence/operation/invoice tables,
 provider-ownership indexes, source-plan/verified-authority constraints, and
-event clocks. It does not fabricate provider IDs, paid status, or verified
+event clocks. The Checkout operation table stores the bounded validated hosted
+redirect separately from its provider object ID; this migration-013 object must
+receive a new independent review before any release approval. It does not
+fabricate provider IDs, paid status, or verified
 authority for any existing row. Existing paid labels default to unverified and
 therefore fail closed until later supported signed reconciliation.
 

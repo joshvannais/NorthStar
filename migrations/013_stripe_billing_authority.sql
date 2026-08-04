@@ -93,6 +93,7 @@ CREATE TABLE billing_provider_operations (
   idempotency_key VARCHAR(96) NOT NULL UNIQUE,
   status VARCHAR(32) NOT NULL,
   provider_object_id VARCHAR(255),
+  provider_redirect_url VARCHAR(2048),
   failure_code VARCHAR(64),
   created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -100,6 +101,9 @@ CREATE TABLE billing_provider_operations (
   CONSTRAINT billing_provider_operations_type_check CHECK (operation_type = 'checkout'),
   CONSTRAINT billing_provider_operations_status_check CHECK (
     status IN ('requested', 'accepted', 'indeterminate', 'rejected', 'completed', 'expired')
+  ),
+  CONSTRAINT billing_provider_operations_accepted_result_check CHECK (
+    status <> 'accepted' OR (provider_object_id IS NOT NULL AND provider_redirect_url IS NOT NULL)
   ),
   CONSTRAINT billing_provider_operations_fingerprint_check CHECK (request_fingerprint ~ '^[0-9a-f]{64}$'),
   CONSTRAINT billing_provider_operations_key_check CHECK (idempotency_key ~ '^northstar-b2-[0-9a-f]{64}$'),

@@ -7,6 +7,7 @@ const {
   hashPassword,
   verifyPassword,
 } = require('../../src/accounts/service');
+const { schemas } = require('../../src/middleware/validate');
 
 describe('Account Lifecycle PR A validation', () => {
   test('email normalization trims and lowercases without provider-specific rewriting', () => {
@@ -20,11 +21,16 @@ describe('Account Lifecycle PR A validation', () => {
     expect(() => normalizeEmail('a'.repeat(244) + '@example.test')).toThrow(/254/);
   });
 
-  test('password policy accepts exactly 12 through 128 characters with no composition rule', () => {
-    expect(validatePassword('a'.repeat(12))).toHaveLength(12);
+  test('password policy accepts exactly 8 through 128 characters with no composition rule', () => {
+    expect(validatePassword('a'.repeat(8))).toHaveLength(8);
     expect(validatePassword(' '.repeat(128))).toHaveLength(128);
-    expect(() => validatePassword('a'.repeat(11))).toThrow(/12 through 128/);
-    expect(() => validatePassword('a'.repeat(129))).toThrow(/12 through 128/);
+    expect(() => validatePassword('a'.repeat(7))).toThrow(/8 through 128/);
+    expect(() => validatePassword('a'.repeat(129))).toThrow(/8 through 128/);
+  });
+
+  test('shared request schema mirrors the canonical creation boundary without constraining login', () => {
+    expect(schemas.signup.password).toEqual({ type: 'string', required: true, min: 8, max: 128 });
+    expect(schemas.login.password).toEqual({ type: 'string', required: true, min: 1 });
   });
 
   test('password hashing covers the full input and upgrades legacy bcrypt hashes', async () => {
@@ -37,6 +43,17 @@ describe('Account Lifecycle PR A validation', () => {
     const legacy = await bcrypt.hash('legacy password 123', 4);
     expect(await verifyPassword('legacy password 123', legacy)).toEqual({ valid: true, needsUpgrade: true });
   });
+
+  test.each(['Ab1!xy', 'Ab1!xyz'])(
+    'historical raw-bcrypt value %p remains verifiable but cannot be used for new password creation',
+    async password => {
+      const bcrypt = require('bcryptjs');
+      const legacy = await bcrypt.hash(password, 4);
+      await expect(hashPassword(password)).rejects.toMatchObject({ code: 'invalid_password', status: 400 });
+      await expect(verifyPassword(password, legacy)).resolves.toEqual({ valid: true, needsUpgrade: true });
+      await expect(verifyPassword(`${password}!`, legacy)).resolves.toEqual({ valid: false, needsUpgrade: false });
+    }
+  );
 
   test('production configuration exposes no environment-owned signup capability', () => {
     const saved = {

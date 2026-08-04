@@ -122,4 +122,35 @@ describe('mounted site-wide theme inventory', () => {
     expect(response.text).toContain('class="account-auth-return"');
     expect(response.text).toContain('href="/login"');
   });
+
+  test('reset-password fallback is non-GET, unnamed, and keeps token cleanup ahead of resources', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'public/reset-password.html'), 'utf8');
+    const form = html.match(/<form\b[^>]*\bid=["']resetForm["'][^>]*>/i);
+    const password = html.match(/<input\b[^>]*\bid=["']password["'][^>]*>/i);
+    const confirmation = html.match(/<input\b[^>]*\bid=["']confirmPassword["'][^>]*>/i);
+    expect(form).not.toBeNull();
+    expect(form[0]).toMatch(/\bmethod=["']post["']/i);
+    expect(form[0]).toMatch(/\baction=["']\/reset-password["']/i);
+    expect(form[0]).not.toMatch(/\baction=["'][^"']*\?/i);
+    expect(password).not.toBeNull();
+    expect(confirmation).not.toBeNull();
+    expect(password[0]).not.toMatch(/\bname=/i);
+    expect(confirmation[0]).not.toMatch(/\bname=/i);
+    expect(html).not.toMatch(/<input\b[^>]*\btype=["']hidden["']/i);
+    expect(html).not.toMatch(/(?:localStorage|sessionStorage|console\.(?:log|warn|error))\b/);
+
+    const referrerPolicy = html.indexOf('<meta name="referrer" content="no-referrer">');
+    const tokenRead = html.indexOf("new URLSearchParams(window.location.search).getAll('token')");
+    const cleanup = html.indexOf("window.history.replaceState(null, '', '/reset-password')");
+    const firstResource = Math.min(
+      ...['<script src=', '<link rel="stylesheet"'].map(value => {
+        const index = html.indexOf(value);
+        return index === -1 ? Number.POSITIVE_INFINITY : index;
+      })
+    );
+    expect(referrerPolicy).toBeGreaterThan(-1);
+    expect(referrerPolicy).toBeLessThan(tokenRead);
+    expect(tokenRead).toBeLessThan(cleanup);
+    expect(cleanup).toBeLessThan(firstResource);
+  });
 });

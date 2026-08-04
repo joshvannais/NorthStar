@@ -107,7 +107,7 @@ const schemas = {
   signup: {
     name: { type: 'string', required: true, min: 1, max: 200 },
     email: { type: 'email', required: true },
-    password: { type: 'string', required: true, min: 6, max: 128 },
+    password: { type: 'string', required: true, min: 8, max: 128 },
     businessName: { type: 'string', required: false, max: 200 },
     phone: { type: 'phone', required: false }
   },

@@ -527,6 +527,33 @@ textarea:focus-visible {
 }
 .account-auth-field input::placeholder { color: var(--theme-muted); opacity: 1; }
 .account-auth-field input:focus { border-color: var(--brand-400); box-shadow: 0 0 0 3px rgba(212,175,55,0.16); }
+.password-input-shell { position: relative; }
+.password-input-shell input { padding-right: 72px; }
+.password-visibility-toggle {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 8px;
+  min-width: 52px;
+  min-height: 34px;
+  padding: 5px 8px;
+  transform: translateY(-50%);
+  color: var(--brand-700);
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  font: 650 12px/1 var(--font-sans);
+  cursor: pointer;
+}
+.password-visibility-toggle:hover { color: var(--brand-800); background: var(--theme-surface-soft); }
+.password-visibility-toggle:focus-visible { outline: 3px solid rgba(212,175,55,0.35); outline-offset: 2px; }
+.password-field-hint,
+.password-field-error { margin-top: 6px; font-size: 13px; line-height: 1.4; }
+.password-field-hint { color: var(--theme-muted); }
+.password-field-error { color: #b91c1c; }
+.password-field-error[hidden] { display: none; }
+[data-theme="dark"] .password-visibility-toggle { color: var(--brand-200); }
+[data-theme="dark"] .password-field-error { color: #fca5a5; }
 .account-auth-form .btn { width: 100%; min-height: 48px; }
 .account-auth-form .btn:disabled { cursor: wait; opacity: 0.64; transform: none; }
 
@@ -1141,6 +1168,11 @@ tr:hover td { background: var(--neutral-50); }
   color: var(--neutral-800);
   transition: border-color 0.2s;
   background: white;
+}
+
+.form-group .password-input-shell > input,
+.account-auth-field .password-input-shell > input {
+  padding-inline-end: 5rem;
 }
 
 .form-group input:focus,

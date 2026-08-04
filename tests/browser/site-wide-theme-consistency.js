@@ -45,6 +45,66 @@ function accountFixture(pathname) {
   };
 }
 
+function createCommunicationsResponseGate() {
+  let requestCount = 0;
+  let requestedResolve;
+  let releaseResolve;
+  let active = false;
+  let released = false;
+  const requested = new Promise(resolve => { requestedResolve = resolve; });
+  const release = new Promise(resolve => { releaseResolve = resolve; });
+  return {
+    activate() { active = true; },
+    async hold() {
+      assert.strictEqual(active, true, 'communications response gate must be route-scoped');
+      requestCount += 1;
+      requestedResolve();
+      await release;
+    },
+    async waitForRequest() {
+      let timeout;
+      try {
+        await Promise.race([
+          requested,
+          new Promise((_resolve, reject) => {
+            timeout = setTimeout(() => reject(new Error('communications request did not begin')), 3000);
+          }),
+        ]);
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+    release() {
+      if (released) return;
+      released = true;
+      releaseResolve();
+    },
+    get active() { return active; },
+    get requestCount() { return requestCount; },
+  };
+}
+
+function canonicalFixture(request, surface) {
+  const sessionId = request.headers()['x-northstar-session-id'];
+  assert.ok(sessionId, `${surface} fixture requires the mounted session header`);
+  return {
+    success: true,
+    data: {
+      surface,
+      readModelVersion: 'm19-part3-read-v1',
+      digest: 'c'.repeat(64),
+      items: [],
+      records: [],
+      metrics: { graphCount: 0, appointmentCount: 0, estimatedRevenue: null },
+      authority: {
+        userId: '00000000-0000-4000-8000-000000000101',
+        organizationId: '00000000-0000-4000-8000-000000000201',
+        sessionId,
+      },
+    },
+  };
+}
+
 async function installLocalApiBoundary(context, origin, evidence, options = {}) {
   await context.route('**/api/**', async route => {
     const request = route.request();
@@ -55,6 +115,18 @@ async function installLocalApiBoundary(context, origin, evidence, options = {}) 
     })();
     const referrer = request.headers().referer || '';
     evidence.api.push({ method: request.method(), path: url.pathname, referrerHasActionToken: /[?&]token=/.test(referrer) });
+
+    const communicationsAudit = framePath === '/dashboard/communications'
+      && options.communicationsGate && options.communicationsGate.active;
+    if (request.method() === 'GET' && communicationsAudit
+      && url.pathname === '/api/v1/canonical/compat/leads') {
+      return route.fulfill(jsonResponse(canonicalFixture(request, 'leads')));
+    }
+    if (request.method() === 'GET' && communicationsAudit
+      && url.pathname === '/api/v1/canonical/compat/communications') {
+      await options.communicationsGate.hold();
+      return route.fulfill(jsonResponse(canonicalFixture(request, 'communications')));
+    }
 
     if (request.method() === 'POST' && options.recovery === true) {
       const outcomes = options.outcomes || {};
@@ -295,7 +367,53 @@ async function installThemeInstrumentation(context, savedTheme) {
   }, savedTheme);
 }
 
-async function assertMountedTheme(page, route, expectedTheme) {
+async function readCommunicationsRenderState(page) {
+  return page.evaluate(() => ({
+    authority: document.documentElement.dataset.canonicalAuthority || null,
+    kpiCards: document.querySelectorAll('#kpiGrid .ds-kpi-card').length,
+    emptyHeading: document.querySelector('#callHistoryList .empty-state h3')?.textContent.trim() || '',
+  }));
+}
+
+async function auditCommunicationsReadiness(page, gate, label) {
+  await gate.waitForRequest();
+  await settleFiniteDocumentAnimations(page);
+  const initialState = await readCommunicationsRenderState(page);
+  assert.strictEqual(initialState.kpiCards, 0, `${label} controlled initial state must precede KPI rendering`);
+  assert.strictEqual(initialState.emptyHeading, 'No communications yet', `${label} initial empty presentation`);
+  const initialAccessibility = await auditMountedAccessibility(page);
+
+  gate.release();
+  await page.waitForFunction(() => (
+    document.documentElement.dataset.canonicalAuthority === 'server'
+      && document.querySelectorAll('#kpiGrid .ds-kpi-card').length === 8
+      && document.querySelector('#callHistoryList .empty-state h3')?.textContent.trim() === 'No communications yet'
+  ), null, { timeout: 5000 });
+  await settleFiniteDocumentAnimations(page);
+
+  const settledState = await readCommunicationsRenderState(page);
+  const settledAccessibility = await auditMountedAccessibility(page);
+  assert.deepStrictEqual(settledState, {
+    authority: 'server',
+    kpiCards: 8,
+    emptyHeading: 'No communications yet',
+  }, `${label} completed communications render`);
+  assert.strictEqual(gate.requestCount, 2, `${label} expected declared and filtered communications reads`);
+  assert.ok(
+    settledAccessibility.auditedTextElements > initialAccessibility.auditedTextElements,
+    `${label} negative control must prove the pre-completion audit omits settled instances`
+  );
+  return {
+    initialAccessibility,
+    settledAccessibility,
+    initialState,
+    settledState,
+    missedByPreCompletionAudit: settledAccessibility.auditedTextElements - initialAccessibility.auditedTextElements,
+    requestCount: gate.requestCount,
+  };
+}
+
+async function assertMountedTheme(page, route, expectedTheme, options = {}) {
   await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 10000 });
   await page.locator('[data-northstar-theme-toggle]').waitFor({ state: 'visible', timeout: 5000 })
     .catch(async error => {
@@ -405,9 +523,16 @@ async function assertMountedTheme(page, route, expectedTheme) {
   const toggleContrast = await computedContrast(page.locator('[data-northstar-theme-toggle]'));
   assert.ok(bodyContrast.ratio >= 4.5, `body contrast at ${route}: ${JSON.stringify({ bodyContrast, result })}`);
   assert.ok(toggleContrast.ratio >= 4.5, `toggle contrast at ${route}: ${JSON.stringify(toggleContrast)}`);
-  // Seek finite source-owned entrance transitions to their deterministic end state.
-  await settleFiniteDocumentAnimations(page);
-  const accessibility = await auditMountedAccessibility(page);
+  let asyncReadiness = null;
+  let accessibility;
+  if (options.communicationsGate) {
+    asyncReadiness = await auditCommunicationsReadiness(page, options.communicationsGate, `${route} ${expectedTheme}`);
+    accessibility = asyncReadiness.settledAccessibility;
+  } else {
+    // Seek finite source-owned entrance transitions to their deterministic end state.
+    await settleFiniteDocumentAnimations(page);
+    accessibility = await auditMountedAccessibility(page);
+  }
   const interactiveStates = await auditInteractiveStates(page);
 
   const toggledTheme = expectedTheme === 'dark' ? 'light' : 'dark';
@@ -432,7 +557,7 @@ async function assertMountedTheme(page, route, expectedTheme) {
   });
   assert.deepStrictEqual(listenerCounts, { toggles: 1, controls: 1, storage: 1, system: 1 });
 
-  return { ...result, accessibility, interactiveStates };
+  return { ...result, accessibility, interactiveStates, asyncReadiness };
 }
 
 async function runMountedMatrix(engine, viewport, origin) {
@@ -450,11 +575,12 @@ async function runMountedMatrix(engine, viewport, origin) {
     for (const theme of selectedThemes) {
       const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
       const inventory = { requests: [], api: [] };
+      const communicationsGate = createCommunicationsResponseGate();
       const pageErrors = [];
       const consoleErrors = [];
       try {
         await installThemeInstrumentation(context, theme);
-        await installLocalApiBoundary(context, origin, inventory);
+        await installLocalApiBoundary(context, origin, inventory, { communicationsGate });
         installRequestInventory(context, origin, inventory);
         const page = await context.newPage();
         page.on('pageerror', error => pageErrors.push(String(error && error.message || error)));
@@ -469,7 +595,11 @@ async function runMountedMatrix(engine, viewport, origin) {
           if (process.env.NORTHSTAR_THEME_PROGRESS === '1') {
             process.stderr.write(`THEME_PROGRESS ${engine} ${viewport.label} ${theme} ${mounted.route}\n`);
           }
-          const result = await assertMountedTheme(page, `${origin}${mounted.route}`, theme);
+          const isCommunications = mounted.route === '/dashboard/communications';
+          if (isCommunications) communicationsGate.activate();
+          const result = await assertMountedTheme(page, `${origin}${mounted.route}`, theme, {
+            communicationsGate: isCommunications ? communicationsGate : null,
+          });
           const label = `${engine} ${viewport.label} ${theme} ${mounted.route}`;
           if (mounted.route === '/dashboard') {
             quickActionTimelines.push({
@@ -493,21 +623,38 @@ async function runMountedMatrix(engine, viewport, origin) {
             visibleControlContexts: result.interactiveStates.visibleControlContexts,
             interactiveHoverFrames: result.interactiveStates.hoverFrames,
             interactiveFocusFrames: result.interactiveStates.focusFrames,
+            asyncReadiness: result.asyncReadiness && {
+              initialAuditedTextElements: result.asyncReadiness.initialAccessibility.auditedTextElements,
+              settledAuditedTextElements: result.asyncReadiness.settledAccessibility.auditedTextElements,
+              missedByPreCompletionAudit: result.asyncReadiness.missedByPreCompletionAudit,
+              requestCount: result.asyncReadiness.requestCount,
+              completionAuthority: result.asyncReadiness.settledState.authority,
+              completedKpiCards: result.asyncReadiness.settledState.kpiCards,
+            },
           });
-          if (result.accessibility.contrastFailures.length || result.accessibility.uiFailures.length || result.accessibility.overlaps.length
-            || result.accessibility.railOverlaps.length || result.accessibility.clipped.length
-            || result.interactiveStates.hoverFailures.length || result.interactiveStates.focusFailures.length) {
-            accessibilityFailures.push({
-              route: mounted.route,
-              theme,
-              contrastFailures: result.accessibility.contrastFailures,
-              uiFailures: result.accessibility.uiFailures,
-              overlaps: result.accessibility.overlaps,
-              railOverlaps: result.accessibility.railOverlaps,
-              clipped: result.accessibility.clipped,
-              hoverFailures: result.interactiveStates.hoverFailures,
-              focusFailures: result.interactiveStates.focusFailures,
-            });
+          const accessibilityStates = [
+            { state: 'settled', audit: result.accessibility },
+            ...(result.asyncReadiness ? [{ state: 'initial', audit: result.asyncReadiness.initialAccessibility }] : []),
+          ];
+          for (const accessibilityState of accessibilityStates) {
+            const audit = accessibilityState.audit;
+            const isSettled = accessibilityState.state === 'settled';
+            if (audit.contrastFailures.length || audit.uiFailures.length || audit.overlaps.length
+              || audit.railOverlaps.length || audit.clipped.length
+              || isSettled && (result.interactiveStates.hoverFailures.length || result.interactiveStates.focusFailures.length)) {
+              accessibilityFailures.push({
+                route: mounted.route,
+                theme,
+                state: accessibilityState.state,
+                contrastFailures: audit.contrastFailures,
+                uiFailures: audit.uiFailures,
+                overlaps: audit.overlaps,
+                railOverlaps: audit.railOverlaps,
+                clipped: audit.clipped,
+                hoverFailures: isSettled ? result.interactiveStates.hoverFailures : [],
+                focusFailures: isSettled ? result.interactiveStates.focusFailures : [],
+              });
+            }
           }
         }
         assert.deepStrictEqual(pageErrors, []);
@@ -515,6 +662,7 @@ async function runMountedMatrix(engine, viewport, origin) {
         assert.strictEqual(inventory.requests.some(item => !['GET'].includes(item.method)), false);
         assert.strictEqual(inventory.api.some(item => item.method !== 'GET'), false);
       } finally {
+        communicationsGate.release();
         await context.close();
       }
     }
@@ -524,6 +672,7 @@ async function runMountedMatrix(engine, viewport, origin) {
   const accessibilityDiagnostic = accessibilityFailures.map(failure => ({
     route: failure.route,
     theme: failure.theme,
+    state: failure.state,
     contrastCount: failure.contrastFailures.length,
     contrastFailures: failure.contrastFailures.slice(0, 12),
     uiFailures: failure.uiFailures.slice(0, 12),
@@ -552,6 +701,11 @@ async function runMountedMatrix(engine, viewport, origin) {
     visibleControlContexts: evidence.reduce((total, item) => total + item.visibleControlContexts, 0),
     interactiveHoverFrames: evidence.reduce((total, item) => total + item.interactiveHoverFrames, 0),
     interactiveFocusFrames: evidence.reduce((total, item) => total + item.interactiveFocusFrames, 0),
+    asyncRouteStates: evidence.filter(item => item.asyncReadiness).map(item => ({
+      route: item.route,
+      theme: item.theme,
+      ...item.asyncReadiness,
+    })),
     quickActionTimelines,
     executiveFocusChecks,
   };
@@ -921,6 +1075,29 @@ async function main() {
         }
       }
     }
+    const asyncReadinessNegativeControls = matrix.flatMap(result => result.asyncRouteStates.map(state => ({
+      engine: result.engine,
+      viewport: result.viewport,
+      route: state.route,
+      theme: state.theme,
+      preCompletionAuditedTextElements: state.initialAuditedTextElements,
+      settledAuditedTextElements: state.settledAuditedTextElements,
+      omittedByPreCompletionAudit: state.missedByPreCompletionAudit,
+      productionObservableCompletion: {
+        authority: state.completionAuthority,
+        kpiCards: state.completedKpiCards,
+      },
+      requestCount: state.requestCount,
+    })));
+    if ((phase === 'all' || phase === 'matrix')
+      && (!process.env.NORTHSTAR_THEME_ROUTE || process.env.NORTHSTAR_THEME_ROUTE === '/dashboard/communications')) {
+      const selectedThemeCount = process.env.NORTHSTAR_THEME_ONLY ? 1 : THEMES.length;
+      assert.strictEqual(
+        asyncReadinessNegativeControls.length,
+        engines.length * selectedViewports.length * selectedThemeCount,
+        'every selected engine, viewport, and theme must exercise communications initial and settled readiness'
+      );
+    }
     process.stdout.write(`${JSON.stringify({
       success: true,
       engines: engines.map(engine => engine === 'chrome' ? 'installed Chrome' : 'actual Playwright WebKit'),
@@ -931,6 +1108,7 @@ async function main() {
       preferences,
       recovery,
       auditNegativeControls,
+      asyncReadinessNegativeControls,
     })}\n`);
   } finally {
     await new Promise(resolve => server.close(resolve));

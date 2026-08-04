@@ -4,7 +4,14 @@ const assert = require('assert');
 const { app } = require('../../src/server');
 const { MOUNTED_THEME_PAGES } = require('../helpers/site-theme-pages');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
-const { assertAccessibilityAudit, auditInteractiveStates, auditMountedAccessibility } = require('../helpers/theme-accessibility-audit');
+const {
+  assertAccessibilityAudit,
+  auditInteractiveStates,
+  auditMountedAccessibility,
+  interactiveTransitionFractions,
+  setInteractiveTransitionProgress,
+  releaseInteractiveState,
+} = require('../helpers/theme-accessibility-audit');
 
 const VIEWPORTS = Object.freeze([
   { label: '1440x900', width: 1440, height: 900 },
@@ -151,6 +158,117 @@ async function computedContrast(locator) {
   });
 }
 
+async function settleFiniteDocumentAnimations(page) {
+  return page.evaluate(() => {
+    let settled = 0;
+    for (const animation of document.getAnimations()) {
+      const timing = animation.effect && animation.effect.getComputedTiming();
+      if (!timing || !Number.isFinite(Number(timing.endTime))) continue;
+      animation.pause();
+      animation.currentTime = Number(timing.endTime);
+      settled += 1;
+    }
+    getComputedStyle(document.body).color;
+    return settled;
+  });
+}
+
+async function assertDashboardQuickActionTimeline(page, label) {
+  const actions = page.locator('.cc-action-btn');
+  const count = await actions.count();
+  assert.strictEqual(count, 6, `${label} quick-action count`);
+  const hrefs = [];
+  const samples = [];
+  for (let index = 0; index < count; index += 1) {
+    const action = actions.nth(index);
+    hrefs.push(await action.getAttribute('href'));
+    await releaseInteractiveState(page, action);
+    await action.hover({ force: true });
+    const fractions = await interactiveTransitionFractions(action);
+    assert.deepStrictEqual(fractions, [0, 0.25, 0.5, 0.75, 1], `${label} quick action ${index} timeline`);
+    const actionSamples = [];
+    for (const fraction of fractions) {
+      const transition = await setInteractiveTransitionProgress(action, fraction);
+      const contrast = await computedContrast(action);
+      actionSamples.push({
+        fraction,
+        animations: transition.animations,
+        ratio: Number(contrast.ratio.toFixed(3)),
+        foreground: contrast.foreground,
+        background: contrast.background,
+      });
+      assert.ok(contrast.ratio >= 4.5, `${label} quick action ${index} at ${fraction}: ${JSON.stringify({ contrast, transition })}`);
+    }
+    samples.push(actionSamples);
+    await releaseInteractiveState(page, action);
+  }
+  assert.strictEqual(new Set(hrefs).size, 6, `${label} every quick-action destination exercised`);
+  return {
+    actions: count,
+    frames: samples.reduce((total, actionSamples) => total + actionSamples.length, 0),
+    minimumRatio: Math.min(...samples.flat().map(sample => sample.ratio)),
+    settledMinimumRatio: Math.min(...samples.map(actionSamples => actionSamples[actionSamples.length - 1].ratio)),
+  };
+}
+
+async function executiveBriefFocusGeometry(page, label) {
+  const selector = 'aside.sidebar [data-account-logout]';
+  const target = page.locator(selector);
+  await target.waitFor({ state: 'visible' });
+  assert.strictEqual(await target.getAttribute('tabindex'), '0', `${label} explicit WebKit keyboard order`);
+  const geometry = () => target.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const outlineWidth = parseFloat(style.outlineWidth) || 0;
+    const outlineOffset = parseFloat(style.outlineOffset) || 0;
+    return {
+      active: document.activeElement === element,
+      focusVisible: element.matches(':focus-visible'),
+      bottom: Number(rect.bottom.toFixed(3)),
+      outlineWidth,
+      outlineOffset,
+      visualTop: Number((rect.top - outlineWidth - outlineOffset).toFixed(3)),
+      visualRight: Number((rect.right + outlineWidth + outlineOffset).toFixed(3)),
+      visualBottom: Number((rect.bottom + outlineWidth + outlineOffset).toFixed(3)),
+      visualLeft: Number((rect.left - outlineWidth - outlineOffset).toFixed(3)),
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+    };
+  });
+  const assertInside = (value, mode) => {
+    assert.strictEqual(value.active, true, `${label} ${mode} active target`);
+    assert.strictEqual(value.focusVisible, true, `${label} ${mode} focus-visible`);
+    assert.ok(value.visualTop >= -0.5, `${label} ${mode} top clearance: ${JSON.stringify(value)}`);
+    assert.ok(value.visualLeft >= -0.5, `${label} ${mode} left clearance: ${JSON.stringify(value)}`);
+    assert.ok(value.visualRight <= value.viewportWidth + 0.5, `${label} ${mode} right clearance: ${JSON.stringify(value)}`);
+    assert.ok(value.visualBottom <= value.viewportHeight + 0.5, `${label} ${mode} bottom clearance: ${JSON.stringify(value)}`);
+  };
+
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    scrollTo(0, 0);
+  });
+  const focusableCount = await page.locator('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])').count();
+  let tabStops = 0;
+  while (tabStops <= (focusableCount * 3) + 3 && !(await target.evaluate(element => document.activeElement === element))) {
+    await page.keyboard.press('Tab');
+    tabStops += 1;
+  }
+  assert.ok(tabStops <= (focusableCount * 3) + 3, `${label} natural traversal reaches Sign Out`);
+  const natural = await geometry();
+  assertInside(natural, 'natural');
+
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    scrollTo(0, 0);
+  });
+  await target.focus();
+  const direct = await geometry();
+  assertInside(direct, 'direct');
+  await target.evaluate(element => element.blur());
+  return { tabStops, focusableCount, natural, direct };
+}
+
 async function installThemeInstrumentation(context, savedTheme) {
   await context.addInitScript(theme => {
     window.__northstarThemeEvidence = {
@@ -287,8 +405,8 @@ async function assertMountedTheme(page, route, expectedTheme) {
   const toggleContrast = await computedContrast(page.locator('[data-northstar-theme-toggle]'));
   assert.ok(bodyContrast.ratio >= 4.5, `body contrast at ${route}: ${JSON.stringify({ bodyContrast, result })}`);
   assert.ok(toggleContrast.ratio >= 4.5, `toggle contrast at ${route}: ${JSON.stringify(toggleContrast)}`);
-  // Let source-owned entrance transitions settle before evaluating steady-state contrast.
-  await page.waitForTimeout(650);
+  // Seek finite source-owned entrance transitions to their deterministic end state.
+  await settleFiniteDocumentAnimations(page);
   const accessibility = await auditMountedAccessibility(page);
   const interactiveStates = await auditInteractiveStates(page);
 
@@ -322,6 +440,8 @@ async function runMountedMatrix(engine, viewport, origin) {
   const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
   const evidence = [];
   const accessibilityFailures = [];
+  const quickActionTimelines = [];
+  const executiveFocusChecks = [];
   try {
     const selectedThemes = process.env.NORTHSTAR_THEME_ONLY
       ? THEMES.filter(theme => theme === process.env.NORTHSTAR_THEME_ONLY)
@@ -350,6 +470,19 @@ async function runMountedMatrix(engine, viewport, origin) {
             process.stderr.write(`THEME_PROGRESS ${engine} ${viewport.label} ${theme} ${mounted.route}\n`);
           }
           const result = await assertMountedTheme(page, `${origin}${mounted.route}`, theme);
+          const label = `${engine} ${viewport.label} ${theme} ${mounted.route}`;
+          if (mounted.route === '/dashboard') {
+            quickActionTimelines.push({
+              theme,
+              ...await assertDashboardQuickActionTimeline(page, label),
+            });
+          }
+          if (mounted.route === '/dashboard/executive-brief' && viewport.label === '1440x900') {
+            executiveFocusChecks.push({
+              theme,
+              ...await executiveBriefFocusGeometry(page, label),
+            });
+          }
           evidence.push({
             route: mounted.route,
             theme,
@@ -357,8 +490,12 @@ async function runMountedMatrix(engine, viewport, origin) {
             color: result.color,
             auditedTextElements: result.accessibility.auditedTextElements,
             interactiveStateGroups: result.interactiveStates.groups,
+            visibleControlContexts: result.interactiveStates.visibleControlContexts,
+            interactiveHoverFrames: result.interactiveStates.hoverFrames,
+            interactiveFocusFrames: result.interactiveStates.focusFrames,
           });
-          if (result.accessibility.contrastFailures.length || result.accessibility.uiFailures.length || result.accessibility.overlaps.length || result.accessibility.clipped.length
+          if (result.accessibility.contrastFailures.length || result.accessibility.uiFailures.length || result.accessibility.overlaps.length
+            || result.accessibility.railOverlaps.length || result.accessibility.clipped.length
             || result.interactiveStates.hoverFailures.length || result.interactiveStates.focusFailures.length) {
             accessibilityFailures.push({
               route: mounted.route,
@@ -366,6 +503,7 @@ async function runMountedMatrix(engine, viewport, origin) {
               contrastFailures: result.accessibility.contrastFailures,
               uiFailures: result.accessibility.uiFailures,
               overlaps: result.accessibility.overlaps,
+              railOverlaps: result.accessibility.railOverlaps,
               clipped: result.accessibility.clipped,
               hoverFailures: result.interactiveStates.hoverFailures,
               focusFailures: result.interactiveStates.focusFailures,
@@ -390,6 +528,7 @@ async function runMountedMatrix(engine, viewport, origin) {
     contrastFailures: failure.contrastFailures.slice(0, 12),
     uiFailures: failure.uiFailures.slice(0, 12),
     overlaps: failure.overlaps,
+    railOverlaps: failure.railOverlaps,
     clipped: failure.clipped,
     hoverFailures: failure.hoverFailures,
     focusFailures: failure.focusFailures,
@@ -410,6 +549,11 @@ async function runMountedMatrix(engine, viewport, origin) {
     pages: evidence.length,
     auditedTextElements: evidence.reduce((total, item) => total + item.auditedTextElements, 0),
     interactiveStateGroups: evidence.reduce((total, item) => total + item.interactiveStateGroups, 0),
+    visibleControlContexts: evidence.reduce((total, item) => total + item.visibleControlContexts, 0),
+    interactiveHoverFrames: evidence.reduce((total, item) => total + item.interactiveHoverFrames, 0),
+    interactiveFocusFrames: evidence.reduce((total, item) => total + item.interactiveFocusFrames, 0),
+    quickActionTimelines,
+    executiveFocusChecks,
   };
 }
 
@@ -490,17 +634,65 @@ async function runAccessibilityAuditNegativeControl(engine) {
   const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await page.setContent(`<!doctype html><html><body style="margin:0;background:#0b0d17;color:#f1f2f6;min-height:100vh">
+    await page.setContent(`<!doctype html><html><head><style>
+      .context-action { color:#0b0d17; background:#f2c94c; border:2px solid #7a5c08; }
+      .context-dark .context-action:hover { color:#f1f2f6; background:#131624; }
+      .context-light .context-action:hover { color:rgb(200,155,44); background:#f8fafc; }
+      .timing { color:#0b0d17; background:#f2c94c; border:2px solid #7a5c08; transition:color .12s linear; }
+      .timing:hover { color:rgb(200,155,44); }
+      :where(button):focus-visible { outline:3px solid #f2c94c; outline-offset:3px; }
+    </style></head><body style="margin:0;padding-right:64px;box-sizing:border-box;background:#0b0d17;color:#f1f2f6;min-height:100vh">
       <div style="background:transparent"><span id="hiddenContrast" style="color:#131624">Unreadable nested text</span></div>
       <input id="weakBoundary" aria-label="Fixture field" style="border:1px solid #131624;background:#0b0d17;color:#f1f2f6">
       <button id="overlap" style="position:fixed;right:10px;bottom:10px;width:60px;height:50px">Action</button>
+      <div class="context-dark" style="background:#0b0d17"><button class="context-action">Context action</button></div>
+      <div class="context-light" style="background:#f8fafc"><button class="context-action">Context action</button></div>
+      <button class="timing">Transition action</button>
+      <button id="railOnly" style="position:fixed;right:56px;top:300px;width:8px;height:48px;padding:0;border:0" aria-label="Rail fixture"></button>
       <div data-northstar-theme-control style="position:fixed;right:10px;bottom:10px"><button data-northstar-theme-toggle aria-label="Fixture theme" style="width:44px;height:44px">T</button></div>
     </body></html>`);
     const audit = await auditMountedAccessibility(page);
+    const exactToggleOverlap = audit.overlaps.some(overlap => overlap.path === '#railOnly');
     assert.strictEqual(audit.contrastFailures.some(failure => failure.path === '#hiddenContrast' && failure.ratio < 1.2), true);
     assert.strictEqual(audit.uiFailures.some(failure => failure.path === '#weakBoundary'), true);
     assert.strictEqual(audit.overlaps.some(overlap => overlap.path === '#overlap'), true);
-    return { engine, inheritedBackgroundContrast: true, componentBoundary: true, overlap: true };
+    assert.strictEqual(exactToggleOverlap, false, 'rail fixture must remain outside the 44px toggle');
+    assert.strictEqual(audit.railOverlaps.some(overlap => overlap.path === '#railOnly'), true, '64px rail catches the outside-toggle fixture');
+
+    const interaction = await auditInteractiveStates(page);
+    const contextualFailures = interaction.hoverFailures.filter(failure =>
+      failure.signature.includes('context-action')
+      && failure.contrastFailures.some(item => item.path.includes('context-light'))
+    );
+    const timingFailures = interaction.hoverFailures.filter(failure =>
+      failure.signature.includes('timing')
+      && failure.contrastFailures.some(item => item.path.includes('timing'))
+    );
+    assert.strictEqual(interaction.visibleControlContexts >= 7, true, 'every visible fixture context is exercised');
+    assert.strictEqual(contextualFailures.some(failure => failure.signature.includes('context-light')), true, 'effective light background failure is retained');
+    assert.strictEqual(
+      timingFailures.some(failure => failure.phase !== 'hover-0'),
+      true,
+      'intermediate or settled transition failure is sampled'
+    );
+    return {
+      engine,
+      inheritedBackgroundContrast: true,
+      componentBoundary: true,
+      exactToggleOverlap: true,
+      contextualControls: {
+        contexts: interaction.visibleControlContexts,
+        failures: contextualFailures.length,
+      },
+      transitionTimeline: {
+        frames: interaction.hoverFrames,
+        failures: timingFailures.length,
+      },
+      safeRail: {
+        exactToggleIntersections: 0,
+        railIntersections: audit.railOverlaps.filter(overlap => overlap.path === '#railOnly').length,
+      },
+    };
   } finally {
     await browser.close();
   }

@@ -1839,7 +1839,7 @@ html[data-theme="dark"] body {
 }
 
 [data-theme="dark"] .pricing-card .btn-primary:hover {
-  background: var(--brand-600);
+  background: var(--brand-300);
 }
 
 [data-theme="dark"] .pricing-card .btn-secondary {

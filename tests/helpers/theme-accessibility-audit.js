@@ -256,8 +256,11 @@ async function auditMountedAccessibility(page) {
     const toggle = document.querySelector('[data-northstar-theme-toggle]');
     const toggleRect = toggle && toggle.getBoundingClientRect();
     const overlaps = [];
+    const railOverlaps = [];
     const clipped = [];
     const seenOverlaps = new Set();
+    const seenRailOverlaps = new Set();
+    const mobileRailLeft = innerWidth <= 480 ? innerWidth - 64 : null;
     for (const element of document.querySelectorAll(interactiveSelector)) {
       if (!isVisible(element) || element === toggle || element.closest('[data-northstar-theme-control]')) continue;
       const rect = element.getBoundingClientRect();
@@ -275,12 +278,24 @@ async function auditMountedAccessibility(page) {
           }
         }
       }
+      if (mobileRailLeft !== null) {
+        const railWidth = Math.min(rect.right, innerWidth) - Math.max(rect.left, mobileRailLeft);
+        const railHeight = Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0);
+        if (railWidth > 0.5 && railHeight > 0.5) {
+          const key = pathFor(element);
+          if (!seenRailOverlaps.has(key)) {
+            seenRailOverlaps.add(key);
+            railOverlaps.push({ path: key, width: Math.round(railWidth), height: Math.round(railHeight) });
+          }
+        }
+      }
     }
 
     return {
       contrastFailures,
       uiFailures,
       overlaps,
+      railOverlaps,
       clipped,
       decorativeExclusions: decorativeSelectors,
       decorativeTextPolicy: 'standalone glyphs without letters or numbers',
@@ -361,10 +376,64 @@ async function focusIndicatorEvidence(locator) {
   });
 }
 
+async function interactiveTransitionFractions(locator) {
+  const animationCount = await locator.evaluate(element => {
+    getComputedStyle(element).color;
+    return element.getAnimations({ subtree: true }).filter(animation => {
+      const timing = animation.effect && animation.effect.getComputedTiming();
+      return timing && Number.isFinite(Number(timing.endTime)) && Number(timing.endTime) > 0;
+    }).length;
+  });
+  return animationCount > 0 ? [0, 0.25, 0.5, 0.75, 1] : [1];
+}
+
+async function setInteractiveTransitionProgress(locator, progress) {
+  return locator.evaluate((element, requestedProgress) => {
+    getComputedStyle(element).color;
+    const animations = element.getAnimations({ subtree: true }).filter(animation => {
+      const timing = animation.effect && animation.effect.getComputedTiming();
+      return timing && Number.isFinite(Number(timing.endTime)) && Number(timing.endTime) > 0;
+    });
+    for (const animation of animations) {
+      const endTime = Number(animation.effect.getComputedTiming().endTime);
+      animation.pause();
+      animation.currentTime = endTime * requestedProgress;
+    }
+    getComputedStyle(element).color;
+    return {
+      progress: requestedProgress,
+      animations: animations.length,
+      properties: animations.map(animation => animation.transitionProperty || animation.animationName || animation.constructor.name),
+    };
+  }, progress);
+}
+
+async function releaseInteractiveState(page, locator) {
+  await locator.evaluate(element => {
+    for (const animation of element.getAnimations({ subtree: true })) animation.cancel();
+  });
+  await page.mouse.move(1, 1);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await locator.evaluate(element => {
+    for (const animation of element.getAnimations({ subtree: true })) {
+      const timing = animation.effect && animation.effect.getComputedTiming();
+      if (timing && Number.isFinite(Number(timing.endTime))) {
+        animation.pause();
+        animation.currentTime = Number(timing.endTime);
+      }
+    }
+    getComputedStyle(element).color;
+  });
+}
+
+function hasAccessibilityFailure(audit) {
+  return audit.contrastFailures.length || audit.uiFailures.length || audit.overlaps.length
+    || audit.railOverlaps.length || audit.clipped.length;
+}
+
 async function auditInteractiveStates(page) {
   const selector = 'a[href], button, input:not([type="hidden"]), select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])';
-  const representatives = await page.locator(selector).evaluateAll(elements => {
-    const seen = new Set();
+  const contexts = await page.locator(selector).evaluateAll(elements => {
     const rows = [];
     elements.forEach((element, index) => {
       const rect = element.getBoundingClientRect();
@@ -375,9 +444,35 @@ async function auditInteractiveStates(page) {
       }
       if (!visible || element.matches('.skip-link')) return;
       const className = typeof element.className === 'string' ? element.className.trim().replace(/\s+/g, '.') : '';
-      const signature = [element.tagName, element.getAttribute('type') || '', element.getAttribute('role') || '', className, element.disabled ? 'disabled' : 'enabled'].join('|');
-      if (seen.has(signature)) return;
-      seen.add(signature);
+      const href = element.getAttribute('href');
+      let safeHref = '';
+      if (href) {
+        try { safeHref = new URL(href, location.origin).pathname; } catch (_error) { safeHref = '[invalid]'; }
+      }
+      const ancestors = [];
+      for (let current = element.parentElement; current && ancestors.length < 4; current = current.parentElement) {
+        const style = getComputedStyle(current);
+        const currentClass = typeof current.className === 'string'
+          ? current.className.trim().split(/\s+/).filter(Boolean).slice(0, 3).join('.')
+          : '';
+        ancestors.push([
+          current.tagName,
+          current.id || '',
+          currentClass,
+          style.backgroundColor,
+          style.backgroundImage,
+        ].join(':'));
+      }
+      const signature = [
+        element.tagName,
+        element.getAttribute('type') || '',
+        element.getAttribute('role') || '',
+        element.id || '',
+        className,
+        safeHref,
+        element.disabled ? 'disabled' : 'enabled',
+        ancestors.join('>'),
+      ].join('|');
       rows.push({ index, signature, disabled: Boolean(element.disabled) });
     });
     return rows;
@@ -385,42 +480,80 @@ async function auditInteractiveStates(page) {
 
   const hoverFailures = [];
   const focusFailures = [];
+  let hoverFrames = 0;
+  let focusFrames = 0;
   const all = page.locator(selector);
-  for (const representative of representatives) {
-    const locator = all.nth(representative.index);
+  for (const context of contexts) {
+    const locator = all.nth(context.index);
     await locator.scrollIntoViewIfNeeded();
     await locator.hover({ force: true });
-    await page.waitForTimeout(10);
-    const hoverAudit = await auditMountedAccessibility(page);
-    if (hoverAudit.contrastFailures.length || hoverAudit.uiFailures.length || hoverAudit.overlaps.length || hoverAudit.clipped.length) {
-      hoverFailures.push({
-        signature: representative.signature,
-        contrastFailures: hoverAudit.contrastFailures.slice(0, 8),
-        uiFailures: hoverAudit.uiFailures.slice(0, 8),
-        overlaps: hoverAudit.overlaps,
-        clipped: hoverAudit.clipped,
-      });
+    const hoverFractions = await interactiveTransitionFractions(locator);
+    for (const fraction of hoverFractions) {
+      const transition = await setInteractiveTransitionProgress(locator, fraction);
+      const hoverAudit = await auditMountedAccessibility(page);
+      hoverFrames += 1;
+      if (hasAccessibilityFailure(hoverAudit)) {
+        hoverFailures.push({
+          signature: context.signature,
+          phase: `hover-${fraction}`,
+          transition,
+          contrastFailures: hoverAudit.contrastFailures.slice(0, 8),
+          uiFailures: hoverAudit.uiFailures.slice(0, 8),
+          overlaps: hoverAudit.overlaps,
+          railOverlaps: hoverAudit.railOverlaps,
+          clipped: hoverAudit.clipped,
+        });
+      }
     }
-    await page.mouse.move(1, 1);
+    await releaseInteractiveState(page, locator);
 
-    if (!representative.disabled) {
+    if (!context.disabled) {
       await page.keyboard.press('Tab');
       await locator.focus();
-      const focus = await focusIndicatorEvidence(locator);
-      if (!focus.active || !focus.focusVisible || focus.outlineStyle === 'none' || focus.outlineWidth < 2 || focus.signalContrast < 3) {
-        focusFailures.push({ signature: representative.signature, focus });
+      const focusFractions = await interactiveTransitionFractions(locator);
+      for (const fraction of focusFractions) {
+        const transition = await setInteractiveTransitionProgress(locator, fraction);
+        const focus = await focusIndicatorEvidence(locator);
+        const focusAudit = await auditMountedAccessibility(page);
+        focusFrames += 1;
+        if (!focus.active || !focus.focusVisible || focus.outlineStyle === 'none' || focus.outlineWidth < 2
+          || focus.signalContrast < 3 || hasAccessibilityFailure(focusAudit)) {
+          focusFailures.push({
+            signature: context.signature,
+            phase: `focus-${fraction}`,
+            transition,
+            focus,
+            contrastFailures: focusAudit.contrastFailures.slice(0, 8),
+            uiFailures: focusAudit.uiFailures.slice(0, 8),
+            overlaps: focusAudit.overlaps,
+            railOverlaps: focusAudit.railOverlaps,
+            clipped: focusAudit.clipped,
+          });
+        }
       }
+      await locator.evaluate(element => {
+        for (const animation of element.getAnimations({ subtree: true })) animation.cancel();
+        element.blur();
+      });
     }
   }
   await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
   await page.evaluate(() => scrollTo(0, 0));
-  return { groups: representatives.length, hoverFailures, focusFailures };
+  return {
+    groups: contexts.length,
+    visibleControlContexts: contexts.length,
+    hoverFrames,
+    focusFrames,
+    hoverFailures,
+    focusFailures,
+  };
 }
 
 function assertAccessibilityAudit(audit, label) {
   assert.deepStrictEqual(audit.contrastFailures, [], `${label} contrast failures: ${JSON.stringify(audit.contrastFailures.slice(0, 40))}`);
   assert.deepStrictEqual(audit.uiFailures, [], `${label} UI contrast failures: ${JSON.stringify(audit.uiFailures.slice(0, 40))}`);
   assert.deepStrictEqual(audit.overlaps, [], `${label} theme control intersections: ${JSON.stringify(audit.overlaps)}`);
+  assert.deepStrictEqual(audit.railOverlaps, [], `${label} 64px theme rail intersections: ${JSON.stringify(audit.railOverlaps)}`);
   assert.deepStrictEqual(audit.clipped, [], `${label} clipped controls: ${JSON.stringify(audit.clipped)}`);
 }
 
@@ -429,4 +562,7 @@ module.exports = {
   auditMountedAccessibility,
   auditInteractiveStates,
   assertAccessibilityAudit,
+  interactiveTransitionFractions,
+  setInteractiveTransitionProgress,
+  releaseInteractiveState,
 };

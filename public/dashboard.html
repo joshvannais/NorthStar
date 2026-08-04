@@ -67,10 +67,13 @@
     .cc-refresh-btn {
       font-size: 11px; padding: 6px 14px; border-radius: 6px;
       border: 1px solid var(--neutral-200); background: var(--neutral-50);
-      color: var(--neutral-500); cursor: pointer; transition: all 0.15s; font-weight: 500;
+      color: var(--neutral-500); cursor: pointer;
+      transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s, transform 0.15s;
+      font-weight: 500;
     }
     [data-theme="dark"] .cc-refresh-btn { color: var(--neutral-400); }
     .cc-refresh-btn:hover { border-color: var(--brand-500); color: var(--brand-500); }
+    [data-theme="light"] .cc-refresh-btn:hover { color: var(--brand-700); }
 
     /* ── Cards — uses shared design tokens ── */
     .cc-card { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: 10px; padding: 14px 18px; }
@@ -176,11 +179,13 @@
       display: flex; align-items: center; justify-content: center; gap: 5px;
       padding: 8px 10px; border-radius: 7px; border: 1px solid var(--neutral-200);
       background: var(--neutral-50); color: var(--neutral-700); font-size: 12px;
-      font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.12s;
+      font-weight: 500; cursor: pointer; text-decoration: none;
+      transition: border-color 0.12s, background-color 0.12s, transform 0.12s, box-shadow 0.12s;
       min-height: 38px;
     }
     [data-theme="dark"] .cc-action-btn { color: var(--neutral-300); }
     .cc-action-btn:hover { border-color: var(--brand-500); color: var(--brand-500); transform: translateY(-1px); }
+    [data-theme="light"] .cc-action-btn:hover { color: var(--brand-700); }
 
     /* ── Grid ── */
     .cc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

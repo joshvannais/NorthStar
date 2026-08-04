@@ -128,7 +128,10 @@ realPostgres('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     const count = await pool.query("SELECT count(*)::int AS count FROM users WHERE email_normalized = 'case.owner@example.test'");
     expect(count.rows[0].count).toBe(1);
 
-    expect((await signup('short@example.test', '12345678901')).status).toBe(400);
+    const sevenCharacters = await signup('short@example.test', '1234567');
+    expect(sevenCharacters.status).toBe(400);
+    expect(sevenCharacters.body.code).toBe('invalid_password');
+    expect((await signup('minimum@example.test', '12345678')).status).toBe(202);
     expect((await signup('long@example.test', 'x'.repeat(129))).status).toBe(400);
     expect((await signup(`${'a'.repeat(244)}@example.test`)).status).toBe(400);
   });

@@ -495,7 +495,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     });
     await request(app).post('/api/auth/forgot-password').send({ email: 'reset-race.b1@example.test' });
     const firstReset = linkToken(capture.messages.at(-1), '/reset-password');
-    expect((await request(app).post('/api/auth/reset-password').send({ token: firstReset, password: 'too-short' })).body.code)
+    expect((await request(app).post('/api/auth/reset-password').send({ token: firstReset, password: 'short7!' })).body.code)
       .toBe('invalid_password');
     await request(app).post('/api/auth/forgot-password').send({ email: ' RESET-RACE.B1@EXAMPLE.TEST ' });
     const currentReset = linkToken(capture.messages.at(-1), '/reset-password');

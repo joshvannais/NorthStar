@@ -1122,12 +1122,14 @@ async function runRecoveryMatrix(engine, viewport, theme, origin) {
       assert.strictEqual(await page.locator('#resetForm').isVisible(), true);
       if (resetCase.outcome === 'success') {
         const weakStart = evidence.api.length;
-        await page.fill('#password', 'too-short');
+        await page.fill('#password', 'short7!');
+        await page.fill('#confirmPassword', 'short7!');
         await page.locator('#resetForm').evaluate(form => form.requestSubmit());
         assert.strictEqual(evidence.api.length, weakStart, 'weak password creates no reset request');
         assert.strictEqual(await page.locator('#password').evaluate(input => input.matches(':invalid')), true);
       }
       await page.fill('#password', 'NorthStar-theme-fixture-123!');
+      await page.fill('#confirmPassword', 'NorthStar-theme-fixture-123!');
       await page.locator('#resetForm button[type="submit"]').click();
       assert.strictEqual(await page.locator('#resetForm button[type="submit"]').isDisabled(), true);
       await assertPresentationState(page, `${engine} ${viewport.label} ${theme} reset ${resetCase.outcome} loading`, theme);

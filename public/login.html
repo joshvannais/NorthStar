@@ -7,6 +7,7 @@
   <title>Sign In — NorthStar AI</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/auth-session.js"></script>
+  <script src="/js/password-fields.js"></script>
 </head>
 <body>
 
@@ -37,7 +38,10 @@
         </div>
         <div class="form-group">
           <label for="password">Password</label>
-          <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password">
+          <div class="password-input-shell">
+            <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password">
+            <button type="button" class="password-visibility-toggle" data-password-toggle aria-controls="password" aria-pressed="false" aria-label="Show password">Show</button>
+          </div>
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Sign In</button>
       </form>

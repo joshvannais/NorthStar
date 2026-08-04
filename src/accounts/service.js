@@ -24,8 +24,8 @@ function normalizeEmail(value) {
 }
 
 function validatePassword(value) {
-  if (typeof value !== 'string' || value.length < 12 || value.length > 128) {
-    throw new AccountError(400, 'invalid_password', 'Password must contain 12 through 128 characters');
+  if (typeof value !== 'string' || value.length < 8 || value.length > 128) {
+    throw new AccountError(400, 'invalid_password', 'Password must contain 8 through 128 characters');
   }
   return value;
 }

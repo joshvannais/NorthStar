@@ -984,6 +984,7 @@ async function main() {
     await pendingPage.fill('#phone', '8605550123');
     await pendingPage.fill('#email', 'pending-browser@example.test');
     await pendingPage.fill('#password', password);
+    await pendingPage.fill('#confirmPassword', password);
     pendingTracked.tracker.allow('POST', '/api/auth/signup');
     const signupResponsePromise = pendingPage.waitForResponse(response => response.url() === `${baseUrl}/api/auth/signup`);
     await Promise.all([

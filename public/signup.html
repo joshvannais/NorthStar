@@ -7,6 +7,7 @@
   <title>Start Free Trial — NorthStar AI</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/auth-session.js"></script>
+  <script src="/js/password-fields.js"></script>
 </head>
 <body>
 
@@ -51,7 +52,19 @@
         </div>
         <div class="form-group">
           <label for="password">Password</label>
-            <input type="password" id="password" placeholder="Create a password" required minlength="12" maxlength="128">
+          <div class="password-input-shell">
+            <input type="password" id="password" placeholder="Create a password" required minlength="8" maxlength="128" autocomplete="new-password" aria-describedby="passwordPolicyHint">
+            <button type="button" class="password-visibility-toggle" data-password-toggle aria-controls="password" aria-pressed="false" aria-label="Show password">Show</button>
+          </div>
+          <p id="passwordPolicyHint" class="password-field-hint">Use 8 to 128 characters.</p>
+        </div>
+        <div class="form-group">
+          <label for="confirmPassword">Confirm password</label>
+          <div class="password-input-shell">
+            <input type="password" id="confirmPassword" placeholder="Re-enter your password" required minlength="8" maxlength="128" autocomplete="new-password" data-password-confirmation-for="password" aria-describedby="passwordMatchError" aria-errormessage="passwordMatchError" aria-invalid="false">
+            <button type="button" class="password-visibility-toggle" data-password-toggle aria-controls="confirmPassword" aria-pressed="false" aria-label="Show password">Show</button>
+          </div>
+          <p id="passwordMatchError" class="password-field-error" role="alert" aria-live="polite" hidden></p>
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px 24px;font-size:15px;">
           Create Free Account
@@ -72,7 +85,9 @@
   <script>
     document.getElementById('signupForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const btn = e.target.querySelector('button');
+      if (!window.NorthStarPasswordFields ||
+          !window.NorthStarPasswordFields.validateConfirmation(e.currentTarget)) return;
+      const btn = e.currentTarget.querySelector('button[type="submit"]');
       btn.disabled = true;
       btn.textContent = 'Creating account...';
 

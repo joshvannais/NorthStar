@@ -211,6 +211,7 @@ async function runTokenConfidentialityMatrix(context, trace, baseUrl, kind) {
       await page.waitForFunction(() => !document.getElementById('verifyStatus').textContent.includes('Checking'));
     } else if (tokenCase.posts) {
       await page.fill('#password', 'Confidential-reset-password-123!');
+      await page.fill('#confirmPassword', 'Confidential-reset-password-123!');
       await page.click('#resetForm button[type="submit"]');
       await page.waitForFunction(() => document.getElementById('resetStatus').textContent.length > 0);
     } else {
@@ -385,6 +386,7 @@ async function runJourney(spec, viewport, state) {
     await page.fill('#phone', '8605550198');
     await page.fill('#email', email);
     await page.fill('#password', oldPassword);
+    await page.fill('#confirmPassword', oldPassword);
     const signupResponse = page.waitForResponse(response => response.url().endsWith('/api/auth/signup'));
     await page.click('#signupForm button[type="submit"]');
     assert.strictEqual((await signupResponse).status(), 202);
@@ -442,6 +444,7 @@ async function runJourney(spec, viewport, state) {
     await page.goto(resetUrl.toString());
     assert.strictEqual(page.url(), `${state.baseUrl}/reset-password`);
     await page.fill('#password', newPassword);
+    await page.fill('#confirmPassword', newPassword);
     const resetResponse = page.waitForResponse(response => response.url().endsWith('/api/auth/reset-password'));
     await page.click('#resetForm button[type="submit"]');
     assert.strictEqual((await resetResponse).status(), 200);

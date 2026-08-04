@@ -997,4 +997,86 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       business_profile_hash: provenance.rows[0].normalized_profile_hash,
     });
   });
+
+  test('mounted simulation preserves the exact controlled fence scenario and durable replay contract', async () => {
+    const controlled = {
+      name: 'Avery Cedar',
+      phone: '+15555550101',
+      email: 'avery.cedar@example.test',
+      address: { line1: '100 North Star Way', city: 'Testville', state: 'NY', postalCode: '10001' },
+      service: 'fence',
+      sessionId: 'm19-part3-session-a',
+      externalTranscriptId: 'm19-part3-transcript-001',
+      externalCommunicationId: 'm19-part3-communication-001',
+      externalAppointmentId: 'm19-part3-appointment-001',
+      occurredAt: '2026-08-04T13:00:00.000Z',
+      callDurationSeconds: 242,
+      transcript: [
+        { turnId: 'turn-1', speaker: 'customer', text: 'I need a new 100-foot six-foot cedar fence and the existing fence removed.' },
+        { turnId: 'turn-2', speaker: 'customer', text: 'Include one walk gate. Permits are required. Weekday mornings work best. This is not an emergency.' },
+      ],
+      facts: [
+        { variable: 'linearFeet', normalizedValue: 100, evidenceText: '100-foot cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
+        { variable: 'height', normalizedValue: 6, evidenceText: 'six-foot cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
+        { variable: 'material', normalizedValue: 'cedar', evidenceText: 'cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
+        { variable: 'removalRequired', normalizedValue: true, evidenceText: 'existing fence removed', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
+        { variable: 'gates', normalizedValue: [{ type: 'walk', width: 4 }], evidenceText: 'one walk gate', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
+        { variable: 'permitsRequired', normalizedValue: true, evidenceText: 'permits are required', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
+      ],
+      scope: {
+        jobType: 'replace', linearFeet: 100, height: 6, material: 'cedar',
+        removalRequired: true, gates: [{ type: 'walk', width: 4 }], permitsRequired: true,
+      },
+      appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
+      travel: { source: 'controlled-loopback-map', minutes: 35, distanceMiles: 18 },
+    };
+    const first = await request(app)
+      .post('/api/v1/simulations/leads')
+      .set(auth(USERS.owner))
+      .set('Idempotency-Key', 'm19-part3-fence-001')
+      .send(controlled);
+    expect(first.status).toBe(201);
+    expect(first.body.snapshot).toMatchObject({
+      service: { scope: controlled.scope },
+      appointmentPreference: controlled.appointmentPreference,
+      travel: controlled.travel,
+      callDurationSeconds: controlled.callDurationSeconds,
+      risk: { emergency: false },
+    });
+    const replay = await request(app)
+      .post('/api/v1/simulations/leads')
+      .set(auth(USERS.owner))
+      .set('Idempotency-Key', 'm19-part3-fence-001')
+      .send(controlled);
+    expect(replay.status).toBe(201);
+    expect(replay.body).toEqual(first.body);
+    const conflict = await request(app)
+      .post('/api/v1/simulations/leads')
+      .set(auth(USERS.owner))
+      .set('Idempotency-Key', 'm19-part3-fence-001')
+      .send({ ...controlled, scope: { ...controlled.scope, linearFeet: 101 } });
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.error.code).toBe('IDEMPOTENCY_FINGERPRINT_CONFLICT');
+
+    const persisted = await db.getPool().query(
+      `SELECT t.external_call_id, t.external_transcript_id, t.occurred_at,
+              cm.external_communication_id, cm.duration_seconds,
+              a.external_appointment_id
+         FROM canonical_transcripts t
+         JOIN canonical_communications cm
+           ON cm.organization_id = t.organization_id AND cm.operation_id = t.operation_id
+         JOIN canonical_appointments a
+           ON a.organization_id = t.organization_id AND a.operation_id = t.operation_id
+        WHERE t.organization_id = $1 AND t.graph_id = $2`,
+      [ORG_A, first.body.graphId]
+    );
+    expect(persisted.rows).toHaveLength(1);
+    expect(persisted.rows[0]).toMatchObject({
+      external_call_id: controlled.sessionId + ':call',
+      external_transcript_id: controlled.externalTranscriptId,
+      external_communication_id: controlled.externalCommunicationId,
+      external_appointment_id: controlled.externalAppointmentId,
+      duration_seconds: controlled.callDurationSeconds,
+    });
+  });
 });

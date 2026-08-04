@@ -395,6 +395,29 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(responses.every(response => response.body.data.authority.sessionId === 'session-a')).toBe(true);
   });
 
+  test('every surface exposes the persisted fact, source, profile, fingerprint, and timestamp metadata', async () => {
+    const surfaces = ['customer-detail', 'leads', 'communications', 'calendar', 'command-center', 'polaris', 'executive', 'estimates'];
+    const responses = [];
+    for (const surface of surfaces) {
+      responses.push(await request(app).get('/api/v1/canonical/surfaces/' + surface).set(headers(ORG_A, USER_A, 'session-a')));
+    }
+    expect(responses.every(response => response.status === 200)).toBe(true);
+    const items = responses.map(response => response.body.data.items[0]);
+    expect(items.every(item => stableStringify(item.ids.facts) === stableStringify(graphA.body.ids.facts))).toBe(true);
+    expect(items.every(item => item.normalizedInputFingerprint === graphA.body.normalizedInputFingerprint)).toBe(true);
+    expect(items.every(item => item.source.type === 'simulation')).toBe(true);
+    expect(items.every(item => item.source.version === 'api-test-v1')).toBe(true);
+    expect(items.every(item => item.source.externalCallId === 'session-a:call')).toBe(true);
+    expect(items.every(item => item.source.externalTranscriptId === 'session-a:transcript')).toBe(true);
+    expect(items.every(item => stableStringify(item.supportingTranscriptFactIds) === stableStringify(graphA.body.ids.facts))).toBe(true);
+    expect(items.every(item => stableStringify(item.businessProfile) === stableStringify(graphA.body.businessProfile))).toBe(true);
+    expect(items.every(item => Array.isArray(item.facts) && item.facts.length === graphA.body.ids.facts.length)).toBe(true);
+    expect(items.every(item => item.facts.every((fact, index) => fact.id === graphA.body.ids.facts[index]))).toBe(true);
+    expect(items.every(item => item.timestamps && item.timestamps.operationCreatedAt && item.timestamps.operationCompletedAt &&
+      item.timestamps.transcriptCreatedAt && item.timestamps.estimateCreatedAt && item.timestamps.snapshotCreatedAt)).toBe(true);
+    expect(new Set(items.map(item => stableStringify(item))).size).toBe(1);
+  });
+
   test('dashboard and analytics are equal and derived from the canonical snapshot', async () => {
     const dashboard = await request(app).get('/api/v1/canonical/dashboard').set(headers(ORG_A, USER_A, 'session-a'));
     const analytics = await request(app).get('/api/v1/canonical/analytics').set(headers(ORG_A, USER_A, 'session-a'));

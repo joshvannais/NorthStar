@@ -176,12 +176,28 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
       'public/dashboard/calendar.html',
       'public/dashboard/command-center.html',
       'public/dashboard/polaris.html',
-      'public/dashboard/executive-brief.html',
+      'public/dashboard.html',
     ];
     for (const page of pages) {
       const html = source(page);
       expect(html).toContain('meta name="northstar-canonical-surfaces"');
       expect(html).toContain('/js/canonical-intelligence.js');
+    }
+  });
+
+  test('the seven ratified pages never invoke browser-side Polaris calculation', () => {
+    const pages = [
+      'public/dashboard/lead.html',
+      'public/dashboard/leads.html',
+      'public/dashboard/communications.html',
+      'public/dashboard/calendar.html',
+      'public/dashboard/command-center.html',
+      'public/dashboard/polaris.html',
+      'public/dashboard.html',
+    ];
+    for (const page of pages) {
+      const html = source(page);
+      expect(html).not.toMatch(/PolarisEngine\.(?:generateEstimate|analyzeLead)\s*\(/);
     }
   });
 

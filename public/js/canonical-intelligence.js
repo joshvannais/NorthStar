@@ -169,10 +169,48 @@
     if (!item || typeof item !== 'object' || !item.ids || typeof item.ids !== 'object') {
       throw new Error('Canonical item is malformed.');
     }
-    if (!UUID.test(String(item.ids.graph || ''))) throw new Error('Canonical graph ID is malformed.');
+    var artifactIds = ['operation', 'graph', 'customer', 'transcript', 'communication', 'opportunity', 'estimate', 'appointment', 'polarisSnapshot'];
+    if (artifactIds.some(function (key) { return !UUID.test(String(item.ids[key] || '')); })) {
+      throw new Error('Canonical artifact identity is malformed.');
+    }
+    if (!Array.isArray(item.ids.facts) || item.ids.facts.some(function (id) { return !UUID.test(String(id || '')); })) {
+      throw new Error('Canonical fact identity is malformed.');
+    }
     if (!item.calculationVersion || !DIGEST.test(String(item.snapshotDigest || '')) ||
-        !DIGEST.test(String(item.projectionDigest || '')) || !item.values || typeof item.values !== 'object' || Array.isArray(item.values)) {
+        !DIGEST.test(String(item.projectionDigest || '')) || !DIGEST.test(String(item.normalizedInputFingerprint || '')) ||
+        !item.values || typeof item.values !== 'object' || Array.isArray(item.values)) {
       throw new Error('Canonical snapshot metadata is malformed.');
+    }
+    if (!item.source || typeof item.source !== 'object' || !item.source.type || !item.source.version) {
+      throw new Error('Canonical source metadata is malformed.');
+    }
+    if (!item.businessProfile || !UUID.test(String(item.businessProfile.id || '')) ||
+        !item.businessProfile.version || !DIGEST.test(String(item.businessProfile.hash || ''))) {
+      throw new Error('Canonical Business Profile authority is malformed.');
+    }
+    if (!Array.isArray(item.supportingTranscriptFactIds) || item.supportingTranscriptFactIds.some(function (id) {
+      return !UUID.test(String(id || '')) || item.ids.facts.indexOf(id) === -1;
+    })) {
+      throw new Error('Canonical supporting fact identity is malformed.');
+    }
+    if (!Array.isArray(item.facts) || item.facts.length !== item.ids.facts.length || item.facts.some(function (fact, index) {
+      return !fact || fact.id !== item.ids.facts[index] || !UUID.test(String(fact.id || '')) ||
+        Number(fact.ordinal) !== index || !fact.variable || !fact.evidenceText || !fact.speaker ||
+        !DIGEST.test(String(fact.factFingerprint || '')) || Number.isNaN(new Date(fact.createdAt).valueOf());
+    })) {
+      throw new Error('Canonical persisted facts are malformed.');
+    }
+    var timestamps = item.timestamps;
+    var requiredTimestamps = ['operationCreatedAt', 'operationCompletedAt', 'transcriptCreatedAt', 'estimateCreatedAt', 'snapshotCreatedAt'];
+    if (!timestamps || typeof timestamps !== 'object' || requiredTimestamps.some(function (key) {
+      return typeof timestamps[key] !== 'string' || !timestamps[key] || Number.isNaN(new Date(timestamps[key]).valueOf());
+    }) || item.snapshotCreatedAt !== timestamps.snapshotCreatedAt) {
+      throw new Error('Canonical persisted timestamps are malformed.');
+    }
+    if (!item.metadata || item.metadata.operationState !== 'completed' ||
+        !DIGEST.test(String(item.metadata.operationPayloadFingerprint || '')) ||
+        !DIGEST.test(String(item.metadata.transcriptFingerprint || ''))) {
+      throw new Error('Canonical operation metadata is malformed.');
     }
     return clone(item);
   }
@@ -290,8 +328,16 @@
       readModelVersion: projection.readModelVersion,
       digest: projection.digest,
       ids: item ? item.ids : null,
+      source: item ? item.source : null,
+      facts: item ? item.facts : null,
+      normalizedInputFingerprint: item ? item.normalizedInputFingerprint : null,
+      supportingTranscriptFactIds: item ? item.supportingTranscriptFactIds : null,
       calculationVersion: item ? item.calculationVersion : null,
       snapshotDigest: item ? item.snapshotDigest : null,
+      snapshotCreatedAt: item ? item.snapshotCreatedAt : null,
+      timestamps: item ? item.timestamps : null,
+      metadata: item ? item.metadata : null,
+      businessProfile: item ? item.businessProfile : null,
       price: values ? values.customerFacingPrice : null,
       tax: values ? {
         ratePercent: values.taxRatePercent,

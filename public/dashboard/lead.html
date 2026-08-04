@@ -119,7 +119,6 @@
           if (!lead) throw new Error('not found');
           lead.caller = lead.callerName;
           lead.avgPrice = lead.estimatedPrice;
-          lead.polarisEstimate = PolarisEngine.generateEstimate(lead);
           renderLead(lead);
         }).catch(function() {
           document.getElementById('loadingState').innerHTML = '<div style="font-size:32px;margin-bottom:12px;">😕</div><div>Lead not found. <a href="/dashboard/leads" style="color:var(--brand-600);">Back to leads</a></div>';
@@ -130,7 +129,7 @@
         var container = document.getElementById('leadDetailContainer');
         var name = lead.caller || lead.customerName || 'Unknown';
         var service = lead.service || lead.serviceRequested || '—';
-        var price = lead.avgPrice ? '$' + Math.round(lead.avgPrice).toLocaleString() : '—';
+        var price = lead.avgPrice === null || lead.avgPrice === undefined ? '—' : '$' + String(lead.avgPrice);
         var phone = lead.phone || lead.phoneNumber || '—';
         var status = lead.status || 'new';
         var statusBadge = (typeof CustomerCard !== 'undefined') ? CustomerCard.getStatusBadge(status) : '<span class="call-status-badge answered">' + status + '</span>';
@@ -142,16 +141,8 @@
         var transcript = lead.transcript || '';
         var summary = lead.summary || '';
 
-        // Polaris analysis — render via PolarisUI platform (after DOM is built)
-        // The actual PolarisUI.render() call happens after container.innerHTML is set below
-        // so that the polarisContainer div exists in the DOM first.
-        var polarisData = lead.polarisEstimate || (typeof PolarisEngine !== 'undefined' ? PolarisEngine.generateEstimate(lead) : null);
-
-        // Generate estimate using M13 intelligence (async), fall back to client-side
-        function runPolarisEstimate() {
-          return polarisData;
-        }
-        runPolarisEstimate();
+        // Canonical Polaris data is projected from PostgreSQL by AppStore.
+        var polarisData = lead.canonical || null;
 
         container.innerHTML = '' +
           '<div class="lead-detail-header">' +
@@ -265,27 +256,58 @@
             '</div>' +
           '</div>';
 
-        // Render PolarisUI after DOM is built (polarisContainer div now exists)
-        if (typeof PolarisUI !== 'undefined' && polarisData) {
-          var pc = document.getElementById('polarisContainer');
-          if (pc) PolarisUI.render(pc, polarisData, { context: 'lead' });
-        }
-
-        // Fetch and render customer intelligence
-        fetchCustomerIntelligence(lead.id || '');
+        var pc = document.getElementById('polarisContainer');
+        renderCanonicalProjection(pc, polarisData);
+        fetchCustomerIntelligence(lead);
       }
 
-      function fetchCustomerIntelligence(leadId) {
-        if (!leadId) return;
+      function renderCanonicalProjection(container, canonical) {
+        if (!container) return;
+        container.replaceChildren();
+        if (!canonical || !canonical.values) {
+          var unavailable = document.createElement('div');
+          unavailable.className = 'ci-placeholder';
+          unavailable.textContent = 'Canonical intelligence unavailable.';
+          container.appendChild(unavailable);
+          return;
+        }
+        var values = canonical.values;
+        var title = document.createElement('h2');
+        title.textContent = 'Canonical Polaris';
+        container.appendChild(title);
+        var card = document.createElement('div');
+        card.className = 'lead-detail-card';
+        [
+          ['Customer price', values.customerFacingPrice],
+          ['Scope', values.service && values.service.scope],
+          ['Labor', { charge: values.laborCharge, knownInternalCost: values.knownInternalLaborCost, productionHours: values.estimatedProductionDurationHours }],
+          ['Travel', values.travel],
+          ['Profit', { gross: values.grossProfit, grossMarginPercent: values.grossMarginPercent, net: values.netProfit, netMarginPercent: values.netMarginPercent }],
+          ['Confidence', values.confidence],
+          ['Risk', values.risk],
+          ['Recommendations', values.recommendedActions],
+          ['Snapshot digest', canonical.snapshotDigest],
+        ].forEach(function (entry) {
+          var row = document.createElement('div');
+          row.style.marginBottom = '8px';
+          var label = document.createElement('strong');
+          label.textContent = entry[0] + ': ';
+          var value = document.createElement('span');
+          value.textContent = typeof entry[1] === 'object'
+            ? JSON.stringify(entry[1])
+            : String(entry[1] === null || entry[1] === undefined ? 'not calculated' : entry[1]);
+          row.appendChild(label);
+          row.appendChild(value);
+          card.appendChild(row);
+        });
+        container.appendChild(card);
+      }
+
+      function fetchCustomerIntelligence(lead) {
+        if (!lead) return;
         var ciContainer = document.getElementById('customerIntelligenceContainer');
         if (!ciContainer) return;
-
-        var item = PolarisEngine.generateEstimate({ id: leadId });
-        if (item && window.PolarisUI) {
-          PolarisUI.render(ciContainer, item, { context: 'lead' });
-        } else {
-          ciContainer.innerHTML = '<div class="ci-placeholder">Canonical intelligence unavailable.</div>';
-        }
+        renderCanonicalProjection(ciContainer, lead.canonical || null);
       }
 
       function renderCustomerIntelligence(container, ci) {

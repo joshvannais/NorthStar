@@ -9,7 +9,7 @@ const {
   requireVerifiedExternalAction,
 } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
-const { sha256, stableValue } = require('../services/businessProfileAdapter');
+const { sha256, stableStringify, stableValue } = require('../services/businessProfileAdapter');
 const { bindIntegrationOwner } = require('../services/organizationAuthority');
 
 const READ_MODEL_VERSION = 'm19-part3-read-v1';
@@ -72,21 +72,60 @@ function queryFilters(req) {
 
 const GRAPH_SELECT = `
   SELECT o.id AS operation_id, o.graph_id, o.state AS operation_state,
+         o.payload_fingerprint AS operation_payload_fingerprint,
+         o.claimed_at AS operation_claimed_at, o.completed_at AS operation_completed_at,
+         o.created_at AS operation_created_at, o.updated_at AS operation_updated_at,
          c.id AS customer_id, c.name AS customer_name, c.email AS customer_email,
          c.phone AS customer_phone, c.address AS customer_address,
+         c.external_customer_id, c.created_at AS customer_created_at,
+         c.updated_at AS customer_updated_at,
          t.id AS transcript_id, t.source, t.source_version, t.external_call_id,
-         t.external_transcript_id, t.transcript_text, t.occurred_at,
+         t.external_transcript_id, t.transcript_text,
+         t.normalized_fingerprint AS transcript_fingerprint,
+         t.occurred_at AS transcript_occurred_at, t.created_at AS transcript_created_at,
          cm.id AS communication_id, cm.channel, cm.direction, cm.subject,
-         cm.duration_seconds,
+         cm.external_communication_id, cm.duration_seconds,
+         cm.occurred_at AS communication_occurred_at,
+         cm.created_at AS communication_created_at,
          op.id AS opportunity_id, op.status AS opportunity_status,
          op.service_type, op.job_scope, op.appointment_preference,
+         op.created_at AS opportunity_created_at, op.updated_at AS opportunity_updated_at,
          e.id AS estimate_id, e.currency, e.customer_price, e.line_items,
-         a.id AS appointment_id, a.preference, a.scheduled_start, a.scheduled_end,
-         a.status AS appointment_status,
+         e.calculation_version AS estimate_calculation_version,
+         e.normalized_input_fingerprint AS estimate_normalized_input_fingerprint,
+         e.business_profile_id AS estimate_business_profile_id,
+         e.business_profile_version AS estimate_business_profile_version,
+         e.business_profile_hash AS estimate_business_profile_hash,
+         e.calculation_output AS estimate_calculation_output,
+         e.snapshot_digest AS estimate_snapshot_digest,
+         e.created_at AS estimate_created_at,
+         a.id AS appointment_id, a.external_appointment_id, a.preference,
+         a.scheduled_start, a.scheduled_end, a.status AS appointment_status,
+         a.created_at AS appointment_created_at, a.updated_at AS appointment_updated_at,
          ps.id AS polaris_snapshot_id, ps.calculation_version,
          ps.normalized_input_fingerprint, ps.business_profile_id, ps.business_profile_version,
          ps.business_profile_hash, ps.supporting_fact_ids, ps.snapshot,
-         ps.snapshot_digest, ps.created_at AS snapshot_created_at
+         ps.snapshot_digest, ps.created_at AS snapshot_created_at,
+         COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+             'id', f.id,
+             'ordinal', f.ordinal,
+             'variable', f.fact_type,
+             'status', f.value ->> 'status',
+             'normalizedValue', f.value -> 'value',
+             'clientFactId', f.value ->> 'clientFactId',
+             'evidenceText', f.evidence_text,
+             'speaker', f.speaker,
+             'confidence', f.confidence,
+             'sourceStart', f.source_start,
+             'sourceEnd', f.source_end,
+             'factFingerprint', f.fact_fingerprint,
+             'createdAt', f.created_at
+           ) ORDER BY f.ordinal)
+             FROM canonical_facts f
+            WHERE f.organization_id = o.organization_id
+              AND f.operation_id = o.id
+         ), '[]'::jsonb) AS facts
     FROM canonical_operations o
     JOIN canonical_transcripts t
       ON t.organization_id = o.organization_id AND t.operation_id = o.id
@@ -103,7 +142,83 @@ const GRAPH_SELECT = `
     JOIN canonical_polaris_snapshots ps
       ON ps.organization_id = o.organization_id AND ps.operation_id = o.id`;
 
+function timestamp(value, field) {
+  if (value === null || value === undefined) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) {
+    const error = new Error('Canonical ' + field + ' is not a valid timestamp.');
+    error.code = 'CANONICAL_PROJECTION_CONTRADICTION';
+    throw error;
+  }
+  return parsed.toISOString();
+}
+
+function persistedFacts(row) {
+  return (Array.isArray(row.facts) ? row.facts : []).map(function (fact) {
+    return {
+      id: fact.id,
+      ordinal: Number(fact.ordinal),
+      variable: fact.variable,
+      status: fact.status,
+      normalizedValue: fact.normalizedValue,
+      clientFactId: fact.clientFactId || null,
+      evidenceText: fact.evidenceText,
+      speaker: fact.speaker,
+      confidence: fact.confidence === null || fact.confidence === undefined ? null : Number(fact.confidence),
+      sourceStart: fact.sourceStart === null || fact.sourceStart === undefined ? null : Number(fact.sourceStart),
+      sourceEnd: fact.sourceEnd === null || fact.sourceEnd === undefined ? null : Number(fact.sourceEnd),
+      factFingerprint: fact.factFingerprint,
+      createdAt: timestamp(fact.createdAt, 'fact createdAt'),
+    };
+  });
+}
+
+function assertPersistedSnapshotAgreement(row) {
+  const persistedPrice = row.customer_price === null || row.customer_price === undefined
+    ? null
+    : Number(row.customer_price);
+  const snapshotPriceValue = row.snapshot && row.snapshot.customerFacingPrice;
+  const snapshotPrice = snapshotPriceValue === null || snapshotPriceValue === undefined
+    ? null
+    : Number(snapshotPriceValue);
+  const matches = row.snapshot_digest === row.estimate_snapshot_digest &&
+    sha256(row.snapshot) === row.snapshot_digest &&
+    stableStringify(row.snapshot) === stableStringify(row.estimate_calculation_output) &&
+    row.calculation_version === row.estimate_calculation_version &&
+    row.normalized_input_fingerprint === row.estimate_normalized_input_fingerprint &&
+    row.business_profile_id === row.estimate_business_profile_id &&
+    row.business_profile_version === row.estimate_business_profile_version &&
+    row.business_profile_hash === row.estimate_business_profile_hash &&
+    stableStringify(row.line_items) === stableStringify(row.snapshot && row.snapshot.pricingLineItems) &&
+    persistedPrice === snapshotPrice;
+  if (!matches) {
+    const error = new Error('Persisted canonical estimate and Polaris snapshot disagree.');
+    error.code = 'CANONICAL_PROJECTION_CONTRADICTION';
+    throw error;
+  }
+}
+
 function projectRow(row) {
+  assertPersistedSnapshotAgreement(row);
+  const facts = persistedFacts(row);
+  const timestamps = {
+    operationClaimedAt: timestamp(row.operation_claimed_at, 'operation claimedAt'),
+    operationCreatedAt: timestamp(row.operation_created_at, 'operation createdAt'),
+    operationCompletedAt: timestamp(row.operation_completed_at, 'operation completedAt'),
+    operationUpdatedAt: timestamp(row.operation_updated_at, 'operation updatedAt'),
+    customerCreatedAt: timestamp(row.customer_created_at, 'customer createdAt'),
+    customerUpdatedAt: timestamp(row.customer_updated_at, 'customer updatedAt'),
+    transcriptOccurredAt: timestamp(row.transcript_occurred_at, 'transcript occurredAt'),
+    transcriptCreatedAt: timestamp(row.transcript_created_at, 'transcript createdAt'),
+    communicationOccurredAt: timestamp(row.communication_occurred_at, 'communication occurredAt'),
+    communicationCreatedAt: timestamp(row.communication_created_at, 'communication createdAt'),
+    opportunityCreatedAt: timestamp(row.opportunity_created_at, 'opportunity createdAt'),
+    opportunityUpdatedAt: timestamp(row.opportunity_updated_at, 'opportunity updatedAt'),
+    estimateCreatedAt: timestamp(row.estimate_created_at, 'estimate createdAt'),
+    appointmentCreatedAt: timestamp(row.appointment_created_at, 'appointment createdAt'),
+    appointmentUpdatedAt: timestamp(row.appointment_updated_at, 'appointment updatedAt'),
+    snapshotCreatedAt: timestamp(row.snapshot_created_at, 'snapshot createdAt'),
+  };
   const projection = {
     readModelVersion: READ_MODEL_VERSION,
     legacy: false,
@@ -117,12 +232,16 @@ function projectRow(row) {
       estimate: row.estimate_id,
       appointment: row.appointment_id,
       polarisSnapshot: row.polaris_snapshot_id,
+      facts: facts.map(function (fact) { return fact.id; }),
     },
     source: {
       type: row.source,
       version: row.source_version,
+      externalCustomerId: row.external_customer_id,
       externalCallId: row.external_call_id,
       externalTranscriptId: row.external_transcript_id,
+      externalCommunicationId: row.external_communication_id,
+      externalAppointmentId: row.external_appointment_id,
     },
     customer: {
       id: row.customer_id,
@@ -134,7 +253,7 @@ function projectRow(row) {
     transcript: {
       id: row.transcript_id,
       text: row.transcript_text,
-      occurredAt: row.occurred_at,
+      occurredAt: timestamps.transcriptOccurredAt,
       durationSeconds: row.duration_seconds,
     },
     communication: {
@@ -163,6 +282,7 @@ function projectRow(row) {
       scheduledEnd: row.scheduled_end,
       status: row.appointment_status,
     },
+    facts,
     calculationVersion: row.calculation_version,
     normalizedInputFingerprint: row.normalized_input_fingerprint,
     businessProfileInputVersion: row.business_profile_version,
@@ -171,12 +291,30 @@ function projectRow(row) {
     supportingTranscriptFactIds: row.supporting_fact_ids,
     snapshotDigest: row.snapshot_digest,
     snapshot: row.snapshot,
-    snapshotCreatedAt: row.snapshot_created_at,
+    snapshotCreatedAt: timestamps.snapshotCreatedAt,
+    timestamps,
+    metadata: {
+      operationState: row.operation_state,
+      operationPayloadFingerprint: row.operation_payload_fingerprint,
+      transcriptFingerprint: row.transcript_fingerprint,
+    },
   };
   projection.projectionDigest = sha256({
     readModelVersion: projection.readModelVersion,
     ids: projection.ids,
+    source: projection.source,
+    facts: projection.facts,
+    normalizedInputFingerprint: projection.normalizedInputFingerprint,
+    supportingTranscriptFactIds: projection.supportingTranscriptFactIds,
+    calculationVersion: projection.calculationVersion,
     snapshotDigest: projection.snapshotDigest,
+    timestamps: projection.timestamps,
+    metadata: projection.metadata,
+    businessProfile: {
+      id: projection.businessProfileAuthorityId,
+      version: projection.businessProfileInputVersion,
+      hash: projection.businessProfileInputHash,
+    },
   });
   return projection;
 }
@@ -290,10 +428,16 @@ function surfaceProjection(surface, items, context) {
     items: items.map(function (item) {
       return {
         ids: item.ids,
+        source: item.source,
+        facts: item.facts,
+        normalizedInputFingerprint: item.normalizedInputFingerprint,
+        supportingTranscriptFactIds: item.supportingTranscriptFactIds,
         calculationVersion: item.calculationVersion,
         snapshotDigest: item.snapshotDigest,
         projectionDigest: item.projectionDigest,
         snapshotCreatedAt: item.snapshotCreatedAt,
+        timestamps: item.timestamps,
+        metadata: item.metadata,
         businessProfile: {
           id: item.businessProfileAuthorityId,
           version: item.businessProfileInputVersion,

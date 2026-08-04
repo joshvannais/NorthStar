@@ -150,8 +150,12 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start server
-async function start() {
+async function start(options) {
   config.validateRuntime();
+  const listenHost = options && options.host ? String(options.host) : null;
+  if (listenHost && listenHost !== '127.0.0.1' && listenHost !== '::1') {
+    throw new Error('Explicit server host must be loopback');
+  }
   const databaseReady = await db.initDatabase();
   if (!databaseReady) {
     throw new Error('PostgreSQL startup authority is unavailable');
@@ -162,8 +166,8 @@ async function start() {
   await audit.ensureTable();
 
 
-  const server = app.listen(PORT, () => {
-    const baseUrl = `http://localhost:${PORT}`;
+  const onListening = () => {
+    const baseUrl = `http://${listenHost || 'localhost'}:${PORT}`;
     console.log(`
 ╔══════════════════════════════════════════════╗
 ║      Northstar Solutions — Platform v1.0     ║
@@ -191,7 +195,10 @@ async function start() {
     console.log(`  POST ${baseUrl}/api/auth/logout          → Revoke session`);
     console.log(`  GET  ${baseUrl}/api/auth/me              → Current user`);
     console.log('');
-  });
+  };
+  const server = listenHost
+    ? app.listen(PORT, listenHost, onListening)
+    : app.listen(PORT, onListening);
 
   server.once('close', () => {
     voiceWebhook.shutdown();

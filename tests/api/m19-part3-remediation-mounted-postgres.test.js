@@ -998,85 +998,98 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     });
   });
 
-  test('mounted simulation preserves the exact controlled fence scenario and durable replay contract', async () => {
-    const controlled = {
-      name: 'Avery Cedar',
+  test('mounted live simulation retains its generated flow and returns the persisted post-call Polaris calculation', async () => {
+    const liveRequest = {
+      name: 'Avery Live Simulation',
       phone: '+15555550101',
-      email: 'avery.cedar@example.test',
-      address: { line1: '100 North Star Way', city: 'Testville', state: 'NY', postalCode: '10001' },
+      email: 'avery.live@example.test',
       service: 'fence',
-      sessionId: 'm19-part3-session-a',
-      externalTranscriptId: 'm19-part3-transcript-001',
-      externalCommunicationId: 'm19-part3-communication-001',
-      externalAppointmentId: 'm19-part3-appointment-001',
-      occurredAt: '2026-08-04T13:00:00.000Z',
-      callDurationSeconds: 242,
-      transcript: [
-        { turnId: 'turn-1', speaker: 'customer', text: 'I need a new 100-foot six-foot cedar fence and the existing fence removed.' },
-        { turnId: 'turn-2', speaker: 'customer', text: 'Include one walk gate. Permits are required. Weekday mornings work best. This is not an emergency.' },
-      ],
-      facts: [
-        { variable: 'linearFeet', normalizedValue: 100, evidenceText: '100-foot cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
-        { variable: 'height', normalizedValue: 6, evidenceText: 'six-foot cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
-        { variable: 'material', normalizedValue: 'cedar', evidenceText: 'cedar fence', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
-        { variable: 'removalRequired', normalizedValue: true, evidenceText: 'existing fence removed', speaker: 'customer', evidenceTurnId: 'turn-1', confidence: 1 },
-        { variable: 'gates', normalizedValue: [{ type: 'walk', width: 4 }], evidenceText: 'one walk gate', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
-        { variable: 'permitsRequired', normalizedValue: true, evidenceText: 'permits are required', speaker: 'customer', evidenceTurnId: 'turn-2', confidence: 1 },
-      ],
-      scope: {
-        jobType: 'replace', linearFeet: 100, height: 6, material: 'cedar',
-        removalRequired: true, gates: [{ type: 'walk', width: 4 }], permitsRequired: true,
-      },
-      appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
-      travel: { source: 'controlled-loopback-map', minutes: 35, distanceMiles: 18 },
+      description: 'Existing live simulation request.',
+      sessionId: 'm19-part3-live-session',
+      estimatedValue: 999999,
+      transcript: [{ speaker: 'customer', text: 'THIS INPUT MUST NOT REPLACE THE GENERATED TRANSCRIPT' }],
+      facts: [{ variable: 'linearFeet', normalizedValue: 9999 }],
+      scope: { linearFeet: 9999, material: 'not-a-generated-material' },
+      travel: { source: 'not-a-live-input', minutes: 999, distanceMiles: 999 },
+      callDurationSeconds: 999,
+      externalTranscriptId: 'not-a-live-input',
     };
     const first = await request(app)
       .post('/api/v1/simulations/leads')
       .set(auth(USERS.owner))
-      .set('Idempotency-Key', 'm19-part3-fence-001')
-      .send(controlled);
+      .set('Idempotency-Key', 'm19-part3-live-flow-001')
+      .send(liveRequest);
     expect(first.status).toBe(201);
-    expect(first.body.snapshot).toMatchObject({
-      service: { scope: controlled.scope },
-      appointmentPreference: controlled.appointmentPreference,
-      travel: controlled.travel,
-      callDurationSeconds: controlled.callDurationSeconds,
-      risk: { emergency: false },
+    expect(first.body.sessionId).toBe(liveRequest.sessionId);
+    expect(first.body.snapshot.service.key).toBe('fence');
+    expect(first.body.snapshot.service.scope).not.toEqual(liveRequest.scope);
+    expect(first.body.snapshot.travel).toEqual({
+      minutes: null,
+      distanceMiles: null,
+      source: null,
+      customerCharge: null,
+      knownInternalCost: null,
     });
+    expect(first.body.snapshot.callDurationSeconds).toBeNull();
+    expect(first.body.transcript).not.toContainEqual(liveRequest.transcript[0]);
+    expect(first.body.transcript.map(turn => turn.text).join('\n')).not.toContain('THIS INPUT MUST NOT REPLACE');
+    expect(first.body.summary.estimatedValue).toBe(first.body.snapshot.customerFacingPrice);
+    expect(first.body.polaris.customerFacingPrice).toBe(first.body.snapshot.customerFacingPrice);
+    expect(first.body.snapshot.customerFacingPrice).not.toBe(liveRequest.estimatedValue);
+
     const replay = await request(app)
       .post('/api/v1/simulations/leads')
       .set(auth(USERS.owner))
-      .set('Idempotency-Key', 'm19-part3-fence-001')
-      .send(controlled);
+      .set('Idempotency-Key', 'm19-part3-live-flow-001')
+      .send(liveRequest);
     expect(replay.status).toBe(201);
     expect(replay.body).toEqual(first.body);
+
+    const ignoredInputChange = await request(app)
+      .post('/api/v1/simulations/leads')
+      .set(auth(USERS.owner))
+      .set('Idempotency-Key', 'm19-part3-live-flow-001')
+      .send({ ...liveRequest, scope: { linearFeet: 1 }, callDurationSeconds: 1 });
+    expect(ignoredInputChange.status).toBe(201);
+    expect(ignoredInputChange.body).toEqual(first.body);
+
     const conflict = await request(app)
       .post('/api/v1/simulations/leads')
       .set(auth(USERS.owner))
-      .set('Idempotency-Key', 'm19-part3-fence-001')
-      .send({ ...controlled, scope: { ...controlled.scope, linearFeet: 101 } });
+      .set('Idempotency-Key', 'm19-part3-live-flow-001')
+      .send({ ...liveRequest, name: 'Changed Accepted Live Name' });
     expect(conflict.status).toBe(409);
     expect(conflict.body.error.code).toBe('IDEMPOTENCY_FINGERPRINT_CONFLICT');
 
     const persisted = await db.getPool().query(
       `SELECT t.external_call_id, t.external_transcript_id, t.occurred_at,
-              cm.external_communication_id, cm.duration_seconds,
-              a.external_appointment_id
-         FROM canonical_transcripts t
-         JOIN canonical_communications cm
-           ON cm.organization_id = t.organization_id AND cm.operation_id = t.operation_id
-         JOIN canonical_appointments a
-           ON a.organization_id = t.organization_id AND a.operation_id = t.operation_id
-        WHERE t.organization_id = $1 AND t.graph_id = $2`,
+               cm.external_communication_id, cm.duration_seconds,
+               a.external_appointment_id,
+               e.calculation_output, e.snapshot_digest AS estimate_digest,
+               ps.snapshot, ps.snapshot_digest
+          FROM canonical_transcripts t
+          JOIN canonical_communications cm
+            ON cm.organization_id = t.organization_id AND cm.operation_id = t.operation_id
+          JOIN canonical_appointments a
+            ON a.organization_id = t.organization_id AND a.operation_id = t.operation_id
+          JOIN canonical_estimates e
+            ON e.organization_id = t.organization_id AND e.operation_id = t.operation_id
+          JOIN canonical_polaris_snapshots ps
+            ON ps.organization_id = t.organization_id AND ps.operation_id = t.operation_id
+         WHERE t.organization_id = $1 AND t.graph_id = $2`,
       [ORG_A, first.body.graphId]
     );
     expect(persisted.rows).toHaveLength(1);
     expect(persisted.rows[0]).toMatchObject({
-      external_call_id: controlled.sessionId + ':call',
-      external_transcript_id: controlled.externalTranscriptId,
-      external_communication_id: controlled.externalCommunicationId,
-      external_appointment_id: controlled.externalAppointmentId,
-      duration_seconds: controlled.callDurationSeconds,
+      external_call_id: liveRequest.sessionId + ':call',
+      external_transcript_id: liveRequest.sessionId + ':transcript',
+      external_communication_id: liveRequest.sessionId + ':communication',
+      external_appointment_id: liveRequest.sessionId + ':appointment',
+      duration_seconds: null,
     });
+    expect(persisted.rows[0].snapshot).toEqual(first.body.snapshot);
+    expect(persisted.rows[0].calculation_output).toEqual(first.body.snapshot);
+    expect(persisted.rows[0].estimate_digest).toBe(first.body.snapshotDigest);
+    expect(persisted.rows[0].snapshot_digest).toBe(first.body.snapshotDigest);
   });
 });

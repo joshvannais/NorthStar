@@ -46,6 +46,7 @@ function eventBuffer(id, type, created, object, apiVersion = TEST_ENV.STRIPE_API
 
 function invoiceObject(input) {
   const amount = input.amount === undefined ? 9900 : input.amount;
+  const currency = input.currency || 'usd';
   const amountPaid = input.amountPaid === undefined ? (input.paid ? amount : 0) : input.amountPaid;
   const amountDue = input.amountDue === undefined ? amount : input.amountDue;
   const total = input.total === undefined ? amount : input.total;
@@ -54,7 +55,7 @@ function invoiceObject(input) {
     id: input.id,
     object: 'invoice',
     customer: input.customerId,
-    currency: 'usd',
+    currency,
     paid: input.paid,
     status: input.paid ? 'paid' : 'open',
     amount_paid: amountPaid,
@@ -81,7 +82,7 @@ function invoiceObject(input) {
     lines: {
       data: [{
         amount,
-        currency: 'usd',
+        currency: input.lineCurrency || currency,
         quantity: input.quantity === undefined ? 1 : input.quantity,
         proration: input.lineProration === true,
         period: { start: input.periodStart, end: input.periodEnd },
@@ -335,6 +336,97 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
     providerCalls.length = 0;
   });
 
+  test('an unexpired accepted Checkout replays its durable safe result without another provider call', async () => {
+    const originalNow = controlledNow;
+    const callStart = providerCalls.length;
+    try {
+      const signup = await request(app).post('/api/auth/signup').send({
+        name: 'Accepted Replay Owner', businessName: 'Accepted Replay Company',
+        email: 'accepted-replay.b2@example.test', password: 'Accepted-replay-password-123!', phone: '',
+      });
+      expect(signup.status).toBe(202);
+      const verification = await request(app).post('/api/auth/verify-email').send({
+        token: linkToken(capture.messages.at(-1)),
+      });
+      expect(verification.status).toBe(200);
+      const login = await request(app).post('/api/auth/login').send({
+        email: 'accepted-replay.b2@example.test', password: 'Accepted-replay-password-123!',
+      });
+      const identity = (await pool.query(
+        "SELECT organization_id FROM users WHERE email_normalized = 'accepted-replay.b2@example.test'"
+      )).rows[0];
+      const headers = { cookie: cookieHeader(login), csrf: csrf(login) };
+
+      const first = await request(app)
+        .post('/api/billing/checkout')
+        .set('Cookie', headers.cookie)
+        .set('X-CSRF-Token', headers.csrf)
+        .send({ planKey: 'starter' });
+      expect(first.status).toBe(201);
+      expect(providerCalls).toHaveLength(callStart + 1);
+      const firstOperation = (await pool.query(
+        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id,
+                failure_code, created_at, updated_at, expires_at
+           FROM billing_provider_operations WHERE organization_id = $1`,
+        [identity.organization_id]
+      )).rows[0];
+      expect(firstOperation.status).toBe('accepted');
+
+      const replay = await request(app)
+        .post('/api/billing/checkout')
+        .set('Cookie', headers.cookie)
+        .set('X-CSRF-Token', headers.csrf)
+        .send({ planKey: 'starter' });
+      expect(replay.status).toBe(201);
+      expect(replay.body).toEqual(first.body);
+      expect(providerCalls).toHaveLength(callStart + 1);
+      const replayOperation = (await pool.query(
+        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id,
+                failure_code, created_at, updated_at, expires_at
+           FROM billing_provider_operations WHERE organization_id = $1`,
+        [identity.organization_id]
+      )).rows[0];
+      expect(replayOperation).toEqual(firstOperation);
+
+      const conflictingPlan = await request(app)
+        .post('/api/billing/checkout')
+        .set('Cookie', headers.cookie)
+        .set('X-CSRF-Token', headers.csrf)
+        .send({ planKey: 'professional' });
+      expect(conflictingPlan.status).toBe(409);
+      expect(conflictingPlan.body.code).toBe('billing_checkout_pending');
+      expect(providerCalls).toHaveLength(callStart + 1);
+      expect((await pool.query(
+        `SELECT id, request_fingerprint, idempotency_key, status, provider_object_id,
+                failure_code, created_at, updated_at, expires_at
+           FROM billing_provider_operations WHERE organization_id = $1`,
+        [identity.organization_id]
+      )).rows[0]).toEqual(firstOperation);
+
+      controlledNow = new Date(originalNow.getTime() + 31 * 60000);
+      const recovered = await request(app)
+        .post('/api/billing/checkout')
+        .set('Cookie', headers.cookie)
+        .set('X-CSRF-Token', headers.csrf)
+        .send({ planKey: 'starter' });
+      expect(recovered.status).toBe(201);
+      expect(providerCalls).toHaveLength(callStart + 2);
+      const operations = (await pool.query(
+        `SELECT id, idempotency_key, status, created_at, updated_at, expires_at
+           FROM billing_provider_operations WHERE organization_id = $1 ORDER BY created_at, id`,
+        [identity.organization_id]
+      )).rows;
+      expect(operations).toHaveLength(2);
+      expect(operations.map(item => item.status).sort()).toEqual(['accepted', 'expired']);
+      expect(new Set(operations.map(item => item.id)).size).toBe(2);
+      expect(new Set(operations.map(item => item.idempotency_key)).size).toBe(2);
+    } finally {
+      controlledNow = originalNow;
+      checkoutResponseMode = 'success';
+      providerCalls.length = callStart;
+    }
+  });
+
   test('owner-only Checkout ignores tenant and amount tampering and is concurrency bounded', async () => {
     const tampered = await request(app)
       .post('/api/billing/checkout')
@@ -453,6 +545,173 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
       stripe_customer_id: 'cus_synthetic_b2',
       stripe_subscription_id: 'sub_synthetic_b2',
       billing_plan_key: 'starter',
+    });
+    expect((await pool.query(
+      `SELECT status FROM billing_provider_operations
+        WHERE organization_id = $1 AND split_part(provider_object_id, '|', 1) = 'cs_synthetic_b2'`,
+      [owner.organization_id]
+    )).rows[0].status).toBe('completed');
+  });
+
+  test('signed supported semantic rejections durably bind their exact payload before any authority change', async () => {
+    const created = Math.floor(controlledNow.getTime() / 1000) + 2;
+    const periodStart = 1785542400;
+    const periodEnd = 1788220800;
+    const structuralCases = [
+      ['line_amount', { amount: 9800 }, 'invoice_evidence_rejected'],
+      ['price', { priceId: 'price_professional_synthetic' }, 'invoice_evidence_rejected'],
+      ['line_currency', { lineCurrency: 'eur' }, 'invoice_evidence_rejected'],
+      ['top_currency', { currency: 'eur' }, 'invoice_evidence_rejected'],
+      ['period', { periodEnd: periodStart + 86400 }, 'invoice_evidence_rejected'],
+      ['quantity', { quantity: 2 }, 'invoice_payment_evidence_rejected'],
+    ];
+    let invalidLineRaw;
+    let invalidLineHash;
+    for (let index = 0; index < structuralCases.length; index += 1) {
+      const [label, overrides, reason] = structuralCases[index];
+      const eventId = `evt_semantic_${label}_b2`;
+      const raw = Buffer.concat([
+        Buffer.from('\n  ', 'utf8'),
+        eventBuffer(eventId, 'invoice.paid', created + index, invoiceObject({
+          id: `in_semantic_${label}_b2`,
+          customerId: 'cus_synthetic_b2', subscriptionId: 'sub_synthetic_b2',
+          organizationId: owner.organization_id, paid: true,
+          periodStart, periodEnd, ...overrides,
+        })),
+        Buffer.from('\n', 'utf8'),
+      ]);
+      const response = await postWebhook(raw);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(expect.objectContaining({ result: 'ignored', code: reason }));
+      const durable = (await pool.query(
+        `SELECT event_type, payload_sha256, processing_status, result_code, processed_at
+           FROM billing_webhook_events WHERE provider_event_id = $1`,
+        [eventId]
+      )).rows[0];
+      expect(durable).toEqual(expect.objectContaining({
+        event_type: 'invoice.paid',
+        payload_sha256: crypto.createHash('sha256').update(raw).digest('hex'),
+        processing_status: 'ignored', result_code: reason,
+        processed_at: expect.any(Date),
+      }));
+      if (label === 'line_amount') {
+        invalidLineRaw = raw;
+        invalidLineHash = durable.payload_sha256;
+      }
+    }
+
+    const duplicate = await postWebhook(invalidLineRaw);
+    expect(duplicate.status).toBe(200);
+    expect(duplicate.body).toEqual(expect.objectContaining({
+      result: 'duplicate', code: 'invoice_evidence_rejected',
+    }));
+
+    const exactReuse = Buffer.concat([
+      Buffer.from('\n  ', 'utf8'),
+      eventBuffer('evt_semantic_line_amount_b2', 'invoice.paid', created, invoiceObject({
+        id: 'in_semantic_line_amount_b2',
+        customerId: 'cus_synthetic_b2', subscriptionId: 'sub_synthetic_b2',
+        organizationId: owner.organization_id, paid: true, periodStart, periodEnd,
+      })),
+      Buffer.from('\n', 'utf8'),
+    ]);
+    const changedPayload = await postWebhook(exactReuse);
+    expect(changedPayload.status).toBe(409);
+    expect(changedPayload.body.code).toBe('billing_event_identity_conflict');
+    expect((await pool.query(
+      `SELECT payload_sha256, processing_status, result_code
+         FROM billing_webhook_events WHERE provider_event_id = 'evt_semantic_line_amount_b2'`
+    )).rows[0]).toEqual({
+      payload_sha256: invalidLineHash,
+      processing_status: 'ignored', result_code: 'invoice_evidence_rejected',
+    });
+
+    const ownershipCases = [
+      ['organization', { organizationId: crypto.randomUUID() }, 'billing_ownership_unavailable'],
+      ['customer', { customerId: 'cus_wrong_owner_b2' }, 'billing_ownership_conflict'],
+      ['subscription', { subscriptionId: 'sub_wrong_owner_b2' }, 'billing_ownership_conflict'],
+    ];
+    for (let index = 0; index < ownershipCases.length; index += 1) {
+      const [label, overrides, reason] = ownershipCases[index];
+      const eventId = `evt_semantic_${label}_b2`;
+      const raw = eventBuffer(eventId, 'invoice.paid', created + 20 + index, invoiceObject({
+        id: `in_semantic_${label}_b2`,
+        customerId: 'cus_synthetic_b2', subscriptionId: 'sub_synthetic_b2',
+        organizationId: owner.organization_id, paid: true, periodStart, periodEnd,
+        ...overrides,
+      }));
+      const response = await postWebhook(raw);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(expect.objectContaining({ result: 'ignored', code: reason }));
+      expect((await pool.query(
+        `SELECT payload_sha256, processing_status, result_code
+           FROM billing_webhook_events WHERE provider_event_id = $1`,
+        [eventId]
+      )).rows[0]).toEqual({
+        payload_sha256: crypto.createHash('sha256').update(raw).digest('hex'),
+        processing_status: 'ignored', result_code: reason,
+      });
+    }
+
+    const concurrentRaw = eventBuffer(
+      'evt_semantic_concurrent_b2', 'invoice.paid', created + 30,
+      invoiceObject({
+        id: 'in_semantic_concurrent_b2', customerId: 'cus_synthetic_b2',
+        subscriptionId: 'sub_synthetic_b2', organizationId: owner.organization_id,
+        paid: true, periodStart, periodEnd, amount: 9800,
+      })
+    );
+    const concurrent = await Promise.all([postWebhook(concurrentRaw), postWebhook(concurrentRaw)]);
+    expect(concurrent.map(item => item.status)).toEqual([200, 200]);
+    expect(concurrent.map(item => item.body.result).sort()).toEqual(['duplicate', 'ignored']);
+    expect((await pool.query(
+      `SELECT count(*)::int AS total FROM billing_webhook_events
+        WHERE provider_event_id = 'evt_semantic_concurrent_b2'`
+    )).rows[0].total).toBe(1);
+
+    const concurrentReuseA = eventBuffer(
+      'evt_semantic_concurrent_reuse_b2', 'invoice.paid', created + 31,
+      invoiceObject({
+        id: 'in_semantic_concurrent_reuse_b2', customerId: 'cus_synthetic_b2',
+        subscriptionId: 'sub_synthetic_b2', organizationId: owner.organization_id,
+        paid: true, periodStart, periodEnd, amount: 9800,
+      })
+    );
+    const concurrentReuseB = eventBuffer(
+      'evt_semantic_concurrent_reuse_b2', 'invoice.paid', created + 31,
+      invoiceObject({
+        id: 'in_semantic_concurrent_reuse_b2', customerId: 'cus_synthetic_b2',
+        subscriptionId: 'sub_synthetic_b2', organizationId: owner.organization_id,
+        paid: true, periodStart, periodEnd, priceId: 'price_professional_synthetic',
+      })
+    );
+    const concurrentReuse = await Promise.all([
+      postWebhook(concurrentReuseA), postWebhook(concurrentReuseB),
+    ]);
+    expect(concurrentReuse.map(item => item.status).sort()).toEqual([200, 409]);
+    expect(concurrentReuse.find(item => item.status === 200).body).toEqual(expect.objectContaining({
+      result: 'ignored', code: 'invoice_evidence_rejected',
+    }));
+    expect(concurrentReuse.find(item => item.status === 409).body.code).toBe('billing_event_identity_conflict');
+    const concurrentReuseRow = (await pool.query(
+      `SELECT payload_sha256, processing_status, result_code FROM billing_webhook_events
+        WHERE provider_event_id = 'evt_semantic_concurrent_reuse_b2'`
+    )).rows[0];
+    expect([
+      crypto.createHash('sha256').update(concurrentReuseA).digest('hex'),
+      crypto.createHash('sha256').update(concurrentReuseB).digest('hex'),
+    ]).toContain(concurrentReuseRow.payload_sha256);
+    expect(concurrentReuseRow).toEqual(expect.objectContaining({
+      processing_status: 'ignored', result_code: 'invoice_evidence_rejected',
+    }));
+
+    expect((await pool.query(
+      `SELECT status, billing_authority_verified, current_period_start, current_period_end
+         FROM subscriptions WHERE organization_id = $1`,
+      [owner.organization_id]
+    )).rows[0]).toEqual({
+      status: 'trialing', billing_authority_verified: false,
+      current_period_start: null, current_period_end: null,
     });
   });
 
@@ -690,7 +949,7 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
     expect(projection.body.subscription).toEqual(expect.objectContaining({ state: 'canceled', readOnly: true }));
   });
 
-  test('conflicting provider ownership and wrong API version fail closed without event retention', async () => {
+  test('signed identity conflicts are durable ignored evidence while wrong API versions remain unclaimed', async () => {
     const invoiceIdentityConflict = eventBuffer(
       'evt_invoice_identity_conflict_b2',
       'invoice.paid',
@@ -706,12 +965,16 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
       })
     );
     const invoiceConflictResponse = await postWebhook(invoiceIdentityConflict);
-    expect(invoiceConflictResponse.status).toBe(409);
-    expect(invoiceConflictResponse.body.code).toBe('billing_invoice_identity_conflict');
+    expect(invoiceConflictResponse.status).toBe(200);
+    expect(invoiceConflictResponse.body).toEqual(expect.objectContaining({
+      result: 'ignored', code: 'billing_invoice_identity_conflict',
+    }));
     expect((await pool.query(
-      `SELECT count(*)::int AS total FROM billing_webhook_events
+      `SELECT processing_status, result_code FROM billing_webhook_events
         WHERE provider_event_id = 'evt_invoice_identity_conflict_b2'`
-    )).rows[0].total).toBe(0);
+    )).rows[0]).toEqual({
+      processing_status: 'ignored', result_code: 'billing_invoice_identity_conflict',
+    });
 
     const secondOrganization = crypto.randomUUID();
     await pool.query(
@@ -732,11 +995,14 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
       metadata: { northstar_organization_id: secondOrganization, northstar_plan_key: 'starter' },
     });
     const conflictResponse = await postWebhook(conflict);
-    expect(conflictResponse.status).toBe(409);
-    expect(conflictResponse.body.code).toBe('billing_ownership_conflict');
+    expect(conflictResponse.status).toBe(200);
+    expect(conflictResponse.body).toEqual(expect.objectContaining({
+      result: 'ignored', code: 'billing_ownership_conflict',
+    }));
     expect((await pool.query(
-      `SELECT count(*)::int AS total FROM billing_webhook_events WHERE provider_event_id = 'evt_conflict_b2'`
-    )).rows[0].total).toBe(0);
+      `SELECT processing_status, result_code FROM billing_webhook_events
+        WHERE provider_event_id = 'evt_conflict_b2'`
+    )).rows[0]).toEqual({ processing_status: 'ignored', result_code: 'billing_ownership_conflict' });
 
     const wrongVersion = eventBuffer('evt_version_b2', 'payment_intent.succeeded', created, {
       id: 'pi_version_b2', object: 'payment_intent',

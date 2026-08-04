@@ -2,6 +2,15 @@
 
 const db = require('../db');
 
+const CHECKOUT_RESULT_SEPARATOR = '|';
+const PERMANENT_WEBHOOK_REJECTIONS = new Set([
+  'billing_event_unsupported_schema',
+  'billing_invoice_identity_conflict',
+  'billing_ownership_conflict',
+  'billing_ownership_unavailable',
+  'billing_plan_conflict',
+]);
+
 class BillingPersistenceError extends Error {
   constructor(code, cause) {
     super('Billing persistence authority failed');
@@ -13,6 +22,41 @@ class BillingPersistenceError extends Error {
 
 function one(result) {
   return result && Array.isArray(result.rows) ? result.rows[0] || null : null;
+}
+
+function safeCheckoutUrl(value) {
+  let url;
+  try { url = new URL(value); } catch (_error) { return null; }
+  if (url.protocol !== 'https:' || url.hostname !== 'checkout.stripe.com' ||
+      url.username || url.password || url.hash) return null;
+  return url.toString();
+}
+
+function encodeCheckoutResult(value) {
+  const checkoutId = value && typeof value.id === 'string' && value.id.length <= 255 &&
+    /^cs_[A-Za-z0-9_]+$/.test(value.id) ? value.id : null;
+  const url = safeCheckoutUrl(value && value.url);
+  if (!checkoutId || !url || url.includes(CHECKOUT_RESULT_SEPARATOR)) {
+    throw new BillingPersistenceError('billing_checkout_result_unavailable');
+  }
+  const encoded = checkoutId + CHECKOUT_RESULT_SEPARATOR + url;
+  if (encoded.length > 255) {
+    throw new BillingPersistenceError('billing_checkout_result_unavailable');
+  }
+  return encoded;
+}
+
+function decodeCheckoutResult(value, expiresAt) {
+  if (typeof value !== 'string') return null;
+  const separator = value.indexOf(CHECKOUT_RESULT_SEPARATOR);
+  if (separator < 1 || separator !== value.lastIndexOf(CHECKOUT_RESULT_SEPARATOR)) return null;
+  const checkoutId = value.slice(0, separator);
+  const storedUrl = value.slice(separator + 1);
+  const url = safeCheckoutUrl(storedUrl);
+  const expiry = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
+  if (!/^cs_[A-Za-z0-9_]+$/.test(checkoutId) || checkoutId.length > 255 ||
+      !url || url !== storedUrl || !Number.isFinite(expiry.getTime())) return null;
+  return Object.freeze({ url, expiresAt: expiry.toISOString() });
 }
 
 class BillingRepository {
@@ -126,7 +170,9 @@ class BillingRepository {
         if (current.status === 'indeterminate') {
           return { disposition: 'checkout_indeterminate', authority, operation: current };
         }
-        return { disposition: 'replay', authority, operation: current };
+        const checkout = decodeCheckoutResult(current.provider_object_id, current.expires_at);
+        if (!checkout) return { disposition: 'checkout_replay_unavailable', authority, operation: current };
+        return { disposition: 'replay', authority, operation: current, checkout };
       }
       const operation = one(await client.query(
         `INSERT INTO billing_provider_operations (
@@ -150,16 +196,27 @@ class BillingRepository {
     });
   }
 
-  async finishCheckoutOperation(operationId, status, providerObjectId, failureCode) {
-    const result = await this.requirePool().query(
-      `UPDATE billing_provider_operations
-          SET status = $2, provider_object_id = $3, failure_code = $4, updated_at = clock_timestamp()
-        WHERE id = $1 AND operation_type = 'checkout'
-          AND status IN ('requested', 'accepted', 'indeterminate')
-      RETURNING id`,
-      [operationId, status, providerObjectId || null, failureCode || null]
-    );
+  async finishCheckoutOperation(operationId, status, providerResult, failureCode) {
+    const storedResult = status === 'accepted' ? encodeCheckoutResult(providerResult) : null;
+    let result;
+    try {
+      result = await this.requirePool().query(
+        `UPDATE billing_provider_operations
+            SET status = $2, provider_object_id = $3, failure_code = $4, updated_at = clock_timestamp()
+          WHERE id = $1 AND operation_type = 'checkout'
+            AND status IN ('requested', 'accepted', 'indeterminate')
+        RETURNING id, status, provider_object_id, expires_at`,
+        [operationId, status, storedResult, failureCode || null]
+      );
+    } catch (error) {
+      if (error instanceof BillingPersistenceError) throw error;
+      throw new BillingPersistenceError('billing_persistence_unavailable', error);
+    }
     if (result.rowCount !== 1) throw new BillingPersistenceError('billing_operation_conflict');
+    if (status !== 'accepted') return null;
+    const checkout = decodeCheckoutResult(result.rows[0].provider_object_id, result.rows[0].expires_at);
+    if (!checkout) throw new BillingPersistenceError('billing_checkout_result_unavailable');
+    return checkout;
   }
 
   async applyWebhook(input) {
@@ -184,23 +241,35 @@ class BillingRepository {
         return { result: 'duplicate', code: existing.result_code };
       }
 
+      await client.query('SAVEPOINT billing_webhook_effects');
       let outcome;
-      if (input.kind === 'unsupported') outcome = { result: 'ignored', code: 'unsupported_event', organizationId: null };
-      else if (input.kind === 'invoice_payment_evidence_rejected') {
-        outcome = {
-          result: 'ignored',
-          code: 'invoice_payment_evidence_rejected',
-          organizationId: input.organizationId,
-        };
+      try {
+        if (input.kind === 'unsupported') outcome = { result: 'ignored', code: 'unsupported_event', organizationId: null };
+        else if (input.kind === 'evidence_rejected') {
+          outcome = { result: 'ignored', code: input.rejectionCode, organizationId: null };
+        } else if (input.kind === 'invoice_payment_evidence_rejected') {
+          outcome = {
+            result: 'ignored',
+            code: 'invoice_payment_evidence_rejected',
+            organizationId: input.organizationId,
+          };
+        }
+        else if (input.kind === 'checkout_completed') outcome = await this.applyCheckoutCompleted(client, input);
+        else if (input.kind === 'invoice_paid' || input.kind === 'invoice_payment_failed') {
+          outcome = await this.applyInvoice(client, input);
+        } else if (input.kind === 'subscription_updated' || input.kind === 'subscription_deleted') {
+          outcome = await this.applySubscription(client, input);
+        } else {
+          throw new BillingPersistenceError('billing_event_unsupported_schema');
+        }
+      } catch (error) {
+        if (!(error instanceof BillingPersistenceError) || !PERMANENT_WEBHOOK_REJECTIONS.has(error.code)) {
+          throw error;
+        }
+        await client.query('ROLLBACK TO SAVEPOINT billing_webhook_effects');
+        outcome = { result: 'ignored', code: error.code, organizationId: null };
       }
-      else if (input.kind === 'checkout_completed') outcome = await this.applyCheckoutCompleted(client, input);
-      else if (input.kind === 'invoice_paid' || input.kind === 'invoice_payment_failed') {
-        outcome = await this.applyInvoice(client, input);
-      } else if (input.kind === 'subscription_updated' || input.kind === 'subscription_deleted') {
-        outcome = await this.applySubscription(client, input);
-      } else {
-        throw new BillingPersistenceError('billing_event_unsupported_schema');
-      }
+      await client.query('RELEASE SAVEPOINT billing_webhook_effects');
 
       await client.query(
         `UPDATE billing_webhook_events
@@ -280,10 +349,10 @@ class BillingRepository {
       ]
     );
     await client.query(
-      `UPDATE billing_provider_operations
+        `UPDATE billing_provider_operations
           SET status = 'completed', updated_at = clock_timestamp()
         WHERE organization_id = $1 AND operation_type = 'checkout'
-          AND provider_object_id = $2
+          AND split_part(provider_object_id, '${CHECKOUT_RESULT_SEPARATOR}', 1) = $2
           AND status IN ('accepted', 'indeterminate')`,
       [row.organization_id, input.checkoutId]
     );

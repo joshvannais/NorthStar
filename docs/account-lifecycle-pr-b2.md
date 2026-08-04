@@ -63,8 +63,12 @@ paid-through boundary.
 the exact request bytes in a bounded `Buffer`; the provider adapter validates a
 bounded signature header, timestamp tolerance, and HMAC over those bytes before
 strict UTF-8 decoding or JSON parsing. Unsigned, malformed, stale, mismatched,
-wrong-version, and unsupported-schema evidence fails closed without billing
-mutation. Valid but unsupported event types are durably recorded and ignored.
+wrong-version, and unusable event-envelope evidence fails closed before an event
+claim or billing mutation. Once an authenticated envelope has a usable provider
+event ID/type and exact payload digest, supported events are claimed before
+semantic reconciliation. Permanent non-exact evidence and ownership/identity
+conflicts commit a bounded ignored reason with no billing mutation. Valid but
+unsupported event types are also durably recorded and ignored.
 
 The supported evidence is:
 
@@ -79,19 +83,25 @@ The supported evidence is:
 Migration 013 gives provider event IDs a primary key and records only event
 type, timestamp, payload digest, bounded result, and organization reference.
 Event insertion and every subscription/invoice change share one PostgreSQL
-transaction. Exact duplicate/concurrent delivery is a safe no-op; a reused
-event ID with different bytes/type conflicts; rollback leaves no event marker,
-so a truthful retry can process it. Per-object event clocks and paid-period
-comparison reject out-of-order regression. Unique indexes enforce one
-organization owner for each provider customer and subscription ID; historical
-or incoming ownership conflicts fail closed.
+transaction. A savepoint retains the authenticated payload claim while rolling
+back every attempted billing effect for permanent semantic or ownership
+rejection. Exact duplicate/concurrent delivery is a safe no-op; a reused event
+ID with different bytes/type conflicts even if the original payload was
+rejected. A genuine transient transaction failure rolls back the claim, so a
+truthful retry can process it. Per-object event clocks and paid-period comparison
+reject out-of-order regression. Unique indexes enforce one organization owner
+for each provider customer and subscription ID; historical or incoming
+ownership conflicts fail closed.
 
 Checkout creation uses a per-organization advisory transaction lock, a durable
 operation row, one active-operation partial unique index, and a stable server
 idempotency key. A concurrent duplicate cannot produce a second provider call.
-Indeterminate provider outcomes remain blocked until their bounded expiry rather
-than being retried automatically. Provider calls occur outside PostgreSQL
-transactions.
+The accepted row retains only a bounded provider Checkout ID plus the already
+validated allowlisted URL and expiry. An identical unexpired accepted request
+returns that durable safe result without provider I/O or row mutation. Accepted
+and indeterminate outcomes remain blocked until their bounded expiry; recovery
+then expires the old row and creates a new operation with a new idempotency key.
+Provider calls occur outside PostgreSQL transactions.
 
 ## Customer access and cancellation
 

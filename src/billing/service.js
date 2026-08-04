@@ -227,6 +227,19 @@ function normalizeWebhook(event, rawBody, configuration) {
   };
 }
 
+function semanticRejection(event, rawBody) {
+  let rejectionCode = 'subscription_evidence_rejected';
+  if (event.type === 'checkout.session.completed') rejectionCode = 'checkout_evidence_rejected';
+  if (event.type === 'invoice.paid' || event.type === 'invoice.payment_failed') {
+    rejectionCode = 'invoice_evidence_rejected';
+  }
+  return {
+    ...eventBase(event, rawBody),
+    kind: 'evidence_rejected',
+    rejectionCode,
+  };
+}
+
 function providerFailure(error) {
   if (!(error instanceof StripeProviderError)) return null;
   return new BillingError(503, error.code, 'Billing provider is temporarily unavailable');
@@ -292,6 +305,19 @@ class BillingService {
         'Checkout status is indeterminate until the recovery window expires'
       );
     }
+    if (acquired.disposition === 'checkout_replay_unavailable') {
+      throw new BillingError(
+        409,
+        'billing_checkout_replay_unavailable',
+        'Checkout is accepted but its safe replay result is unavailable until the recovery window expires'
+      );
+    }
+    if (acquired.disposition === 'replay') {
+      return Object.freeze({
+        checkout: acquired.checkout,
+        activationPendingWebhook: true,
+      });
+    }
     const operation = acquired.operation;
     try {
       const checkout = await this.provider.createCheckout({
@@ -302,12 +328,32 @@ class BillingService {
         idempotencyKey: operation.idempotency_key,
         expiresAt: operation.expires_at,
       });
-      await this.repository.finishCheckoutOperation(operation.id, 'accepted', checkout.id, null);
+      const durableCheckout = await this.repository.finishCheckoutOperation(
+        operation.id,
+        'accepted',
+        checkout,
+        null
+      );
       return Object.freeze({
-        checkout: Object.freeze({ url: checkout.url, expiresAt: checkout.expiresAt }),
+        checkout: durableCheckout,
         activationPendingWebhook: true,
       });
     } catch (error) {
+      if (error instanceof BillingPersistenceError) {
+        if (error.code === 'billing_checkout_result_unavailable') {
+          try {
+            await this.repository.finishCheckoutOperation(
+              operation.id,
+              'indeterminate',
+              null,
+              error.code
+            );
+          } catch (_persistenceError) {
+            throw new BillingError(503, 'billing_persistence_unavailable', 'Billing authority is temporarily unavailable');
+          }
+        }
+        throw new BillingError(503, error.code, 'Billing authority is temporarily unavailable');
+      }
       const mapped = providerFailure(error);
       if (!mapped) throw error;
       try {
@@ -399,7 +445,14 @@ class BillingService {
       }
       throw error;
     }
-    const normalized = normalizeWebhook(event, rawBody, this.configuration);
+    let normalized;
+    try {
+      normalized = normalizeWebhook(event, rawBody, this.configuration);
+    } catch (error) {
+      if (!(error instanceof BillingError) || error.code !== 'billing_webhook_unsupported_schema' ||
+          !SUPPORTED_EVENTS.has(event.type)) throw error;
+      normalized = semanticRejection(event, rawBody);
+    }
     try { return await this.repository.applyWebhook(normalized); }
     catch (error) {
       if (!(error instanceof BillingPersistenceError)) throw error;

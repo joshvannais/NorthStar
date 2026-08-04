@@ -75,9 +75,10 @@ function projectSubscription(authority, options = {}) {
 
   const billingAvailable = options.billingAvailable === true;
   const paidThroughEnded = PAID_STATES.has(state) && serverNow.getTime() >= periodEnd.getTime();
+  if (state === 'active' && paidThroughEnded) state = 'expired';
   const readOnly = state === 'expired' || (PAID_STATES.has(state) && paidThroughEnded);
   const upgradeAvailable = billingAvailable && ['trialing', 'expired'].includes(state) && !subscriptionId;
-  const portalAvailable = billingAvailable && providerId(customerId, 'cus_');
+  const portalAvailable = billingAvailable && !readOnly && providerId(customerId, 'cus_');
   const cancelAtPeriodEnd = source.cancel_at_period_end === true || source.cancelAtPeriodEnd === true;
   return Object.freeze({
     state,
@@ -89,7 +90,7 @@ function projectSubscription(authority, options = {}) {
     readOnly,
     upgradeAvailable,
     portalAvailable,
-    cancelAvailable: billingAvailable && verified && !cancelAtPeriodEnd &&
+    cancelAvailable: billingAvailable && !readOnly && verified && !cancelAtPeriodEnd &&
       ['active', 'past_due'].includes(state),
     cancelAtPeriodEnd,
     paidThrough: periodEnd ? periodEnd.toISOString() : null,

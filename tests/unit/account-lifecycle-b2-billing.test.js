@@ -185,6 +185,58 @@ describe('Account Lifecycle PR B2 billing boundary', () => {
     expect(intercepted).toHaveBeenCalledTimes(1);
   });
 
+  test('classifies a response-body deadline as one bounded indeterminate provider failure', async () => {
+    const { buildBillingConfiguration } = require('../../src/billing/config');
+    const { StripeProvider } = require('../../src/billing/stripeProvider');
+    const destinations = [];
+    const fetchImpl = jest.fn(async (url, options) => {
+      destinations.push(url);
+      return {
+        status: 200,
+        headers: { get: () => null },
+        body: {
+          getReader() {
+            return {
+              read() {
+                return new Promise((_resolve, reject) => {
+                  options.signal.addEventListener('abort', () => {
+                    const error = new Error('synthetic sensitive body abort');
+                    error.name = 'AbortError';
+                    reject(error);
+                  }, { once: true });
+                });
+              },
+              cancel: jest.fn().mockResolvedValue(undefined),
+              releaseLock: jest.fn(),
+            };
+          },
+        },
+      };
+    });
+    const provider = new StripeProvider(buildBillingConfiguration(COMPLETE_ENV, { exposeSecrets: true }), {
+      fetchImpl,
+      timeoutMs: 20,
+    });
+    const started = Date.now();
+    let failure;
+    try {
+      await provider.createPortal({
+        customerId: 'cus_synthetic',
+        idempotencyKey: 'northstar-b2-' + 'd'.repeat(64),
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(destinations).toEqual(['https://api.stripe.com/v1/billing_portal/sessions']);
+    expect(failure).toEqual(expect.objectContaining({
+      name: 'StripeProviderError', code: 'billing_provider_timeout', indeterminate: true,
+    }));
+    expect(String(failure && failure.message)).not.toContain('sensitive');
+    expect(JSON.stringify(failure)).not.toContain('synthetic sensitive body abort');
+  });
+
   test('paid and paid-through projections require verified PostgreSQL provider authority', () => {
     const { projectSubscription, canMutateInternal } = require('../../src/accounts/subscriptionPolicy');
     const base = {
@@ -223,5 +275,16 @@ describe('Account Lifecycle PR B2 billing boundary', () => {
     }, { billingAvailable: true });
     expect(canceledEnded.readOnly).toBe(true);
     expect(canMutateInternal(canceledEnded)).toBe(false);
+
+    const expiredActive = projectSubscription({
+      ...base,
+      billing_authority_verified: true,
+      server_now: '2026-09-01T00:00:00.000Z',
+    }, { billingAvailable: true });
+    expect(expiredActive).toEqual(expect.objectContaining({
+      state: 'expired', readOnly: true, portalAvailable: false, cancelAvailable: false,
+      billingAuthorityVerified: true, planKey: 'starter',
+    }));
+    expect(canMutateInternal(expiredActive)).toBe(false);
   });
 });

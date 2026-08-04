@@ -120,6 +120,15 @@
       status.textContent = 'Verify the owner email before choosing a monthly plan.';
       return;
     }
+    if (subscription.readOnly === true && subscription.billingAuthorityVerified === true) {
+      status.textContent = subscription.state === 'past_due'
+        ? 'Payment is past due and the paid-through period has ended. Billing actions are unavailable in read-only mode.'
+        : subscription.state === 'canceled'
+          ? 'The subscription is canceled and the paid-through period has ended. Billing actions are unavailable in read-only mode.'
+          : 'The authoritative paid-through period has ended. Subscription access is read-only and billing actions are unavailable.';
+      status.setAttribute('role', 'alert');
+      return;
+    }
     if (subscription.state === 'trialing' || subscription.state === 'expired') {
       status.textContent = subscription.upgradeAvailable
         ? 'Choose one monthly plan. Access changes only after a signed paid invoice is reconciled.'

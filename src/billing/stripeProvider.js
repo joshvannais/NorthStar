@@ -201,9 +201,8 @@ class StripeProvider {
       controller.abort();
     }, this.timeoutMs);
     try {
-      let response;
       try {
-        response = await this.fetchImpl(STRIPE_API_ORIGIN + pathname, {
+        const response = await this.fetchImpl(STRIPE_API_ORIGIN + pathname, {
           method: 'POST',
           redirect: 'manual',
           signal: controller.signal,
@@ -215,20 +214,21 @@ class StripeProvider {
           },
           body: form.toString(),
         });
+        if (!response || !Number.isInteger(response.status)) {
+          throw new StripeProviderError('billing_provider_malformed_response', { indeterminate: true });
+        }
+        if (response.status < 200 || response.status >= 300) {
+          try { if (response.body && response.body.cancel) await response.body.cancel(); } catch (_error) { /* bounded cleanup */ }
+          throw providerStatusError(response.status);
+        }
+        return safeJson(await readBounded(response));
       } catch (error) {
+        if (error instanceof StripeProviderError) throw error;
         if (deadlineReached || (error && error.name === 'AbortError')) {
           throw new StripeProviderError('billing_provider_timeout', { indeterminate: true });
         }
         throw new StripeProviderError('billing_provider_network_failure', { indeterminate: true });
       }
-      if (!response || !Number.isInteger(response.status)) {
-        throw new StripeProviderError('billing_provider_malformed_response', { indeterminate: true });
-      }
-      if (response.status < 200 || response.status >= 300) {
-        try { if (response.body && response.body.cancel) await response.body.cancel(); } catch (_error) { /* bounded cleanup */ }
-        throw providerStatusError(response.status);
-      }
-      return safeJson(await readBounded(response));
     } finally {
       clearTimeout(timer);
     }

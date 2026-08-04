@@ -148,6 +148,18 @@ function invoiceObject(input) {
     currency: 'usd',
     paid: true,
     status: 'paid',
+    amount_paid: 9900,
+    amount_due: 9900,
+    amount_remaining: 0,
+    total: 9900,
+    subtotal: 9900,
+    starting_balance: 0,
+    ending_balance: 0,
+    pre_payment_credit_notes_amount: 0,
+    post_payment_credit_notes_amount: 0,
+    discounts: [],
+    total_discount_amounts: [],
+    total_tax_amounts: [],
     parent: {
       subscription_details: {
         subscription: input.subscriptionId,
@@ -160,6 +172,8 @@ function invoiceObject(input) {
     lines: { data: [{
       amount: 9900,
       currency: 'usd',
+      quantity: 1,
+      proration: false,
       period: { start: input.periodStart, end: input.periodEnd },
       pricing: { price_details: { price: 'price_starter_synthetic' } },
     }] },
@@ -365,6 +379,34 @@ async function runJourney(spec, viewport, state) {
     assert.match(canceledUi.status, /canceled at period end/);
     assert.deepStrictEqual(canceledUi.labels, ['Manage billing']);
 
+    await state.pool.query(
+      `UPDATE subscriptions
+          SET status = 'active', cancel_at_period_end = FALSE,
+              current_period_start = $2, current_period_end = $3
+        WHERE organization_id = $1`,
+      [authority.organization_id, new Date(NOW.getTime() - 31 * 86400000), new Date(NOW.getTime() - 1)]
+    );
+    const expiredProjection = await page.evaluate(async () => {
+      await Promise.all([NorthStarTrialStatus.refresh(), NorthStarBillingSettings.refresh()]);
+      return NorthStarAccountSession.json('/api/account/subscription');
+    });
+    await page.waitForSelector('#northstar-trial-status[data-state="restricted"]');
+    const expiredUi = await page.evaluate(() => ({
+      banner: document.getElementById('northstar-trial-status').textContent,
+      bannerRole: document.getElementById('northstar-trial-status').getAttribute('role'),
+      status: document.getElementById('subscription-billing-status').textContent,
+      labels: Array.from(document.querySelectorAll('#subscription-billing-actions button')).map(item => item.textContent),
+    }));
+    assert.strictEqual(expiredProjection.subscription.state, 'expired');
+    assert.strictEqual(expiredProjection.subscription.readOnly, true);
+    assert.strictEqual(expiredProjection.subscription.portalAvailable, false);
+    assert.strictEqual(expiredProjection.subscription.cancelAvailable, false);
+    assert.match(expiredUi.banner, /paid-through period has ended/);
+    assert.strictEqual(expiredUi.bannerRole, 'alert');
+    assert.match(expiredUi.status, /paid-through period has ended/);
+    assert.doesNotMatch(expiredUi.status, / is active through /);
+    assert.deepStrictEqual(expiredUi.labels, []);
+
     const traceEvidence = await trace.assertSafe();
     assert.ok(state.providerCalls.slice(providerStart).every(callItem => callItem.intercepted === true));
     return {
@@ -378,6 +420,8 @@ async function runJourney(spec, viewport, state) {
       externalProviderTransmissions: 0,
       paidBannerRemovedAfterSignedInvoice: true,
       cancellationPreservedPaidThrough: true,
+      expiredActiveRestrictionVisible: true,
+      expiredActiveControlsHidden: true,
     };
   } finally {
     if (context) await context.close().catch(() => {});

@@ -123,6 +123,9 @@ class BillingRepository {
           return { disposition: 'different_checkout_pending', authority };
         }
         if (current.status === 'requested') return { disposition: 'checkout_in_progress', authority };
+        if (current.status === 'indeterminate') {
+          return { disposition: 'checkout_indeterminate', authority, operation: current };
+        }
         return { disposition: 'replay', authority, operation: current };
       }
       const operation = one(await client.query(
@@ -183,6 +186,13 @@ class BillingRepository {
 
       let outcome;
       if (input.kind === 'unsupported') outcome = { result: 'ignored', code: 'unsupported_event', organizationId: null };
+      else if (input.kind === 'invoice_payment_evidence_rejected') {
+        outcome = {
+          result: 'ignored',
+          code: 'invoice_payment_evidence_rejected',
+          organizationId: input.organizationId,
+        };
+      }
       else if (input.kind === 'checkout_completed') outcome = await this.applyCheckoutCompleted(client, input);
       else if (input.kind === 'invoice_paid' || input.kind === 'invoice_payment_failed') {
         outcome = await this.applyInvoice(client, input);

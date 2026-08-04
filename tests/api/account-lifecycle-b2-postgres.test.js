@@ -45,6 +45,11 @@ function eventBuffer(id, type, created, object, apiVersion = TEST_ENV.STRIPE_API
 }
 
 function invoiceObject(input) {
+  const amount = input.amount === undefined ? 9900 : input.amount;
+  const amountPaid = input.amountPaid === undefined ? (input.paid ? amount : 0) : input.amountPaid;
+  const amountDue = input.amountDue === undefined ? amount : input.amountDue;
+  const total = input.total === undefined ? amount : input.total;
+  const subtotal = input.subtotal === undefined ? amount : input.subtotal;
   return {
     id: input.id,
     object: 'invoice',
@@ -52,6 +57,18 @@ function invoiceObject(input) {
     currency: 'usd',
     paid: input.paid,
     status: input.paid ? 'paid' : 'open',
+    amount_paid: amountPaid,
+    amount_due: amountDue,
+    amount_remaining: input.amountRemaining === undefined ? (input.paid ? 0 : amountDue) : input.amountRemaining,
+    total,
+    subtotal,
+    starting_balance: input.startingBalance === undefined ? 0 : input.startingBalance,
+    ending_balance: input.endingBalance === undefined ? 0 : input.endingBalance,
+    pre_payment_credit_notes_amount: input.prePaymentCreditNotesAmount === undefined ? 0 : input.prePaymentCreditNotesAmount,
+    post_payment_credit_notes_amount: input.postPaymentCreditNotesAmount === undefined ? 0 : input.postPaymentCreditNotesAmount,
+    discounts: input.discounts || [],
+    total_discount_amounts: input.totalDiscountAmounts || [],
+    total_tax_amounts: input.totalTaxAmounts || [],
     parent: {
       subscription_details: {
         subscription: input.subscriptionId,
@@ -63,8 +80,10 @@ function invoiceObject(input) {
     },
     lines: {
       data: [{
-        amount: input.amount === undefined ? 9900 : input.amount,
+        amount,
         currency: 'usd',
+        quantity: input.quantity === undefined ? 1 : input.quantity,
+        proration: input.lineProration === true,
         period: { start: input.periodStart, end: input.periodEnd },
         pricing: { price_details: { price: input.priceId || 'price_starter_synthetic' } },
       }],
@@ -106,6 +125,7 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
   let session;
   let releaseCheckout;
   let checkoutStarted;
+  let checkoutResponseMode = 'success';
 
   async function postWebhook(rawBody, signatureHeader = signed(rawBody, Math.floor(controlledNow.getTime() / 1000))) {
     return request(app)
@@ -151,6 +171,29 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
         if (checkoutStarted) checkoutStarted();
         if (releaseCheckout) await new Promise(resolve => { releaseCheckout.resolve = resolve; });
         const form = new URLSearchParams(options.body);
+        if (checkoutResponseMode === 'stalled_body') {
+          return {
+            status: 200,
+            headers: { get: () => null },
+            body: {
+              getReader() {
+                return {
+                  read() {
+                    return new Promise((_resolve, reject) => {
+                      options.signal.addEventListener('abort', () => {
+                        const error = new Error('synthetic response-body abort');
+                        error.name = 'AbortError';
+                        reject(error);
+                      }, { once: true });
+                    });
+                  },
+                  cancel: async () => {},
+                  releaseLock: () => {},
+                };
+              },
+            },
+          };
+        }
         return new Response(JSON.stringify({
           id: 'cs_synthetic_b2',
           url: 'https://checkout.stripe.com/c/pay/synthetic-b2',
@@ -173,7 +216,7 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
     const provider = new StripeProvider(configuration, {
       fetchImpl,
       now: () => controlledNow,
-      timeoutMs: 2000,
+      timeoutMs: 100,
     });
     const billingService = new BillingService({
       configuration,
@@ -215,6 +258,81 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
     if (priorDatabaseUrl === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = priorDatabaseUrl;
     if (allocation) await allocation.cleanup();
+  });
+
+  test('an unexpired indeterminate Checkout is not replayed and expires under the documented recovery bound', async () => {
+    const originalNow = controlledNow;
+    const signup = await request(app).post('/api/auth/signup').send({
+      name: 'Indeterminate Owner', businessName: 'Indeterminate Company',
+      email: 'indeterminate.b2@example.test', password: 'Indeterminate-password-123!', phone: '',
+    });
+    expect(signup.status).toBe(202);
+    const verification = await request(app).post('/api/auth/verify-email').send({
+      token: linkToken(capture.messages.at(-1)),
+    });
+    expect(verification.status).toBe(200);
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'indeterminate.b2@example.test', password: 'Indeterminate-password-123!',
+    });
+    const identity = (await pool.query(
+      "SELECT organization_id FROM users WHERE email_normalized = 'indeterminate.b2@example.test'"
+    )).rows[0];
+    const headers = { cookie: cookieHeader(login), csrf: csrf(login) };
+    const callStart = providerCalls.length;
+    checkoutResponseMode = 'stalled_body';
+
+    const first = await request(app)
+      .post('/api/billing/checkout')
+      .set('Cookie', headers.cookie)
+      .set('X-CSRF-Token', headers.csrf)
+      .send({ planKey: 'starter' });
+    expect(first.status).toBe(503);
+    expect(first.body.code).toBe('billing_provider_timeout');
+    expect(providerCalls).toHaveLength(callStart + 1);
+    const firstOperation = (await pool.query(
+      `SELECT id, idempotency_key, status, failure_code, expires_at, updated_at
+         FROM billing_provider_operations WHERE organization_id = $1`,
+      [identity.organization_id]
+    )).rows[0];
+    expect(firstOperation).toEqual(expect.objectContaining({
+      status: 'indeterminate', failure_code: 'billing_provider_timeout',
+    }));
+
+    const replay = await request(app)
+      .post('/api/billing/checkout')
+      .set('Cookie', headers.cookie)
+      .set('X-CSRF-Token', headers.csrf)
+      .send({ planKey: 'starter' });
+    expect(replay.status).toBe(409);
+    expect(replay.body.code).toBe('billing_checkout_indeterminate');
+    expect(providerCalls).toHaveLength(callStart + 1);
+    const unchanged = (await pool.query(
+      `SELECT id, idempotency_key, status, failure_code, expires_at, updated_at
+         FROM billing_provider_operations WHERE organization_id = $1`,
+      [identity.organization_id]
+    )).rows[0];
+    expect(unchanged).toEqual(firstOperation);
+
+    controlledNow = new Date(originalNow.getTime() + 31 * 60000);
+    checkoutResponseMode = 'success';
+    const recovered = await request(app)
+      .post('/api/billing/checkout')
+      .set('Cookie', headers.cookie)
+      .set('X-CSRF-Token', headers.csrf)
+      .send({ planKey: 'starter' });
+    expect(recovered.status).toBe(201);
+    expect(providerCalls).toHaveLength(callStart + 2);
+    const operations = (await pool.query(
+      `SELECT id, idempotency_key, status FROM billing_provider_operations
+        WHERE organization_id = $1 ORDER BY created_at, id`,
+      [identity.organization_id]
+    )).rows;
+    expect(operations.map(item => item.status).sort()).toEqual(['accepted', 'expired']);
+    expect(new Set(operations.map(item => item.idempotency_key)).size).toBe(2);
+
+    controlledNow = originalNow;
+    checkoutResponseMode = 'success';
+    providerCalls.length = 0;
   });
 
   test('owner-only Checkout ignores tenant and amount tampering and is concurrency bounded', async () => {
@@ -335,6 +453,66 @@ describe('Account Lifecycle PR B2 mounted PostgreSQL billing authority', () => {
       stripe_customer_id: 'cus_synthetic_b2',
       stripe_subscription_id: 'sub_synthetic_b2',
       billing_plan_key: 'starter',
+    });
+  });
+
+  test('valid signed non-exact paid invoices are durable ignored no-ops and cannot activate authority', async () => {
+    const created = Math.floor(controlledNow.getTime() / 1000) + 7;
+    const cases = [
+      ['zero_cash', { amountPaid: 0, amountDue: 0, total: 0, subtotal: 0 }],
+      ['paid_mismatch', { amountPaid: 0 }],
+      ['due_mismatch', { amountDue: 9800 }],
+      ['total_mismatch', { total: 10000 }],
+      ['discounted', { totalDiscountAmounts: [{ amount: 100 }] }],
+      ['tax_adjusted', { totalTaxAmounts: [{ amount: 100 }] }],
+      ['prorated', { lineProration: true }],
+    ];
+    for (let index = 0; index < cases.length; index += 1) {
+      const [label, overrides] = cases[index];
+      const event = eventBuffer(`evt_paid_rejected_${label}_b2`, 'invoice.paid', created + index, invoiceObject({
+        id: `in_paid_rejected_${label}_b2`,
+        customerId: 'cus_synthetic_b2',
+        subscriptionId: 'sub_synthetic_b2',
+        organizationId: owner.organization_id,
+        paid: true,
+        periodStart: 1785542400,
+        periodEnd: 1788220800,
+        ...overrides,
+      }));
+      const exactRaw = Buffer.concat([Buffer.from('\n  ', 'utf8'), event, Buffer.from('\n', 'utf8')]);
+      const response = await postWebhook(exactRaw);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(expect.objectContaining({
+        result: 'ignored', code: 'invoice_payment_evidence_rejected',
+      }));
+      const durable = (await pool.query(
+        `SELECT processing_status, result_code FROM billing_webhook_events WHERE provider_event_id = $1`,
+        [`evt_paid_rejected_${label}_b2`]
+      )).rows[0];
+      expect(durable).toEqual({ processing_status: 'ignored', result_code: 'invoice_payment_evidence_rejected' });
+    }
+    const replayRaw = Buffer.concat([
+      Buffer.from('\n  ', 'utf8'),
+      eventBuffer('evt_paid_rejected_zero_cash_b2', 'invoice.paid', created, invoiceObject({
+        id: 'in_paid_rejected_zero_cash_b2', customerId: 'cus_synthetic_b2',
+        subscriptionId: 'sub_synthetic_b2', organizationId: owner.organization_id,
+        paid: true, periodStart: 1785542400, periodEnd: 1788220800,
+        amountPaid: 0, amountDue: 0, total: 0, subtotal: 0,
+      })),
+      Buffer.from('\n', 'utf8'),
+    ]);
+    const replay = await postWebhook(replayRaw);
+    expect(replay.body).toEqual(expect.objectContaining({
+      result: 'duplicate', code: 'invoice_payment_evidence_rejected',
+    }));
+    const authority = (await pool.query(
+      `SELECT status, billing_authority_verified, current_period_start, current_period_end
+         FROM subscriptions WHERE organization_id = $1`,
+      [owner.organization_id]
+    )).rows[0];
+    expect(authority).toEqual({
+      status: 'trialing', billing_authority_verified: false,
+      current_period_start: null, current_period_end: null,
     });
   });
 

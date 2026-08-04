@@ -84,7 +84,32 @@ function invoiceLine(object) {
       !period || !Number.isSafeInteger(period.start) || !Number.isSafeInteger(period.end) ||
       period.end <= period.start || period.end - period.start < 25 * 86400 ||
       period.end - period.start > 35 * 86400) return null;
-  return { priceId, amountCents: line.amount, periodStart: period.start, periodEnd: period.end };
+  return {
+    priceId,
+    amountCents: line.amount,
+    periodStart: period.start,
+    periodEnd: period.end,
+    quantity: line.quantity,
+    proration: line.proration,
+  };
+}
+
+function exactEmptyArray(value) {
+  return Array.isArray(value) && value.length === 0;
+}
+
+function exactPaidInvoiceEvidence(object, line, plan) {
+  const amount = plan.monthlyAmountCents;
+  return object.paid === true && object.status === 'paid' &&
+    String(object.currency || '').toLowerCase() === 'usd' &&
+    object.amount_paid === amount && object.amount_due === amount &&
+    object.total === amount && object.subtotal === amount &&
+    object.amount_remaining === 0 && object.starting_balance === 0 &&
+    object.ending_balance === 0 && object.pre_payment_credit_notes_amount === 0 &&
+    object.post_payment_credit_notes_amount === 0 &&
+    exactEmptyArray(object.discounts) && exactEmptyArray(object.total_discount_amounts) &&
+    exactEmptyArray(object.total_tax_amounts) &&
+    line.quantity === 1 && line.proration === false;
 }
 
 function subscriptionItem(object) {
@@ -130,9 +155,15 @@ function normalizeWebhook(event, rawBody, configuration) {
     if (!line || !subscriptionProviderId || !customerId || !invoiceId ||
         line.priceId !== metadata.plan.priceId || line.amountCents !== metadata.plan.monthlyAmountCents ||
         String(object.currency || '').toLowerCase() !== 'usd' ||
-        (paid && (object.paid !== true || object.status !== 'paid')) ||
         (!paid && (object.paid !== false || object.status !== 'open'))) {
       throw new BillingError(400, 'billing_webhook_unsupported_schema', 'Billing webhook is unsupported');
+    }
+    if (paid && !exactPaidInvoiceEvidence(object, line, metadata.plan)) {
+      return {
+        ...base,
+        kind: 'invoice_payment_evidence_rejected',
+        organizationId: metadata.organizationId,
+      };
     }
     return {
       ...base,
@@ -253,6 +284,13 @@ class BillingService {
     }
     if (acquired.disposition === 'checkout_in_progress') {
       throw new BillingError(409, 'billing_checkout_in_progress', 'Checkout creation is already in progress');
+    }
+    if (acquired.disposition === 'checkout_indeterminate') {
+      throw new BillingError(
+        409,
+        'billing_checkout_indeterminate',
+        'Checkout status is indeterminate until the recovery window expires'
+      );
     }
     const operation = acquired.operation;
     try {

@@ -54,6 +54,9 @@ app.use(auditLogger);
 // Stripe signatures cover exact bytes. This route is mounted before every
 // JSON parser and receives a Buffer from express.raw().
 app.use('/api/billing', createBillingWebhookRouter({ service: productionBillingService }));
+// Retell signatures also cover exact bytes. Only the dedicated webhook router
+// is mounted here; all authenticated voice routes remain after JSON parsing.
+app.use('/api/v1/voice', voiceRoutes.webhookRouter);
 app.use(express.json({ limit: '1mb' }));
 
 // Static assets (CSS, JS)

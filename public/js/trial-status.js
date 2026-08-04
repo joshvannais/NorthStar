@@ -102,7 +102,7 @@
       scheduleRefresh(subscription);
       return;
     }
-    if (subscription.state === 'active') {
+    if (subscription.state === 'active' && subscription.readOnly !== true) {
       removeBanner();
       scheduleRefresh(null);
       return;
@@ -134,15 +134,14 @@
       scheduleRefresh(subscription);
       return;
     }
-    var restricted = banner(
-      'restricted',
-      subscription.state === 'past_due'
-        ? 'Payment is past due. Access follows the authoritative paid-through period.'
-        : subscription.state === 'canceled'
-          ? 'The subscription is canceled. Access follows the authoritative paid-through period.'
-          : 'Your trial has ended. Your organization remains available in restricted read-only mode.',
-      'alert'
-    );
+    var restrictionMessage = subscription.state === 'past_due'
+      ? 'Payment is past due. Access follows the authoritative paid-through period.'
+      : subscription.state === 'canceled'
+        ? 'The subscription is canceled. Access follows the authoritative paid-through period.'
+        : subscription.billingAuthorityVerified === true
+          ? 'The authoritative paid-through period has ended. Your organization is restricted to read-only access.'
+          : 'Your trial has ended. Your organization remains available in restricted read-only mode.';
+    var restricted = banner('restricted', restrictionMessage, 'alert');
     if (subscription.upgradeAvailable) billingLink(restricted, 'Choose a monthly plan');
     else if (subscription.portalAvailable) billingLink(restricted, 'Manage billing');
     scheduleRefresh(subscription);

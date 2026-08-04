@@ -39,6 +39,8 @@ function createDisposableAccountApp(options = {}) {
     const { createBillingWebhookRouter } = require('../../src/routes/billing');
     app.use('/api/billing', createBillingWebhookRouter({ service: options.billingService }));
   }
+  const voiceRoutes = require('../../src/routes/voice');
+  app.use('/api/v1/voice', voiceRoutes.webhookRouter);
   app.use(express.json({ limit: '1mb' }));
   const publicRoot = path.resolve(__dirname, '../../public');
   app.use('/css', express.static(path.join(publicRoot, 'css')));
@@ -70,7 +72,7 @@ function createDisposableAccountApp(options = {}) {
   app.use('/api/v1/canonical', createCanonicalRouter());
   app.use('/api/v1', createCompatibilityRouter());
   app.use('/api/v1/business-profile', require('../../src/routes/businessProfile'));
-  app.use('/api/v1/voice', require('../../src/routes/voice'));
+  app.use('/api/v1/voice', voiceRoutes);
   app.use('/api/v1', createLegacyAuthorityRetirementRouter());
   app.use('/api', require('../../src/routes/canonicalLeads'));
   app.use('/api', createCompatibilityRouter());

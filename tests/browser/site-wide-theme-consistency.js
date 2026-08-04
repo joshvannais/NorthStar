@@ -20,6 +20,10 @@ const VIEWPORTS = Object.freeze([
 const THEMES = Object.freeze(['dark', 'light']);
 const INTERNAL_LANGUAGE = /\bPR (?:A|B1|B2)\b|PR #|pull request|phase B[12]\b|internal phase|development milestone|implementation availability/i;
 const RESET_TOKEN = 'T'.repeat(43);
+const COMMUNICATIONS_EXPECTED_REQUESTS = Object.freeze([
+  Object.freeze({ method: 'GET', pathname: '/api/v1/canonical/compat/communications', search: '' }),
+  Object.freeze({ method: 'GET', pathname: '/api/v1/canonical/compat/communications', search: '?limit=50' }),
+]);
 
 function jsonResponse(body, status = 200) {
   return {
@@ -45,42 +49,112 @@ function accountFixture(pathname) {
   };
 }
 
-function createCommunicationsResponseGate() {
-  let requestCount = 0;
-  let requestedResolve;
+function communicationsRequestIdentity(request) {
+  const url = new URL(request.url());
+  return Object.freeze({
+    method: request.method(),
+    origin: url.origin,
+    pathname: url.pathname,
+    search: url.search,
+    key: `${request.method()} ${url.pathname}${url.search}`,
+  });
+}
+
+function createCommunicationsResponseGate(origin) {
+  const expectedKeys = COMMUNICATIONS_EXPECTED_REQUESTS
+    .map(identity => `${identity.method} ${identity.pathname}${identity.search}`)
+    .sort();
+  const observed = new Map();
+  const late = [];
+  let firstRequestedResolve;
+  let allRequestedResolve;
   let releaseResolve;
   let active = false;
   let released = false;
-  const requested = new Promise(resolve => { requestedResolve = resolve; });
+  const firstRequested = new Promise(resolve => { firstRequestedResolve = resolve; });
+  const allRequested = new Promise(resolve => { allRequestedResolve = resolve; });
   const release = new Promise(resolve => { releaseResolve = resolve; });
+
+  function snapshot() {
+    const observedKeys = [...observed.keys()].sort();
+    return {
+      expectedKeys: expectedKeys.slice(),
+      observedKeys,
+      missingKeys: expectedKeys.filter(key => !observed.has(key)),
+      lateKeys: late.map(identity => identity.key),
+      requestCount: observedKeys.length,
+      pendingCount: released ? 0 : observedKeys.length,
+      released,
+    };
+  }
+
+  async function boundedWait(signal, description, timeoutMs = 3000) {
+    let timeout;
+    try {
+      await Promise.race([
+        signal,
+        new Promise((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            reject(new Error(`${description}: ${JSON.stringify(snapshot())}`));
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function releaseWithoutCompletenessCheck() {
+    if (released) return;
+    released = true;
+    releaseResolve();
+  }
+
   return {
     activate() { active = true; },
-    async hold() {
+    async hold(request) {
       assert.strictEqual(active, true, 'communications response gate must be route-scoped');
-      requestCount += 1;
-      requestedResolve();
+      const identity = communicationsRequestIdentity(request);
+      assert.strictEqual(identity.origin, origin, `communications request escaped loopback: ${identity.origin}`);
+      assert.ok(expectedKeys.includes(identity.key), `unexpected communications request identity: ${identity.key}`);
+      if (released) {
+        late.push(identity);
+        throw new Error(`communications request arrived after release: ${identity.key}`);
+      }
+      assert.strictEqual(observed.has(identity.key), false, `duplicate communications request identity: ${identity.key}`);
+      observed.set(identity.key, identity);
+      firstRequestedResolve();
+      if (observed.size === expectedKeys.length) allRequestedResolve();
       await release;
     },
-    async waitForRequest() {
-      let timeout;
-      try {
-        await Promise.race([
-          requested,
-          new Promise((_resolve, reject) => {
-            timeout = setTimeout(() => reject(new Error('communications request did not begin')), 3000);
-          }),
-        ]);
-      } finally {
-        clearTimeout(timeout);
-      }
+    async waitForObservedCount(count) {
+      assert.strictEqual(count, 1, 'only the late-second negative control may wait for a partial request set');
+      await boundedWait(firstRequested, 'first communications request did not become pending');
+      assert.strictEqual(snapshot().requestCount, 1, `expected one pending request: ${JSON.stringify(snapshot())}`);
+      return snapshot();
+    },
+    async waitForExpectedRequests() {
+      await boundedWait(allRequested, 'complete communications request set did not become pending');
+      const state = snapshot();
+      assert.deepStrictEqual(state.observedKeys, expectedKeys, 'communications pending request identities');
+      assert.strictEqual(state.pendingCount, expectedKeys.length, 'both communications reads must remain pending');
+      return state;
     },
     release() {
       if (released) return;
-      released = true;
-      releaseResolve();
+      const state = snapshot();
+      assert.deepStrictEqual(
+        state.observedKeys,
+        expectedKeys,
+        `refusing communications release before the complete expected set: ${JSON.stringify(state)}`
+      );
+      releaseWithoutCompletenessCheck();
     },
+    forceLegacyReleaseForNegativeControl() { releaseWithoutCompletenessCheck(); },
+    cancel() { releaseWithoutCompletenessCheck(); },
+    snapshot,
     get active() { return active; },
-    get requestCount() { return requestCount; },
+    get requestCount() { return observed.size; },
   };
 }
 
@@ -124,7 +198,7 @@ async function installLocalApiBoundary(context, origin, evidence, options = {}) 
     }
     if (request.method() === 'GET' && communicationsAudit
       && url.pathname === '/api/v1/canonical/compat/communications') {
-      await options.communicationsGate.hold();
+      await options.communicationsGate.hold(request);
       return route.fulfill(jsonResponse(canonicalFixture(request, 'communications')));
     }
 
@@ -376,12 +450,17 @@ async function readCommunicationsRenderState(page) {
 }
 
 async function auditCommunicationsReadiness(page, gate, label) {
-  await gate.waitForRequest();
+  const preReleaseRequests = await gate.waitForExpectedRequests();
   await settleFiniteDocumentAnimations(page);
   const initialState = await readCommunicationsRenderState(page);
   assert.strictEqual(initialState.kpiCards, 0, `${label} controlled initial state must precede KPI rendering`);
   assert.strictEqual(initialState.emptyHeading, 'No communications yet', `${label} initial empty presentation`);
   const initialAccessibility = await auditMountedAccessibility(page);
+  assert.deepStrictEqual(
+    gate.snapshot(),
+    preReleaseRequests,
+    `${label} complete request set must remain pending throughout the initial audit`
+  );
 
   gate.release();
   await page.waitForFunction(() => (
@@ -398,7 +477,10 @@ async function auditCommunicationsReadiness(page, gate, label) {
     kpiCards: 8,
     emptyHeading: 'No communications yet',
   }, `${label} completed communications render`);
-  assert.strictEqual(gate.requestCount, 2, `${label} expected declared and filtered communications reads`);
+  const completedRequests = gate.snapshot();
+  assert.deepStrictEqual(completedRequests.observedKeys, preReleaseRequests.expectedKeys, `${label} completed request identities`);
+  assert.deepStrictEqual(completedRequests.lateKeys, [], `${label} no communications request may arrive after release`);
+  assert.strictEqual(completedRequests.requestCount, 2, `${label} expected declared and filtered communications reads`);
   assert.ok(
     settledAccessibility.auditedTextElements > initialAccessibility.auditedTextElements,
     `${label} negative control must prove the pre-completion audit omits settled instances`
@@ -408,6 +490,8 @@ async function auditCommunicationsReadiness(page, gate, label) {
     settledAccessibility,
     initialState,
     settledState,
+    preReleaseRequests,
+    completedRequests,
     missedByPreCompletionAudit: settledAccessibility.auditedTextElements - initialAccessibility.auditedTextElements,
     requestCount: gate.requestCount,
   };
@@ -575,7 +659,7 @@ async function runMountedMatrix(engine, viewport, origin) {
     for (const theme of selectedThemes) {
       const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
       const inventory = { requests: [], api: [] };
-      const communicationsGate = createCommunicationsResponseGate();
+      const communicationsGate = createCommunicationsResponseGate(origin);
       const pageErrors = [];
       const consoleErrors = [];
       try {
@@ -628,6 +712,8 @@ async function runMountedMatrix(engine, viewport, origin) {
               settledAuditedTextElements: result.asyncReadiness.settledAccessibility.auditedTextElements,
               missedByPreCompletionAudit: result.asyncReadiness.missedByPreCompletionAudit,
               requestCount: result.asyncReadiness.requestCount,
+              preReleaseRequestIdentities: result.asyncReadiness.preReleaseRequests.observedKeys,
+              postReleaseLateRequestIdentities: result.asyncReadiness.completedRequests.lateKeys,
               completionAuthority: result.asyncReadiness.settledState.authority,
               completedKpiCards: result.asyncReadiness.settledState.kpiCards,
             },
@@ -662,7 +748,7 @@ async function runMountedMatrix(engine, viewport, origin) {
         assert.strictEqual(inventory.requests.some(item => !['GET'].includes(item.method)), false);
         assert.strictEqual(inventory.api.some(item => item.method !== 'GET'), false);
       } finally {
-        communicationsGate.release();
+        communicationsGate.cancel();
         await context.close();
       }
     }
@@ -848,6 +934,79 @@ async function runAccessibilityAuditNegativeControl(engine) {
       },
     };
   } finally {
+    await browser.close();
+  }
+}
+
+async function runCommunicationsReleaseSequencingNegativeControl(engine, origin) {
+  const runtime = resolveBrowserRuntime(engine);
+  const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const gate = createCommunicationsResponseGate(origin);
+  const evidence = { requests: [], api: [] };
+  let lateFailure = '';
+  gate.activate();
+  try {
+    await context.route('**/api/v1/canonical/compat/communications**', async route => {
+      try {
+        await gate.hold(route.request());
+        await route.fulfill(jsonResponse({ success: true }));
+      } catch (error) {
+        lateFailure = String(error && error.message || error);
+        await route.abort('failed');
+      }
+    });
+    installRequestInventory(context, origin, evidence);
+    const page = await context.newPage();
+    await page.goto(`${origin}/login`, { waitUntil: 'domcontentloaded', timeout: 10000 });
+
+    const firstRequest = page.evaluate(() => fetch('/api/v1/canonical/compat/communications')
+      .then(response => response.status)
+      .catch(() => 0));
+    const onePending = await gate.waitForObservedCount(1);
+    let earlyReleaseFailure = '';
+    try {
+      gate.release();
+    } catch (error) {
+      earlyReleaseFailure = String(error && error.message || error);
+    }
+    assert.match(earlyReleaseFailure, /refusing communications release before the complete expected set/);
+    assert.deepStrictEqual(onePending.missingKeys, ['GET /api/v1/canonical/compat/communications?limit=50']);
+
+    // Recreate the superseded early-release sequence only inside this negative
+    // control. The real mounted path has no access to this test-only bypass.
+    gate.forceLegacyReleaseForNegativeControl();
+    assert.strictEqual(await firstRequest, 200);
+    const lateSecondOutcome = await page.evaluate(() => fetch('/api/v1/canonical/compat/communications?limit=50')
+      .then(() => 'unexpected_success')
+      .catch(() => 'network_failure'));
+    assert.strictEqual(lateSecondOutcome, 'network_failure');
+    assert.match(lateFailure, /communications request arrived after release/);
+
+    const finalState = gate.snapshot();
+    assert.deepStrictEqual(finalState.observedKeys, ['GET /api/v1/canonical/compat/communications']);
+    assert.deepStrictEqual(finalState.lateKeys, ['GET /api/v1/canonical/compat/communications?limit=50']);
+    const requests = evidence.requests
+      .filter(item => item.path === '/api/v1/canonical/compat/communications')
+      .map(item => `${item.method} ${item.path}`);
+    assert.deepStrictEqual(requests, [
+      'GET /api/v1/canonical/compat/communications',
+      'GET /api/v1/canonical/compat/communications',
+    ]);
+    return {
+      engine,
+      preReleaseRequestCount: onePending.requestCount,
+      missingBeforeRelease: onePending.missingKeys,
+      earlyReleaseRejected: true,
+      postReleaseSecondRejected: true,
+      lateRequestIdentities: finalState.lateKeys,
+      methods: ['GET', 'GET'],
+      loopbackOnly: true,
+      authorizationHeaders: 0,
+    };
+  } finally {
+    gate.cancel();
+    await context.close();
     await browser.close();
   }
 }
@@ -1062,6 +1221,7 @@ async function main() {
   const preferences = [];
   const recovery = [];
   const auditNegativeControls = [];
+  const readinessSequencingNegativeControls = [];
   try {
     for (const engine of engines) {
       if (phase === 'all' || phase === 'matrix') {
@@ -1069,6 +1229,9 @@ async function main() {
       }
       if (phase === 'all' || phase === 'preference') preferences.push(await runPreferenceMatrix(engine, origin));
       if (phase === 'all' || phase === 'matrix') auditNegativeControls.push(await runAccessibilityAuditNegativeControl(engine));
+      if (phase === 'all' || phase === 'matrix') {
+        readinessSequencingNegativeControls.push(await runCommunicationsReleaseSequencingNegativeControl(engine, origin));
+      }
       if (phase === 'all' || phase === 'recovery') {
         for (const viewport of selectedViewports) {
           for (const theme of THEMES) recovery.push(await runRecoveryMatrix(engine, viewport, theme, origin));
@@ -1088,6 +1251,8 @@ async function main() {
         kpiCards: state.completedKpiCards,
       },
       requestCount: state.requestCount,
+      preReleaseRequestIdentities: state.preReleaseRequestIdentities,
+      postReleaseLateRequestIdentities: state.postReleaseLateRequestIdentities,
     })));
     if ((phase === 'all' || phase === 'matrix')
       && (!process.env.NORTHSTAR_THEME_ROUTE || process.env.NORTHSTAR_THEME_ROUTE === '/dashboard/communications')) {
@@ -1109,6 +1274,7 @@ async function main() {
       recovery,
       auditNegativeControls,
       asyncReadinessNegativeControls,
+      readinessSequencingNegativeControls,
     })}\n`);
   } finally {
     await new Promise(resolve => server.close(resolve));

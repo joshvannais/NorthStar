@@ -495,13 +495,23 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     });
     await request(app).post('/api/auth/forgot-password').send({ email: 'reset-race.b1@example.test' });
     const firstReset = linkToken(capture.messages.at(-1), '/reset-password');
-    expect((await request(app).post('/api/auth/reset-password').send({ token: firstReset, password: 'short7!' })).body.code)
-      .toBe('invalid_password');
+    const sevenCharacterReset = await request(app).post('/api/auth/reset-password')
+      .send({ token: firstReset, password: 'short7!' });
+    expect(sevenCharacterReset.status).toBe(400);
+    expect(sevenCharacterReset.body.code).toBe('invalid_password');
+    expect((await request(app).post('/api/auth/reset-password').send({
+      token: firstReset, password: 'Exact8!!',
+    })).status).toBe(200);
+    expect((await request(app).post('/api/auth/login').send({
+      email: 'reset-race.b1@example.test', password: 'Exact8!!',
+    })).status).toBe(200);
+    await request(app).post('/api/auth/forgot-password').send({ email: 'reset-race.b1@example.test' });
+    const supersededReset = linkToken(capture.messages.at(-1), '/reset-password');
     await request(app).post('/api/auth/forgot-password').send({ email: ' RESET-RACE.B1@EXAMPLE.TEST ' });
     const currentReset = linkToken(capture.messages.at(-1), '/reset-password');
-    expect(currentReset).not.toBe(firstReset);
+    expect(currentReset).not.toBe(supersededReset);
     expect((await request(app).post('/api/auth/reset-password').send({
-      token: firstReset, password: 'Superseded-reset-password-123!',
+      token: supersededReset, password: 'Superseded-reset-password-123!',
     })).body.code).toBe('reset_invalid');
 
     const [first, second] = await Promise.all([

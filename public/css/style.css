@@ -1170,6 +1170,11 @@ tr:hover td { background: var(--neutral-50); }
   background: white;
 }
 
+.form-group .password-input-shell > input,
+.account-auth-field .password-input-shell > input {
+  padding-inline-end: 5rem;
+}
+
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {

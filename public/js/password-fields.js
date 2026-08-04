@@ -8,20 +8,25 @@
     return id ? global.document.getElementById(id) : null;
   }
 
-  function setVisibility(button, visible, restoreFocus) {
+  function setVisibility(button, visible, restoreInputFocus) {
     var input = controlledInput(button);
     if (!input) return;
     var selectionStart = input.selectionStart;
     var selectionEnd = input.selectionEnd;
     input.type = visible ? 'text' : 'password';
     button.setAttribute('aria-pressed', visible ? 'true' : 'false');
-    button.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
     button.textContent = visible ? 'Hide' : 'Show';
-    if (!restoreFocus) return;
-    input.focus({ preventScroll: true });
-    if (selectionStart !== null && selectionEnd !== null) {
-      try { input.setSelectionRange(selectionStart, selectionEnd); } catch (_error) {}
+    if (!restoreInputFocus) return;
+    function restoreSelection() {
+      input.focus({ preventScroll: true });
+      if (selectionStart !== null && selectionEnd !== null) {
+        try { input.setSelectionRange(selectionStart, selectionEnd); } catch (_error) {}
+      }
     }
+    restoreSelection();
+    global.setTimeout(function () {
+      if (global.document.activeElement === input) restoreSelection();
+    }, 0);
   }
 
   function confirmationFields(form) {
@@ -49,15 +54,33 @@
     return !mismatch;
   }
 
+  function revalidateConfirmation(form) {
+    var fields = confirmationFields(form);
+    if (!fields) return true;
+    var mismatch = fields.password.value !== fields.confirmation.value;
+    setConfirmationError(fields, mismatch);
+    return !mismatch;
+  }
+
   function initialize(root) {
     var scope = root || global.document;
     Array.prototype.forEach.call(scope.querySelectorAll('[data-password-toggle]'), function (button) {
       if (button.getAttribute('data-password-toggle-ready') === 'true') return;
       button.setAttribute('data-password-toggle-ready', 'true');
       setVisibility(button, false, false);
-      button.addEventListener('click', function () {
-        setVisibility(button, button.getAttribute('aria-pressed') !== 'true', true);
+      var pointerActivation = false;
+      button.addEventListener('pointerdown', function (event) {
+        var input = controlledInput(button);
+        pointerActivation = Boolean(input && global.document.activeElement === input);
+        if (pointerActivation) event.preventDefault();
       });
+      button.addEventListener('click', function () {
+        var restoreInputFocus = pointerActivation;
+        pointerActivation = false;
+        setVisibility(button, button.getAttribute('aria-pressed') !== 'true', restoreInputFocus);
+      });
+      button.addEventListener('pointercancel', function () { pointerActivation = false; });
+      button.addEventListener('blur', function () { pointerActivation = false; });
     });
 
     Array.prototype.forEach.call(scope.querySelectorAll('form'), function (form) {
@@ -65,7 +88,7 @@
       if (!fields || form.getAttribute('data-password-confirmation-ready') === 'true') return;
       form.setAttribute('data-password-confirmation-ready', 'true');
       function refreshActiveError() {
-        if (fields.confirmation.getAttribute('aria-invalid') === 'true') validateConfirmation(form);
+        if (fields.confirmation.getAttribute('aria-invalid') === 'true') revalidateConfirmation(form);
       }
       fields.password.addEventListener('input', refreshActiveError);
       fields.confirmation.addEventListener('input', refreshActiveError);

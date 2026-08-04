@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
@@ -134,6 +135,60 @@ realPostgres('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     expect((await signup('minimum@example.test', '12345678')).status).toBe(202);
     expect((await signup('long@example.test', 'x'.repeat(129))).status).toBe(400);
     expect((await signup(`${'a'.repeat(244)}@example.test`)).status).toBe(400);
+  });
+
+  test.each([
+    { length: 6, password: 'Ab1!xy' },
+    { length: 7, password: 'Ab1!xyz' },
+  ])('legacy raw-bcrypt $length-character login upgrades only after verification without an oracle', async ({ length, password }) => {
+    const email = `legacy-${length}@example.test`;
+    expect(password).toHaveLength(length);
+    expect((await signup(email, 'Seed-pass-123!')).status).toBe(202);
+    const legacyHash = await bcrypt.hash(password, 4);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE email_normalized = $2', [legacyHash, email]);
+    await pool.query("DELETE FROM auth_rate_limits WHERE event_type IN ('login_ip', 'login_email')");
+
+    const wrongExisting = await request(app).post('/api/auth/login').send({ email, password: `${password}!` });
+    const wrongMissing = await request(app).post('/api/auth/login').send({
+      email: `missing-legacy-${length}@example.test`, password,
+    });
+    expect(wrongExisting.status).toBe(401);
+    expect(wrongMissing.status).toBe(401);
+    for (const rejected of [wrongExisting, wrongMissing]) {
+      expect(Object.keys(rejected.body).sort()).toEqual(['code', 'error', 'requestId']);
+      expect(rejected.body).toMatchObject({ code: 'invalid_credentials', error: 'Invalid email or password' });
+      expect(rejected.body.requestId).toEqual(expect.any(String));
+    }
+
+    const first = await request(app).post('/api/auth/login').send({ email, password });
+    expect(first.status).toBe(200);
+    expect(cookieMap(first)).toEqual(expect.objectContaining({
+      northstar_access: expect.any(String),
+      northstar_refresh: expect.any(String),
+      northstar_csrf: expect.any(String),
+    }));
+    expect(JSON.stringify(first.body)).not.toContain(password);
+
+    const upgraded = (await pool.query(
+      `SELECT u.password_hash,
+              (SELECT count(*)::int FROM auth_sessions session WHERE session.user_id = u.id) AS sessions
+         FROM users u WHERE u.email_normalized = $1`,
+      [email]
+    )).rows[0];
+    expect(upgraded.password_hash).not.toBe(legacyHash);
+    expect(await bcrypt.compare(password, upgraded.password_hash)).toBe(false);
+    const { verifyPassword } = require('../../src/accounts/service');
+    expect(await verifyPassword(password, upgraded.password_hash)).toEqual({ valid: true, needsUpgrade: false });
+    expect(upgraded.sessions).toBe(1);
+
+    const subsequent = await request(app).post('/api/auth/login').send({ email, password });
+    expect(subsequent.status).toBe(200);
+    const sessionCount = await pool.query(
+      `SELECT count(*)::int AS count FROM auth_sessions session
+        JOIN users u ON u.id = session.user_id WHERE u.email_normalized = $1`,
+      [email]
+    );
+    expect(sessionCount.rows[0].count).toBe(2);
   });
 
   test('missing, wrong, and cross-session CSRF are rejected before mutation', async () => {

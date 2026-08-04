@@ -44,6 +44,17 @@ describe('Account Lifecycle PR A validation', () => {
     expect(await verifyPassword('legacy password 123', legacy)).toEqual({ valid: true, needsUpgrade: true });
   });
 
+  test.each(['Ab1!xy', 'Ab1!xyz'])(
+    'historical raw-bcrypt value %p remains verifiable but cannot be used for new password creation',
+    async password => {
+      const bcrypt = require('bcryptjs');
+      const legacy = await bcrypt.hash(password, 4);
+      await expect(hashPassword(password)).rejects.toMatchObject({ code: 'invalid_password', status: 400 });
+      await expect(verifyPassword(password, legacy)).resolves.toEqual({ valid: true, needsUpgrade: true });
+      await expect(verifyPassword(`${password}!`, legacy)).resolves.toEqual({ valid: false, needsUpgrade: false });
+    }
+  );
+
   test('production configuration exposes no environment-owned signup capability', () => {
     const saved = {
       NODE_ENV: process.env.NODE_ENV,

@@ -34,8 +34,12 @@ function passwordMaterial(password) {
   return `northstar-sha512:${crypto.createHash('sha512').update(password, 'utf8').digest('base64')}`;
 }
 
+async function hashVerifiedPassword(password) {
+  return bcrypt.hash(passwordMaterial(password), 12);
+}
+
 async function hashPassword(password) {
-  return bcrypt.hash(passwordMaterial(validatePassword(password)), 12);
+  return hashVerifiedPassword(validatePassword(password));
 }
 
 async function verifyPassword(password, hash) {
@@ -324,6 +328,7 @@ class AccountService {
 
   async login(input, requestIp) {
     const email = normalizeEmail(input.email);
+    const submittedPassword = String(input.password || '');
     const ipKey = await this.consumeLimit('login_ip', requestIp, {
       limit: 10, windowSeconds: 900, blockSeconds: 900,
     });
@@ -332,7 +337,7 @@ class AccountService {
     });
     const authority = await this.repository.findLoginAuthority(email);
     const verification = authority
-      ? await verifyPassword(String(input.password || ''), authority.password_hash)
+      ? await verifyPassword(submittedPassword, authority.password_hash)
       : { valid: false, needsUpgrade: false };
     if (!authority || !verification.valid) {
       throw new AccountError(401, 'invalid_credentials', 'Invalid email or password');
@@ -341,7 +346,7 @@ class AccountService {
       throw new AccountError(403, 'account_inactive', 'This account is not available');
     }
     if (verification.needsUpgrade) {
-      await this.repository.upgradePasswordHash(authority.user_id, await hashPassword(input.password));
+      await this.repository.upgradePasswordHash(authority.user_id, await hashVerifiedPassword(submittedPassword));
     }
     const material = sessionMaterial();
     const current = await this.repository.createLoginSession({

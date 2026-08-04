@@ -54,11 +54,22 @@ describe('Account Lifecycle PR B1 shared subscription policy', () => {
   );
 
   test('active is banner-free but cannot be fabricated from contradictory or missing input', () => {
-    expect(projectSubscription({ subscription_status: 'active', server_now: '2026-08-01T00:00:00Z' }))
+    expect(projectSubscription({
+      subscription_status: 'active',
+      server_now: '2026-08-01T00:00:00Z',
+      billing_authority_verified: true,
+      billing_plan_key: 'starter',
+      stripe_customer_id: 'cus_b1_policy',
+      stripe_subscription_id: 'sub_b1_policy',
+      current_period_start: '2026-07-31T00:00:00Z',
+      current_period_end: '2026-08-31T00:00:00Z',
+    }))
       .toEqual(expect.objectContaining({
         state: 'active', readOnly: false, showTrialBanner: false, upgradeAvailable: false,
       }));
-    for (const authority of [null, {}, { subscription_status: 'bogus', server_now: '2026-08-01T00:00:00Z' }, {
+    for (const authority of [null, {},
+      { subscription_status: 'active', server_now: '2026-08-01T00:00:00Z' },
+      { subscription_status: 'bogus', server_now: '2026-08-01T00:00:00Z' }, {
       subscription_status: 'trialing', trial_started_at: 'invalid',
       trial_ends_at: '2026-08-15T00:00:00Z', server_now: '2026-08-01T00:00:00Z',
     }]) {

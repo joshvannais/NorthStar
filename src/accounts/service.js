@@ -322,8 +322,8 @@ class AccountService {
     return reset;
   }
 
-  async subscriptionStatus(organizationId) {
-    return projectSubscription(await this.repository.expireAndReadSubscription(organizationId));
+  async subscriptionStatus(organizationId, options = {}) {
+    return projectSubscription(await this.repository.expireAndReadSubscription(organizationId), options);
   }
 
   async login(input, requestIp) {

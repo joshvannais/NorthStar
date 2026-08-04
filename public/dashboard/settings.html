@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <script src="/js/billing-settings.js"></script>
 </head>
 <body>
 
@@ -20,6 +21,13 @@
         </div>
         <button class="btn btn-primary btn-sm" onclick="saveSettings()">💾 Save Changes</button>
       </div>
+
+      <section class="settings-section" id="subscription-billing" aria-labelledby="subscription-billing-heading">
+        <h2 id="subscription-billing-heading">Subscription and billing</h2>
+        <p class="description">Monthly plans are billed in advance. Cancellation keeps access through the current paid period; partial monthly refunds are not provided.</p>
+        <p id="subscription-billing-status" role="status" aria-live="polite">Loading subscription authority…</p>
+        <div id="subscription-billing-actions" class="subscription-billing-actions"></div>
+      </section>
 
       <!-- Company Info -->
       <div class="settings-section">
@@ -250,6 +258,20 @@
 }
 .btn-ghost:hover {
   background:var(--neutral-200);
+}
+.subscription-billing-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:14px;
+}
+.subscription-billing-actions button:focus-visible {
+  outline:3px solid #2563eb;
+  outline-offset:2px;
+}
+@media (max-width: 520px) {
+  .subscription-billing-actions { flex-direction:column; }
+  .subscription-billing-actions .btn { width:100%; }
 }
 </style>
 

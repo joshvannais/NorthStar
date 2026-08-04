@@ -23,6 +23,10 @@ const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const { createAuthRouter } = require('./routes/auth');
 const { AccountService } = require('./accounts/service');
 const { createProductionTransactionalEmail } = require('./email/transactional');
+const { buildBillingConfiguration } = require('./billing/config');
+const { StripeProvider } = require('./billing/stripeProvider');
+const { BillingService } = require('./billing/service');
+const { createBillingAccountRouter, createBillingWebhookRouter } = require('./routes/billing');
 const accountRoutes = require('./routes/account');
 const db = require('./db');
 const cache = require('./cache/client');
@@ -33,18 +37,24 @@ const { correlationId, auditLogger } = require('./middleware/auditLog');
 
 const app = express();
 const PORT = config.port || 3000;
+const billingConfiguration = buildBillingConfiguration(process.env);
+const productionBillingService = billingConfiguration
+  ? new BillingService({
+    configuration: billingConfiguration,
+    provider: new StripeProvider(billingConfiguration),
+  })
+  : null;
+app.locals.billingAvailable = Boolean(productionBillingService);
 
 // Middleware
 app.use(cors(corsOptions));
 app.use(correlationId);
-app.use(express.json({
-  limit: '1mb',
-  verify(req, _res, buffer) {
-    req.rawBody = buffer.toString();
-  },
-}));
 app.use(securityHeaders);
 app.use(auditLogger);
+// Stripe signatures cover exact bytes. This route is mounted before every
+// JSON parser and receives a Buffer from express.raw().
+app.use('/api/billing', createBillingWebhookRouter({ service: productionBillingService }));
+app.use(express.json({ limit: '1mb' }));
 
 // Static assets (CSS, JS)
 app.use('/css', express.static('public/css'));
@@ -109,6 +119,7 @@ app.use('/api/auth', createAuthRouter({
     : null,
 }));
 app.use('/api/account', accountRoutes);
+app.use('/api/billing', createBillingAccountRouter({ service: productionBillingService }));
 
 // Legacy demo credential minting is retired. Canonical demo access requires a
 // separately provisioned account attached to canonical_demo_authority.

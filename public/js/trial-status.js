@@ -58,7 +58,29 @@
       var trialEnd = new Date(subscription.trialEnd).getTime();
       if (Number.isFinite(trialEnd)) delay = Math.min(delay, Math.max(1, trialEnd - serverNow));
     }
+    if (subscription.paidThrough) {
+      var paidThrough = new Date(subscription.paidThrough).getTime();
+      if (Number.isFinite(paidThrough) && paidThrough > serverNow) {
+        delay = Math.min(delay, Math.max(1, paidThrough - serverNow));
+      }
+    }
     refreshTimer = global.setTimeout(refresh, Math.max(1000, Math.min(delay + 250, 86400250)));
+  }
+
+  function billingLink(element, label) {
+    var link = document.createElement('a');
+    link.href = '/dashboard/settings#subscription-billing';
+    link.textContent = label;
+    link.style.color = 'inherit';
+    link.style.fontWeight = '700';
+    link.addEventListener('click', function (event) {
+      if (global.location.pathname === '/dashboard/settings') {
+        event.preventDefault();
+        var target = document.getElementById('subscription-billing');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+    element.appendChild(link);
   }
 
   function resend(button) {
@@ -108,14 +130,21 @@
       support.className = 'northstar-trial-support';
       support.textContent = 'Enjoy full access during your trial.';
       trial.appendChild(support);
+      if (subscription.upgradeAvailable) billingLink(trial, 'Choose a monthly plan');
       scheduleRefresh(subscription);
       return;
     }
-    banner(
+    var restricted = banner(
       'restricted',
-      'Your trial has ended. Your organization remains available in restricted read-only mode. Upgrade options are coming soon.',
+      subscription.state === 'past_due'
+        ? 'Payment is past due. Access follows the authoritative paid-through period.'
+        : subscription.state === 'canceled'
+          ? 'The subscription is canceled. Access follows the authoritative paid-through period.'
+          : 'Your trial has ended. Your organization remains available in restricted read-only mode.',
       'alert'
     );
+    if (subscription.upgradeAvailable) billingLink(restricted, 'Choose a monthly plan');
+    else if (subscription.portalAvailable) billingLink(restricted, 'Manage billing');
     scheduleRefresh(subscription);
   }
 

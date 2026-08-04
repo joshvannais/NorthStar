@@ -24,6 +24,11 @@ async function provisionDurableSession(pool, input) {
   );
   const profileId = activeProfile.rows[0] && activeProfile.rows[0].id;
   const onboardingStatus = input.onboardingStatus || (profileId ? 'complete' : 'business_profile_required');
+  const subscriptionStatus = input.subscriptionStatus || 'active';
+  const hasPaidFixture = ['active', 'past_due', 'canceled'].includes(subscriptionStatus);
+  const providerSuffix = String(input.organizationId).replace(/-/g, '');
+  const paidPeriodStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const paidPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
   await pool.query(
     `INSERT INTO organization_memberships (id, organization_id, user_id, role, status)
@@ -55,15 +60,34 @@ async function provisionDurableSession(pool, input) {
   );
   await pool.query(
     `INSERT INTO subscriptions (
-       id, organization_id, plan_type, status, trial_started_at, trial_ends_at
-     ) VALUES ($1,$2,'Test fixture',$3,NULL,NULL)
+       id, organization_id, plan_type, status, trial_started_at, trial_ends_at,
+       billing_plan_key, billing_authority_verified, stripe_customer_id,
+       stripe_subscription_id, current_period_start, current_period_end
+     ) VALUES ($1,$2,$4,$3,NULL,NULL,$5,$6,$7,$8,$9,$10)
      ON CONFLICT (organization_id) DO UPDATE SET
        plan_type = EXCLUDED.plan_type,
        status = EXCLUDED.status,
        trial_started_at = NULL,
        trial_ends_at = NULL,
+       billing_plan_key = EXCLUDED.billing_plan_key,
+       billing_authority_verified = EXCLUDED.billing_authority_verified,
+       stripe_customer_id = EXCLUDED.stripe_customer_id,
+       stripe_subscription_id = EXCLUDED.stripe_subscription_id,
+       current_period_start = EXCLUDED.current_period_start,
+       current_period_end = EXCLUDED.current_period_end,
        updated_at = NOW()`,
-    [crypto.randomUUID(), input.organizationId, input.subscriptionStatus || 'active']
+    [
+      crypto.randomUUID(),
+      input.organizationId,
+      subscriptionStatus,
+      hasPaidFixture ? 'Starter' : 'Test fixture',
+      hasPaidFixture ? 'starter' : null,
+      hasPaidFixture,
+      hasPaidFixture ? `cus_fixture_${providerSuffix}` : null,
+      hasPaidFixture ? `sub_fixture_${providerSuffix}` : null,
+      hasPaidFixture ? paidPeriodStart : null,
+      hasPaidFixture ? paidPeriodEnd : null,
+    ]
   );
   await pool.query(
     `INSERT INTO auth_sessions (

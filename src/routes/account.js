@@ -161,7 +161,10 @@ router.get('/subscription', requireTenantAccess, async (req, res) => {
       ? injected
       : new AccountRepository();
     const subscription = await new AccountService(repository)
-      .subscriptionStatus(req.tenantContext.organizationId);
+      .subscriptionStatus(req.tenantContext.organizationId, {
+        billingAvailable: Boolean(req.app && req.app.locals && req.app.locals.billingAvailable) &&
+          req.userRole === 'owner',
+      });
     return res.json({ subscription, requestId: requestId(req) });
   } catch (_error) {
     return res.status(503).json({

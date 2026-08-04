@@ -3,6 +3,8 @@
 const STATES = Object.freeze([
   'pending_verification', 'trialing', 'expired', 'active', 'past_due', 'canceled',
 ]);
+const PAID_STATES = new Set(['active', 'past_due', 'canceled']);
+const PLAN_KEYS = new Set(['starter', 'professional', 'enterprise']);
 
 function timestamp(value) {
   const date = value instanceof Date ? value : new Date(value);
@@ -13,20 +15,29 @@ function utcDay(value) {
   return Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
 }
 
-function projectSubscription(authority) {
+function providerId(value, prefix) {
+  return typeof value === 'string' && value.length <= 255 &&
+    new RegExp('^' + prefix + '[A-Za-z0-9_]+$').test(value);
+}
+
+function unavailable(serverNow) {
+  return Object.freeze({
+    state: 'unavailable', trialStart: null, trialEnd: null,
+    serverTimestamp: serverNow ? serverNow.toISOString() : null,
+    daysRemaining: null, endsToday: false, readOnly: true,
+    upgradeAvailable: false, portalAvailable: false, cancelAvailable: false,
+    cancelAtPeriodEnd: false, paidThrough: null, planKey: null,
+    showTrialBanner: false, safe: false, billingAuthorityVerified: false,
+  });
+}
+
+function projectSubscription(authority, options = {}) {
   const source = authority && typeof authority === 'object' ? authority : {};
   const storedState = source.subscription_status || source.state;
   const serverNow = timestamp(source.server_now || source.serverTimestamp);
   const trialStart = timestamp(source.trial_started_at || source.trialStart);
   const trialEnd = timestamp(source.trial_ends_at || source.trialEnd);
-  if (!STATES.includes(storedState) || !serverNow) {
-    return Object.freeze({
-      state: 'unavailable', trialStart: null, trialEnd: null,
-      serverTimestamp: serverNow ? serverNow.toISOString() : null,
-      daysRemaining: null, endsToday: false, readOnly: true,
-      upgradeAvailable: false, showTrialBanner: false, safe: false,
-    });
-  }
+  if (!STATES.includes(storedState) || !serverNow) return unavailable(serverNow);
 
   let state = storedState;
   let daysRemaining = null;
@@ -47,16 +58,27 @@ function projectSubscription(authority) {
     }
   }
 
-  if (!safe) {
-    return Object.freeze({
-      state: 'unavailable', trialStart: null, trialEnd: null,
-      serverTimestamp: serverNow.toISOString(), daysRemaining: null,
-      endsToday: false, readOnly: true, upgradeAvailable: false,
-      showTrialBanner: false, safe: false,
-    });
+  const verified = source.billing_authority_verified === true;
+  const planKey = source.billing_plan_key || source.planKey || null;
+  const customerId = source.stripe_customer_id || source.customerId;
+  const subscriptionId = source.stripe_subscription_id || source.subscriptionId;
+  const periodStart = timestamp(source.current_period_start || source.currentPeriodStart);
+  const periodEnd = timestamp(source.current_period_end || source.currentPeriodEnd || source.paidThrough);
+  if (PAID_STATES.has(state)) {
+    if (!verified || !PLAN_KEYS.has(planKey) || !providerId(customerId, 'cus_') ||
+        !providerId(subscriptionId, 'sub_') || !periodStart || !periodEnd ||
+        periodEnd.getTime() <= periodStart.getTime()) safe = false;
+  } else if (verified) {
+    safe = false;
   }
+  if (!safe) return unavailable(serverNow);
 
-  const readOnly = ['expired', 'past_due', 'canceled'].includes(state);
+  const billingAvailable = options.billingAvailable === true;
+  const paidThroughEnded = PAID_STATES.has(state) && serverNow.getTime() >= periodEnd.getTime();
+  const readOnly = state === 'expired' || (PAID_STATES.has(state) && paidThroughEnded);
+  const upgradeAvailable = billingAvailable && ['trialing', 'expired'].includes(state) && !subscriptionId;
+  const portalAvailable = billingAvailable && providerId(customerId, 'cus_');
+  const cancelAtPeriodEnd = source.cancel_at_period_end === true || source.cancelAtPeriodEnd === true;
   return Object.freeze({
     state,
     trialStart: trialStart ? trialStart.toISOString() : null,
@@ -65,21 +87,28 @@ function projectSubscription(authority) {
     daysRemaining,
     endsToday,
     readOnly,
-    upgradeAvailable: false,
+    upgradeAvailable,
+    portalAvailable,
+    cancelAvailable: billingAvailable && verified && !cancelAtPeriodEnd &&
+      ['active', 'past_due'].includes(state),
+    cancelAtPeriodEnd,
+    paidThrough: periodEnd ? periodEnd.toISOString() : null,
+    planKey: verified ? planKey : null,
     showTrialBanner: state === 'trialing',
     safe: true,
+    billingAuthorityVerified: verified,
   });
 }
 
 function canMutateInternal(projection, options = {}) {
-  if (!projection || projection.safe !== true) return false;
-  if (projection.state === 'active' || projection.state === 'trialing') return true;
+  if (!projection || projection.safe !== true || projection.readOnly === true) return false;
+  if (projection.state === 'trialing' || PAID_STATES.has(projection.state)) return true;
   return options.allowPending === true && projection.state === 'pending_verification';
 }
 
 function canPerformExternal(projection) {
-  return Boolean(projection && projection.safe === true &&
-    (projection.state === 'active' || projection.state === 'trialing'));
+  return Boolean(projection && projection.safe === true && projection.readOnly !== true &&
+    (projection.state === 'trialing' || PAID_STATES.has(projection.state)));
 }
 
 module.exports = {

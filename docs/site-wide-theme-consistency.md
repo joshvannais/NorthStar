@@ -70,22 +70,35 @@ The forgot-password UI now represents submitting, disabled, enumeration-safe suc
 - `/admin` remains a static fail-closed unavailable surface; no admin data or authorization was added.
 - No migration, dependency, provider, billing, Stripe, Railway, or production configuration is part of this correction.
 
+## Independent-audit correction
+
+The independent review of head `ea54f2228351b861b0649b6549b3f5c89c1dc69c` found material presentation gaps that the first evidence campaign did not detect. Dark `/dashboard/legacy` used near-black foregrounds against its dark canvas, ordinary text or controls failed contrast on 22 of 28 mounted routes, and the fixed mobile theme control intersected visible controls on `/`, `/contact`, and `/dashboard/polaris`. The original inventory walker also stopped at the top Express router instead of traversing nested routers.
+
+This additive correction:
+
+- maps legacy dashboard headings, copy, counts, summary text, quick actions, and interactive states to the shared dark-theme tokens;
+- corrects ordinary text, links, placeholders, controls, disabled states, transient notices, hover states, and focus indicators while retaining NorthStar navy and gold surfaces;
+- reserves one shared responsive control rail for the 44×44 theme toggle so it intersects no visible input or action at 390×844;
+- recursively traverses mounted Express router stacks and rejects an unrecognized mount pattern instead of silently omitting it;
+- adds an in-memory nested child-router negative control whose hidden mounted HTML route must break the exact 28-route allowlist; and
+- measures element-level effective-background contrast, field/control boundaries, hover/focus states, clipping, and theme-control intersections in both browser engines.
+
+The accessibility audit applies 4.5:1 to ordinary text, 3:1 to large text, and 3:1 to meaningful component boundaries and graphical controls. Its only explicit exclusions are hidden content, the unfocused skip link, and standalone decorative glyph/logo content that has no actionable or textual meaning. Transparent ancestor colors are composited against the first effective opaque background rather than assumed to sit directly on the body.
+
 ## Validation boundary
 
-The bounded evidence campaign executes the real mounted Express route graph and production HTML/JavaScript. It covers all 28 pages in dark and light modes in installed Chrome and actual Playwright WebKit at 1440×900 and 390×844, plus OS preference, live OS changes, explicit persistence, corrupt/unavailable storage, one-toggle/listener ownership, keyboard activation/focus, first-frame theme, responsive layout, recovery states, token non-retention, and loopback-only request containment.
+The bounded evidence campaign executes the real mounted Express route graph and production HTML/JavaScript. It covers all 28 pages in dark and light modes in installed Chrome and actual Playwright WebKit at 1440×900 and 390×844. It separately exercises OS preference, live OS changes, explicit persistence, corrupt/unavailable storage, one-toggle/listener ownership, first-frame theme, recovery and verification states, action-token non-retention, and loopback-only request containment. Actual Playwright WebKit is not physical Safari.
 
-The existing PostgreSQL-backed Account Lifecycle B1 browser campaign remains the authoritative behavioral proof for signup, verification, forgot/reset delivery, credential revocation, pending/trialing/expired/active presentation, and server-enforced trial gates. Local browser evidence does not claim physical Safari or production/provider readiness.
+Final additive-remediation evidence on 2026-08-03:
 
-Final local evidence on 2026-08-03:
+- Mounted theme inventory/static/authority: 3 suites, 71/71 tests. The added nested-router negative control failed inventory equality as intended; the exact production inventory remained 28 rendered routes plus two redirect-only aliases.
+- Complete mounted matrix: 224/224 renders passed (28 routes × 2 themes × 2 viewports × 2 engines). Chrome audited 2,444 text/control-value instances and 334 interaction-state groups at 1440×900, plus 2,112 text/control-value instances and 286 groups at 390×844. Actual Playwright WebKit produced the same counts. Aggregate: 9,112 text/control-value instances and 1,240 interaction-state groups.
+- Contrast and geometry: zero final contrast, component-boundary, hover, focus, clipping, horizontal-overflow, hidden-action, or theme-control-intersection failures. Both engines' inherited-background, component-boundary, and overlap negative controls detected their deliberately injected defects.
+- Preference behavior: installed Chrome and actual Playwright WebKit both passed OS default, live OS change, explicit persistence/override, corrupt storage, and unavailable-storage cases.
+- Recovery/verification matrix: 8 engine/viewport/theme combinations passed, with 29 presentation states per combination (232 state checks). Each combination mounted 2 forgot-password, 5 reset-password, and 5 verification POST outcomes, covering validation, submitting/disabled, success, enumeration-safe response, invalid, expired, replay, malformed/missing token, network/provider-safe unavailable presentation, and safe failure. All 96 state-driving POSTs remained loopback-only; raw action-token retention and provider destinations were zero.
+- PostgreSQL-backed Account Lifecycle B1 regression: four journeys passed in installed Chrome and actual Playwright WebKit at both viewports against one disposable loopback PostgreSQL 17.10 database freshly migrated through 001–012. Existing pending, verification, exact trial start/expiry, active-banner removal, forgot/reset, session revocation, request, storage, and mutation assertions remained intact.
+- Required skips: zero. No HTML document or inline script changed in this remediation, so HTML/inline parsing was not applicable. JavaScript syntax, CSS/static references, protected-object identity, and Git integrity are recorded in the PR evidence ledger.
 
-- Mounted theme inventory/static/authority: 3 suites, 70/70 tests.
-- Complete page matrix: 28 pages × 2 themes at both viewports in each engine; 224 total mounted renders passed.
-- Preference/recovery matrix: system default and live change, explicit override/persistence, corrupt and unavailable storage, keyboard focus/activation, one forgot request, and one reset request passed in each engine. Raw reset-token retention was false.
-- Existing visual lifecycle campaign: four journeys passed (installed Chrome and actual Playwright WebKit at both viewports).
-- Existing PostgreSQL-backed lifecycle campaign: four journeys passed against fresh migrations 001–012, including pending, verification, exact trial start/expiry, active-banner removal, forgot/reset, request, storage, and mutation assertions.
-- Focused JavaScript syntax: 8/8 changed files passed `node --check`.
-- Complete serial Jest on the repository-required disposable PostgreSQL 18.4 authority: 61 suites, 1,240/1,240 tests, zero required skips.
+Intermediate failures were retained rather than relabeled as passing. The old reviewed head reproduced the legacy heading at approximately 1.077:1 and quick actions at approximately 1.467:1, plus the broad route and mobile-overlap failures. During implementation, the expanded WebKit audit then found native select focus, an opacity-fading Business Profile notice, and browser-default Connect buttons; focused corrections passed before the single final complete campaign. The first disposable PostgreSQL initialization failed before startup because the sandboxed Windows process could not create PostgreSQL's restricted token; the same task-owned cluster was initialized once outside that sandbox, completed the lifecycle campaign, and was stopped and removed with zero remaining listeners.
 
-The first serial invocation used PostgreSQL 17 and omitted the two required migration negative-control databases; it was rejected as an environmental invocation mismatch (53/61 suites and 1,203/1,240 tests passed). No product change was made in response. One corrected run used PostgreSQL 18.4 plus the required fresh/upgrade controls and passed completely. Earlier focused browser corrections retained during development included a stale WebKit runtime, first-frame synchronization, loopback fixture identity, recovery-message, focus-visible, and WebKit body/canvas compatibility adjustments. No complete passing campaign was repeated after the final correction.
-
-A separate complete API campaign was not duplicated because no server/API source changed and the complete serial run includes those suites. `--detectOpenHandles` was not applicable because this correction adds no Node timer, worker, server, or persistent handle. All browser and PostgreSQL evidence was disposable and loopback-only; no production system or provider was contacted.
+A complete serial Jest run was not repeated because the final delta changes presentation CSS and its browser/ratification harness only; no production JavaScript, server/API source, migration, manifest, lockfile, dependency, data, or fixture changed. `--detectOpenHandles` was not applicable because no production timer, listener, worker, or persistent handle was added. All browser and PostgreSQL evidence was disposable and loopback-only; no production system or provider was contacted.

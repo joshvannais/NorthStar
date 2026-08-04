@@ -450,21 +450,19 @@
           console.log('[CC] Simulating lead...');
           var lead = genCall();
           var leadName = lead && lead.caller ? lead.caller : 'Customer';
-          var leadValue = lead && lead.avgPrice ? lead.avgPrice : 0;
-
-          if (typeof PolarisEngine !== 'undefined' && PolarisEngine.analyzeLead) {
-            try { PolarisEngine.analyzeLead(lead); } catch(e) { console.warn('[CC] analyzeLead error:', e); }
-          }
+          var idempotencyKey = window.crypto && typeof window.crypto.randomUUID === 'function'
+            ? window.crypto.randomUUID()
+            : String(window.SIM_SESSION_ID || 'simulation') + ':' + String(Date.now());
 
           apiFetch('/api/v1/simulations/leads', {
             method: 'POST',
+            headers: { 'Idempotency-Key': idempotencyKey },
             body: JSON.stringify({
               name: leadName,
               phone: lead.phone || '',
               email: lead.email || '',
               service: lead.service || 'General',
-              description: lead.description || '',
-              estimatedValue: leadValue
+              description: lead.description || ''
             })
           }).then(function(resp) {
             if (!resp.ok) {
@@ -476,7 +474,8 @@
           }).then(function(result) {
             simStatus.style.display = '';
             simStatus.style.color = 'var(--success)';
-            simStatusText.innerHTML = 'Lead generated: <strong>' + leadName + '</strong> ($' + (leadValue ? leadValue.toLocaleString() : '0') + ' estimated) — Synced to all pages';
+            var canonicalPrice = result && result.snapshot ? result.snapshot.customerFacingPrice : null;
+            simStatusText.textContent = 'Lead generated: ' + leadName + ' ($' + String(canonicalPrice === null || canonicalPrice === undefined ? 'not calculated' : canonicalPrice) + ' estimated) — Synced to all pages';
             console.log('[CC] Simulation complete:', result && result.ids);
             render();
             simBtn.disabled = false;

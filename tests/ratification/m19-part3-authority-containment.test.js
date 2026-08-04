@@ -176,13 +176,49 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
       'public/dashboard/calendar.html',
       'public/dashboard/command-center.html',
       'public/dashboard/polaris.html',
-      'public/dashboard/executive-brief.html',
+      'public/dashboard.html',
     ];
     for (const page of pages) {
       const html = source(page);
       expect(html).toContain('meta name="northstar-canonical-surfaces"');
       expect(html).toContain('/js/canonical-intelligence.js');
     }
+  });
+
+  test('the seven ratified pages never invoke browser-side Polaris calculation', () => {
+    const pages = [
+      'public/dashboard/lead.html',
+      'public/dashboard/leads.html',
+      'public/dashboard/communications.html',
+      'public/dashboard/calendar.html',
+      'public/dashboard/command-center.html',
+      'public/dashboard/polaris.html',
+      'public/dashboard.html',
+      'public/js/polaris-m13-bridge.js',
+    ];
+    for (const page of pages) {
+      const html = source(page);
+      expect(html).not.toMatch(/PolarisEngine\.(?:generateEstimate|analyzeLead)\s*\(/);
+    }
+  });
+
+  test('live simulation keeps the generated production flow and renders only the returned canonical snapshot price', () => {
+    const route = source('src/routes/simulations.js');
+    const commandCenter = source('public/dashboard/command-center.html');
+    const dashboard = source('public/dashboard.html');
+
+    expect(route).toContain('pipeline.generateScenario(requestedService, name)');
+    expect(route).toContain('pipeline.generateTranscript(scenario)');
+    expect(route).toContain('pipeline.extractScope(transcript, scenario)');
+    expect(route).not.toMatch(/hasControlledScenario|controlled-scenario-v1|externalTranscriptId|externalCommunicationId|externalAppointmentId/);
+    for (const caller of [commandCenter, dashboard]) {
+      expect(caller).toContain("headers: { 'Idempotency-Key': idempotencyKey }");
+      expect(caller).toContain('result.snapshot.customerFacingPrice');
+      expect(caller).not.toMatch(/PolarisEngine\.analyzeLead\s*\(|\bestimatedValue\s*:/);
+      expect(caller).not.toMatch(/\b(?:transcript|facts|scope|travel|callDurationSeconds|scheduledAppointment|externalTranscriptId)\s*:/);
+    }
+    expect(commandCenter).toContain('sessionId: window.SIM_SESSION_ID');
+    expect(dashboard).not.toContain('sessionId: window.SIM_SESSION_ID');
   });
 
   test('deployment inventory discloses route, canary, rollback, CI, and production boundaries', () => {

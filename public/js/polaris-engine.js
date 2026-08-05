@@ -189,7 +189,7 @@ window.PolarisEngine = (function () {
     var selected = selectPresentation(item);
     var metrics = current && current.metrics ? current.metrics : null;
     if (!selected) {
-      ['polarisTopOpp', 'polarisTopOppDesc', 'polarisPipeline', 'polarisPipeConf', 'polarisFocus', 'polarisFocusDesc', 'polarisFocusConf'].forEach(function (id) { setText(id, '\u2014'); });
+      ['polarisTopOpp', 'polarisTopOppDesc', 'polarisTopConf', 'polarisPipeline', 'polarisPipeConf', 'polarisFocus', 'polarisFocusDesc', 'polarisFocusConf'].forEach(function (id) { setText(id, '\u2014'); });
       return;
     }
     setText('polarisTopOpp', selected.service && selected.service.label);

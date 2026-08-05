@@ -614,7 +614,7 @@ window.syncCalendarFromAppStore = function() {
       leadId: record.canonical && record.canonical.ids.opportunity,
       phone: record.customer && record.customer.phone,
       address: record.customer && record.customer.address,
-      serviceType: presentation && presentation.service ? presentation.service.label : undefined,
+      serviceType: presentation && presentation.serviceText ? presentation.serviceText : undefined,
       estimatedPrice: presentation ? presentation.customerPrice : null,
       color: '#6395ff',
       status: record.status,

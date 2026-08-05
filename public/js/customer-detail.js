@@ -51,6 +51,8 @@ window.CustomerDetail = (function() {
   function displayDescription(value) {
     if (typeof value === 'string') return capitalizeFirst(value);
     if (!value || typeof value !== 'object' || Array.isArray(value)) return '\u2014';
+    var prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return '\u2014';
     try {
       var serialized = JSON.stringify(value);
       return typeof serialized === 'string' ? serialized : '\u2014';

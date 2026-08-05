@@ -357,6 +357,8 @@ async function runCustomerDetail(source) {
   await new Promise(function (resolve) { setImmediate(resolve); });
   await Promise.resolve();
   return {
+    title: runtime.document.getElementById('cdDrawerTitle'),
+    description: runtime.document.getElementById('cdDescription'),
     summary: runtime.document.getElementById('cdPolSummary'),
     price: runtime.document.getElementById('cdPolPrice'),
     confidence: runtime.document.getElementById('cdPolConfidence'),
@@ -699,6 +701,10 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
 
     expect(result.selectorCalls).toEqual([source, values]);
     expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
+    expect(result.title.textContent).toBe('Avery <Cedar>');
+    expect(result.title.innerHTML).toBe('Avery &lt;Cedar&gt;');
+    expect(result.description.textContent).toBe('Scope <safe> & complete');
+    expect(result.description.innerHTML).toBe('Scope &lt;safe&gt; &amp; complete');
     expect(result.summary.textContent).toBe('Zero & <Service>');
     expect(result.summary.innerHTML).toBe('Zero &amp; &lt;Service&gt;');
     expect(result.price.textContent).toBe('$0');
@@ -706,6 +712,36 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(result.revenue.textContent).toBe('$0');
     expect(result.action.textContent).toBe('Call <owner> & confirm');
     expect(result.action.innerHTML).toBe('Call &lt;owner&gt; &amp; confirm');
+  });
+
+  test('real CustomerDetail renders authentic calculator scope and labeled recommendation without entering error UI', async () => {
+    const values = productionCalculation();
+    const result = await runCustomerDetail(canonicalEnvelope(values));
+
+    expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
+    expect(result.title.textContent).toBe('Avery <Cedar>');
+    expect(result.title.innerHTML).toBe('Avery &lt;Cedar&gt;');
+    expect(result.description.textContent).toBe(JSON.stringify(values.service.scope));
+    expect(result.description.innerHTML).toContain('&quot;linearFeet&quot;:100');
+    expect(result.summary.textContent).toBe('Persisted Profile Fence');
+    expect(result.price.textContent).toBe('$37,376');
+    expect(result.action.textContent).toBe('Schedule the requested estimate window');
+  });
+
+  test.each([
+    ['null scope', null],
+    ['numeric scope', 42],
+    ['array scope', ['unexpected']],
+  ])('real CustomerDetail fails closed for %s description values', async (_label, scope) => {
+    const values = canonicalValues({
+      service: Object.freeze({ key: 'zero-service', label: 'Zero service', scope: scope }),
+    });
+    const result = await runCustomerDetail(canonicalEnvelope(values));
+
+    expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
+    expect(result.description.textContent).toBe('\u2014');
+    expect(result.summary.textContent).toBe('Zero service');
+    expect(result.action.textContent).toBe('Call <owner> & confirm');
   });
 
   test('real Lead inline load/render pipeline delegates twice and preserves valid zero and safe string action', async () => {

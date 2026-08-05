@@ -45,6 +45,30 @@ window.PolarisEngine = (function () {
     return value === null || (typeof value === 'number' && Number.isFinite(value));
   }
 
+  function validService(service) {
+    if (service === null) return true;
+    if (!isRecord(service) || (!hasOwn(service, 'key') && !hasOwn(service, 'label'))) return false;
+    if (hasOwn(service, 'key') && typeof service.key !== 'string') return false;
+    if (hasOwn(service, 'label') && typeof service.label !== 'string') return false;
+    return true;
+  }
+
+  function validConfidence(confidence) {
+    return confidence === null ||
+      (isRecord(confidence) && hasOwn(confidence, 'score') && finiteOrNull(confidence.score));
+  }
+
+  function validRisk(risk) {
+    return risk === null ||
+      (isRecord(risk) && hasOwn(risk, 'emergency') && typeof risk.emergency === 'boolean');
+  }
+
+  function validRecommendation(action) {
+    if (typeof action === 'string') return true;
+    if (!isRecord(action)) return false;
+    return typeof (action.action || action.title || action.description || action.reason) === 'string';
+  }
+
   function validValues(values) {
     if (!isRecord(values)) return false;
     if (hasOwn(values, 'contract') && values.contract !== 'CanonicalPolarisOutput') return false;
@@ -86,11 +110,11 @@ window.PolarisEngine = (function () {
       'overhead',
     ];
     if (numeric.some(function (key) { return hasOwn(values, key) && !finiteOrNull(values[key]); })) return false;
-    if (values.service !== null && !isRecord(values.service)) return false;
-    if (values.confidence !== null && !isRecord(values.confidence)) return false;
-    if (values.confidence && hasOwn(values.confidence, 'score') && !finiteOrNull(values.confidence.score)) return false;
-    if (values.risk !== null && !isRecord(values.risk)) return false;
+    if (!validService(values.service)) return false;
+    if (!validConfidence(values.confidence)) return false;
+    if (!validRisk(values.risk)) return false;
     if (values.recommendedActions !== null && !Array.isArray(values.recommendedActions)) return false;
+    if (Array.isArray(values.recommendedActions) && !values.recommendedActions.every(validRecommendation)) return false;
     return true;
   }
 

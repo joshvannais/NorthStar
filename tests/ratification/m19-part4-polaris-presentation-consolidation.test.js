@@ -7,6 +7,9 @@ const vm = require('vm');
 const ROOT = path.resolve(__dirname, '..', '..');
 const ENGINE_PATH = path.join(ROOT, 'public', 'js', 'polaris-engine.js');
 const UI_PATH = path.join(ROOT, 'public', 'js', 'polaris-ui.js');
+const CALENDAR_PATH = path.join(ROOT, 'public', 'js', 'calendar-engine.js');
+const CUSTOMER_DETAIL_PATH = path.join(ROOT, 'public', 'js', 'customer-detail.js');
+const LEAD_PATH = path.join(ROOT, 'public', 'dashboard', 'lead.html');
 
 function escapeHtml(value) {
   return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
@@ -43,6 +46,9 @@ function canonicalValues(overrides) {
     taxDisposition: Object.freeze({ status: 'calculated' }),
     pricingLineItems: Object.freeze([]),
     laborCharge: 0,
+    laborHours: 0,
+    knownInternalLaborCost: 0,
+    estimatedProductionDurationHours: 0,
     materialsCharge: 0,
     equipmentCharge: 0,
     travel: Object.freeze({ minutes: 0, distanceMiles: 0 }),
@@ -83,6 +89,317 @@ function createSandbox(values) {
   vm.runInContext(fs.readFileSync(ENGINE_PATH, 'utf8'), sandbox, { filename: 'polaris-engine.js' });
   return { item: item, listeners: listeners, sandbox: sandbox };
 }
+
+function canonicalEnvelope(values) {
+  return Object.freeze({
+    ids: Object.freeze({ opportunity: 'lead-1', customer: 'customer-1' }),
+    calculationVersion: 'canonical-v-test',
+    snapshotDigest: 'presentation-digest',
+    values: values,
+  });
+}
+
+function domElement() {
+  var text = '';
+  var html = null;
+  var children = [];
+  var classes = new Set();
+  var node = {
+    id: '',
+    className: '',
+    style: {},
+    dataset: {},
+    children: children,
+    value: '',
+    scrollTop: 0,
+    addEventListener: function () {},
+    focus: function () {},
+    remove: function () {},
+    replaceWith: function () {},
+    cloneNode: function () { return domElement(); },
+    appendChild: function (child) {
+      html = null;
+      children.push(child);
+      return child;
+    },
+    replaceChildren: function () {
+      html = null;
+      text = '';
+      children.length = 0;
+      Array.prototype.forEach.call(arguments, function (child) { children.push(child); });
+    },
+  };
+  node.classList = {
+    add: function (name) { classes.add(name); },
+    remove: function (name) { classes.delete(name); },
+    contains: function (name) { return classes.has(name); },
+  };
+  Object.defineProperties(node, {
+    textContent: {
+      get: function () {
+        return text + children.map(function (child) { return child.textContent || ''; }).join('');
+      },
+      set: function (value) {
+        text = value == null ? '' : String(value);
+        html = null;
+        children.length = 0;
+      },
+    },
+    innerHTML: {
+      get: function () {
+        if (html !== null) return html;
+        return escapeHtml(text) + children.map(function (child) { return child.innerHTML || ''; }).join('');
+      },
+      set: function (value) {
+        html = value == null ? '' : String(value);
+        text = '';
+        children.length = 0;
+      },
+    },
+    firstElementChild: {
+      get: function () { return children[0] || null; },
+    },
+  });
+  return node;
+}
+
+function createDocument() {
+  var elements = Object.create(null);
+  var listeners = [];
+  var body = domElement();
+  body.style = {};
+  return {
+    body: body,
+    readyState: 'complete',
+    hidden: false,
+    createElement: function () { return domElement(); },
+    getElementById: function (id) {
+      if (!elements[id]) {
+        elements[id] = domElement();
+        elements[id].id = id;
+      }
+      return elements[id];
+    },
+    querySelector: function () { return null; },
+    querySelectorAll: function () { return []; },
+    addEventListener: function (name, callback) { listeners.push({ name: name, callback: callback }); },
+    elements: elements,
+    listeners: listeners,
+  };
+}
+
+function createConsumerRuntime(source, options) {
+  options = options || {};
+  var document = createDocument();
+  var values = canonicalValues();
+  var item = canonicalEnvelope(values);
+  var windowListeners = [];
+  var canonicalIntelligence = options.canonicalIntelligence || {
+    getPresentation: function () { return source; },
+    getProjection: function () {
+      return {
+        items: [item],
+        records: options.records || [],
+        metrics: { estimatedRevenue: values.estimatedRevenue },
+      };
+    },
+    loadCompatibility: function () { return Promise.resolve({ items: [item], records: [], digest: 'presentation-digest' }); },
+  };
+  var sandbox = {
+    window: {
+      CanonicalIntelligence: canonicalIntelligence,
+      addEventListener: function (name, callback) { windowListeners.push({ name: name, callback: callback }); },
+      location: { href: 'https://northstar.test/dashboard/lead?id=lead-1' },
+    },
+    document: document,
+    console: console,
+    Object: Object,
+    Array: Array,
+    String: String,
+    Number: Number,
+    Boolean: Boolean,
+    Promise: Promise,
+    Date: Date,
+    URL: URL,
+    Set: Set,
+    Map: Map,
+    JSON: JSON,
+    Math: Math,
+    isNaN: isNaN,
+    parseFloat: parseFloat,
+    setTimeout: setTimeout,
+    clearTimeout: clearTimeout,
+    setInterval: setInterval,
+    clearInterval: clearInterval,
+    confirm: function () { return false; },
+    alert: function () {},
+  };
+  sandbox.window.window = sandbox.window;
+  sandbox.window.document = document;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(ENGINE_PATH, 'utf8'), sandbox, { filename: 'polaris-engine.js' });
+  var productionSelector = sandbox.window.PolarisEngine.selectPresentation;
+  var selectorCalls = [];
+  sandbox.window.PolarisEngine = {
+    selectPresentation: function (candidate) {
+      selectorCalls.push(candidate);
+      return productionSelector(candidate);
+    },
+  };
+  return {
+    document: document,
+    sandbox: sandbox,
+    selectorCalls: selectorCalls,
+  };
+}
+
+function runPolarisUi(source) {
+  var runtime = createConsumerRuntime(source);
+  vm.runInContext(fs.readFileSync(UI_PATH, 'utf8'), runtime.sandbox, { filename: 'polaris-ui.js' });
+  var container = domElement();
+  runtime.sandbox.window.PolarisUI.render(container, source);
+  return { html: container.innerHTML, selectorCalls: runtime.selectorCalls };
+}
+
+function runCalendar(source, includeEvent) {
+  var record = {
+    id: 'appointment-1',
+    scheduledStart: '2026-08-05T13:00:00.000Z',
+    scheduledEnd: '2026-08-05T14:00:00.000Z',
+    customer: { name: 'Avery <Cedar>', phone: '555-0100', address: '1 & Main' },
+    status: 'scheduled',
+    canonical: source,
+  };
+  var runtime = createConsumerRuntime(source, { records: includeEvent ? [record] : [] });
+  vm.runInContext(fs.readFileSync(CALENDAR_PATH, 'utf8'), runtime.sandbox, { filename: 'calendar-engine.js' });
+  runtime.sandbox.window.calRenderer.renderPolaris();
+  var events = includeEvent ? runtime.sandbox.window.syncCalendarFromAppStore() : [];
+  return {
+    html: runtime.document.getElementById('calendarPolaris').innerHTML,
+    events: events,
+    selectorCalls: runtime.selectorCalls,
+  };
+}
+
+async function runCustomerDetail(source) {
+  var projections = {
+    'customer-detail': { digest: 'customer-digest', records: [{ id: 'customer-1', name: 'Avery <Cedar>', status: 'active' }], items: [source] },
+    leads: { digest: 'customer-digest', records: [{ id: 'lead-1', status: 'qualified' }], items: [] },
+    estimates: { digest: 'customer-digest', records: [], items: [] },
+    communications: { digest: 'customer-digest', records: [], items: [] },
+  };
+  var canonicalIntelligence = {
+    getProjection: function () { return null; },
+    loadCompatibility: function (surface) { return Promise.resolve(projections[surface]); },
+  };
+  var runtime = createConsumerRuntime(source, { canonicalIntelligence: canonicalIntelligence });
+  runtime.sandbox.window.NorthStarAccountSession = {
+    fetch: function () { return Promise.reject(new Error('unexpected account fetch')); },
+  };
+  vm.runInContext(fs.readFileSync(CUSTOMER_DETAIL_PATH, 'utf8'), runtime.sandbox, { filename: 'customer-detail.js' });
+  runtime.sandbox.window.CustomerDetail.open('customer-1');
+  await new Promise(function (resolve) { setImmediate(resolve); });
+  await Promise.resolve();
+  return {
+    summary: runtime.document.getElementById('cdPolSummary'),
+    price: runtime.document.getElementById('cdPolPrice'),
+    confidence: runtime.document.getElementById('cdPolConfidence'),
+    revenue: runtime.document.getElementById('cdPolRevenue'),
+    action: runtime.document.getElementById('cdPolAction'),
+    loading: runtime.document.getElementById('cdDrawerLoading'),
+    selectorCalls: runtime.selectorCalls,
+  };
+}
+
+function leadInlineScript() {
+  var html = fs.readFileSync(LEAD_PATH, 'utf8');
+  var scripts = Array.from(html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi))
+    .filter(function (match) { return !/\bsrc\s*=/.test(match[1]); })
+    .map(function (match) { return match[2]; });
+  if (scripts.length !== 1) throw new Error('Expected one complete Lead inline script, found ' + scripts.length);
+  return scripts[0];
+}
+
+async function runLead(source) {
+  var runtime = createConsumerRuntime(source);
+  var PolarisApi = {
+    getOpportunities: function () {
+      return Promise.resolve({ opportunities: [{ canonical: { ids: { opportunity: 'lead-1' } } }] });
+    },
+    normalizeLead: function () {
+      return {
+        id: 'lead-1',
+        callerName: 'Avery Cedar',
+        service: 'Zero service',
+        estimatedPrice: 0,
+        status: 'qualified',
+        canonical: source,
+      };
+    },
+  };
+  runtime.sandbox.PolarisApi = PolarisApi;
+  runtime.sandbox.window.PolarisApi = PolarisApi;
+  vm.runInContext(leadInlineScript(), runtime.sandbox, { filename: 'lead.html:inline' });
+  await new Promise(function (resolve) { setImmediate(resolve); });
+  await Promise.resolve();
+  return {
+    primary: runtime.document.getElementById('polarisContainer'),
+    customer: runtime.document.getElementById('customerIntelligenceContainer'),
+    loading: runtime.document.getElementById('loadingState'),
+    selectorCalls: runtime.selectorCalls,
+  };
+}
+
+function dynamicValues(action) {
+  return canonicalValues({
+    service: Object.freeze({
+      key: 'zero-service',
+      label: 'Zero & <Service>',
+      scope: 'Scope <safe> & complete',
+    }),
+    recommendedActions: Object.freeze([action]),
+  });
+}
+
+const INVALID_SELECTOR_SOURCES = [
+  ['null', function () { return null; }],
+  ['undefined', function () { return undefined; }],
+  ['an empty raw object', function () { return {}; }],
+  ['an explicit null values wrapper', function () { return { values: null }; }],
+  ['an empty values wrapper', function () { return { values: {} }; }],
+  ['a string', function () { return 'not-canonical'; }],
+  ['a number', function () { return 42; }],
+  ['an array', function () { return []; }],
+  ['a malformed numeric projection', function () {
+    return canonicalEnvelope(canonicalValues({ customerFacingPrice: 'not-a-number' }));
+  }],
+  ['a non-finite numeric projection', function () {
+    return canonicalEnvelope(canonicalValues({ grossProfit: Infinity }));
+  }],
+  ['an explicitly invalid higher-priority wrapper', function () {
+    return { canonicalValues: null, values: canonicalValues(), snapshot: canonicalValues() };
+  }],
+  ['an explicitly invalid values wrapper with a stale snapshot', function () {
+    return { values: null, snapshot: canonicalValues() };
+  }],
+];
+
+const INVALID_CONSUMER_SOURCES = [
+  ['null', function () { return null; }],
+  ['undefined', function () { return undefined; }],
+  ['empty raw object', function () { return {}; }],
+  ['explicit null wrapper', function () { return { values: null }; }],
+  ['empty wrapped projection', function () { return { values: {} }; }],
+  ['malformed numeric projection', function () {
+    return canonicalEnvelope(canonicalValues({
+      service: Object.freeze({ key: 'bad-service', label: 'Bad service', scope: 'Bad scope' }),
+      customerFacingPrice: 'not-a-number',
+    }));
+  }],
+  ['stale higher-priority wrapper', function () {
+    return { canonicalValues: null, values: dynamicValues('Stale action'), snapshot: dynamicValues('Stale snapshot') };
+  }],
+];
 
 describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () => {
   test('selects and formats persisted canonical fields without collapsing explicit zero', () => {
@@ -134,6 +451,20 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(selected.recommendedActionText).toBe('');
   });
 
+  test.each(INVALID_SELECTOR_SOURCES)('fails closed for %s', (_label, createSource) => {
+    const selector = createSandbox(canonicalValues()).sandbox.window.PolarisEngine.selectPresentation;
+    expect(selector(createSource())).toBeNull();
+  });
+
+  test('preserves action strings and action objects without interpreting presentation text', () => {
+    const selector = createSandbox(canonicalValues()).sandbox.window.PolarisEngine.selectPresentation;
+    const stringAction = selector({ values: dynamicValues('Dispatch <crew> & confirm') });
+    const objectAction = selector({ values: dynamicValues(Object.freeze({ action: 'Call <owner> & confirm' })) });
+
+    expect(stringAction.recommendedActionText).toBe('Dispatch <crew> & confirm');
+    expect(objectAction.recommendedActionText).toBe('Call <owner> & confirm');
+  });
+
   test('legacy PolarisEngine presentation remains a selector over the same canonical object', () => {
     const values = canonicalValues();
     const loaded = createSandbox(values);
@@ -149,40 +480,107 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(presentation.insight).toBe('Call <owner> & confirm');
   });
 
-  test('real PolarisUI consumes the selector and preserves its exact escaped card semantics', () => {
-    const values = canonicalValues();
-    const loaded = createSandbox(values);
-    const productionSelector = loaded.sandbox.window.PolarisEngine.selectPresentation;
-    var selectorCalls = 0;
-    loaded.sandbox.window.PolarisEngine = {
-      selectPresentation: function (source) {
-        selectorCalls += 1;
-        return productionSelector(source);
-      },
-    };
+  test('real PolarisUI delegates at runtime and preserves zero, object-action, and escaping semantics', () => {
+    const source = canonicalEnvelope(dynamicValues(Object.freeze({ action: 'Call <owner> & confirm' })));
+    const result = runPolarisUi(source);
 
-    vm.runInContext(fs.readFileSync(UI_PATH, 'utf8'), loaded.sandbox, { filename: 'polaris-ui.js' });
-    const container = { innerHTML: '' };
-    loaded.sandbox.window.PolarisUI.render(container, { values: values });
-
-    expect(selectorCalls).toBe(1);
-    expect(container.innerHTML).toContain('Zero &amp; &lt;Service&gt;');
-    expect(container.innerHTML).toContain('>$0<');
-    expect(container.innerHTML).toContain('>0%<');
-    expect(container.innerHTML).toContain('Call &lt;owner&gt; &amp; confirm');
-    expect(container.innerHTML).not.toContain('Call <owner>');
+    expect(result.selectorCalls).toEqual([source]);
+    expect(result.html).toContain('data-canonical-presentation="true"');
+    expect(result.html).toContain('Zero &amp; &lt;Service&gt;');
+    expect(result.html).toContain('>$0<');
+    expect(result.html).toContain('>0%<');
+    expect(result.html).toContain('Call &lt;owner&gt; &amp; confirm');
+    expect(result.html).not.toContain('Call <owner>');
   });
 
-  test('every frozen mounted consumer delegates canonical field selection to PolarisEngine', () => {
-    const consumers = [
-      'public/js/polaris-ui.js',
-      'public/js/calendar-engine.js',
-      'public/js/customer-detail.js',
-      'public/dashboard/lead.html',
-    ];
-    for (const relative of consumers) {
-      const source = fs.readFileSync(path.join(ROOT, relative), 'utf8');
-      expect(source).toMatch(/PolarisEngine\.selectPresentation\s*\(/);
-    }
+  test('real Calendar delegates both rendering and event projection with valid zero and escaped string action', () => {
+    const source = canonicalEnvelope(dynamicValues('Dispatch <crew> & confirm'));
+    const result = runCalendar(source, true);
+
+    expect(result.selectorCalls).toEqual([source, source]);
+    expect(result.html).not.toContain('Canonical intelligence unavailable');
+    expect(result.html).toContain('$0');
+    expect(result.html).toContain('0%');
+    expect(result.html).toContain('Dispatch &lt;crew&gt; &amp; confirm');
+    expect(result.html).not.toContain('Dispatch <crew>');
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].serviceType).toBe('Zero & <Service>');
+    expect(result.events[0].estimatedPrice).toBe(0);
+    expect(result.events[0].duration).toBe(0);
+  });
+
+  test('real CustomerDetail load/render pipeline delegates and preserves valid zero and safe object action', async () => {
+    const values = dynamicValues(Object.freeze({ action: 'Call <owner> & confirm' }));
+    const source = canonicalEnvelope(values);
+    const result = await runCustomerDetail(source);
+
+    expect(result.selectorCalls).toEqual([source, values]);
+    expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
+    expect(result.summary.textContent).toBe('Zero & <Service>');
+    expect(result.summary.innerHTML).toBe('Zero &amp; &lt;Service&gt;');
+    expect(result.price.textContent).toBe('$0');
+    expect(result.confidence.innerHTML).toContain('Server confidence (0%)');
+    expect(result.revenue.textContent).toBe('$0');
+    expect(result.action.textContent).toBe('Call <owner> & confirm');
+    expect(result.action.innerHTML).toBe('Call &lt;owner&gt; &amp; confirm');
+  });
+
+  test('real Lead inline load/render pipeline delegates twice and preserves valid zero and safe string action', async () => {
+    const source = canonicalEnvelope(dynamicValues('Dispatch <crew> & confirm'));
+    const result = await runLead(source);
+
+    expect(result.selectorCalls).toEqual([source, source]);
+    expect(result.loading.innerHTML).not.toContain('Lead not found');
+    expect(result.primary.textContent).toContain('Canonical Polaris');
+    expect(result.primary.textContent).toContain('Customer price: 0');
+    expect(result.primary.textContent).toContain('Dispatch <crew> & confirm');
+    expect(result.primary.innerHTML).toContain('Dispatch &lt;crew&gt; &amp; confirm');
+    expect(result.primary.innerHTML).not.toContain('Dispatch <crew>');
+    expect(result.customer.textContent).toContain('Canonical Polaris');
+  });
+
+  describe.each(INVALID_CONSUMER_SOURCES)('fail-closed consumer DOM for %s', (_label, createSource) => {
+    test('PolarisUI delegates dynamically and renders only unavailable state', () => {
+      const source = createSource();
+      const result = runPolarisUi(source);
+
+      expect(result.selectorCalls).toEqual([source]);
+      expect(result.html).toContain('Canonical intelligence unavailable');
+      expect(result.html).not.toContain('data-canonical-presentation="true"');
+      expect(result.html).not.toContain('$NaN');
+    });
+
+    test('Calendar delegates dynamically and renders only unavailable state', () => {
+      const source = createSource();
+      const result = runCalendar(source, false);
+
+      expect(result.selectorCalls).toEqual([source]);
+      expect(result.html).toContain('Canonical intelligence unavailable');
+      expect(result.html).not.toContain('$NaN');
+    });
+
+    test('CustomerDetail delegates dynamically and renders canonical-unavailable values', async () => {
+      const source = createSource();
+      const result = await runCustomerDetail(source);
+
+      expect(result.selectorCalls[0]).toBe(source === undefined ? null : source);
+      expect(result.selectorCalls).toHaveLength(2);
+      expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
+      expect(result.summary.textContent).toBe('Canonical intelligence unavailable.');
+      expect(result.price.textContent).toBe('\u2014');
+      expect(result.action.textContent).toBe('\u2014');
+      expect(result.summary.innerHTML).not.toContain('$NaN');
+    });
+
+    test('Lead inline renderer delegates dynamically and renders two unavailable placeholders', async () => {
+      const source = createSource();
+      const result = await runLead(source);
+
+      expect(result.selectorCalls).toHaveLength(2);
+      expect(result.loading.innerHTML).not.toContain('Lead not found');
+      expect(result.primary.textContent).toBe('Canonical intelligence unavailable.');
+      expect(result.customer.textContent).toBe('Canonical intelligence unavailable.');
+      expect(result.primary.innerHTML).not.toContain('$NaN');
+    });
   });
 });

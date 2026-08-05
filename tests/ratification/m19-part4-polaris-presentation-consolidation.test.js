@@ -379,6 +379,40 @@ function dynamicValues(action) {
   });
 }
 
+const INVALID_NESTED_VALUES = [
+  ['an empty service object', function () {
+    return canonicalValues({ service: Object.freeze({}) });
+  }],
+  ['a non-string service key', function () {
+    return canonicalValues({ service: Object.freeze({ key: 42, label: 'Fence' }) });
+  }],
+  ['a non-string service label', function () {
+    return canonicalValues({ service: Object.freeze({ key: 'fence', label: 42 }) });
+  }],
+  ['an empty confidence object', function () {
+    return canonicalValues({ confidence: Object.freeze({}) });
+  }],
+  ['an empty risk object', function () {
+    return canonicalValues({ risk: Object.freeze({}) });
+  }],
+  ['a string false emergency value', function () {
+    return canonicalValues({ risk: Object.freeze({ emergency: 'false' }) });
+  }],
+  ['an empty recommendation record', function () {
+    return canonicalValues({ recommendedActions: Object.freeze([Object.freeze({})]) });
+  }],
+  ['a numeric recommendation', function () {
+    return canonicalValues({ recommendedActions: Object.freeze([42]) });
+  }],
+  ['a non-string selected recommendation field', function () {
+    return canonicalValues({ recommendedActions: Object.freeze([Object.freeze({ action: 42 })]) });
+  }],
+];
+
+const INVALID_NESTED_SOURCES = INVALID_NESTED_VALUES.map(function (entry) {
+  return [entry[0], function () { return canonicalEnvelope(entry[1]()); }];
+});
+
 const INVALID_SELECTOR_SOURCES = [
   ['null', function () { return null; }],
   ['undefined', function () { return undefined; }],
@@ -403,7 +437,7 @@ const INVALID_SELECTOR_SOURCES = [
   ['an explicitly invalid values wrapper with a stale snapshot', function () {
     return { values: null, snapshot: canonicalValues() };
   }],
-];
+].concat(INVALID_NESTED_SOURCES);
 
 const INVALID_CONSUMER_SOURCES = [
   ['null', function () { return null; }],
@@ -420,7 +454,7 @@ const INVALID_CONSUMER_SOURCES = [
   ['stale higher-priority wrapper', function () {
     return { canonicalValues: null, values: dynamicValues('Stale action'), snapshot: dynamicValues('Stale snapshot') };
   }],
-];
+].concat(INVALID_NESTED_SOURCES);
 
 describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () => {
   test('selects and formats persisted canonical fields without collapsing explicit zero', () => {
@@ -452,23 +486,28 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
 
   test('preserves null as Not calculated instead of fabricating zero', () => {
     const values = canonicalValues({
+      service: null,
       customerFacingPrice: null,
-      confidence: Object.freeze({ score: null }),
+      confidence: null,
       grossProfit: null,
-      recommendedActions: Object.freeze([]),
+      recommendedActions: null,
       risk: null,
     });
     const selected = createSandbox(values).sandbox.window.PolarisEngine.selectPresentation({ values: values });
 
+    expect(selected.service).toBeNull();
+    expect(selected.serviceText).toBe('');
     expect(selected.customerPrice).toBeNull();
     expect(selected.customerPriceText).toBe('Not calculated');
     expect(selected.customerPriceRoundedText).toBe('Not calculated');
+    expect(selected.confidence).toBeNull();
     expect(selected.confidenceScore).toBeNull();
     expect(selected.confidenceText).toBe('Not calculated');
     expect(selected.grossProfit).toBeNull();
     expect(selected.grossProfitText).toBe('Not calculated');
     expect(selected.risk).toBeNull();
     expect(selected.riskText).toBe('null');
+    expect(selected.recommendations).toBeNull();
     expect(selected.recommendedActionText).toBe('');
   });
 
@@ -515,6 +554,13 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     const rendered = runSharedCard(canonicalValues({ customerFacingPrice: 'not-a-number' }));
 
     expect(Object.values(rendered)).toEqual(Array(8).fill('\u2014'));
+  });
+
+  test.each(INVALID_NESTED_VALUES)('shared Polaris card clears stale fields for %s', (_label, createValues) => {
+    const rendered = runSharedCard(createValues());
+
+    expect(Object.values(rendered)).toEqual(Array(8).fill('\u2014'));
+    expect(rendered.polarisFocusConf).not.toBe('Emergency evidence');
   });
 
   test('real PolarisUI delegates at runtime and preserves zero, object-action, and escaping semantics', () => {

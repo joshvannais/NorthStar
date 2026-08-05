@@ -10,6 +10,14 @@ const UI_PATH = path.join(ROOT, 'public', 'js', 'polaris-ui.js');
 const CALENDAR_PATH = path.join(ROOT, 'public', 'js', 'calendar-engine.js');
 const CUSTOMER_DETAIL_PATH = path.join(ROOT, 'public', 'js', 'customer-detail.js');
 const LEAD_PATH = path.join(ROOT, 'public', 'dashboard', 'lead.html');
+const {
+  CALCULATION_VERSION,
+  calculateCanonicalPolaris,
+} = require('../../src/services/canonicalPolarisCalculation');
+const {
+  canonicalFenceProfile,
+  canonicalFenceScope,
+} = require('../helpers/m19-part3-business-profile');
 
 function escapeHtml(value) {
   return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
@@ -53,6 +61,36 @@ function canonicalValues(overrides) {
     equipmentCharge: 0,
     travel: Object.freeze({ minutes: 0, distanceMiles: 0 }),
     notCalculated: Object.freeze([]),
+  }, overrides || {}));
+}
+
+function productionCalculation(overrides) {
+  return calculateCanonicalPolaris(Object.assign({
+    organizationId: '00000000-0000-0000-0000-000000000083',
+    customerId: '10000000-0000-0000-0000-000000000083',
+    opportunityId: '20000000-0000-0000-0000-000000000083',
+    calculationVersion: CALCULATION_VERSION,
+    service: { key: 'fence', scope: canonicalFenceScope() },
+    transcript: [
+      { turnId: 'turn-1', speaker: 'customer', text: 'I need a new 100-foot cedar fence and the existing fence removed.' },
+      { turnId: 'turn-2', speaker: 'customer', text: 'Please include one walk gate. Weekday mornings work best. This is not an emergency.' },
+    ],
+    facts: [
+      { id: 'fact-linear-feet', variable: 'linearFeet', status: 'collected', normalizedValue: 100, evidenceTurnId: 'turn-1' },
+      { id: 'fact-material', variable: 'material', status: 'collected', normalizedValue: 'cedar', evidenceTurnId: 'turn-1' },
+      { id: 'fact-removal', variable: 'removalRequired', status: 'collected', normalizedValue: true, evidenceTurnId: 'turn-1' },
+      { id: 'fact-gate', variable: 'gates', status: 'collected', normalizedValue: [{ type: 'walk' }], evidenceTurnId: 'turn-2' },
+    ],
+    businessProfile: canonicalFenceProfile(),
+    businessProfileAuthority: {
+      id: '30000000-0000-0000-0000-000000000083',
+      versionLabel: 'm19-part4-slice3-production-output-v1',
+      profileHash: 'b'.repeat(64),
+    },
+    appointmentPreference: { dayPart: 'morning', days: ['weekday'] },
+    travel: null,
+    callDurationSeconds: 242,
+    actualCrewAssignment: null,
   }, overrides || {}));
 }
 
@@ -523,6 +561,60 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
 
     expect(stringAction.recommendedActionText).toBe('Dispatch <crew> & confirm');
     expect(objectAction.recommendedActionText).toBe('Call <owner> & confirm');
+  });
+
+  test('accepts the authentic calculator labeled recommendation without rewriting its values', () => {
+    const values = productionCalculation();
+    const selector = createSandbox(values).sandbox.window.PolarisEngine.selectPresentation;
+
+    expect(values.recommendedActions).toEqual([{
+      code: 'schedule-estimate',
+      label: 'Schedule the requested estimate window',
+      priority: 'high',
+    }]);
+    const selected = selector({ values: values });
+    expect(selected).not.toBeNull();
+    expect(selected.values).toBe(values);
+    expect(selected.recommendedActionText).toBe('Schedule the requested estimate window');
+  });
+
+  test('renders authentic calculator output through the complete real PolarisUI consumer', () => {
+    const values = productionCalculation();
+    const source = canonicalEnvelope(values);
+    const result = runPolarisUi(source);
+
+    expect(result.selectorCalls).toEqual([source]);
+    expect(result.html).toContain('data-canonical-presentation="true"');
+    expect(result.html).toContain('Persisted Profile Fence');
+    expect(result.html).toContain('Schedule the requested estimate window');
+    expect(result.html).not.toContain('Canonical intelligence unavailable');
+    expect(result.html).not.toContain('$NaN');
+  });
+
+  test('accepts and renders the authentic unsupported-service output with its null label', () => {
+    const values = productionCalculation({ service: { key: 'roofing', scope: {} } });
+    const source = canonicalEnvelope(values);
+    const selector = createSandbox(values).sandbox.window.PolarisEngine.selectPresentation;
+
+    expect(values.service).toMatchObject({
+      key: 'roofing',
+      label: null,
+      supported: false,
+      unpricedReason: 'service_not_configured',
+    });
+    const selected = selector(source);
+    expect(selected).not.toBeNull();
+    expect(selected.serviceText).toBe('roofing');
+    expect(selected.customerPriceText).toBe('Not calculated');
+    expect(selected.recommendedActionText).toBe('Schedule the requested estimate window');
+
+    const result = runPolarisUi(source);
+    expect(result.selectorCalls).toEqual([source]);
+    expect(result.html).toContain('data-canonical-presentation="true"');
+    expect(result.html).toContain('>roofing<');
+    expect(result.html).toContain('Schedule the requested estimate window');
+    expect(result.html).not.toContain('Canonical intelligence unavailable');
+    expect(result.html).not.toContain('$NaN');
   });
 
   test('accepts each explicit valid envelope without changing the canonical values identity', () => {

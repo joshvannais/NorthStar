@@ -330,8 +330,16 @@ function runCalendar(source, includeEvent) {
   vm.runInContext(fs.readFileSync(CALENDAR_PATH, 'utf8'), runtime.sandbox, { filename: 'calendar-engine.js' });
   runtime.sandbox.window.calRenderer.renderPolaris();
   var events = includeEvent ? runtime.sandbox.window.syncCalendarFromAppStore() : [];
+  if (includeEvent) {
+    runtime.sandbox.window.calState.events = events;
+    runtime.sandbox.window.calState.view = 'day';
+    runtime.sandbox.window.calState.selectedDate = '2026-08-05';
+    runtime.sandbox.window.calState.currentDate = new Date('2026-08-05T12:00:00.000Z');
+    runtime.sandbox.window.calRenderer.renderCalendarView();
+  }
   return {
     html: runtime.document.getElementById('calendarPolaris').innerHTML,
+    calendarView: runtime.document.getElementById('calendarGrid').innerHTML,
     events: events,
     selectorCalls: runtime.selectorCalls,
   };
@@ -694,6 +702,21 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(result.events[0].duration).toBe(0);
   });
 
+  test('real Calendar preserves an authentic unsupported-service fallback in its event projection and rendered appointment', () => {
+    const values = productionCalculation({ service: { key: 'roofing', scope: {} } });
+    const source = canonicalEnvelope(values);
+    const result = runCalendar(source, true);
+
+    expect(result.selectorCalls).toEqual([source, source]);
+    expect(result.html).not.toContain('Canonical intelligence unavailable');
+    expect(result.html).toContain('Schedule the requested estimate window');
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].serviceType).toBe('roofing');
+    expect(result.events[0].estimatedPrice).toBeNull();
+    expect(result.calendarView).toContain('roofing');
+    expect(result.calendarView).not.toContain('null');
+  });
+
   test('real CustomerDetail load/render pipeline delegates and preserves valid zero and safe object action', async () => {
     const values = dynamicValues(Object.freeze({ action: 'Call <owner> & confirm' }));
     const source = canonicalEnvelope(values);
@@ -740,6 +763,53 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
 
     expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
     expect(result.description.textContent).toBe('\u2014');
+    expect(result.summary.textContent).toBe('Zero service');
+    expect(result.action.textContent).toBe('Call <owner> & confirm');
+  });
+
+  test.each([
+    ['Date scope', function () { return new Date('2026-08-05T00:00:00.000Z'); }],
+    ['Map scope', function () { return new Map([['linearFeet', 100]]); }],
+    ['class-instance scope', function () {
+      class ScopeRecord {
+        constructor() { this.linearFeet = 100; }
+      }
+      return new ScopeRecord();
+    }],
+    ['custom-prototype scope', function () {
+      var scope = Object.create({ source: 'prototype' });
+      scope.linearFeet = 100;
+      return scope;
+    }],
+    ['cyclic scope', function () {
+      var scope = { linearFeet: 100 };
+      scope.self = scope;
+      return scope;
+    }],
+  ])('real CustomerDetail fails closed for %s without disturbing canonical presentation', async (_label, createScope) => {
+    const values = canonicalValues({
+      service: Object.freeze({ key: 'zero-service', label: 'Zero service', scope: createScope() }),
+    });
+    const result = await runCustomerDetail(canonicalEnvelope(values));
+
+    expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
+    expect(result.description.textContent).toBe('\u2014');
+    expect(result.summary.textContent).toBe('Zero service');
+    expect(result.action.textContent).toBe('Call <owner> & confirm');
+  });
+
+  test('real CustomerDetail accepts and safely escapes a plain null-prototype scope', async () => {
+    const scope = Object.create(null);
+    scope.note = '<safe> & clear';
+    scope.units = 0;
+    const values = canonicalValues({
+      service: Object.freeze({ key: 'zero-service', label: 'Zero service', scope: scope }),
+    });
+    const result = await runCustomerDetail(canonicalEnvelope(values));
+
+    expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
+    expect(result.description.textContent).toBe(JSON.stringify(scope));
+    expect(result.description.innerHTML).toBe('{&quot;note&quot;:&quot;&lt;safe&gt; &amp; clear&quot;,&quot;units&quot;:0}');
     expect(result.summary.textContent).toBe('Zero service');
     expect(result.action.textContent).toBe('Call <owner> & confirm');
   });

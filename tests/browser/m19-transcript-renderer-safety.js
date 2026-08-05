@@ -32,7 +32,8 @@ const LEGACY_IMAGE_PAYLOAD = '<img src="/m19-transcript-attack-legacy" onerror="
 const LEAD_IMAGE_PAYLOAD = '<img src="/m19-transcript-attack-lead" onerror="window.__m19TranscriptLeadXss=1">';
 const CLOSING_PAYLOAD = '</div><script>window.__m19TranscriptScript=1</script><svg onload="window.__m19TranscriptSvg=1">';
 const LABEL_PAYLOAD = '<img/src=/m19-transcript-attack-label/onerror=window.__m19TranscriptLabelXss=1>';
-const CUSTOMER_NAME = LABEL_PAYLOAD + ' Cedar';
+const CUSTOMER_NAME = 'Cedar Customer';
+const DRAWER_CUSTOMER_NAME = LABEL_PAYLOAD + ' Cedar';
 const STRUCTURED_TURNS = Object.freeze([
   Object.freeze({ speaker: 'assistant', text: 'Structured ' + IMAGE_PAYLOAD }),
   Object.freeze({ speaker: 'human', text: CLOSING_PAYLOAD }),
@@ -239,12 +240,22 @@ async function installBoundaries(context, origin, evidence) {
     if (url.pathname === '/api/account/subscription') return route.fulfill(json({ subscription: account().subscription }));
     if (url.pathname === '/api/account/preferences') return route.fulfill(json({ preferences: {} }));
     if (url.pathname.indexOf('/api/v1/canonical/compat/') === 0) {
-      return route.fulfill(json(projection(decodeURIComponent(url.pathname.split('/').pop()))));
+      const surface = decodeURIComponent(url.pathname.split('/').pop());
+      const response = projection(surface);
+      if (surface === 'customer-detail' && url.searchParams.has('customerId')) {
+        response.data.records[0].name = DRAWER_CUSTOMER_NAME;
+        response.data.items[0].customer.name = DRAWER_CUSTOMER_NAME;
+      }
+      if (surface === 'leads' && new URL(request.frame().url()).pathname === '/dashboard/lead') {
+        response.data.records[0].customer.name = DRAWER_CUSTOMER_NAME;
+        response.data.items[0].customer.name = DRAWER_CUSTOMER_NAME;
+      }
+      return route.fulfill(json(response));
     }
-    if (url.pathname === '/api/demo/sessions/m19-public/transcript') {
+    if (url.pathname === '/api/demo/m19-public/transcript') {
       return route.fulfill(json({ lines: PUBLIC_TURNS }));
     }
-    if (url.pathname.indexOf('/api/demo/sessions/m19-public/') === 0) {
+    if (url.pathname.indexOf('/api/demo/m19-public/') === 0) {
       return route.fulfill(json({ success: true, data: null, executiveSummary: null, polaris: null }));
     }
     if (url.pathname === '/api/events') return route.fulfill(json([]));
@@ -330,7 +341,7 @@ async function exerciseCustomerDetail(page, evidence, label) {
   recordCheck(evidence, primary.transcript.scrollTop === 0, label + ': CustomerDetail starts at transcript top', primary.transcript);
   recordCheck(evidence, primary.transcript.role === 'log' && primary.transcript.live === 'polite',
     label + ': CustomerDetail live-region contract', primary.transcript);
-  recordCheck(evidence, primary.title === CUSTOMER_NAME, label + ': customer title remains literal text', primary.title);
+  recordCheck(evidence, primary.title === DRAWER_CUSTOMER_NAME, label + ': customer title remains literal text', primary.title);
   checkNoOverflow(evidence, primary.layout, label);
 
   await page.evaluate(id => window.CustomerDetail.selectTranscript(id), LEGACY_COMMUNICATION_ID);

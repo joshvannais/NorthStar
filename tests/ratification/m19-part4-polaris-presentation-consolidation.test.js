@@ -9,6 +9,7 @@ const ENGINE_PATH = path.join(ROOT, 'public', 'js', 'polaris-engine.js');
 const UI_PATH = path.join(ROOT, 'public', 'js', 'polaris-ui.js');
 const CALENDAR_PATH = path.join(ROOT, 'public', 'js', 'calendar-engine.js');
 const CUSTOMER_DETAIL_PATH = path.join(ROOT, 'public', 'js', 'customer-detail.js');
+const TRANSCRIPT_RENDERER_PATH = path.join(ROOT, 'public', 'js', 'transcript-renderer.js');
 const LEAD_PATH = path.join(ROOT, 'public', 'dashboard', 'lead.html');
 const {
   CALCULATION_VERSION,
@@ -160,6 +161,7 @@ function domElement() {
   var html = null;
   var children = [];
   var classes = new Set();
+  var attributes = Object.create(null);
   var node = {
     id: '',
     className: '',
@@ -168,6 +170,11 @@ function domElement() {
     children: children,
     value: '',
     scrollTop: 0,
+    scrollHeight: 240,
+    setAttribute: function (name, value) { attributes[String(name)] = String(value); },
+    getAttribute: function (name) {
+      return Object.prototype.hasOwnProperty.call(attributes, name) ? attributes[name] : null;
+    },
     addEventListener: function () {},
     focus: function () {},
     remove: function () {},
@@ -224,15 +231,26 @@ function createDocument() {
   var listeners = [];
   var body = domElement();
   body.style = {};
-  return {
+  var document = {
     body: body,
     readyState: 'complete',
     hidden: false,
-    createElement: function () { return domElement(); },
+    createElement: function () {
+      var node = domElement();
+      node.ownerDocument = document;
+      return node;
+    },
+    createTextNode: function (value) {
+      var node = domElement();
+      node.ownerDocument = document;
+      node.textContent = value;
+      return node;
+    },
     getElementById: function (id) {
       if (!elements[id]) {
         elements[id] = domElement();
         elements[id].id = id;
+        elements[id].ownerDocument = document;
       }
       return elements[id];
     },
@@ -242,6 +260,8 @@ function createDocument() {
     elements: elements,
     listeners: listeners,
   };
+  body.ownerDocument = document;
+  return document;
 }
 
 function createConsumerRuntime(source, options) {
@@ -293,6 +313,7 @@ function createConsumerRuntime(source, options) {
   sandbox.window.window = sandbox.window;
   sandbox.window.document = document;
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(TRANSCRIPT_RENDERER_PATH, 'utf8'), sandbox, { filename: 'transcript-renderer.js' });
   vm.runInContext(fs.readFileSync(ENGINE_PATH, 'utf8'), sandbox, { filename: 'polaris-engine.js' });
   var productionSelector = sandbox.window.PolarisEngine.selectPresentation;
   var selectorCalls = [];

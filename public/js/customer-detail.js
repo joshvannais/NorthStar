@@ -199,57 +199,21 @@ window.CustomerDetail = (function() {
     _injected = true;
   }
 
-  // ── Transcript Rendering (demo-msg style from index.html) ──
+  // ── Shared Transcript Rendering ──
 
-  function renderTranscriptBubbles(transcript, customerName) {
-    if (!transcript) return '<p style="font-size:13px;color:var(--neutral-500);">No transcript available.</p>';
-
-    var turns;
-    try {
-      if (typeof transcript === 'string') {
-        turns = JSON.parse(transcript);
-      } else if (Array.isArray(transcript)) {
-        turns = transcript;
-      } else {
-        return '<p style="font-size:13px;color:var(--neutral-500);">Unrecognized transcript format.</p>';
-      }
-    } catch (e) {
-      // Try legacy line-based format
-      if (typeof transcript === 'string' && transcript.indexOf('\n') >= 0) {
-        return renderLegacyTranscript(transcript, customerName);
-      }
-      return '<p style="font-size:13px;color:var(--neutral-500);">Unable to parse transcript.</p>';
-    }
-
-    if (!Array.isArray(turns) || turns.length === 0) {
-      return '<p style="font-size:13px;color:var(--neutral-500);">No transcript turns found.</p>';
-    }
-
+  function renderTranscript(transcript, customerName) {
     var firstName = customerName ? customerName.split(' ')[0] : 'Customer';
-    var html = '';
-    for (var i = 0; i < turns.length; i++) {
-      var turn = turns[i];
-      var cls = turn.speaker === 'ai' ? 'ai' : (turn.speaker === 'customer' ? 'customer' : 'system');
-      var label = cls === 'ai' ? 'AI AGENT' : (cls === 'customer' ? firstName : '');
-      var labelHtml = label ? '<div class="demo-msg-label">' + label + '</div>' : '';
-      html += '<div class="demo-msg ' + cls + '">' + labelHtml + turn.text + '</div>';
-    }
-    return html;
-  }
-
-  function renderLegacyTranscript(text, customerName) {
-    var firstName = customerName ? customerName.split(' ')[0] : 'Customer';
-    return text.split('\n').map(function(l) {
-      if (l.indexOf('AI:') === 0 || l.indexOf('Agent:') === 0) {
-        var colon = l.indexOf(':');
-        return '<div class="demo-msg ai"><div class="demo-msg-label">AI AGENT</div>' + l.substring(colon + 1).trim() + '</div>';
-      }
-      if (l.indexOf('Customer:') === 0) {
-        var c = l.indexOf(':');
-        return '<div class="demo-msg customer"><div class="demo-msg-label">' + firstName + '</div>' + l.substring(c + 1).trim() + '</div>';
-      }
-      return '<div class="demo-msg system">' + l + '</div>';
-    }).join('');
+    return window.NorthStarTranscriptRenderer.render($('cdTranscript'), transcript, {
+      labels: { ai: 'AI AGENT', customer: firstName, system: '' },
+      messages: {
+        missing: 'No transcript available.',
+        unrecognized: 'Unrecognized transcript format.',
+        parseError: 'Unable to parse transcript.',
+        empty: 'No transcript turns found.'
+      },
+      scroll: 'top',
+      live: 'polite'
+    });
   }
 
   // ── Data Fetching ──
@@ -479,8 +443,7 @@ window.CustomerDetail = (function() {
     $('cdPricingBreakdown').innerHTML = renderPricingBreakdown(data.estimates);
 
     // Transcript
-    $('cdTranscript').innerHTML = renderTranscriptBubbles(data.primaryTranscript, data.name);
-    $('cdTranscript').scrollTop = 0;
+    renderTranscript(data.primaryTranscript, data.name);
   }
 
   function close() {
@@ -494,8 +457,7 @@ window.CustomerDetail = (function() {
     if (!commId || !_currentData) return;
     var transcript = _commIdToTranscript[commId];
     if (transcript) {
-      $('cdTranscript').innerHTML = renderTranscriptBubbles(transcript, _currentData.name);
-      $('cdTranscript').scrollTop = 0;
+      renderTranscript(transcript, _currentData.name);
     }
   }
 

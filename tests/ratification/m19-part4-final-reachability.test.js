@@ -34,6 +34,9 @@ const TEST_PATHS = Object.freeze([
   'tests/browser/m19-part4-final-reachability.js',
   'tests/ratification/m19-part4-final-reachability.test.js',
 ]);
+const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
+  'public/js/transcript-renderer.js',
+]);
 const { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS } = require('../helpers/site-theme-pages');
 const packageMetadata = require('../../package.json');
 const { app } = require('../..');
@@ -144,7 +147,8 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
       .filter(relative => relative.startsWith('public/js/') && relative.endsWith('.js') && !current.has(relative))
       .sort();
     expect(missingPublicScripts).toEqual(RETIRED.map(candidate => candidate.path).sort());
-    expect([...current].filter(relative => relative.startsWith('public/js/') && !base.has(relative))).toEqual([]);
+    expect([...current].filter(relative => relative.startsWith('public/js/') && !base.has(relative)))
+      .toEqual(AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS);
     expect([...base].filter(relative => relative.startsWith('src/') && !current.has(relative))).toEqual([]);
     expect([...base].filter(relative => relative.startsWith('migrations/') && !current.has(relative))).toEqual([]);
     expect(TEST_PATHS.every(relative => current.has(relative) && fs.existsSync(path.join(ROOT, ...relative.split('/'))))).toBe(true);

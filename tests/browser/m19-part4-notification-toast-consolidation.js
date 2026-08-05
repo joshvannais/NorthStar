@@ -29,6 +29,7 @@ const SURFACES = Object.freeze([
   Object.freeze({ label: 'Calendar', route: '/dashboard/calendar', mode: 'legacy' }),
   Object.freeze({ label: 'AI Settings', route: '/dashboard/ai-settings', mode: 'legacy' }),
   Object.freeze({ label: 'Lead Detail', route: '/dashboard/lead?id=00000000-0000-4000-8000-000000000404', mode: 'legacy' }),
+  Object.freeze({ label: 'Public Contact fallback', route: '/contact', mode: 'legacy', serviceAbsent: true }),
 ]);
 
 function json(body, status = 200) {
@@ -173,6 +174,7 @@ async function exerciseToast(page, surface, viewport, theme) {
       containerTop: container && container.style.top,
       containerLeft: container && container.style.left,
       containerTransform: container && container.style.transform,
+      serviceAvailable: Boolean(window.NotificationService),
       after: {
         bodyX: document.body.getBoundingClientRect().x,
         bodyWidth: document.body.getBoundingClientRect().width,
@@ -189,6 +191,9 @@ async function exerciseToast(page, surface, viewport, theme) {
   assert.strictEqual(observed.role, 'alert', `${surface.label}/${viewport}/${theme}: severity role`);
   assert.strictEqual(observed.live, 'assertive', `${surface.label}/${viewport}/${theme}: live region`);
   assert.strictEqual(observed.atomic, 'true', `${surface.label}/${viewport}/${theme}: atomic announcement`);
+  if (surface.serviceAbsent) {
+    assert.strictEqual(observed.serviceAvailable, false, `${surface.label}: API fallback remains independent`);
+  }
   assert.deepStrictEqual(observed.after, before, `${surface.label}/${viewport}/${theme}: no page shift or overflow`);
   assert.strictEqual(observed.after.scrollWidth, observed.after.clientWidth, `${surface.label}/${viewport}/${theme}: no horizontal overflow`);
 
@@ -233,14 +238,13 @@ async function main() {
         const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
         await context.addInitScript(selectedTheme => {
           localStorage.setItem('theme', selectedTheme);
-          document.documentElement.setAttribute('data-theme', selectedTheme);
         }, theme);
         await installBoundaries(context, origin, evidence);
         for (const surface of SURFACES) {
           const page = await context.newPage();
           const pageErrors = [];
           const consoleErrors = [];
-          page.on('pageerror', error => pageErrors.push(error.message));
+          page.on('pageerror', error => pageErrors.push(error.stack || error.message));
           page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
           const response = await page.goto(origin + surface.route, { waitUntil: 'networkidle' });
           assert.strictEqual(response.status(), 200, `${surface.label}: mounted route status`);

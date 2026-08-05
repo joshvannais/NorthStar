@@ -116,6 +116,7 @@ class TrialReminderRepository {
 
       let scheduled = 0;
       let invalid = 0;
+      let transitioned = 0;
       for (const authority of authorities.rows) {
         let recipient = null;
         try { recipient = normalizeRecipient(authority.notification_email); } catch (_error) { recipient = null; }
@@ -134,7 +135,7 @@ class TrialReminderRepository {
         }
 
         const digest = recipientHash(recipient);
-        await client.query(
+        const destinationTransition = await client.query(
           `UPDATE trial_reminder_outbox
               SET status = 'canceled', canceled_at = ${current}, terminal_code = 'destination_changed',
                   lease_token = NULL, lease_expires_at = NULL, updated_at = ${current}
@@ -143,19 +144,52 @@ class TrialReminderRepository {
               AND (status = 'pending' OR (status = 'leased' AND lease_expires_at <= ${current}))`,
           [now, authority.organization_id, authority.subscription_id, authority.trial_ends_at, digest]
         );
+        transitioned += destinationTransition.rowCount;
         for (const threshold of THRESHOLDS) {
           const inserted = await client.query(
             `INSERT INTO trial_reminder_outbox (
                organization_id, subscription_id, trial_ends_at, threshold_days,
                scheduled_for, recipient_sha256, next_attempt_at
-             ) VALUES (
+             ) SELECT
                $1, $2, $3, $4::smallint,
                $3::timestamptz - (($4::smallint * 24) * INTERVAL '1 hour'), $5,
                $3::timestamptz - (($4::smallint * 24) * INTERVAL '1 hour')
-             )
-             ON CONFLICT (organization_id, subscription_id, trial_ends_at, threshold_days)
-             DO NOTHING`,
-            [authority.organization_id, authority.subscription_id, authority.trial_ends_at, threshold, digest]
+              WHERE NOT EXISTS (
+                SELECT 1
+                  FROM trial_reminder_outbox evidence
+                 WHERE evidence.organization_id = $1
+                   AND evidence.subscription_id = $2
+                   AND evidence.trial_ends_at = $3
+                   AND evidence.threshold_days = $4::smallint
+                   AND (
+                     evidence.status IN ('sent', 'failed')
+                     OR evidence.attempt_count > 0
+                     OR evidence.terminal_code IN (
+                       'superseded_threshold',
+                       'trial_expired',
+                       'subscription_authority_changed'
+                     )
+                   )
+              )
+             ON CONFLICT (
+               organization_id, subscription_id, trial_ends_at, threshold_days, recipient_sha256
+             ) DO UPDATE
+               SET status = 'pending',
+                   attempt_count = 0,
+                   next_attempt_at = EXCLUDED.scheduled_for,
+                   lease_token = NULL,
+                   lease_expires_at = NULL,
+                   canceled_at = NULL,
+                   terminal_code = NULL,
+                   updated_at = COALESCE($6::timestamptz, clock_timestamp())
+             WHERE trial_reminder_outbox.status = 'canceled'
+               AND trial_reminder_outbox.attempt_count = 0
+               AND trial_reminder_outbox.terminal_code IN (
+                 'destination_changed',
+                 'destination_invalid',
+                 'owner_authority_invalid'
+               )`,
+            [authority.organization_id, authority.subscription_id, authority.trial_ends_at, threshold, digest, now]
           );
           scheduled += inserted.rowCount;
         }
@@ -183,7 +217,12 @@ class TrialReminderRepository {
                  OR (reminder.status = 'leased' AND reminder.lease_expires_at <= ${current}))`,
         [now]
       );
-      return { canceled: canceled.rowCount + invalid + noBurst.rowCount, scheduled };
+      transitioned += invalid;
+      return {
+        canceled: canceled.rowCount + transitioned + noBurst.rowCount,
+        scheduled,
+        transitioned,
+      };
     });
   }
 

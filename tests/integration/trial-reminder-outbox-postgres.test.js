@@ -397,4 +397,210 @@ describe('durable trial reminder PostgreSQL authority', () => {
       terminal_code: 'resend_provider_unavailable',
     });
   });
+
+  test('destination recovery replaces only unsent future authority and reports exact transitions', async () => {
+    controlledNow = new Date('2027-04-01T00:00:00.000Z');
+    const trial = await seedTrial();
+    const normalizer = require('../../src/email/transactional').normalizeTransactionalRecipient;
+    expect(await repository().reconcileAuthorities(normalizer)).toEqual(expect.objectContaining({
+      canceled: 0,
+      scheduled: 3,
+    }));
+
+    const replacement = 'replacement-owner@example.test';
+    await pool.query(
+      `UPDATE notification_preferences SET notification_email = $2 WHERE organization_id = $1`,
+      [trial.organizationId, replacement]
+    );
+    expect(await repository().reconcileAuthorities(normalizer)).toEqual({
+      canceled: 3,
+      scheduled: 3,
+      transitioned: 3,
+    });
+
+    controlledNow = new Date(trial.trialEnd.getTime() - 7 * DAY);
+    const delivery = captureDelivery();
+    const first = await service(delivery).runOnce({ limit: 1 });
+    const second = await service(delivery).runOnce({ limit: 1 });
+    expect(first.sent).toBe(1);
+    expect(second.sent).toBe(0);
+    expect(delivery.calls).toHaveLength(1);
+    expect(delivery.calls[0].message.to).toBe(replacement);
+    expect(delivery.calls[0].message.to).not.toBe(trial.notificationEmail);
+  });
+
+  test('transient owner and destination invalidity recover future reminders once', async () => {
+    controlledNow = new Date('2027-05-01T00:00:00.000Z');
+    const ownerTrial = await seedTrial();
+    const destinationTrial = await seedTrial();
+    const normalizer = require('../../src/email/transactional').normalizeTransactionalRecipient;
+    expect(await repository().reconcileAuthorities(normalizer)).toEqual({
+      canceled: 0,
+      scheduled: 6,
+      transitioned: 0,
+    });
+
+    await pool.query(
+      `UPDATE organization_memberships SET status = 'suspended' WHERE id = $1`,
+      [ownerTrial.membershipId]
+    );
+    await pool.query(
+      `UPDATE notification_preferences SET notification_email = 'not-an-email' WHERE organization_id = $1`,
+      [destinationTrial.organizationId]
+    );
+    expect(await repository().reconcileAuthorities(normalizer)).toEqual({
+      canceled: 6,
+      scheduled: 0,
+      transitioned: 6,
+    });
+
+    await pool.query(
+      `UPDATE organization_memberships SET status = 'active' WHERE id = $1`,
+      [ownerTrial.membershipId]
+    );
+    await pool.query(
+      `UPDATE notification_preferences SET notification_email = $2 WHERE organization_id = $1`,
+      [destinationTrial.organizationId, destinationTrial.notificationEmail]
+    );
+    expect(await repository().reconcileAuthorities(normalizer)).toEqual({
+      canceled: 0,
+      scheduled: 6,
+      transitioned: 0,
+    });
+
+    controlledNow = new Date(ownerTrial.trialEnd.getTime() - 7 * DAY);
+    const delivery = captureDelivery();
+    const summary = await service(delivery).runOnce({ limit: 10 });
+    const repeated = await service(delivery).runOnce({ limit: 10 });
+    expect(summary.sent).toBe(2);
+    expect(repeated.sent).toBe(0);
+    expect(delivery.calls.map(call => call.message.to).sort()).toEqual([
+      ownerTrial.notificationEmail,
+      destinationTrial.notificationEmail,
+    ].sort());
+    const stored = await pool.query(
+      `SELECT row_to_json(reminder)::text AS body
+         FROM trial_reminder_outbox reminder
+        WHERE organization_id = ANY($1::uuid[])`,
+      [[ownerTrial.organizationId, destinationTrial.organizationId]]
+    );
+    expect(stored.rows).toHaveLength(6);
+    expect(stored.rows.map(item => item.body).join('\n')).not.toContain(ownerTrial.notificationEmail);
+    expect(stored.rows.map(item => item.body).join('\n')).not.toContain(destinationTrial.notificationEmail);
+  });
+
+  test('sent and possibly accepted thresholds remain terminal across destination changes', async () => {
+    controlledNow = new Date('2027-06-01T00:00:00.000Z');
+    const sentTrial = await seedTrial();
+    const normalizer = require('../../src/email/transactional').normalizeTransactionalRecipient;
+    await repository().reconcileAuthorities(normalizer);
+    controlledNow = new Date(sentTrial.trialEnd.getTime() - 7 * DAY);
+    const sentDelivery = captureDelivery();
+    expect((await service(sentDelivery).runOnce({ limit: 1 })).sent).toBe(1);
+    await pool.query(
+      `UPDATE notification_preferences SET notification_email = $2 WHERE organization_id = $1`,
+      [sentTrial.organizationId, 'sent-replacement@example.test']
+    );
+    expect(await repository().reconcileAuthorities(normalizer)).toEqual({
+      canceled: 2,
+      scheduled: 2,
+      transitioned: 2,
+    });
+    expect((await service(sentDelivery).runOnce({ limit: 1 })).claimed).toBe(0);
+    expect(sentDelivery.calls).toHaveLength(1);
+    const sentEvidence = await pool.query(
+      `SELECT id, status, attempt_count, recipient_sha256
+         FROM trial_reminder_outbox
+        WHERE organization_id = $1 AND threshold_days = 7`,
+      [sentTrial.organizationId]
+    );
+    expect(sentEvidence.rows).toEqual([expect.objectContaining({
+      status: 'sent',
+      attempt_count: 1,
+      recipient_sha256: require('../../src/accounts/trialReminderRepository')
+        .recipientHash(sentTrial.notificationEmail),
+    })]);
+
+    controlledNow = new Date('2027-07-01T00:00:00.000Z');
+    const possibleTrial = await seedTrial();
+    await repository().reconcileAuthorities(normalizer);
+    controlledNow = new Date(possibleTrial.trialEnd.getTime() - 7 * DAY);
+    const possible = await repository().claimNext();
+    expect(possible).toEqual(expect.objectContaining({ attempt_count: 1, status: 'leased' }));
+    await pool.query(
+      `UPDATE notification_preferences SET notification_email = $2 WHERE organization_id = $1`,
+      [possibleTrial.organizationId, 'possible-replacement@example.test']
+    );
+    expect(await repository().reconcileAuthorities(normalizer)).toEqual({
+      canceled: 2,
+      scheduled: 2,
+      transitioned: 2,
+    });
+    controlledNow = new Date(controlledNow.getTime() + 121000);
+    expect(await repository().reconcileAuthorities(normalizer)).toEqual({
+      canceled: 1,
+      scheduled: 0,
+      transitioned: 1,
+    });
+    expect(await repository().claimNext()).toBeNull();
+    const possibleEvidence = await pool.query(
+      `SELECT id, status, attempt_count, terminal_code, recipient_sha256
+         FROM trial_reminder_outbox
+        WHERE organization_id = $1 AND threshold_days = 7`,
+      [possibleTrial.organizationId]
+    );
+    expect(possibleEvidence.rows).toEqual([{
+      id: possible.id,
+      status: 'canceled',
+      attempt_count: 1,
+      terminal_code: 'destination_changed',
+      recipient_sha256: require('../../src/accounts/trialReminderRepository')
+        .recipientHash(possibleTrial.notificationEmail),
+    }]);
+  });
+
+  test('concurrent recovery creates one live generation and one current-authority delivery', async () => {
+    controlledNow = new Date('2027-08-01T00:00:00.000Z');
+    const trial = await seedTrial();
+    const normalizer = require('../../src/email/transactional').normalizeTransactionalRecipient;
+    await repository().reconcileAuthorities(normalizer);
+    const replacement = 'parallel-replacement@example.test';
+    await pool.query(
+      `UPDATE notification_preferences SET notification_email = $2 WHERE organization_id = $1`,
+      [trial.organizationId, replacement]
+    );
+    const reconciliations = await Promise.all([
+      repository().reconcileAuthorities(normalizer),
+      repository().reconcileAuthorities(normalizer),
+      repository().reconcileAuthorities(normalizer),
+      repository().reconcileAuthorities(normalizer),
+    ]);
+    expect(reconciliations.reduce((sum, item) => sum + item.transitioned, 0)).toBe(3);
+    expect(reconciliations.reduce((sum, item) => sum + item.scheduled, 0)).toBe(3);
+
+    controlledNow = new Date(trial.trialEnd.getTime() - 7 * DAY);
+    const delivery = captureDelivery();
+    const workers = await Promise.all(Array.from({ length: 4 }, () => (
+      service(delivery).runOnce({ limit: 1 })
+    )));
+    expect(workers.reduce((sum, item) => sum + item.sent, 0)).toBe(1);
+    expect(delivery.calls).toHaveLength(1);
+    expect(delivery.calls[0].message.to).toBe(replacement);
+    const generations = await pool.query(
+      `SELECT threshold_days,
+              count(*)::int AS generations,
+              count(*) FILTER (WHERE status IN ('pending', 'leased', 'sent'))::int AS live,
+              count(*) FILTER (WHERE status = 'sent')::int AS sent
+         FROM trial_reminder_outbox
+        WHERE organization_id = $1
+        GROUP BY threshold_days
+        ORDER BY threshold_days DESC`,
+      [trial.organizationId]
+    );
+    expect(generations.rows).toEqual([
+      { threshold_days: 7, generations: 2, live: 1, sent: 1 },
+      { threshold_days: 3, generations: 2, live: 1, sent: 0 },
+      { threshold_days: 1, generations: 2, live: 1, sent: 0 },
+    ]);
+  });
 });

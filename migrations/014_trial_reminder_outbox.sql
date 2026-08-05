@@ -65,10 +65,16 @@ CREATE TABLE trial_reminder_outbox (
       AND sent_at IS NULL AND canceled_at IS NULL AND failed_at IS NOT NULL
       AND terminal_code IS NOT NULL AND provider_message_id IS NULL)
   ),
-  CONSTRAINT trial_reminder_logical_unique UNIQUE (
-    organization_id, subscription_id, trial_ends_at, threshold_days
+  CONSTRAINT trial_reminder_generation_unique UNIQUE (
+    organization_id, subscription_id, trial_ends_at, threshold_days, recipient_sha256
   )
 );
+
+CREATE UNIQUE INDEX trial_reminder_one_live_or_sent_generation
+  ON trial_reminder_outbox(
+    organization_id, subscription_id, trial_ends_at, threshold_days
+  )
+  WHERE status IN ('pending', 'leased', 'sent');
 
 CREATE INDEX trial_reminder_due_claim
   ON trial_reminder_outbox(next_attempt_at, scheduled_for, id)

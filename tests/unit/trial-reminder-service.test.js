@@ -69,7 +69,7 @@ describe('trial reminder transactional boundary', () => {
     const lease = crypto.randomUUID();
     const recipient = 'owner@example.test';
     const repository = {
-      reconcileAuthorities: jest.fn(async () => ({ scheduled: 3, canceled: 0 })),
+      reconcileAuthorities: jest.fn(async () => ({ scheduled: 3, canceled: 2, transitioned: 2 })),
       claimNext: jest.fn().mockResolvedValueOnce({ id: DELIVERY_ID, lease_token: lease }).mockResolvedValueOnce(null),
       validateLease: jest.fn(async () => ({
         id: DELIVERY_ID,
@@ -88,6 +88,7 @@ describe('trial reminder transactional boundary', () => {
       })),
     };
     const summary = await new TrialReminderService(repository, { transactionalEmail: delivery }).runOnce();
+    expect(summary).toEqual(expect.objectContaining({ scheduled: 3, canceled: 2, transitioned: 2 }));
     expect(summary.sent).toBe(1);
     expect(delivery.trialEndingReminder).toHaveBeenCalledWith(recipient, 3, {
       deliveryId: DELIVERY_ID,

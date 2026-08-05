@@ -33,6 +33,7 @@ class TrialReminderService {
     const summary = {
       scheduled: reconciliation.scheduled,
       canceled: reconciliation.canceled,
+      transitioned: Number.isInteger(reconciliation.transitioned) ? reconciliation.transitioned : 0,
       claimed: 0,
       sent: 0,
       retried: 0,

@@ -29,16 +29,27 @@ calling the provider.
 
 ## Scheduling, concurrency, and delivery
 
-Migration `014_trial_reminder_outbox.sql` stores one logical row per
-organization, subscription, exact `trial_ends_at`, and threshold. Its check
-constraint fixes `scheduled_for` to the end instant minus exactly 7, 3, or 1
-twenty-four-hour UTC days. Reconciliation creates all future rows, cancels stale
-rows when authority changes, and terminally cancels an earlier due threshold
-when a later threshold is already due. A delayed worker therefore sends at most
-the most recent applicable reminder rather than bursting accumulated mail.
+Migration `014_trial_reminder_outbox.sql` stores bounded recipient generations
+for each organization, subscription, exact `trial_ends_at`, and threshold. A
+partial unique index permits only one live-or-sent generation per logical
+threshold. Its check constraint fixes `scheduled_for` to the end instant minus
+exactly 7, 3, or 1 twenty-four-hour UTC days. Reconciliation creates all future
+rows, cancels stale rows when authority changes, and terminally cancels an
+earlier due threshold when a later threshold is already due. A delayed worker
+therefore sends at most the most recent applicable reminder rather than
+bursting accumulated mail.
 Nothing sends at or after the trial end instant. The message identifies the
 scheduled threshold but says the trial is ending soon, avoiding a false exact
 time-remaining claim when a durable worker is delayed.
+
+A destination change creates a new recipient-hash generation only for a
+zero-attempt future reminder. Transient invalid destination or owner authority
+can reactivate that same zero-attempt generation after authority recovers.
+Sent, failed, attempted, superseded, expired, and subscription-invalid evidence
+is never regenerated, which preserves the original row UUID and provider
+idempotency boundary when provider acceptance may have occurred. Reconciliation
+reports both the full canceled count and the exact subset transitioned because
+destination or owner authority changed; neither summary contains a recipient.
 
 Workers claim one due row at a time with `FOR UPDATE SKIP LOCKED`, increment a
 bounded attempt counter, and commit a two-minute lease. The provider call occurs
@@ -64,7 +75,7 @@ invoice, refund, portal, or payment claim.
 
 **MIGRATION RELEASE PLAN: NOT APPROVED.**
 
-Migration 014 is an additive table plus three indexes and is schema-independent
+Migration 014 is an additive table plus four indexes and is schema-independent
 from migration 013. Migrations 001-012 remain byte-identical, and this branch
 does not copy or modify PR #80's migration 013. Nevertheless, release order is
 a hard gate: PR #80's independently reviewed `013_stripe_billing_authority.sql`

@@ -19,10 +19,15 @@ window.PolarisEngine = (function () {
     }) || null;
   }
 
-  function actionText(action) {
+  function recommendationText(action) {
     if (typeof action === 'string') return action;
-    if (!action || typeof action !== 'object') return '';
-    return action.action || action.title || action.description || action.reason || '';
+    if (!isRecord(action)) return null;
+    var fields = ['action', 'title', 'description', 'reason', 'label'];
+    for (var index = 0; index < fields.length; index += 1) {
+      var value = action[fields[index]];
+      if (value) return typeof value === 'string' ? value : null;
+    }
+    return null;
   }
 
   function isRecord(value) {
@@ -49,7 +54,7 @@ window.PolarisEngine = (function () {
     if (service === null) return true;
     if (!isRecord(service) || (!hasOwn(service, 'key') && !hasOwn(service, 'label'))) return false;
     if (hasOwn(service, 'key') && typeof service.key !== 'string') return false;
-    if (hasOwn(service, 'label') && typeof service.label !== 'string') return false;
+    if (hasOwn(service, 'label') && service.label !== null && typeof service.label !== 'string') return false;
     return true;
   }
 
@@ -64,9 +69,7 @@ window.PolarisEngine = (function () {
   }
 
   function validRecommendation(action) {
-    if (typeof action === 'string') return true;
-    if (!isRecord(action)) return false;
-    return typeof (action.action || action.title || action.description || action.reason) === 'string';
+    return recommendationText(action) !== null;
   }
 
   function validValues(values) {
@@ -151,7 +154,7 @@ window.PolarisEngine = (function () {
       risk: values.risk,
       riskText: JSON.stringify(values.risk),
       recommendations: recommendations,
-      recommendedActionText: actionText(recommendations && recommendations[0]),
+      recommendedActionText: recommendationText(recommendations && recommendations[0]) || '',
     });
   }
 

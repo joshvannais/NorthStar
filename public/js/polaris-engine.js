@@ -19,23 +19,158 @@ window.PolarisEngine = (function () {
     }) || null;
   }
 
-  function actionText(action) {
+  function recommendationText(action) {
     if (typeof action === 'string') return action;
-    if (!action || typeof action !== 'object') return '';
-    return action.action || action.title || action.description || action.reason || '';
+    if (!isRecord(action)) return null;
+    var fields = ['action', 'title', 'description', 'reason', 'label'];
+    for (var index = 0; index < fields.length; index += 1) {
+      var value = action[fields[index]];
+      if (value) return typeof value === 'string' ? value : null;
+    }
+    return null;
+  }
+
+  function isRecord(value) {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function hasOwn(value, key) {
+    return Object.prototype.hasOwnProperty.call(value, key);
+  }
+
+  function valuesFrom(source) {
+    if (!isRecord(source)) return null;
+    if (hasOwn(source, 'canonicalValues')) return source.canonicalValues;
+    if (hasOwn(source, 'values')) return source.values;
+    if (hasOwn(source, 'snapshot')) return source.snapshot;
+    return source;
+  }
+
+  function finiteOrNull(value) {
+    return value === null || (typeof value === 'number' && Number.isFinite(value));
+  }
+
+  function validService(service) {
+    if (service === null) return true;
+    if (!isRecord(service) || (!hasOwn(service, 'key') && !hasOwn(service, 'label'))) return false;
+    if (hasOwn(service, 'key') && typeof service.key !== 'string') return false;
+    if (hasOwn(service, 'label') && service.label !== null && typeof service.label !== 'string') return false;
+    return true;
+  }
+
+  function validConfidence(confidence) {
+    return confidence === null ||
+      (isRecord(confidence) && hasOwn(confidence, 'score') && finiteOrNull(confidence.score));
+  }
+
+  function validRisk(risk) {
+    return risk === null ||
+      (isRecord(risk) && hasOwn(risk, 'emergency') && typeof risk.emergency === 'boolean');
+  }
+
+  function validRecommendation(action) {
+    return recommendationText(action) !== null;
+  }
+
+  function validValues(values) {
+    if (!isRecord(values)) return false;
+    if (hasOwn(values, 'contract') && values.contract !== 'CanonicalPolarisOutput') return false;
+
+    var required = [
+      'service',
+      'customerFacingPrice',
+      'confidence',
+      'grossProfit',
+      'grossMarginPercent',
+      'netProfit',
+      'netMarginPercent',
+      'risk',
+      'recommendedActions',
+    ];
+    if (!required.every(function (key) { return hasOwn(values, key); })) return false;
+
+    var numeric = [
+      'customerFacingPrice',
+      'grossProfit',
+      'grossMarginPercent',
+      'netProfit',
+      'netMarginPercent',
+      'estimatedRevenue',
+      'subtotalBeforeTax',
+      'taxRatePercent',
+      'tax',
+      'totalIncludingTax',
+      'materialsCharge',
+      'knownDirectMaterialCost',
+      'laborCharge',
+      'laborHours',
+      'knownInternalLaborCost',
+      'equipmentCharge',
+      'knownEquipmentCost',
+      'callDurationSeconds',
+      'estimatedProductionDurationHours',
+      'knownDirectCosts',
+      'overhead',
+    ];
+    if (numeric.some(function (key) { return hasOwn(values, key) && !finiteOrNull(values[key]); })) return false;
+    if (!validService(values.service)) return false;
+    if (!validConfidence(values.confidence)) return false;
+    if (!validRisk(values.risk)) return false;
+    if (values.recommendedActions !== null && !Array.isArray(values.recommendedActions)) return false;
+    if (Array.isArray(values.recommendedActions) && !values.recommendedActions.every(validRecommendation)) return false;
+    return true;
+  }
+
+  function money(value, round) {
+    if (value === null || value === undefined) return 'Not calculated';
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not calculated';
+    return '$' + (round ? Math.round(value) : value).toLocaleString();
+  }
+
+  function selectPresentation(source) {
+    var values = valuesFrom(source);
+    if (!validValues(values)) return null;
+    var service = values.service || null;
+    var confidence = values.confidence || null;
+    var confidenceScore = confidence && confidence.score !== null && confidence.score !== undefined
+      ? confidence.score
+      : null;
+    var recommendations = values.recommendedActions;
+    return Object.freeze({
+      values: values,
+      service: service,
+      serviceText: service ? (service.label || service.key || '') : '',
+      customerPrice: values.customerFacingPrice,
+      customerPriceText: money(values.customerFacingPrice, false),
+      customerPriceRoundedText: money(values.customerFacingPrice, true),
+      confidence: confidence,
+      confidenceScore: confidenceScore,
+      confidenceText: confidenceScore === null ? 'Not calculated' : confidenceScore + '%',
+      grossProfit: values.grossProfit,
+      grossProfitText: money(values.grossProfit, false),
+      grossMarginPercent: values.grossMarginPercent,
+      netProfit: values.netProfit,
+      netMarginPercent: values.netMarginPercent,
+      risk: values.risk,
+      riskText: JSON.stringify(values.risk),
+      recommendations: recommendations,
+      recommendedActionText: recommendationText(recommendations && recommendations[0]) || '',
+    });
   }
 
   function present(item) {
     if (!item) return null;
-    var values = item.values;
+    var selected = selectPresentation(item);
+    if (!selected) return null;
+    var values = selected.values;
     return Object.freeze({
       ids: item.ids,
       calculationVersion: item.calculationVersion,
       snapshotDigest: item.snapshotDigest,
-      service: values.service,
-      insight: actionText(values.recommendedActions && values.recommendedActions[0]),
-      confidence: values.confidence ? values.confidence.score : null,
-      estimatedPrice: values.customerFacingPrice,
+      service: selected.service,
+      insight: selected.recommendedActionText,
+      confidence: selected.confidenceScore,
+      estimatedPrice: selected.customerPrice,
       total: values.totalIncludingTax,
       subtotalBeforeTax: values.subtotalBeforeTax,
       tax: values.tax,
@@ -46,12 +181,12 @@ window.PolarisEngine = (function () {
       materials: values.materialsCharge,
       equipment: values.equipmentCharge,
       travel: values.travel,
-      grossProfit: values.grossProfit,
-      grossMarginPercent: values.grossMarginPercent,
-      netProfit: values.netProfit,
-      netMarginPercent: values.netMarginPercent,
-      risk: values.risk,
-      recommendations: values.recommendedActions,
+      grossProfit: selected.grossProfit,
+      grossMarginPercent: selected.grossMarginPercent,
+      netProfit: selected.netProfit,
+      netMarginPercent: selected.netMarginPercent,
+      risk: selected.risk,
+      recommendations: selected.recommendations,
       notCalculated: values.notCalculated,
       canonicalValues: values,
     });
@@ -78,20 +213,20 @@ window.PolarisEngine = (function () {
   function renderPolarisCard() {
     var current = projection();
     var item = current && current.items && current.items.length ? current.items[0] : null;
-    var values = item ? item.values : null;
+    var selected = selectPresentation(item);
     var metrics = current && current.metrics ? current.metrics : null;
-    if (!values) {
-      ['polarisTopOpp', 'polarisTopOppDesc', 'polarisPipeline', 'polarisPipeConf', 'polarisFocus', 'polarisFocusDesc', 'polarisFocusConf'].forEach(function (id) { setText(id, '\u2014'); });
+    if (!selected) {
+      ['polarisTopOpp', 'polarisTopOppDesc', 'polarisTopConf', 'polarisPipeline', 'polarisPipeConf', 'polarisFocus', 'polarisFocusDesc', 'polarisFocusConf'].forEach(function (id) { setText(id, '\u2014'); });
       return;
     }
-    setText('polarisTopOpp', values.service && values.service.label);
-    setText('polarisTopOppDesc', values.customerFacingPrice === null ? 'Not calculated' : '$' + Number(values.customerFacingPrice).toLocaleString());
-    setText('polarisTopConf', values.confidence && values.confidence.score !== null ? values.confidence.score + '%' : 'Not calculated');
+    setText('polarisTopOpp', selected.serviceText);
+    setText('polarisTopOppDesc', selected.customerPriceText);
+    setText('polarisTopConf', selected.confidenceText);
     setText('polarisPipeline', metrics && metrics.estimatedRevenue !== null ? '$' + Number(metrics.estimatedRevenue).toLocaleString() : '\u2014');
     setText('polarisPipeConf', item.calculationVersion);
-    setText('polarisFocus', actionText(values.recommendedActions && values.recommendedActions[0]) || '\u2014');
+    setText('polarisFocus', selected.recommendedActionText || '\u2014');
     setText('polarisFocusDesc', item.snapshotDigest);
-    setText('polarisFocusConf', values.risk && values.risk.emergency ? 'Emergency evidence' : 'No active emergency');
+    setText('polarisFocusConf', selected.risk && selected.risk.emergency ? 'Emergency evidence' : 'No active emergency');
   }
 
   if (window.addEventListener) {
@@ -107,5 +242,6 @@ window.PolarisEngine = (function () {
     loadEstimationConfig: loadEstimationConfig,
     assessDifficulty: assessDifficulty,
     fetchM13Intelligence: fetchM13Intelligence,
+    selectPresentation: selectPresentation,
   });
 })();

@@ -264,28 +264,28 @@
       function renderCanonicalProjection(container, canonical) {
         if (!container) return;
         container.replaceChildren();
-        if (!canonical || !canonical.values) {
+        var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(canonical);
+        if (!presentation) {
           var unavailable = document.createElement('div');
           unavailable.className = 'ci-placeholder';
           unavailable.textContent = 'Canonical intelligence unavailable.';
           container.appendChild(unavailable);
           return;
         }
-        var values = canonical.values;
         var title = document.createElement('h2');
         title.textContent = 'Canonical Polaris';
         container.appendChild(title);
         var card = document.createElement('div');
         card.className = 'lead-detail-card';
         [
-          ['Customer price', values.customerFacingPrice],
-          ['Scope', values.service && values.service.scope],
-          ['Labor', { charge: values.laborCharge, knownInternalCost: values.knownInternalLaborCost, productionHours: values.estimatedProductionDurationHours }],
-          ['Travel', values.travel],
-          ['Profit', { gross: values.grossProfit, grossMarginPercent: values.grossMarginPercent, net: values.netProfit, netMarginPercent: values.netMarginPercent }],
-          ['Confidence', values.confidence],
-          ['Risk', values.risk],
-          ['Recommendations', values.recommendedActions],
+          ['Customer price', presentation.customerPrice],
+          ['Scope', presentation.service && presentation.service.scope],
+          ['Labor', { charge: presentation.values.laborCharge, knownInternalCost: presentation.values.knownInternalLaborCost, productionHours: presentation.values.estimatedProductionDurationHours }],
+          ['Travel', presentation.values.travel],
+          ['Profit', { gross: presentation.grossProfit, grossMarginPercent: presentation.grossMarginPercent, net: presentation.netProfit, netMarginPercent: presentation.netMarginPercent }],
+          ['Confidence', presentation.confidence],
+          ['Risk', presentation.risk],
+          ['Recommendations', presentation.recommendations],
           ['Snapshot digest', canonical.snapshotDigest],
         ].forEach(function (entry) {
           var row = document.createElement('div');

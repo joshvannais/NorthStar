@@ -386,16 +386,12 @@ class CalendarRenderer {
   renderPolaris() {
     if (!this.polarisSection) return;
     const canonical = window.CanonicalIntelligence && window.CanonicalIntelligence.getPresentation('calendar');
-    const values = canonical && canonical.values;
+    const presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(canonical);
+    const values = presentation && presentation.values;
     function esc(value) {
       return String(value == null ? '' : value).replace(/[&<>"']/g, function(character) {
         return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character];
       });
-    }
-    function money(value) { return value == null ? 'Not calculated' : '$' + Number(value).toLocaleString(); }
-    function actionText(action) {
-      if (typeof action === 'string') return action;
-      return action && (action.action || action.title || action.description || action.reason) || 'No recommendation recorded';
     }
     let html = '<div class="polaris-card">';
     html += '<div class="polaris-header">';
@@ -406,15 +402,15 @@ class CalendarRenderer {
     if (!values) {
       html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Canonical intelligence unavailable</span></div>';
     } else {
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Customer Price</span><span class="cal-polaris-value">' + esc(money(values.customerFacingPrice)) + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Customer Price</span><span class="cal-polaris-value">' + esc(presentation.customerPriceText) + '</span></div>';
       html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Scope</span><span class="cal-polaris-value">' + esc(JSON.stringify(values.service && values.service.scope)) + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Labor</span><span class="cal-polaris-value">' + esc(money(values.laborCharge)) + ' / ' + esc(values.laborHours == null ? 'Not calculated' : values.laborHours + ' hours') + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Labor</span><span class="cal-polaris-value">' + esc(values.laborCharge == null ? 'Not calculated' : '$' + Number(values.laborCharge).toLocaleString()) + ' / ' + esc(values.laborHours == null ? 'Not calculated' : values.laborHours + ' hours') + '</span></div>';
       html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Duration</span><span class="cal-polaris-value">' + esc(values.estimatedProductionDurationHours == null ? 'Not calculated' : values.estimatedProductionDurationHours + ' hours') + '</span></div>';
       html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Travel</span><span class="cal-polaris-value">' + esc(JSON.stringify(values.travel)) + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Gross Profit</span><span class="cal-polaris-value">' + esc(money(values.grossProfit)) + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Confidence</span><span class="cal-polaris-value">' + esc(values.confidence && values.confidence.score != null ? values.confidence.score + '%' : 'Not calculated') + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Risk</span><span class="cal-polaris-value">' + esc(JSON.stringify(values.risk)) + '</span></div>';
-      html += '<div class="cal-polaris-row" style="border-bottom:none;"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">' + esc(actionText(values.recommendedActions && values.recommendedActions[0])) + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Gross Profit</span><span class="cal-polaris-value">' + esc(presentation.grossProfitText) + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Confidence</span><span class="cal-polaris-value">' + esc(presentation.confidenceText) + '</span></div>';
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Risk</span><span class="cal-polaris-value">' + esc(presentation.riskText) + '</span></div>';
+      html += '<div class="cal-polaris-row" style="border-bottom:none;"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">' + esc(presentation.recommendedActionText || 'No recommendation recorded') + '</span></div>';
     }
     html += '</div></div>';
     this.polarisSection.innerHTML = html;
@@ -602,11 +598,12 @@ window.openEventModal = function() { calModal.openCreateEvent(calState.selectedD
 // retained for the PR #68 readiness contract; it no longer synthesizes events.
 window.syncCalendarFromAppStore = function() {
   var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
-  var records = projection && Array.isArray(projection.records) ? projection.records : [];
-  return records.map(function(record) {
-    var start = record.scheduledStart ? new Date(record.scheduledStart) : null;
-    var end = record.scheduledEnd ? new Date(record.scheduledEnd) : null;
-    var values = record.canonical && record.canonical.values;
+    var records = projection && Array.isArray(projection.records) ? projection.records : [];
+    return records.map(function(record) {
+      var start = record.scheduledStart ? new Date(record.scheduledStart) : null;
+      var end = record.scheduledEnd ? new Date(record.scheduledEnd) : null;
+      var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(record.canonical);
+      var values = presentation && presentation.values;
     return {
       id: record.id,
       title: record.customer && record.customer.name || 'Appointment',
@@ -617,8 +614,8 @@ window.syncCalendarFromAppStore = function() {
       leadId: record.canonical && record.canonical.ids.opportunity,
       phone: record.customer && record.customer.phone,
       address: record.customer && record.customer.address,
-      serviceType: values && values.service && values.service.label,
-      estimatedPrice: values ? values.customerFacingPrice : null,
+      serviceType: presentation && presentation.service ? presentation.service.label : undefined,
+      estimatedPrice: presentation ? presentation.customerPrice : null,
       color: '#6395ff',
       status: record.status,
       duration: values ? values.estimatedProductionDurationHours : null,

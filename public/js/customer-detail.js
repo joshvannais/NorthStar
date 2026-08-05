@@ -292,12 +292,13 @@ window.CustomerDetail = (function() {
       data.stage = primaryOpp.status || null;
     }
 
-    var values = raw.canonical && raw.canonical.values;
+    var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(raw.canonical);
+    var values = presentation && presentation.values;
     data.canonical = raw.canonical;
     data.intelligence = values || null;
-    data.service = values && values.service ? (values.service.label || values.service.key) : '';
-    data.description = values && values.service ? values.service.scope : null;
-    data.estimatedValue = values ? values.customerFacingPrice : null;
+    data.service = presentation ? presentation.serviceText : '';
+    data.description = presentation && presentation.service ? presentation.service.scope : null;
+    data.estimatedValue = presentation ? presentation.customerPrice : null;
     data.closeProbability = null;
     data.estimates = raw.estimate ? [raw.estimate] : [];
 
@@ -357,18 +358,16 @@ window.CustomerDetail = (function() {
 
   function generatePolarisIntel(data) {
     var canon = data.intelligence;
-    if (!canon) return { summary: 'Canonical intelligence unavailable.', price: '\u2014', confidenceLabel: 'Not calculated', confidenceClass: '', confidencePct: '\u2014', revenue: '\u2014', action: '\u2014', isCanonical: false };
-    var recommendation = canon.recommendedActions && canon.recommendedActions[0];
-    var action = typeof recommendation === 'string' ? recommendation : recommendation && (recommendation.action || recommendation.title || recommendation.description || recommendation.reason);
-    var confidence = canon.confidence && canon.confidence.score;
+    var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(canon);
+    if (!presentation) return { summary: 'Canonical intelligence unavailable.', price: '\u2014', confidenceLabel: 'Not calculated', confidenceClass: '', confidencePct: '\u2014', revenue: '\u2014', action: '\u2014', isCanonical: false };
     return {
-      summary: canon.service ? (canon.service.label || canon.service.key || 'Canonical service') : 'Canonical service',
-      price: fmtCurrency(canon.customerFacingPrice),
+      summary: presentation.serviceText || 'Canonical service',
+      price: presentation.customerPriceRoundedText,
       confidenceLabel: 'Server confidence',
       confidenceClass: '',
-      confidencePct: confidence === null || confidence === undefined ? 'Not calculated' : confidence + '%',
+      confidencePct: presentation.confidenceText,
       revenue: fmtCurrency(canon.estimatedRevenue),
-      action: action || 'No recommendation recorded',
+      action: presentation.recommendedActionText || 'No recommendation recorded',
       isCanonical: true
     };
   }
@@ -380,7 +379,8 @@ window.CustomerDetail = (function() {
       return '<p style="font-size:13px;color:var(--neutral-500);">No estimate data available.</p>';
     }
     var est = estimates[0];
-    var values = est.canonical && est.canonical.values;
+    var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(est.canonical);
+    var values = presentation && presentation.values;
     if (values && Array.isArray(values.pricingLineItems) && values.pricingLineItems.length > 0) {
       var html = '';
       values.pricingLineItems.forEach(function(item) {
@@ -397,8 +397,8 @@ window.CustomerDetail = (function() {
       }
       return html;
     }
-    if (values && values.customerFacingPrice !== null) {
-      return '<p style="font-size:13px;color:var(--neutral-500);">Est. value: ' + fmtCurrency(values.customerFacingPrice) + '</p>';
+    if (presentation && presentation.customerPrice !== null) {
+      return '<p style="font-size:13px;color:var(--neutral-500);">Est. value: ' + presentation.customerPriceRoundedText + '</p>';
     }
     return '<p style="font-size:13px;color:var(--neutral-500);">Estimate pending.</p>';
   }

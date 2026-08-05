@@ -67,10 +67,7 @@ function relativeRequireTargets(filename) {
     if (!match[2].startsWith('.')) continue;
     const base = path.resolve(path.dirname(filename), match[2]);
     for (const candidate of [base, base + '.js', path.join(base, 'index.js')]) {
-      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-        targets.push(path.normalize(candidate));
-        break;
-      }
+      targets.push(path.normalize(candidate));
     }
   }
   return targets;
@@ -85,6 +82,21 @@ describe('Mission 19 Part 4 Slice 2 legacy intelligence retirement', () => {
       for (const replacement of replacementPaths) {
         expect(fs.existsSync(absolute(replacement))).toBe(true);
       }
+    }
+  });
+
+  test('the dependency guard detects a literal relative require of an absent retired module', () => {
+    const probe = absolute('src/services/__slice2-retained-require-negative-control.js');
+    const retiredTarget = path.normalize(absolute('src/services/intelligence.js'));
+
+    expect(fs.existsSync(probe)).toBe(false);
+    expect(fs.existsSync(retiredTarget)).toBe(false);
+
+    try {
+      fs.writeFileSync(probe, "'use strict';\nmodule.exports = require('./intelligence');\n", { flag: 'wx' });
+      expect(relativeRequireTargets(probe)).toContain(retiredTarget);
+    } finally {
+      if (fs.existsSync(probe)) fs.unlinkSync(probe);
     }
   });
 

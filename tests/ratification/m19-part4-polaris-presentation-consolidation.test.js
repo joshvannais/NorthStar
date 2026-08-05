@@ -655,6 +655,14 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(rendered.polarisFocusConf).not.toBe('Emergency evidence');
   });
 
+  test('shared Polaris card presents authentic unsupported-service output using its canonical key', () => {
+    const rendered = runSharedCard(productionCalculation({ service: { key: 'roofing', scope: {} } }));
+
+    expect(rendered.polarisTopOpp).toBe('roofing');
+    expect(rendered.polarisTopOppDesc).toBe('Not calculated');
+    expect(rendered.polarisFocus).toBe('Schedule the requested estimate window');
+  });
+
   test('real PolarisUI delegates at runtime and preserves zero, object-action, and escaping semantics', () => {
     const source = canonicalEnvelope(dynamicValues(Object.freeze({ action: 'Call <owner> & confirm' })));
     const result = runPolarisUi(source);

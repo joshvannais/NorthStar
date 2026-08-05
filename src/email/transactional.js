@@ -289,7 +289,7 @@ function createResendAdapter(configuration, options = {}) {
 }
 
 function idempotencyKey(purpose, deliveryId) {
-  if (!['email-verification', 'password-reset'].includes(purpose) ||
+  if (!['email-verification', 'password-reset', 'trial-ending-reminder'].includes(purpose) ||
       typeof deliveryId !== 'string' || !UUID.test(deliveryId)) {
     throw new Error('Transactional delivery operation is invalid');
   }
@@ -335,7 +335,10 @@ class TransactionalEmail {
       requestId: safeRequestId(context.requestId),
     });
     if (!result || result.accepted !== true) throw new Error('Transactional email was not accepted');
-    return { delivered: true };
+    return {
+      delivered: true,
+      providerMessageId: typeof result.providerMessageId === 'string' ? result.providerMessageId : null,
+    };
   }
 
   verification(recipient, rawToken, context) {
@@ -367,6 +370,28 @@ class TransactionalEmail {
       context
     );
   }
+
+  trialEndingReminder(recipient, daysRemaining, context) {
+    if (![7, 3, 1].includes(daysRemaining)) {
+      throw new Error('Trial reminder threshold is invalid');
+    }
+    const link = new URL('/login', this.publicOrigin);
+    const href = link.toString();
+    return this.deliver(
+      recipient,
+      'trial-ending-reminder',
+      'Your NorthStar trial is ending soon',
+      `This is your scheduled ${daysRemaining}-day reminder: your NorthStar trial is ending soon. ` +
+        `Sign in to review your account: ${href}`,
+      `<p>This is your scheduled ${daysRemaining}-day reminder: your NorthStar trial is ending soon.</p>` +
+        `<p><a href="${escapeHtml(href)}">Sign in to review your account</a></p>`,
+      context
+    );
+  }
+}
+
+function normalizeTransactionalRecipient(value) {
+  return emailAddress(value, 'recipient');
 }
 
 function createProductionTransactionalEmail(environment, options = {}) {
@@ -388,5 +413,6 @@ module.exports = {
   canonicalOrigin,
   createProductionTransactionalEmail,
   createResendAdapter,
+  normalizeTransactionalRecipient,
   validatedProductionConfiguration,
 };

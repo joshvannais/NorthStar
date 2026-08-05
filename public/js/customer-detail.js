@@ -48,6 +48,17 @@ window.CustomerDetail = (function() {
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
+  function displayDescription(value) {
+    if (typeof value === 'string') return capitalizeFirst(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return '\u2014';
+    try {
+      var serialized = JSON.stringify(value);
+      return typeof serialized === 'string' ? serialized : '\u2014';
+    } catch (error) {
+      return '\u2014';
+    }
+  }
+
   function stageLabel(stage) {
     var map = {
       lead: 'Lead', qualified: 'Qualified', discovery: 'Discovery',
@@ -449,7 +460,7 @@ window.CustomerDetail = (function() {
 
     // Job Details
     $('cdService').textContent = data.service || '\u2014';
-    $('cdDescription').textContent = data.description ? capitalizeFirst(data.description) : '\u2014';
+    $('cdDescription').textContent = displayDescription(data.description);
     $('cdEstValue').textContent = fmtCurrency(data.estimatedValue);
     $('cdStage').textContent = stageLabel(data.stage);
     $('cdProb').textContent = (data.closeProbability != null ? data.closeProbability + '%' : '\u2014');

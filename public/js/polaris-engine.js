@@ -25,18 +25,84 @@ window.PolarisEngine = (function () {
     return action.action || action.title || action.description || action.reason || '';
   }
 
+  function isRecord(value) {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function hasOwn(value, key) {
+    return Object.prototype.hasOwnProperty.call(value, key);
+  }
+
   function valuesFrom(source) {
-    return source && (source.canonicalValues || source.values || source.snapshot || source);
+    if (!isRecord(source)) return null;
+    if (hasOwn(source, 'canonicalValues')) return source.canonicalValues;
+    if (hasOwn(source, 'values')) return source.values;
+    if (hasOwn(source, 'snapshot')) return source.snapshot;
+    return source;
+  }
+
+  function finiteOrNull(value) {
+    return value === null || (typeof value === 'number' && Number.isFinite(value));
+  }
+
+  function validValues(values) {
+    if (!isRecord(values)) return false;
+    if (hasOwn(values, 'contract') && values.contract !== 'CanonicalPolarisOutput') return false;
+
+    var required = [
+      'service',
+      'customerFacingPrice',
+      'confidence',
+      'grossProfit',
+      'grossMarginPercent',
+      'netProfit',
+      'netMarginPercent',
+      'risk',
+      'recommendedActions',
+    ];
+    if (!required.every(function (key) { return hasOwn(values, key); })) return false;
+
+    var numeric = [
+      'customerFacingPrice',
+      'grossProfit',
+      'grossMarginPercent',
+      'netProfit',
+      'netMarginPercent',
+      'estimatedRevenue',
+      'subtotalBeforeTax',
+      'taxRatePercent',
+      'tax',
+      'totalIncludingTax',
+      'materialsCharge',
+      'knownDirectMaterialCost',
+      'laborCharge',
+      'laborHours',
+      'knownInternalLaborCost',
+      'equipmentCharge',
+      'knownEquipmentCost',
+      'callDurationSeconds',
+      'estimatedProductionDurationHours',
+      'knownDirectCosts',
+      'overhead',
+    ];
+    if (numeric.some(function (key) { return hasOwn(values, key) && !finiteOrNull(values[key]); })) return false;
+    if (values.service !== null && !isRecord(values.service)) return false;
+    if (values.confidence !== null && !isRecord(values.confidence)) return false;
+    if (values.confidence && hasOwn(values.confidence, 'score') && !finiteOrNull(values.confidence.score)) return false;
+    if (values.risk !== null && !isRecord(values.risk)) return false;
+    if (values.recommendedActions !== null && !Array.isArray(values.recommendedActions)) return false;
+    return true;
   }
 
   function money(value, round) {
     if (value === null || value === undefined) return 'Not calculated';
-    return '$' + (round ? Math.round(value) : Number(value)).toLocaleString();
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not calculated';
+    return '$' + (round ? Math.round(value) : value).toLocaleString();
   }
 
   function selectPresentation(source) {
     var values = valuesFrom(source);
-    if (!values) return null;
+    if (!validValues(values)) return null;
     var service = values.service || null;
     var confidence = values.confidence || null;
     var confidenceScore = confidence && confidence.score !== null && confidence.score !== undefined
@@ -68,6 +134,7 @@ window.PolarisEngine = (function () {
   function present(item) {
     if (!item) return null;
     var selected = selectPresentation(item);
+    if (!selected) return null;
     var values = selected.values;
     return Object.freeze({
       ids: item.ids,

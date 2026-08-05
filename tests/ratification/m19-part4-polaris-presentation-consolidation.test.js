@@ -376,6 +376,9 @@ const INVALID_SELECTOR_SOURCES = [
   ['a non-finite numeric projection', function () {
     return canonicalEnvelope(canonicalValues({ grossProfit: Infinity }));
   }],
+  ['a NaN numeric projection', function () {
+    return canonicalEnvelope(canonicalValues({ grossProfit: NaN }));
+  }],
   ['an explicitly invalid higher-priority wrapper', function () {
     return { canonicalValues: null, values: canonicalValues(), snapshot: canonicalValues() };
   }],
@@ -463,6 +466,16 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
 
     expect(stringAction.recommendedActionText).toBe('Dispatch <crew> & confirm');
     expect(objectAction.recommendedActionText).toBe('Call <owner> & confirm');
+  });
+
+  test('accepts each explicit valid envelope without changing the canonical values identity', () => {
+    const values = canonicalValues();
+    const selector = createSandbox(values).sandbox.window.PolarisEngine.selectPresentation;
+
+    expect(selector(values).values).toBe(values);
+    expect(selector({ canonicalValues: values }).values).toBe(values);
+    expect(selector({ values: values }).values).toBe(values);
+    expect(selector({ snapshot: values }).values).toBe(values);
   });
 
   test('legacy PolarisEngine presentation remains a selector over the same canonical object', () => {

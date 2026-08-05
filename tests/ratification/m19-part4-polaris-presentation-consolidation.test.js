@@ -90,6 +90,24 @@ function createSandbox(values) {
   return { item: item, listeners: listeners, sandbox: sandbox };
 }
 
+function runSharedCard(values) {
+  const loaded = createSandbox(values);
+  const document = createDocument();
+  const ids = [
+    'polarisTopOpp', 'polarisTopOppDesc', 'polarisTopConf',
+    'polarisPipeline', 'polarisPipeConf', 'polarisFocus',
+    'polarisFocusDesc', 'polarisFocusConf',
+  ];
+  loaded.sandbox.document = document;
+  loaded.sandbox.window.document = document;
+  ids.forEach(function (id) { document.getElementById(id).textContent = 'stale-value'; });
+  loaded.sandbox.window.PolarisEngine.renderPolarisCard();
+  return ids.reduce(function (result, id) {
+    result[id] = document.getElementById(id).textContent;
+    return result;
+  }, {});
+}
+
 function canonicalEnvelope(values) {
   return Object.freeze({
     ids: Object.freeze({ opportunity: 'lead-1', customer: 'customer-1' }),
@@ -491,6 +509,12 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(presentation.risk).toBe(values.risk);
     expect(presentation.recommendations).toBe(values.recommendedActions);
     expect(presentation.insight).toBe('Call <owner> & confirm');
+  });
+
+  test('shared Polaris card clears every presentation field when canonical values are malformed', () => {
+    const rendered = runSharedCard(canonicalValues({ customerFacingPrice: 'not-a-number' }));
+
+    expect(Object.values(rendered)).toEqual(Array(8).fill('\u2014'));
   });
 
   test('real PolarisUI delegates at runtime and preserves zero, object-action, and escaping semantics', () => {

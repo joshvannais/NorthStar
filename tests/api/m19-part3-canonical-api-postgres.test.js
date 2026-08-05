@@ -491,6 +491,71 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(after.map(response => response.body)).toEqual(before.slice(0, 3).map(response => response.body));
   });
 
+  test('mounted context envelopes use persisted canonical intelligence without the retired service chain', async () => {
+    const retiredModules = [
+      '../../src/services/intelligence.js',
+      '../../src/services/decisionEngine.js',
+      '../../src/services/customerIntelligence.js',
+      '../../src/services/polarisContextBuilder.js',
+      '../../src/voice/executiveContext.js',
+    ].map(relative => path.resolve(__dirname, relative));
+    expect(retiredModules.filter(filename => fs.existsSync(filename))).toEqual([]);
+
+    const responses = await Promise.all([
+      request(app).get('/api/v1/polaris/unified-context').set(headers(ORG_A, USER_A, 'session-a')),
+      request(app).get('/api/v1/polaris/business-context').set(headers(ORG_A, USER_A, 'session-a')),
+      request(app).get('/api/v1/leads/' + graphA.body.ids.opportunity + '/intelligence')
+        .set(headers(ORG_A, USER_A, 'session-a')),
+      request(app).get('/api/v1/leads/intelligence/dashboard').set(headers(ORG_A, USER_A, 'session-a')),
+    ]);
+    expect(responses.every(response => response.status === 200)).toBe(true);
+
+    const [unified, business, lead, dashboard] = responses.map(response => response.body);
+    expect(unified).toMatchObject({
+      success: true,
+      context: {
+        graphCount: 1,
+        customerCount: 1,
+        estimatedRevenue: EXTREME_FENCE_SUBTOTAL,
+      },
+    });
+    expect(unified.context.items).toHaveLength(1);
+    expect(unified.context.items[0].values).toEqual(graphA.body.snapshot);
+    expect(unified.context.items[0].businessProfile).toEqual(graphA.body.businessProfile);
+    expect(business).toMatchObject({
+      success: true,
+      context: {
+        graphCount: 1,
+        customerCount: 1,
+        estimatedRevenue: EXTREME_FENCE_SUBTOTAL,
+      },
+    });
+    expect(lead).toEqual({
+      success: true,
+      data: {
+        values: graphA.body.snapshot,
+        facts: expect.any(Array),
+        calculationVersion: graphA.body.calculationVersion,
+        snapshotDigest: graphA.body.snapshotDigest,
+      },
+    });
+    expect(lead.data.facts).toHaveLength(graphA.body.ids.facts.length);
+    expect(dashboard).toMatchObject({
+      success: true,
+      data: {
+        graphCount: 1,
+        customerCount: 1,
+        estimatedRevenue: EXTREME_FENCE_SUBTOTAL,
+      },
+    });
+    expect(dashboard.data.items).toHaveLength(1);
+    expect(dashboard.data.items[0].values).toEqual(graphA.body.snapshot);
+
+    const loadedRetiredModules = Object.keys(require.cache)
+      .filter(filename => retiredModules.includes(path.resolve(filename)));
+    expect(loadedRetiredModules).toEqual([]);
+  });
+
   test('compatibility projections exclude other organizations and distinguish genuine empty state', async () => {
     const tenantB = await Promise.all([
       request(app).get('/api/v1/analytics/trends').set(headers(ORG_B, USER_B, 'session-b')),

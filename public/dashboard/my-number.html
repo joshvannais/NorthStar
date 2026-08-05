@@ -72,17 +72,11 @@
       if (num.length < 10) { showToast("Please enter a full phone number"); return; }
       showToast("Business number changes require canonical provider provisioning.");
     }
-    function showToast(m) {
-      const e = document.getElementById("toast");
-      if (!e) return;
-      e.textContent = m;
-      e.className = "toast show";
-      setTimeout(() => e.classList.remove("show"), 3000);
-    }
   </script>
 </main>
 </div>
 <div id="toast" class="toast"></div>
+<script src="/js/notification-service.js"></script>
 <script src="/js/api.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("my-number");</script>

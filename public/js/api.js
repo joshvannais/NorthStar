@@ -45,13 +45,33 @@ const API = {
 /**
  * Toast notification helper.
  */
+const legacyToastTimers = new WeakMap();
+
 function showToast(message, type = 'success') {
+  if (window.NotificationService && typeof window.NotificationService.showInline === 'function') {
+    window.NotificationService.showInline(message, type, {
+      targetId: 'toast',
+      duration: 3000,
+      legacyBackground: true,
+    });
+    return;
+  }
   const toast = document.getElementById('toast');
   if (!toast) return;
+  const priorTimer = legacyToastTimers.get(toast);
+  if (priorTimer) clearTimeout(priorTimer);
   toast.textContent = message;
   toast.style.background = type === 'error' ? 'var(--danger)' : 'var(--neutral-900)';
+  toast.setAttribute('role', type === 'error' || type === 'warning' ? 'alert' : 'status');
+  toast.setAttribute('aria-live', type === 'error' || type === 'warning' ? 'assertive' : 'polite');
+  toast.setAttribute('aria-atomic', 'true');
   toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 3000);
+  const timer = setTimeout(() => {
+    if (legacyToastTimers.get(toast) !== timer) return;
+    legacyToastTimers.delete(toast);
+    toast.classList.remove('show');
+  }, 3000);
+  legacyToastTimers.set(toast, timer);
 }
 
 /**

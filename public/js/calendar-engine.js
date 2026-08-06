@@ -109,12 +109,29 @@ class CalendarState {
 class CalendarRenderer {
   constructor(state) {
     this.state = state;
+    // Mounted calendars opt into the pending state before fetching. Direct
+    // renderer consumers retain the settled-state contract.
+    this.loading = false;
+    this.rejected = false;
+    this.layout = document.querySelector('.cal-layout');
     this.container = document.getElementById('calendarGrid');
     this.header = document.getElementById('calendarHeader');
     this.kpiBar = document.getElementById('calendarKpiBar');
     this.eventList = document.getElementById('calendarEventList');
     this.newEventArea = document.getElementById('calendarNewEventArea');
     this.polarisSection = document.getElementById('calendarPolaris');
+  }
+
+  setLoading(loading) {
+    this.loading = Boolean(loading);
+    this.rejected = false;
+    if (this.layout) this.layout.setAttribute('aria-busy', String(this.loading));
+  }
+
+  setRejected() {
+    this.loading = false;
+    this.rejected = true;
+    if (this.layout) this.layout.setAttribute('aria-busy', 'false');
   }
 
   render() {
@@ -159,12 +176,17 @@ class CalendarRenderer {
     var totalEvents = this.state.events.length;
     var canonical = window.CanonicalIntelligence && window.CanonicalIntelligence.getPresentation('calendar');
     var pipelineValue = canonical && canonical.metrics ? canonical.metrics.estimatedRevenue : null;
+    var unavailable = this.loading || this.rejected;
+    var monthValue = unavailable ? '\u2014' : monthEvents.length;
+    var todayValue = unavailable ? '\u2014' : todayEvents.length;
+    var totalValue = unavailable ? '\u2014' : totalEvents;
+    var pipelineText = unavailable ? '\u2014' : (pipelineValue == null ? 'Not calculated' : '$' + Number(pipelineValue).toLocaleString());
 
     this.kpiBar.innerHTML = `
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📅</span><span class="cal-kpi-num">${monthEvents.length}</span><span class="cal-kpi-label">Appointments</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📞</span><span class="cal-kpi-num">${todayEvents.length}</span><span class="cal-kpi-label">Today</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📊</span><span class="cal-kpi-num">${totalEvents}</span><span class="cal-kpi-label">Events</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">💰</span><span class="cal-kpi-num">${pipelineValue == null ? 'Not calculated' : '$' + Number(pipelineValue).toLocaleString()}</span><span class="cal-kpi-label">Pipeline</span></span>`;
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📅</span><span class="cal-kpi-num">${monthValue}</span><span class="cal-kpi-label">Appointments</span></span>
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📞</span><span class="cal-kpi-num">${todayValue}</span><span class="cal-kpi-label">Today</span></span>
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📊</span><span class="cal-kpi-num">${totalValue}</span><span class="cal-kpi-label">Events</span></span>
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon">💰</span><span class="cal-kpi-num">${pipelineText}</span><span class="cal-kpi-label">Pipeline</span></span>`;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -186,7 +208,10 @@ class CalendarRenderer {
     const firstDay = s.getFirstDayOfMonth();
     const daysInMonth = s.getDaysInMonth();
     const todayStr = s._formatDate(new Date());
-    const selStr = s.selectedDate ? s._formatDate(s.selectedDate) : '';
+    const selectedDate = s.selectedDate instanceof Date
+      ? s.selectedDate
+      : (s.selectedDate ? new Date(s.selectedDate + 'T12:00:00') : null);
+    const selStr = selectedDate && !Number.isNaN(selectedDate.getTime()) ? s._formatDate(selectedDate) : '';
     const eventsByDate = {};
     s.events.forEach(e => { if (e.date) { eventsByDate[e.date] = eventsByDate[e.date] || []; eventsByDate[e.date].push(e); } });
     let html = '<div class="cal-month-grid">';
@@ -211,6 +236,9 @@ class CalendarRenderer {
         html += '</div>';
       }
       html += '</div>';
+    }
+    for (let trailing = firstDay + daysInMonth; trailing < 42; trailing++) {
+      html += '<div class="cal-month-cell cal-month-cell-empty"></div>';
     }
     html += '</div>';
     this.container.innerHTML = html;
@@ -355,7 +383,11 @@ class CalendarRenderer {
     const todayStr = this.state._formatDate(new Date());
     const todayEvents = this.state.events.filter(e => e.date === todayStr);
     let html = `<div class="cal-event-list-header">Today\u2019s Schedule</div>`;
-    if (todayEvents.length === 0) {
+    if (this.loading) {
+      html += `<div class="cal-event-list-empty" role="status" aria-live="polite">Loading schedule\u2026</div>`;
+    } else if (this.rejected) {
+      html += `<div class="cal-event-list-empty" role="alert" aria-live="assertive">Calendar data unavailable. Try again.</div>`;
+    } else if (todayEvents.length === 0) {
       html += `<div class="cal-event-list-empty">No events scheduled for today</div>`;
     } else {
       todayEvents.forEach(e => {
@@ -399,7 +431,9 @@ class CalendarRenderer {
     html += '<span class="cal-polaris-badge" style="background:#a67c00;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;letter-spacing:0.05em;">&#10022; CANONICAL</span>';
     html += '</div>';
     html += '<div class="polaris-grid" style="display:flex;flex-direction:column;gap:0;">';
-    if (!values) {
+    if (this.loading) {
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Loading calendar intelligence&hellip;</span></div>';
+    } else if (!values) {
       html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Canonical intelligence unavailable</span></div>';
     } else {
       html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Customer Price</span><span class="cal-polaris-value">' + esc(presentation.customerPriceText) + '</span></div>';
@@ -427,12 +461,26 @@ class CalendarData {
         return {};
       }
 
+      readAuthorizedEvents() {
+        var client = window.CanonicalIntelligence;
+        var projection = client && client.getProjection('calendar');
+        var root = window.document && window.document.documentElement;
+        if (!projection || !root || root.dataset.canonicalAuthority !== 'server') {
+          throw new Error('Current canonical Calendar authority is unavailable.');
+        }
+        var events = window.syncCalendarFromAppStore ? window.syncCalendarFromAppStore() : [];
+        if (client.getProjection('calendar') !== projection || root.dataset.canonicalAuthority !== 'server') {
+          throw new Error('Canonical Calendar authority changed during settlement.');
+        }
+        return Array.isArray(events) ? events : [];
+      }
+
       async fetchEvents() {
         try {
           await window.CanonicalIntelligence.loadCompatibility('calendar');
-          return window.syncCalendarFromAppStore ? window.syncCalendarFromAppStore() : [];
+          return this.readAuthorizedEvents();
         }
-        catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); return []; }
+        catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); throw e; }
       }
 
       async createEvent(data) {
@@ -627,16 +675,15 @@ window.syncCalendarFromAppStore = function() {
 };
 
 window.refreshCalendar = async function() {
+  calRenderer.setLoading(true);
+  calRenderer.render();
   try {
-    const [apiEvents, leadEvents] = await Promise.all([
-      calData.fetchEvents().catch(() => []),
-      Promise.resolve(window.syncCalendarFromAppStore())
-    ]);
-    const existingIds = new Set(apiEvents.map(e => e.id));
-    const newLeadEvents = leadEvents.filter(e => !existingIds.has(e.id));
-    calState.events = [...apiEvents, ...newLeadEvents];
+    await calData.fetchEvents();
+    calState.events = calData.readAuthorizedEvents();
+    calRenderer.setLoading(false);
   } catch(e) {
-    calState.events = window.syncCalendarFromAppStore();
+    calState.events = [];
+    calRenderer.setRejected();
   }
   calRenderer.render();
 };

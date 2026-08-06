@@ -161,7 +161,16 @@ async function exerciseToast(page, surface, viewport, theme) {
     const toast = document.querySelector(selector);
     const body = mode === 'premium' ? toast && toast.querySelector('.toast-body') : toast;
     const container = document.getElementById('toastContainer');
+    const themeToggle = document.querySelector('[data-northstar-theme-toggle]');
     const style = toast ? getComputedStyle(toast) : null;
+    const toastRect = toast ? toast.getBoundingClientRect() : null;
+    const toggleRect = themeToggle ? themeToggle.getBoundingClientRect() : null;
+    const overlapWidth = toastRect && toggleRect
+      ? Math.max(0, Math.min(toastRect.right, toggleRect.right) - Math.max(toastRect.left, toggleRect.left))
+      : 0;
+    const overlapHeight = toastRect && toggleRect
+      ? Math.max(0, Math.min(toastRect.bottom, toggleRect.bottom) - Math.max(toastRect.top, toggleRect.top))
+      : 0;
     return {
       count: document.querySelectorAll(selector).length,
       text: body && body.textContent,
@@ -173,6 +182,8 @@ async function exerciseToast(page, surface, viewport, theme) {
       executed: window.__slice4Pwned,
       bottom: style && style.bottom,
       right: style && style.right,
+      themeTogglePresent: Boolean(themeToggle),
+      themeToggleIntersectionArea: overlapWidth * overlapHeight,
       containerTop: container && container.style.top,
       containerLeft: container && container.style.left,
       containerTransform: container && container.style.transform,
@@ -215,8 +226,10 @@ async function exerciseToast(page, surface, viewport, theme) {
     assert.strictEqual(observed.right, '24px', `${surface.label}: Business Profile right`);
   } else {
     assert.ok(observed.className.split(/\s+/).includes('toast'), `${surface.label}: legacy class`);
-    assert.strictEqual(observed.bottom, '20px', `${surface.label}: legacy bottom`);
-    assert.strictEqual(observed.right, '20px', `${surface.label}: legacy right`);
+    assert.strictEqual(observed.bottom, '70px', `${surface.label}: legacy bottom clears fixed theme control`);
+    assert.strictEqual(observed.right, '14px', `${surface.label}: legacy safe-area edge`);
+    assert.strictEqual(observed.themeTogglePresent, true, `${surface.label}: mounted fixed theme control`);
+    assert.strictEqual(observed.themeToggleIntersectionArea, 0, `${surface.label}: toast does not overlap theme control`);
   }
 }
 

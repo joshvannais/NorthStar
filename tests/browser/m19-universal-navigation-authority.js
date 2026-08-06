@@ -242,7 +242,7 @@ async function exercisePass(page, origin, definition, role, viewport, theme, pas
 async function deepLinkNegative(browser, origin, evidence) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const projected = EXPECTED_NAVIGATION.filter(item => item.id !== 'business-profile');
-  await context.addInitScript(() => localStorage.setItem('theme', 'light'));
+  await context.addInitScript(() => localStorage.setItem('northstar-theme', 'light'));
   await installBoundaries(context, origin, 'viewer', evidence, projected);
   const page = await context.newPage();
   page.on('pageerror', error => evidence.pageErrors.push({ page: 'Deep-link negative', message: error.stack || error.message }));
@@ -278,7 +278,7 @@ async function main() {
       for (const viewport of VIEWPORTS) {
         for (const theme of THEMES) {
           const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
-          await context.addInitScript(selectedTheme => localStorage.setItem('theme', selectedTheme), theme);
+          await context.addInitScript(selectedTheme => localStorage.setItem('northstar-theme', selectedTheme), theme);
           await installBoundaries(context, origin, role, evidence, EXPECTED_NAVIGATION);
           for (const definition of PAGES) {
             const page = await context.newPage();

@@ -6,7 +6,7 @@
  *        NavComponent.init('page-name');
  * 
  * Where 'page-name' is one of: command-center, polaris, leads, communications,
- *   my-number, calendar, ai-settings, business-profile, settings
+ *   my-number, calendar, ai-settings, business-profile, settings, integrations
  */
 (function() {
   'use strict';
@@ -26,18 +26,18 @@
     { id: 'integrations',     href: '/dashboard/integrations',      label: 'Integrations',       svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>' }
   ];
 
-  function makeNavLinks(isMobile) {
+  function makeNavLinks(isMobile, items) {
     var html = '';
-    for (var i = 0; i < NAV_ITEMS.length; i++) {
-      var item = NAV_ITEMS[i];
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
       var isActive = item.id === ACTIVE_PAGE;
       var activeAttr = isActive ? ' class="active" aria-current="page"' : '';
-      html += '<a href="' + item.href + '"' + activeAttr + '>' + item.svg + (isMobile ? item.label : '<span>' + item.label + '</span>') + '</a>';
+      html += '<a href="' + item.href + '" data-nav-id="' + item.id + '"' + activeAttr + '>' + item.svg + (isMobile ? item.label : '<span>' + item.label + '</span>') + '</a>';
     }
     return html;
   }
 
-  function buildMobileNav() {
+  function buildMobileNav(items) {
     return '' +
       '<style id="nav-critical-css">' +
         '.mobile-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;}' +
@@ -57,15 +57,15 @@
           '<button class="mobile-menu-close" id="navCloseBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
         '</div>' +
         '<nav class="mobile-menu-nav">' +
-          makeNavLinks(true) +
+          makeNavLinks(true, items) +
         '</nav>' +
         '<div class="mobile-menu-footer">' +
-          '<a href="/" id="navSignOut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>' +
+          '<a href="/login" id="navSignOut" data-account-logout><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>' +
         '</div>' +
       '</div>';
   }
 
-  function buildSidebar() {
+  function buildSidebar(items) {
     return '' +
       '<aside class="sidebar">' +
         '<a href="/dashboard" class="sidebar-logo">' +
@@ -73,13 +73,57 @@
           'NorthStar' +
         '</a>' +
         '<nav class="sidebar-nav">' +
-          makeNavLinks(false) +
+          makeNavLinks(false, items) +
         '</nav>' +
         '<a href="/login" data-account-logout style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>' +
           '<span>Sign Out</span>' +
         '</a>' +
       '</aside>';
+  }
+
+  function projectedItems(account) {
+    if (!account || !Array.isArray(account.navigation) || account.navigation.length === 0 ||
+        account.navigation.length > NAV_ITEMS.length) return null;
+    var allowed = Object.create(null);
+    for (var index = 0; index < account.navigation.length; index++) {
+      var projected = account.navigation[index];
+      if (!projected || typeof projected.id !== 'string' || typeof projected.href !== 'string' || allowed[projected.id]) {
+        return null;
+      }
+      var canonical = null;
+      for (var itemIndex = 0; itemIndex < NAV_ITEMS.length; itemIndex++) {
+        if (NAV_ITEMS[itemIndex].id === projected.id) {
+          canonical = NAV_ITEMS[itemIndex];
+          break;
+        }
+      }
+      if (!canonical || canonical.href !== projected.href) return null;
+      allowed[projected.id] = true;
+    }
+    return NAV_ITEMS.filter(function(item) { return allowed[item.id] === true; });
+  }
+
+  function removeGeneratedMobileNav() {
+    var selectors = ['.mobile-header', '.mobile-overlay', '.mobile-menu', '#nav-critical-css'];
+    for (var selectorIndex = 0; selectorIndex < selectors.length; selectorIndex++) {
+      var nodes = document.querySelectorAll(selectors[selectorIndex]);
+      for (var nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) nodes[nodeIndex].remove();
+    }
+  }
+
+  function installSidebar(items) {
+    var sidebars = document.querySelectorAll('.sidebar');
+    var existingSidebar = sidebars.length ? sidebars[0] : null;
+    for (var index = 1; index < sidebars.length; index++) sidebars[index].remove();
+    if (existingSidebar) {
+      existingSidebar.outerHTML = buildSidebar(items);
+      return true;
+    }
+    var layout = document.querySelector('.app-layout') || document.querySelector('.dashboard-layout');
+    if (!layout) return false;
+    layout.insertAdjacentHTML('afterbegin', buildSidebar(items));
+    return true;
   }
 
   window.toggleMobileMenu = function() {
@@ -106,51 +150,76 @@
   window.NavComponent = {
     init: function(activePage) {
       ACTIVE_PAGE = activePage || '';
+      var root = document.documentElement;
+      root.setAttribute('data-northstar-navigation', 'pending');
+      removeGeneratedMobileNav();
 
-      var body = document.body;
-      var mobileHTML = buildMobileNav();
-      body.insertAdjacentHTML('afterbegin', mobileHTML);
-
-      var existingSidebar = document.querySelector('.sidebar');
-      if (existingSidebar) {
-        existingSidebar.outerHTML = buildSidebar();
-      } else {
-        var layout = document.querySelector('.app-layout') || document.querySelector('.dashboard-layout');
-        if (layout) {
-          layout.insertAdjacentHTML('afterbegin', buildSidebar());
-        }
+      if (!window.NorthStarAccountSession || typeof window.NorthStarAccountSession.load !== 'function') {
+        root.setAttribute('data-northstar-navigation', 'denied');
+        window.location.replace('/login');
+        return Promise.resolve(null);
       }
 
-      // Wire up close handlers
-      var hamburger = document.getElementById('navHamburgerBtn');
-      var closeBtn = document.getElementById('navCloseBtn');
-      var overlay = document.getElementById('mobileOverlay');
-      var signOut = document.getElementById('navSignOut');
+      return window.NorthStarAccountSession.load().then(function(account) {
+        var items = projectedItems(account);
+        if (!items) {
+          root.setAttribute('data-northstar-navigation', 'denied');
+          window.location.replace('/login');
+          return null;
+        }
 
-      if (hamburger) hamburger.onclick = toggleMobileMenu;
-      if (closeBtn) closeBtn.onclick = toggleMobileMenu;
-      if (overlay) overlay.onclick = toggleMobileMenu;
-      // The shared account client owns one delegated logout listener so every
-      // surface receives the same durable success/failure behavior.
-      if (signOut) signOut.setAttribute('data-account-logout', '');
-
-      // Close on Escape
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-          var menu = document.getElementById('mobileMenu');
-          if (menu && menu.classList.contains('open')) {
-            closeMenu();
+        var activeAllowed = items.some(function(item) { return item.id === ACTIVE_PAGE; });
+        if (!activeAllowed) {
+          root.setAttribute('data-northstar-navigation', 'denied');
+          if (items.some(function(item) { return item.id === 'command-center'; })) {
+            window.location.replace('/dashboard');
+          } else {
+            window.location.replace('/login');
           }
+          return null;
         }
-      });
 
-      // Close on nav link click
-      var navLinks = document.querySelectorAll('.mobile-menu-nav a');
-      for (var i = 0; i < navLinks.length; i++) {
-        navLinks[i].addEventListener('click', function() {
-          setTimeout(closeMenu, 150);
-        });
-      }
+        removeGeneratedMobileNav();
+        document.body.insertAdjacentHTML('afterbegin', buildMobileNav(items));
+        if (!installSidebar(items)) {
+          root.setAttribute('data-northstar-navigation', 'denied');
+          window.location.replace('/dashboard');
+          return null;
+        }
+
+        var hamburger = document.getElementById('navHamburgerBtn');
+        var closeBtn = document.getElementById('navCloseBtn');
+        var overlay = document.getElementById('mobileOverlay');
+        if (hamburger) hamburger.onclick = window.toggleMobileMenu;
+        if (closeBtn) closeBtn.onclick = window.toggleMobileMenu;
+        if (overlay) overlay.onclick = window.toggleMobileMenu;
+
+        // The shared account client owns one delegated logout listener so every
+        // surface receives the same durable success/failure behavior.
+        if (root.getAttribute('data-northstar-navigation-keyboard-bound') !== 'true') {
+          root.setAttribute('data-northstar-navigation-keyboard-bound', 'true');
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeMenu();
+          });
+        }
+
+        var navLinks = document.querySelectorAll('.mobile-menu-nav a');
+        for (var i = 0; i < navLinks.length; i++) {
+          navLinks[i].addEventListener('click', function() {
+            setTimeout(closeMenu, 150);
+          });
+        }
+
+        root.setAttribute('data-northstar-navigation', 'ready');
+        window.dispatchEvent(new CustomEvent('northstar:navigation-ready', {
+          detail: Object.freeze({ activePage: ACTIVE_PAGE })
+        }));
+        return items;
+      }).catch(function() {
+        root.setAttribute('data-northstar-navigation', 'denied');
+        window.location.replace('/login');
+        return null;
+      });
     }
   };
 })();

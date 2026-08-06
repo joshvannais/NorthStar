@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const { app } = require('../../src/server');
+const { navigationFixture } = require('../helpers/navigation-fixture');
 const { MOUNTED_THEME_PAGES } = require('../helpers/site-theme-pages');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const {
@@ -40,6 +41,7 @@ function accountFixture(pathname) {
     account: {
       user: { id: '00000000-0000-4000-8000-000000000101', status: pending ? 'pending' : 'active', email: '' },
       organization: { id: '00000000-0000-4000-8000-000000000201', name: 'NorthStar Theme Fixture' },
+      navigation: navigationFixture(),
       memberships: [{ role: 'owner' }],
       onboarding: { status: 'complete' },
       subscription: pending

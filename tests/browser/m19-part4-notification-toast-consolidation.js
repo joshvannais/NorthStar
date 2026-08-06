@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
+const { navigationFixture } = require('../helpers/navigation-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
 [
@@ -53,6 +54,7 @@ function account() {
       id: '00000000-0000-4000-8000-000000000402',
       name: 'NorthStar Notification Test',
     },
+    navigation: navigationFixture(),
     memberships: [{ role: 'owner', status: 'active' }],
     onboarding: { status: 'complete' },
     subscription: { safe: true, state: 'active', readOnly: false, showTrialBanner: false },

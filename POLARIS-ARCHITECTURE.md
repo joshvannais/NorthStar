@@ -110,6 +110,10 @@ an autonomous learning loop.
 
 The production graph writers are narrow and server-owned:
 
+- `POST /api/leads` is the mounted canonical lead writer. It requires
+  onboarded authentication, `leads:create` RBAC, and an idempotency key, then
+  calls `ingestLead` with canonical `source: 'lead'` and commits through the
+  same shared transactional graph authority.
 - `POST /api/v1/simulations/leads` generates the mounted synthetic scenario,
   passes it to `ingestSimulation`, and commits one canonical graph after
   authentication, RBAC, idempotency, and service validation.

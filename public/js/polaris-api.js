@@ -151,6 +151,7 @@ window.PolarisApi = (function () {
       estimatedPrice: values.customerFacingPrice,
       jobDetail: values.service && values.service.scope,
       status: record.status,
+      transcript: record.transcript && record.transcript.text,
       calculationVersion: record.canonical.calculationVersion,
       snapshotDigest: record.canonical.snapshotDigest,
       canonical: record.canonical,

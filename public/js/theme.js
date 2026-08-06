@@ -7,6 +7,10 @@
   var media = null;
   var explicitChoice = null;
   var initialized = false;
+  var dockingObserver = null;
+  var themeSwitchToken = 0;
+
+  var INTERACTIVE_SELECTOR = 'a[href], button, input:not([type="hidden"]), select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])';
 
   function validTheme(value) {
     return value === 'light' || value === 'dark';
@@ -49,11 +53,26 @@
     if (label) label.textContent = dark ? 'Use light theme' : 'Use dark theme';
   }
 
+  function releaseThemeTransitionGuard(root, token) {
+    function release() {
+      if (token === themeSwitchToken) root.removeAttribute('data-theme-switching');
+    }
+    if (typeof global.requestAnimationFrame === 'function') {
+      global.requestAnimationFrame(function () { global.requestAnimationFrame(release); });
+    } else {
+      global.setTimeout(release, 0);
+    }
+  }
+
   function applyTheme(theme, source) {
     var safeTheme = validTheme(theme) ? theme : 'light';
-    document.documentElement.setAttribute('data-theme', safeTheme);
-    document.documentElement.style.colorScheme = safeTheme;
+    var root = document.documentElement;
+    var token = ++themeSwitchToken;
+    root.setAttribute('data-theme-switching', '');
+    root.setAttribute('data-theme', safeTheme);
+    root.style.colorScheme = safeTheme;
     updateToggle(safeTheme);
+    releaseThemeTransitionGuard(root, token);
     if (initialized && typeof global.CustomEvent === 'function') {
       global.dispatchEvent(new global.CustomEvent('northstar:themechange', {
         detail: { theme: safeTheme, source: source || 'presentation' },
@@ -78,6 +97,66 @@
     return setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
   }
 
+  function isVisibleInteractive(element) {
+    if (!element || element.closest('[data-northstar-theme-control]')) return false;
+    var rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || rect.right <= 0 || rect.left >= global.innerWidth ||
+        rect.bottom <= 0 || rect.top >= global.innerHeight) return false;
+    for (var current = element; current; current = current.parentElement) {
+      var style = global.getComputedStyle(current);
+      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) <= 0) return false;
+    }
+    return true;
+  }
+
+  function rectanglesIntersect(first, second, gap) {
+    var clearance = typeof gap === 'number' ? gap : 0;
+    return Math.min(first.right, second.right) - Math.max(first.left, second.left) > -clearance &&
+      Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > -clearance;
+  }
+
+  function dockToggle() {
+    var control = document.querySelector('[data-northstar-theme-control]');
+    if (!control || !document.body) return;
+
+    control.style.removeProperty('--northstar-theme-control-bottom');
+    var baseRect = control.getBoundingClientRect();
+    if (baseRect.width <= 0 || baseRect.height <= 0) return;
+
+    var baseBottom = Math.max(0, global.innerHeight - baseRect.bottom);
+    var controls = Array.prototype.slice.call(document.querySelectorAll(INTERACTIVE_SELECTOR))
+      .filter(isVisibleInteractive)
+      .map(function (element) { return element.getBoundingClientRect(); });
+    var step = baseRect.height + 12;
+    var maximumBottom = Math.max(baseBottom, global.innerHeight - baseRect.height - 4);
+    var selectedBottom = baseBottom;
+
+    for (var candidate = baseBottom; candidate <= maximumBottom; candidate += step) {
+      var candidateBottom = global.innerHeight - candidate;
+      var candidateRect = {
+        left: baseRect.left,
+        right: baseRect.right,
+        top: candidateBottom - baseRect.height,
+        bottom: candidateBottom,
+      };
+      var blocked = controls.some(function (rect) { return rectanglesIntersect(candidateRect, rect, 4); });
+      if (!blocked) {
+        selectedBottom = candidate;
+        break;
+      }
+    }
+
+    control.style.setProperty('--northstar-theme-control-bottom', Math.round(selectedBottom) + 'px');
+  }
+
+  function scheduleDocking() {
+    if (typeof global.requestAnimationFrame !== 'function') {
+      dockToggle();
+      return;
+    }
+    global.requestAnimationFrame(dockToggle);
+  }
+
   function createToggle() {
     var existing = Array.prototype.slice.call(document.querySelectorAll('[data-northstar-theme-toggle], .theme-toggle'));
     for (var index = 0; index < existing.length; index += 1) existing[index].remove();
@@ -95,6 +174,7 @@
     document.body.appendChild(control);
     control.querySelector('button').addEventListener('click', toggleTheme);
     updateToggle(currentTheme());
+    dockToggle();
   }
 
   function onSystemChange(event) {
@@ -118,7 +198,15 @@
       else if (media && typeof media.addListener === 'function') media.addListener(onSystemChange);
     } catch (_error) {}
     global.addEventListener('storage', onStorage);
+    global.addEventListener('scroll', dockToggle, { passive: true });
+    global.addEventListener('resize', scheduleDocking);
+    global.addEventListener('load', scheduleDocking, { once: true });
+    if (typeof global.MutationObserver === 'function' && document.body) {
+      dockingObserver = new global.MutationObserver(scheduleDocking);
+      dockingObserver.observe(document.body, { childList: true, subtree: true });
+    }
     updateToggle(currentTheme());
+    scheduleDocking();
   }
 
   global.NorthStarTheme = Object.freeze({
@@ -128,6 +216,7 @@
     loadTheme: loadTheme,
     setTheme: setTheme,
     toggleTheme: toggleTheme,
+    refreshControlPosition: dockToggle,
     init: initialize,
   });
 

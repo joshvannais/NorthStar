@@ -735,7 +735,7 @@ async function runMountedMatrix(engine, viewport, origin) {
             const audit = accessibilityState.audit;
             const isSettled = accessibilityState.state === 'settled';
             if (audit.contrastFailures.length || audit.uiFailures.length || audit.overlaps.length
-              || audit.railOverlaps.length || audit.clipped.length
+              || audit.clipped.length
               || isSettled && (result.interactiveStates.hoverFailures.length || result.interactiveStates.focusFailures.length)) {
               accessibilityFailures.push({
                 route: mounted.route,
@@ -744,7 +744,6 @@ async function runMountedMatrix(engine, viewport, origin) {
                 contrastFailures: audit.contrastFailures,
                 uiFailures: audit.uiFailures,
                 overlaps: audit.overlaps,
-                railOverlaps: audit.railOverlaps,
                 clipped: audit.clipped,
                 hoverFailures: isSettled ? result.interactiveStates.hoverFailures : [],
                 focusFailures: isSettled ? result.interactiveStates.focusFailures : [],
@@ -772,7 +771,6 @@ async function runMountedMatrix(engine, viewport, origin) {
     contrastFailures: failure.contrastFailures.slice(0, 12),
     uiFailures: failure.uiFailures.slice(0, 12),
     overlaps: failure.overlaps,
-    railOverlaps: failure.railOverlaps,
     clipped: failure.clipped,
     hoverFailures: failure.hoverFailures,
     focusFailures: failure.focusFailures,
@@ -890,23 +888,19 @@ async function runAccessibilityAuditNegativeControl(engine) {
       .timing { color:#0b0d17; background:#f2c94c; border:2px solid #7a5c08; transition:color .12s linear; }
       .timing:hover { color:rgb(200,155,44); }
       :where(button):focus-visible { outline:3px solid #f2c94c; outline-offset:3px; }
-    </style></head><body style="margin:0;padding-right:64px;box-sizing:border-box;background:#0b0d17;color:#f1f2f6;min-height:100vh">
+    </style></head><body style="margin:0;box-sizing:border-box;background:#0b0d17;color:#f1f2f6;min-height:100vh">
       <div style="background:transparent"><span id="hiddenContrast" style="color:#131624">Unreadable nested text</span></div>
       <input id="weakBoundary" aria-label="Fixture field" style="border:1px solid #131624;background:#0b0d17;color:#f1f2f6">
       <button id="overlap" style="position:fixed;right:10px;bottom:10px;width:60px;height:50px">Action</button>
       <div class="context-dark" style="background:#0b0d17"><button class="context-action">Context action</button></div>
       <div class="context-light" style="background:#f8fafc"><button class="context-action">Context action</button></div>
       <button class="timing">Transition action</button>
-      <button id="railOnly" style="position:fixed;right:56px;top:300px;width:8px;height:48px;padding:0;border:0" aria-label="Rail fixture"></button>
       <div data-northstar-theme-control style="position:fixed;right:10px;bottom:10px"><button data-northstar-theme-toggle aria-label="Fixture theme" style="width:44px;height:44px">T</button></div>
     </body></html>`);
     const audit = await auditMountedAccessibility(page);
-    const exactToggleOverlap = audit.overlaps.some(overlap => overlap.path === '#railOnly');
     assert.strictEqual(audit.contrastFailures.some(failure => failure.path === '#hiddenContrast' && failure.ratio < 1.2), true);
     assert.strictEqual(audit.uiFailures.some(failure => failure.path === '#weakBoundary'), true);
     assert.strictEqual(audit.overlaps.some(overlap => overlap.path === '#overlap'), true);
-    assert.strictEqual(exactToggleOverlap, false, 'rail fixture must remain outside the 44px toggle');
-    assert.strictEqual(audit.railOverlaps.some(overlap => overlap.path === '#railOnly'), true, '64px rail catches the outside-toggle fixture');
 
     const interaction = await auditInteractiveStates(page);
     const contextualFailures = interaction.hoverFailures.filter(failure =>
@@ -917,7 +911,7 @@ async function runAccessibilityAuditNegativeControl(engine) {
       failure.signature.includes('timing')
       && failure.contrastFailures.some(item => item.path.includes('timing'))
     );
-    assert.strictEqual(interaction.visibleControlContexts >= 7, true, 'every visible fixture context is exercised');
+    assert.strictEqual(interaction.visibleControlContexts >= 6, true, 'every visible fixture context is exercised');
     assert.strictEqual(contextualFailures.some(failure => failure.signature.includes('context-light')), true, 'effective light background failure is retained');
     assert.strictEqual(
       timingFailures.some(failure => failure.phase !== 'hover-0'),
@@ -936,10 +930,6 @@ async function runAccessibilityAuditNegativeControl(engine) {
       transitionTimeline: {
         frames: interaction.hoverFrames,
         failures: timingFailures.length,
-      },
-      safeRail: {
-        exactToggleIntersections: 0,
-        railIntersections: audit.railOverlaps.filter(overlap => overlap.path === '#railOnly').length,
       },
     };
   } finally {

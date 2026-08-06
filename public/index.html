@@ -11,7 +11,7 @@
   <link rel="icon" href="/assets/logo.png">
   <style>
     /* ── Demo-specific styles ── */
-    .demo-container { max-width: 1100px; margin: 0 auto; }
+    .demo-container { width: min(calc(100% - 32px), 1100px); margin-inline: auto; }
     .demo-hero { text-align: center; padding: 64px 24px 48px; }
     .demo-hero h1 { font-size: clamp(32px, 5vw, 48px); font-weight: 800; line-height: 1.15; margin-bottom: 16px; }
     .demo-hero h1 span { color: var(--brand-600, #D4AF37); }
@@ -741,11 +741,11 @@
   <!-- Notification banner -->
   <div class="demo-notification" id="demoNotification"></div>
 
-  <!-- Try Before You Buy — Full Demo Access -->
+  <!-- Try Before You Buy — Isolated Demo Dashboard -->
   <div class="demo-banner">
     ⚡ No credit card needed —
-    <a href="/login">Try the full dashboard right now</a>
-    — simulate real leads, explore every feature
+    <a href="/demo-dashboard">Explore the account-free demo dashboard</a>
+    — sample data only, no sign-in required
   </div>
 
   <!-- Navigation -->
@@ -758,6 +758,7 @@
       <div class="nav-links">
         <a href="#how-it-works">How It Works</a>
         <a href="#pricing">Pricing</a>
+        <a href="/demo-dashboard">Demo Dashboard</a>
         <a href="/login" class="btn btn-ghost btn-sm">Sign In</a>
         <a href="/signup" class="btn btn-primary btn-sm">Start Free Trial</a>
       </div>

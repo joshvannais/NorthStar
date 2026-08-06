@@ -54,6 +54,7 @@ app.use('/assets', express.static('public/assets'));
 // Frontend page routes
 const pages = {
   '/': 'public/index.html',
+  '/demo-dashboard': 'public/demo-dashboard.html',
   '/login': 'public/login.html',
   '/signup': 'public/signup.html',
   '/verify-email': 'public/verify-email.html',

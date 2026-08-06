@@ -366,6 +366,38 @@ async function waitForCalendarRejected(page) {
   ), null, { timeout: 5000 });
 }
 
+async function assertRejectedCalendarViews(page, label, staleTitle) {
+  for (const view of ['Month', 'Week', 'Day', 'Agenda']) {
+    await page.getByRole('button', { name: view, exact: true }).click();
+    const selector = {
+      Month: '.cal-month-grid',
+      Week: '.cal-week-view',
+      Day: '.cal-day-view',
+      Agenda: '.cal-agenda-view',
+    }[view];
+    await page.locator(selector).waitFor({ state: 'visible' });
+    const rejectedView = await page.evaluate(oldTitle => ({
+      stateCount: Array.from(window.calState?.events || []).length,
+      renderedEventCount: document.querySelectorAll([
+        '.cal-month-event-dot',
+        '.cal-week-event',
+        '.cal-day-event-card',
+        '.cal-agenda-event',
+        '.cal-event-list-item',
+      ].join(',')).length,
+      bodyHasOldTitle: document.body.innerText.includes(oldTitle),
+      titleAttributeHasOldTitle: Array.from(document.querySelectorAll('[title]'))
+        .some(element => element.getAttribute('title')?.includes(oldTitle)),
+    }), staleTitle);
+    assert.deepStrictEqual(rejectedView, {
+      stateCount: 0,
+      renderedEventCount: 0,
+      bodyHasOldTitle: false,
+      titleAttributeHasOldTitle: false,
+    }, `${label} ${view} cannot reveal rejected appointment`);
+  }
+}
+
 async function waitForAsyncSettled(page, surface) {
   if (surface.label === 'communications') {
     await page.waitForFunction(() => (
@@ -512,6 +544,7 @@ async function runCalendarAuthorityMatrix(browser, engine, origin, evidence) {
     for (const theme of THEMES) {
       for (const rejectionMode of rejectionModes) {
         for (const mode of MODES) {
+          for (const consumer of ['refreshCalendar', 'initCalendar']) {
           const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
           const activeGate = { current: null };
           const scenario = {
@@ -524,7 +557,7 @@ async function runCalendarAuthorityMatrix(browser, engine, origin, evidence) {
           await installBoundaries(context, origin, evidence, activeGate, scenario);
           const page = await context.newPage();
           page.on('pageerror', error => errors.push(error.stack || error.message));
-          const label = `${engine}/${viewport.label}/${theme}/calendar-authority/${rejectionMode}/${mode}`;
+          const label = `${engine}/${viewport.label}/${theme}/calendar-authority/${consumer}/${rejectionMode}/${mode}`;
           try {
             if (mode === 'reload') {
               const bootstrap = await page.goto(origin + '/dashboard/calendar', { waitUntil: 'networkidle' });
@@ -569,7 +602,7 @@ async function runCalendarAuthorityMatrix(browser, engine, origin, evidence) {
             const rejectGate = createGate('/api/v1/canonical/compat/calendar');
             activeGate.current = rejectGate;
             scenario.phase = rejectionMode;
-            await page.evaluate(() => window.initCalendar());
+            await page.evaluate(method => { window[method](); }, consumer);
             await rejectGate.waitForRequest();
             await page.waitForTimeout(75);
             const rejectPending = await readCalendarAuthorityState(page);
@@ -594,12 +627,13 @@ async function runCalendarAuthorityMatrix(browser, engine, origin, evidence) {
             if (engine === 'chrome') {
               assert.ok(rejected.layout.value <= 0.1, `${label} rejected transition CLS <= 0.1: ${JSON.stringify(rejected.layout)}`);
             }
+            await assertRejectedCalendarViews(page, label, scenario.initialTitle);
 
             await resetLayoutEvidence(page);
             const recoveryGate = createGate('/api/v1/canonical/compat/calendar');
             activeGate.current = recoveryGate;
             scenario.phase = 'recovery';
-            await page.evaluate(() => window.initCalendar());
+            await page.evaluate(method => { window[method](); }, consumer);
             await recoveryGate.waitForRequest();
             await page.waitForTimeout(75);
             const recoveryPending = await readCalendarAuthorityState(page);
@@ -631,12 +665,14 @@ async function runCalendarAuthorityMatrix(browser, engine, origin, evidence) {
               downstreamShift,
               rejectedItems: rejected.itemCount,
               recoveredTitles: recovered.itemTitles,
+              consumer,
               interaction,
             });
           } finally {
             if (activeGate.current) activeGate.current.release();
             await page.close();
             await context.close();
+          }
           }
         }
       }

@@ -461,10 +461,24 @@ class CalendarData {
         return {};
       }
 
+      readAuthorizedEvents() {
+        var client = window.CanonicalIntelligence;
+        var projection = client && client.getProjection('calendar');
+        var root = window.document && window.document.documentElement;
+        if (!projection || !root || root.dataset.canonicalAuthority !== 'server') {
+          throw new Error('Current canonical Calendar authority is unavailable.');
+        }
+        var events = window.syncCalendarFromAppStore ? window.syncCalendarFromAppStore() : [];
+        if (client.getProjection('calendar') !== projection || root.dataset.canonicalAuthority !== 'server') {
+          throw new Error('Canonical Calendar authority changed during settlement.');
+        }
+        return Array.isArray(events) ? events : [];
+      }
+
       async fetchEvents() {
         try {
           await window.CanonicalIntelligence.loadCompatibility('calendar');
-          return window.syncCalendarFromAppStore ? window.syncCalendarFromAppStore() : [];
+          return this.readAuthorizedEvents();
         }
         catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); throw e; }
       }
@@ -661,16 +675,15 @@ window.syncCalendarFromAppStore = function() {
 };
 
 window.refreshCalendar = async function() {
+  calRenderer.setLoading(true);
+  calRenderer.render();
   try {
-    const [apiEvents, leadEvents] = await Promise.all([
-      calData.fetchEvents().catch(() => []),
-      Promise.resolve(window.syncCalendarFromAppStore())
-    ]);
-    const existingIds = new Set(apiEvents.map(e => e.id));
-    const newLeadEvents = leadEvents.filter(e => !existingIds.has(e.id));
-    calState.events = [...apiEvents, ...newLeadEvents];
+    await calData.fetchEvents();
+    calState.events = calData.readAuthorizedEvents();
+    calRenderer.setLoading(false);
   } catch(e) {
-    calState.events = window.syncCalendarFromAppStore();
+    calState.events = [];
+    calRenderer.setRejected();
   }
   calRenderer.render();
 };

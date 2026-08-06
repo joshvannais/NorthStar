@@ -420,8 +420,8 @@ function initCalendar() {
 
   window.calRenderer.setLoading(true);
   window.calRenderer.render();
-  window.calData.fetchEvents().then(function(events) {
-    calendarApiEvents = Array.isArray(events) ? events : [];
+  window.calData.fetchEvents().then(function() {
+    calendarApiEvents = window.calData.readAuthorizedEvents();
     window.calRenderer.setLoading(false);
     renderCalendarSources();
   }).catch(function() { rejectCalendarSources(true); });

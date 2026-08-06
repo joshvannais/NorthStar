@@ -112,6 +112,7 @@ class CalendarRenderer {
     // Mounted calendars opt into the pending state before fetching. Direct
     // renderer consumers retain the settled-state contract.
     this.loading = false;
+    this.rejected = false;
     this.layout = document.querySelector('.cal-layout');
     this.container = document.getElementById('calendarGrid');
     this.header = document.getElementById('calendarHeader');
@@ -123,7 +124,14 @@ class CalendarRenderer {
 
   setLoading(loading) {
     this.loading = Boolean(loading);
+    this.rejected = false;
     if (this.layout) this.layout.setAttribute('aria-busy', String(this.loading));
+  }
+
+  setRejected() {
+    this.loading = false;
+    this.rejected = true;
+    if (this.layout) this.layout.setAttribute('aria-busy', 'false');
   }
 
   render() {
@@ -168,10 +176,11 @@ class CalendarRenderer {
     var totalEvents = this.state.events.length;
     var canonical = window.CanonicalIntelligence && window.CanonicalIntelligence.getPresentation('calendar');
     var pipelineValue = canonical && canonical.metrics ? canonical.metrics.estimatedRevenue : null;
-    var monthValue = this.loading ? '\u2014' : monthEvents.length;
-    var todayValue = this.loading ? '\u2014' : todayEvents.length;
-    var totalValue = this.loading ? '\u2014' : totalEvents;
-    var pipelineText = this.loading ? '\u2014' : (pipelineValue == null ? 'Not calculated' : '$' + Number(pipelineValue).toLocaleString());
+    var unavailable = this.loading || this.rejected;
+    var monthValue = unavailable ? '\u2014' : monthEvents.length;
+    var todayValue = unavailable ? '\u2014' : todayEvents.length;
+    var totalValue = unavailable ? '\u2014' : totalEvents;
+    var pipelineText = unavailable ? '\u2014' : (pipelineValue == null ? 'Not calculated' : '$' + Number(pipelineValue).toLocaleString());
 
     this.kpiBar.innerHTML = `
       <span class="cal-kpi-pill"><span class="cal-kpi-icon">📅</span><span class="cal-kpi-num">${monthValue}</span><span class="cal-kpi-label">Appointments</span></span>
@@ -376,6 +385,8 @@ class CalendarRenderer {
     let html = `<div class="cal-event-list-header">Today\u2019s Schedule</div>`;
     if (this.loading) {
       html += `<div class="cal-event-list-empty" role="status" aria-live="polite">Loading schedule\u2026</div>`;
+    } else if (this.rejected) {
+      html += `<div class="cal-event-list-empty" role="alert" aria-live="assertive">Calendar data unavailable. Try again.</div>`;
     } else if (todayEvents.length === 0) {
       html += `<div class="cal-event-list-empty">No events scheduled for today</div>`;
     } else {
@@ -455,7 +466,7 @@ class CalendarData {
           await window.CanonicalIntelligence.loadCompatibility('calendar');
           return window.syncCalendarFromAppStore ? window.syncCalendarFromAppStore() : [];
         }
-        catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); return []; }
+        catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); throw e; }
       }
 
       async createEvent(data) {

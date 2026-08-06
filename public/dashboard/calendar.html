@@ -391,6 +391,13 @@ function syncAuthoritativeCalendarLeads(loadInfo) {
   renderCalendarSources();
 }
 
+function rejectCalendarSources(settled) {
+  calendarApiEvents = [];
+  calendarLeadEvents = [];
+  if (settled === true || !window.calRenderer.loading) window.calRenderer.setRejected();
+  renderCalendarSources();
+}
+
 if (window.EventBus && typeof window.EventBus.on === 'function') {
   window.EventBus.on('store:loaded', syncAuthoritativeCalendarLeads);
   window.EventBus.on('canonical:loaded', function(loadInfo) {
@@ -398,6 +405,8 @@ if (window.EventBus && typeof window.EventBus.on === 'function') {
     syncAuthoritativeCalendarLeads({ from: 'server' });
   });
 }
+
+window.addEventListener('canonical:rejected', function() { rejectCalendarSources(false); });
 
 // The mounted containers and CalendarEngine are already available here. Render
 // the truthful loading geometry during parsing, before awaiting server data.
@@ -415,11 +424,7 @@ function initCalendar() {
     calendarApiEvents = Array.isArray(events) ? events : [];
     window.calRenderer.setLoading(false);
     renderCalendarSources();
-  }).catch(function() {
-    calendarApiEvents = [];
-    window.calRenderer.setLoading(false);
-    renderCalendarSources();
-  });
+  }).catch(function() { rejectCalendarSources(true); });
 }
 </script>
   <script src="/js/nav-component.js"></script>

@@ -71,7 +71,7 @@ function accountFixture() {
   };
 }
 
-function canonicalProjection(surface, request) {
+function canonicalProjection(surface, request, records = []) {
   return {
     success: true,
     data: {
@@ -79,10 +79,10 @@ function canonicalProjection(surface, request) {
       readModelVersion: 'm19-part3-read-v1',
       digest: '8'.repeat(64),
       items: [],
-      records: [],
+      records,
       metrics: {
         graphCount: 0,
-        appointmentCount: 0,
+        appointmentCount: records.length,
         estimatedRevenue: 0,
         knownGrossProfit: 0,
         outstandingRevenue: 0,
@@ -96,6 +96,45 @@ function canonicalProjection(surface, request) {
       },
     },
   };
+}
+
+function calendarAppointment(title, id) {
+  const start = new Date();
+  start.setHours(10, 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(11, 0, 0, 0);
+  return {
+    id,
+    scheduledStart: start.toISOString(),
+    scheduledEnd: end.toISOString(),
+    status: 'scheduled',
+    customer: {
+      id: `customer-${id}`,
+      name: title,
+      phone: '+15555550189',
+      address: '189 Authority Way',
+    },
+    canonical: null,
+  };
+}
+
+function calendarScenarioResponse(scenario, request) {
+  if (scenario.phase === 'http503') {
+    return json({ success: false, error: { code: 'calendar_unavailable', message: 'Calendar unavailable.' } }, 503);
+  }
+  if (scenario.phase === 'malformed') {
+    const malformed = canonicalProjection('calendar', request, [calendarAppointment(
+      scenario.initialTitle,
+      '00000000-0000-4000-8000-000000000891',
+    )]);
+    malformed.data.digest = 'malformed-digest';
+    return json(malformed);
+  }
+  const recovered = scenario.phase === 'recovery';
+  return json(canonicalProjection('calendar', request, [calendarAppointment(
+    recovered ? scenario.recoveryTitle : scenario.initialTitle,
+    recovered ? '00000000-0000-4000-8000-000000000892' : '00000000-0000-4000-8000-000000000891',
+  )]));
 }
 
 function createGate(pathname) {
@@ -158,7 +197,7 @@ async function installInstrumentation(context, theme) {
   }, theme);
 }
 
-async function installBoundaries(context, origin, evidence, activeGate) {
+async function installBoundaries(context, origin, evidence, activeGate, calendarScenario) {
   context.on('request', request => {
     let url;
     try { url = new URL(request.url()); } catch (_error) { return; }
@@ -191,6 +230,9 @@ async function installBoundaries(context, origin, evidence, activeGate) {
       return route.fulfill(json({ success: true, data: null }));
     }
     if (url.pathname.includes('/api/v1/canonical/compat/')) {
+      if (calendarScenario && url.pathname === '/api/v1/canonical/compat/calendar') {
+        return route.fulfill(calendarScenarioResponse(calendarScenario, request));
+      }
       return route.fulfill(json(canonicalProjection(url.pathname.split('/').pop(), request)));
     }
     if (url.pathname === '/api/health') {
@@ -251,6 +293,77 @@ function maxAnchorShift(before, after) {
     if (!before[key] || !after[key]) return Number.POSITIVE_INFINITY;
     return Math.abs(after[key].top - before[key].top);
   }));
+}
+
+function selectedAnchorShift(before, after, keys) {
+  return Math.max(...keys.map(key => {
+    if (!before[key] || !after[key]) return Number.POSITIVE_INFINITY;
+    return Math.abs(after[key].top - before[key].top);
+  }));
+}
+
+async function resetLayoutEvidence(page) {
+  await page.evaluate(() => {
+    if (!window.__m19Part8Layout) return;
+    window.__m19Part8Layout.value = 0;
+    window.__m19Part8Layout.entries = [];
+  });
+}
+
+async function readCalendarAuthorityState(page) {
+  return page.evaluate(() => {
+    function rect(selector) {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const box = element.getBoundingClientRect();
+      return { top: box.top, left: box.left, width: box.width, height: box.height };
+    }
+    const layout = window.__m19Part8Layout || { supported: false, value: 0, entries: [] };
+    return {
+      authority: document.documentElement.dataset.canonicalAuthority || null,
+      layoutBusy: document.querySelector('.cal-layout')?.getAttribute('aria-busy') || null,
+      stateTitles: Array.from(window.calState?.events || []).map(event => event.title),
+      apiTitles: Array.from(window.calendarApiEvents || []).map(event => event.title),
+      leadTitles: Array.from(window.calendarLeadEvents || []).map(event => event.title),
+      itemCount: document.querySelectorAll('.cal-event-list-item').length,
+      itemTitles: Array.from(document.querySelectorAll('.cal-event-list-title')).map(element => element.textContent.trim()),
+      eventText: document.getElementById('calendarEventList')?.textContent.trim() || '',
+      errorRole: document.querySelector('#calendarEventList .cal-event-list-empty')?.getAttribute('role') || null,
+      bodyText: document.body.innerText,
+      layout: {
+        supported: Boolean(layout.supported),
+        value: Number(layout.value || 0),
+        entries: Array.from(layout.entries || []),
+      },
+      anchors: {
+        header: rect('#calendarHeader'),
+        kpis: rect('#calendarKpiBar'),
+        grid: rect('#calendarGrid'),
+        events: rect('#calendarEventList'),
+        newEvent: rect('#calendarNewEventArea'),
+        polaris: rect('#calendarPolaris'),
+      },
+    };
+  });
+}
+
+async function waitForCalendarAuthorized(page, title) {
+  await page.waitForFunction(expectedTitle => (
+    document.documentElement.dataset.canonicalAuthority === 'server'
+      && document.querySelector('.cal-layout')?.getAttribute('aria-busy') === 'false'
+      && document.querySelectorAll('.cal-event-list-item').length === 1
+      && document.querySelector('.cal-event-list-title')?.textContent.trim() === expectedTitle
+  ), title, { timeout: 5000 });
+}
+
+async function waitForCalendarRejected(page) {
+  await page.waitForFunction(() => (
+    document.documentElement.dataset.canonicalAuthority === 'rejected'
+      && document.querySelector('.cal-layout')?.getAttribute('aria-busy') === 'false'
+      && document.querySelectorAll('.cal-event-list-item').length === 0
+      && Array.from(window.calState?.events || []).length === 0
+      && document.getElementById('calendarEventList')?.textContent.includes('Calendar data unavailable')
+  ), null, { timeout: 5000 });
 }
 
 async function waitForAsyncSettled(page, surface) {
@@ -385,6 +498,146 @@ async function runAsyncMatrix(browser, engine, origin, evidence) {
           if (activeGate.current) activeGate.current.release();
           await page.close();
           await context.close();
+        }
+      }
+    }
+  }
+  return results;
+}
+
+async function runCalendarAuthorityMatrix(browser, engine, origin, evidence) {
+  const results = [];
+  const rejectionModes = ['malformed', 'http503'];
+  for (const viewport of VIEWPORTS) {
+    for (const theme of THEMES) {
+      for (const rejectionMode of rejectionModes) {
+        for (const mode of MODES) {
+          const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
+          const activeGate = { current: null };
+          const scenario = {
+            phase: 'initial',
+            initialTitle: 'Authorized initial appointment',
+            recoveryTitle: 'Recovered authorized appointment',
+          };
+          const errors = [];
+          await installInstrumentation(context, theme);
+          await installBoundaries(context, origin, evidence, activeGate, scenario);
+          const page = await context.newPage();
+          page.on('pageerror', error => errors.push(error.stack || error.message));
+          const label = `${engine}/${viewport.label}/${theme}/calendar-authority/${rejectionMode}/${mode}`;
+          try {
+            if (mode === 'reload') {
+              const bootstrap = await page.goto(origin + '/dashboard/calendar', { waitUntil: 'networkidle' });
+              assert.strictEqual(bootstrap.status(), 200, `${label} bootstrap mounted status`);
+              await waitForCalendarAuthorized(page, scenario.initialTitle);
+            }
+
+            const initialGate = createGate('/api/v1/canonical/compat/calendar');
+            activeGate.current = initialGate;
+            scenario.phase = 'initial';
+            const response = mode === 'fresh'
+              ? await page.goto(origin + '/dashboard/calendar', { waitUntil: 'domcontentloaded' })
+              : await page.reload({ waitUntil: 'domcontentloaded' });
+            assert.strictEqual(response.status(), 200, `${label} mounted status`);
+            await initialGate.waitForRequest();
+            await page.waitForTimeout(75);
+            const pending = await readCalendarAuthorityState(page);
+            initialGate.release();
+            await waitForCalendarAuthorized(page, scenario.initialTitle);
+            await page.waitForTimeout(100);
+            const authorized = await readCalendarAuthorityState(page);
+            activeGate.current = null;
+
+            assert.strictEqual(pending.layoutBusy, 'true', `${label} initial load is busy`);
+            assert.ok(pending.eventText.includes('Loading schedule…'), `${label} initial loading presentation`);
+            assert.strictEqual(authorized.authority, 'server', `${label} initial server authority`);
+            assert.deepStrictEqual(authorized.stateTitles, [scenario.initialTitle], `${label} initial state title`);
+            assert.deepStrictEqual(authorized.itemTitles, [scenario.initialTitle], `${label} initial mounted title`);
+
+            const upstreamShift = selectedAnchorShift(pending.anchors, authorized.anchors, ['header', 'kpis', 'grid', 'events']);
+            const downstreamShift = selectedAnchorShift(pending.anchors, authorized.anchors, ['newEvent', 'polaris']);
+            assert.ok(upstreamShift <= 1, `${label} non-empty settlement keeps upstream geometry stable: ${upstreamShift}`);
+            assert.ok(downstreamShift <= 32, `${label} non-empty settlement downstream movement remains bounded: ${downstreamShift}`);
+            if (engine === 'chrome') {
+              assert.strictEqual(authorized.layout.supported, true, `${label} Chrome Layout Instability API available`);
+              assert.ok(authorized.layout.value <= 0.1, `${label} initial non-empty CLS <= 0.1: ${JSON.stringify(authorized.layout)}`);
+            } else {
+              assert.strictEqual(authorized.layout.supported, false, `${label} WebKit Layout Instability unavailable`);
+            }
+
+            await resetLayoutEvidence(page);
+            const rejectGate = createGate('/api/v1/canonical/compat/calendar');
+            activeGate.current = rejectGate;
+            scenario.phase = rejectionMode;
+            await page.evaluate(() => window.initCalendar());
+            await rejectGate.waitForRequest();
+            await page.waitForTimeout(75);
+            const rejectPending = await readCalendarAuthorityState(page);
+            rejectGate.release();
+            await waitForCalendarRejected(page);
+            await page.waitForTimeout(100);
+            const rejected = await readCalendarAuthorityState(page);
+            activeGate.current = null;
+
+            assert.strictEqual(rejectPending.layoutBusy, 'true', `${label} rejected refresh begins busy`);
+            assert.ok(rejectPending.eventText.includes('Loading schedule…'), `${label} rejected refresh shows loading presentation`);
+            assert.strictEqual(rejected.authority, 'rejected', `${label} canonical authority rejected`);
+            assert.strictEqual(rejected.layoutBusy, 'false', `${label} rejected settle is not busy`);
+            assert.deepStrictEqual(rejected.stateTitles, [], `${label} state cache cleared`);
+            assert.deepStrictEqual(rejected.apiTitles, [], `${label} API cache cleared`);
+            assert.deepStrictEqual(rejected.leadTitles, [], `${label} lead cache cleared`);
+            assert.strictEqual(rejected.itemCount, 0, `${label} no rejected event items`);
+            assert.deepStrictEqual(rejected.itemTitles, [], `${label} no rejected event titles`);
+            assert.ok(rejected.eventText.includes('Calendar data unavailable'), `${label} truthful rejected presentation`);
+            assert.strictEqual(rejected.errorRole, 'alert', `${label} rejected presentation announced`);
+            assert.ok(!rejected.bodyText.includes(scenario.initialTitle), `${label} stale initial title absent after rejection`);
+            if (engine === 'chrome') {
+              assert.ok(rejected.layout.value <= 0.1, `${label} rejected transition CLS <= 0.1: ${JSON.stringify(rejected.layout)}`);
+            }
+
+            await resetLayoutEvidence(page);
+            const recoveryGate = createGate('/api/v1/canonical/compat/calendar');
+            activeGate.current = recoveryGate;
+            scenario.phase = 'recovery';
+            await page.evaluate(() => window.initCalendar());
+            await recoveryGate.waitForRequest();
+            await page.waitForTimeout(75);
+            const recoveryPending = await readCalendarAuthorityState(page);
+            recoveryGate.release();
+            await waitForCalendarAuthorized(page, scenario.recoveryTitle);
+            await page.waitForTimeout(100);
+            const recovered = await readCalendarAuthorityState(page);
+            activeGate.current = null;
+
+            assert.strictEqual(recoveryPending.layoutBusy, 'true', `${label} recovery begins busy`);
+            assert.ok(recoveryPending.eventText.includes('Loading schedule…'), `${label} recovery loading presentation`);
+            assert.strictEqual(recovered.authority, 'server', `${label} recovery server authority`);
+            assert.strictEqual(recovered.layoutBusy, 'false', `${label} recovery settled`);
+            assert.deepStrictEqual(recovered.stateTitles, [scenario.recoveryTitle], `${label} only fresh recovered state`);
+            assert.deepStrictEqual(recovered.itemTitles, [scenario.recoveryTitle], `${label} only fresh recovered title`);
+            assert.ok(!recovered.bodyText.includes(scenario.initialTitle), `${label} stale initial title absent after recovery`);
+            if (engine === 'chrome') {
+              assert.ok(recovered.layout.value <= 0.1, `${label} recovery transition CLS <= 0.1: ${JSON.stringify(recovered.layout)}`);
+            }
+            assert.deepStrictEqual(errors, [], `${label} no page errors`);
+
+            const interaction = await auditCalendarInteractions(page, label, viewport);
+            results.push({
+              label,
+              initialCls: authorized.layout.supported ? authorized.layout.value : null,
+              rejectionCls: rejected.layout.supported ? rejected.layout.value : null,
+              recoveryCls: recovered.layout.supported ? recovered.layout.value : null,
+              upstreamShift,
+              downstreamShift,
+              rejectedItems: rejected.itemCount,
+              recoveredTitles: recovered.itemTitles,
+              interaction,
+            });
+          } finally {
+            if (activeGate.current) activeGate.current.release();
+            await page.close();
+            await context.close();
+          }
         }
       }
     }
@@ -573,8 +826,8 @@ async function runToastMatrix(browser, engine, origin, evidence) {
 async function main() {
   const engine = process.argv[2];
   const scope = process.argv[3] || 'all';
-  assert.ok(engine === 'chrome' || engine === 'webkit', 'usage: node m19-part8-responsive-p2-regression.js <chrome|webkit> [async|contrast|toast|all]');
-  assert.ok(['async', 'contrast', 'toast', 'all'].includes(scope), `unknown scope: ${scope}`);
+  assert.ok(engine === 'chrome' || engine === 'webkit', 'usage: node m19-part8-responsive-p2-regression.js <chrome|webkit> [async|authority|contrast|toast|all]');
+  assert.ok(['async', 'authority', 'contrast', 'toast', 'all'].includes(scope), `unknown scope: ${scope}`);
   const runtime = resolveBrowserRuntime(engine);
   const evidence = { requests: [], api: [] };
   let server;
@@ -591,10 +844,12 @@ async function main() {
       browserVersion: browser.version(),
       scope,
       async: [],
+      authority: [],
       contrast: [],
       toast: [],
     };
     if (scope === 'all' || scope === 'async') output.async = await runAsyncMatrix(browser, engine, origin, evidence);
+    if (scope === 'all' || scope === 'authority') output.authority = await runCalendarAuthorityMatrix(browser, engine, origin, evidence);
     if (scope === 'all' || scope === 'contrast') output.contrast = await runContrastMatrix(browser, engine, origin, evidence);
     if (scope === 'all' || scope === 'toast') output.toast = await runToastMatrix(browser, engine, origin, evidence);
     assert.ok(evidence.requests.length > 0, 'mounted pages made observable loopback requests');

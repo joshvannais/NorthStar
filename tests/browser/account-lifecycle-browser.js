@@ -724,7 +724,9 @@ async function main() {
       const response = await request(app).post('/api/auth/signup').send({
         name: 'Browser Owner', businessName: `Browser ${email}`, phone: '8605550199', email, password,
       });
-      assert.strictEqual(response.status, 201, `mounted disposable signup: ${email}`);
+      assert.strictEqual(response.status, 202, `mounted disposable signup: ${email}`);
+      assert.strictEqual(response.body.code, 'verification_required', `anonymous verification-first signup: ${email}`);
+      assert.strictEqual(response.headers['set-cookie'], undefined, `signup issues no credentials: ${email}`);
       const identity = await pool.query('SELECT id, organization_id FROM users WHERE email_normalized = $1', [email]);
       assert.strictEqual(identity.rowCount, 1);
       return identity.rows[0];
@@ -974,8 +976,8 @@ async function main() {
       return failed;
     }
 
-    // Authentic pending journey: the browser uses the real mounted signup
-    // transaction exposed only by the disposable test application.
+    // Authentic anonymous signup journey: accepted signup remains on the
+    // public page and creates no session or protected-page authority.
     const pendingTracked = await newTrackedContext(primaryBrowser, baseUrl, VIEWPORTS[1], totals);
     const pendingPage = await pendingTracked.context.newPage();
     await pendingPage.goto(`${baseUrl}/signup`, { waitUntil: 'networkidle' });
@@ -987,58 +989,63 @@ async function main() {
     await pendingPage.fill('#confirmPassword', password);
     pendingTracked.tracker.allow('POST', '/api/auth/signup');
     const signupResponsePromise = pendingPage.waitForResponse(response => response.url() === `${baseUrl}/api/auth/signup`);
-    await Promise.all([
-      pendingPage.waitForURL(url => url.pathname === '/dashboard/business-profile'),
-      pendingPage.click('#signupForm button[type=submit]'),
-    ]);
+    await pendingPage.click('#signupForm button[type=submit]');
     const signupResponse = await signupResponsePromise;
+    const signupBody = await signupResponse.json();
     const signupCredentialHeaders = (await signupResponse.headersArray())
       .filter(header => header.name.toLowerCase() === 'set-cookie')
       .map(header => header.value);
-    await pendingPage.waitForFunction(() => window.NorthStarAccountSession && window.NorthStarAccountSession.getAccount());
-    assert.strictEqual(await pendingPage.locator('#northstar-verification-status').isVisible(), true);
-    assert.strictEqual((await pendingPage.evaluate(() => window.NorthStarAccountSession.getAccount())).user.status, 'pending_verification');
-    await pendingPage.evaluate(() => {
-      localStorage.setItem('northstar-notification-preferences', JSON.stringify({ emailEnabled: true, smsEnabled: true }));
-      localStorage.setItem('northstar-auth-forgery', JSON.stringify({ role: 'owner', organizationId: 'foreign', verified: true }));
-      sessionStorage.setItem('northstar-role-forgery', 'owner');
-      window.currentUser = { role: 'owner', organizationId: 'foreign', status: 'active', onboarding: 'complete' };
+    assert.strictEqual(signupResponse.status(), 202);
+    assert.strictEqual(signupBody.code, 'verification_required');
+    assert.deepStrictEqual(signupCredentialHeaders.filter(value => /^northstar_(?:access|refresh|csrf)=/i.test(value)), []);
+    await pendingPage.waitForFunction(() => document.getElementById('toast').textContent.includes('verification'));
+    assert.strictEqual(new URL(pendingPage.url()).pathname, '/signup');
+    assert.strictEqual(await pendingPage.evaluate(() => window.NorthStarAccountSession.getAccount()), null);
+    assert.deepStrictEqual(
+      (await pendingTracked.context.cookies(baseUrl)).filter(cookie => CREDENTIAL_NAMES.includes(cookie.name)),
+      [],
+      'signup creates no browser credentials'
+    );
+    const pendingAuthority = await pool.query(
+      `SELECT account.status AS user_status, subscription.status AS subscription_status,
+              (SELECT count(*)::int FROM auth_sessions session WHERE session.user_id = account.id) AS sessions,
+              (SELECT count(*)::int FROM auth_refresh_tokens token
+                 JOIN auth_sessions session ON session.id = token.session_id
+                WHERE session.user_id = account.id) AS refresh_tokens
+         FROM users account
+         JOIN subscriptions subscription ON subscription.organization_id = account.organization_id
+        WHERE account.email_normalized = $1`,
+      ['pending-browser@example.test']
+    );
+    assert.deepStrictEqual(pendingAuthority.rows, [{
+      user_status: 'pending_verification', subscription_status: 'pending_verification', sessions: 0, refresh_tokens: 0,
+    }]);
+    await Promise.all([
+      pendingPage.waitForURL(url => url.pathname === '/login'),
+      pendingPage.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' }),
+    ]);
+    const anonymousBrowserState = await pendingPage.evaluate(() => {
+      const allowedCorrelation = new Set(['northstarSessionId', 'northstarSessionOwner']);
+      const forbiddenStorage = Object.entries(localStorage).concat(Object.entries(sessionStorage))
+        .filter(([name, value]) => !allowedCorrelation.has(name) && (
+          /auth|token|credential|bearer|session.?id|organization.?id|org.?id|user.?id|role|verification|onboarding/i.test(name) ||
+          /\bBearer\s+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\./.test(String(value))
+        ))
+        .map(([name]) => name);
+      return {
+        account: window.NorthStarAccountSession.getAccount(),
+        forbiddenStorage,
+        currentUser: Object.hasOwn(window, 'currentUser'),
+      };
     });
-    const pendingProfile = canonicalFenceProfile({ companyName: 'Pending Browser Company' });
-    pendingProfile.notifications = { email: true, sms: true, criticalAlerts: true };
-    pendingTracked.tracker.allow('PUT', '/api/v1/business-profile');
-    const saved = await pendingPage.evaluate(profile => window.NorthStarAccountSession.json('/api/v1/business-profile', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile),
-    }), pendingProfile);
-    assert.strictEqual(saved.success, true);
-    const pendingAccount = await pendingPage.evaluate(() => window.NorthStarAccountSession.load(true));
-    assert.strictEqual(pendingAccount.user.status, 'pending_verification', 'onboarding never verifies email');
-    assert.strictEqual(pendingAccount.onboarding.status, 'complete');
-    const preferences = await pendingPage.evaluate(() => window.NorthStarAccountSession.json('/api/account/preferences'));
-    for (const name of ['emailEnabled', 'emailCallSummary', 'emailAppointment', 'smsEnabled', 'smsUrgent']) {
-      assert.strictEqual(preferences.preferences[name], false, `${name} ignores stale browser/Profile claims`);
-    }
-    pendingTracked.tracker.allow('POST', '/api/v1/voice/call');
-    const externalDenial = await pendingPage.evaluate(async () => {
-      const response = await window.NorthStarAccountSession.fetch('/api/v1/voice/call', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phoneNumber: '8605550124' }),
-      });
-      return { status: response.status, body: await response.json() };
-    });
-    assert.deepStrictEqual({ status: externalDenial.status, code: externalDenial.body.code }, { status: 403, code: 'verification_required' });
-    await pendingPage.evaluate(() => {
-      localStorage.removeItem('northstar-auth-forgery');
-      sessionStorage.removeItem('northstar-role-forgery');
-      delete window.currentUser;
-    });
-    await pendingPage.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
-    await pendingPage.waitForFunction(() => window.NorthStarAccountSession && window.NorthStarAccountSession.getAccount());
-    assert.strictEqual(new URL(pendingPage.url()).pathname, '/dashboard');
-    assert.strictEqual(await pendingPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    await assertNoBrowserAuthority(pendingPage);
-    await assertCredentialCookieShape(pendingTracked.context, baseUrl, signupCredentialHeaders);
-    await pendingTracked.tracker.assertClean();
+    assert.deepStrictEqual(anonymousBrowserState, { account: null, forbiddenStorage: [], currentUser: false });
+    assert.deepStrictEqual(
+      (await pendingTracked.context.cookies(baseUrl)).filter(cookie => CREDENTIAL_NAMES.includes(cookie.name)),
+      [],
+      'protected navigation creates no browser credentials'
+    );
     await pendingTracked.context.close();
+    await pendingTracked.tracker.assertClean();
 
     const active = await provisionVerifiedFixture('browser-active@example.test');
 
@@ -1759,8 +1766,8 @@ async function main() {
     assert.strictEqual(await secondTab.evaluate(() => fetch('/api/auth/me', { credentials: 'same-origin' }).then(response => response.status)), 401, 'second tab rejects revoked session');
     await secondTab.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
     await secondTab.waitForURL(url => url.pathname === '/login');
-    await success.tracker.assertClean();
     await success.context.close();
+    await success.tracker.assertClean();
 
     const restarted = await newTrackedContext(primaryBrowser, baseUrl, VIEWPORTS[0], totals, staleState);
     const restartedPage = await restarted.context.newPage();

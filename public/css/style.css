@@ -1745,9 +1745,10 @@ html[data-theme="dark"] body {
 
 /* One shared theme control on every mounted page */
 .northstar-theme-control {
+  --northstar-theme-control-bottom: 14px;
   position: fixed;
-  right: max(14px, env(safe-area-inset-right));
-  bottom: max(14px, env(safe-area-inset-bottom));
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(var(--northstar-theme-control-bottom), env(safe-area-inset-bottom));
   z-index: 2500;
 }
 
@@ -3780,10 +3781,7 @@ textarea:disabled {
   color: var(--brand-200) !important;
 }
 
-/* Reserve one shared non-interactive rail for the persistent 44px theme control. */
-body {
-  padding-right: calc(64px + env(safe-area-inset-right)) !important;
-}
+/* The fixed theme control docks around visible controls without narrowing page layout. */
 
 :where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
   outline: 3px solid var(--theme-focus) !important;
@@ -3861,7 +3859,7 @@ body {
 
 @media (max-width: 480px) {
   .northstar-theme-control {
+    --northstar-theme-control-bottom: 10px;
     right: max(10px, env(safe-area-inset-right));
-    bottom: max(10px, env(safe-area-inset-bottom));
   }
 }

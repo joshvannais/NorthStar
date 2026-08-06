@@ -2,6 +2,7 @@
 
 const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/', file: 'public/index.html', surface: 'public' },
+  { route: '/demo-dashboard', file: 'public/demo-dashboard.html', surface: 'public-demo' },
   { route: '/login', file: 'public/login.html', surface: 'auth' },
   { route: '/signup', file: 'public/signup.html', surface: 'auth' },
   { route: '/verify-email', file: 'public/verify-email.html', surface: 'auth' },

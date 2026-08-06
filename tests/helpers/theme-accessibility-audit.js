@@ -256,11 +256,8 @@ async function auditMountedAccessibility(page) {
     const toggle = document.querySelector('[data-northstar-theme-toggle]');
     const toggleRect = toggle && toggle.getBoundingClientRect();
     const overlaps = [];
-    const railOverlaps = [];
     const clipped = [];
     const seenOverlaps = new Set();
-    const seenRailOverlaps = new Set();
-    const mobileRailLeft = innerWidth <= 480 ? innerWidth - 64 : null;
     for (const element of document.querySelectorAll(interactiveSelector)) {
       if (!isVisible(element) || element === toggle || element.closest('[data-northstar-theme-control]')) continue;
       const rect = element.getBoundingClientRect();
@@ -278,24 +275,12 @@ async function auditMountedAccessibility(page) {
           }
         }
       }
-      if (mobileRailLeft !== null) {
-        const railWidth = Math.min(rect.right, innerWidth) - Math.max(rect.left, mobileRailLeft);
-        const railHeight = Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0);
-        if (railWidth > 0.5 && railHeight > 0.5) {
-          const key = pathFor(element);
-          if (!seenRailOverlaps.has(key)) {
-            seenRailOverlaps.add(key);
-            railOverlaps.push({ path: key, width: Math.round(railWidth), height: Math.round(railHeight) });
-          }
-        }
-      }
     }
 
     return {
       contrastFailures,
       uiFailures,
       overlaps,
-      railOverlaps,
       clipped,
       decorativeExclusions: decorativeSelectors,
       decorativeTextPolicy: 'standalone glyphs without letters or numbers',
@@ -428,7 +413,7 @@ async function releaseInteractiveState(page, locator) {
 
 function hasAccessibilityFailure(audit) {
   return audit.contrastFailures.length || audit.uiFailures.length || audit.overlaps.length
-    || audit.railOverlaps.length || audit.clipped.length;
+    || audit.clipped.length;
 }
 
 async function auditInteractiveStates(page) {
@@ -500,7 +485,6 @@ async function auditInteractiveStates(page) {
           contrastFailures: hoverAudit.contrastFailures.slice(0, 8),
           uiFailures: hoverAudit.uiFailures.slice(0, 8),
           overlaps: hoverAudit.overlaps,
-          railOverlaps: hoverAudit.railOverlaps,
           clipped: hoverAudit.clipped,
         });
       }
@@ -526,7 +510,6 @@ async function auditInteractiveStates(page) {
             contrastFailures: focusAudit.contrastFailures.slice(0, 8),
             uiFailures: focusAudit.uiFailures.slice(0, 8),
             overlaps: focusAudit.overlaps,
-            railOverlaps: focusAudit.railOverlaps,
             clipped: focusAudit.clipped,
           });
         }
@@ -553,7 +536,6 @@ function assertAccessibilityAudit(audit, label) {
   assert.deepStrictEqual(audit.contrastFailures, [], `${label} contrast failures: ${JSON.stringify(audit.contrastFailures.slice(0, 40))}`);
   assert.deepStrictEqual(audit.uiFailures, [], `${label} UI contrast failures: ${JSON.stringify(audit.uiFailures.slice(0, 40))}`);
   assert.deepStrictEqual(audit.overlaps, [], `${label} theme control intersections: ${JSON.stringify(audit.overlaps)}`);
-  assert.deepStrictEqual(audit.railOverlaps, [], `${label} 64px theme rail intersections: ${JSON.stringify(audit.railOverlaps)}`);
   assert.deepStrictEqual(audit.clipped, [], `${label} clipped controls: ${JSON.stringify(audit.clipped)}`);
 }
 

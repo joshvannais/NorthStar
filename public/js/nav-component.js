@@ -75,10 +75,12 @@
         '<nav class="sidebar-nav">' +
           makeNavLinks(false, items) +
         '</nav>' +
-        '<a href="/login" data-account-logout style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>' +
-          '<span>Sign Out</span>' +
-        '</a>' +
+        '<div class="sidebar-footer">' +
+          '<a href="/login" data-account-logout tabindex="0" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>' +
+            '<span>Sign Out</span>' +
+          '</a>' +
+        '</div>' +
       '</aside>';
   }
 

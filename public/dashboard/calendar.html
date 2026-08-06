@@ -309,19 +309,52 @@ body { background: var(--neutral-50); }
 </head>
 <body>
 <a href="#mainContent" class="skip-link">Skip to main content</a><div class="dashboard-layout">
+  <aside class="sidebar" aria-hidden="true"></aside>
   <main class="main-content" id="mainContent">
-    <div class="cal-layout">
+    <div class="cal-layout" aria-busy="true">
       <!-- Header -->
-      <div class="cal-header" id="calendarHeader"></div>
+      <div class="cal-header" id="calendarHeader">
+        <div class="cal-header-left">
+          <h1 class="cal-title">Calendar</h1>
+          <div class="cal-nav-btns" aria-hidden="true">
+            <button class="cal-nav-btn" type="button" disabled>&lsaquo;</button>
+            <button class="cal-nav-btn" type="button" disabled>&rsaquo;</button>
+            <button class="cal-today-btn" type="button" disabled>Today</button>
+          </div>
+        </div>
+        <div class="cal-header-right" aria-hidden="true">
+          <div class="cal-view-tabs">
+            <button class="cal-view-tab active" type="button" disabled>Month</button>
+            <button class="cal-view-tab" type="button" disabled>Week</button>
+            <button class="cal-view-tab" type="button" disabled>Day</button>
+            <button class="cal-view-tab" type="button" disabled>Agenda</button>
+          </div>
+        </div>
+      </div>
       <!-- 4 compact KPI pills -->
-      <div class="cal-kpi-bar" id="calendarKpiBar"></div>
+      <div class="cal-kpi-bar" id="calendarKpiBar">
+        <span class="cal-kpi-pill"><span class="cal-kpi-icon">&#128197;</span><span class="cal-kpi-num">&mdash;</span><span class="cal-kpi-label">Appointments</span></span>
+        <span class="cal-kpi-pill"><span class="cal-kpi-icon">&#128222;</span><span class="cal-kpi-num">&mdash;</span><span class="cal-kpi-label">Today</span></span>
+        <span class="cal-kpi-pill"><span class="cal-kpi-icon">&#128202;</span><span class="cal-kpi-num">&mdash;</span><span class="cal-kpi-label">Events</span></span>
+        <span class="cal-kpi-pill"><span class="cal-kpi-icon">&#128176;</span><span class="cal-kpi-num">&mdash;</span><span class="cal-kpi-label">Pipeline</span></span>
+      </div>
       <!-- Calendar Grid — single calendar, full width -->
-      <div class="cal-grid-container" id="calendarGrid"></div>
+      <div class="cal-grid-container" id="calendarGrid">
+        <div class="cal-month-grid" aria-hidden="true">
+          <div class="cal-month-day-header">SUN</div><div class="cal-month-day-header">MON</div><div class="cal-month-day-header">TUE</div><div class="cal-month-day-header">WED</div><div class="cal-month-day-header">THU</div><div class="cal-month-day-header">FRI</div><div class="cal-month-day-header">SAT</div>
+          <div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div>
+          <div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div>
+          <div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div>
+          <div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div>
+          <div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div>
+          <div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div><div class="cal-month-cell cal-month-cell-empty"></div>
+        </div>
+      </div>
       <!-- Event List + New Event — below calendar -->
-      <div class="cal-event-list" id="calendarEventList"></div>
-      <div class="cal-new-event-area" id="calendarNewEventArea"></div>
+      <div class="cal-event-list" id="calendarEventList"><div class="cal-event-list-header">Today&rsquo;s Schedule</div><div class="cal-event-list-empty" role="status" aria-live="polite">Loading schedule&hellip;</div></div>
+      <div class="cal-new-event-area" id="calendarNewEventArea"><button class="cal-new-event-btn" type="button" disabled aria-hidden="true" style="width:100%;padding:7px 14px;background:#6395ff;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:block;text-align:center;">+ New Event</button></div>
       <!-- Polaris — shared polaris-card component from Dashboard -->
-      <div class="cal-polaris-section ds-widget ds-widget-full" id="calendarPolaris"></div>
+      <div class="cal-polaris-section ds-widget ds-widget-full" id="calendarPolaris"><div class="polaris-card"><div class="polaris-header"><h2 style="font-size:15px;font-weight:700;color:#e8eaed;display:flex;align-items:center;gap:6px;margin:0;letter-spacing:0.01em;">POLARIS<span style="font-size:9px;color:#9aa0a6;font-weight:400;vertical-align:super;">&#8482;</span> <span style="font-weight:400;font-size:13px;color:#9aa0a6;">Intelligence</span></h2><span class="cal-polaris-badge">&#10022; CANONICAL</span></div><div class="polaris-grid" style="display:flex;flex-direction:column;gap:0;"><div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Loading calendar intelligence&hellip;</span></div></div></div></div>
     </div>
   </main>
 </div>
@@ -366,11 +399,9 @@ if (window.EventBus && typeof window.EventBus.on === 'function') {
   });
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initCalendar);
-} else {
-  initCalendar();
-}
+// The mounted containers and CalendarEngine are already available here. Render
+// the truthful loading geometry during parsing, before awaiting server data.
+initCalendar();
 
 function initCalendar() {
   if (!calendarStateListenerRegistered) {
@@ -378,11 +409,15 @@ function initCalendar() {
     calendarStateListenerRegistered = true;
   }
 
+  window.calRenderer.setLoading(true);
+  window.calRenderer.render();
   window.calData.fetchEvents().then(function(events) {
     calendarApiEvents = Array.isArray(events) ? events : [];
+    window.calRenderer.setLoading(false);
     renderCalendarSources();
   }).catch(function() {
     calendarApiEvents = [];
+    window.calRenderer.setLoading(false);
     renderCalendarSources();
   });
 }

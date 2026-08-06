@@ -109,12 +109,19 @@ class CalendarState {
 class CalendarRenderer {
   constructor(state) {
     this.state = state;
+    this.loading = true;
+    this.layout = document.querySelector('.cal-layout');
     this.container = document.getElementById('calendarGrid');
     this.header = document.getElementById('calendarHeader');
     this.kpiBar = document.getElementById('calendarKpiBar');
     this.eventList = document.getElementById('calendarEventList');
     this.newEventArea = document.getElementById('calendarNewEventArea');
     this.polarisSection = document.getElementById('calendarPolaris');
+  }
+
+  setLoading(loading) {
+    this.loading = Boolean(loading);
+    if (this.layout) this.layout.setAttribute('aria-busy', String(this.loading));
   }
 
   render() {
@@ -159,12 +166,16 @@ class CalendarRenderer {
     var totalEvents = this.state.events.length;
     var canonical = window.CanonicalIntelligence && window.CanonicalIntelligence.getPresentation('calendar');
     var pipelineValue = canonical && canonical.metrics ? canonical.metrics.estimatedRevenue : null;
+    var monthValue = this.loading ? '\u2014' : monthEvents.length;
+    var todayValue = this.loading ? '\u2014' : todayEvents.length;
+    var totalValue = this.loading ? '\u2014' : totalEvents;
+    var pipelineText = this.loading ? '\u2014' : (pipelineValue == null ? 'Not calculated' : '$' + Number(pipelineValue).toLocaleString());
 
     this.kpiBar.innerHTML = `
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📅</span><span class="cal-kpi-num">${monthEvents.length}</span><span class="cal-kpi-label">Appointments</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📞</span><span class="cal-kpi-num">${todayEvents.length}</span><span class="cal-kpi-label">Today</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📊</span><span class="cal-kpi-num">${totalEvents}</span><span class="cal-kpi-label">Events</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">💰</span><span class="cal-kpi-num">${pipelineValue == null ? 'Not calculated' : '$' + Number(pipelineValue).toLocaleString()}</span><span class="cal-kpi-label">Pipeline</span></span>`;
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📅</span><span class="cal-kpi-num">${monthValue}</span><span class="cal-kpi-label">Appointments</span></span>
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📞</span><span class="cal-kpi-num">${todayValue}</span><span class="cal-kpi-label">Today</span></span>
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📊</span><span class="cal-kpi-num">${totalValue}</span><span class="cal-kpi-label">Events</span></span>
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon">💰</span><span class="cal-kpi-num">${pipelineText}</span><span class="cal-kpi-label">Pipeline</span></span>`;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -186,7 +197,10 @@ class CalendarRenderer {
     const firstDay = s.getFirstDayOfMonth();
     const daysInMonth = s.getDaysInMonth();
     const todayStr = s._formatDate(new Date());
-    const selStr = s.selectedDate ? s._formatDate(s.selectedDate) : '';
+    const selectedDate = s.selectedDate instanceof Date
+      ? s.selectedDate
+      : (s.selectedDate ? new Date(s.selectedDate + 'T12:00:00') : null);
+    const selStr = selectedDate && !Number.isNaN(selectedDate.getTime()) ? s._formatDate(selectedDate) : '';
     const eventsByDate = {};
     s.events.forEach(e => { if (e.date) { eventsByDate[e.date] = eventsByDate[e.date] || []; eventsByDate[e.date].push(e); } });
     let html = '<div class="cal-month-grid">';
@@ -211,6 +225,9 @@ class CalendarRenderer {
         html += '</div>';
       }
       html += '</div>';
+    }
+    for (let trailing = firstDay + daysInMonth; trailing < 42; trailing++) {
+      html += '<div class="cal-month-cell cal-month-cell-empty"></div>';
     }
     html += '</div>';
     this.container.innerHTML = html;
@@ -355,7 +372,9 @@ class CalendarRenderer {
     const todayStr = this.state._formatDate(new Date());
     const todayEvents = this.state.events.filter(e => e.date === todayStr);
     let html = `<div class="cal-event-list-header">Today\u2019s Schedule</div>`;
-    if (todayEvents.length === 0) {
+    if (this.loading) {
+      html += `<div class="cal-event-list-empty" role="status" aria-live="polite">Loading schedule\u2026</div>`;
+    } else if (todayEvents.length === 0) {
       html += `<div class="cal-event-list-empty">No events scheduled for today</div>`;
     } else {
       todayEvents.forEach(e => {
@@ -399,7 +418,9 @@ class CalendarRenderer {
     html += '<span class="cal-polaris-badge" style="background:#a67c00;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;letter-spacing:0.05em;">&#10022; CANONICAL</span>';
     html += '</div>';
     html += '<div class="polaris-grid" style="display:flex;flex-direction:column;gap:0;">';
-    if (!values) {
+    if (this.loading) {
+      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Loading calendar intelligence&hellip;</span></div>';
+    } else if (!values) {
       html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Canonical intelligence unavailable</span></div>';
     } else {
       html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Customer Price</span><span class="cal-polaris-value">' + esc(presentation.customerPriceText) + '</span></div>';

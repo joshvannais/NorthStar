@@ -447,7 +447,10 @@ async function readCommunicationsRenderState(page) {
   return page.evaluate(() => ({
     authority: document.documentElement.dataset.canonicalAuthority || null,
     kpiCards: document.querySelectorAll('#kpiGrid .ds-kpi-card').length,
-    emptyHeading: document.querySelector('#callHistoryList .empty-state h3')?.textContent.trim() || '',
+    gridBusy: document.getElementById('kpiGrid')?.getAttribute('aria-busy') || null,
+    listBusy: document.getElementById('callHistoryList')?.getAttribute('aria-busy') || null,
+    loadingHeading: document.querySelector('#callHistoryList .communications-loading-state h3')?.textContent.trim() || '',
+    emptyHeading: document.querySelector('#callHistoryList .empty-state:not(.communications-loading-state) h3')?.textContent.trim() || '',
   }));
 }
 
@@ -455,8 +458,11 @@ async function auditCommunicationsReadiness(page, gate, label) {
   const preReleaseRequests = await gate.waitForExpectedRequests();
   await settleFiniteDocumentAnimations(page);
   const initialState = await readCommunicationsRenderState(page);
-  assert.strictEqual(initialState.kpiCards, 0, `${label} controlled initial state must precede KPI rendering`);
-  assert.strictEqual(initialState.emptyHeading, 'No communications yet', `${label} initial empty presentation`);
+  assert.strictEqual(initialState.kpiCards, 8, `${label} controlled initial state reserves KPI geometry`);
+  assert.strictEqual(initialState.gridBusy, 'true', `${label} KPI loading state is explicit`);
+  assert.strictEqual(initialState.listBusy, 'true', `${label} history loading state is explicit`);
+  assert.strictEqual(initialState.loadingHeading, 'Loading communications\u2026', `${label} truthful initial loading presentation`);
+  assert.strictEqual(initialState.emptyHeading, '', `${label} empty state is not claimed before authority settles`);
   const initialAccessibility = await auditMountedAccessibility(page);
   assert.deepStrictEqual(
     gate.snapshot(),
@@ -477,16 +483,17 @@ async function auditCommunicationsReadiness(page, gate, label) {
   assert.deepStrictEqual(settledState, {
     authority: 'server',
     kpiCards: 8,
+    gridBusy: 'false',
+    listBusy: 'false',
+    loadingHeading: '',
     emptyHeading: 'No communications yet',
   }, `${label} completed communications render`);
   const completedRequests = gate.snapshot();
   assert.deepStrictEqual(completedRequests.observedKeys, preReleaseRequests.expectedKeys, `${label} completed request identities`);
   assert.deepStrictEqual(completedRequests.lateKeys, [], `${label} no communications request may arrive after release`);
   assert.strictEqual(completedRequests.requestCount, 2, `${label} expected declared and filtered communications reads`);
-  assert.ok(
-    settledAccessibility.auditedTextElements > initialAccessibility.auditedTextElements,
-    `${label} negative control must prove the pre-completion audit omits settled instances`
-  );
+  assert.ok(settledAccessibility.auditedTextElements >= initialAccessibility.auditedTextElements,
+    `${label} settled accessibility coverage must not shrink`);
   return {
     initialAccessibility,
     settledAccessibility,
@@ -494,7 +501,7 @@ async function auditCommunicationsReadiness(page, gate, label) {
     settledState,
     preReleaseRequests,
     completedRequests,
-    missedByPreCompletionAudit: settledAccessibility.auditedTextElements - initialAccessibility.auditedTextElements,
+    missedByPreCompletionAudit: Math.max(0, settledAccessibility.auditedTextElements - initialAccessibility.auditedTextElements),
     requestCount: gate.requestCount,
   };
 }

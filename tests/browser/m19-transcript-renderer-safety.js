@@ -32,6 +32,7 @@ const LEGACY_IMAGE_PAYLOAD = '<img src="/m19-transcript-attack-legacy" onerror="
 const LEAD_IMAGE_PAYLOAD = '<img src="/m19-transcript-attack-lead" onerror="window.__m19TranscriptLeadXss=1">';
 const CLOSING_PAYLOAD = '</div><script>window.__m19TranscriptScript=1</script><svg onload="window.__m19TranscriptSvg=1">';
 const LABEL_PAYLOAD = '<img/src=/m19-transcript-attack-label/onerror=window.__m19TranscriptLabelXss=1>';
+const STALE_TRANSCRIPT_SENTINEL = 'M19_STALE_TRANSCRIPT_SENTINEL';
 const CUSTOMER_NAME = 'Cedar Customer';
 const DRAWER_CUSTOMER_NAME = LABEL_PAYLOAD + ' Cedar';
 const STRUCTURED_TURNS = Object.freeze([
@@ -208,24 +209,6 @@ async function installBoundaries(context, origin, evidence) {
     if (url.pathname.indexOf('/m19-transcript-attack-') === 0) {
       evidence.attackerRequests.push({ method: request.method(), path: url.pathname });
     }
-  });
-
-  await context.route('**/js/polaris-api.js', async route => {
-    const response = await route.fetch();
-    const source = await response.text();
-    const instrumentation = [
-      '',
-      ';(function(){',
-      'var original=window.PolarisApi;',
-      'if(!original||typeof original.normalizeLead!=="function")return;',
-      'var patched={};Object.keys(original).forEach(function(key){patched[key]=original[key];});',
-      'patched.normalizeLead=function(record){var lead=original.normalizeLead(record);',
-      'if(lead&&record&&record.transcript)lead.transcript=record.transcript.text;return lead;};',
-      'window.PolarisApi=Object.freeze(patched);',
-      '})();',
-    ].join('');
-    evidence.instrumentedScripts += 1;
-    await route.fulfill({ status: response.status(), contentType: 'application/javascript; charset=utf-8', body: source + instrumentation });
   });
 
   await context.route('**/api/**', async route => {
@@ -428,10 +411,43 @@ async function exercisePublicDemo(page, evidence, label) {
   recordCheck(evidence, post.postVisible, label + ': live-to-post lifecycle completed');
   recordCheck(evidence, post.count === '3 messages', label + ': transcript count preserved', post.count);
   recordCheck(evidence, post.transcript.scrollTop === 0, label + ': post transcript starts at top', post.transcript);
+
+  const twoCall = await page.evaluate(async sentinel => {
+    demoState.sessionId = 'm19-cache-first';
+    transitionToLiveView('simulation');
+    demoState.finalTimerValue = '0:01';
+    document.getElementById('demoLiveTimer').textContent = '0:01';
+    renderTranscript([{ speaker: 'agent', text: sentinel }]);
+    await transitionToPostCall();
+    var firstPostText = document.getElementById('demoPostTranscriptBody').textContent;
+
+    demoState.sessionId = 'm19-public-empty';
+    transitionToLiveView('simulation');
+    demoState.finalTimerValue = '0:01';
+    document.getElementById('demoLiveTimer').textContent = '0:01';
+    await transitionToPostCall();
+
+    return {
+      firstPostText: firstPostText,
+      secondPost: window.__m19TranscriptSnapshot(document.getElementById('demoPostTranscriptBody')),
+      secondLive: window.__m19TranscriptSnapshot(document.getElementById('demoTranscriptBody')),
+      secondCount: document.getElementById('demoTranscriptCount').textContent,
+    };
+  }, STALE_TRANSCRIPT_SENTINEL);
+  recordCheck(evidence, twoCall.firstPostText.indexOf(STALE_TRANSCRIPT_SENTINEL) >= 0,
+    label + ': first call establishes transcript cache', twoCall);
+  recordCheck(evidence, twoCall.secondPost.text.indexOf(STALE_TRANSCRIPT_SENTINEL) === -1,
+    label + ': second empty call does not inherit first-call transcript', twoCall.secondPost);
+  recordCheck(evidence, twoCall.secondPost.bubbles.length === 0,
+    label + ': second empty call post view has no stale transcript bubbles', twoCall.secondPost);
+  recordCheck(evidence, twoCall.secondLive.bubbles.length === 0,
+    label + ': second call starts with an empty live transcript', twoCall.secondLive);
+  recordCheck(evidence, twoCall.secondCount === '0 messages',
+    label + ': second empty call retains the reset transcript count', twoCall.secondCount);
 }
 
 async function exerciseLead(page, evidence, label) {
-  await page.waitForFunction(() => Array.from(document.querySelectorAll('.lead-detail-section h2')).some(node => node.textContent === 'Transcript'));
+  await page.waitForFunction(() => !document.getElementById('loadingState'));
   await page.waitForTimeout(100);
   const observed = await page.evaluate(() => {
     window.__m19TranscriptXss = Number(window.__m19TranscriptXss || 0);
@@ -457,6 +473,7 @@ async function exerciseLead(page, evidence, label) {
   });
   checkScriptOrder(evidence, observed, label);
   checkFlags(evidence, observed.flags, label);
+  recordCheck(evidence, observed.transcript.exists, label + ': unmodified production normalization reaches mounted transcript');
   recordCheck(evidence, observed.transcript.maliciousElements === 0, label + ': mounted lead transcript has no attacker elements', observed.transcript);
   recordCheck(evidence, observed.transcript.text === LEAD_TRANSCRIPT, label + ': mounted lead preserves exact plain transcript text', observed.transcript.text);
   recordCheck(evidence, observed.transcript.children !== 0, label + ': mounted lead transcript rendered');
@@ -480,7 +497,7 @@ async function main() {
   const runtime = resolveBrowserRuntime(selected);
   const evidence = {
     requests: [], api: [], attackerRequests: [], external: [], mutations: [], failures: [],
-    pages: [], instrumentedScripts: 0, pageErrors: [], consoleErrors: [],
+    pages: [], pageErrors: [], consoleErrors: [],
   };
   let server;
   let browser;
@@ -579,9 +596,6 @@ async function main() {
     recordCheck(evidence, evidence.mutations.length === 0, 'no provider/business/API mutation', evidence.mutations);
     recordCheck(evidence, evidence.pageErrors.length === 0, 'no page errors', evidence.pageErrors);
     recordCheck(evidence, evidence.consoleErrors.length === 0, 'no console errors', evidence.consoleErrors);
-    recordCheck(evidence, evidence.instrumentedScripts > 0,
-      'exact mounted lead negative-control instrumentation count', evidence.instrumentedScripts);
-
     const summary = {
       browser: selected === 'chrome' ? 'installed Chrome' : 'actual Playwright WebKit',
       browserVersion: browser.version(),
@@ -597,7 +611,7 @@ async function main() {
       mutations: evidence.mutations.length,
       providerActions: 0,
       databaseActions: 0,
-      instrumentation: 'production polaris-api plus tests-only transcript field propagation into mounted lead renderLead',
+      instrumentation: 'none; mounted pages use unmodified production scripts',
       failures: evidence.failures,
       physicalSafari: false,
     };

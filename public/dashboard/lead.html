@@ -8,6 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lead Details — NorthStar Solutions</title>
   <script src="/js/theme.js"></script>
+  <script src="/js/transcript-renderer.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <style>
     .lead-detail-container { max-width: 960px; margin: 0 auto; padding: 24px; }
@@ -147,7 +148,7 @@
         container.innerHTML = '' +
           '<div class="lead-detail-header">' +
             '<div>' +
-              '<div class="lead-detail-title">' + name + ' ' + statusBadge + '</div>' +
+              '<div class="lead-detail-title"><span id="leadCustomerName"></span> ' + statusBadge + '</div>' +
               '<div class="lead-detail-subtitle">' + service + ' · ' + price + ' · ' + phone + '</div>' +
             '</div>' +
             '<div class="lead-actions">' +
@@ -174,7 +175,7 @@
           '</div>' +
           (summary ? '<div class="lead-detail-section"><h2>Summary</h2><div class="lead-detail-card"><div class="value-secondary">' + summary + '</div></div></div>' : '') +
 
-          (transcript ? '<div class="lead-detail-section"><h2>Transcript</h2><div class="lead-detail-card"><div class="value-secondary" style="white-space:pre-wrap;max-height:300px;overflow-y:auto;font-size:13px;line-height:1.6;">' + transcript + '</div></div></div>' : '') +
+          (transcript ? '<div class="lead-detail-section"><h2>Transcript</h2><div class="lead-detail-card"><div id="leadTranscriptBody" class="value-secondary" style="white-space:pre-wrap;max-height:300px;overflow-y:auto;font-size:13px;line-height:1.6;"></div></div></div>' : '') +
 
           // Executive Summary (from Retell webhook post-call pipeline)
           (function() {
@@ -255,6 +256,17 @@
               '<div class="ci-placeholder" style="padding:20px;">📊 Production Intelligence<br><span style="font-size:11px;">Coming in Mission 20</span></div>' +
             '</div>' +
           '</div>';
+
+        var leadCustomerName = document.getElementById('leadCustomerName');
+        if (leadCustomerName) leadCustomerName.textContent = name;
+        var transcriptBody = document.getElementById('leadTranscriptBody');
+        if (transcriptBody) {
+          window.NorthStarTranscriptRenderer.render(transcriptBody, transcript, {
+            presentation: 'plain',
+            scroll: 'top',
+            live: 'polite'
+          });
+        }
 
         var pc = document.getElementById('polarisContainer');
         renderCanonicalProjection(pc, polarisData);

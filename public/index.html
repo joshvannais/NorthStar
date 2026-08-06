@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <script src="/js/theme.js"></script>
+  <script src="/js/transcript-renderer.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>NorthStar AI — AI Office Manager for Contractors</title>
   <meta name="description" content="Meet your future AI receptionist. NorthStar answers every call, captures every lead, 24/7 — for home service contractors.">
@@ -1780,6 +1781,7 @@
 
       demoState.timerSec = 0;
       demoState.transcriptSeq = 0;
+      demoState.transcriptLinesCache = [];
 
       document.getElementById('demoPreCallView').style.display = 'none';
       document.getElementById('demoLiveView').style.display = 'block';
@@ -1972,36 +1974,19 @@
       }
     }
 
-    // ── M18O: Speaker normalization — single source of truth ──
-    // All transcript rendering flows through this function.
-    // Maps any provider variant to the canonical presentation value.
-    function normalizeSpeaker(speaker) {
-      if (!speaker) return 'system';
-      var s = ('' + speaker).toLowerCase().trim();
-      // AI variants → 'ai'
-      if (s === 'ai' || s === 'agent' || s === 'assistant' || s === 'bot') return 'ai';
-      // Customer variants → 'customer'
-      if (s === 'customer' || s === 'user' || s === 'human') return 'customer';
-      // Everything else → 'system'
-      console.warn('[Demo:M18O] Unknown speaker variant: "' + speaker + '" — mapped to system');
-      return 'system';
-    }
-
+    // ── Shared transcript presentation ──
+    // Provider variants are normalized by NorthStarTranscriptRenderer.
     function renderTranscript(lines) {
-      console.log('[Demo:RenderTranscript] Called with ' + lines.length + ' lines. First speaker=' + (lines[0] ? normalizeSpeaker(lines[0].speaker) : 'N/A'));
+      var transcriptLines = Array.isArray(lines) ? lines.slice() : [];
+      demoState.transcriptLinesCache = transcriptLines;
+      console.log('[Demo:RenderTranscript] Called with ' + transcriptLines.length + ' lines. First speaker=' + (transcriptLines[0] ? window.NorthStarTranscriptRenderer.normalizeSpeaker(transcriptLines[0].speaker) : 'N/A'));
       var body = document.getElementById('demoTranscriptBody');
-      var html = '';
-      for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-        var cls = normalizeSpeaker(line.speaker);
-        var label = cls === 'ai' ? 'NorthStar AI' : (cls === 'customer' ? 'Customer' : '');
-        html += '<div class="demo-msg ' + cls + '">';
-        if (label && cls !== 'system') html += '<div class="demo-msg-label">' + label + '</div>';
-        html += line.text + '</div>';
-      }
-      body.innerHTML = html;
-      console.log('[Demo:RenderTranscript] body.innerHTML length=' + body.innerHTML.length + ' lines=' + lines.length);
-      body.scrollTop = body.scrollHeight;
+      var result = window.NorthStarTranscriptRenderer.render(body, transcriptLines, {
+        labels: { ai: 'NorthStar AI', customer: 'Customer', system: '' },
+        scroll: 'bottom',
+        live: 'polite'
+      });
+      console.log('[Demo:RenderTranscript] rendered=' + result.count + ' lines=' + transcriptLines.length);
     }
 
     // ── Status Polling ──
@@ -2393,11 +2378,14 @@
       var finalTimer = demoState.finalTimerValue || document.getElementById('demoLiveTimer').textContent;
       document.getElementById('demoCallDuration').textContent = 'Duration: ' + finalTimer;
 
-      // Copy transcript
-      var liveBody = document.getElementById('demoTranscriptBody');
+      // Render the same canonical transcript turns into the post-call view.
       var postBody = document.getElementById('demoPostTranscriptBody');
-      console.log('[Demo:Transition] Copying transcript — liveBody.innerHTML length=' + liveBody.innerHTML.length + ' content="' + liveBody.innerHTML.substring(0, 200) + '"');
-      postBody.innerHTML = liveBody.innerHTML;
+      window.NorthStarTranscriptRenderer.render(postBody, demoState.transcriptLinesCache, {
+        labels: { ai: 'NorthStar AI', customer: 'Customer', system: '' },
+        scroll: 'top',
+        live: 'polite'
+      });
+      console.log('[Demo:Transition] Rendered ' + demoState.transcriptLinesCache.length + ' transcript lines into post-call view');
 
       // Copy insights
       var insights = document.getElementById('demoInsights');

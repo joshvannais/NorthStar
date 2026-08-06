@@ -109,7 +109,9 @@ class CalendarState {
 class CalendarRenderer {
   constructor(state) {
     this.state = state;
-    this.loading = true;
+    // Mounted calendars opt into the pending state before fetching. Direct
+    // renderer consumers retain the settled-state contract.
+    this.loading = false;
     this.layout = document.querySelector('.cal-layout');
     this.container = document.getElementById('calendarGrid');
     this.header = document.getElementById('calendarHeader');

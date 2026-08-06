@@ -16,14 +16,22 @@ describe('pre-Mission 20 public UI corrections', () => {
   const homepage = read('public/index.html');
   const demo = read('public/demo-dashboard.html');
   const demoCss = read('public/css/demo-dashboard.css');
+  const themeScript = read('public/js/theme.js');
 
   test('the fixed theme toggle no longer reserves a horizontal body rail', () => {
+    const toggleRule = sharedCss.match(/\.theme-toggle\s*\{([^}]*)\}/s)?.[1] || '';
+
     expect(sharedCss).not.toMatch(/body\s*\{[^}]*padding-right\s*:\s*calc\(64px/si);
     expect(sharedCss).not.toMatch(/padding-right\s*:\s*calc\([^)]*safe-area-inset-right/si);
     expect(sharedCss).toMatch(/\.northstar-theme-control\s*\{[^}]*position\s*:\s*fixed[^}]*right\s*:[^;}]+[^}]*bottom\s*:[^;}]+/si);
     expect(sharedCss).toMatch(/\.theme-toggle\s*\{[^}]*width\s*:\s*44px[^}]*height\s*:\s*44px/si);
+    expect(toggleRule).toContain('transition: border-color 0.2s, transform 0.2s;');
+    expect(toggleRule).not.toMatch(/background-color\s+0\.2s|(?:^|,)\s*color\s+0\.2s/m);
+    expect(sharedCss).toMatch(/html\[data-theme-switching\][\s\S]*?transition\s*:\s*none\s*!important/);
+    expect(themeScript).toMatch(/setAttribute\('data-theme-switching',\s*''\)/);
+    expect(themeScript).toMatch(/requestAnimationFrame\(function \(\) \{ global\.requestAnimationFrame\(release\); \}\)/);
     expect(demoCss).not.toMatch(/padding-right\s*:/i);
-    expect(read('public/js/theme.js')).toMatch(/refreshControlPosition:\s*dockToggle/);
+    expect(themeScript).toMatch(/refreshControlPosition:\s*dockToggle/);
   });
 
   test('the homepage is explicitly centered and exposes the account-free dashboard entry', () => {

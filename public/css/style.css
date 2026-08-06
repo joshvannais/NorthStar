@@ -1743,6 +1743,14 @@ html[data-theme="dark"] body {
 [data-theme="dark"] .mobile-menu-footer { border-top-color: var(--neutral-300); }
 [data-theme="dark"] .mobile-menu-close svg { stroke: var(--neutral-500); }
 
+/* Theme changes settle atomically so endpoint colors never interpolate through unsafe contrast. */
+html[data-theme-switching],
+html[data-theme-switching] *,
+html[data-theme-switching] *::before,
+html[data-theme-switching] *::after {
+  transition: none !important;
+}
+
 /* One shared theme control on every mounted page */
 .northstar-theme-control {
   --northstar-theme-control-bottom: 14px;
@@ -1765,7 +1773,7 @@ html[data-theme="dark"] body {
   justify-content: center;
   color: var(--theme-text);
   box-shadow: var(--theme-control-shadow);
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
+  transition: border-color 0.2s, transform 0.2s;
   font-size: 19px;
   margin: 0;
   flex-shrink: 0;

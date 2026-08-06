@@ -8,6 +8,7 @@
   var explicitChoice = null;
   var initialized = false;
   var dockingObserver = null;
+  var themeSwitchToken = 0;
 
   var INTERACTIVE_SELECTOR = 'a[href], button, input:not([type="hidden"]), select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])';
 
@@ -52,11 +53,26 @@
     if (label) label.textContent = dark ? 'Use light theme' : 'Use dark theme';
   }
 
+  function releaseThemeTransitionGuard(root, token) {
+    function release() {
+      if (token === themeSwitchToken) root.removeAttribute('data-theme-switching');
+    }
+    if (typeof global.requestAnimationFrame === 'function') {
+      global.requestAnimationFrame(function () { global.requestAnimationFrame(release); });
+    } else {
+      global.setTimeout(release, 0);
+    }
+  }
+
   function applyTheme(theme, source) {
     var safeTheme = validTheme(theme) ? theme : 'light';
-    document.documentElement.setAttribute('data-theme', safeTheme);
-    document.documentElement.style.colorScheme = safeTheme;
+    var root = document.documentElement;
+    var token = ++themeSwitchToken;
+    root.setAttribute('data-theme-switching', '');
+    root.setAttribute('data-theme', safeTheme);
+    root.style.colorScheme = safeTheme;
     updateToggle(safeTheme);
+    releaseThemeTransitionGuard(root, token);
     if (initialized && typeof global.CustomEvent === 'function') {
       global.dispatchEvent(new global.CustomEvent('northstar:themechange', {
         detail: { theme: safeTheme, source: source || 'presentation' },

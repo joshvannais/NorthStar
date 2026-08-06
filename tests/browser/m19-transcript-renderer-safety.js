@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const { navigationFixture } = require('../helpers/navigation-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
 [
@@ -66,6 +67,7 @@ function account() {
   return {
     user: { id: ACCOUNT_USER_ID, status: 'active', email: 'owner@example.test', phone: '+15555550199' },
     organization: { id: ORGANIZATION_ID, name: 'NorthStar Transcript Safety' },
+    navigation: navigationFixture(),
     memberships: [{ role: 'owner', status: 'active' }],
     onboarding: { status: 'complete' },
     subscription: { safe: true, state: 'active', readOnly: false, showTrialBanner: false },

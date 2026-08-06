@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const credentials = require('../auth/credentials');
+const { navigationForRole } = require('../auth/permissions');
 const { AccountPersistenceError, AccountRepository } = require('./repository');
 const { projectSubscription } = require('./subscriptionPolicy');
 
@@ -149,6 +150,7 @@ function accountView(authority) {
       role: authority.role,
       status: authority.membership_status || authority.membershipStatus,
     },
+    navigation: navigationForRole(authority.role),
     subscription: authority.plan_type ? {
       plan: authority.plan_type,
       status: authority.subscription_status,

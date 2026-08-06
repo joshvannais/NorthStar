@@ -3,6 +3,7 @@
 const assert = require('assert');
 const path = require('path');
 const { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS } = require('../helpers/site-theme-pages');
+const { navigationFixture } = require('../helpers/navigation-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
 [
@@ -48,6 +49,7 @@ function account(pathname) {
         id: '00000000-0000-4000-8000-000000000912',
         name: 'NorthStar Reachability Ratification',
       },
+      navigation: navigationFixture(),
       memberships: [{ role: 'owner', status: 'active' }],
       onboarding: { status: 'complete' },
       subscription: pending

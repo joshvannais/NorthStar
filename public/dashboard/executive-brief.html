@@ -43,7 +43,7 @@
 
     .sidebar-footer {
       position: relative;
-      bottom: 18px;
+      bottom: 21px;
     }
 
     .eb-header h1 {
@@ -432,45 +432,7 @@
 </head>
 <body>
   <div class="app-layout">
-    <aside class="sidebar">
-      <a href="/dashboard" class="sidebar-logo">
-        <span class="sidebar-star">&#9733;</span>
-        <span class="sidebar-brand">NorthStar</span>
-      </a>
-      <nav class="sidebar-nav">
-        <a href="/dashboard" class="sidebar-item active">
-          <span class="sidebar-icon">&#9733;</span>
-          <span>Executive Brief</span>
-        </a>
-        <a href="/dashboard/polaris" class="sidebar-item">
-          <span class="sidebar-icon">&#9881;</span>
-          <span>Polaris</span>
-        </a>
-        <a href="/dashboard/leads" class="sidebar-item">
-          <span class="sidebar-icon">&#128100;</span>
-          <span>Leads</span>
-        </a>
-        <a href="/dashboard/communications" class="sidebar-item">
-          <span class="sidebar-icon">&#128172;</span>
-          <span>Communications</span>
-        </a>
-        <a href="/dashboard/calendar" class="sidebar-item">
-          <span class="sidebar-icon">&#128197;</span>
-          <span>Calendar</span>
-        </a>
-        <a href="/dashboard/business-profile" class="sidebar-item">
-          <span class="sidebar-icon">&#128202;</span>
-          <span>Business Profile</span>
-        </a>
-        <a href="/dashboard/settings" class="sidebar-item">
-          <span class="sidebar-icon">&#9881;</span>
-          <span>Settings</span>
-        </a>
-      </nav>
-      <div class="sidebar-footer">
-        <a href="/login" class="sidebar-item" data-account-logout tabindex="0">Sign Out</a>
-      </div>
-    </aside>
+    <aside class="sidebar" aria-label="Primary navigation"></aside>
     <main class="main-content" id="mainContent">
       <div class="eb-workspace" id="executiveBrief">
         <div class="eb-header">
@@ -786,11 +748,9 @@
   </script>
   <script src="/js/nav-component.js"></script>
   <script>
-    var preservedSidebar = document.querySelector('.sidebar');
-    preservedSidebar = preservedSidebar ? preservedSidebar.cloneNode(true) : null;
-    NavComponent.init("command-center");
-    var generatedSidebar = document.querySelector('.sidebar');
-    if (preservedSidebar && generatedSidebar) generatedSidebar.replaceWith(preservedSidebar);
+    if (window.NavComponent && typeof window.NavComponent.init === 'function') {
+      NavComponent.init("command-center");
+    }
   </script>
 </body>
 </html>

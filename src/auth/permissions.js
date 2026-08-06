@@ -56,6 +56,21 @@ const PERMISSIONS = {
   },
 };
 
+// The server permission matrix is the visibility authority. The browser keeps
+// labels and icons only; it never derives destination visibility from a role.
+const NAVIGATION_DESTINATIONS = Object.freeze([
+  Object.freeze({ id: 'command-center', href: '/dashboard', resource: 'dashboard' }),
+  Object.freeze({ id: 'polaris', href: '/dashboard/polaris', resource: 'ai' }),
+  Object.freeze({ id: 'leads', href: '/dashboard/leads', resource: 'leads' }),
+  Object.freeze({ id: 'communications', href: '/dashboard/communications', resource: 'calls' }),
+  Object.freeze({ id: 'my-number', href: '/dashboard/my-number', resource: 'calls' }),
+  Object.freeze({ id: 'calendar', href: '/dashboard/calendar', resource: 'calendar' }),
+  Object.freeze({ id: 'ai-settings', href: '/dashboard/ai-settings', resource: 'ai' }),
+  Object.freeze({ id: 'business-profile', href: '/dashboard/business-profile', resource: 'settings' }),
+  Object.freeze({ id: 'settings', href: '/dashboard/settings', resource: 'settings' }),
+  Object.freeze({ id: 'integrations', href: '/dashboard/integrations', resource: 'integrations' }),
+]);
+
 /**
  * Check if a role has permission for a resource+action.
  */
@@ -65,6 +80,12 @@ function hasPermission(role, resource, action) {
   const resourcePerms = rolePerms[resource];
   if (!resourcePerms) return false;
   return resourcePerms.includes(action);
+}
+
+function navigationForRole(role) {
+  return NAVIGATION_DESTINATIONS
+    .filter(destination => hasPermission(role, destination.resource, 'read'))
+    .map(destination => ({ id: destination.id, href: destination.href }));
 }
 
 /**
@@ -107,7 +128,9 @@ async function requireOrgMembership(req, res, next) {
 
 module.exports = {
   hasPermission,
+  navigationForRole,
   requirePermission,
   requireOrgMembership,
   PERMISSIONS,
+  NAVIGATION_DESTINATIONS,
 };

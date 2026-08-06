@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
+const { navigationFixture } = require('../helpers/navigation-fixture');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 
@@ -117,6 +118,7 @@ realPostgres('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     const me = await request(app).get('/api/auth/me').set('Cookie', cookieHeader(jar));
     expect(me.status).toBe(200);
     expect(me.body.account.user.status).toBe('pending_verification');
+    expect(me.body.account.navigation).toEqual(navigationFixture());
     const protectedResponse = await request(app).get('/api/v1/canonical/status').set('Cookie', cookieHeader(jar));
     expect(protectedResponse.status).toBe(200);
   });

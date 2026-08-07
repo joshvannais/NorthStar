@@ -509,4 +509,108 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     expect((await request(app).get('/api/v1/business-profile').set(auth(OWNER_B))).body.data.company.name)
       .toBe(loadedB.body.data.company.name);
   });
+
+  test('service catalogue ids and pricing rules persist byte-exact and malformed or unauthorized writes do not advance authority', async () => {
+    const loadedA = await request(app).get('/api/v1/business-profile').set(auth(OWNER_A));
+    const loadedB = await request(app).get('/api/v1/business-profile').set(auth(OWNER_B));
+    const rawName = '  Fence <Install> \u2603  ';
+    const rawEquipment = '  Mini-excavator <A&B>\nTrailer  ';
+    const rawLabel = '  Permit <review> "raw"  ';
+    const services = [{
+      id: 'fence',
+      name: rawName,
+      crewSize: 2,
+      avgHours: 3.5,
+      difficulty: 1.2,
+      confidence: 0,
+      equipment: rawEquipment,
+      legacyNote: '  retained metadata  ',
+      canonicalPricing: {
+        requiredScope: [],
+        allowedScopeValues: { jobType: ['replace', 'install'] },
+        rangePercent: 0,
+        lineItems: [{
+          code: 'permit', label: rawLabel, category: 'serviceCharge', type: 'fixed', amount: 0,
+        }],
+      },
+    }, {
+      name: '  Legacy Tree Service  ',
+      equipment: '<legacy-equipment>',
+      difficulty: 1.3,
+    }];
+
+    const saved = await request(app)
+      .put('/api/v1/business-profile/services')
+      .set(auth(OWNER_A))
+      .send(services);
+    expect(saved.status).toBe(200);
+    expect(saved.body.data.services[0]).toEqual(services[0]);
+    expect(saved.body.data.services[1]).toEqual({
+      ...services[1], id: expect.stringMatching(/^service-[0-9a-f]{16}$/),
+    });
+    expect(saved.body.data.canonicalAuthority.legacyMigration).toEqual({ pending: false, fields: [] });
+    expect(saved.body.data.canonicalAuthority.id).not.toBe(baselineA.id);
+
+    const section = await request(app).get('/api/v1/business-profile/services').set(auth(OWNER_A));
+    expect(section.status).toBe(200);
+    expect(section.body.data).toEqual(saved.body.data.services);
+    const reloaded = await request(app).get('/api/v1/business-profile').set(auth(OWNER_A));
+    expect(reloaded.body.data.services).toEqual(saved.body.data.services);
+    expect((await request(app).get('/api/v1/business-profile').set(auth(OWNER_B))).body.data.services)
+      .toEqual(loadedB.body.data.services);
+
+    const stored = await db.getPool().query(
+      `SELECT
+         encode(convert_to(raw_profile #>> '{services,0,name}', 'UTF8'), 'hex') AS name_hex,
+         encode(convert_to(raw_profile #>> '{services,0,equipment}', 'UTF8'), 'hex') AS equipment_hex,
+         encode(convert_to(raw_profile #>> '{services,0,canonicalPricing,lineItems,0,label}', 'UTF8'), 'hex') AS label_hex,
+         raw_profile #>> '{services,0,canonicalPricing,lineItems,0,amount}' AS amount,
+         raw_profile #>> '{services,0,confidence}' AS confidence
+       FROM canonical_business_profiles WHERE id = $1`,
+      [saved.body.data.canonicalAuthority.id]
+    );
+    expect(stored.rows).toEqual([{
+      name_hex: Buffer.from(rawName, 'utf8').toString('hex'),
+      equipment_hex: Buffer.from(rawEquipment, 'utf8').toString('hex'),
+      label_hex: Buffer.from(rawLabel, 'utf8').toString('hex'),
+      amount: '0',
+      confidence: '0',
+    }]);
+
+    const activeBeforeRejects = await getActiveBusinessProfile(db.getPool(), ORG_A);
+    const countBeforeRejects = await db.getPool().query(
+      'SELECT count(*)::int AS count FROM canonical_business_profiles WHERE organization_id = $1',
+      [ORG_A]
+    );
+    const invalidCases = [
+      [{ ...saved.body.data.services[0], id: 'bad id' }, 'stable identifier'],
+      [{ ...saved.body.data.services[0], canonicalPricing: { lineItems: [{
+        code: 'bad', label: 'Bad', category: 'labor', type: 'perUnit',
+      }] } }, 'quantityField is required for perUnit'],
+      [{ ...saved.body.data.services[0], canonicalPricing: { lineItems: [{
+        code: 'bad', label: 'Bad', category: 'materials', type: 'perUnitByValue',
+        quantityField: 'feet', selectorField: 'material', unitRates: { Cedar: 1 },
+      }] } }, 'unitRates keys must be lowercase'],
+    ];
+    for (const [invalidService, expected] of invalidCases) {
+      const rejected = await request(app)
+        .put('/api/v1/business-profile/services')
+        .set(auth(OWNER_A))
+        .send([invalidService]);
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.errors.join('\n')).toContain(expected);
+      expect((await getActiveBusinessProfile(db.getPool(), ORG_A)).id).toBe(activeBeforeRejects.id);
+    }
+    const viewer = await request(app)
+      .put('/api/v1/business-profile/services')
+      .set(auth(VIEWER_A))
+      .send(saved.body.data.services);
+    expect(viewer.status).toBe(403);
+    expect((await getActiveBusinessProfile(db.getPool(), ORG_A)).id).toBe(activeBeforeRejects.id);
+    const countAfterRejects = await db.getPool().query(
+      'SELECT count(*)::int AS count FROM canonical_business_profiles WHERE organization_id = $1',
+      [ORG_A]
+    );
+    expect(countAfterRejects.rows[0].count).toBe(countBeforeRejects.rows[0].count);
+  });
 });

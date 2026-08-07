@@ -59,6 +59,16 @@ const WEEKDAYS = Object.freeze([
 ]);
 const HOURS_FIELDS = new Set(['open', 'close', 'lunch', 'emergency', 'afterHours', 'holiday']);
 const HOLIDAY_FIELDS = new Set(['id', 'name', 'date', 'closed', 'open', 'close']);
+const SERVICE_PRICING_FIELDS = new Set([
+  'requiredScope', 'allowedScopeValues', 'rangePercent', 'lineItems',
+]);
+const SERVICE_LINE_ITEM_FIELDS = new Set([
+  'code', 'label', 'category', 'type', 'amount', 'quantityField', 'unitRate',
+  'selectorField', 'unitRates', 'collectionField', 'when',
+]);
+const SERVICE_LINE_ITEM_CATEGORIES = new Set(['labor', 'materials', 'equipment', 'serviceCharge']);
+const SERVICE_LINE_ITEM_TYPES = new Set(['fixed', 'perUnit', 'perUnitByValue', 'perItemByValue']);
+const SERVICE_CONDITION_FIELDS = new Set(['field', 'equals']);
 const STABLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -428,6 +438,188 @@ function validatePolicies(policies, errors) {
   }
 }
 
+function validateNonNegativeNumber(value, path, errors) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    errors.push(path + ' must be a non-negative finite number.');
+  }
+}
+
+function validateScopeField(value, path, errors) {
+  if (typeof value !== 'string' || !STABLE_ID_PATTERN.test(value)) {
+    errors.push(path + ' must be a stable scope field identifier.');
+  }
+}
+
+function validateUnitRates(value, path, errors) {
+  if (!isPlainObject(value) || Object.keys(value).length === 0) {
+    errors.push(path + ' must be a non-empty object of non-negative finite numbers.');
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    if (!key.trim()) errors.push(path + ' keys must not be blank.');
+    if (key !== key.toLowerCase()) errors.push(path + ' keys must be lowercase because pricing selectors are normalized to lowercase.');
+    validateNonNegativeNumber(value[key], path + '.' + key, errors);
+  }
+}
+
+function validatePricingCondition(value, path, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(path + ' must be an object.');
+    return;
+  }
+  addUnsupportedFieldErrors(value, SERVICE_CONDITION_FIELDS, path, 'pricing condition', errors);
+  if (!hasOwn(value, 'field')) {
+    errors.push(path + '.field is required.');
+  } else {
+    validateScopeField(value.field, path + '.field', errors);
+  }
+  if (!hasOwn(value, 'equals')) errors.push(path + '.equals is required.');
+}
+
+function validateServiceLineItem(value, path, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(path + ' must be an object.');
+    return;
+  }
+  addUnsupportedFieldErrors(value, SERVICE_LINE_ITEM_FIELDS, path, 'pricing line item', errors);
+  if (!hasOwn(value, 'code') || typeof value.code !== 'string' || !STABLE_ID_PATTERN.test(value.code)) {
+    errors.push(path + '.code must be a stable identifier.');
+  }
+  if (!hasOwn(value, 'label') || typeof value.label !== 'string' || !value.label.trim()) {
+    errors.push(path + '.label must not be blank.');
+  }
+  if (!SERVICE_LINE_ITEM_CATEGORIES.has(value.category)) {
+    errors.push(path + '.category must be one of labor, materials, equipment, or serviceCharge.');
+  }
+  if (!SERVICE_LINE_ITEM_TYPES.has(value.type)) {
+    errors.push(path + '.type must be one of fixed, perUnit, perUnitByValue, or perItemByValue.');
+  }
+  if (hasOwn(value, 'when')) validatePricingCondition(value.when, path + '.when', errors);
+
+  if (value.type === 'fixed') {
+    if (!hasOwn(value, 'amount')) errors.push(path + '.amount is required for fixed.');
+    else validateNonNegativeNumber(value.amount, path + '.amount', errors);
+  }
+  if (value.type === 'perUnit' || value.type === 'perUnitByValue') {
+    if (!hasOwn(value, 'quantityField')) errors.push(path + '.quantityField is required for ' + value.type + '.');
+    else validateScopeField(value.quantityField, path + '.quantityField', errors);
+  }
+  if (value.type === 'perUnit') {
+    if (!hasOwn(value, 'unitRate')) errors.push(path + '.unitRate is required for perUnit.');
+    else validateNonNegativeNumber(value.unitRate, path + '.unitRate', errors);
+  }
+  if (value.type === 'perUnitByValue' || value.type === 'perItemByValue') {
+    if (!hasOwn(value, 'selectorField')) errors.push(path + '.selectorField is required for ' + value.type + '.');
+    else validateScopeField(value.selectorField, path + '.selectorField', errors);
+    if (!hasOwn(value, 'unitRates')) errors.push(path + '.unitRates is required for ' + value.type + '.');
+    else validateUnitRates(value.unitRates, path + '.unitRates', errors);
+  }
+  if (value.type === 'perItemByValue') {
+    if (!hasOwn(value, 'collectionField')) errors.push(path + '.collectionField is required for perItemByValue.');
+    else validateScopeField(value.collectionField, path + '.collectionField', errors);
+  }
+}
+
+function validateServicePricing(value, path, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(path + ' must be an object.');
+    return;
+  }
+  addUnsupportedFieldErrors(value, SERVICE_PRICING_FIELDS, path, 'pricing', errors);
+  if (hasOwn(value, 'requiredScope')) {
+    if (!Array.isArray(value.requiredScope)) {
+      errors.push(path + '.requiredScope must be an array.');
+    } else {
+      const fields = new Set();
+      value.requiredScope.forEach(function (field, index) {
+        validateScopeField(field, path + '.requiredScope[' + index + ']', errors);
+        if (typeof field === 'string') {
+          if (fields.has(field)) errors.push(path + ' contains duplicate required scope field ' + field + '.');
+          fields.add(field);
+        }
+      });
+    }
+  }
+  if (hasOwn(value, 'allowedScopeValues')) {
+    if (!isPlainObject(value.allowedScopeValues)) {
+      errors.push(path + '.allowedScopeValues must be an object.');
+    } else {
+      for (const field of Object.keys(value.allowedScopeValues)) {
+        validateScopeField(field, path + '.allowedScopeValues field ' + field, errors);
+        const allowed = value.allowedScopeValues[field];
+        if (!Array.isArray(allowed) || allowed.length === 0) {
+          errors.push(path + '.allowedScopeValues.' + field + ' must be a non-empty array.');
+          continue;
+        }
+        allowed.forEach(function (candidate, index) {
+          if (candidate === null || !['string', 'number', 'boolean'].includes(typeof candidate) ||
+              (typeof candidate === 'number' && !Number.isFinite(candidate))) {
+            errors.push(path + '.allowedScopeValues.' + field + '[' + index + '] must be a finite JSON scalar.');
+          }
+        });
+      }
+    }
+  }
+  if (hasOwn(value, 'rangePercent')) {
+    if (typeof value.rangePercent !== 'number' || !Number.isFinite(value.rangePercent) ||
+        value.rangePercent < 0 || value.rangePercent > 100) {
+      errors.push(path + '.rangePercent must be between 0 and 100.');
+    }
+  }
+  if (Object.keys(value).length === 0) return;
+  if (!Array.isArray(value.lineItems) || value.lineItems.length === 0) {
+    errors.push(path + '.lineItems must be a non-empty array when pricing is configured.');
+    return;
+  }
+  const codes = new Set();
+  value.lineItems.forEach(function (lineItem, index) {
+    const itemPath = path + '.lineItems[' + index + ']';
+    validateServiceLineItem(lineItem, itemPath, errors);
+    if (!isPlainObject(lineItem) || typeof lineItem.code !== 'string') return;
+    if (codes.has(lineItem.code)) errors.push(path + ' contains duplicate line item code ' + lineItem.code + '.');
+    codes.add(lineItem.code);
+  });
+}
+
+function validateServiceCatalogue(services, errors) {
+  if (!Array.isArray(services)) return;
+  const ids = new Set();
+  services.forEach(function (service, index) {
+    const path = 'services[' + index + ']';
+    if (!isPlainObject(service)) {
+      errors.push(path + ' must be an object.');
+      return;
+    }
+    if (!hasOwn(service, 'id') || typeof service.id !== 'string' || !STABLE_ID_PATTERN.test(service.id)) {
+      errors.push(path + '.id must be a stable identifier using letters, numbers, dot, underscore, colon, or hyphen.');
+    } else {
+      const normalizedId = service.id.toLowerCase();
+      if (ids.has(normalizedId)) errors.push('services contains duplicate stable id ' + service.id + '.');
+      ids.add(normalizedId);
+    }
+    if (!hasOwn(service, 'name') || typeof service.name !== 'string' || !service.name.trim()) {
+      errors.push(path + '.name must not be blank.');
+    }
+    for (const field of ['description', 'equipment']) {
+      if (hasOwn(service, field) && typeof service[field] !== 'string') errors.push(path + '.' + field + ' must be a string.');
+    }
+    if (hasOwn(service, 'active') && typeof service.active !== 'boolean') errors.push(path + '.active must be a boolean.');
+    if (hasOwn(service, 'crewSize') && (!Number.isInteger(service.crewSize) || service.crewSize <= 0)) {
+      errors.push(path + '.crewSize must be a positive integer.');
+    }
+    for (const field of ['avgHours', 'difficulty']) {
+      if (hasOwn(service, field) && (typeof service[field] !== 'number' || !Number.isFinite(service[field]) || service[field] <= 0)) {
+        errors.push(path + '.' + field + ' must be a positive finite number.');
+      }
+    }
+    if (hasOwn(service, 'confidence') && (typeof service.confidence !== 'number' || !Number.isFinite(service.confidence) ||
+        service.confidence < 0 || service.confidence > 100)) {
+      errors.push(path + '.confidence must be between 0 and 100.');
+    }
+    if (hasOwn(service, 'canonicalPricing')) validateServicePricing(service.canonicalPricing, path + '.canonicalPricing', errors);
+  });
+}
+
 function validateOperationalBusinessProfile(profile) {
   const errors = [];
   if (hasOwn(profile, 'company')) validateCompany(profile.company, errors);
@@ -435,6 +627,7 @@ function validateOperationalBusinessProfile(profile) {
   if (hasOwn(profile, 'serviceArea')) validateServiceArea(profile.serviceArea, errors);
   if (hasOwn(profile, 'hours')) validateHours(profile.hours, errors);
   if (hasOwn(profile, 'policies')) validatePolicies(profile.policies, errors);
+  if (hasOwn(profile, 'services')) validateServiceCatalogue(profile.services, errors);
   return errors;
 }
 
@@ -508,6 +701,15 @@ function migrateLegacyCanonicalAuthority(profile) {
     if (overhead !== null) canonicalCosts.overheadPercent = overhead;
     source.canonicalCosts = canonicalCosts;
     migratedFields.push('canonicalCosts');
+  }
+  if (Array.isArray(source.services)) {
+    source.services.forEach(function (service, index) {
+      if (!isPlainObject(service) || hasOwn(service, 'id')) return;
+      if (hasOwn(service, 'key')) service.id = service.key;
+      else if (hasOwn(service, 'serviceId')) service.id = service.serviceId;
+      else service.id = 'service-' + sha256({ index, service }).slice(0, 16);
+      migratedFields.push('services[' + index + '].id');
+    });
   }
   return { profile: source, migratedFields };
 }
@@ -585,11 +787,11 @@ function prepareBusinessProfileForWrite(profile) {
   if (rawErrors.length) {
     return { profile: null, migratedFields: [], errors: rawErrors };
   }
-  const operationalErrors = validateOperationalBusinessProfile(profile);
+  const migrated = migrateLegacyCanonicalAuthority(profile);
+  const operationalErrors = validateOperationalBusinessProfile(migrated.profile);
   if (operationalErrors.length) {
     return { profile: null, migratedFields: [], errors: operationalErrors };
   }
-  const migrated = migrateLegacyCanonicalAuthority(profile);
   const errors = validateCanonicalBusinessProfile(migrated.profile);
   if (!errors.length) synchronizeLegacyFinancial(migrated.profile);
   return {

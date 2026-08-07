@@ -56,6 +56,9 @@
     .bp-service-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
     .bp-repeat-list { display: grid; gap: 12px; }
     .bp-repeat-card { border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); padding: 14px; background: var(--neutral-50); }
+    .bp-string-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+    .bp-string-row .bp-field { min-width: 0; }
+    .bp-string-row input, .bp-string-row textarea { width: 100%; }
     .bp-asset-card[data-catalogue-state="archived"] { border-style: dashed; opacity: 0.88; }
     .bp-asset-status { font-size: 11px; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.5px; }
     .bp-asset-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
@@ -72,7 +75,7 @@
     .bp-empty-note { padding: 12px; border: 1px dashed var(--neutral-200); border-radius: var(--radius-sm); color: var(--neutral-500); font-size: 12px; text-align: center; }
     .bp-policy-row { display: grid; grid-template-columns: minmax(150px, 1fr) 3fr auto; gap: 8px; align-items: start; }
     .bp-policy-row input, .bp-policy-row textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); color: var(--neutral-800); background: var(--neutral-50); font: inherit; }
-    @media (max-width: 768px) { .bp-container { padding: 16px; } .bp-grid { grid-template-columns: 1fr; } .bp-hours-row { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .bp-container { padding: 16px; } .bp-grid { grid-template-columns: 1fr; } .bp-hours-row { grid-template-columns: 1fr; } .bp-string-row { grid-template-columns: minmax(0, 1fr); } }
     .bp-full { grid-column: 1 / -1; }
     .bp-half { grid-column: span 1; }
     .bp-section-desc { font-size: 13px; color: var(--neutral-500); margin-bottom: 16px; line-height: 1.5; }
@@ -107,7 +110,7 @@
           <button class="bp-nav-btn" data-section="financial" onclick="switchSection('financial')">💰 Financial</button>
           <button class="bp-nav-btn" data-section="scheduling" onclick="switchSection('scheduling')">📅 Scheduling</button>
           <button class="bp-nav-btn" data-section="polaris" onclick="switchSection('polaris')">🤖 Polaris</button>
-          <button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">📞 Retell</button>
+          <button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">☎️ Voice &amp; Knowledge</button>
           <button class="bp-nav-btn" data-section="notifications" onclick="switchSection('notifications')">🔔 Notifications</button>
           <button class="bp-nav-btn" data-section="integrations" onclick="switchSection('integrations')">🔗 Integrations</button>
         </div>
@@ -346,24 +349,44 @@
           </div>
         </div>
 
-        <!-- Section: Retell -->
+        <!-- Section: Provider-neutral voice and business knowledge -->
         <div class="bp-section" id="section-retell">
-          <div class="bp-card">
-            <h3>Retell AI Preferences</h3>
-            <div class="bp-section-desc">Configure how your AI phone agent communicates. These settings will be consumed by Retell Intelligence in Mission 17.</div>
+          <div class="bp-card" id="providerNeutralKnowledge">
+            <h3>Business Knowledge</h3>
+            <div class="bp-section-desc">Maintain tenant-authored facts and guidance used by NorthStar's provider-neutral voice mapping.</div>
+            <div class="bp-authority-note" id="providerNeutralAuthority">These provider-neutral Business Profile values are canonical tenant authority. Saving them does not connect to or configure a voice provider.</div>
             <div class="bp-grid">
-              <div class="bp-field"><label>Voice Personality</label>
-                <select id="ret-voicePersonality"><option value="professional">Professional</option><option value="friendly">Friendly</option><option value="consultative">Consultative</option><option value="efficient">Efficient</option></select></div>
-              <div class="bp-field"><label>Conversation Style</label>
-                <select id="ret-conversationStyle"><option value="consultative">Consultative</option><option value="direct">Direct</option><option value="warm">Warm</option></select></div>
-              <div class="bp-field"><label>Max Conversation Length (min)</label><input id="ret-maxConversationLength" type="number" min="5" max="60"></div>
-              <div class="bp-field"><label>Question Strategy</label>
-                <select id="ret-questionStrategy"><option value="discovery">Discovery (open-ended)</option><option value="structured">Structured (guided)</option><option value="efficient">Efficient (minimal)</option></select></div>
-              <div class="bp-field"><label>Confirmation Style</label>
-                <select id="ret-confirmationStyle"><option value="explicit">Explicit (repeat details)</option><option value="implicit">Implicit (implied agreement)</option><option value="summary">Summary (end recap)</option></select></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="ret-emergencyWorkflow" type="checkbox"><span class="slider"></span> Emergency Workflow</label></div>
+              <div class="bp-field"><label for="profile-industry">Industry</label><input id="profile-industry" autocomplete="organization-title"></div>
+              <div class="bp-field"><label for="profile-ownerName">Owner or Primary Contact</label><input id="profile-ownerName" autocomplete="name"></div>
+              <div class="bp-field bp-full"><label for="profile-businessDescription">Business Description</label><textarea id="profile-businessDescription" rows="4"></textarea></div>
+              <div class="bp-field bp-full"><label for="profile-emergencyPolicy">Emergency Guidance</label><textarea id="profile-emergencyPolicy" rows="4"></textarea></div>
+              <div class="bp-field bp-full"><label for="profile-customPrompt">Additional Operating Guidance</label><textarea id="profile-customPrompt" rows="4"></textarea></div>
             </div>
-            <div style="margin-top:12px;padding:12px;background:var(--neutral-100);border-radius:var(--radius-sm);font-size:12px;color:var(--neutral-500);">⚠️ Full Retell configuration will be available in Mission 17. These are placeholder preferences.</div>
+
+            <div class="bp-repeat-header" style="margin-top:20px;">
+              <div>
+                <h3>Frequently Asked Questions</h3>
+                <div class="bp-section-desc">Questions and answers remain literal tenant-authored text.</div>
+              </div>
+              <button class="bp-add-btn" id="addFaqButton" type="button">Add FAQ</button>
+            </div>
+            <div id="faqContainer" class="bp-repeat-list"></div>
+
+            <div class="bp-repeat-header" style="margin-top:20px;">
+              <div>
+                <h3>Company Values</h3>
+                <div class="bp-section-desc">Short values that guide customer-facing responses.</div>
+              </div>
+              <button class="bp-add-btn" id="addCompanyValueButton" type="button">Add value</button>
+            </div>
+            <div id="companyValuesContainer" class="bp-repeat-list"></div>
+
+            <h3 style="margin-top:24px;">Voice Assistant</h3>
+            <div class="bp-grid">
+              <div class="bp-field bp-full"><label for="voice-assistant-name">Assistant Name</label><input id="voice-assistant-name"><span class="help-text">Up to 120 Unicode characters and 480 UTF-8 bytes.</span></div>
+              <div class="bp-field bp-full"><label for="voice-assistant-style">Communication Style</label><textarea id="voice-assistant-style" rows="4"></textarea></div>
+              <div class="bp-field bp-full"><label for="voice-assistant-greeting">Greeting</label><textarea id="voice-assistant-greeting" rows="4"></textarea></div>
+            </div>
           </div>
         </div>
 
@@ -822,6 +845,8 @@
       var headquarters = p.headquarters && typeof p.headquarters === 'object' ? p.headquarters : {};
       var serviceArea = p.serviceArea && typeof p.serviceArea === 'object' ? p.serviceArea : {};
       var hours = p.hours && typeof p.hours === 'object' ? p.hours : {};
+      var voiceAssistant = p.voiceAssistant && typeof p.voiceAssistant === 'object' && !Array.isArray(p.voiceAssistant)
+        ? p.voiceAssistant : {};
 
       // Company
       setVal('company-name', company.name);
@@ -924,13 +949,24 @@
       setCheck('pol-conciseMode', p.polaris.conciseMode);
       setCheck('pol-executiveMode', p.polaris.executiveMode);
 
-      // Retell
-      setSelect('ret-voicePersonality', p.retell.voicePersonality);
-      setSelect('ret-conversationStyle', p.retell.conversationStyle);
-      setVal('ret-maxConversationLength', p.retell.maxConversationLength);
-      setSelect('ret-questionStrategy', p.retell.questionStrategy);
-      setSelect('ret-confirmationStyle', p.retell.confirmationStyle);
-      setCheck('ret-emergencyWorkflow', p.retell.emergencyWorkflow);
+      // Provider-neutral voice and business knowledge. Legacy provider data is
+      // intentionally not rendered or rewritten by this form.
+      setVal('profile-industry', p.industry);
+      setVal('profile-ownerName', p.ownerName);
+      setVal('profile-businessDescription', p.businessDescription);
+      setVal('profile-emergencyPolicy', p.emergencyPolicy);
+      setVal('profile-customPrompt', p.customPrompt);
+      renderStringList('faqContainer', p.faq, {
+        idPrefix: 'faq', valueClass: 'faq-value', itemLabel: 'FAQ', multiline: true,
+        emptyMessage: 'No frequently asked questions configured.',
+      });
+      renderStringList('companyValuesContainer', p.companyValues, {
+        idPrefix: 'company-value', valueClass: 'company-value', itemLabel: 'Company value', multiline: false,
+        emptyMessage: 'No company values configured.',
+      });
+      setVal('voice-assistant-name', voiceAssistant.name);
+      setVal('voice-assistant-style', voiceAssistant.style);
+      setVal('voice-assistant-greeting', voiceAssistant.greeting);
 
       // Notifications
       setCheck('notif-email', p.notifications.email);
@@ -959,9 +995,41 @@
       setCheck('int-inventory', p.integrations.inventory.enabled);
     }
 
+    function preferredLineEnding(raw) {
+      var withoutCrLf = raw.replace(/\r\n/g, '');
+      if (raw.indexOf('\r\n') !== -1 && !/[\r\n]/.test(withoutCrLf)) return 'crlf';
+      if (raw.indexOf('\r') !== -1 && raw.indexOf('\n') === -1) return 'cr';
+      return 'lf';
+    }
+
+    function setTextControlValue(el, val) {
+      var raw = (val !== null && val !== undefined) ? String(val) : '';
+      el.value = raw;
+      if (el.tagName !== 'TEXTAREA') return;
+      el._northstarOriginalRawValue = raw;
+      el._northstarOriginalDomValue = el.value;
+      el._northstarPreferredLineEnding = preferredLineEnding(raw);
+      el._northstarTextEdited = false;
+      if (!el._northstarTextListener) {
+        el.addEventListener('input', function() { el._northstarTextEdited = true; });
+        el._northstarTextListener = true;
+      }
+    }
+
+    function readTextControlValue(el) {
+      if (!el || el.tagName !== 'TEXTAREA') return el ? el.value : '';
+      if (!el._northstarTextEdited && el.value === el._northstarOriginalDomValue) {
+        return el._northstarOriginalRawValue;
+      }
+      var normalized = el.value.replace(/\r\n?/g, '\n');
+      if (el._northstarPreferredLineEnding === 'crlf') return normalized.replace(/\n/g, '\r\n');
+      if (el._northstarPreferredLineEnding === 'cr') return normalized.replace(/\n/g, '\r');
+      return normalized;
+    }
+
     function setVal(id, val) {
       var el = document.getElementById(id);
-      if (el) el.value = (val !== null && val !== undefined) ? val : '';
+      if (el) setTextControlValue(el, val);
     }
     function setSelect(id, val) {
       var el = document.getElementById(id);
@@ -1071,6 +1139,94 @@
     function stableRowId(prefix) {
       if (window.crypto && typeof window.crypto.randomUUID === 'function') return prefix + '-' + window.crypto.randomUUID();
       return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    function renderStringList(containerId, values, options) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+      var entries = Array.isArray(values) ? values : [];
+      var fragment = document.createDocumentFragment();
+      if (entries.length === 0) {
+        appendEmptyNote(fragment, options.emptyMessage);
+        container.replaceChildren(fragment);
+        return;
+      }
+      entries.forEach(function(entry, index) {
+        var card = document.createElement('div');
+        card.className = 'bp-repeat-card bp-string-row';
+        var field = document.createElement('div');
+        field.className = 'bp-field';
+        var label = document.createElement('label');
+        var control = document.createElement(options.multiline ? 'textarea' : 'input');
+        control.id = stableRowId(options.idPrefix);
+        control.className = options.valueClass;
+        if (!options.multiline) control.type = 'text';
+        else control.rows = 3;
+        label.htmlFor = control.id;
+        label.textContent = options.itemLabel + ' ' + (index + 1);
+        var valid = typeof entry === 'string';
+        setTextControlValue(control, valid ? entry : '');
+        control.dataset.authorityState = valid ? 'valid' : 'malformed';
+        control.dataset.userEdited = 'false';
+        control.setAttribute('aria-invalid', valid ? 'false' : 'true');
+        control.addEventListener('input', function() {
+          control.dataset.authorityState = 'valid';
+          control.dataset.userEdited = 'true';
+          control.setAttribute('aria-invalid', 'false');
+        });
+        field.append(label, control);
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'bp-remove-btn';
+        remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', 'Remove ' + options.itemLabel.toLowerCase() + ' ' + (index + 1));
+        remove.addEventListener('click', function() {
+          card.remove();
+          if (!container.querySelector('.' + options.valueClass)) appendEmptyNote(container, options.emptyMessage);
+        });
+        card.append(field, remove);
+        fragment.appendChild(card);
+      });
+      container.replaceChildren(fragment);
+    }
+
+    function currentStringList(containerId, valueClass) {
+      return Array.from(document.querySelectorAll('#' + containerId + ' .' + valueClass)).map(function(control) {
+        return readTextControlValue(control);
+      });
+    }
+
+    function collectStringList(containerId, valueClass, label) {
+      return Array.from(document.querySelectorAll('#' + containerId + ' .' + valueClass)).map(function(control, index) {
+        if (control.dataset.authorityState === 'malformed' && control.dataset.userEdited !== 'true') {
+          throw new Error(label + ' ' + (index + 1) + ' is malformed in the persisted profile. Edit or remove it before Save.');
+        }
+        return readTextControlValue(control);
+      });
+    }
+
+    function addFaqValue() {
+      var values = currentStringList('faqContainer', 'faq-value');
+      values.push('');
+      renderStringList('faqContainer', values, {
+        idPrefix: 'faq', valueClass: 'faq-value', itemLabel: 'FAQ', multiline: true,
+        emptyMessage: 'No frequently asked questions configured.',
+      });
+      var fields = document.querySelectorAll('#faqContainer .faq-value');
+      var latest = fields.length ? fields[fields.length - 1] : null;
+      if (latest) latest.focus();
+    }
+
+    function addCompanyValue() {
+      var values = currentStringList('companyValuesContainer', 'company-value');
+      values.push('');
+      renderStringList('companyValuesContainer', values, {
+        idPrefix: 'company-value', valueClass: 'company-value', itemLabel: 'Company value', multiline: false,
+        emptyMessage: 'No company values configured.',
+      });
+      var fields = document.querySelectorAll('#companyValuesContainer .company-value');
+      var latest = fields.length ? fields[fields.length - 1] : null;
+      if (latest) latest.focus();
     }
 
     function appendLabeledInput(parent, label, className, value, type, attributes) {
@@ -1606,6 +1762,19 @@
       p.serviceArea.primaryTerritory = getVal('sa-primaryTerritory');
       p.serviceArea.polygon = readServicePolygon();
 
+      p.industry = getVal('profile-industry');
+      p.ownerName = getVal('profile-ownerName');
+      p.businessDescription = getVal('profile-businessDescription');
+      p.emergencyPolicy = getVal('profile-emergencyPolicy');
+      p.faq = collectStringList('faqContainer', 'faq-value', 'FAQ');
+      p.companyValues = collectStringList('companyValuesContainer', 'company-value', 'Company value');
+      p.customPrompt = getVal('profile-customPrompt');
+      p.voiceAssistant = {
+        name: getVal('voice-assistant-name'),
+        style: getVal('voice-assistant-style'),
+        greeting: getVal('voice-assistant-greeting'),
+      };
+
       p.routing.preferredProvider = getSelect('routing-preferredProvider');
       p.routing.dispatchFrom = getSelect('routing-dispatchFrom');
       p.routing.trafficEnabled = getCheck('routing-trafficEnabled');
@@ -1697,13 +1866,6 @@
       p.polaris.conciseMode = getCheck('pol-conciseMode');
       p.polaris.executiveMode = getCheck('pol-executiveMode');
 
-      p.retell.voicePersonality = getSelect('ret-voicePersonality');
-      p.retell.conversationStyle = getSelect('ret-conversationStyle');
-      p.retell.maxConversationLength = parseInt(getVal('ret-maxConversationLength')) || 15;
-      p.retell.questionStrategy = getSelect('ret-questionStrategy');
-      p.retell.confirmationStyle = getSelect('ret-confirmationStyle');
-      p.retell.emergencyWorkflow = getCheck('ret-emergencyWorkflow');
-
       p.notifications.email = getCheck('notif-email');
       p.notifications.sms = getCheck('notif-sms');
       p.notifications.push = getCheck('notif-push');
@@ -1731,7 +1893,7 @@
       return p;
     }
 
-    function getVal(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+    function getVal(id) { return readTextControlValue(document.getElementById(id)); }
     function getSelect(id) { var el = document.getElementById(id); return el ? el.value : ''; }
     function getCheck(id) { var el = document.getElementById(id); return el ? el.checked : false; }
 
@@ -1802,6 +1964,10 @@
       if (addAssetButton) addAssetButton.addEventListener('click', addAssetCard);
       var addServiceButton = document.getElementById('addServiceButton');
       if (addServiceButton) addServiceButton.addEventListener('click', addService);
+      var addFaqButton = document.getElementById('addFaqButton');
+      if (addFaqButton) addFaqButton.addEventListener('click', addFaqValue);
+      var addCompanyValueButton = document.getElementById('addCompanyValueButton');
+      if (addCompanyValueButton) addCompanyValueButton.addEventListener('click', addCompanyValue);
       var servicesContainer = document.getElementById('servicesContainer');
       if (servicesContainer) servicesContainer.addEventListener('input', clearServiceCatalogError);
       document.querySelectorAll('[data-canonical-field]').forEach(function(el) {

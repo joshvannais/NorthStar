@@ -131,13 +131,14 @@ function attachPage(page, ledger, role) {
   });
 }
 
-async function openNeutralProfile(page, origin, expectedName) {
-  await page.goto(origin + '/dashboard/business-profile', { waitUntil: 'domcontentloaded' });
+async function openNeutralProfile(page, origin, expectedName, navigate = true) {
+  if (navigate) await page.goto(origin + '/dashboard/business-profile', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(name => document.querySelector('#company-name') && document.querySelector('#company-name').value === name,
     expectedName, { timeout: 15000 });
   await page.click('[data-section="retell"]');
   await page.waitForFunction(() => document.getElementById('section-retell').classList.contains('active'));
   await page.waitForFunction(() => document.querySelector('#voice-assistant-name'));
+  await page.waitForLoadState('networkidle');
 }
 
 async function snapshot(page) {
@@ -167,18 +168,19 @@ async function snapshot(page) {
 }
 
 function assertSnapshot(value, input) {
+  const domText = raw => raw.replace(/\r\n?/g, '\n');
   assert.strictEqual(value.theme, input.theme, input.role + ' theme retained');
   assert.strictEqual(value.navigation, 'ready', input.role + ' navigation ready');
   assert.strictEqual(value.industry, input.expected.industry, input.role + ' industry exact');
   assert.strictEqual(value.ownerName, input.expected.ownerName, input.role + ' owner exact');
-  assert.strictEqual(value.businessDescription, input.expected.businessDescription, input.role + ' description exact');
-  assert.strictEqual(value.emergencyPolicy, input.expected.emergencyPolicy, input.role + ' emergency policy exact');
-  assert.deepStrictEqual(value.faq, input.expected.faq, input.role + ' FAQ exact');
+  assert.strictEqual(value.businessDescription, domText(input.expected.businessDescription), input.role + ' description DOM-normalized');
+  assert.strictEqual(value.emergencyPolicy, domText(input.expected.emergencyPolicy), input.role + ' emergency policy DOM-normalized');
+  assert.deepStrictEqual(value.faq, input.expected.faq.map(domText), input.role + ' FAQ DOM-normalized');
   assert.deepStrictEqual(value.companyValues, input.expected.companyValues, input.role + ' values exact');
-  assert.strictEqual(value.customPrompt, input.expected.customPrompt, input.role + ' guidance exact');
+  assert.strictEqual(value.customPrompt, domText(input.expected.customPrompt), input.role + ' guidance DOM-normalized');
   assert.strictEqual(value.name, input.expected.name, input.role + ' assistant name exact');
-  assert.strictEqual(value.style, input.expected.style, input.role + ' style exact');
-  assert.strictEqual(value.greeting, input.expected.greeting, input.role + ' greeting exact');
+  assert.strictEqual(value.style, domText(input.expected.style), input.role + ' style DOM-normalized');
+  assert.strictEqual(value.greeting, domText(input.expected.greeting), input.role + ' greeting DOM-normalized');
   assert.strictEqual(value.xss, 0, input.role + ' executes no persisted markup');
   assert.strictEqual(value.injectedNodes, 0, input.role + ' creates no injected nodes');
   assert.strictEqual(value.legacyControls, 0, input.role + ' provider-specific placeholder controls retired');
@@ -197,7 +199,7 @@ async function lifecycle(browser, origin, session, input, ledger) {
   await page.evaluate(() => renderProfile(profileData));
   assertSnapshot(await snapshot(page), { ...input, role: input.role + '-rerender' });
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await openNeutralProfile(page, origin, 'Provider Neutral Company');
+  await openNeutralProfile(page, origin, 'Provider Neutral Company', false);
   assertSnapshot(await snapshot(page), { ...input, role: input.role + '-reload' });
   if (input.viewport.width <= 500) {
     await page.locator('#navHamburgerBtn').focus();

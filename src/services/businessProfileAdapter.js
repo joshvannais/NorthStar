@@ -20,6 +20,7 @@ const RAW_PROFILE_FIELD_TYPES = Object.freeze({
   scheduling: 'object',
   polaris: 'object',
   retell: 'object',
+  voiceAssistant: 'object',
   notifications: 'object',
   integrations: 'object',
   canonicalPricing: 'object',
@@ -62,6 +63,7 @@ const HOURS_FIELDS = new Set(['open', 'close', 'lunch', 'emergency', 'afterHours
 const HOLIDAY_FIELDS = new Set(['id', 'name', 'date', 'closed', 'open', 'close']);
 const WORKFORCE_FIELDS = new Set(['policies']);
 const WORKFORCE_POLICY_FIELDS = new Set(['id', 'name', 'description', 'enabled']);
+const VOICE_ASSISTANT_FIELDS = new Set(['name', 'style', 'greeting']);
 const SERVICE_PRICING_FIELDS = new Set([
   'requiredScope', 'allowedScopeValues', 'rangePercent', 'lineItems',
 ]);
@@ -477,6 +479,36 @@ function validateWorkforce(workforce, errors) {
   });
 }
 
+function validateStringList(value, path, errors) {
+  if (!Array.isArray(value)) return;
+  if (value.length > 100) errors.push(path + ' must contain at most 100 entries.');
+  value.forEach(function (entry, index) {
+    if (typeof entry !== 'string') errors.push(path + '[' + index + '] must be a string.');
+  });
+}
+
+function validateVoiceAssistant(voiceAssistant, errors) {
+  if (!isPlainObject(voiceAssistant)) return;
+  addUnsupportedFieldErrors(voiceAssistant, VOICE_ASSISTANT_FIELDS, 'voiceAssistant', 'voice assistant', errors);
+  for (const field of VOICE_ASSISTANT_FIELDS) {
+    if (!hasOwn(voiceAssistant, field)) continue;
+    const value = voiceAssistant[field];
+    if (typeof value !== 'string') {
+      errors.push('voiceAssistant.' + field + ' must be a string.');
+      continue;
+    }
+    if (field === 'name' && (Array.from(value).length > 120 || Buffer.byteLength(value, 'utf8') > 480)) {
+      errors.push('voiceAssistant.name must be text of at most 120 characters and 480 UTF-8 bytes.');
+    }
+    if (field === 'style' && Buffer.byteLength(value, 'utf8') > 4096) {
+      errors.push('voiceAssistant.style must be text of at most 4096 UTF-8 bytes.');
+    }
+    if (field === 'greeting' && Buffer.byteLength(value, 'utf8') > 8192) {
+      errors.push('voiceAssistant.greeting must be text of at most 8192 UTF-8 bytes.');
+    }
+  }
+}
+
 function validateNonNegativeNumber(value, path, errors) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     errors.push(path + ' must be a non-negative finite number.');
@@ -668,6 +700,9 @@ function validateOperationalBusinessProfile(profile) {
   if (hasOwn(profile, 'policies')) validatePolicies(profile.policies, errors);
   if (hasOwn(profile, 'workforce')) validateWorkforce(profile.workforce, errors);
   if (hasOwn(profile, 'services')) validateServiceCatalogue(profile.services, errors);
+  if (hasOwn(profile, 'faq')) validateStringList(profile.faq, 'faq', errors);
+  if (hasOwn(profile, 'companyValues')) validateStringList(profile.companyValues, 'companyValues', errors);
+  if (hasOwn(profile, 'voiceAssistant')) validateVoiceAssistant(profile.voiceAssistant, errors);
   return errors;
 }
 

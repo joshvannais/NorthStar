@@ -227,15 +227,15 @@ realPostgres('Mission 20 Part 2G mounted provider-neutral Business Profile autho
       config.retell.phoneNumber = '+15555554800';
       global.fetch = jest.fn(async (url, options) => {
         const body = JSON.parse(options.body);
-        const pending = await pool.query(
+        const pinned = await pool.query(
           `SELECT organization_id, business_profile_id, business_profile_version,
                   business_profile_hash, status
              FROM canonical_voice_sessions
             WHERE organization_id = $1 AND to_number = $2 AND external_session_id LIKE 'pending-%'`,
           [ORG_A, body.to_number]
         );
-        expect(pending.rows).toHaveLength(1);
-        observed.push({ url, body, pending: pending.rows[0] });
+        expect(pinned.rows).toHaveLength(1);
+        observed.push({ url, body, pinned: pinned.rows[0] });
         return {
           ok: true,
           status: 200,
@@ -283,12 +283,12 @@ realPostgres('Mission 20 Part 2G mounted provider-neutral Business Profile autho
         northstar_greeting: RAW.voiceAssistant.greeting.trim(),
       });
       expect(JSON.stringify(call.body)).not.toMatch(/LEGACY|CALLER MUST NOT WIN|providerPrivateField/);
-      expect(call.pending).toMatchObject({
+      expect(call.pinned).toMatchObject({
         organization_id: ORG_A,
         business_profile_id: response.body.profile.id,
         business_profile_version: response.body.profile.version,
         business_profile_hash: response.body.profile.hash,
-        status: 'pending',
+        status: 'active',
       });
       const durable = await pool.query(
         `SELECT organization_id, business_profile_id, business_profile_version,

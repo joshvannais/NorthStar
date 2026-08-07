@@ -18,7 +18,7 @@
           <h1>Settings</h1>
           <p>Manage your account and AI Office Manager configuration.</p>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="saveSettings()">💾 Save Changes</button>
+        <button class="btn btn-primary btn-sm" id="saveSettingsBtn" data-settings-mutable onclick="saveSettings()" aria-describedby="settingsAccessStatus" disabled>Loading access…</button>
       </div>
 
       <!-- Company Info -->
@@ -28,56 +28,90 @@
         <div class="form-row">
           <div class="form-group">
             <label for="companyName">Business Name</label>
-            <input type="text" id="companyName" placeholder="e.g. Smith Tree Service">
+            <input type="text" id="companyName" data-settings-mutable placeholder="e.g. Smith Tree Service" disabled>
           </div>
           <div class="form-group">
             <label for="companyPhone">Business Phone</label>
-            <input type="tel" id="companyPhone" placeholder="(555) 123-4567">
+            <input type="tel" id="companyPhone" data-settings-mutable placeholder="(555) 123-4567" disabled>
           </div>
         </div>
         <div class="form-group">
           <label for="services">Services Offered</label>
-          <input type="text" id="services" placeholder="e.g. Tree removal, stump grinding, pruning">
+          <input type="text" id="services" data-settings-mutable placeholder="e.g. Tree removal, stump grinding, pruning" disabled>
         </div>
         <div class="form-group">
           <label for="companyInfo">Company Description (for AI knowledge base)</label>
-          <textarea id="companyInfo" placeholder="Tell your AI Office Manager about your company — service areas, hours, insurance info, etc."></textarea>
+          <textarea id="companyInfo" data-settings-mutable placeholder="Tell your AI Office Manager about your company — service areas, hours, insurance info, etc." disabled></textarea>
         </div>
       </div>
 
       <!-- Notifications -->
-      <div class="settings-section">
+      <div class="settings-section" id="notificationPreferencesAuthority" data-state="loading">
         <h2>Notification Preferences</h2>
-        <p class="description">Choose how you want to be notified when a new lead comes in.</p>
-        <div class="integration-card">
-          <div class="icon">📱</div>
-          <div class="info">
-            <h4>SMS Notifications</h4>
-            <p>Get a text message for every new lead</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="smsEnabled">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="form-group" style="margin-top:8px;">
-          <label for="smsNumber">SMS Phone Number</label>
-          <input type="tel" id="smsNumber" placeholder="(555) 123-4567">
-        </div>
+        <p class="description" id="notificationPreferencesAuthorityNote">Operational delivery preferences are stored in the tenant-scoped PostgreSQL <code>notification_preferences</code> authority.</p>
+        <p id="settingsAccessStatus" role="status" aria-live="polite">Loading your durable account access. Editing remains disabled.</p>
         <div class="integration-card">
           <div class="icon">📧</div>
           <div class="info">
-            <h4>Email Notifications</h4>
-            <p>Get an email summary for every new lead</p>
+            <h4>Email for new leads</h4>
+            <p>Send an operational email when a new lead is created.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="emailEnabled">
+            <input type="checkbox" id="emailEnabled" data-settings-mutable disabled>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="integration-card">
+          <div class="icon">📨</div>
+          <div class="info">
+            <h4>Email call summaries</h4>
+            <p>Send an operational email after a call summary is ready.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="emailCallSummary" data-settings-mutable disabled>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="integration-card">
+          <div class="icon">📅</div>
+          <div class="info">
+            <h4>Email appointments</h4>
+            <p>Send an operational email when an appointment is created.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="emailAppointment" data-settings-mutable disabled>
             <span class="toggle-slider"></span>
           </label>
         </div>
         <div class="form-group" style="margin-top:8px;">
           <label for="emailAddress">Notification Email</label>
-          <input type="email" id="emailAddress" placeholder="you@example.com">
+          <input type="email" id="emailAddress" data-settings-mutable placeholder="you@example.com" disabled>
+        </div>
+        <div class="integration-card">
+          <div class="icon">📱</div>
+          <div class="info">
+            <h4>SMS for new leads</h4>
+            <p>Send an operational text message when a new lead is created.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="smsEnabled" data-settings-mutable disabled>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="integration-card">
+          <div class="icon">🚨</div>
+          <div class="info">
+            <h4>Urgent SMS alerts</h4>
+            <p>Send an operational text message for urgent events.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="smsUrgent" data-settings-mutable disabled>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="form-group" style="margin-top:8px;">
+          <label for="smsNumber">SMS Phone Number</label>
+          <input type="tel" id="smsNumber" data-settings-mutable placeholder="(555) 123-4567" disabled>
         </div>
         <div class="integration-card" aria-live="polite">
           <div class="icon">🔒</div>
@@ -106,11 +140,11 @@
         </div>
         <div class="form-group">
           <label for="greeting">Custom Greeting (optional)</label>
-          <input type="text" id="greeting" placeholder='e.g. "Thank you for calling Smith Tree Service..."'>
+          <input type="text" id="greeting" data-settings-mutable placeholder='e.g. "Thank you for calling Smith Tree Service..."' disabled>
         </div>
         <div class="form-group">
           <label for="companyInfo">Company Knowledge Base (for AI context)</label>
-          <textarea id="companyInfo" placeholder="Tell your AI Office Manager about your company — service areas, hours, insurance info, etc."></textarea>
+          <textarea id="companyInfo" data-settings-mutable placeholder="Tell your AI Office Manager about your company — service areas, hours, insurance info, etc." disabled></textarea>
         </div>
       </div>
 
@@ -126,7 +160,7 @@
             <p>Known contacts ring your phone normally. New numbers get the AI Office Manager.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" checked id="smartRouting">
+            <input type="checkbox" checked id="smartRouting" data-settings-mutable disabled>
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -142,9 +176,9 @@
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <input type="text" id="contactName" placeholder="Name (e.g. Mom, John, Office)" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;">
-          <input type="tel" id="contactPhone" placeholder="Phone number" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;">
-          <button class="btn btn-primary btn-sm" onclick="addContact()">+ Add</button>
+          <input type="text" id="contactName" data-settings-mutable placeholder="Name (e.g. Mom, John, Office)" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
+          <input type="tel" id="contactPhone" data-settings-mutable placeholder="Phone number" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
+          <button class="btn btn-primary btn-sm" data-settings-mutable onclick="addContact()" disabled>+ Add</button>
         </div>
 
         <details style="margin-top:12px;">
@@ -157,7 +191,7 @@
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
                 📤 Choose CSV File
-                <input type="file" id="csvUpload" accept=".csv" style="display:none;" onchange="importCSV(event)">
+                <input type="file" id="csvUpload" data-settings-mutable accept=".csv" style="display:none;" onchange="importCSV(event)" disabled>
               </label>
               <span id="importStatus" style="font-size:13px;color:var(--neutral-400);"></span>
             </div>
@@ -260,31 +294,67 @@
 
   <script>
     let settingsState = {};
+    let settingsAccount = null;
+    let settingsCanEdit = false;
 
-    async function loadSettings() {
-      const [account, stored] = await Promise.all([
-        NorthStarAccountSession.load(),
-        NorthStarAccountSession.json('/api/account/preferences', { method: 'GET' }),
-      ]);
-      settingsState = stored.preferences || {};
+    function applySettingsAccess(account) {
+      const role = account && account.membership ? account.membership.role : '';
+      settingsCanEdit = role === 'owner' || role === 'admin';
+      document.querySelectorAll('[data-settings-mutable]').forEach(element => {
+        element.disabled = !settingsCanEdit;
+      });
+      const saveButton = document.getElementById('saveSettingsBtn');
+      saveButton.disabled = !settingsCanEdit;
+      saveButton.textContent = settingsCanEdit ? '💾 Save Changes' : 'Read-only settings';
+      document.getElementById('settingsAccessStatus').textContent = settingsCanEdit
+        ? 'Your durable account membership can edit these settings.'
+        : 'Read-only: your durable account membership can view these settings but cannot change them.';
+    }
+
+    function renderSettingsState() {
+      const account = settingsAccount || {};
       const user = account.user || {};
       const organization = account.organization || {};
       if (organization.name) document.getElementById('companyName').value = organization.name;
       if (user.phone) document.getElementById('companyPhone').value = user.phone;
       document.getElementById('securityEmailAddress').textContent = settingsState.securityEmailAddress || user.email || '';
       Object.entries(settingsState).forEach(([key, val]) => {
+        if (key === 'securityEmailMandatory' || key === 'securityEmailAddress') return;
         const el = document.getElementById(key);
         if (el) {
-          if (el.type === 'checkbox') el.checked = val;
-          else el.value = val;
+          if (el.type === 'checkbox') el.checked = val === true;
+          else el.value = val === null || val === undefined ? '' : String(val);
         }
       });
       renderContacts();
     }
 
+    async function loadSettings() {
+      const authority = document.getElementById('notificationPreferencesAuthority');
+      authority.dataset.state = 'loading';
+      try {
+        const [account, stored] = await Promise.all([
+          NorthStarAccountSession.load(),
+          NorthStarAccountSession.json('/api/account/preferences', { method: 'GET' }),
+        ]);
+        settingsAccount = account;
+        settingsState = stored.preferences || {};
+        renderSettingsState();
+        applySettingsAccess(account);
+        authority.dataset.state = 'ready';
+      } catch (error) {
+        settingsCanEdit = false;
+        applySettingsAccess(null);
+        authority.dataset.state = 'error';
+        document.getElementById('settingsAccessStatus').textContent = 'Settings access is unavailable. Editing remains disabled.';
+        throw error;
+      }
+    }
+
     async function saveSettings() {
+      if (!settingsCanEdit) return;
       const fields = ['companyName', 'companyPhone', 'services', 'companyInfo', 'smsNumber', 'emailAddress', 'greeting'];
-      const checkboxes = ['smsEnabled', 'emailEnabled', 'smartRouting'];
+      const checkboxes = ['emailEnabled', 'emailCallSummary', 'emailAppointment', 'smsEnabled', 'smsUrgent', 'smartRouting'];
       const settings = {};
 
       fields.forEach(id => {
@@ -295,25 +365,32 @@
         const el = document.getElementById(id);
         if (el) settings[id] = el.checked;
       });
-      settings.emailCallSummary = settingsState.emailCallSummary === true;
-      settings.emailAppointment = settingsState.emailAppointment === true;
-      settings.smsUrgent = settingsState.smsUrgent === true;
-
       // Save contacts too
       const contacts = getContacts();
       settings.contacts = contacts;
 
-      settingsState = settings;
-      await NorthStarAccountSession.json('/api/account/preferences', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(settingsState)),
-      });
-      showToast('✅ Settings saved successfully!');
+      const saveButton = document.getElementById('saveSettingsBtn');
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving…';
+      try {
+        const saved = await NorthStarAccountSession.json('/api/account/preferences', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(settings)),
+        });
+        settingsState = saved.preferences || settings;
+        renderSettingsState();
+        showToast('✅ Settings saved successfully!');
+      } catch (error) {
+        showToast(error.message || 'Settings could not be saved.', 'error');
+      } finally {
+        saveButton.disabled = !settingsCanEdit;
+        saveButton.textContent = settingsCanEdit ? '💾 Save Changes' : 'Read-only settings';
+      }
     }
 
     // ======== Known Contacts (VIP Numbers) ========
 
     function getContacts() {
-      return Array.isArray(settingsState.contacts) ? settingsState.contacts : [];
+      return Array.isArray(settingsState.contacts) ? settingsState.contacts.slice() : [];
     }
 
     function writableSettings(value) {
@@ -324,11 +401,14 @@
     }
 
     function saveContacts(contacts) {
-      settingsState.contacts = contacts;
+      if (!settingsCanEdit) return;
+      const nextState = Object.assign({}, settingsState, { contacts: contacts });
       NorthStarAccountSession.json('/api/account/preferences', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(settingsState)),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(nextState)),
+      }).then(function(saved) {
+        settingsState = saved.preferences || nextState;
+        renderContacts();
       }).catch(function(error) { showToast(error.message, 'error'); });
-      renderContacts();
     }
 
     function renderContacts() {
@@ -372,6 +452,8 @@
         remove.className = 'btn btn-ghost btn-sm';
         remove.style.cssText = 'color:var(--danger);font-size:12px;';
         remove.textContent = 'Remove';
+        remove.setAttribute('data-settings-mutable', '');
+        remove.disabled = !settingsCanEdit;
         remove.addEventListener('click', () => removeContact(index));
 
         card.append(icon, info, remove);
@@ -381,6 +463,7 @@
     }
 
     function addContact() {
+      if (!settingsCanEdit) return;
       const name = document.getElementById('contactName').value.trim();
       const phone = document.getElementById('contactPhone').value.trim();
       if (!name || !phone) {
@@ -398,6 +481,7 @@
     }
 
     function removeContact(index) {
+      if (!settingsCanEdit) return;
       const contacts = getContacts();
       const removed = contacts.splice(index, 1)[0];
       saveContacts(contacts);
@@ -405,6 +489,7 @@
     }
 
     function importCSV(event) {
+      if (!settingsCanEdit) return;
       const file = event.target.files[0];
       if (!file) return;
 

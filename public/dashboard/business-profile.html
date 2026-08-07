@@ -394,16 +394,9 @@
         <div class="bp-section" id="section-notifications">
           <div class="bp-card">
             <h3>Notification Preferences</h3>
-            <div class="bp-section-desc">Control which notifications you receive and how.</div>
-            <div class="bp-grid">
-              <div class="bp-field"><label class="bp-toggle"><input id="notif-email" type="checkbox"><span class="slider"></span> Email Notifications</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="notif-sms" type="checkbox"><span class="slider"></span> SMS Notifications</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="notif-push" type="checkbox"><span class="slider"></span> Push Notifications</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="notif-dailyExecutiveBriefing" type="checkbox"><span class="slider"></span> Daily Executive Briefing</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="notif-revenueAlerts" type="checkbox"><span class="slider"></span> Revenue Alerts</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="notif-crewAlerts" type="checkbox"><span class="slider"></span> Crew Alerts</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="notif-criticalAlerts" type="checkbox"><span class="slider"></span> Critical Alerts</label></div>
-            </div>
+            <div class="bp-section-desc">Operational notification delivery is controlled by the tenant-scoped PostgreSQL notification preferences authority, not by Business Profile.</div>
+            <p id="legacyNotificationsAuthority" style="margin:0 0 16px;color:var(--neutral-500);font-size:13px;line-height:1.5;">Existing legacy notification values are preserved during unrelated profile saves and ignored as delivery preferences.</p>
+            <a class="btn btn-primary" id="canonicalNotificationsLink" href="/dashboard/settings">Manage authoritative notification preferences</a>
           </div>
         </div>
 
@@ -966,14 +959,6 @@
       setVal('voice-assistant-greeting', voiceAssistant.greeting);
 
       // Notifications
-      setCheck('notif-email', p.notifications.email);
-      setCheck('notif-sms', p.notifications.sms);
-      setCheck('notif-push', p.notifications.push);
-      setCheck('notif-dailyExecutiveBriefing', p.notifications.dailyExecutiveBriefing);
-      setCheck('notif-revenueAlerts', p.notifications.revenueAlerts);
-      setCheck('notif-crewAlerts', p.notifications.crewAlerts);
-      setCheck('notif-criticalAlerts', p.notifications.criticalAlerts);
-
     }
 
     function preferredLineEnding(raw) {
@@ -1846,14 +1831,6 @@
       p.polaris.showExecutiveReasoning = getCheck('pol-showExecutiveReasoning');
       p.polaris.conciseMode = getCheck('pol-conciseMode');
       p.polaris.executiveMode = getCheck('pol-executiveMode');
-
-      p.notifications.email = getCheck('notif-email');
-      p.notifications.sms = getCheck('notif-sms');
-      p.notifications.push = getCheck('notif-push');
-      p.notifications.dailyExecutiveBriefing = getCheck('notif-dailyExecutiveBriefing');
-      p.notifications.revenueAlerts = getCheck('notif-revenueAlerts');
-      p.notifications.crewAlerts = getCheck('notif-crewAlerts');
-      p.notifications.criticalAlerts = getCheck('notif-criticalAlerts');
 
       return p;
     }

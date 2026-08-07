@@ -18,7 +18,7 @@ const MEMBER_A = '94000000-0000-4000-8000-000000000003';
 const VIEWER_A = '94000000-0000-4000-8000-000000000004';
 const OWNER_B = '94000000-0000-4000-8000-000000000005';
 const EMAIL_POISON = '"><img data-m20-notification-email src=/m20-notification-email onerror=window.__notificationXss++>';
-const PHONE_POISON = '<svg data-m20-notification-phone onload=window.__notificationXss++>';
+const PHONE_POISON = '<svg onload=window.__notificationXss++>';
 const LEGACY_LABEL = '  </span><img data-m20-legacy-notification src=x onerror=window.__notificationXss++>\r\nlegacy bytes  ';
 const LEGACY_NOTIFICATIONS = Object.freeze({
   email: false,
@@ -59,7 +59,12 @@ function dataDigest() {
 }
 
 function profileFor(name, notifications) {
-  const profile = canonicalFenceProfile({ companyName: name });
+  const profile = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'business-profile.json'), 'utf8'));
+  const canonical = canonicalFenceProfile({ companyName: name });
+  profile.company = { ...profile.company, ...canonical.company, name };
+  profile.services = canonical.services;
+  profile.canonicalPricing = canonical.canonicalPricing;
+  profile.canonicalCosts = canonical.canonicalCosts;
   profile.notifications = JSON.parse(JSON.stringify(notifications));
   return profile;
 }
@@ -236,11 +241,11 @@ async function exerciseOwnerMutation(browser, origin, session, pool, ledger) {
     attachPage(page, ledger, input.role);
     await page.goto(origin + '/dashboard/settings', { waitUntil: 'domcontentloaded' });
     await waitForSettings(page);
-    await page.uncheck('#emailEnabled');
-    await page.check('#emailCallSummary');
-    await page.uncheck('#emailAppointment');
-    await page.check('#smsEnabled');
-    await page.uncheck('#smsUrgent');
+    await page.locator('label.toggle:has(#emailEnabled)').click();
+    await page.locator('label.toggle:has(#emailCallSummary)').click();
+    await page.locator('label.toggle:has(#emailAppointment)').click();
+    await page.locator('label.toggle:has(#smsEnabled)').click();
+    await page.locator('label.toggle:has(#smsUrgent)').click();
     await page.fill('#emailAddress', 'owner.ui@example.test');
     await page.fill('#smsNumber', '+1 860 555 0123');
     const saved = page.waitForResponse(response =>

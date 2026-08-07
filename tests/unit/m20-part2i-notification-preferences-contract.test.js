@@ -49,6 +49,6 @@ describe('Mission 20 Part 2I notification preference presentation contract', () 
     expect(businessProfile).not.toMatch(/id="notif-/);
     expect(businessProfile).not.toMatch(/setCheck\('notif-/);
     expect(businessProfile).not.toMatch(/p\.notifications\.[A-Za-z]+\s*=\s*getCheck/);
-    expect(businessProfile).toMatch(/function collectProfile\(\)[\s\S]*JSON\.parse\(JSON\.stringify\(profileData\)\)/);
+    expect(businessProfile).toMatch(/function collectProfile\(\)[\s\S]*JSON\.parse\(JSON\.stringify\(profileData \|\| \{\}\)\)/);
   });
 });

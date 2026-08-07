@@ -256,6 +256,8 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       { body: { ...loaded.body.data, company: { name: 'A\u0000B' } }, expected: 'NUL character that PostgreSQL JSONB cannot represent' },
       { body: { ...loaded.body.data, company: { name: 'A\ud800B' } }, expected: 'unpaired UTF-16 surrogate that PostgreSQL JSONB cannot represent' },
       { body: { ...loaded.body.data, company: { name: 'A\udc00B' } }, expected: 'unpaired UTF-16 surrogate that PostgreSQL JSONB cannot represent' },
+      { body: { ...loaded.body.data, company: { ['A\u0000B']: 'value' } }, expected: 'key with a NUL character that PostgreSQL JSONB cannot represent' },
+      { body: { ...loaded.body.data, company: { ['A\ud800B']: 'value' } }, expected: 'key with an unpaired UTF-16 surrogate that PostgreSQL JSONB cannot represent' },
       { body: { ...loaded.body.data, ...dangerous }, expected: 'unsafe key __proto__' },
     ];
 

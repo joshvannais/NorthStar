@@ -293,11 +293,20 @@ function mapExecutiveContextToVariables(ec) {
     : {};
   const company = bp.company && typeof bp.company === 'object' ? bp.company : {};
   const retell = bp.retell && typeof bp.retell === 'object' ? bp.retell : {};
+  const hasNeutralVoiceAuthority = own(bp, 'voiceAssistant');
+  const voiceAssistant = hasNeutralVoiceAuthority && bp.voiceAssistant && typeof bp.voiceAssistant === 'object' &&
+    !Array.isArray(bp.voiceAssistant) ? bp.voiceAssistant : {};
+  const assistantNameCandidates = hasNeutralVoiceAuthority
+    ? [{ source: voiceAssistant, key: 'name' }]
+    : [{ source: retell, key: 'assistantName' }, { source: retell, key: 'brandName' }];
+  const voiceStyleCandidates = hasNeutralVoiceAuthority
+    ? [{ source: voiceAssistant, key: 'style' }]
+    : [{ source: retell, key: 'voiceStyle' }, { source: retell, key: 'brandVoice' }];
+  const greetingCandidates = hasNeutralVoiceAuthority
+    ? [{ source: voiceAssistant, key: 'greeting' }]
+    : [{ source: retell, key: 'greetingTemplate' }];
   const vars = {
-    assistant_name: promptValue(firstPersistedValue([
-      { source: retell, key: 'assistantName' },
-      { source: retell, key: 'brandName' },
-    ])),
+    assistant_name: promptValue(firstPersistedValue(assistantNameCandidates)),
     company_name: promptValue(firstPersistedValue([{ source: company, key: 'name' }])),
     industry: promptValue(firstPersistedValue([
       { source: bp, key: 'industry' },
@@ -323,12 +332,9 @@ function mapExecutiveContextToVariables(ec) {
     faq: promptValue(firstPersistedValue([{ source: bp, key: 'faq' }])),
     policies: promptValue(firstPersistedValue([{ source: bp, key: 'policies' }])),
     company_values: promptValue(firstPersistedValue([{ source: bp, key: 'companyValues' }])),
-    voice_style: promptValue(firstPersistedValue([
-      { source: retell, key: 'voiceStyle' },
-      { source: retell, key: 'brandVoice' },
-    ])),
+    voice_style: promptValue(firstPersistedValue(voiceStyleCandidates)),
     custom_prompt: promptValue(firstPersistedValue([{ source: bp, key: 'customPrompt' }])),
-    northstar_greeting: promptValue(firstPersistedValue([{ source: retell, key: 'greetingTemplate' }])),
+    northstar_greeting: promptValue(firstPersistedValue(greetingCandidates)),
   };
 
   return Object.fromEntries(PROMPT_VARIABLE_KEYS.map((key) => [key, vars[key]]));

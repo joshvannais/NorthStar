@@ -289,7 +289,7 @@ function createResendAdapter(configuration, options = {}) {
 }
 
 function idempotencyKey(purpose, deliveryId) {
-  if (!['email-verification', 'password-reset'].includes(purpose) ||
+  if (!['email-verification', 'password-reset', 'workforce-invitation'].includes(purpose) ||
       typeof deliveryId !== 'string' || !UUID.test(deliveryId)) {
     throw new Error('Transactional delivery operation is invalid');
   }
@@ -364,6 +364,23 @@ class TransactionalEmail {
       `Reset your password within 30 minutes: ${href}\n\nIf you did not request this, no action is required.`,
       `<p>Reset your password within 30 minutes: <a href="${escapeHtml(href)}">Reset your password</a></p>` +
         '<p>If you did not request this, no action is required.</p>',
+      context
+    );
+  }
+
+  invitation(recipient, rawToken, context, invite = {}) {
+    const link = new URL('/accept-invitation', this.publicOrigin);
+    link.searchParams.set('token', bounded(rawToken, 128, 'invitation token'));
+    const href = link.toString();
+    const person = bounded(invite.name || 'Team member', 160, 'invited name');
+    const organization = bounded(invite.organizationName || 'your organization', 200, 'organization name');
+    return this.deliver(
+      recipient,
+      'workforce-invitation',
+      `Join ${organization} on NorthStar`,
+      `${person}, you were invited to join ${organization} on NorthStar. Set your password within 72 hours: ${href}`,
+      `<p>${escapeHtml(person)}, you were invited to join ${escapeHtml(organization)} on NorthStar.</p>` +
+        `<p><a href="${escapeHtml(href)}">Set your password and accept the invitation</a> within 72 hours.</p>`,
       context
     );
   }

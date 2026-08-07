@@ -27,6 +27,7 @@ const RAW_PROFILE_FIELD_TYPES = Object.freeze({
   emergencyPolicy: 'string',
   faq: 'array',
   policies: 'object',
+  workforce: 'object',
   companyValues: 'array',
   customPrompt: 'string',
 });
@@ -59,6 +60,8 @@ const WEEKDAYS = Object.freeze([
 ]);
 const HOURS_FIELDS = new Set(['open', 'close', 'lunch', 'emergency', 'afterHours', 'holiday']);
 const HOLIDAY_FIELDS = new Set(['id', 'name', 'date', 'closed', 'open', 'close']);
+const WORKFORCE_FIELDS = new Set(['policies']);
+const WORKFORCE_POLICY_FIELDS = new Set(['id', 'name', 'description', 'enabled']);
 const SERVICE_PRICING_FIELDS = new Set([
   'requiredScope', 'allowedScopeValues', 'rangePercent', 'lineItems',
 ]);
@@ -438,6 +441,42 @@ function validatePolicies(policies, errors) {
   }
 }
 
+function validateWorkforce(workforce, errors) {
+  if (!isPlainObject(workforce)) return;
+  addUnsupportedFieldErrors(workforce, WORKFORCE_FIELDS, 'workforce', 'workforce', errors);
+  if (!hasOwn(workforce, 'policies')) return;
+  if (!Array.isArray(workforce.policies)) {
+    errors.push('workforce.policies must be an array.');
+    return;
+  }
+  if (workforce.policies.length > 100) errors.push('workforce.policies must contain at most 100 entries.');
+  const ids = new Set();
+  workforce.policies.forEach(function (policy, index) {
+    const path = 'workforce.policies[' + index + ']';
+    if (!isPlainObject(policy)) {
+      errors.push(path + ' must be an object.');
+      return;
+    }
+    addUnsupportedFieldErrors(policy, WORKFORCE_POLICY_FIELDS, path, 'workforce policy', errors);
+    if (!hasOwn(policy, 'id') || typeof policy.id !== 'string' || !STABLE_ID_PATTERN.test(policy.id)) {
+      errors.push(path + '.id must be a stable identifier.');
+    } else {
+      const normalized = policy.id.toLowerCase();
+      if (ids.has(normalized)) errors.push('workforce.policies contains duplicate id ' + policy.id + '.');
+      ids.add(normalized);
+    }
+    if (!hasOwn(policy, 'name') || typeof policy.name !== 'string' || !policy.name.trim() ||
+        Buffer.byteLength(policy.name, 'utf8') > 480 || Array.from(policy.name).length > 120) {
+      errors.push(path + '.name must be non-blank text of at most 120 characters and 480 UTF-8 bytes.');
+    }
+    if (!hasOwn(policy, 'description') || typeof policy.description !== 'string' ||
+        Buffer.byteLength(typeof policy.description === 'string' ? policy.description : '', 'utf8') > 4096) {
+      errors.push(path + '.description must be text of at most 4096 UTF-8 bytes.');
+    }
+    if (typeof policy.enabled !== 'boolean') errors.push(path + '.enabled must be a boolean.');
+  });
+}
+
 function validateNonNegativeNumber(value, path, errors) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     errors.push(path + ' must be a non-negative finite number.');
@@ -627,6 +666,7 @@ function validateOperationalBusinessProfile(profile) {
   if (hasOwn(profile, 'serviceArea')) validateServiceArea(profile.serviceArea, errors);
   if (hasOwn(profile, 'hours')) validateHours(profile.hours, errors);
   if (hasOwn(profile, 'policies')) validatePolicies(profile.policies, errors);
+  if (hasOwn(profile, 'workforce')) validateWorkforce(profile.workforce, errors);
   if (hasOwn(profile, 'services')) validateServiceCatalogue(profile.services, errors);
   return errors;
 }

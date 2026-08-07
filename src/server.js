@@ -24,6 +24,8 @@ const { createAuthRouter } = require('./routes/auth');
 const { AccountService } = require('./accounts/service');
 const { createProductionTransactionalEmail } = require('./email/transactional');
 const accountRoutes = require('./routes/account');
+const { WorkforceService } = require('./workforce/service');
+const { createWorkforceRouter } = require('./routes/workforce');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -60,6 +62,7 @@ const pages = {
   '/verify-email': 'public/verify-email.html',
   '/forgot-password': 'public/forgot-password.html',
   '/reset-password': 'public/reset-password.html',
+  '/accept-invitation': 'public/accept-invitation.html',
   '/account/pending': 'public/account/pending.html',
   '/dashboard': 'public/dashboard/command-center.html',
   '/dashboard/executive-brief': 'public/dashboard/executive-brief.html',
@@ -67,6 +70,7 @@ const pages = {
   '/dashboard/leads': 'public/dashboard/leads.html',
   '/dashboard/communications': 'public/dashboard/communications.html',
   '/dashboard/calendar': 'public/dashboard/calendar.html',
+  '/dashboard/team': 'public/dashboard/team.html',
   '/dashboard/ai-settings': 'public/dashboard/ai-settings.html',
   '/dashboard/business-profile': 'public/dashboard/business-profile.html',
   '/dashboard/my-number': 'public/dashboard/my-number.html',
@@ -103,6 +107,10 @@ const productionTransactionalEmail = createProductionTransactionalEmail(process.
 const productionAccountService = new AccountService(undefined, {
   transactionalEmail: productionTransactionalEmail,
 });
+const productionWorkforceService = new WorkforceService(undefined, {
+  transactionalEmail: productionTransactionalEmail,
+});
+app.locals.workforceService = productionWorkforceService;
 app.use('/api/auth', createAuthRouter({
   service: productionAccountService,
   signup: productionTransactionalEmail
@@ -110,6 +118,7 @@ app.use('/api/auth', createAuthRouter({
     : null,
 }));
 app.use('/api/account', accountRoutes);
+app.use('/api/workforce', createWorkforceRouter());
 
 // Legacy demo credential minting is retired. Canonical demo access requires a
 // separately provisioned account attached to canonical_demo_authority.

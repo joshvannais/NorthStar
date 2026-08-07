@@ -15,6 +15,7 @@ const EXPECTED_NAVIGATION = Object.freeze([
   Object.freeze({ id: 'communications', href: '/dashboard/communications', resource: 'calls' }),
   Object.freeze({ id: 'my-number', href: '/dashboard/my-number', resource: 'calls' }),
   Object.freeze({ id: 'calendar', href: '/dashboard/calendar', resource: 'calendar' }),
+  Object.freeze({ id: 'team', href: '/dashboard/team', resource: 'team' }),
   Object.freeze({ id: 'ai-settings', href: '/dashboard/ai-settings', resource: 'ai' }),
   Object.freeze({ id: 'business-profile', href: '/dashboard/business-profile', resource: 'settings' }),
   Object.freeze({ id: 'settings', href: '/dashboard/settings', resource: 'settings' }),

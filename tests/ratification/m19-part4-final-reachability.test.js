@@ -193,9 +193,9 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
       .toEqual([]);
   });
 
-  test('the real package entrypoint mounts all 29 pages and retires both direct/deep asset URLs', async () => {
+  test('the real package entrypoint mounts all 31 pages and retires both direct/deep asset URLs', async () => {
     const mounted = mountedRoutePaths();
-    expect(MOUNTED_THEME_PAGES).toHaveLength(29);
+    expect(MOUNTED_THEME_PAGES).toHaveLength(31);
     for (const page of MOUNTED_THEME_PAGES) expect(mounted).toContain(page.route);
     for (const route of MOUNTED_REDIRECTS) expect(mounted).toContain(route);
 

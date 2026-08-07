@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
+  <script>
+    (function () {
+      var values = new URLSearchParams(window.location.search).getAll('token');
+      var token = values.length === 1 && /^[A-Za-z0-9_-]{43}$/.test(values[0]) ? values[0] : '';
+      window.history.replaceState(null, '', '/accept-invitation');
+      document.addEventListener('DOMContentLoaded', function () {
+        var form = document.getElementById('invitationForm');
+        var status = document.getElementById('invitationStatus');
+        if (!token) {
+          form.hidden = true;
+          status.setAttribute('data-state', 'error');
+          status.textContent = 'This workforce invitation is invalid or expired.';
+          return;
+        }
+        function submitInvitation(event) {
+          event.preventDefault();
+          if (!window.NorthStarPasswordFields ||
+              !window.NorthStarPasswordFields.validateConfirmation(form)) return;
+          form.removeEventListener('submit', submitInvitation);
+          var button = form.querySelector('button[type="submit"]');
+          button.disabled = true;
+          button.textContent = 'Joining…';
+          form.setAttribute('aria-busy', 'true');
+          fetch('/api/workforce/invitations/accept', {
+            method: 'POST',
+            credentials: 'same-origin',
+            referrerPolicy: 'no-referrer',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token, password: document.getElementById('password').value })
+          }).then(function (response) {
+            token = '';
+            return response.json().catch(function () { return {}; }).then(function (body) {
+              if (!response.ok) throw new Error(body.error && body.error.message || 'Invitation failed');
+              status.setAttribute('data-state', 'success');
+              status.textContent = 'Invitation accepted. Sign in with your new password.';
+              form.hidden = true;
+            });
+          }).catch(function () {
+            token = '';
+            form.hidden = true;
+            status.setAttribute('data-state', 'error');
+            status.textContent = 'This workforce invitation is invalid or expired.';
+          }).finally(function () {
+            button.disabled = false;
+            form.removeAttribute('aria-busy');
+          });
+        }
+        form.addEventListener('submit', submitInvitation);
+      }, { once: true });
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join Your Team | NorthStar</title>
+  <script src="/js/theme.js"></script>
+  <script src="/js/password-fields.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="account-auth-page">
+  <header class="account-auth-brand" aria-label="NorthStar">
+    <a href="/"><img src="/assets/logo.png" alt=""><span>NorthStar</span></a>
+  </header>
+  <main class="account-auth-shell" id="mainContent">
+    <section class="account-auth-card" aria-labelledby="invitationTitle">
+      <p class="account-auth-eyebrow">NorthStar workforce</p>
+      <h1 id="invitationTitle">Join your organization</h1>
+      <p class="account-auth-support">Set your private password to activate your individual NorthStar account.</p>
+      <form id="invitationForm" class="account-auth-form" method="post" action="/accept-invitation">
+        <div class="account-auth-field">
+          <label for="password">New password</label>
+          <div class="password-input-shell">
+            <input id="password" type="password" minlength="8" maxlength="128" required autocomplete="new-password" aria-describedby="passwordPolicyHint">
+            <button type="button" class="password-visibility-toggle" data-password-toggle aria-controls="password" aria-pressed="false" aria-label="New password visibility">Show</button>
+          </div>
+          <p id="passwordPolicyHint" class="password-field-hint">Use 8 to 128 characters.</p>
+        </div>
+        <div class="account-auth-field">
+          <label for="confirmPassword">Confirm password</label>
+          <div class="password-input-shell">
+            <input id="confirmPassword" type="password" minlength="8" maxlength="128" required autocomplete="new-password" data-password-confirmation-for="password" aria-describedby="passwordMatchError" aria-errormessage="passwordMatchError" aria-invalid="false">
+            <button type="button" class="password-visibility-toggle" data-password-toggle aria-controls="confirmPassword" aria-pressed="false" aria-label="Confirm password visibility">Show</button>
+          </div>
+          <p id="passwordMatchError" class="password-field-error" role="alert" aria-live="polite" hidden></p>
+        </div>
+        <button class="btn btn-primary" type="submit">Accept invitation</button>
+      </form>
+      <p id="invitationStatus" class="account-auth-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      <p class="account-auth-return"><a href="/login">Return to sign in</a></p>
+    </section>
+  </main>
+</body>
+</html>

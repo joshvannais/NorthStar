@@ -522,7 +522,7 @@ async function runJourney(spec, viewport, state) {
     await restarted.evaluate(() => NorthStarTrialStatus.refresh());
     await bannerEvidence(
       restarted,
-      /Your trial has ended\. Your organization remains available in restricted read-only mode\. Upgrade options are coming soon\./
+      /Your trial has ended\. Your organization remains available in restricted read-only mode\./
     );
     const expiredProjection = await restarted.evaluate(async () => {
       const response = await NorthStarAccountSession.fetch(
@@ -543,7 +543,7 @@ async function runJourney(spec, viewport, state) {
       { enabledButtons: 0, paymentLinks: 0 }
     );
     assert.match(upgradeUi.text, /Your trial has ended/i);
-    assert.match(upgradeUi.text, /Upgrade options are coming soon/i);
+    assert.doesNotMatch(upgradeUi.text, /Upgrade options are coming soon/i);
     assert.doesNotMatch(upgradeUi.text, /PR B2|pull request|internal phase/i);
     const denied = await restarted.evaluate(async () => {
       const response = await NorthStarAccountSession.fetch('/api/account/preferences', {
@@ -555,8 +555,19 @@ async function runJourney(spec, viewport, state) {
     assert.strictEqual(denied.body.code, 'subscription_read_only');
 
     await state.pool.query(
-      "UPDATE subscriptions SET status = 'active' WHERE organization_id = $1",
-      [authority.organization_id]
+      `UPDATE subscriptions
+          SET status = 'active', plan_type = 'Starter', billing_plan_key = 'starter',
+              billing_authority_verified = TRUE,
+              stripe_customer_id = $2, stripe_subscription_id = $3,
+              current_period_start = $4, current_period_end = $5
+        WHERE organization_id = $1`,
+      [
+        authority.organization_id,
+        `cus_b1_${authority.organization_id.replace(/-/g, '')}`,
+        `sub_b1_${authority.organization_id.replace(/-/g, '')}`,
+        new Date(state.controlledNow.value.getTime() - 86400000),
+        new Date(state.controlledNow.value.getTime() + 30 * 86400000),
+      ]
     );
     await restarted.evaluate(() => NorthStarTrialStatus.refresh());
     await restarted.waitForFunction(() => !document.getElementById('northstar-trial-status'));

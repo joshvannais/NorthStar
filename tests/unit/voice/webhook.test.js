@@ -419,7 +419,7 @@ describe('Voice Webhook Framework', () => {
     function mockReq(body = {}, headers = {}) {
       return {
         body,
-        rawBody: JSON.stringify(body),
+        rawBody: Buffer.from(JSON.stringify(body), 'utf8'),
         headers,
       };
     }

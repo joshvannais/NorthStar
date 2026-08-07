@@ -10,6 +10,7 @@ const { createCanonicalVoiceCall } = require('../services/canonicalVoiceSessionC
 const voiceSessions = require('../services/voiceSessionAuthority');
 
 const router = express.Router();
+const webhookRouter = express.Router();
 
 function errorResponse(res, error) {
   const status = error && error.status ? error.status : 503;
@@ -23,9 +24,9 @@ function organizationId(req) {
   return req.tenantContext.organizationId;
 }
 
-router.post('/webhook',
+webhookRouter.post('/webhook',
+  express.raw({ type: 'application/json', limit: '1mb' }),
   rawBodyCapture,
-  express.json({ verify: function (req, _res, buffer) { req.rawBody = req.rawBody || buffer.toString(); } }),
   handleWebhook
 );
 
@@ -162,3 +163,4 @@ router.post('/context/refresh', requireTenantAccess, retired);
 router.get('/events/history', requireTenantAccess, retired);
 
 module.exports = router;
+module.exports.webhookRouter = webhookRouter;

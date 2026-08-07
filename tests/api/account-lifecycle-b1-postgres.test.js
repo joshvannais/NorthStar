@@ -640,8 +640,19 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     expect(mutation.body.code).toBe('subscription_read_only');
 
     await pool.query(
-      `UPDATE subscriptions SET status = 'active' WHERE organization_id = $1`,
-      [owner.rows[0].organization_id]
+      `UPDATE subscriptions
+          SET status = 'active', plan_type = 'Starter', billing_plan_key = 'starter',
+              billing_authority_verified = TRUE,
+              stripe_customer_id = $2, stripe_subscription_id = $3,
+              current_period_start = $4, current_period_end = $5
+        WHERE organization_id = $1`,
+      [
+        owner.rows[0].organization_id,
+        `cus_b1_${owner.rows[0].organization_id.replace(/-/g, '')}`,
+        `sub_b1_${owner.rows[0].organization_id.replace(/-/g, '')}`,
+        new Date(controlledNow.getTime() - 86400000),
+        new Date(controlledNow.getTime() + 30 * 86400000),
+      ]
     );
     const active = await request(app).get('/api/account/subscription').set('Cookie', jar);
     expect(active.body.subscription).toEqual(expect.objectContaining({
@@ -671,11 +682,23 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       ['past_due', null, null], ['canceled', null, null],
     ];
     for (const [state, start, end] of states) {
+      const paid = ['active', 'past_due', 'canceled'].includes(state);
       await pool.query(
         `UPDATE subscriptions
-            SET status = $2, trial_started_at = $3, trial_ends_at = $4
+            SET status = $2, trial_started_at = $3, trial_ends_at = $4,
+                plan_type = $5, billing_plan_key = $6,
+                billing_authority_verified = $7,
+                stripe_customer_id = $8, stripe_subscription_id = $9,
+                current_period_start = $10, current_period_end = $11
           WHERE organization_id = $1`,
-        [organizationId, state, start, end]
+        [
+          organizationId, state, start, end,
+          paid ? 'Starter' : 'Trial', paid ? 'starter' : null, paid,
+          paid ? `cus_b1_matrix_${organizationId.replace(/-/g, '')}` : null,
+          paid ? `sub_b1_matrix_${organizationId.replace(/-/g, '')}` : null,
+          paid ? '2026-08-01T00:00:00.000Z' : null,
+          paid ? '2026-09-01T00:00:00.000Z' : null,
+        ]
       );
       const response = await request(app)
         .get('/api/account/subscription?upgrade=true&paid=true&success=true&organizationId=foreign')

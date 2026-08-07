@@ -231,10 +231,17 @@ class AccountRepository {
               active_profile.id AS active_business_profile_id,
               CASE WHEN active_profile.id IS NOT NULL THEN 'complete' ELSE onboarding.status END AS onboarding_status,
               subscription.plan_type,
-              subscription.status AS subscription_status,
-              subscription.trial_started_at,
-              subscription.trial_ends_at,
-              COALESCE($3::timestamptz, clock_timestamp()) AS server_now
+               subscription.status AS subscription_status,
+               subscription.trial_started_at,
+               subscription.trial_ends_at,
+               subscription.billing_plan_key,
+               subscription.billing_authority_verified,
+               subscription.stripe_customer_id,
+               subscription.stripe_subscription_id,
+               subscription.current_period_start,
+               subscription.current_period_end,
+               subscription.cancel_at_period_end,
+               COALESCE($3::timestamptz, clock_timestamp()) AS server_now
          FROM auth_sessions session
          JOIN users u ON u.id = session.user_id
          JOIN organizations organization ON organization.id = session.organization_id
@@ -248,7 +255,10 @@ class AccountRepository {
            ON active_profile.organization_id = session.organization_id
           AND active_profile.is_active = TRUE
          LEFT JOIN LATERAL (
-           SELECT plan_type, status, trial_started_at, trial_ends_at
+            SELECT plan_type, status, trial_started_at, trial_ends_at,
+                   billing_plan_key, billing_authority_verified,
+                   stripe_customer_id, stripe_subscription_id,
+                   current_period_start, current_period_end, cancel_at_period_end
              FROM subscriptions
             WHERE organization_id = session.organization_id
             LIMIT 1
@@ -482,6 +492,9 @@ class AccountRepository {
       );
       const result = await client.query(
         `SELECT status AS subscription_status, trial_started_at, trial_ends_at,
+                billing_plan_key, billing_authority_verified,
+                stripe_customer_id, stripe_subscription_id,
+                current_period_start, current_period_end, cancel_at_period_end,
                 COALESCE($2::timestamptz, clock_timestamp()) AS server_now
            FROM subscriptions WHERE organization_id = $1`,
         [organizationId, currentTime]

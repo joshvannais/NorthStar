@@ -15,6 +15,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { TextDecoder } = require('util');
 const businessEvents = require('./businessEvents');
 const transcriptStream = require('./transcriptStream');
 const { ingestRetellPayload } = require('../services/canonicalRetellIngestion');
@@ -360,21 +361,36 @@ async function routeEvent(payload) {
  */
 async function handleWebhook(req, res) {
   const startTime = Date.now();
-  const eventId = req.body?.event_id || req.body?.call_id || 'unknown';
-
-  console.log(`[Voice:Webhook] Received: ${req.body?.event || 'unknown'} (id: ${eventId})`);
-
+  let eventId = 'unknown';
   try {
     // 1. Validate signature
-    const rawBody = req.rawBody || JSON.stringify(req.body);
+    const rawBody = Buffer.isBuffer(req.rawBody) ? req.rawBody : null;
+    if (!rawBody) {
+      return res.status(400).json({ error: { code: 'INVALID_BODY', message: 'Invalid webhook body' } });
+    }
     const signature = req.headers['x-retell-signature'] || '';
     if (!validateSignature(rawBody, signature)) {
-      console.warn(`[Voice:Webhook] Invalid signature for event ${eventId}`);
+      console.warn('[Voice:Webhook] Invalid signature');
       return res.status(401).json({ error: { code: 'INVALID_SIGNATURE', message: 'Invalid webhook signature' } });
     }
 
+    // Parse only after the signature has authenticated the exact received bytes.
+    let payload;
+    try {
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(rawBody);
+      payload = JSON.parse(text);
+    } catch (_error) {
+      return res.status(400).json({ error: { code: 'INVALID_BODY', message: 'Invalid webhook body' } });
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return res.status(400).json({ error: { code: 'INVALID_BODY', message: 'Invalid webhook body' } });
+    }
+    req.body = payload;
+    eventId = payload.event_id || payload.call_id || 'unknown';
+    console.log(`[Voice:Webhook] Received: ${payload.event || 'unknown'} (id: ${eventId})`);
+
     // 2. Validate timestamp
-    const timestamp = req.headers['x-retell-timestamp'] || req.body.timestamp;
+    const timestamp = req.headers['x-retell-timestamp'] || payload.timestamp;
     if (!validateTimestamp(timestamp)) {
       console.warn(`[Voice:Webhook] Invalid timestamp for event ${eventId}`);
       return res.status(400).json({ error: { code: 'INVALID_TIMESTAMP', message: 'Timestamp outside acceptable window' } });
@@ -385,11 +401,11 @@ async function handleWebhook(req, res) {
     // 4. Route every mounted production Retell event through persisted
     // integration ownership. Terminal events commit canonical graphs; other
     // events are acknowledged without invoking legacy graph writers.
-    const canonical = await ingestRetellPayload(req.body, { ingestionSource: 'voice' });
+    const canonical = await ingestRetellPayload(payload, { ingestionSource: 'voice' });
 
     // 5. Return success
     const elapsed = Date.now() - startTime;
-    console.log(`[Voice:Webhook] Completed: ${req.body.event} (${elapsed}ms)`);
+    console.log(`[Voice:Webhook] Completed: ${payload.event} (${elapsed}ms)`);
 
     return res.status(canonical.status).json(canonical.body);
   } catch (err) {
@@ -406,20 +422,12 @@ async function handleWebhook(req, res) {
  * Must be applied before express.json() on the webhook route.
  *
  * Usage:
- *   router.post('/webhook', rawBodyCapture, express.json(), handleWebhook)
+ *   router.post('/webhook', express.raw(...), rawBodyCapture, handleWebhook)
  */
-function rawBodyCapture(req, res, next) {
-  if (typeof req.rawBody === 'string') return next();
-  if (req.readableEnded) {
-    req.rawBody = JSON.stringify(req.body || {});
-    return next();
-  }
-  let data = '';
-  req.on('data', chunk => { data += chunk; });
-  req.on('end', () => {
-    req.rawBody = data;
-    next();
-  });
+function rawBodyCapture(req, _res, next) {
+  if (Buffer.isBuffer(req.rawBody)) return next();
+  req.rawBody = Buffer.isBuffer(req.body) ? Buffer.from(req.body) : null;
+  return next();
 }
 
 module.exports = {

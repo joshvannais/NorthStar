@@ -166,6 +166,12 @@ realPostgres('Mission 20 Part 2F tenant asset catalogue migration', () => {
        VALUES ($1,'equipment','Invalid version','active',0,$2,$2)`,
       [organization, actor]
     )).rejects.toMatchObject({ code: '23514', constraint: 'tenant_assets_version_check' });
+    await expect(pool.query(
+      `INSERT INTO tenant_assets
+        (organization_id, category, name, created_by_user_id, updated_by_user_id)
+       VALUES ($1,'equipment',$3,$2,$2)`,
+      [organization, actor, ' '.repeat(120) + 'x']
+    )).rejects.toMatchObject({ code: '23514', constraint: 'tenant_assets_name_check' });
 
     expect(await db.runMigrations({ pool, migrationsDirectory: MIGRATIONS })).toBe(true);
     expect((await pool.query('SELECT count(*)::int AS count FROM tenant_assets')).rows)

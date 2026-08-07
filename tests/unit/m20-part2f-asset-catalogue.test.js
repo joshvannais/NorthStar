@@ -66,6 +66,8 @@ describe('Mission 20 Part 2F tenant asset catalogue contract', () => {
       .toThrow(expect.objectContaining({ code: 'invalid_asset_catalogue_item' }));
     expect(() => service().parseAsset(validAsset({ name: 'bad\u0000name' }), false))
       .toThrow(expect.objectContaining({ code: 'invalid_asset_catalogue_item' }));
+    expect(() => service().parseAsset(validAsset({ name: 'x'.repeat(121) }), false))
+      .toThrow(expect.objectContaining({ code: 'invalid_asset_catalogue_item' }));
     expect(() => service().parseAsset(validAsset({ configuration: '🧰'.repeat(1025) }), false))
       .toThrow(expect.objectContaining({ code: 'invalid_asset_catalogue_item' }));
     expect(() => service().parseAsset(validAsset({ serviceIds: ['Fence', 'fEnCe'] }), false))

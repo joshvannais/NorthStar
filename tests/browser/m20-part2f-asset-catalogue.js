@@ -13,6 +13,7 @@ const OWNER_A = '86000000-0000-4000-8000-000000000001';
 const ADMIN_A = '86000000-0000-4000-8000-000000000002';
 const VIEWER_A = '86000000-0000-4000-8000-000000000003';
 const OWNER_B = '86000000-0000-4000-8000-000000000004';
+const MEMBER_A = '86000000-0000-4000-8000-000000000005';
 const RAW_NAME = '  Mini <img src=x onerror=window.__assetXss++> Excavator 🧰  ';
 const RAW_UPDATED_NAME = '  Updated </textarea><svg onload=window.__assetXss++> 🌌  ';
 const RAW_REFERENCE = '  EQ-42 <A&B>  ';
@@ -103,6 +104,10 @@ async function snapshot(page) {
     names: Array.from(document.querySelectorAll('#assetCatalogueContainer .asset-name')).map(node => node.value),
     references: Array.from(document.querySelectorAll('#assetCatalogueContainer .asset-internal-reference')).map(node => node.value),
     configurations: Array.from(document.querySelectorAll('#assetCatalogueContainer .asset-configuration')).map(node => node.value),
+    manufacturers: Array.from(document.querySelectorAll('#assetCatalogueContainer .asset-manufacturer')).map(node => node.value),
+    models: Array.from(document.querySelectorAll('#assetCatalogueContainer .asset-model')).map(node => node.value),
+    serialNumbers: Array.from(document.querySelectorAll('#assetCatalogueContainer .asset-serial-number')).map(node => node.value),
+    vins: Array.from(document.querySelectorAll('#assetCatalogueContainer .asset-vin')).map(node => node.value),
     addHidden: document.getElementById('addAssetButton').hidden,
     enabledControls: Array.from(document.querySelectorAll('#assetCatalogueContainer input,#assetCatalogueContainer select,#assetCatalogueContainer textarea,#assetCatalogueContainer button'))
       .filter(control => !control.disabled).length,
@@ -125,6 +130,10 @@ function assertSnapshot(value, input) {
   assert.ok(value.names.includes(RAW_UPDATED_NAME), input.role + ' exact updated name rendered');
   assert.ok(value.references.includes(RAW_REFERENCE), input.role + ' exact internal reference rendered');
   assert.ok(value.configurations.includes(RAW_CONFIGURATION), input.role + ' exact configuration rendered');
+  assert.ok(value.manufacturers.includes(RAW_MANUFACTURER), input.role + ' exact manufacturer rendered');
+  assert.ok(value.models.includes(RAW_MODEL), input.role + ' exact model rendered');
+  assert.ok(value.serialNumbers.includes(RAW_SERIAL), input.role + ' exact serial number rendered');
+  assert.ok(value.vins.includes(RAW_VIN), input.role + ' exact VIN rendered');
   assert.deepStrictEqual(value.duplicateIds, [], input.role + ' has no duplicate ids');
   assert.ok(value.scrollWidth - value.clientWidth <= 1, input.role + ' has no horizontal overflow');
   assert.strictEqual(value.activeBusinessProfileLinks, 2, input.role + ' canonical navigation active');
@@ -205,6 +214,7 @@ async function main() {
       [OWNER_A, ORG_A, 'Owner A', 'owner'],
       [ADMIN_A, ORG_A, 'Admin A', 'admin'],
       [VIEWER_A, ORG_A, 'Viewer A', 'viewer'],
+      [MEMBER_A, ORG_A, 'Member A', 'member'],
       [OWNER_B, ORG_B, 'Owner B', 'owner'],
     ]) {
       await pool.query(
@@ -230,6 +240,7 @@ async function main() {
     const ownerSession = await provisionDurableSession(pool, { userId: OWNER_A, organizationId: ORG_A, role: 'owner' });
     const adminSession = await provisionDurableSession(pool, { userId: ADMIN_A, organizationId: ORG_A, role: 'admin' });
     const viewerSession = await provisionDurableSession(pool, { userId: VIEWER_A, organizationId: ORG_A, role: 'viewer' });
+    const memberSession = await provisionDurableSession(pool, { userId: MEMBER_A, organizationId: ORG_A, role: 'member' });
     await provisionDurableSession(pool, { userId: OWNER_B, organizationId: ORG_B, role: 'owner' });
 
     const { AssetCatalogueRepository } = require('../../src/assets/repository');
@@ -303,19 +314,19 @@ async function main() {
       Array.from(document.querySelectorAll('.bp-asset-card .asset-name')).some(node => node.value === name), RAW_UPDATED_NAME);
     await adminContext.close();
 
-    const sessions = { owner: ownerSession, admin: adminSession, viewer: viewerSession };
+    const sessions = { owner: ownerSession, admin: adminSession, member: memberSession, viewer: viewerSession };
     const viewports = [
       { name: 'desktop', value: { width: 1280, height: 900 } },
       { name: 'mobile', value: { width: 390, height: 844 } },
     ];
-    for (const role of ['owner', 'admin', 'viewer']) {
+    for (const role of ['owner', 'admin', 'member', 'viewer']) {
       for (const viewport of viewports) {
         for (const theme of ['light', 'dark']) {
           await lifecycle(browser, origin, sessions[role], {
             role: role + '-' + viewport.name + '-' + theme,
             viewport: viewport.value,
             theme,
-            canManage: role !== 'viewer',
+            canManage: role === 'owner' || role === 'admin',
           }, ledger);
         }
       }
@@ -360,8 +371,9 @@ async function main() {
     assert.deepStrictEqual(ledger.consoleErrors, [], 'no unexpected console errors');
     assert.deepStrictEqual(ledger.pageErrors, [], 'no page errors');
     assert.ok(ledger.requests.every(entry => entry.authorization === null), 'browser sends no Authorization headers');
-    assert.strictEqual(ledger.requests.filter(entry => entry.role.startsWith('viewer') &&
-      ['POST', 'PUT', 'PATCH', 'DELETE'].includes(entry.method)).length, 0, 'viewer writes remain zero');
+    assert.strictEqual(ledger.requests.filter(entry =>
+      (entry.role.startsWith('member') || entry.role.startsWith('viewer')) &&
+      ['POST', 'PUT', 'PATCH', 'DELETE'].includes(entry.method)).length, 0, 'read-only role writes remain zero');
     const providerPattern = /retell|stripe|twilio|resend|googleapis|maps\.google|api\.openai/i;
     assert.strictEqual(ledger.requests.filter(entry => providerPattern.test(entry.origin)).length, 0);
 
@@ -369,13 +381,14 @@ async function main() {
       browser: selected === 'chrome' ? 'installed Chrome' : 'actual Playwright WebKit',
       version: browser.version(),
       database: suiteDatabase.databaseName,
-      roles: ['owner', 'admin', 'viewer'],
+      roles: ['owner', 'admin', 'member', 'viewer'],
       viewports: ['desktop', 'mobile'],
       themes: ['light', 'dark'],
-      cartesianCombinations: 12,
+      cartesianCombinations: 16,
       lifecycle: ['initial', 'rerender', 'reload'],
       ownerWrites: ledger.requests.filter(entry => entry.role === 'owner-write' && ['POST', 'PUT', 'PATCH'].includes(entry.method)).length,
       adminWrites: ledger.requests.filter(entry => entry.role === 'admin-write' && ['POST', 'PUT', 'PATCH'].includes(entry.method)).length,
+      memberWrites: 0,
       viewerWrites: 0,
       providerRequests: ledger.external.length,
       providerActions: 0,

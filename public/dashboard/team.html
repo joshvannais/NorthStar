@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script src="/js/theme.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team — NorthStar</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/auth-session.js"></script>
+  <script src="/js/trial-status.js"></script>
+  <style>
+    .wf-shell{display:grid;gap:20px;max-width:1240px}.wf-panel{background:var(--theme-surface);border:1px solid var(--neutral-200);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)}
+    .wf-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.wf-panel h2{font-size:18px;margin:0}.wf-panel-desc{color:var(--neutral-500);font-size:13px;margin:5px 0 0}
+    .wf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.wf-card{border:1px solid var(--neutral-200);border-radius:var(--radius-md);padding:16px;background:var(--theme-surface);min-width:0}
+    .wf-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.wf-card h3{font-size:16px;margin:0;overflow-wrap:anywhere}.wf-meta{font-size:12px;color:var(--neutral-500);margin:5px 0 13px;overflow-wrap:anywhere}
+    .wf-badge{display:inline-flex;padding:3px 8px;border-radius:999px;background:var(--brand-50);color:var(--brand-700);font-size:11px;font-weight:700;text-transform:capitalize}.wf-badge[data-status="suspended"],.wf-badge[data-status="revoked"]{background:#fee2e2;color:#991b1b}.wf-badge[data-status="pending"],.wf-badge[data-status="expired"]{background:#fef3c7;color:#92400e}
+    .wf-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.wf-form-grid .form-group{margin:0}.wf-span{grid-column:1/-1}.wf-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.wf-actions .btn{min-width:0}
+    .wf-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:7px;padding:10px;border:1px solid var(--neutral-200);border-radius:var(--radius-sm);max-height:180px;overflow:auto}.wf-check{display:flex;gap:7px;align-items:flex-start;font-size:13px}.wf-check input{margin-top:2px}
+    .wf-empty,.wf-loading,.wf-error{padding:24px;border:1px dashed var(--neutral-300);border-radius:var(--radius-md);color:var(--neutral-500);text-align:center}.wf-error{color:var(--danger);border-color:var(--danger)}
+    .wf-status{min-height:22px;font-size:13px;font-weight:600;margin-top:8px}.wf-status[data-state="success"]{color:var(--success)}.wf-status[data-state="error"]{color:var(--danger)}
+    .wf-readonly{padding:10px 12px;border-radius:var(--radius-sm);background:var(--neutral-50);font-size:12px;color:var(--neutral-500);margin-bottom:14px}.wf-id{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--neutral-400);overflow-wrap:anywhere}
+    [data-theme="dark"] .wf-panel,[data-theme="dark"] .wf-card{background:var(--neutral-50);border-color:var(--neutral-200)}[data-theme="dark"] .wf-readonly{background:var(--neutral-100)}
+    @media(max-width:700px){.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-actions .btn{width:100%}}
+  </style>
+</head>
+<body>
+  <a href="#mainContent" class="skip-link">Skip to main content</a>
+  <div class="dashboard-layout">
+    <main class="main-content" id="mainContent" tabindex="-1">
+      <div class="page-header">
+        <div><h1>Team</h1><p>Individual access, job roles, skills, crews, locations, and workforce policies.</p></div>
+        <span class="wf-badge" id="workforceAuthority">PostgreSQL authority</span>
+      </div>
+      <p id="workforceStatus" class="wf-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div class="wf-shell" id="workforceShell" aria-busy="true">
+        <section class="wf-panel" id="invitePanel" hidden aria-labelledby="inviteTitle">
+          <div class="wf-panel-head"><div><h2 id="inviteTitle">Invite a team member</h2><p class="wf-panel-desc">Each person receives an individual account. Owner credentials are never shared.</p></div></div>
+          <form id="inviteForm" class="wf-form-grid">
+            <div class="form-group"><label for="inviteName">Name</label><input id="inviteName" required maxlength="120" autocomplete="name"></div>
+            <div class="form-group"><label for="inviteEmail">Email</label><input id="inviteEmail" type="email" required maxlength="254" autocomplete="email"></div>
+            <div class="form-group"><label for="invitePhone">Phone</label><input id="invitePhone" type="tel" maxlength="50" autocomplete="tel"></div>
+            <div class="form-group"><label for="inviteAccessRole">Access role</label><select id="inviteAccessRole"><option value="member">Member</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select></div>
+            <div class="form-group"><label for="inviteOperationalRole">Job role</label><select id="inviteOperationalRole"></select></div>
+            <div class="form-group"><label for="inviteLocation">Home location</label><select id="inviteLocation"></select></div>
+            <fieldset class="form-group wf-span"><legend>Skills</legend><div id="inviteSkills" class="wf-checks"></div></fieldset>
+            <div class="wf-actions wf-span"><button class="btn btn-primary" type="submit">Send invitation</button></div>
+          </form>
+        </section>
+
+        <section class="wf-panel" id="invitationsPanel" hidden aria-labelledby="invitationsTitle">
+          <div class="wf-panel-head"><div><h2 id="invitationsTitle">Pending invitations</h2><p class="wf-panel-desc">Invitations remain tenant-scoped until the recipient proves the private token. No account or membership exists before acceptance.</p></div></div>
+          <div id="invitationsList" class="wf-grid"></div>
+        </section>
+
+        <section class="wf-panel" aria-labelledby="membersTitle">
+          <div class="wf-panel-head"><div><h2 id="membersTitle">People and access</h2><p class="wf-panel-desc">Login permissions and operational job roles remain separate authorities.</p></div></div>
+          <div id="membersList" class="wf-grid"><div class="wf-loading" role="status">Loading workforce…</div></div>
+        </section>
+
+        <section class="wf-panel" aria-labelledby="skillsTitle">
+          <div class="wf-panel-head"><div><h2 id="skillsTitle">Skills</h2><p class="wf-panel-desc">Tenant skills may reference stable services from the canonical catalogue.</p></div></div>
+          <form id="skillForm" class="wf-form-grid" hidden>
+            <div class="form-group"><label for="skillKey">Stable key</label><input id="skillKey" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._:\-]{0,63}"></div>
+            <div class="form-group"><label for="skillName">Name</label><input id="skillName" required maxlength="120"></div>
+            <div class="form-group"><label for="skillService">Canonical service</label><select id="skillService"></select></div>
+            <div class="form-group"><label for="skillDescription">Description</label><textarea id="skillDescription" maxlength="4096"></textarea></div>
+            <div class="wf-actions wf-span"><button class="btn btn-primary" type="submit">Add skill</button></div>
+          </form>
+          <div id="skillsList" class="wf-grid"></div>
+        </section>
+
+        <section class="wf-panel" aria-labelledby="crewsTitle">
+          <div class="wf-panel-head"><div><h2 id="crewsTitle">Crews</h2><p class="wf-panel-desc">Structural crew membership only. Assignments, schedules, routes, and dispatch remain outside Mission 20.</p></div></div>
+          <form id="crewForm" class="wf-form-grid" hidden>
+            <div class="form-group"><label for="crewKey">Stable key</label><input id="crewKey" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._:\-]{0,63}"></div>
+            <div class="form-group"><label for="crewName">Name</label><input id="crewName" required maxlength="120"></div>
+            <div class="form-group"><label for="crewLocation">Home location</label><select id="crewLocation"></select></div>
+            <div class="wf-actions wf-span"><button class="btn btn-primary" type="submit">Add crew</button></div>
+          </form>
+          <div id="crewsList" class="wf-grid"></div>
+        </section>
+
+        <section class="wf-panel" aria-labelledby="policiesTitle">
+          <div class="wf-panel-head"><div><h2 id="policiesTitle">Workforce policies</h2><p class="wf-panel-desc">Versioned Business Profile policy authority. These entries do not create assignments or field state.</p></div><button id="addPolicy" class="btn btn-secondary btn-sm" type="button" hidden>Add policy</button></div>
+          <div id="policiesList" class="wf-grid"></div>
+          <div id="policyActions" class="wf-actions" hidden><button id="savePolicies" class="btn btn-primary" type="button">Save policies</button></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/js/nav-component.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    var state = { account: null, data: null, policies: [] };
+    var operationalRoles = [
+      ['owner','Owner'],['administrator','Administrator'],['dispatcher','Dispatcher'],
+      ['estimator','Estimator'],['crew_lead','Crew lead'],['technician','Technician'],
+      ['accounting','Accounting'],['employee','Employee'],['other','Other']
+    ];
+    function element(tag, className, text) {
+      var node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+    function option(value, label, selected) {
+      var node = document.createElement('option');
+      node.value = value === null ? '' : value;
+      node.textContent = label;
+      node.selected = selected === value;
+      return node;
+    }
+    function status(message, type) {
+      var node = document.getElementById('workforceStatus');
+      node.textContent = message || '';
+      node.setAttribute('data-state', type || '');
+    }
+    function api(url, options) {
+      return window.NorthStarAccountSession.json(url, options || { method: 'GET' });
+    }
+    function body(method, value) {
+      return { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) };
+    }
+    function canManage() { return state.account && ['owner','admin'].includes(state.account.membership.role); }
+    function isOwner() { return state.account && state.account.membership.role === 'owner'; }
+    function fillSelect(select, entries, selected, emptyLabel) {
+      select.replaceChildren();
+      if (emptyLabel) select.appendChild(option(null, emptyLabel, selected));
+      entries.forEach(function (entry) { select.appendChild(option(entry[0], entry[1], selected)); });
+    }
+    function locationEntries() {
+      return state.data.locations.map(function (item) { return [item.id, item.name]; });
+    }
+    function serviceEntries() {
+      return state.data.services.map(function (item) { return [item.id, item.name]; });
+    }
+    function skillChecks(selected, prefix, disabled) {
+      var root = element('div', 'wf-checks');
+      root.id = prefix;
+      var set = new Set(selected || []);
+      if (!state.data.skills.length) root.appendChild(element('span', 'wf-meta', 'No skills configured.'));
+      state.data.skills.forEach(function (skill) {
+        var label = element('label', 'wf-check');
+        var input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = skill.id;
+        input.checked = set.has(skill.id);
+        input.disabled = Boolean(disabled);
+        label.append(input, document.createTextNode(skill.name));
+        root.appendChild(label);
+      });
+      return root;
+    }
+    function selectedChecks(root) {
+      return Array.from(root.querySelectorAll('input[type="checkbox"]:checked')).map(function (item) { return item.value; });
+    }
+    function field(labelText, control) {
+      var group = element('div', 'form-group');
+      var label = element('label', '', labelText);
+      label.htmlFor = control.id;
+      group.append(label, control);
+      return group;
+    }
+    function roleSelect(id, selected, disabled) {
+      var select = document.createElement('select');
+      select.id = id;
+      fillSelect(select, operationalRoles, selected);
+      select.disabled = Boolean(disabled);
+      return select;
+    }
+    function locationSelect(id, selected, disabled) {
+      var select = document.createElement('select');
+      select.id = id;
+      fillSelect(select, locationEntries(), selected, 'No home location');
+      select.disabled = Boolean(disabled);
+      return select;
+    }
+    function empty(container, message) {
+      container.replaceChildren(element('div', 'wf-empty', message));
+    }
+    function labelFor(entries, selected, fallback) {
+      var match = entries.find(function (entry) { return entry[0] === selected; });
+      return match ? match[1] : fallback;
+    }
+    async function mutate(url, options, success) {
+      status('Saving…');
+      try {
+        await api(url, options);
+        status(success, 'success');
+        await loadData(false);
+      } catch (error) {
+        status(error && error.message ? error.message : 'Workforce change failed.', 'error');
+        await loadData(false);
+      }
+    }
+    function renderInvitations() {
+      var panel = document.getElementById('invitationsPanel');
+      var root = document.getElementById('invitationsList');
+      panel.hidden = !isOwner();
+      root.replaceChildren();
+      if (!isOwner()) return;
+      if (!state.data.invitations.length) { empty(root, 'No pending workforce invitations.'); return; }
+      state.data.invitations.forEach(function (invitation) {
+        var card = element('article', 'wf-card');
+        card.dataset.invitationId = invitation.invitationId;
+        var head = element('div', 'wf-card-head');
+        head.append(element('h3', '', invitation.name));
+        var badge = element('span', 'wf-badge', invitation.status);
+        badge.dataset.status = invitation.status;
+        head.appendChild(badge);
+        card.append(head, element('p', 'wf-meta', invitation.email + (invitation.phone ? ' Â· ' + invitation.phone : '')));
+        card.appendChild(element('p', 'wf-id', 'Invitation ' + invitation.invitationId));
+        card.appendChild(element('p', 'wf-meta',
+          'Access: ' + invitation.accessRole + ' Â· Job role: ' +
+          labelFor(operationalRoles, invitation.operationalRole, invitation.operationalRole) + ' Â· Location: ' +
+          labelFor(locationEntries(), invitation.homeLocationId, 'None')));
+        var skillNames = state.data.skills.filter(function (skill) {
+          return invitation.skillIds.includes(skill.id);
+        }).map(function (skill) { return skill.name; });
+        card.appendChild(element('p', 'wf-meta', 'Skills: ' + (skillNames.length ? skillNames.join(', ') : 'None')));
+        var actions = element('div', 'wf-actions');
+        var resend = element('button', 'btn btn-secondary btn-sm', 'Resend invitation');
+        resend.type = 'button';
+        resend.addEventListener('click', function () {
+          mutate('/api/workforce/invitations/' + invitation.invitationId + '/resend', body('POST', {}), 'Invitation resent.');
+        });
+        var revoke = element('button', 'btn btn-ghost btn-sm', 'Revoke invitation');
+        revoke.type = 'button';
+        revoke.addEventListener('click', function () {
+          mutate('/api/workforce/invitations/' + invitation.invitationId + '/revoke', body('POST', {}), 'Invitation revoked.');
+        });
+        actions.append(resend, revoke);
+        card.appendChild(actions);
+        root.appendChild(card);
+      });
+    }
+    function renderMembers() {
+      var root = document.getElementById('membersList');
+      root.replaceChildren();
+      if (!state.data.members.length) { empty(root, 'No workforce members found.'); return; }
+      state.data.members.forEach(function (member) {
+        var card = element('article', 'wf-card');
+        card.dataset.profileId = member.profileId;
+        var head = element('div', 'wf-card-head');
+        head.append(element('h3', '', member.name));
+        var badge = element('span', 'wf-badge', member.membershipStatus.replace('_',' '));
+        badge.dataset.status = member.membershipStatus;
+        head.appendChild(badge);
+        card.append(head, element('p', 'wf-meta', member.email + (member.phone ? ' · ' + member.phone : '')));
+        card.appendChild(element('p', 'wf-id', 'Profile ' + member.profileId));
+        var grid = element('div', 'wf-form-grid');
+        var role = roleSelect('member-role-' + member.profileId, member.operationalRole, !canManage());
+        var location = locationSelect('member-location-' + member.profileId, member.homeLocationId, !canManage());
+        grid.append(field('Job role', role), field('Home location', location));
+        var skillsGroup = element('fieldset', 'form-group wf-span');
+        skillsGroup.appendChild(element('legend', '', 'Skills'));
+        var checks = skillChecks(member.skillIds, 'member-skills-' + member.profileId, !canManage());
+        skillsGroup.appendChild(checks);
+        grid.appendChild(skillsGroup);
+        card.appendChild(grid);
+        var actions = element('div', 'wf-actions');
+        if (canManage()) {
+          var saveProfile = element('button', 'btn btn-primary btn-sm', 'Save structure');
+          saveProfile.type = 'button';
+          saveProfile.addEventListener('click', function () {
+            mutate('/api/workforce/profiles/' + member.profileId, body('PUT', {
+              operationalRole: role.value,
+              homeLocationId: location.value || null,
+              skillIds: selectedChecks(checks)
+            }), 'Workforce structure saved.');
+          });
+          actions.appendChild(saveProfile);
+        }
+        if (isOwner() && member.accessRole !== 'owner') {
+          var access = document.createElement('select');
+          access.setAttribute('aria-label', 'Access role for ' + member.name);
+          var roles = [['admin','Admin'],['member','Member'],['viewer','Viewer']];
+          if (!roles.some(function (item) { return item[0] === member.accessRole; })) roles.unshift([member.accessRole, member.accessRole + ' (legacy)']);
+          fillSelect(access, roles, member.accessRole);
+          var accessStatus = document.createElement('select');
+          accessStatus.setAttribute('aria-label', 'Membership status for ' + member.name);
+          var statuses = member.membershipStatus === 'suspended'
+              ? [['suspended','Suspended'],['active','Reactivate'],['revoked','Revoke']]
+              : [['active','Active'],['suspended','Suspend'],['revoked','Revoke']];
+          fillSelect(accessStatus, statuses, member.membershipStatus);
+          var saveAccess = element('button', 'btn btn-secondary btn-sm', 'Save access');
+          saveAccess.type = 'button';
+          saveAccess.addEventListener('click', function () {
+            mutate('/api/workforce/members/' + member.membershipId + '/access', body('PATCH', {
+              accessRole: access.value,
+              membershipStatus: accessStatus.value
+            }), 'Workforce access saved. Changed access revokes prior sessions.');
+          });
+          actions.append(access, accessStatus, saveAccess);
+        }
+        if (actions.childNodes.length) card.appendChild(actions);
+        root.appendChild(card);
+      });
+    }
+    function renderSkills() {
+      var root = document.getElementById('skillsList');
+      root.replaceChildren();
+      if (!state.data.skills.length) { empty(root, 'No skills configured.'); return; }
+      state.data.skills.forEach(function (skill) {
+        var card = element('article', 'wf-card');
+        var name = document.createElement('input'); name.value = skill.name; name.maxLength = 120; name.disabled = !canManage(); name.id = 'skill-name-' + skill.id;
+        var description = document.createElement('textarea'); description.value = skill.description; description.maxLength = 4096; description.disabled = !canManage(); description.id = 'skill-desc-' + skill.id;
+        var service = document.createElement('select'); service.id = 'skill-service-' + skill.id; service.disabled = !canManage(); fillSelect(service, serviceEntries(), skill.serviceId, 'No service reference');
+        card.append(element('p', 'wf-id', 'Key ' + skill.key), field('Name', name), field('Description', description), field('Canonical service', service));
+        if (canManage()) {
+          var actions = element('div', 'wf-actions');
+          var save = element('button', 'btn btn-primary btn-sm', 'Save skill'); save.type = 'button';
+          save.addEventListener('click', function () { mutate('/api/workforce/skills/' + skill.id, body('PUT', { name: name.value, description: description.value, serviceId: service.value || null }), 'Skill saved.'); });
+          actions.appendChild(save); card.appendChild(actions);
+        }
+        root.appendChild(card);
+      });
+    }
+    function crewMemberEditor(crew, disabled) {
+      var wrapper = element('div', 'wf-checks');
+      var selected = new Map((crew.members || []).map(function (member) { return [member.profileId, member.role]; }));
+      state.data.members.filter(function (member) { return member.membershipStatus !== 'revoked'; }).forEach(function (member) {
+        var row = element('div', 'wf-check');
+        var check = document.createElement('input'); check.type = 'checkbox'; check.value = member.profileId; check.checked = selected.has(member.profileId); check.disabled = disabled;
+        var label = element('label', '', member.name); label.prepend(check);
+        var lead = document.createElement('input'); lead.type = 'radio'; lead.name = 'crew-lead-' + crew.id; lead.value = member.profileId; lead.checked = selected.get(member.profileId) === 'lead'; lead.disabled = disabled;
+        lead.setAttribute('aria-label', 'Crew lead ' + member.name);
+        row.append(label, lead, document.createTextNode(' Lead'));
+        wrapper.appendChild(row);
+      });
+      return wrapper;
+    }
+    function selectedCrewMembers(root) {
+      var lead = root.querySelector('input[type="radio"]:checked');
+      return Array.from(root.querySelectorAll('input[type="checkbox"]:checked')).map(function (check) {
+        return { profileId: check.value, role: lead && lead.value === check.value ? 'lead' : 'member' };
+      });
+    }
+    function renderCrews() {
+      var root = document.getElementById('crewsList'); root.replaceChildren();
+      if (!state.data.crews.length) { empty(root, 'No crews configured.'); return; }
+      state.data.crews.forEach(function (crew) {
+        var card = element('article', 'wf-card');
+        var name = document.createElement('input'); name.value = crew.name; name.maxLength = 120; name.disabled = !canManage(); name.id = 'crew-name-' + crew.id;
+        var location = locationSelect('crew-location-' + crew.id, crew.homeLocationId, !canManage());
+        var members = crewMemberEditor(crew, !canManage());
+        card.append(element('p', 'wf-id', 'Key ' + crew.key), field('Name', name), field('Home location', location));
+        var group = element('fieldset', 'form-group'); group.append(element('legend', '', 'Members and lead'), members); card.appendChild(group);
+        if (canManage()) {
+          var actions = element('div', 'wf-actions'); var save = element('button', 'btn btn-primary btn-sm', 'Save crew'); save.type = 'button';
+          save.addEventListener('click', function () { mutate('/api/workforce/crews/' + crew.id, body('PUT', { name: name.value, homeLocationId: location.value || null, members: selectedCrewMembers(members) }), 'Crew saved.'); });
+          actions.appendChild(save); card.appendChild(actions);
+        }
+        root.appendChild(card);
+      });
+    }
+    function policyCard(policy) {
+      var card = element('article', 'wf-card'); card.dataset.policyId = policy.id;
+      card.appendChild(element('p', 'wf-id', 'Policy ' + policy.id));
+      var name = document.createElement('input'); name.className = 'policy-name'; name.value = policy.name; name.maxLength = 120; name.disabled = !canManage();
+      var description = document.createElement('textarea'); description.className = 'policy-description'; description.value = policy.description; description.maxLength = 4096; description.disabled = !canManage();
+      var enabled = document.createElement('input'); enabled.className = 'policy-enabled'; enabled.type = 'checkbox'; enabled.checked = policy.enabled; enabled.disabled = !canManage();
+      var enabledLabel = element('label', 'wf-check'); enabledLabel.append(enabled, document.createTextNode(' Enabled'));
+      card.append(field('Name', name), field('Description', description), enabledLabel);
+      return card;
+    }
+    function renderPolicies() {
+      var root = document.getElementById('policiesList'); root.replaceChildren();
+      if (!state.policies.length) { empty(root, 'No workforce policies configured.'); return; }
+      state.policies.forEach(function (policy) { root.appendChild(policyCard(policy)); });
+    }
+    function renderForms() {
+      document.getElementById('invitePanel').hidden = !isOwner();
+      document.getElementById('skillForm').hidden = !canManage();
+      document.getElementById('crewForm').hidden = !canManage();
+      document.getElementById('addPolicy').hidden = !canManage();
+      document.getElementById('policyActions').hidden = !canManage();
+      fillSelect(document.getElementById('inviteOperationalRole'), operationalRoles, 'employee');
+      fillSelect(document.getElementById('inviteLocation'), locationEntries(), null, 'No home location');
+      fillSelect(document.getElementById('crewLocation'), locationEntries(), null, 'No home location');
+      fillSelect(document.getElementById('skillService'), serviceEntries(), null, 'No service reference');
+      document.getElementById('inviteSkills').replaceChildren.apply(document.getElementById('inviteSkills'), Array.from(skillChecks([], 'invite-skills', false).childNodes));
+    }
+    function render() {
+      state.policies = JSON.parse(JSON.stringify(state.data.policies || []));
+      renderForms(); renderInvitations(); renderMembers(); renderSkills(); renderCrews(); renderPolicies();
+      document.getElementById('workforceShell').setAttribute('aria-busy', 'false');
+      document.documentElement.setAttribute('data-workforce-state', 'ready');
+    }
+    async function loadData(initial) {
+      try {
+        if (initial || !state.account) state.account = await window.NorthStarAccountSession.load();
+        var response = await api('/api/workforce', { method: 'GET' });
+        state.data = response.data;
+        render();
+      } catch (error) {
+        document.getElementById('workforceShell').setAttribute('aria-busy', 'false');
+        document.documentElement.setAttribute('data-workforce-state', 'error');
+        status(error && error.message ? error.message : 'Workforce authority is unavailable.', 'error');
+      }
+    }
+    document.getElementById('inviteForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      mutate('/api/workforce/invitations', body('POST', {
+        name: document.getElementById('inviteName').value,
+        email: document.getElementById('inviteEmail').value,
+        phone: document.getElementById('invitePhone').value,
+        accessRole: document.getElementById('inviteAccessRole').value,
+        operationalRole: document.getElementById('inviteOperationalRole').value,
+        homeLocationId: document.getElementById('inviteLocation').value || null,
+        skillIds: selectedChecks(document.getElementById('inviteSkills'))
+      }), 'Invitation accepted for delivery.');
+    });
+    document.getElementById('skillForm').addEventListener('submit', function (event) {
+      event.preventDefault(); mutate('/api/workforce/skills', body('POST', { key: document.getElementById('skillKey').value, name: document.getElementById('skillName').value, description: document.getElementById('skillDescription').value, serviceId: document.getElementById('skillService').value || null }), 'Skill added.');
+    });
+    document.getElementById('crewForm').addEventListener('submit', function (event) {
+      event.preventDefault(); mutate('/api/workforce/crews', body('POST', { key: document.getElementById('crewKey').value, name: document.getElementById('crewName').value, homeLocationId: document.getElementById('crewLocation').value || null, members: [] }), 'Crew added.');
+    });
+    document.getElementById('addPolicy').addEventListener('click', function () {
+      state.policies.push({ id: 'policy-' + window.crypto.randomUUID(), name: '', description: '', enabled: true }); renderPolicies();
+      var latest = document.querySelector('#policiesList .wf-card:last-child .policy-name'); if (latest) latest.focus();
+    });
+    document.getElementById('savePolicies').addEventListener('click', function () {
+      var policies = Array.from(document.querySelectorAll('#policiesList .wf-card[data-policy-id]')).map(function (card) {
+        return { id: card.dataset.policyId, name: card.querySelector('.policy-name').value, description: card.querySelector('.policy-description').value, enabled: card.querySelector('.policy-enabled').checked };
+      });
+      mutate('/api/v1/business-profile/workforce', body('PUT', { policies: policies }), 'Workforce policies saved to the Business Profile.');
+    });
+    window.NorthStarWorkforce = Object.freeze({ reload: function () { return loadData(false); } });
+    loadData(true);
+  })();
+  </script>
+  <script>NavComponent.init('team');</script>
+</body>
+</html>

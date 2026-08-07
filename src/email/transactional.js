@@ -53,6 +53,21 @@ function emailAddress(value, label) {
   return `${local.toLowerCase()}@${dnsHostname(domain)}`;
 }
 
+function workforceInvitationEnvelope(recipient, invite = {}) {
+  const rawName = invite.name || 'Team member';
+  if (typeof rawName !== 'string' || !rawName.trim() ||
+      Buffer.byteLength(rawName, 'utf8') > 480 || Array.from(rawName).length > 120 ||
+      BODY_CONTROL.test(rawName)) {
+    throw new Error('Invalid transactional email invited name');
+  }
+  const organization = bounded(invite.organizationName || 'your organization', 142, 'organization name');
+  return {
+    recipient: emailAddress(recipient, 'recipient'),
+    person: rawName,
+    organization,
+  };
+}
+
 function canonicalOrigin(raw, production = true) {
   if (typeof raw !== 'string' || !raw || raw !== raw.trim() || CONTROL.test(raw) ||
       (production && /[^\x21-\x7e]/.test(raw))) return null;
@@ -289,7 +304,7 @@ function createResendAdapter(configuration, options = {}) {
 }
 
 function idempotencyKey(purpose, deliveryId) {
-  if (!['email-verification', 'password-reset'].includes(purpose) ||
+  if (!['email-verification', 'password-reset', 'workforce-invitation'].includes(purpose) ||
       typeof deliveryId !== 'string' || !UUID.test(deliveryId)) {
     throw new Error('Transactional delivery operation is invalid');
   }
@@ -367,6 +382,24 @@ class TransactionalEmail {
       context
     );
   }
+
+  invitation(recipient, rawToken, context, invite = {}) {
+    const link = new URL('/accept-invitation', this.publicOrigin);
+    link.searchParams.set('token', bounded(rawToken, 128, 'invitation token'));
+    const href = link.toString();
+    const envelope = workforceInvitationEnvelope(recipient, invite);
+    const person = envelope.person;
+    const organization = envelope.organization;
+    return this.deliver(
+      envelope.recipient,
+      'workforce-invitation',
+      `Join ${organization} on NorthStar`,
+      `${person}, you were invited to join ${organization} on NorthStar. Set your password within 72 hours: ${href}`,
+      `<p>${escapeHtml(person)}, you were invited to join ${escapeHtml(organization)} on NorthStar.</p>` +
+        `<p><a href="${escapeHtml(href)}">Set your password and accept the invitation</a> within 72 hours.</p>`,
+      context
+    );
+  }
 }
 
 function createProductionTransactionalEmail(environment, options = {}) {
@@ -389,4 +422,5 @@ module.exports = {
   createProductionTransactionalEmail,
   createResendAdapter,
   validatedProductionConfiguration,
+  workforceInvitationEnvelope,
 };

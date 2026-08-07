@@ -7,6 +7,7 @@ const NAVIGATION = Object.freeze([
   Object.freeze({ id: 'communications', href: '/dashboard/communications' }),
   Object.freeze({ id: 'my-number', href: '/dashboard/my-number' }),
   Object.freeze({ id: 'calendar', href: '/dashboard/calendar' }),
+  Object.freeze({ id: 'team', href: '/dashboard/team' }),
   Object.freeze({ id: 'ai-settings', href: '/dashboard/ai-settings' }),
   Object.freeze({ id: 'business-profile', href: '/dashboard/business-profile' }),
   Object.freeze({ id: 'settings', href: '/dashboard/settings' }),

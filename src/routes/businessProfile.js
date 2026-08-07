@@ -22,6 +22,7 @@ const VALID_SECTIONS = new Set([
   'company', 'headquarters', 'serviceArea', 'routing', 'hours', 'crew',
   'vehicles', 'services', 'financial', 'scheduling', 'polaris', 'retell',
   'notifications', 'integrations', 'canonicalPricing', 'canonicalCosts', 'policies',
+  'workforce',
 ]);
 
 function sendError(res, error) {
@@ -106,6 +107,7 @@ function onboardingDraft(req) {
       return result;
     }, {}),
     policies: {},
+    workforce: { policies: [] },
     canonicalAuthority: null,
     onboardingDraft: true,
   };

@@ -12,6 +12,7 @@ function createDisposableAccountApp(options = {}) {
   const { createAuthRouter } = require('../../src/routes/auth');
   const { createCanonicalRouter, createCompatibilityRouter } = require('../../src/routes/canonicalPolaris');
   const { createJobberIntegrationRouter } = require('../../src/routes/jobberIntegration');
+  const { createIntegrationStatusRouter } = require('../../src/routes/integrationStatus');
   const { createLegacyAuthorityRetirementRouter } = require('../../src/routes/legacyAuthorityRetirement');
   const capture = options.emailCapture || {
     messages: [],
@@ -62,6 +63,7 @@ function createDisposableAccountApp(options = {}) {
   app.use('/api/v1', createCompatibilityRouter());
   app.use('/api/v1/business-profile', require('../../src/routes/businessProfile'));
   app.use('/api/v1/voice', require('../../src/routes/voice'));
+  app.use('/api/v1/integrations', createIntegrationStatusRouter());
   app.use('/api/v1', createLegacyAuthorityRetirementRouter());
   app.use('/api', require('../../src/routes/canonicalLeads'));
   app.use('/api', createCompatibilityRouter());

@@ -107,27 +107,42 @@ async function provisionMountedIdentity(app, pool) {
     email,
     password,
   });
-  assert.strictEqual(signup.status, 201, 'mounted disposable signup succeeds');
-  const cookies = responseCookies(signup);
-  assert.ok(cookies.northstar_access && cookies.northstar_refresh && cookies.northstar_csrf, 'signup sets the real credential cookies');
+  assert.strictEqual(signup.status, 202, 'mounted verification-first signup succeeds');
+  assert.strictEqual(signup.body.code, 'verification_required');
+  assert.strictEqual(signup.headers['set-cookie'], undefined, 'signup remains anonymous');
+  const provisioned = await pool.query(
+    'SELECT id, organization_id FROM users WHERE email_normalized = $1',
+    [email]
+  );
+  assert.strictEqual(provisioned.rowCount, 1, 'signup creates one pending PostgreSQL identity');
+  // TEST PROVISIONING ONLY: verification delivery is owned by the accepted
+  // account-lifecycle slice and is not under test in this Jobber harness.
+  await pool.query("UPDATE users SET status = 'active' WHERE id = $1", [provisioned.rows[0].id]);
+  await pool.query(
+    `UPDATE subscriptions
+        SET status = 'trialing',
+            trial_started_at = transaction_timestamp(),
+            trial_ends_at = transaction_timestamp() + INTERVAL '14 days',
+            updated_at = transaction_timestamp()
+      WHERE organization_id = $1`,
+    [provisioned.rows[0].organization_id]
+  );
+  const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+  await putBusinessProfile(pool, {
+    organizationId: provisioned.rows[0].organization_id,
+    userId: provisioned.rows[0].id,
+    profile: canonicalFenceProfile({ companyName: 'Jobber Browser Company' }),
+  });
+  const login = await request(app).post('/api/auth/login').send({ email, password });
+  assert.strictEqual(login.status, 200, 'verified test owner obtains a mounted session through login');
+  const cookies = responseCookies(login);
+  assert.ok(cookies.northstar_access && cookies.northstar_refresh && cookies.northstar_csrf, 'login sets the real credential cookies');
   const cookie = cookieHeader(cookies);
 
-  const pending = await request(app).get('/api/auth/me').set('Cookie', cookie);
-  assert.strictEqual(pending.status, 200, 'pending identity can read its mounted account');
-  assert.strictEqual(pending.body.account.user.status, 'pending_verification');
-  assert.strictEqual(pending.body.account.onboarding.status, 'business_profile_required');
-
-  const profile = await request(app)
-    .put('/api/v1/business-profile')
-    .set('Cookie', cookie)
-    .set('X-CSRF-Token', cookies.northstar_csrf)
-    .send(canonicalFenceProfile({ companyName: 'Jobber Browser Company' }));
-  assert.strictEqual(profile.status, 200, 'mounted Business Profile onboarding succeeds');
-
-  const onboarded = await request(app).get('/api/auth/me').set('Cookie', cookie);
-  assert.strictEqual(onboarded.status, 200);
-  assert.strictEqual(onboarded.body.account.user.status, 'pending_verification', 'onboarding does not verify email');
-  assert.strictEqual(onboarded.body.account.onboarding.status, 'complete');
+  const current = await request(app).get('/api/auth/me').set('Cookie', cookie);
+  assert.strictEqual(current.status, 200, 'verified identity can read its mounted account');
+  assert.strictEqual(current.body.account.user.status, 'active');
+  assert.strictEqual(current.body.account.onboarding.status, 'complete');
 
   const authority = await pool.query(
     `SELECT account.id AS user_id,
@@ -170,23 +185,15 @@ async function provisionMountedIdentity(app, pool) {
       activeProfile: authority.rows[0].active_profile,
     },
     {
-      user: 'pending_verification',
+      user: 'active',
       membership: 'active',
       role: 'owner',
       session: 'active',
       onboarding: 'complete',
       activeProfile: true,
     },
-    'PostgreSQL reflects the mounted pending/onboarding journey'
+    'PostgreSQL reflects the mounted verified integration-test authority graph'
   );
-
-  // TEST PROVISIONING ONLY: the mounted pending journey and onboarding were
-  // proven above. PR B owns the email-verification flow.
-  await pool.query("UPDATE users SET status = 'active' WHERE id = $1", [authority.rows[0].user_id]);
-  const verified = await request(app).get('/api/auth/me').set('Cookie', cookie);
-  assert.strictEqual(verified.status, 200);
-  assert.strictEqual(verified.body.account.user.status, 'active', 'test-only verification is visible through mounted authority');
-  assert.strictEqual(verified.body.account.onboarding.status, 'complete');
 
   return {
     email,
@@ -318,8 +325,8 @@ async function exerciseViewport(browser, engine, viewport, pool, baseUrl, identi
       window.__jobberUnavailableRatification.toastMessages.includes('Jobber connection could not be confirmed.')
     ));
     await waitFor(
-      () => responses.filter(entry => entry.phase === 'forged_query').length >= 2,
-      `${engine} ${viewport.label} initial Jobber status projections`
+      () => responses.filter(entry => entry.phase === 'forged_query').length >= 1,
+      `${engine} ${viewport.label} initial Jobber status projection`
     );
     await Promise.all(responseReads);
 
@@ -328,7 +335,7 @@ async function exerciseViewport(browser, engine, viewport, pool, baseUrl, identi
       entry.method === 'GET' &&
       entry.pathname === JOBBER_STATUS_PATH
     ));
-    assert.strictEqual(initialStatusRequests.length, 2, 'load and forged callback confirmation each read mounted status once');
+    assert.strictEqual(initialStatusRequests.length, 1, 'the fresh page projection confirms both load and forged callback state');
     for (const entry of responses.filter(candidate => candidate.phase === 'forged_query')) {
       assert.strictEqual(entry.status, 200);
       assertUnavailableProjection(entry.body, 'forged query');
@@ -340,6 +347,7 @@ async function exerciseViewport(browser, engine, viewport, pool, baseUrl, identi
       search: location.search,
       status: document.getElementById('jobber-status').textContent.replace(/\s+/g, ' ').trim(),
       button: document.getElementById('jobber-btn').textContent.trim(),
+      disabled: document.getElementById('jobber-btn').disabled,
       sessionClient: Boolean(window.NorthStarAccountSession),
       sessionClientFrozen: Object.isFrozen(window.NorthStarAccountSession),
       sessionScriptCount: document.querySelectorAll('script[src="/js/auth-session.js"]').length,
@@ -348,8 +356,9 @@ async function exerciseViewport(browser, engine, viewport, pool, baseUrl, identi
     assert.strictEqual(forgedUi.origin, baseUrl, 'forged query stays on the disposable origin');
     assert.strictEqual(forgedUi.pathname, '/dashboard/integrations');
     assert.strictEqual(forgedUi.search, '', 'forged success query is removed');
-    assert.strictEqual(forgedUi.status, 'Not connected');
-    assert.strictEqual(forgedUi.button, 'Connect');
+    assert.strictEqual(forgedUi.status, 'Unavailable');
+    assert.strictEqual(forgedUi.button, 'Unavailable');
+    assert.strictEqual(forgedUi.disabled, true, 'unavailable Jobber has no actionable control');
     assert.strictEqual(forgedUi.sessionClient, true, 'real account session client is loaded');
     assert.strictEqual(forgedUi.sessionClientFrozen, true, 'real account session client remains immutable');
     assert.strictEqual(forgedUi.sessionScriptCount, 1, 'one real account session client is mounted');
@@ -358,95 +367,62 @@ async function exerciseViewport(browser, engine, viewport, pool, baseUrl, identi
     assert.ok(!forgedUi.evidence.statusTexts.some(status => status === 'Connected'), 'forged query never presents connected status');
     assert.ok(!forgedUi.evidence.buttonTexts.some(button => button === 'Disconnect'), 'forged query never presents a disconnect action');
 
-    phase = 'connect_click';
-    const clickResponsePromise = page.waitForResponse(response => (
-      new URL(response.url()).pathname === JOBBER_STATUS_PATH &&
-      response.request().method() === 'GET'
-    ));
-    await page.locator('#jobber-btn').click();
-    const clickResponse = await clickResponsePromise;
-    assert.strictEqual(clickResponse.status(), 200, 'Connect checks mounted availability');
-    assertUnavailableProjection(await clickResponse.json(), 'Connect');
-    await page.waitForFunction(() => (
-      window.__jobberUnavailableRatification.toastMessages.includes('Jobber integration is not currently available.')
-    ));
-    await page.locator('#toast.show').waitFor({ state: 'visible' });
-
-    const clickUi = await page.evaluate(() => {
-      const toast = document.getElementById('toast');
-      const toastStyle = getComputedStyle(toast);
-      return {
-        origin: location.origin,
-        pathname: location.pathname,
-        search: location.search,
-        status: document.getElementById('jobber-status').textContent.replace(/\s+/g, ' ').trim(),
-        button: document.getElementById('jobber-btn').textContent.trim(),
-        toast: toast.textContent.trim(),
-        toastVisible: toastStyle.display !== 'none' && toastStyle.visibility !== 'hidden' &&
-          toast.getClientRects().length > 0,
-        readyState: document.readyState,
-        evidence: window.__jobberUnavailableRatification,
-      };
-    });
+    phase = 'disabled_action';
+    const requestCountBeforeDisabledClick = requests.length;
+    await page.evaluate(() => document.getElementById('jobber-btn').click());
+    await page.waitForTimeout(500);
+    const disabledUi = await page.evaluate(() => ({
+      origin: location.origin,
+      pathname: location.pathname,
+      search: location.search,
+      status: document.getElementById('jobber-status').textContent.replace(/\s+/g, ' ').trim(),
+      button: document.getElementById('jobber-btn').textContent.trim(),
+      disabled: document.getElementById('jobber-btn').disabled,
+      readyState: document.readyState,
+      evidence: window.__jobberUnavailableRatification,
+    }));
     assert.deepStrictEqual(
       {
-        origin: clickUi.origin,
-        pathname: clickUi.pathname,
-        search: clickUi.search,
-        status: clickUi.status,
-        button: clickUi.button,
+        origin: disabledUi.origin,
+        pathname: disabledUi.pathname,
+        search: disabledUi.search,
+        status: disabledUi.status,
+        button: disabledUi.button,
+        disabled: disabledUi.disabled,
       },
       {
         origin: baseUrl,
         pathname: '/dashboard/integrations',
         search: '',
-        status: 'Not connected',
-        button: 'Connect',
+        status: 'Unavailable',
+        button: 'Unavailable',
+        disabled: true,
       },
-      'Connect remains on the local unavailable UI'
+      'the unavailable connector remains visibly and functionally disabled'
     );
-    assert.strictEqual(clickUi.toast, 'Jobber integration is not currently available.');
-    assert.strictEqual(clickUi.toastVisible, true, 'unavailable message is visibly rendered');
-    assert.ok(['interactive', 'complete'].includes(clickUi.readyState), 'page remains operational');
-    assert.ok(!clickUi.evidence.toastMessages.some(message => /Jobber connected successfully/i.test(message)));
-    assert.ok(!clickUi.evidence.statusTexts.some(status => status === 'Connected'));
-    assert.ok(!clickUi.evidence.buttonTexts.some(button => button === 'Disconnect'));
+    assert.ok(['interactive', 'complete'].includes(disabledUi.readyState), 'page remains operational');
+    assert.ok(!disabledUi.evidence.toastMessages.some(message => /Jobber connected successfully/i.test(message)));
+    assert.ok(!disabledUi.evidence.statusTexts.some(status => status === 'Connected'));
+    assert.ok(!disabledUi.evidence.buttonTexts.some(button => button === 'Disconnect'));
 
-    const connectStatusCount = () => requests.filter(entry => (
-      entry.phase === 'connect_click' &&
-      entry.method === 'GET' &&
-      entry.pathname === JOBBER_STATUS_PATH
-    )).length;
-    assert.strictEqual(connectStatusCount(), 1, 'Connect performs one bounded availability read');
-    await page.waitForTimeout(500);
-    assert.strictEqual(connectStatusCount(), 1, 'Connect does not enter an availability retry loop');
-
-    const clickRequests = requests.filter(entry => entry.phase === 'connect_click');
-    assert.strictEqual(clickRequests.some(entry => entry.pathname === JOBBER_AUTH_PATH), false, 'Connect never navigates to the OAuth start route');
-    assert.strictEqual(clickRequests.some(entry => !entry.local), false, 'Connect produces no nonlocal destination');
+    const disabledRequests = requests.slice(requestCountBeforeDisabledClick);
+    assert.strictEqual(disabledRequests.some(entry => entry.pathname === JOBBER_STATUS_PATH), false, 'disabled action performs no redundant status read');
+    assert.strictEqual(disabledRequests.some(entry => entry.pathname === JOBBER_AUTH_PATH), false, 'disabled action never navigates to OAuth');
+    assert.strictEqual(disabledRequests.some(entry => !entry.local), false, 'disabled action produces no nonlocal destination');
     assert.strictEqual(
-      clickRequests.some(entry => entry.navigation && entry.pathname !== '/dashboard/integrations'),
+      disabledRequests.some(entry => entry.navigation && entry.pathname !== '/dashboard/integrations'),
       false,
-      'Connect produces no navigation away from the local page'
+      'disabled action produces no navigation away from the local page'
     );
-    assert.strictEqual(page.isClosed(), false, 'Connect does not crash or close the page');
+    assert.strictEqual(page.isClosed(), false, 'disabled action does not crash or close the page');
     assert.deepStrictEqual(
       requests.filter(entry => (
-        ['forged_query', 'connect_click'].includes(entry.phase) &&
+        ['forged_query', 'disabled_action'].includes(entry.phase) &&
         !['GET', 'HEAD', 'OPTIONS'].includes(entry.method)
       )),
       [],
-      'forged load and Connect perform no browser mutation'
+      'forged load and disabled action perform no browser mutation'
     );
-
-    await waitFor(
-      () => responses.filter(entry => entry.phase === 'connect_click').length === 1,
-      `${engine} ${viewport.label} Connect status projection`
-    );
-    await Promise.all(responseReads);
-    const clickProjections = responses.filter(entry => entry.phase === 'connect_click');
-    assert.strictEqual(clickProjections.length, 1, 'Connect receives one mounted status response');
-    assertUnavailableProjection(clickProjections[0].body, 'Connect response');
 
     const providerDestinations = requests.filter(entry => /(?:^|\.)getjobber\.com$/i.test(new URL(entry.url).hostname));
     assert.deepStrictEqual(providerDestinations, [], 'browser never targets a Jobber provider destination');
@@ -467,14 +443,14 @@ async function exerciseViewport(browser, engine, viewport, pool, baseUrl, identi
     assert.deepStrictEqual(oauthStateAfter.rows, oauthStateBefore.rows, 'browser unavailable flow creates no OAuth state');
 
     return {
-      status: clickUi.status,
-      button: clickUi.button,
+      status: disabledUi.status,
+      button: disabledUi.button,
       forgedQueryRemoved: forgedUi.search === '',
       forgedSuccessPresented: false,
-      unavailableMessage: clickUi.toast,
+      unavailableMessage: 'Jobber connection could not be confirmed.',
       initialStatusRequests: initialStatusRequests.length,
-      connectStatusRequests: connectStatusCount(),
-      authNavigations: clickRequests.filter(entry => entry.pathname === JOBBER_AUTH_PATH).length,
+      connectStatusRequests: 0,
+      authNavigations: disabledRequests.filter(entry => entry.pathname === JOBBER_AUTH_PATH).length,
       providerDestinations: providerDestinations.map(entry => entry.url),
       nonlocalDestinations: Array.from(new Set(
         requests.filter(entry => !entry.local).map(entry => new URL(entry.url).origin)

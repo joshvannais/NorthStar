@@ -823,11 +823,9 @@ async function runToastMatrix(browser, engine, origin, evidence) {
             : await page.reload({ waitUntil: 'networkidle' });
           assert.strictEqual(response.status(), 200, `integrations/${mode}: mounted status`);
           await page.evaluate(() => {
-            window.connectIntegration('email');
-            const input = document.getElementById('email-input');
-            input.value = 'invalid-email';
-            input.focus();
-            window.confirmConnection();
+            const refresh = document.getElementById('refreshIntegrationsBtn');
+            refresh.focus();
+            window.showToast('Integration status presentation check');
           });
           await page.locator('#toast.show').waitFor({ state: 'visible' });
           const observed = await readToastGeometry(page);
@@ -838,7 +836,7 @@ async function runToastMatrix(browser, engine, origin, evidence) {
           assert.strictEqual(observed.role, 'status', `${label} default severity role`);
           assert.strictEqual(observed.live, 'polite', `${label} polite live region`);
           assert.strictEqual(observed.atomic, 'true', `${label} atomic live region`);
-          assert.strictEqual(observed.activeId, 'email-input', `${label} inline toast does not steal focus`);
+          assert.strictEqual(observed.activeId, 'refreshIntegrationsBtn', `${label} inline toast does not steal focus`);
           assert.strictEqual(observed.scrollWidth, observed.clientWidth, `${label} no content-width reservation or horizontal overflow`);
 
           await page.evaluate(() => window.NotificationService.show('Keyboard close check', 'error'));

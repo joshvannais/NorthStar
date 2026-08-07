@@ -579,7 +579,7 @@
       var value = asset && typeof asset === 'object' ? asset : {};
       var canManage = Boolean(assetCatalogueData && assetCatalogueData.canManage);
       var archived = value.catalogueState === 'archived';
-      var controlsDisabled = !canManage || archived;
+      var controlsDisabled = !canManage;
       var card = document.createElement('div');
       card.className = 'bp-repeat-card bp-asset-card';
       if (isNew) card.dataset.new = 'true';
@@ -653,16 +653,14 @@
           });
           actions.appendChild(discard);
         }
-        if (!archived) {
-          var save = document.createElement('button');
-          save.type = 'button';
-          save.className = 'bp-save-btn';
-          save.textContent = 'Save asset';
-          save.addEventListener('click', function() {
-            runAssetCardMutation(card, function() { return saveAssetCard(card); });
-          });
-          actions.appendChild(save);
-        }
+        var save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'bp-save-btn';
+        save.textContent = 'Save asset';
+        save.addEventListener('click', function() {
+          runAssetCardMutation(card, function() { return saveAssetCard(card); });
+        });
+        actions.appendChild(save);
         if (!isNew) {
           var lifecycle = document.createElement('button');
           lifecycle.type = 'button';

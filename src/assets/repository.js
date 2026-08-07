@@ -146,6 +146,32 @@ class AssetCatalogueRepository {
     ));
   }
 
+  async requireRestorableReferences(client, organizationId, assetId, homeLocationId) {
+    const references = await this.profileReferences(client, organizationId);
+    const serviceResult = await client.query(
+      `SELECT service_id FROM tenant_asset_service_capabilities
+        WHERE organization_id = $1 AND asset_id = $2
+        ORDER BY lower(service_id), service_id`,
+      [organizationId, assetId]
+    );
+    try {
+      this.canonicalLocation(references, homeLocationId);
+      this.canonicalServices(references, serviceResult.rows.map(row => row.service_id));
+    } catch (error) {
+      if (error && [
+        'invalid_asset_location', 'ambiguous_asset_location',
+        'invalid_asset_service', 'ambiguous_asset_service',
+      ].includes(error.code)) {
+        throw catalogueError(
+          409,
+          'asset_catalogue_reference_conflict',
+          'Asset Business Profile references changed; update the archived asset before restoring'
+        );
+      }
+      throw error;
+    }
+  }
+
   project(row, services) {
     return {
       id: row.id,
@@ -322,7 +348,7 @@ class AssetCatalogueRepository {
       await this.lockOrganization(client, input.organizationId);
       await this.requireActor(client, input.organizationId, input.actorUserId);
       const existing = await client.query(
-        `SELECT id, version, catalogue_state FROM tenant_assets
+        `SELECT id, version, catalogue_state, home_location_id FROM tenant_assets
           WHERE organization_id = $1 AND id = $2 FOR UPDATE`,
         [input.organizationId, input.assetId]
       );
@@ -337,6 +363,14 @@ class AssetCatalogueRepository {
         throw catalogueError(409, 'asset_catalogue_state_conflict', 'Asset catalogue state is already current');
       }
       const archived = input.catalogueState === 'archived';
+      if (!archived) {
+        await this.requireRestorableReferences(
+          client,
+          input.organizationId,
+          input.assetId,
+          row.home_location_id
+        );
+      }
       await client.query(
         `UPDATE tenant_assets
             SET catalogue_state = $3,

@@ -290,6 +290,10 @@ async function main() {
     await archiveCard.getByRole('button', { name: 'Archive asset' }).click();
     assert.strictEqual((await archiveResponse).status(), 200, 'owner archives identity without deletion');
     const restoredCard = ownerPage.locator('.bp-asset-card[data-asset-id="' + assetRow.id + '"]');
+    assert.strictEqual(await restoredCard.locator('.asset-name').isEnabled(), true,
+      'authorized owner can repair archived identity references before restore');
+    assert.strictEqual(await restoredCard.getByRole('button', { name: 'Save asset' }).count(), 1,
+      'archived identity exposes an explicit save control');
     const restoreResponse = ownerPage.waitForResponse(response =>
       response.url().endsWith('/api/assets/' + assetRow.id + '/catalogue-state') && response.request().method() === 'PATCH'
     );

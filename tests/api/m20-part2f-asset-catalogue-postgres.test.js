@@ -307,4 +307,89 @@ realPostgres('Mission 20 Part 2F mounted tenant asset catalogue PostgreSQL autho
       expect.objectContaining({ action: 'asset_restored', actor_user_id: OWNER_A, subject_id: assetId }),
     ]));
   }, 60000);
+
+  test('restore fails closed for stale Business Profile references and permits archived repair', async () => {
+    const created = await request(app).post('/api/assets').set(auth.get(OWNER_A)).send(assetBody({
+      name: 'Archived location repair', internalReference: 'ARCHIVED-LOCATION', vin: '', serviceIds: [],
+    }));
+    expect(created.status).toBe(201);
+    const assetId = created.body.data.id;
+    const archived = await request(app)
+      .patch('/api/assets/' + assetId + '/catalogue-state')
+      .set(auth.get(OWNER_A)).send({ version: 1, catalogueState: 'archived' });
+    expect(archived.status).toBe(200);
+    expect(archived.body.data).toMatchObject({ catalogueState: 'archived', version: 2 });
+    const serviceCreated = await request(app).post('/api/assets').set(auth.get(OWNER_A)).send(assetBody({
+      name: 'Archived service repair', internalReference: 'ARCHIVED-SERVICE', vin: '',
+      homeLocationId: 'headquarters',
+    }));
+    expect(serviceCreated.status).toBe(201);
+    const serviceAssetId = serviceCreated.body.data.id;
+    const serviceArchived = await request(app)
+      .patch('/api/assets/' + serviceAssetId + '/catalogue-state')
+      .set(auth.get(OWNER_A)).send({ version: 1, catalogueState: 'archived' });
+    expect(serviceArchived.status).toBe(200);
+
+    const replacementProfile = profileFor('Asset A Replacement', 'Office-Replacement', 'Other-Service');
+    replacementProfile.headquarters.additionalOffices = [];
+    const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A, userId: OWNER_A, profile: replacementProfile,
+    });
+    const replacementProfileBefore = (await pool.query(
+      `SELECT id, version_label, normalized_profile_hash, raw_profile
+         FROM canonical_business_profiles
+        WHERE organization_id = $1 AND is_active = TRUE`,
+      [ORG_A]
+    )).rows[0];
+
+    const staleRestore = await request(app)
+      .patch('/api/assets/' + assetId + '/catalogue-state')
+      .set(auth.get(OWNER_A)).send({ version: 2, catalogueState: 'active' });
+    expect(staleRestore.status).toBe(409);
+    expect(staleRestore.body.error.code).toBe('asset_catalogue_reference_conflict');
+    expect((await pool.query(
+      `SELECT catalogue_state, version, home_location_id
+         FROM tenant_assets WHERE organization_id = $1 AND id = $2`,
+      [ORG_A, assetId]
+    )).rows).toEqual([{
+      catalogue_state: 'archived', version: 2, home_location_id: 'Office-North',
+    }]);
+    const staleServiceRestore = await request(app)
+      .patch('/api/assets/' + serviceAssetId + '/catalogue-state')
+      .set(auth.get(ADMIN_A)).send({ version: 2, catalogueState: 'active' });
+    expect(staleServiceRestore.status).toBe(409);
+    expect(staleServiceRestore.body.error.code).toBe('asset_catalogue_reference_conflict');
+    expect((await pool.query(
+      `SELECT catalogue_state, version FROM tenant_assets
+        WHERE organization_id = $1 AND id = $2`,
+      [ORG_A, serviceAssetId]
+    )).rows).toEqual([{ catalogue_state: 'archived', version: 2 }]);
+
+    const repaired = await request(app).put('/api/assets/' + assetId).set(auth.get(ADMIN_A)).send(
+      editableAsset(created.body.data, {
+        version: 2, homeLocationId: 'headquarters', serviceIds: ['Other-Service'],
+      })
+    );
+    expect(repaired.status).toBe(200);
+    expect(repaired.body.data).toMatchObject({
+      catalogueState: 'archived', version: 3,
+      homeLocationId: 'headquarters', serviceIds: ['Other-Service'],
+    });
+    const restored = await request(app)
+      .patch('/api/assets/' + assetId + '/catalogue-state')
+      .set(auth.get(OWNER_A)).send({ version: 3, catalogueState: 'active' });
+    expect(restored.status).toBe(200);
+    expect(restored.body.data).toMatchObject({
+      catalogueState: 'active', version: 4,
+      homeLocationId: 'headquarters', serviceIds: ['Other-Service'],
+    });
+    const replacementProfileAfter = (await pool.query(
+      `SELECT id, version_label, normalized_profile_hash, raw_profile
+         FROM canonical_business_profiles
+        WHERE organization_id = $1 AND is_active = TRUE`,
+      [ORG_A]
+    )).rows[0];
+    expect(replacementProfileAfter).toEqual(replacementProfileBefore);
+  }, 60000);
 });

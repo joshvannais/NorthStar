@@ -245,12 +245,17 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       { body: [], expected: 'must be an object' },
       { body: { ...loaded.body.data, organizationId: ORG_B }, expected: 'organizationId is not a writable Business Profile field' },
       { body: { ...loaded.body.data, unexpectedSection: {} }, expected: 'unexpectedSection is not a writable Business Profile field' },
+      { body: { ...loaded.body.data, toString: 'inherited-name-bypass' }, expected: 'toString is not a writable Business Profile field' },
+      { body: { ...loaded.body.data, valueOf: 'inherited-name-bypass' }, expected: 'valueOf is not a writable Business Profile field' },
       { body: { ...loaded.body.data, company: [] }, expected: 'company must be an object' },
       { body: { ...loaded.body.data, services: {} }, expected: 'services must be an array' },
       { body: { ...loaded.body.data, policies: 'not-an-object' }, expected: 'policies must be an object' },
       { body: { ...loaded.body.data, customPrompt: { text: 'not-a-string' } }, expected: 'customPrompt must be a string' },
       { body: { ...loaded.body.data, services: [{ canonicalPricing: deeplyNested }] }, expected: 'maximum nesting depth' },
       { body: { ...loaded.body.data, company: { name: 'x'.repeat(33000) } }, expected: 'maximum UTF-8 byte length' },
+      { body: { ...loaded.body.data, company: { name: 'A\u0000B' } }, expected: 'NUL character that PostgreSQL JSONB cannot represent' },
+      { body: { ...loaded.body.data, company: { name: 'A\ud800B' } }, expected: 'unpaired UTF-16 surrogate that PostgreSQL JSONB cannot represent' },
+      { body: { ...loaded.body.data, company: { name: 'A\udc00B' } }, expected: 'unpaired UTF-16 surrogate that PostgreSQL JSONB cannot represent' },
       { body: { ...loaded.body.data, ...dangerous }, expected: 'unsafe key __proto__' },
     ];
 
@@ -298,6 +303,9 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       onboardingDraft: true,
       canonicalAuthority: { id: 'forged', version: 'forged', hash: 'forged' },
       company: { ...loadedA.body.data.company, name: rawName },
+      industry: '  Tree & landscape \ud83c\udf33  ',
+      ownerName: '  Owner <literal> \ud83e\uddf1  ',
+      businessDescription: '\n  Established top-level description e\u0301.  \n',
       services: [{
         ...loadedA.body.data.services[0],
         equipment: rawEquipment,
@@ -312,6 +320,9 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     expect(saved.body.data.company.name).toBe(rawName);
     expect(saved.body.data.services[0].equipment).toBe(rawEquipment);
     expect(saved.body.data.customPrompt).toBe(rawPrompt);
+    expect(saved.body.data.industry).toBe(body.industry);
+    expect(saved.body.data.ownerName).toBe(body.ownerName);
+    expect(saved.body.data.businessDescription).toBe(body.businessDescription);
     expect(saved.body.data).not.toHaveProperty('onboardingDraft');
     expect(saved.body.data.canonicalAuthority.id).not.toBe('forged');
     expect(saved.body.data.canonicalAuthority.hash).not.toBe('forged');
@@ -321,6 +332,9 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
          encode(convert_to(raw_profile #>> '{company,name}', 'UTF8'), 'hex') AS name_hex,
          encode(convert_to(raw_profile #>> '{services,0,equipment}', 'UTF8'), 'hex') AS equipment_hex,
          encode(convert_to(raw_profile ->> 'customPrompt', 'UTF8'), 'hex') AS prompt_hex,
+         encode(convert_to(raw_profile ->> 'industry', 'UTF8'), 'hex') AS industry_hex,
+         encode(convert_to(raw_profile ->> 'ownerName', 'UTF8'), 'hex') AS owner_hex,
+         encode(convert_to(raw_profile ->> 'businessDescription', 'UTF8'), 'hex') AS description_hex,
          raw_profile ? 'canonicalAuthority' AS has_authority,
          raw_profile ? 'onboardingDraft' AS has_onboarding
        FROM canonical_business_profiles
@@ -331,6 +345,9 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       name_hex: Buffer.from(rawName, 'utf8').toString('hex'),
       equipment_hex: Buffer.from(rawEquipment, 'utf8').toString('hex'),
       prompt_hex: Buffer.from(rawPrompt, 'utf8').toString('hex'),
+      industry_hex: Buffer.from(body.industry, 'utf8').toString('hex'),
+      owner_hex: Buffer.from(body.ownerName, 'utf8').toString('hex'),
+      description_hex: Buffer.from(body.businessDescription, 'utf8').toString('hex'),
       has_authority: false,
       has_onboarding: false,
     }]);
@@ -339,6 +356,9 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     expect(reloaded.body.data.company.name).toBe(rawName);
     expect(reloaded.body.data.services[0].equipment).toBe(rawEquipment);
     expect(reloaded.body.data.customPrompt).toBe(rawPrompt);
+    expect(reloaded.body.data.industry).toBe(body.industry);
+    expect(reloaded.body.data.ownerName).toBe(body.ownerName);
+    expect(reloaded.body.data.businessDescription).toBe(body.businessDescription);
     expect((await request(app).get('/api/v1/business-profile').set(auth(OWNER_B))).body.data.company.name)
       .toBe(loadedB.body.data.company.name);
 

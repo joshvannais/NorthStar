@@ -74,7 +74,8 @@
     .connector-status[data-status="ambiguous"],
     .connector-status[data-status="error"] { background: rgba(220, 38, 38, .1); color: #b91c1c; }
     .jobber-action { flex: 0 0 auto; margin-left: auto; }
-    .unavailable-card { opacity: .78; }
+    .jobber-action:disabled { opacity: 1; background: var(--neutral-200); border-color: var(--neutral-300); color: var(--neutral-700); }
+    .unavailable-card { opacity: 1; border-style: dashed; }
     .status-message {
       color: var(--neutral-500);
       font-size: 13px;
@@ -91,8 +92,9 @@
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Skip to main content</a>
   <div class="dashboard-layout">
-    <main class="main-content">
+    <main class="main-content" id="mainContent" tabindex="-1">
       <div class="page-header integration-toolbar">
         <div>
           <h1>Integrations</h1>
@@ -180,7 +182,7 @@
     </main>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/js/notification-service.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/nav-component.js"></script>

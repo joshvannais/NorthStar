@@ -143,7 +143,7 @@ async function pageSnapshot(page) {
       }
       return (element.textContent || element.getAttribute('title') || '').trim();
     }
-    const controls = Array.from(document.querySelectorAll('a[href],button,input:not([type="hidden"]),select,textarea,[role="tab"]'))
+    const controls = Array.from(document.querySelectorAll('main a[href],main button,main input:not([type="hidden"]),main select,main textarea,main [role="tab"]'))
       .filter(visible);
     const ids = Array.from(document.querySelectorAll('[id]')).map(node => node.id);
     return {
@@ -171,10 +171,10 @@ async function assertBusinessProfile(page, role) {
     const snapshot = await pageSnapshot(page);
     assert.deepStrictEqual(snapshot.unnamedControls, [], `Business Profile tab ${index} accessible names`);
   }
-  const mutableDisabled = await page.locator('.bp-section input:not([readonly]),.bp-section select,.bp-section textarea:not([readonly])')
+  const enabledEditors = await page.locator('.bp-section input:not([readonly]),.bp-section select,.bp-section textarea:not([readonly])')
     .evaluateAll(controls => controls.filter(control => !control.disabled).length);
-  if (role === 'viewer') assert.strictEqual(mutableDisabled, 0, 'viewer Business Profile editors are fail-closed');
-  else assert.ok(mutableDisabled > 0, 'owner Business Profile editors are available after authority load');
+  assert.ok(enabledEditors > 0, `${role} Business Profile values remain locally inspectable after authority load`);
+  assert.strictEqual(await page.locator('#saveBtn').isDisabled(), role === 'viewer', 'only authorized roles can persist Business Profile changes');
 }
 
 async function assertSettings(page, role) {
@@ -280,7 +280,11 @@ async function main() {
     const matrix = await runMatrix(browser, selected, origin, evidence);
     await runErrorStates(browser, selected, origin, evidence);
     assert.deepStrictEqual(evidence.external, [], 'provider/external requests');
-    assert.deepStrictEqual(evidence.consoleErrors, [], 'console errors');
+    const expectedAuthorityErrors = evidence.consoleErrors.filter(entry =>
+      entry.includes('error states: Failed to load resource: the server responded with a status of 503'));
+    const unexpectedConsoleErrors = evidence.consoleErrors.filter(entry => !expectedAuthorityErrors.includes(entry));
+    assert.deepStrictEqual(unexpectedConsoleErrors, [], 'unexpected console errors');
+    assert.ok(expectedAuthorityErrors.length >= ROUTES.length, 'negative controls must observe failed authority responses');
     assert.deepStrictEqual(evidence.pageErrors, [], 'page errors');
     process.stdout.write(JSON.stringify({
       success: true,
@@ -290,6 +294,8 @@ async function main() {
       errorRoutes: ROUTES,
       automaticMethods: [...new Set(evidence.api.map(item => item.method))],
       providerRequests: evidence.external.length,
+      expectedAuthorityConsoleErrors: expectedAuthorityErrors.length,
+      unexpectedConsoleErrors: unexpectedConsoleErrors.length,
     }) + '\n');
   } finally {
     if (browser) await browser.close();

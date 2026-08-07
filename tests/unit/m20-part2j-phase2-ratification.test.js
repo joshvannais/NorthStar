@@ -45,7 +45,7 @@ describe('Mission 20 Part 2J additive Phase 2 ratification contract', () => {
     expect(businessProfile).toMatch(/function handleProfileTabKeydown\(event\)[\s\S]*ArrowRight[\s\S]*ArrowLeft[\s\S]*Home[\s\S]*End/);
     expect(businessProfile).toMatch(/function setProfileInteractionState\(state, message\)[\s\S]*aria-busy[\s\S]*profileCanEdit[\s\S]*disabled/);
     expect(businessProfile).toMatch(/function loadProfile\(\)[\s\S]*setProfileInteractionState\('loading'/);
-    expect(businessProfile).toMatch(/renderProfile\(profileData\);\s*setProfileInteractionState\('ready'/);
+    expect(businessProfile).toMatch(/renderProfile\(profileData\);[\s\S]*associateProfileLabels\(document\);[\s\S]*setProfileInteractionState\('ready'/);
     expect(businessProfile).toMatch(/setProfileInteractionState\('error'/);
   });
 
@@ -95,7 +95,10 @@ describe('Mission 20 Part 2J additive Phase 2 ratification contract', () => {
     expect(team).toMatch(/id=["']crewsList["'][^>]*>[\s\S]*Loading crews/);
     expect(team).toMatch(/id=["']policiesList["'][^>]*>[\s\S]*Loading workforce policies/);
     expect(team).toMatch(/function renderWorkforceError\(message\)[\s\S]*membersList[\s\S]*skillsList[\s\S]*crewsList[\s\S]*policiesList/);
-    expect(team).toMatch(/async function loadData\(initial\)[\s\S]*aria-busy', 'true'[\s\S]*renderWorkforceError/);
+    expect(team).toMatch(/empty\(document\.getElementById\(id\), unavailable, 'wf-error'\)/);
+    expect(team).toMatch(/className === 'wf-error'[\s\S]*setAttribute\('role', 'alert'\)/);
+    expect(team).toMatch(/function setWorkforceLoading\(initial\)[\s\S]*aria-busy', 'true'[\s\S]*if \(!initial\) return/);
+    expect(team).toMatch(/async function loadData\(initial\)\s*{\s*setWorkforceLoading\(initial\);[\s\S]*renderWorkforceError/);
   });
 
   test('Integrations retains unavailable meaning without opacity-driven contrast loss', () => {

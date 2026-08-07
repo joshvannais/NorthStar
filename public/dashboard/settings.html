@@ -10,9 +10,10 @@
   <script src="/js/trial-status.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Skip to main content</a>
 
   <div class="dashboard-layout">
-    <main class="main-content">
+    <main class="main-content" id="mainContent" tabindex="-1">
       <div class="page-header">
         <div>
           <h1>Settings</h1>
@@ -143,8 +144,8 @@
           <input type="text" id="greeting" data-settings-mutable placeholder='e.g. "Thank you for calling Smith Tree Service..."' disabled>
         </div>
         <div class="form-group">
-          <label for="companyInfo">Company Knowledge Base (for AI context)</label>
-          <textarea id="companyInfo" data-settings-mutable placeholder="Tell your AI Office Manager about your company — service areas, hours, insurance info, etc." disabled></textarea>
+          <label for="companyInfoAiContext">Company Knowledge Base (for AI context)</label>
+          <textarea id="companyInfoAiContext" data-settings-mutable placeholder="Tell your AI Office Manager about your company — service areas, hours, insurance info, etc." disabled></textarea>
         </div>
       </div>
 
@@ -156,11 +157,11 @@
         <div class="integration-card">
           <div class="icon">🔄</div>
           <div class="info">
-            <h4>AI answers unknown callers only</h4>
+            <h4 id="smartRoutingLabel">AI answers unknown callers only</h4>
             <p>Known contacts ring your phone normally. New numbers get the AI Office Manager.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" checked id="smartRouting" data-settings-mutable disabled>
+            <input type="checkbox" checked id="smartRouting" data-settings-mutable aria-labelledby="smartRoutingLabel" disabled>
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -176,8 +177,8 @@
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <input type="text" id="contactName" data-settings-mutable placeholder="Name (e.g. Mom, John, Office)" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
-          <input type="tel" id="contactPhone" data-settings-mutable placeholder="Phone number" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
+          <input type="text" id="contactName" data-settings-mutable aria-label="Known contact name" placeholder="Name (e.g. Mom, John, Office)" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
+          <input type="tel" id="contactPhone" data-settings-mutable aria-label="Known contact phone number" placeholder="Phone number" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
           <button class="btn btn-primary btn-sm" data-settings-mutable onclick="addContact()" disabled>+ Add</button>
         </div>
 
@@ -193,7 +194,7 @@
                 📤 Choose CSV File
                 <input type="file" id="csvUpload" data-settings-mutable accept=".csv" style="display:none;" onchange="importCSV(event)" disabled>
               </label>
-              <span id="importStatus" style="font-size:13px;color:var(--neutral-400);"></span>
+              <span id="importStatus" role="status" aria-live="polite" aria-atomic="true" style="font-size:13px;color:var(--neutral-400);"></span>
             </div>
             <p style="font-size:12px;color:var(--neutral-400);margin-top:8px;">
               How to export: <strong>iPhone</strong> → Settings > Contacts > Export &nbsp;·&nbsp;
@@ -290,12 +291,20 @@
     </main>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script>
     let settingsState = {};
     let settingsAccount = null;
     let settingsCanEdit = false;
+
+    function synchronizeCompanyInfoControls(source) {
+      const companyInfo = document.getElementById('companyInfo');
+      const companyInfoAiContext = document.getElementById('companyInfoAiContext');
+      if (!companyInfo || !companyInfoAiContext) return;
+      if (source === companyInfoAiContext) companyInfo.value = companyInfoAiContext.value;
+      else companyInfoAiContext.value = companyInfo.value;
+    }
 
     function applySettingsAccess(account) {
       const role = account && account.membership ? account.membership.role : '';
@@ -326,6 +335,7 @@
           else el.value = val === null || val === undefined ? '' : String(val);
         }
       });
+      synchronizeCompanyInfoControls(document.getElementById('companyInfo'));
       renderContacts();
     }
 
@@ -452,6 +462,7 @@
         remove.className = 'btn btn-ghost btn-sm';
         remove.style.cssText = 'color:var(--danger);font-size:12px;';
         remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', 'Remove known contact ' + contact.name);
         remove.setAttribute('data-settings-mutable', '');
         remove.disabled = !settingsCanEdit;
         remove.addEventListener('click', () => removeContact(index));
@@ -552,6 +563,12 @@
     }
 
     // Load contacts on page load
+    document.getElementById('companyInfo').addEventListener('input', function() {
+      synchronizeCompanyInfoControls(this);
+    });
+    document.getElementById('companyInfoAiContext').addEventListener('input', function() {
+      synchronizeCompanyInfoControls(this);
+    });
     loadSettings().catch(function(error) { showToast(error.message || 'Settings unavailable', 'error'); });
   </script>
   <script src="/js/notification-service.js"></script>

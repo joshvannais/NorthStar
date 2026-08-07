@@ -34,14 +34,15 @@
     .bp-validation-error.show { display: block; }
     .bp-field [aria-invalid="true"] { border-color: #b91c1c; }
     .bp-field .bp-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
-    .bp-field .bp-toggle input { display: none; }
+    .bp-field .bp-toggle input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
     .bp-field .bp-toggle .slider { width: 36px; height: 20px; background: var(--neutral-300); border-radius: 10px; position: relative; transition: background 0.2s; }
     .bp-field .bp-toggle .slider::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: transform 0.2s; }
     .bp-field .bp-toggle input:checked + .slider { background: var(--brand-500); }
     .bp-field .bp-toggle input:checked + .slider::after { transform: translateX(16px); }
+    .bp-field .bp-toggle input:focus-visible + .slider { outline: 3px solid var(--theme-focus, var(--brand-500)); outline-offset: 3px; }
     .bp-save-btn { padding: 10px 24px; background: var(--brand-600); color: #0b0d17; border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
     .bp-save-btn:hover { background: var(--brand-700); }
-    .bp-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .bp-save-btn:disabled { opacity: 1; cursor: not-allowed; background: var(--neutral-200); color: var(--neutral-700); }
     .bp-toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; z-index: 999; opacity: 0; transform: translateY(20px); transition: all 0.3s; }
     .bp-toast.show { opacity: 1; transform: translateY(0); }
     .bp-toast.success { background: #065f46; color: #fff; }
@@ -85,19 +86,21 @@
   <script src="/js/notification-service.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Skip to main content</a>
   <div class="app-layout">
-    <main class="main-content">
-      <div class="bp-container">
+    <main class="main-content" id="mainContent" tabindex="-1">
+      <div class="bp-container" id="businessProfileRoot" data-state="loading" aria-busy="true">
         <div class="bp-header">
           <div>
-            <div class="bp-title">⚙️ Business Profile</div>
+            <h1 class="bp-title">⚙️ Business Profile</h1>
             <div class="bp-subtitle">Configure how your business operates — this is the DNA of your NorthStar platform.</div>
+            <p id="businessProfileStatus" role="status" aria-live="polite" aria-atomic="true">Loading your durable Business Profile authority. Editing remains disabled.</p>
           </div>
           <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()" disabled>💾 Save Profile</button>
         </div>
 
         <!-- Navigation Tabs -->
-        <div class="bp-nav" id="bpNav">
+        <div class="bp-nav" id="bpNav" role="tablist" aria-label="Business Profile sections">
           <button class="bp-nav-btn active" data-section="company" onclick="switchSection('company')">🏢 Company</button>
           <button class="bp-nav-btn" data-section="headquarters" onclick="switchSection('headquarters')">📍 HQ</button>
           <button class="bp-nav-btn" data-section="serviceArea" onclick="switchSection('serviceArea')">🗺️ Service Area</button>
@@ -416,7 +419,7 @@
       </div>
     </main>
   </div>
-  <div id="toast" class="bp-toast"></div>
+  <div id="toast" class="bp-toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script>
     // ====================================================================
@@ -436,10 +439,79 @@
     // Section navigation
     // ====================================================================
     function switchSection(section) {
-      document.querySelectorAll('.bp-section').forEach(function(el) { el.classList.remove('active'); });
-      document.querySelectorAll('.bp-nav-btn').forEach(function(el) { el.classList.remove('active'); });
-      document.getElementById('section-' + section).classList.add('active');
-      document.querySelector('[data-section="' + section + '"]').classList.add('active');
+      var selectedPanel = document.getElementById('section-' + section);
+      var selectedTab = document.querySelector('[data-section="' + section + '"]');
+      if (!selectedPanel || !selectedTab) return;
+      document.querySelectorAll('.bp-section').forEach(function(el) {
+        var active = el === selectedPanel;
+        el.classList.toggle('active', active);
+        el.hidden = !active;
+      });
+      document.querySelectorAll('.bp-nav-btn').forEach(function(el) {
+        var active = el === selectedTab;
+        el.classList.toggle('active', active);
+        el.setAttribute('aria-selected', active ? 'true' : 'false');
+        el.tabIndex = active ? 0 : -1;
+      });
+    }
+
+    function handleProfileTabKeydown(event) {
+      if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+      var tabs = Array.from(document.querySelectorAll('.bp-nav-btn'));
+      var current = tabs.indexOf(event.currentTarget);
+      if (current === -1) return;
+      var next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+        : event.key === 'ArrowRight' ? (current + 1) % tabs.length
+        : (current - 1 + tabs.length) % tabs.length;
+      event.preventDefault();
+      switchSection(tabs[next].dataset.section);
+      tabs[next].focus();
+    }
+
+    function associateProfileLabels(root) {
+      (root || document).querySelectorAll('.bp-field > label:not(.bp-toggle)').forEach(function(label) {
+        var field = label.parentElement;
+        var control = field && field.querySelector('input, select, textarea');
+        if (!control) return;
+        if (!control.id) control.id = stableRowId('profile-control');
+        label.htmlFor = control.id;
+      });
+    }
+
+    function initializeProfileAccessibility() {
+      document.querySelectorAll('.bp-nav-btn').forEach(function(tab, index) {
+        var panel = document.getElementById('section-' + tab.dataset.section);
+        var tabId = 'profile-tab-' + tab.dataset.section;
+        tab.id = tabId;
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-controls', panel.id);
+        tab.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
+        tab.tabIndex = index === 0 ? 0 : -1;
+        tab.addEventListener('keydown', handleProfileTabKeydown);
+        panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-labelledby', tabId);
+        panel.hidden = index !== 0;
+      });
+      associateProfileLabels(document);
+    }
+
+    function setProfileInteractionState(state, message) {
+      var root = document.getElementById('businessProfileRoot');
+      var status = document.getElementById('businessProfileStatus');
+      var profileAvailable = state === 'ready';
+      var editable = profileAvailable && profileCanEdit;
+      root.dataset.state = state;
+      root.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+      if (status) status.textContent = message;
+      document.querySelectorAll('.bp-section input, .bp-section select, .bp-section textarea, .bp-section button').forEach(function(control) {
+        if (control.id === 'addAssetButton' || control.closest('#assetCatalogueContainer')) return;
+        control.disabled = !profileAvailable;
+      });
+      var saveButton = document.getElementById('saveBtn');
+      saveButton.disabled = !editable;
+      saveButton.textContent = editable ? '💾 Save Profile'
+        : state === 'loading' ? 'Loading profile…'
+        : profileCanEdit ? 'Profile unavailable' : 'Read-only profile';
     }
 
     // ====================================================================
@@ -448,12 +520,10 @@
     function applyProfileAccess(account) {
       var role = account && account.membership ? account.membership.role : '';
       profileCanEdit = role === 'owner' || role === 'admin';
-      var saveButton = document.getElementById('saveBtn');
-      saveButton.disabled = !profileCanEdit;
-      saveButton.textContent = profileCanEdit ? '💾 Save Profile' : 'Read-only profile';
     }
 
     function loadProfile() {
+      setProfileInteractionState('loading', 'Loading your durable Business Profile authority. Editing remains disabled.');
       NorthStarAccountSession.load()
         .then(function(account) {
           applyProfileAccess(account);
@@ -464,11 +534,17 @@
           if (resp.success && resp.data) {
             profileData = resp.data;
             renderProfile(profileData);
+            associateProfileLabels(document);
+            setProfileInteractionState('ready', profileCanEdit
+              ? 'Your durable account membership can edit this Business Profile.'
+              : 'Read-only: local form changes cannot be saved by your durable account membership.');
           } else {
+            setProfileInteractionState('error', 'Business Profile authority is unavailable. Editing remains disabled.');
             showToast('Failed to load profile', 'error');
           }
         })
         .catch(function() {
+          setProfileInteractionState('error', 'Business Profile authority is unavailable. Editing remains disabled.');
           showToast('Could not connect to server', 'error');
         });
     }
@@ -1202,9 +1278,11 @@
       labelElement.textContent = label;
       var input = document.createElement('input');
       input.type = type || 'text';
+      input.id = stableRowId('profile-field');
       input.className = className;
       input.value = value !== null && value !== undefined ? value : '';
       Object.keys(attributes || {}).forEach(function(key) { input.setAttribute(key, attributes[key]); });
+      labelElement.htmlFor = input.id;
       field.append(labelElement, input);
       parent.appendChild(field);
       return input;
@@ -1402,19 +1480,20 @@
         day.textContent = dayLabel;
         row.appendChild(day);
 
-        function appendTime(className, value) {
+        function appendTime(className, value, fieldLabel) {
           var cell = document.createElement('div');
           var input = document.createElement('input');
           input.type = 'time';
           input.className = className;
           input.dataset.day = d;
           input.value = value;
+          input.setAttribute('aria-label', fieldLabel + ' for ' + dayLabel);
           cell.appendChild(input);
           row.appendChild(cell);
         }
 
-        appendTime('hours-open', h.open || '');
-        appendTime('hours-close', h.close || '');
+        appendTime('hours-open', h.open || '', 'Opening time');
+        appendTime('hours-close', h.close || '', 'Closing time');
 
         var lunchCell = document.createElement('div');
         var lunch = document.createElement('input');
@@ -1423,6 +1502,7 @@
         lunch.dataset.day = d;
         lunch.placeholder = '12:00-13:00';
         lunch.value = h.lunch || '';
+        lunch.setAttribute('aria-label', 'Lunch hours for ' + dayLabel);
         lunchCell.appendChild(lunch);
         row.appendChild(lunchCell);
 
@@ -1437,6 +1517,7 @@
           input.className = className;
           input.dataset.day = d;
           input.checked = !!checked;
+          input.setAttribute('aria-label', labelText + ' for ' + dayLabel);
           var slider = document.createElement('span');
           slider.className = 'slider';
           label.append(input, slider);
@@ -1474,6 +1555,7 @@
       var label = document.createElement('label');
       label.textContent = labelText;
       var input = document.createElement(options && options.multiline ? 'textarea' : 'input');
+      input.id = stableRowId('service-field');
       input.className = className;
       if (!(options && options.multiline)) input.type = options && options.type ? options.type : 'text';
       input.value = value === null || value === undefined ? '' : String(value);
@@ -1482,6 +1564,7 @@
       if (options && options.min !== undefined) input.min = String(options.min);
       if (options && options.max !== undefined) input.max = String(options.max);
       if (options && options.placeholder) input.placeholder = options.placeholder;
+      label.htmlFor = input.id;
       field.append(label, input);
       if (options && options.help) {
         var help = document.createElement('span');
@@ -1903,6 +1986,8 @@
     // Init
     // ====================================================================
     document.addEventListener('DOMContentLoaded', function() {
+      initializeProfileAccessibility();
+      setProfileInteractionState('loading', 'Loading your durable Business Profile authority. Editing remains disabled.');
       var addAssetButton = document.getElementById('addAssetButton');
       if (addAssetButton) addAssetButton.addEventListener('click', addAssetCard);
       var addServiceButton = document.getElementById('addServiceButton');

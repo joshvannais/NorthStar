@@ -5,6 +5,9 @@ const crypto = require('crypto');
 const RAW_PROFILE_FIELD_TYPES = Object.freeze({
   version: 'string',
   updatedAt: 'string',
+  industry: 'string',
+  ownerName: 'string',
+  businessDescription: 'string',
   company: 'object',
   headquarters: 'object',
   serviceArea: 'object',
@@ -46,16 +49,33 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
+function postgresJsonStringIssue(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 0) return 'NUL';
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        index += 1;
+        continue;
+      }
+      return 'unpaired-surrogate';
+    }
+    if (code >= 0xDC00 && code <= 0xDFFF) return 'unpaired-surrogate';
+  }
+  return null;
+}
+
 function validateRawBusinessProfile(profile) {
   const errors = [];
   if (!isPlainObject(profile)) return ['Business Profile must be an object.'];
 
   for (const key of Object.keys(profile)) {
-    const expected = RAW_PROFILE_FIELD_TYPES[key];
-    if (!expected) {
+    if (!Object.prototype.hasOwnProperty.call(RAW_PROFILE_FIELD_TYPES, key)) {
       errors.push(key + ' is not a writable Business Profile field.');
       continue;
     }
+    const expected = RAW_PROFILE_FIELD_TYPES[key];
     const value = profile[key];
     if (expected === 'object' && !isPlainObject(value)) errors.push(key + ' must be an object.');
     if (expected === 'array' && !Array.isArray(value)) errors.push(key + ' must be an array.');
@@ -89,6 +109,12 @@ function validateRawBusinessProfile(profile) {
       return;
     }
     if (typeof value === 'string') {
+      const issue = postgresJsonStringIssue(value);
+      if (issue === 'NUL') {
+        errors.push(path + ' contains a NUL character that PostgreSQL JSONB cannot represent.');
+      } else if (issue === 'unpaired-surrogate') {
+        errors.push(path + ' contains an unpaired UTF-16 surrogate that PostgreSQL JSONB cannot represent.');
+      }
       if (Buffer.byteLength(value, 'utf8') > RAW_PROFILE_LIMITS.maximumStringBytes) {
         errors.push(path + ' exceeds the maximum UTF-8 byte length of ' + RAW_PROFILE_LIMITS.maximumStringBytes + '.');
       }
@@ -127,6 +153,12 @@ function validateRawBusinessProfile(profile) {
     }
     for (const key of keys) {
       if (UNSAFE_RAW_KEYS.has(key)) errors.push(path + ' contains unsafe key ' + key + '.');
+      const keyIssue = postgresJsonStringIssue(key);
+      if (keyIssue === 'NUL') {
+        errors.push(path + ' contains a key with a NUL character that PostgreSQL JSONB cannot represent.');
+      } else if (keyIssue === 'unpaired-surrogate') {
+        errors.push(path + ' contains a key with an unpaired UTF-16 surrogate that PostgreSQL JSONB cannot represent.');
+      }
       if (Buffer.byteLength(key, 'utf8') > RAW_PROFILE_LIMITS.maximumKeyBytes) {
         errors.push(path + ' contains a key that exceeds the maximum UTF-8 byte length of ' + RAW_PROFILE_LIMITS.maximumKeyBytes + '.');
       }

@@ -626,39 +626,91 @@
       var container = document.getElementById('hoursContainer');
       if (!container) return;
       var days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-      var html = '';
+      var fragment = document.createDocumentFragment();
       days.forEach(function(d) {
         var h = hours[d] || {};
         var dayLabel = d.charAt(0).toUpperCase() + d.slice(1);
-        var tpl = '<div class="bp-hours-row">' +
-          '<div class="day">' + dayLabel + '</div>' +
-          '<div><input type="time" class="hours-open" data-day="' + d + '" value="' + (h.open || '') + '"></div>' +
-          '<div><input type="time" class="hours-close" data-day="' + d + '" value="' + (h.close || '') + '"></div>' +
-          '<div><label class="bp-toggle" style="justify-content:center;"><input type="checkbox" class="hours-emergency" data-day="' + d + '" ' + (h.emergency ? 'checked' : '') + '><span class="slider"></span></label></div>' +
-          '</div>';
-        html += tpl;
+        var row = document.createElement('div');
+        row.className = 'bp-hours-row';
+
+        var day = document.createElement('div');
+        day.className = 'day';
+        day.textContent = dayLabel;
+        row.appendChild(day);
+
+        function appendTime(className, value) {
+          var cell = document.createElement('div');
+          var input = document.createElement('input');
+          input.type = 'time';
+          input.className = className;
+          input.dataset.day = d;
+          input.value = value;
+          cell.appendChild(input);
+          row.appendChild(cell);
+        }
+
+        appendTime('hours-open', h.open || '');
+        appendTime('hours-close', h.close || '');
+
+        var emergencyCell = document.createElement('div');
+        var emergencyLabel = document.createElement('label');
+        emergencyLabel.className = 'bp-toggle';
+        emergencyLabel.style.justifyContent = 'center';
+        var emergency = document.createElement('input');
+        emergency.type = 'checkbox';
+        emergency.className = 'hours-emergency';
+        emergency.dataset.day = d;
+        emergency.checked = !!h.emergency;
+        var slider = document.createElement('span');
+        slider.className = 'slider';
+        emergencyLabel.append(emergency, slider);
+        emergencyCell.appendChild(emergencyLabel);
+        row.appendChild(emergencyCell);
+        fragment.appendChild(row);
       });
-      container.innerHTML = html;
+      container.replaceChildren(fragment);
     }
 
     function renderServices(services) {
       var container = document.getElementById('servicesContainer');
       if (!container) return;
       if (!services || services.length === 0) {
-        container.innerHTML = '<div style="padding:16px;text-align:center;color:var(--neutral-400);font-size:13px;">No services configured. Add services to your catalog.</div>';
+        var empty = document.createElement('div');
+        empty.style.cssText = 'padding:16px;text-align:center;color:var(--neutral-400);font-size:13px;';
+        empty.textContent = 'No services configured. Add services to your catalog.';
+        container.replaceChildren(empty);
         return;
       }
-      var html = '';
+      var fragment = document.createDocumentFragment();
       services.forEach(function(s, i) {
-        html += '<div class="bp-service-row">' +
-          '<div class="svc-name">' + s.name + '</div>' +
-          '<div><input type="number" class="svc-crew" data-idx="' + i + '" value="' + (s.crewSize || 2) + '" min="1" style="width:50px;"></div>' +
-          '<div><input type="number" class="svc-hours" data-idx="' + i + '" value="' + (s.avgHours || 3) + '" step="0.5" min="0.5" style="width:60px;"></div>' +
-          '<div><input type="number" class="svc-confidence" data-idx="' + i + '" value="' + (s.confidence || 85) + '" min="0" max="100" style="width:50px;"></div>' +
-          '<div><input type="text" class="svc-equipment" data-idx="' + i + '" value="' + (s.equipment || '') + '" placeholder="Equipment"></div>' +
-          '</div>';
+        var row = document.createElement('div');
+        row.className = 'bp-service-row';
+
+        var name = document.createElement('div');
+        name.className = 'svc-name';
+        name.textContent = s.name;
+        row.appendChild(name);
+
+        function appendInput(type, className, value, attributes, width) {
+          var cell = document.createElement('div');
+          var input = document.createElement('input');
+          input.type = type;
+          input.className = className;
+          input.dataset.idx = String(i);
+          input.value = value;
+          Object.keys(attributes).forEach(function(key) { input.setAttribute(key, attributes[key]); });
+          if (width) input.style.width = width;
+          cell.appendChild(input);
+          row.appendChild(cell);
+        }
+
+        appendInput('number', 'svc-crew', s.crewSize || 2, { min: '1' }, '50px');
+        appendInput('number', 'svc-hours', s.avgHours || 3, { step: '0.5', min: '0.5' }, '60px');
+        appendInput('number', 'svc-confidence', s.confidence || 85, { min: '0', max: '100' }, '50px');
+        appendInput('text', 'svc-equipment', s.equipment || '', { placeholder: 'Equipment' });
+        fragment.appendChild(row);
       });
-      container.innerHTML = html;
+      container.replaceChildren(fragment);
     }
 
     // ====================================================================

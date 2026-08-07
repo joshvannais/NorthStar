@@ -336,22 +336,48 @@
       const contacts = getContacts();
 
       if (contacts.length === 0) {
-        list.innerHTML = `<div class="empty-state" style="padding:20px;">
-          <p style="font-size:13px;color:var(--neutral-400);">No contacts added yet. Add family, team members, or regular customers below.</p>
-        </div>`;
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.style.padding = '20px';
+        const message = document.createElement('p');
+        message.style.cssText = 'font-size:13px;color:var(--neutral-400);';
+        message.textContent = 'No contacts added yet. Add family, team members, or regular customers below.';
+        empty.appendChild(message);
+        list.replaceChildren(empty);
         return;
       }
 
-      list.innerHTML = contacts.map((c, i) => `
-        <div class="integration-card" style="margin-bottom:0;padding:10px 14px;">
-          <div class="icon" style="width:36px;height:36px;font-size:14px;">👤</div>
-          <div class="info">
-            <h4 style="font-size:14px;">${c.name}</h4>
-            <p style="font-size:12px;">${c.phone}</p>
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="removeContact(${i})" style="color:var(--danger);font-size:12px;">Remove</button>
-        </div>
-      `).join('');
+      const fragment = document.createDocumentFragment();
+      contacts.forEach((contact, index) => {
+        const card = document.createElement('div');
+        card.className = 'integration-card';
+        card.style.cssText = 'margin-bottom:0;padding:10px 14px;';
+
+        const icon = document.createElement('div');
+        icon.className = 'icon';
+        icon.style.cssText = 'width:36px;height:36px;font-size:14px;';
+        icon.textContent = '👤';
+
+        const info = document.createElement('div');
+        info.className = 'info';
+        const name = document.createElement('h4');
+        name.style.fontSize = '14px';
+        name.textContent = contact.name;
+        const phone = document.createElement('p');
+        phone.style.fontSize = '12px';
+        phone.textContent = contact.phone;
+        info.append(name, phone);
+
+        const remove = document.createElement('button');
+        remove.className = 'btn btn-ghost btn-sm';
+        remove.style.cssText = 'color:var(--danger);font-size:12px;';
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', () => removeContact(index));
+
+        card.append(icon, info, remove);
+        fragment.appendChild(card);
+      });
+      list.replaceChildren(fragment);
     }
 
     function addContact() {

@@ -46,7 +46,7 @@
     .bp-toast.show { opacity: 1; transform: translateY(0); }
     .bp-toast.success { background: #065f46; color: #fff; }
     .bp-toast.error { background: #991b1b; color: #fff; }
-    .bp-hours-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--neutral-100); font-size: 13px; }
+    .bp-hours-row { display: grid; grid-template-columns: 2fr repeat(5, 1fr); gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--neutral-100); font-size: 13px; }
     .bp-hours-row:last-child { border-bottom: none; }
     .bp-hours-row .day { font-weight: 600; color: var(--neutral-700); }
     .bp-hours-row input { padding: 4px 8px; border: 1px solid var(--neutral-200); border-radius: 4px; font-size: 13px; width: 100%; }
@@ -55,6 +55,16 @@
     .bp-service-row:last-child { border-bottom: none; }
     .bp-service-row input { padding: 4px 8px; border: 1px solid var(--neutral-200); border-radius: 4px; font-size: 13px; width: 100%; }
     .bp-service-row .svc-name { font-weight: 600; }
+    .bp-repeat-list { display: grid; gap: 12px; }
+    .bp-repeat-card { border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); padding: 14px; background: var(--neutral-50); }
+    .bp-repeat-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .bp-repeat-title { font-size: 13px; font-weight: 600; color: var(--neutral-700); }
+    .bp-add-btn, .bp-remove-btn { border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); background: var(--neutral-50); color: var(--neutral-700); font-size: 12px; font-weight: 600; cursor: pointer; padding: 7px 10px; }
+    .bp-add-btn:hover, .bp-remove-btn:hover { border-color: var(--brand-500); }
+    .bp-remove-btn { color: #991b1b; }
+    .bp-empty-note { padding: 12px; border: 1px dashed var(--neutral-200); border-radius: var(--radius-sm); color: var(--neutral-500); font-size: 12px; text-align: center; }
+    .bp-policy-row { display: grid; grid-template-columns: minmax(150px, 1fr) 3fr auto; gap: 8px; align-items: start; }
+    .bp-policy-row input, .bp-policy-row textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); color: var(--neutral-800); background: var(--neutral-50); font: inherit; }
     @media (max-width: 768px) { .bp-container { padding: 16px; } .bp-grid { grid-template-columns: 1fr; } .bp-hours-row { grid-template-columns: 1fr; } .bp-service-row { grid-template-columns: 1fr; } }
     .bp-full { grid-column: 1 / -1; }
     .bp-half { grid-column: span 1; }
@@ -83,6 +93,7 @@
           <button class="bp-nav-btn" data-section="serviceArea" onclick="switchSection('serviceArea')">🗺️ Service Area</button>
           <button class="bp-nav-btn" data-section="routing" onclick="switchSection('routing')">🧭 Routing</button>
           <button class="bp-nav-btn" data-section="hours" onclick="switchSection('hours')">🕐 Hours</button>
+          <button class="bp-nav-btn" data-section="policies" onclick="switchSection('policies')">📜 Policies</button>
           <button class="bp-nav-btn" data-section="crew" onclick="switchSection('crew')">👥 Crews</button>
           <button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Vehicles</button>
           <button class="bp-nav-btn" data-section="services" onclick="switchSection('services')">📋 Services</button>
@@ -105,9 +116,10 @@
               <div class="bp-field"><label>Business Email</label><input id="company-email" type="email" placeholder="contact@example.com"></div>
               <div class="bp-field"><label>Business Phone</label><input id="company-phone" type="tel" placeholder="(555) 000-0000"></div>
               <div class="bp-field"><label>Website</label><input id="company-website" type="url" placeholder="https://"></div>
+              <div class="bp-field"><label>Logo URL</label><input id="company-logo" type="url" placeholder="https://example.com/logo.svg"></div>
               <div class="bp-field"><label>Tax ID (EIN)</label><input id="company-taxId" placeholder="XX-XXXXXXX"></div>
               <div class="bp-field"><label>Time Zone</label>
-                <select id="company-timeZone"><option value="America/New_York">Eastern (ET)</option><option value="America/Chicago">Central (CT)</option><option value="America/Denver">Mountain (MT)</option><option value="America/Phoenix">Arizona (MST)</option><option value="America/Los_Angeles">Pacific (PT)</option><option value="America/Anchorage">Alaska (AKT)</option><option value="Pacific/Honolulu">Hawaii (HT)</option></select></div>
+                <select id="company-timeZone"><option value="">Not configured</option><option value="America/New_York">Eastern (ET)</option><option value="America/Chicago">Central (CT)</option><option value="America/Denver">Mountain (MT)</option><option value="America/Phoenix">Arizona (MST)</option><option value="America/Los_Angeles">Pacific (PT)</option><option value="America/Anchorage">Alaska (AKT)</option><option value="Pacific/Honolulu">Hawaii (HT)</option></select></div>
               <div class="bp-field"><label>Currency</label>
                 <select id="company-currency"><option value="USD">USD ($)</option><option value="CAD">CAD (C$)</option><option value="EUR">EUR (€)</option></select></div>
             </div>
@@ -129,6 +141,16 @@
               <div class="bp-field"><label>Longitude</label><input id="hq-longitude" type="number" step="any" placeholder="-74.0060"></div>
             </div>
           </div>
+          <div class="bp-card">
+            <div class="bp-repeat-header">
+              <div>
+                <h3>Additional Office Locations</h3>
+                <div class="bp-section-desc">Optional offices retain stable profile identifiers for location-aware control-plane use.</div>
+              </div>
+              <button class="bp-add-btn" type="button" onclick="addOffice()">Add office</button>
+            </div>
+            <div id="additionalOfficesContainer" class="bp-repeat-list"></div>
+          </div>
         </div>
 
         <!-- Section: Service Area -->
@@ -140,6 +162,7 @@
               <div class="bp-field"><label>Max Service Radius (miles)</label><input id="sa-maxRadiusMiles" type="number" min="1" max="500" placeholder="50"></div>
               <div class="bp-field"><label>Max Travel Time (minutes)</label><input id="sa-maxTravelMinutes" type="number" min="1" max="240" placeholder="60"></div>
               <div class="bp-field bp-full"><label>Primary Territory</label><textarea id="sa-primaryTerritory" rows="2" placeholder="e.g., Greater Phoenix Metropolitan Area"></textarea></div>
+              <div class="bp-field bp-full"><label>Boundary Polygon (JSON)</label><textarea id="sa-polygon" rows="4" placeholder="[[33.4,-112.2],[33.7,-112.2],[33.7,-111.8]]"></textarea><span class="help-text">Empty array or at least three [latitude, longitude] points. Values remain canonical profile data; no mapping provider is contacted.</span></div>
             </div>
           </div>
         </div>
@@ -168,10 +191,34 @@
           <div class="bp-card">
             <h3>Business Hours</h3>
             <div class="bp-section-desc">Set operating hours for each day. Used by scheduling and Retell call routing.</div>
-            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;padding:8px 0;font-size:11px;font-weight:600;color:var(--neutral-500);text-transform:uppercase;border-bottom:2px solid var(--neutral-200);">
-              <div>Day</div><div>Open</div><div>Close</div><div>Emergency</div>
+            <div class="bp-hours-row" style="font-size:11px;font-weight:600;color:var(--neutral-500);text-transform:uppercase;border-bottom:2px solid var(--neutral-200);">
+              <div>Day</div><div>Open</div><div>Close</div><div>Lunch</div><div>Emergency</div><div>After Hours</div>
             </div>
             <div id="hoursContainer"></div>
+          </div>
+          <div class="bp-card">
+            <div class="bp-repeat-header">
+              <div>
+                <h3>Holiday Exceptions</h3>
+                <div class="bp-section-desc">Date-specific closures or reduced hours override the weekly schedule.</div>
+              </div>
+              <button class="bp-add-btn" type="button" onclick="addHoliday()">Add holiday</button>
+            </div>
+            <div id="holidaysContainer" class="bp-repeat-list"></div>
+          </div>
+        </div>
+
+        <!-- Section: Policies -->
+        <div class="bp-section" id="section-policies">
+          <div class="bp-card">
+            <div class="bp-repeat-header">
+              <div>
+                <h3>Operating Policies</h3>
+                <div class="bp-section-desc">Tenant-authored operational policy text. NorthStar stores it literally and does not supply legal language.</div>
+              </div>
+              <button class="bp-add-btn" type="button" onclick="addPolicy()">Add policy</button>
+            </div>
+            <div id="policiesContainer" class="bp-repeat-list"></div>
           </div>
         </div>
 
@@ -397,29 +444,37 @@
     // Render profile to form
     // ====================================================================
     function renderProfile(p) {
+      var company = p.company && typeof p.company === 'object' ? p.company : {};
+      var headquarters = p.headquarters && typeof p.headquarters === 'object' ? p.headquarters : {};
+      var serviceArea = p.serviceArea && typeof p.serviceArea === 'object' ? p.serviceArea : {};
+      var hours = p.hours && typeof p.hours === 'object' ? p.hours : {};
+
       // Company
-      setVal('company-name', p.company.name);
-      setVal('company-dba', p.company.dba);
-      setVal('company-email', p.company.email);
-      setVal('company-phone', p.company.phone);
-      setVal('company-website', p.company.website);
-      setVal('company-taxId', p.company.taxId);
-      setSelect('company-timeZone', p.company.timeZone);
-      setSelect('company-currency', p.company.currency);
+      setVal('company-name', company.name);
+      setVal('company-dba', company.dba);
+      setVal('company-email', company.email);
+      setVal('company-phone', company.phone);
+      setVal('company-website', company.website);
+      setVal('company-logo', company.logo);
+      setVal('company-taxId', company.taxId);
+      setSelect('company-timeZone', company.timeZone);
+      setSelect('company-currency', company.currency);
 
       // HQ
-      setVal('hq-street', p.headquarters.street);
-      setVal('hq-city', p.headquarters.city);
-      setVal('hq-state', p.headquarters.state);
-      setVal('hq-zip', p.headquarters.zip);
-      setSelect('hq-country', p.headquarters.country);
-      setVal('hq-latitude', p.headquarters.latitude);
-      setVal('hq-longitude', p.headquarters.longitude);
+      setVal('hq-street', headquarters.street);
+      setVal('hq-city', headquarters.city);
+      setVal('hq-state', headquarters.state);
+      setVal('hq-zip', headquarters.zip);
+      setSelect('hq-country', headquarters.country);
+      setVal('hq-latitude', headquarters.latitude);
+      setVal('hq-longitude', headquarters.longitude);
+      renderAdditionalOffices(headquarters.additionalOffices);
 
       // Service Area
-      setVal('sa-maxRadiusMiles', p.serviceArea.maxRadiusMiles);
-      setVal('sa-maxTravelMinutes', p.serviceArea.maxTravelMinutes);
-      setVal('sa-primaryTerritory', p.serviceArea.primaryTerritory);
+      setVal('sa-maxRadiusMiles', serviceArea.maxRadiusMiles);
+      setVal('sa-maxTravelMinutes', serviceArea.maxTravelMinutes);
+      setVal('sa-primaryTerritory', serviceArea.primaryTerritory);
+      setVal('sa-polygon', JSON.stringify(Array.isArray(serviceArea.polygon) ? serviceArea.polygon : [], null, 2));
 
       // Routing
       setSelect('routing-preferredProvider', p.routing.preferredProvider);
@@ -431,7 +486,9 @@
       setCheck('routing-avoidFerries', p.routing.avoidFerries);
 
       // Hours
-      renderHours(p.hours);
+      renderHours(hours);
+      renderHolidays(hours.holidays);
+      renderPolicies(p.policies);
 
       // Crew
       setVal('crew-defaultCrewSize', p.crew.defaultCrewSize);
@@ -533,7 +590,7 @@
     }
     function setSelect(id, val) {
       var el = document.getElementById(id);
-      if (el && val) el.value = val;
+      if (el && val !== null && val !== undefined) el.value = val;
     }
     function setCheck(id, val) {
       var el = document.getElementById(id);
@@ -622,6 +679,202 @@
       error.classList.remove('show');
     }
 
+    function stableRowId(prefix) {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') return prefix + '-' + window.crypto.randomUUID();
+      return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    function appendLabeledInput(parent, label, className, value, type, attributes) {
+      var field = document.createElement('div');
+      field.className = 'bp-field';
+      var labelElement = document.createElement('label');
+      labelElement.textContent = label;
+      var input = document.createElement('input');
+      input.type = type || 'text';
+      input.className = className;
+      input.value = value !== null && value !== undefined ? value : '';
+      Object.keys(attributes || {}).forEach(function(key) { input.setAttribute(key, attributes[key]); });
+      field.append(labelElement, input);
+      parent.appendChild(field);
+      return input;
+    }
+
+    function appendEmptyNote(container, message) {
+      var empty = document.createElement('div');
+      empty.className = 'bp-empty-note';
+      empty.textContent = message;
+      container.appendChild(empty);
+    }
+
+    function renderAdditionalOffices(offices) {
+      var container = document.getElementById('additionalOfficesContainer');
+      if (!container) return;
+      var values = Array.isArray(offices) ? offices : [];
+      var fragment = document.createDocumentFragment();
+      if (values.length === 0) {
+        appendEmptyNote(fragment, 'No additional offices configured.');
+        container.replaceChildren(fragment);
+        return;
+      }
+      values.forEach(function(office) {
+        var value = office && typeof office === 'object' ? office : {};
+        var card = document.createElement('div');
+        card.className = 'bp-repeat-card bp-location-card';
+        card.dataset.locationId = typeof value.id === 'string' ? value.id : '';
+        var header = document.createElement('div');
+        header.className = 'bp-repeat-header';
+        var title = document.createElement('div');
+        title.className = 'bp-repeat-title';
+        title.textContent = value.name || 'Office location';
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'bp-remove-btn';
+        remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', 'Remove office ' + (value.name || 'location'));
+        remove.addEventListener('click', function() {
+          card.remove();
+          if (!container.querySelector('.bp-location-card')) appendEmptyNote(container, 'No additional offices configured.');
+        });
+        header.append(title, remove);
+        var grid = document.createElement('div');
+        grid.className = 'bp-grid';
+        appendLabeledInput(grid, 'Location name', 'office-name', value.name);
+        appendLabeledInput(grid, 'Street', 'office-street', value.street);
+        appendLabeledInput(grid, 'City', 'office-city', value.city);
+        appendLabeledInput(grid, 'State / region', 'office-state', value.state);
+        appendLabeledInput(grid, 'Postal code', 'office-zip', value.zip);
+        appendLabeledInput(grid, 'Country code', 'office-country', value.country || 'US', 'text', { maxlength: '2' });
+        appendLabeledInput(grid, 'Latitude', 'office-latitude', value.latitude, 'number', { step: 'any', min: '-90', max: '90' });
+        appendLabeledInput(grid, 'Longitude', 'office-longitude', value.longitude, 'number', { step: 'any', min: '-180', max: '180' });
+        card.append(header, grid);
+        fragment.appendChild(card);
+      });
+      container.replaceChildren(fragment);
+    }
+
+    function addOffice() {
+      var offices = collectAdditionalOffices();
+      offices.push({
+        id: stableRowId('office'), name: '', street: '', city: '', state: '', zip: '', country: 'US',
+        latitude: null, longitude: null,
+      });
+      renderAdditionalOffices(offices);
+      var latest = document.querySelector('#additionalOfficesContainer .bp-location-card:last-child .office-name');
+      if (latest) latest.focus();
+    }
+
+    function renderHolidays(holidays) {
+      var container = document.getElementById('holidaysContainer');
+      if (!container) return;
+      var values = Array.isArray(holidays) ? holidays : [];
+      var fragment = document.createDocumentFragment();
+      if (values.length === 0) {
+        appendEmptyNote(fragment, 'No holiday exceptions configured.');
+        container.replaceChildren(fragment);
+        return;
+      }
+      values.forEach(function(holiday) {
+        var value = holiday && typeof holiday === 'object' ? holiday : {};
+        var card = document.createElement('div');
+        card.className = 'bp-repeat-card bp-holiday-card';
+        card.dataset.holidayId = typeof value.id === 'string' ? value.id : '';
+        var header = document.createElement('div');
+        header.className = 'bp-repeat-header';
+        var title = document.createElement('div');
+        title.className = 'bp-repeat-title';
+        title.textContent = value.name || 'Holiday exception';
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'bp-remove-btn';
+        remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', 'Remove holiday ' + (value.name || 'exception'));
+        remove.addEventListener('click', function() {
+          card.remove();
+          if (!container.querySelector('.bp-holiday-card')) appendEmptyNote(container, 'No holiday exceptions configured.');
+        });
+        header.append(title, remove);
+        var grid = document.createElement('div');
+        grid.className = 'bp-grid';
+        appendLabeledInput(grid, 'Name', 'holiday-name', value.name);
+        appendLabeledInput(grid, 'Date', 'holiday-date', value.date, 'date');
+        var closedField = document.createElement('div');
+        closedField.className = 'bp-field';
+        var closedLabel = document.createElement('label');
+        closedLabel.className = 'bp-toggle';
+        var closed = document.createElement('input');
+        closed.type = 'checkbox';
+        closed.className = 'holiday-closed';
+        closed.checked = value.closed !== false;
+        var slider = document.createElement('span');
+        slider.className = 'slider';
+        closedLabel.append(closed, slider, document.createTextNode(' Closed'));
+        closedField.appendChild(closedLabel);
+        grid.appendChild(closedField);
+        appendLabeledInput(grid, 'Open', 'holiday-open', value.open, 'time');
+        appendLabeledInput(grid, 'Close', 'holiday-close', value.close, 'time');
+        card.append(header, grid);
+        fragment.appendChild(card);
+      });
+      container.replaceChildren(fragment);
+    }
+
+    function addHoliday() {
+      var holidays = collectHolidays();
+      holidays.push({ id: stableRowId('holiday'), name: '', date: '', closed: true, open: '', close: '' });
+      renderHolidays(holidays);
+      var latest = document.querySelector('#holidaysContainer .bp-holiday-card:last-child .holiday-name');
+      if (latest) latest.focus();
+    }
+
+    function renderPolicies(policies) {
+      var container = document.getElementById('policiesContainer');
+      if (!container) return;
+      var value = policies && typeof policies === 'object' && !Array.isArray(policies) ? policies : {};
+      var keys = Object.keys(value).sort();
+      var fragment = document.createDocumentFragment();
+      if (keys.length === 0) {
+        appendEmptyNote(fragment, 'No operating policies configured.');
+        container.replaceChildren(fragment);
+        return;
+      }
+      keys.forEach(function(key) {
+        var row = document.createElement('div');
+        row.className = 'bp-policy-row';
+        var keyInput = document.createElement('input');
+        keyInput.className = 'policy-key';
+        keyInput.setAttribute('aria-label', 'Policy key');
+        keyInput.value = key;
+        var text = document.createElement('textarea');
+        text.className = 'policy-value';
+        text.setAttribute('aria-label', 'Policy text for ' + key);
+        text.rows = 3;
+        text.value = typeof value[key] === 'string' ? value[key] : '';
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'bp-remove-btn';
+        remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', 'Remove policy ' + key);
+        remove.addEventListener('click', function() {
+          row.remove();
+          if (!container.querySelector('.bp-policy-row')) appendEmptyNote(container, 'No operating policies configured.');
+        });
+        row.append(keyInput, text, remove);
+        fragment.appendChild(row);
+      });
+      container.replaceChildren(fragment);
+    }
+
+    function addPolicy() {
+      var policies = collectPolicies();
+      var key = 'policy';
+      var suffix = 1;
+      while (Object.prototype.hasOwnProperty.call(policies, key)) { suffix += 1; key = 'policy' + suffix; }
+      policies[key] = '';
+      renderPolicies(policies);
+      var latest = document.querySelector('#policiesContainer .bp-policy-row:last-child .policy-key');
+      if (latest) { latest.focus(); latest.select(); }
+    }
+
     function renderHours(hours) {
       var container = document.getElementById('hoursContainer');
       if (!container) return;
@@ -652,20 +905,36 @@
         appendTime('hours-open', h.open || '');
         appendTime('hours-close', h.close || '');
 
-        var emergencyCell = document.createElement('div');
-        var emergencyLabel = document.createElement('label');
-        emergencyLabel.className = 'bp-toggle';
-        emergencyLabel.style.justifyContent = 'center';
-        var emergency = document.createElement('input');
-        emergency.type = 'checkbox';
-        emergency.className = 'hours-emergency';
-        emergency.dataset.day = d;
-        emergency.checked = !!h.emergency;
-        var slider = document.createElement('span');
-        slider.className = 'slider';
-        emergencyLabel.append(emergency, slider);
-        emergencyCell.appendChild(emergencyLabel);
-        row.appendChild(emergencyCell);
+        var lunchCell = document.createElement('div');
+        var lunch = document.createElement('input');
+        lunch.type = 'text';
+        lunch.className = 'hours-lunch';
+        lunch.dataset.day = d;
+        lunch.placeholder = '12:00-13:00';
+        lunch.value = h.lunch || '';
+        lunchCell.appendChild(lunch);
+        row.appendChild(lunchCell);
+
+        function appendToggle(className, checked, labelText) {
+          var cell = document.createElement('div');
+          var label = document.createElement('label');
+          label.className = 'bp-toggle';
+          label.style.justifyContent = 'center';
+          label.setAttribute('aria-label', labelText + ' for ' + dayLabel);
+          var input = document.createElement('input');
+          input.type = 'checkbox';
+          input.className = className;
+          input.dataset.day = d;
+          input.checked = !!checked;
+          var slider = document.createElement('span');
+          slider.className = 'slider';
+          label.append(input, slider);
+          cell.appendChild(label);
+          row.appendChild(cell);
+        }
+
+        appendToggle('hours-emergency', h.emergency, 'Emergency availability');
+        appendToggle('hours-afterHours', h.afterHours, 'After-hours availability');
         fragment.appendChild(row);
       });
       container.replaceChildren(fragment);
@@ -713,6 +982,67 @@
       container.replaceChildren(fragment);
     }
 
+    function readOptionalNumber(element, label) {
+      if (!element || !element.value.trim()) return null;
+      var value = Number(element.value);
+      if (!Number.isFinite(value) || (element.validity && !element.validity.valid)) {
+        throw new Error(label + ' must be a valid finite number.');
+      }
+      return value;
+    }
+
+    function collectAdditionalOffices() {
+      return Array.from(document.querySelectorAll('#additionalOfficesContainer .bp-location-card')).map(function(card) {
+        var office = {
+          name: card.querySelector('.office-name').value,
+          street: card.querySelector('.office-street').value,
+          city: card.querySelector('.office-city').value,
+          state: card.querySelector('.office-state').value,
+          zip: card.querySelector('.office-zip').value,
+          country: card.querySelector('.office-country').value,
+          latitude: readOptionalNumber(card.querySelector('.office-latitude'), 'Office latitude'),
+          longitude: readOptionalNumber(card.querySelector('.office-longitude'), 'Office longitude'),
+        };
+        if (card.dataset.locationId) office.id = card.dataset.locationId;
+        return office;
+      });
+    }
+
+    function collectHolidays() {
+      return Array.from(document.querySelectorAll('#holidaysContainer .bp-holiday-card')).map(function(card) {
+        var holiday = {
+          name: card.querySelector('.holiday-name').value,
+          date: card.querySelector('.holiday-date').value,
+          closed: card.querySelector('.holiday-closed').checked,
+          open: card.querySelector('.holiday-open').value,
+          close: card.querySelector('.holiday-close').value,
+        };
+        if (card.dataset.holidayId) holiday.id = card.dataset.holidayId;
+        return holiday;
+      });
+    }
+
+    function collectPolicies() {
+      var policies = Object.create(null);
+      document.querySelectorAll('#policiesContainer .bp-policy-row').forEach(function(row) {
+        var key = row.querySelector('.policy-key').value;
+        if (!key.trim()) throw new Error('Policy keys must not be blank.');
+        if (Object.prototype.hasOwnProperty.call(policies, key)) throw new Error('Policy keys must be unique.');
+        policies[key] = row.querySelector('.policy-value').value;
+      });
+      return policies;
+    }
+
+    function readServicePolygon() {
+      var element = document.getElementById('sa-polygon');
+      var raw = element ? element.value.trim() : '';
+      if (!raw) return [];
+      var polygon;
+      try { polygon = JSON.parse(raw); } catch (_error) { throw new Error('Boundary polygon must be valid JSON.'); }
+      if (!Array.isArray(polygon)) throw new Error('Boundary polygon must be a JSON array.');
+      return polygon;
+    }
+
     // ====================================================================
     // Collect form data
     // ====================================================================
@@ -720,11 +1050,17 @@
       var p = JSON.parse(JSON.stringify(profileData || {}));
       delete p.canonicalAuthority;
 
+      p.company = p.company && typeof p.company === 'object' ? p.company : {};
+      p.headquarters = p.headquarters && typeof p.headquarters === 'object' ? p.headquarters : {};
+      p.serviceArea = p.serviceArea && typeof p.serviceArea === 'object' ? p.serviceArea : {};
+      p.hours = p.hours && typeof p.hours === 'object' ? p.hours : {};
+
       p.company.name = getVal('company-name');
       p.company.dba = getVal('company-dba');
       p.company.email = getVal('company-email');
       p.company.phone = getVal('company-phone');
       p.company.website = getVal('company-website');
+      p.company.logo = getVal('company-logo');
       p.company.taxId = getVal('company-taxId');
       p.company.timeZone = getSelect('company-timeZone');
       p.company.currency = getSelect('company-currency');
@@ -734,12 +1070,14 @@
       p.headquarters.state = getVal('hq-state');
       p.headquarters.zip = getVal('hq-zip');
       p.headquarters.country = getSelect('hq-country');
-      p.headquarters.latitude = parseFloat(getVal('hq-latitude')) || null;
-      p.headquarters.longitude = parseFloat(getVal('hq-longitude')) || null;
+      p.headquarters.latitude = readOptionalNumber(document.getElementById('hq-latitude'), 'Headquarters latitude');
+      p.headquarters.longitude = readOptionalNumber(document.getElementById('hq-longitude'), 'Headquarters longitude');
+      p.headquarters.additionalOffices = collectAdditionalOffices();
 
-      p.serviceArea.maxRadiusMiles = parseInt(getVal('sa-maxRadiusMiles')) || 50;
-      p.serviceArea.maxTravelMinutes = parseInt(getVal('sa-maxTravelMinutes')) || 60;
+      p.serviceArea.maxRadiusMiles = readOptionalNumber(document.getElementById('sa-maxRadiusMiles'), 'Maximum service radius');
+      p.serviceArea.maxTravelMinutes = readOptionalNumber(document.getElementById('sa-maxTravelMinutes'), 'Maximum travel time');
       p.serviceArea.primaryTerritory = getVal('sa-primaryTerritory');
+      p.serviceArea.polygon = readServicePolygon();
 
       p.routing.preferredProvider = getSelect('routing-preferredProvider');
       p.routing.dispatchFrom = getSelect('routing-dispatchFrom');
@@ -755,11 +1093,17 @@
         if (!p.hours[d]) p.hours[d] = {};
         var openEl = document.querySelector('.hours-open[data-day="' + d + '"]');
         var closeEl = document.querySelector('.hours-close[data-day="' + d + '"]');
+        var lunchEl = document.querySelector('.hours-lunch[data-day="' + d + '"]');
         var emergEl = document.querySelector('.hours-emergency[data-day="' + d + '"]');
+        var afterHoursEl = document.querySelector('.hours-afterHours[data-day="' + d + '"]');
         p.hours[d].open = openEl ? openEl.value : '';
         p.hours[d].close = closeEl ? closeEl.value : '';
+        p.hours[d].lunch = lunchEl ? lunchEl.value : '';
         p.hours[d].emergency = emergEl ? emergEl.checked : false;
+        p.hours[d].afterHours = afterHoursEl ? afterHoursEl.checked : false;
       });
+      p.hours.holidays = collectHolidays();
+      p.policies = collectPolicies();
 
       p.crew.defaultCrewSize = parseInt(getVal('crew-defaultCrewSize')) || 2;
       p.crew.maxCrewSize = parseInt(getVal('crew-maxCrewSize')) || 6;

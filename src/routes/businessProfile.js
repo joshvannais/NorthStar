@@ -21,7 +21,7 @@ const {
 const VALID_SECTIONS = new Set([
   'company', 'headquarters', 'serviceArea', 'routing', 'hours', 'crew',
   'vehicles', 'services', 'financial', 'scheduling', 'polaris', 'retell',
-  'notifications', 'integrations', 'canonicalPricing', 'canonicalCosts',
+  'notifications', 'integrations', 'canonicalPricing', 'canonicalCosts', 'policies',
 ]);
 
 function sendError(res, error) {
@@ -62,13 +62,16 @@ function onboardingDraft(req) {
       email: req.user.email || '', phone: req.accountAuthority.phone || '',
       website: '', taxId: '', timeZone: '', currency: 'USD',
     },
-    headquarters: { street: '', city: '', state: '', zip: '', country: 'US', latitude: null, longitude: null },
+    headquarters: {
+      street: '', city: '', state: '', zip: '', country: 'US', latitude: null, longitude: null,
+      additionalOffices: [],
+    },
     serviceArea: { maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [] },
     routing: {
       preferredProvider: '', dispatchFrom: '', trafficEnabled: false,
       useLiveTraffic: false, avoidTolls: false, avoidHighways: false, avoidFerries: false,
     },
-    hours: {},
+    hours: { holidays: [] },
     crew: {
       defaultCrewSize: null, maxCrewSize: null, averageHourlyRate: null,
       overtimeMultiplier: null, travelPay: null, shopTime: null, minimumBillableHours: null,
@@ -102,6 +105,7 @@ function onboardingDraft(req) {
       result[name] = { enabled: false };
       return result;
     }, {}),
+    policies: {},
     canonicalAuthority: null,
     onboardingDraft: true,
   };

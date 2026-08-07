@@ -1,6 +1,7 @@
 'use strict';
 
 const db = require('../db');
+const { workforceInvitationEnvelope } = require('../email/transactional');
 
 class WorkforcePersistenceError extends Error {
   constructor(message, cause) {
@@ -148,9 +149,10 @@ class WorkforceRepository {
     );
   }
 
-  async snapshot(organizationId) {
+  async snapshot(organizationId, includeInvitations = false) {
     const pool = this.requirePool();
-    const [memberResult, skillResult, profileSkillResult, crewResult, crewMemberResult, profileResult] = await Promise.all([
+    const [memberResult, skillResult, profileSkillResult, crewResult, crewMemberResult, profileResult,
+      invitationResult, invitationSkillResult] = await Promise.all([
       pool.query(
         `SELECT profile.id AS profile_id,
                 membership.id AS membership_id,
@@ -210,6 +212,25 @@ class WorkforceRepository {
           WHERE organization_id = $1 AND is_active = TRUE`,
         [organizationId]
       ),
+      includeInvitations ? pool.query(
+        `SELECT id, name, email, phone, access_role, operational_role, home_location_id,
+                CASE WHEN token_expires_at <= NOW() THEN 'expired' ELSE status END AS invitation_status,
+                token_expires_at, delivery_generation, created_at, updated_at
+           FROM workforce_invitations
+          WHERE organization_id = $1 AND status = 'pending'
+          ORDER BY lower(name), id`,
+        [organizationId]
+      ) : Promise.resolve({ rows: [] }),
+      includeInvitations ? pool.query(
+        `SELECT relation.invitation_id, relation.skill_id
+           FROM workforce_invitation_skills relation
+           JOIN workforce_invitations invitation
+             ON invitation.organization_id = relation.organization_id
+            AND invitation.id = relation.invitation_id
+          WHERE relation.organization_id = $1 AND invitation.status = 'pending'
+          ORDER BY relation.invitation_id, relation.skill_id`,
+        [organizationId]
+      ) : Promise.resolve({ rows: [] }),
     ]);
 
     if (profileResult.rows.length !== 1) {
@@ -245,6 +266,11 @@ class WorkforceRepository {
       if (!membersByCrew.has(relation.crew_id)) membersByCrew.set(relation.crew_id, []);
       membersByCrew.get(relation.crew_id).push({ profileId: relation.profile_id, role: relation.crew_role });
     }
+    const skillsByInvitation = new Map();
+    for (const relation of invitationSkillResult.rows) {
+      if (!skillsByInvitation.has(relation.invitation_id)) skillsByInvitation.set(relation.invitation_id, []);
+      skillsByInvitation.get(relation.invitation_id).push(relation.skill_id);
+    }
     return {
       members: memberResult.rows.map(member => ({
         profileId: member.profile_id,
@@ -262,6 +288,21 @@ class WorkforceRepository {
         crews: crewsByProfile.get(member.profile_id) || [],
         createdAt: member.created_at,
         updatedAt: member.updated_at,
+      })),
+      invitations: invitationResult.rows.map(invitation => ({
+        invitationId: invitation.id,
+        name: invitation.name,
+        email: invitation.email,
+        phone: invitation.phone,
+        accessRole: invitation.access_role,
+        operationalRole: invitation.operational_role,
+        homeLocationId: invitation.home_location_id,
+        skillIds: skillsByInvitation.get(invitation.id) || [],
+        status: invitation.invitation_status,
+        expiresAt: invitation.token_expires_at,
+        deliveryGeneration: invitation.delivery_generation,
+        createdAt: invitation.created_at,
+        updatedAt: invitation.updated_at,
       })),
       skills: skillResult.rows.map(skill => ({
         id: skill.id,
@@ -296,6 +337,18 @@ class WorkforceRepository {
     return this.transaction(async client => {
       const organization = await this.lockOrganization(client, input.organizationId);
       await this.requireActor(client, input.organizationId, input.actorUserId, ['owner']);
+      try {
+        workforceInvitationEnvelope(input.email, {
+          name: input.name,
+          organizationName: organization.name,
+        });
+      } catch (_error) {
+        throw workforceError(
+          409,
+          'invitation_delivery_incompatible',
+          'Organization invitation identity is incompatible with delivery'
+        );
+      }
       const references = await this.profileReferences(client, input.organizationId);
       const homeLocationId = this.canonicalLocation(references, input.homeLocationId);
       if (input.skillIds.length) {
@@ -308,63 +361,46 @@ class WorkforceRepository {
           throw workforceError(400, 'invalid_workforce_skill', 'A selected skill is unavailable');
         }
       }
-      await client.query(
-        `INSERT INTO users
-          (id, organization_id, name, email, email_normalized, password_hash, phone, role, status)
-         VALUES ($1,$2,$3,$4,$4,$5,$6,$7,'pending_verification')`,
-        [input.userId, input.organizationId, input.name, input.email, input.passwordHash,
-          input.phone, input.accessRole]
+      const existingTenantAccount = await client.query(
+        `SELECT id FROM users
+          WHERE organization_id = $1 AND email_normalized = $2
+          LIMIT 1`,
+        [input.organizationId, input.email]
       );
-      await client.query(
-        `INSERT INTO organization_memberships
-          (id, organization_id, user_id, role, status)
-         VALUES ($1,$2,$3,$4,'invited')`,
-        [input.membershipId, input.organizationId, input.userId, input.accessRole]
-      );
-      const profile = await client.query(
-        `UPDATE workforce_profiles
-            SET operational_role = $3,
-                home_location_id = $4,
-                created_by_user_id = $5,
-                updated_by_user_id = $5,
-                updated_at = NOW()
-          WHERE organization_id = $1 AND membership_id = $2 AND id = $2
-          RETURNING id`,
-        [input.organizationId, input.membershipId, input.operationalRole,
-          homeLocationId, input.actorUserId]
-      );
-      if (profile.rows.length !== 1 || profile.rows[0].id !== input.profileId) {
-        throw new Error('Workforce invitation profile authority was not created');
+      if (existingTenantAccount.rows.length) {
+        throw workforceError(409, 'workforce_identity_conflict', 'A workforce identity already exists');
       }
+      await client.query(
+        `INSERT INTO workforce_invitations
+          (id, organization_id, name, email, email_normalized, phone, access_role,
+           operational_role, home_location_id, token_hash, token_expires_at,
+           created_by_user_id, updated_by_user_id)
+         VALUES ($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,NOW() + INTERVAL '72 hours',$10,$10)`,
+        [input.invitationId, input.organizationId, input.name, input.email, input.phone,
+          input.accessRole, input.operationalRole, homeLocationId, input.tokenHash, input.actorUserId]
+      );
       for (const skillId of input.skillIds) {
         await client.query(
-          `INSERT INTO workforce_profile_skills
-            (organization_id, profile_id, skill_id, created_by_user_id)
+          `INSERT INTO workforce_invitation_skills
+            (organization_id, invitation_id, skill_id, created_by_user_id)
            VALUES ($1,$2,$3,$4)`,
-          [input.organizationId, input.profileId, skillId, input.actorUserId]
+          [input.organizationId, input.invitationId, skillId, input.actorUserId]
         );
       }
-      await client.query(
-        `INSERT INTO account_action_tokens
-          (id, user_id, organization_id, purpose, token_hash, expires_at)
-         VALUES ($1,$2,$3,'membership_invitation',$4,NOW() + INTERVAL '72 hours')`,
-        [input.tokenId, input.userId, input.organizationId, input.tokenHash]
-      );
       await this.insertAudit(client, {
         organizationId: input.organizationId,
         actorUserId: input.actorUserId,
-        action: 'member_invited',
-        subjectType: 'membership',
-        subjectId: input.membershipId,
+        action: 'invitation_created',
+        subjectType: 'invitation',
+        subjectId: input.invitationId,
         details: { accessRole: input.accessRole, operationalRole: input.operationalRole },
       });
       return {
         organizationName: organization.name,
-        userId: input.userId,
-        membershipId: input.membershipId,
-        profileId: input.profileId,
+        invitationId: input.invitationId,
         name: input.name,
         email: input.email,
+        status: 'pending',
       };
     });
   }
@@ -374,106 +410,175 @@ class WorkforceRepository {
       const organization = await this.lockOrganization(client, input.organizationId);
       await this.requireActor(client, input.organizationId, input.actorUserId, ['owner']);
       const target = await client.query(
-        `SELECT membership.id AS membership_id, account.id AS user_id, account.name, account.email,
-                account.status AS user_status, membership.status AS membership_status
-           FROM organization_memberships membership
-           JOIN users account ON account.id = membership.user_id
-          WHERE membership.organization_id = $1 AND membership.id = $2
-          FOR UPDATE OF membership, account`,
-        [input.organizationId, input.membershipId]
+        `SELECT id, name, email, delivery_generation
+           FROM workforce_invitations
+          WHERE organization_id = $1 AND id = $2 AND status = 'pending'
+          FOR UPDATE`,
+        [input.organizationId, input.invitationId]
       );
       const row = target.rows[0];
-      if (!row || row.membership_status !== 'invited' || row.user_status !== 'pending_verification') {
+      if (!row) {
         throw workforceError(409, 'invitation_not_pending', 'The workforce invitation is not pending');
       }
-      const prior = await client.query(
-        `SELECT id FROM account_action_tokens
-          WHERE user_id = $1 AND purpose = 'membership_invitation'
-            AND consumed_at IS NULL AND revoked_at IS NULL
-          FOR UPDATE`,
-        [row.user_id]
-      );
+      try {
+        workforceInvitationEnvelope(row.email, {
+          name: row.name,
+          organizationName: organization.name,
+        });
+      } catch (_error) {
+        throw workforceError(
+          409,
+          'invitation_delivery_incompatible',
+          'Organization invitation identity is incompatible with delivery'
+        );
+      }
       await client.query(
-        `UPDATE account_action_tokens
-            SET revoked_at = NOW(), superseded_by_token_id = $2
-          WHERE user_id = $1 AND purpose = 'membership_invitation'
-            AND consumed_at IS NULL AND revoked_at IS NULL`,
-        [row.user_id, input.tokenId]
-      );
-      await client.query(
-        `INSERT INTO account_action_tokens
-          (id, user_id, organization_id, purpose, token_hash, expires_at)
-         VALUES ($1,$2,$3,'membership_invitation',$4,NOW() + INTERVAL '72 hours')`,
-        [input.tokenId, row.user_id, input.organizationId, input.tokenHash]
+        `UPDATE workforce_invitations
+            SET token_hash = $3,
+                token_expires_at = NOW() + INTERVAL '72 hours',
+                delivery_generation = delivery_generation + 1,
+                updated_by_user_id = $4,
+                updated_at = NOW()
+          WHERE organization_id = $1 AND id = $2 AND status = 'pending'`,
+        [input.organizationId, input.invitationId, input.tokenHash, input.actorUserId]
       );
       await this.insertAudit(client, {
         organizationId: input.organizationId,
         actorUserId: input.actorUserId,
         action: 'invitation_resent',
-        subjectType: 'membership',
-        subjectId: row.membership_id,
-        details: { superseded: prior.rows.length },
+        subjectType: 'invitation',
+        subjectId: row.id,
+        details: { fromGeneration: row.delivery_generation, toGeneration: row.delivery_generation + 1 },
       });
       return {
         organizationName: organization.name,
-        membershipId: row.membership_id,
-        userId: row.user_id,
+        invitationId: row.id,
         name: row.name,
         email: row.email,
-        superseded: prior.rows.length,
+        deliveryGeneration: row.delivery_generation + 1,
       };
+    });
+  }
+
+  async revokeInvitation(input) {
+    return this.transaction(async client => {
+      await this.lockOrganization(client, input.organizationId);
+      await this.requireActor(client, input.organizationId, input.actorUserId, ['owner']);
+      const revoked = await client.query(
+        `UPDATE workforce_invitations
+            SET status = 'revoked', revoked_at = NOW(), revoked_by_user_id = $3,
+                updated_by_user_id = $3, updated_at = NOW()
+          WHERE organization_id = $1 AND id = $2 AND status = 'pending'
+          RETURNING id`,
+        [input.organizationId, input.invitationId, input.actorUserId]
+      );
+      if (revoked.rows.length !== 1) {
+        throw workforceError(409, 'invitation_not_pending', 'The workforce invitation is not pending');
+      }
+      await this.insertAudit(client, {
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        action: 'invitation_revoked',
+        subjectType: 'invitation',
+        subjectId: input.invitationId,
+        details: {},
+      });
+      return { invitationId: input.invitationId, status: 'revoked' };
     });
   }
 
   async acceptInvitation(input) {
     return this.transaction(async client => {
-      const result = await client.query(
-        `SELECT token.id AS token_id, token.user_id, token.organization_id,
-                token.expires_at > NOW() AS token_valid,
-                account.status AS user_status,
-                membership.id AS membership_id,
-                membership.status AS membership_status
-           FROM account_action_tokens token
-           JOIN users account
-             ON account.id = token.user_id AND account.organization_id = token.organization_id
-           JOIN organization_memberships membership
-             ON membership.user_id = token.user_id AND membership.organization_id = token.organization_id
-          WHERE token.token_hash = $1
-            AND token.consumed_at IS NULL
-            AND token.revoked_at IS NULL
-          FOR UPDATE OF token, account, membership`,
+      const candidate = await client.query(
+        `SELECT id, organization_id
+           FROM workforce_invitations
+          WHERE token_hash = $1 AND status = 'pending'`,
         [input.tokenHash]
       );
+      if (candidate.rows.length !== 1) return null;
+      await this.lockOrganization(client, candidate.rows[0].organization_id);
+      const result = await client.query(
+        `SELECT id, organization_id, name, email, phone, access_role, operational_role,
+                home_location_id, created_by_user_id, token_expires_at > NOW() AS token_valid
+           FROM workforce_invitations
+          WHERE id = $1 AND organization_id = $2 AND token_hash = $3 AND status = 'pending'
+          FOR UPDATE`,
+        [candidate.rows[0].id, candidate.rows[0].organization_id, input.tokenHash]
+      );
       const row = result.rows[0];
-      if (!row || row.token_valid !== true || row.user_status !== 'pending_verification' ||
-          row.membership_status !== 'invited') return null;
-      await client.query(
-        `UPDATE users
-            SET password_hash = $2, status = 'active', updated_at = NOW()
-          WHERE id = $1`,
-        [row.user_id, input.passwordHash]
+      if (!row || row.token_valid !== true) return null;
+      const references = await this.profileReferences(client, row.organization_id);
+      let homeLocationId;
+      try {
+        homeLocationId = this.canonicalLocation(references, row.home_location_id);
+      } catch (error) {
+        if (error && [400, 409].includes(error.status)) return { outcome: 'unavailable' };
+        throw error;
+      }
+      const invitationSkills = await client.query(
+        `SELECT relation.skill_id
+           FROM workforce_invitation_skills relation
+           JOIN workforce_skills skill
+             ON skill.organization_id = relation.organization_id AND skill.id = relation.skill_id
+          WHERE relation.organization_id = $1 AND relation.invitation_id = $2
+          ORDER BY relation.skill_id`,
+        [row.organization_id, row.id]
       );
-      await client.query(
-        `UPDATE organization_memberships
-            SET status = 'active', updated_at = NOW()
-          WHERE id = $1 AND status = 'invited'`,
-        [row.membership_id]
+      const account = await client.query(
+        `INSERT INTO users
+          (id, organization_id, name, email, email_normalized, password_hash, phone, role, status)
+         VALUES ($1,$2,$3,$4,$4,$5,$6,$7,'active')
+         ON CONFLICT (email_normalized) DO NOTHING
+         RETURNING id`,
+        [input.userId, row.organization_id, row.name, row.email, input.passwordHash,
+          row.phone, row.access_role]
       );
+      if (account.rows.length !== 1) return { outcome: 'unavailable' };
       await client.query(
-        `UPDATE account_action_tokens
-            SET consumed_at = NOW()
-          WHERE id = $1 AND consumed_at IS NULL AND revoked_at IS NULL`,
-        [row.token_id]
+        `INSERT INTO organization_memberships
+          (id, organization_id, user_id, role, status)
+         VALUES ($1,$2,$3,$4,'active')`,
+        [input.membershipId, row.organization_id, input.userId, row.access_role]
+      );
+      const profile = await client.query(
+        `UPDATE workforce_profiles
+            SET operational_role = $3, home_location_id = $4,
+                created_by_user_id = $5, updated_by_user_id = $5, updated_at = NOW()
+          WHERE organization_id = $1 AND membership_id = $2 AND id = $2
+          RETURNING id`,
+        [row.organization_id, input.membershipId, row.operational_role,
+          homeLocationId, row.created_by_user_id]
+      );
+      if (profile.rows.length !== 1) throw new Error('Accepted workforce profile authority was not created');
+      for (const skill of invitationSkills.rows) {
+        await client.query(
+          `INSERT INTO workforce_profile_skills
+            (organization_id, profile_id, skill_id, created_by_user_id)
+           VALUES ($1,$2,$3,$4)`,
+          [row.organization_id, input.membershipId, skill.skill_id, row.created_by_user_id]
+        );
+      }
+      await client.query(
+        `UPDATE workforce_invitations
+            SET status = 'accepted', accepted_membership_id = $2, accepted_at = NOW(),
+                updated_by_user_id = $3, updated_at = NOW()
+          WHERE id = $1 AND status = 'pending'`,
+        [row.id, input.membershipId, input.userId]
       );
       await this.insertAudit(client, {
         organizationId: row.organization_id,
-        actorUserId: row.user_id,
+        actorUserId: input.userId,
         action: 'invitation_accepted',
-        subjectType: 'membership',
-        subjectId: row.membership_id,
-        details: {},
+        subjectType: 'invitation',
+        subjectId: row.id,
+        details: { membershipId: input.membershipId },
       });
-      return { userId: row.user_id, organizationId: row.organization_id, membershipId: row.membership_id };
+      return {
+        outcome: 'accepted',
+        userId: input.userId,
+        organizationId: row.organization_id,
+        membershipId: input.membershipId,
+      };
     });
   }
 
@@ -498,17 +603,11 @@ class WorkforceRepository {
       if (row.status === 'revoked') {
         throw workforceError(409, 'membership_revoked', 'A revoked membership cannot be restored');
       }
-      if (row.status === 'invited' && input.membershipStatus !== 'invited' && input.membershipStatus !== 'revoked') {
-        throw workforceError(409, 'invitation_acceptance_required', 'Invited access must be accepted by the invited person');
-      }
-      if (row.status !== 'invited' && input.membershipStatus === 'invited') {
-        throw workforceError(409, 'invalid_membership_transition', 'An existing membership cannot become an invitation');
-      }
       const accessRole = input.accessRole || row.role;
       const membershipStatus = input.membershipStatus || row.status;
       const userStatus = membershipStatus === 'active' ? 'active'
         : membershipStatus === 'suspended' ? 'suspended'
-          : membershipStatus === 'revoked' ? 'disabled' : 'pending_verification';
+          : 'disabled';
       if (accessRole === row.role && membershipStatus === row.status) {
         return {
           membershipId: row.id,

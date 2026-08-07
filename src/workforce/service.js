@@ -20,7 +20,7 @@ const OPERATIONAL_ROLES = new Set([
   'owner', 'administrator', 'dispatcher', 'estimator', 'crew_lead',
   'technician', 'accounting', 'employee', 'other',
 ]);
-const MEMBERSHIP_STATUSES = new Set(['invited', 'active', 'suspended', 'revoked']);
+const MEMBERSHIP_STATUSES = new Set(['active', 'suspended', 'revoked']);
 
 class WorkforceError extends Error {
   constructor(status, code, message) {
@@ -130,8 +130,8 @@ class WorkforceService {
     if (!state.allowed) throw new WorkforceError(429, 'rate_limited', 'Too many requests. Try again later.');
   }
 
-  async snapshot(organizationId) {
-    return this.repository.snapshot(organizationId);
+  async snapshot(organizationId, role) {
+    return this.repository.snapshot(organizationId, role === 'owner');
   }
 
   parseInvitation(input) {
@@ -173,20 +173,12 @@ class WorkforceService {
     });
     const parsed = this.parseInvitation(input);
     const invitation = actionToken();
-    const membershipId = crypto.randomUUID();
-    const ids = {
-      userId: crypto.randomUUID(),
-      membershipId,
-      profileId: membershipId,
-    };
     try {
       const created = await this.repository.createInvitation({
         ...parsed,
-        ...ids,
+        invitationId: invitation.id,
         organizationId: context.organizationId,
         actorUserId: context.actorUserId,
-        passwordHash: await hashPassword(crypto.randomBytes(32).toString('base64url')),
-        tokenId: invitation.id,
         tokenHash: invitation.tokenHash,
       });
       try {
@@ -213,7 +205,7 @@ class WorkforceService {
     }
   }
 
-  async resendInvitation(membershipId, context) {
+  async resendInvitation(invitationId, context) {
     if (!this.transactionalEmail || typeof this.transactionalEmail.invitation !== 'function') {
       throw new WorkforceError(503, 'invitation_delivery_unavailable', 'Workforce invitation delivery is unavailable');
     }
@@ -224,8 +216,7 @@ class WorkforceService {
     const pending = await this.repository.replaceInvitation({
       organizationId: context.organizationId,
       actorUserId: context.actorUserId,
-      membershipId: uuid(membershipId, 'invalid_workforce_member', 'Membership'),
-      tokenId: invitation.id,
+      invitationId: uuid(invitationId, 'invalid_workforce_invitation', 'Invitation'),
       tokenHash: invitation.tokenHash,
     });
     try {
@@ -239,7 +230,15 @@ class WorkforceService {
       safeDeliveryFailure(error, context.requestId);
       throw new WorkforceError(503, 'invitation_delivery_failed', 'Invitation delivery failed. Try again later.');
     }
-    return { membershipId: pending.membershipId, delivery: 'accepted' };
+    return { invitationId: pending.invitationId, delivery: 'accepted' };
+  }
+
+  async revokeInvitation(invitationId, context) {
+    return this.repository.revokeInvitation({
+      invitationId: uuid(invitationId, 'invalid_workforce_invitation', 'Invitation'),
+      organizationId: context.organizationId,
+      actorUserId: context.actorUserId,
+    });
   }
 
   async acceptInvitation(input, context) {
@@ -250,9 +249,14 @@ class WorkforceService {
     const result = await this.repository.acceptInvitation({
       tokenHash: tokenHash(body.token),
       passwordHash: await hashPassword(body.password),
+      userId: crypto.randomUUID(),
+      membershipId: crypto.randomUUID(),
     });
-    if (!result) throw new WorkforceError(400, 'invitation_invalid', 'The workforce invitation is invalid or expired');
-    return result;
+    if (!result || result.outcome !== 'accepted') {
+      throw new WorkforceError(400, 'invitation_invalid', 'The workforce invitation is invalid or expired');
+    }
+    const { outcome: _outcome, ...accepted } = result;
+    return accepted;
   }
 
   async updateAccess(membershipId, input, context) {

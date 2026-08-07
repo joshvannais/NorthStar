@@ -75,7 +75,11 @@ describe('Mission 20 Part 2E workforce contract', () => {
       operationalRole: 'employee', homeLocationId: null, skillIds: [],
     })).toMatchObject({ name: rawName, email: 'worker@example.test' });
     expect(workforceInvitationEnvelope('worker@example.test', { name: rawName }))
-      .toEqual({ recipient: 'worker@example.test', person: rawName });
+      .toEqual({ recipient: 'worker@example.test', person: rawName, organization: 'your organization' });
+    expect(() => workforceInvitationEnvelope('worker@example.test', {
+      name: rawName,
+      organizationName: 'O'.repeat(143),
+    })).toThrow('Invalid transactional email organization name');
     expect(() => service().parseInvitation({
       name: 'Worker', email: 'worker@例子.test', phone: '', accessRole: 'member',
       operationalRole: 'employee', homeLocationId: null, skillIds: [],

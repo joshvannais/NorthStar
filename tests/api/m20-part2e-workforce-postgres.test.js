@@ -180,13 +180,43 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
     });
     expect(invite.status).toBe(202);
     expect(invite.body.data).toMatchObject({
-      profileId: invite.body.data.membershipId,
+      invitationId: expect.any(String),
       name: rawPersonName,
       email: 'tech@example.test',
+      status: 'pending',
       delivery: 'accepted',
     });
     expect(delivery.messages).toHaveLength(1);
     const firstToken = delivery.messages[0].rawToken;
+
+    const pendingAuthority = await pool.query(
+      `SELECT
+         (SELECT count(*)::int FROM users WHERE email_normalized = 'tech@example.test') AS users,
+         (SELECT count(*)::int FROM organization_memberships membership
+           JOIN users account ON account.id = membership.user_id
+          WHERE account.email_normalized = 'tech@example.test') AS memberships,
+         (SELECT count(*)::int FROM workforce_profiles profile
+           JOIN organization_memberships membership ON membership.id = profile.membership_id
+           JOIN users account ON account.id = membership.user_id
+          WHERE account.email_normalized = 'tech@example.test') AS profiles,
+         (SELECT count(*)::int FROM workforce_invitations
+          WHERE organization_id = $1 AND id = $2 AND status = 'pending') AS invitations`,
+      [ORG_A, invite.body.data.invitationId]
+    );
+    expect(pendingAuthority.rows[0]).toEqual({ users: 0, memberships: 0, profiles: 0, invitations: 1 });
+    const ownerPendingSnapshot = await request(app).get('/api/workforce').set(auth.get(OWNER_A));
+    expect(ownerPendingSnapshot.body.data.invitations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        invitationId: invite.body.data.invitationId,
+        name: rawPersonName,
+        homeLocationId: 'Office-North',
+        skillIds: [skillId],
+        status: 'pending',
+      }),
+    ]));
+    for (const userId of [ADMIN_A, MEMBER_A, VIEWER_A]) {
+      expect((await request(app).get('/api/workforce').set(auth.get(userId))).body.data.invitations).toEqual([]);
+    }
 
     const beforeAccept = await request(app).post('/api/auth/login').send({
       email: 'tech@example.test', password: 'Private-workforce-password-1!',
@@ -194,7 +224,7 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
     expect(beforeAccept.status).toBe(401);
 
     const resend = await request(app)
-      .post('/api/workforce/members/' + invite.body.data.membershipId + '/resend-invitation')
+      .post('/api/workforce/invitations/' + invite.body.data.invitationId + '/resend')
       .set(auth.get(OWNER_A)).send({});
     expect(resend.status).toBe(202);
     expect(delivery.messages).toHaveLength(2);
@@ -225,15 +255,27 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
     const ownerSnapshot = await request(app).get('/api/workforce').set(auth.get(OWNER_A));
     const ownerProfile = ownerSnapshot.body.data.members.find(member => member.userId === OWNER_A);
     const adminProfile = ownerSnapshot.body.data.members.find(member => member.userId === ADMIN_A);
-    const invitedProfile = ownerSnapshot.body.data.members.find(member => member.membershipId === invite.body.data.membershipId);
+    const invitedProfile = ownerSnapshot.body.data.members.find(member => member.membershipId === accepted.body.data.membershipId);
     expect(invitedProfile).toMatchObject({
-      profileId: invite.body.data.membershipId,
+      profileId: accepted.body.data.membershipId,
       name: rawPersonName,
       phone: rawPhone,
       operationalRole: 'technician',
       homeLocationId: 'Office-North',
       skillIds: [skillId],
     });
+    expect((await pool.query(
+      `SELECT profile.created_by_user_id, relation.created_by_user_id AS skill_created_by_user_id
+         FROM workforce_profiles profile
+         JOIN workforce_profile_skills relation
+           ON relation.organization_id = profile.organization_id AND relation.profile_id = profile.id
+        WHERE profile.organization_id = $1 AND profile.id = $2 AND relation.skill_id = $3`,
+      [ORG_A, invitedProfile.profileId, skillId]
+    )).rows).toEqual([{
+      created_by_user_id: OWNER_A,
+      skill_created_by_user_id: OWNER_A,
+    }]);
+    expect(ownerSnapshot.body.data.invitations.some(item => item.invitationId === invite.body.data.invitationId)).toBe(false);
     expect(ownerSnapshot.body.data.skills.find(item => item.id === skillId).serviceId).toBe('Fence');
 
     const crossTenantProfile = await request(app)
@@ -334,10 +376,6 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
       `SELECT count(*)::int AS sessions FROM auth_sessions WHERE user_id = $1 AND status = 'active'`,
       [invitedProfile.userId]
     )).rows[0].sessions).toBe(sessionBeforeSuspend.rows[0].sessions);
-    const invalidInvitationTransition = await request(app)
-      .patch('/api/workforce/members/' + invitedProfile.membershipId + '/access')
-      .set(auth.get(OWNER_A)).send({ accessRole: 'member', membershipStatus: 'invited' });
-    expect(invalidInvitationTransition.status).toBe(409);
     const suspended = await request(app)
       .patch('/api/workforce/members/' + invitedProfile.membershipId + '/access')
       .set(auth.get(OWNER_A)).send({ accessRole: 'member', membershipStatus: 'suspended' });
@@ -360,9 +398,9 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
     );
     expect(audit.rows).toEqual(expect.arrayContaining([
       expect.objectContaining({ action: 'skill_created', actor_user_id: ADMIN_A, subject_id: skillId }),
-      expect.objectContaining({ action: 'member_invited', actor_user_id: OWNER_A, subject_id: invitedProfile.membershipId }),
-      expect.objectContaining({ action: 'invitation_resent', actor_user_id: OWNER_A, subject_id: invitedProfile.membershipId }),
-      expect.objectContaining({ action: 'invitation_accepted', actor_user_id: invitedProfile.userId, subject_id: invitedProfile.membershipId }),
+      expect.objectContaining({ action: 'invitation_created', actor_user_id: OWNER_A, subject_id: invite.body.data.invitationId }),
+      expect.objectContaining({ action: 'invitation_resent', actor_user_id: OWNER_A, subject_id: invite.body.data.invitationId }),
+      expect.objectContaining({ action: 'invitation_accepted', actor_user_id: invitedProfile.userId, subject_id: invite.body.data.invitationId }),
       expect.objectContaining({ action: 'crew_created', actor_user_id: OWNER_A, subject_id: crew.body.data.id }),
       expect.objectContaining({ action: 'member_access_updated', actor_user_id: OWNER_A, subject_id: invitedProfile.membershipId }),
     ]));
@@ -384,29 +422,55 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
     expect(boundaryInvite.status).toBe(202);
     expect(delivery.messages).toHaveLength(startingDeliveryCount + 1);
     const storedBoundary = await pool.query(
-      `SELECT encode(convert_to(account.name, 'UTF8'), 'hex') AS name_hex,
-              profile.home_location_id
-         FROM users account
-         JOIN workforce_profiles profile
-           ON profile.organization_id = account.organization_id AND profile.id = $2
-        WHERE account.organization_id = $1 AND account.email_normalized = 'boundary@example.test'`,
-      [ORG_A, boundaryInvite.body.data.profileId]
+      `SELECT encode(convert_to(invitation.name, 'UTF8'), 'hex') AS name_hex,
+              invitation.home_location_id,
+              (SELECT count(*)::int FROM users WHERE email_normalized = 'boundary@example.test') AS users,
+              (SELECT count(*)::int FROM organization_memberships membership
+                JOIN users account ON account.id = membership.user_id
+               WHERE account.email_normalized = 'boundary@example.test') AS memberships,
+              (SELECT count(*)::int FROM workforce_profiles profile
+                JOIN organization_memberships membership ON membership.id = profile.membership_id
+                JOIN users account ON account.id = membership.user_id
+               WHERE account.email_normalized = 'boundary@example.test') AS profiles
+         FROM workforce_invitations invitation
+        WHERE invitation.organization_id = $1 AND invitation.id = $2`,
+      [ORG_A, boundaryInvite.body.data.invitationId]
     );
     expect(storedBoundary.rows).toEqual([{
       name_hex: hex(rawBoundaryName),
       home_location_id: 'Office-North',
+      users: 0,
+      memberships: 0,
+      profiles: 0,
     }]);
     const boundaryResend = await request(app)
-      .post('/api/workforce/members/' + boundaryInvite.body.data.membershipId + '/resend-invitation')
+      .post('/api/workforce/invitations/' + boundaryInvite.body.data.invitationId + '/resend')
       .set(auth.get(OWNER_A)).send({});
     expect(boundaryResend.status).toBe(202);
     expect(delivery.messages).toHaveLength(startingDeliveryCount + 2);
+
+    await pool.query('UPDATE organizations SET name = $2 WHERE id = $1', [ORG_A, 'O'.repeat(143)]);
+    try {
+      const incompatibleOrganization = await request(app).post('/api/workforce/invitations').set(auth.get(OWNER_A)).send({
+        name: 'No durable drift', email: 'no-drift@example.test', phone: '', accessRole: 'member',
+        operationalRole: 'employee', homeLocationId: null, skillIds: [],
+      });
+      expect(incompatibleOrganization.status).toBe(409);
+      expect(incompatibleOrganization.body.error.code).toBe('invitation_delivery_incompatible');
+      expect((await pool.query(
+        `SELECT count(*)::int AS count FROM workforce_invitations
+          WHERE organization_id = $1 AND email_normalized = 'no-drift@example.test'`,
+        [ORG_A]
+      )).rows[0].count).toBe(0);
+    } finally {
+      await pool.query("UPDATE organizations SET name = 'Workforce Organization A' WHERE id = $1", [ORG_A]);
+    }
 
     const beforeInvalid = await pool.query(
       `SELECT
          (SELECT count(*)::int FROM users WHERE organization_id = $1) AS users,
          (SELECT count(*)::int FROM organization_memberships WHERE organization_id = $1) AS memberships,
-         (SELECT count(*)::int FROM account_action_tokens WHERE organization_id = $1) AS tokens`,
+         (SELECT count(*)::int FROM workforce_invitations WHERE organization_id = $1) AS invitations`,
       [ORG_A]
     );
     const invalidRecipient = await request(app).post('/api/workforce/invitations').set(auth.get(OWNER_A)).send({
@@ -419,7 +483,7 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
       `SELECT
          (SELECT count(*)::int FROM users WHERE organization_id = $1) AS users,
          (SELECT count(*)::int FROM organization_memberships WHERE organization_id = $1) AS memberships,
-         (SELECT count(*)::int FROM account_action_tokens WHERE organization_id = $1) AS tokens`,
+         (SELECT count(*)::int FROM workforce_invitations WHERE organization_id = $1) AS invitations`,
       [ORG_A]
     );
     expect(afterInvalid.rows).toEqual(beforeInvalid.rows);
@@ -460,6 +524,81 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
         [ORG_A, activeProfile.rows[0].id, JSON.stringify(rawProfile)]
       );
     }
+  }, 60000);
+
+  test('cross-tenant account existence is hidden behind uniform pending invitation authority', async () => {
+    const startingDeliveryCount = delivery.messages.length;
+    const crossTenantInvite = await request(app).post('/api/workforce/invitations').set(auth.get(OWNER_A)).send({
+      name: 'Cross-tenant recipient', email: 'owner-b@example.test', phone: '', accessRole: 'member',
+      operationalRole: 'employee', homeLocationId: null, skillIds: [],
+    });
+    expect(crossTenantInvite.status).toBe(202);
+    expect(crossTenantInvite.body.data).toMatchObject({
+      invitationId: expect.any(String), status: 'pending', delivery: 'accepted',
+    });
+    expect(delivery.messages).toHaveLength(startingDeliveryCount + 1);
+    const invitationId = crossTenantInvite.body.data.invitationId;
+    const beforeAcceptance = await pool.query(
+      `SELECT
+         (SELECT count(*)::int FROM users WHERE email_normalized = 'owner-b@example.test') AS global_users,
+         (SELECT count(*)::int FROM users
+           WHERE organization_id = $1 AND email_normalized = 'owner-b@example.test') AS tenant_users,
+         (SELECT count(*)::int FROM organization_memberships membership
+           JOIN users account ON account.id = membership.user_id
+          WHERE membership.organization_id = $1 AND account.email_normalized = 'owner-b@example.test') AS memberships,
+         (SELECT count(*)::int FROM workforce_profiles profile
+           JOIN organization_memberships membership ON membership.id = profile.membership_id
+           JOIN users account ON account.id = membership.user_id
+          WHERE profile.organization_id = $1 AND account.email_normalized = 'owner-b@example.test') AS profiles,
+         (SELECT count(*)::int FROM workforce_invitations
+          WHERE organization_id = $1 AND id = $2 AND status = 'pending') AS invitations`,
+      [ORG_A, invitationId]
+    );
+    expect(beforeAcceptance.rows[0]).toEqual({
+      global_users: 1, tenant_users: 0, memberships: 0, profiles: 0, invitations: 1,
+    });
+    const ownerView = await request(app).get('/api/workforce').set(auth.get(OWNER_A));
+    expect(ownerView.body.data.invitations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ invitationId, email: 'owner-b@example.test', status: 'pending' }),
+    ]));
+    expect((await request(app).get('/api/workforce').set(auth.get(VIEWER_A))).body.data.invitations).toEqual([]);
+
+    const unavailableAcceptance = await request(app).post('/api/workforce/invitations/accept').send({
+      token: delivery.messages[startingDeliveryCount].rawToken,
+      password: 'Private-cross-tenant-password-1!',
+    });
+    expect(unavailableAcceptance.status).toBe(400);
+    expect(unavailableAcceptance.body.error.code).toBe('invitation_invalid');
+    expect((await pool.query(
+      `SELECT status, accepted_membership_id FROM workforce_invitations
+        WHERE organization_id = $1 AND id = $2`,
+      [ORG_A, invitationId]
+    )).rows).toEqual([{ status: 'pending', accepted_membership_id: null }]);
+
+    const resend = await request(app)
+      .post('/api/workforce/invitations/' + invitationId + '/resend')
+      .set(auth.get(OWNER_A)).send({});
+    expect(resend.status).toBe(202);
+    expect(delivery.messages).toHaveLength(startingDeliveryCount + 2);
+    const revoke = await request(app)
+      .post('/api/workforce/invitations/' + invitationId + '/revoke')
+      .set(auth.get(OWNER_A)).send({});
+    expect(revoke.status).toBe(200);
+    expect((await request(app).get('/api/workforce').set(auth.get(OWNER_A))).body.data.invitations
+      .some(item => item.invitationId === invitationId)).toBe(false);
+    expect((await pool.query(
+      `SELECT
+         (SELECT count(*)::int FROM users
+           WHERE organization_id = $1 AND email_normalized = 'owner-b@example.test') AS users,
+         (SELECT count(*)::int FROM organization_memberships membership
+           JOIN users account ON account.id = membership.user_id
+          WHERE membership.organization_id = $1 AND account.email_normalized = 'owner-b@example.test') AS memberships,
+         (SELECT count(*)::int FROM workforce_profiles profile
+           JOIN organization_memberships membership ON membership.id = profile.membership_id
+           JOIN users account ON account.id = membership.user_id
+          WHERE profile.organization_id = $1 AND account.email_normalized = 'owner-b@example.test') AS profiles`,
+      [ORG_A]
+    )).rows[0]).toEqual({ users: 0, memberships: 0, profiles: 0 });
   }, 60000);
 
   test('future memberships receive stable workforce profiles while unsupported mission state is absent', async () => {

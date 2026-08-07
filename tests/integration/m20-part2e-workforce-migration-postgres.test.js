@@ -104,16 +104,37 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
       updated_by_user_id: null,
     })));
 
+    const pendingInvitation = '63000000-0000-4000-8000-000000000008';
+    await pool.query(
+      `INSERT INTO workforce_invitations
+        (id, organization_id, name, email, email_normalized, access_role, operational_role,
+         token_hash, token_expires_at, created_by_user_id, updated_by_user_id)
+       VALUES ($1,$2,'Pending Invite','pending-invite@example.test','pending-invite@example.test',
+         'viewer','employee',$3,NOW() + INTERVAL '72 hours',$4,$4)`,
+      [pendingInvitation, organization, 'a'.repeat(64), users[0][0]]
+    );
+    expect((await pool.query(
+      `SELECT invitation.status, invitation.accepted_membership_id,
+              (SELECT count(*)::int FROM users WHERE organization_id = $1) AS users,
+              (SELECT count(*)::int FROM organization_memberships WHERE organization_id = $1) AS memberships,
+              (SELECT count(*)::int FROM workforce_profiles WHERE organization_id = $1) AS profiles
+         FROM workforce_invitations invitation
+        WHERE invitation.organization_id = $1 AND invitation.id = $2`,
+      [organization, pendingInvitation]
+    )).rows).toEqual([{
+      status: 'pending', accepted_membership_id: null, users: 6, memberships: 6, profiles: 6,
+    }]);
+
     const futureUser = '62000000-0000-4000-8000-000000000007';
     const futureMembership = '63000000-0000-4000-8000-000000000007';
     await pool.query(
       `INSERT INTO users (id, organization_id, name, email, password_hash, role, status)
-       VALUES ($1,$2,'Future Invite','future-invite@example.test','not-used','viewer','pending_verification')`,
+       VALUES ($1,$2,'Future Member','future-member@example.test','not-used','viewer','active')`,
       [futureUser, organization]
     );
     await pool.query(
       `INSERT INTO organization_memberships (id, organization_id, user_id, role, status)
-       VALUES ($1,$2,$3,'viewer','invited')`,
+       VALUES ($1,$2,$3,'viewer','active')`,
       [futureMembership, organization, futureUser]
     );
     expect((await pool.query(
@@ -130,6 +151,8 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
       `SELECT
          (SELECT count(*)::int FROM organization_memberships WHERE organization_id = $1) AS memberships,
          (SELECT count(*)::int FROM workforce_profiles WHERE organization_id = $1) AS profiles,
+         (SELECT count(*)::int FROM workforce_invitations
+           WHERE organization_id = $1 AND status = 'pending') AS pending_invitations,
          (SELECT count(*)::int FROM pg_trigger
            WHERE tgname = 'workforce_membership_profile' AND NOT tgisinternal) AS profile_triggers,
          (SELECT count(*)::int FROM pg_constraint
@@ -144,6 +167,7 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
     expect(catalog.rows[0]).toEqual({
       memberships: 7,
       profiles: 7,
+      pending_invitations: 1,
       profile_triggers: 1,
       unvalidated_constraints: 0,
       invalid_indexes: 0,

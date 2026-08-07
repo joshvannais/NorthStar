@@ -77,7 +77,11 @@ function createWorkforceRouter() {
 
   router.get('/', requireTenantAccess, requirePermission('team', 'read'), async (req, res) => {
     try {
-      return res.json({ success: true, data: await service(req).snapshot(req.tenantContext.organizationId), requestId: requestId(req) });
+      return res.json({
+        success: true,
+        data: await service(req).snapshot(req.tenantContext.organizationId, req.tenantContext.role),
+        requestId: requestId(req),
+      });
     } catch (error) {
       return failure(req, res, error, 'workforce_read_failed');
     }
@@ -92,13 +96,23 @@ function createWorkforceRouter() {
     }
   });
 
-  router.post('/members/:membershipId/resend-invitation', requireAccountMutation,
+  router.post('/invitations/:invitationId/resend', requireAccountMutation,
     requirePermission('team', 'create'), requireRole('owner'), async (req, res) => {
       try {
-        const invited = await service(req).resendInvitation(req.params.membershipId, context(req));
+        const invited = await service(req).resendInvitation(req.params.invitationId, context(req));
         return res.status(202).json({ success: true, data: invited, requestId: requestId(req) });
       } catch (error) {
         return failure(req, res, error, 'workforce_invitation_resend_failed');
+      }
+    });
+
+  router.post('/invitations/:invitationId/revoke', requireAccountMutation,
+    requirePermission('team', 'update'), requireRole('owner'), async (req, res) => {
+      try {
+        const revoked = await service(req).revokeInvitation(req.params.invitationId, context(req));
+        return res.json({ success: true, data: revoked, requestId: requestId(req) });
+      } catch (error) {
+        return failure(req, res, error, 'workforce_invitation_revoke_failed');
       }
     });
 

@@ -60,9 +60,11 @@ function workforceInvitationEnvelope(recipient, invite = {}) {
       BODY_CONTROL.test(rawName)) {
     throw new Error('Invalid transactional email invited name');
   }
+  const organization = bounded(invite.organizationName || 'your organization', 142, 'organization name');
   return {
     recipient: emailAddress(recipient, 'recipient'),
     person: rawName,
+    organization,
   };
 }
 
@@ -387,7 +389,7 @@ class TransactionalEmail {
     const href = link.toString();
     const envelope = workforceInvitationEnvelope(recipient, invite);
     const person = envelope.person;
-    const organization = bounded(invite.organizationName || 'your organization', 200, 'organization name');
+    const organization = envelope.organization;
     return this.deliver(
       envelope.recipient,
       'workforce-invitation',

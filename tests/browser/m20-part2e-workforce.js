@@ -21,6 +21,7 @@ const RAW_CREW = '  North <Crew> 🧰  ';
 const RAW_POLICY = '  Safety <Policy> ☃  ';
 const RAW_POLICY_DESCRIPTION = '\n  Policy <img src=x onerror=window.__workforceXss++> é  \n';
 const RAW_INVITEE = '  Tech <img src=x onerror=window.__workforceXss++> 🧰  ';
+const RAW_PENDING = '  Pending <svg onload=window.__workforceXss++> ☃  ';
 const RAW_PHONE = ' +1 (555) 010-7878 ';
 
 function profileFor(name, officeId) {
@@ -105,10 +106,12 @@ async function mountedSnapshot(page) {
     injectedImages: document.querySelectorAll('#workforceShell img').length,
     injectedScripts: Array.from(document.querySelectorAll('#workforceShell script')).length,
     memberNames: Array.from(document.querySelectorAll('#membersList h3')).map(node => node.textContent),
+    invitationNames: Array.from(document.querySelectorAll('#invitationsList h3')).map(node => node.textContent),
     skillNames: Array.from(document.querySelectorAll('#skillsList input')).map(node => node.value),
     crewNames: Array.from(document.querySelectorAll('#crewsList input[id^="crew-name-"]')).map(node => node.value),
     policyNames: Array.from(document.querySelectorAll('#policiesList .policy-name')).map(node => node.value),
     inviteHidden: document.getElementById('invitePanel').hidden,
+    invitationsHidden: document.getElementById('invitationsPanel').hidden,
     skillFormHidden: document.getElementById('skillForm').hidden,
     crewFormHidden: document.getElementById('crewForm').hidden,
     policyActionsHidden: document.getElementById('policyActions').hidden,
@@ -141,22 +144,28 @@ function assertSafeSnapshot(snapshot, role, theme) {
   assert.ok(snapshot.policyNames.includes(RAW_POLICY), role + ' preserves raw policy name in value');
   if (role.startsWith('owner')) {
     assert.strictEqual(snapshot.inviteHidden, false);
+    assert.strictEqual(snapshot.invitationsHidden, false);
     assert.strictEqual(snapshot.skillFormHidden, false);
     assert.strictEqual(snapshot.crewFormHidden, false);
     assert.strictEqual(snapshot.policyActionsHidden, false);
     assert.ok(snapshot.enabledStructureControls > 0);
+    assert.ok(snapshot.invitationNames.includes(RAW_PENDING), 'owner sees safe pending invitation text');
   } else if (role.startsWith('admin')) {
     assert.strictEqual(snapshot.inviteHidden, true);
+    assert.strictEqual(snapshot.invitationsHidden, true);
     assert.strictEqual(snapshot.skillFormHidden, false);
     assert.strictEqual(snapshot.crewFormHidden, false);
     assert.strictEqual(snapshot.policyActionsHidden, false);
     assert.ok(snapshot.enabledStructureControls > 0);
+    assert.deepStrictEqual(snapshot.invitationNames, [], 'admin receives no pending invitation identities');
   } else {
     assert.strictEqual(snapshot.inviteHidden, true);
+    assert.strictEqual(snapshot.invitationsHidden, true);
     assert.strictEqual(snapshot.skillFormHidden, true);
     assert.strictEqual(snapshot.crewFormHidden, true);
     assert.strictEqual(snapshot.policyActionsHidden, true);
     assert.strictEqual(snapshot.enabledStructureControls, 0);
+    assert.deepStrictEqual(snapshot.invitationNames, [], 'viewer receives no pending invitation identities');
   }
 }
 
@@ -338,7 +347,36 @@ async function main() {
     assert.strictEqual((await inviteResponse).status(), 202, 'owner invites individual account');
     assert.strictEqual(capture.messages.length, 1, 'one intercepted transactional delivery');
     await ownerPage.waitForFunction(name =>
-      Array.from(document.querySelectorAll('#membersList h3')).some(node => node.textContent === name), RAW_INVITEE);
+      Array.from(document.querySelectorAll('#invitationsList h3')).some(node => node.textContent === name), RAW_INVITEE);
+    const pendingSnapshot = await mountedSnapshot(ownerPage);
+    assert.ok(pendingSnapshot.invitationNames.includes(RAW_INVITEE), 'owner sees tenant pending invitation');
+    assert.ok(!pendingSnapshot.memberNames.includes(RAW_INVITEE), 'pending invitation is not a member');
+    const pendingAuthority = await pool.query(
+      `SELECT
+         (SELECT count(*)::int FROM users WHERE email_normalized = 'browser-tech@example.test') AS users,
+         (SELECT count(*)::int FROM organization_memberships membership
+           JOIN users account ON account.id = membership.user_id
+          WHERE account.email_normalized = 'browser-tech@example.test') AS memberships,
+         (SELECT count(*)::int FROM workforce_profiles profile
+           JOIN organization_memberships membership ON membership.id = profile.membership_id
+           JOIN users account ON account.id = membership.user_id
+          WHERE account.email_normalized = 'browser-tech@example.test') AS profiles,
+         (SELECT count(*)::int FROM workforce_invitations
+          WHERE organization_id = $1 AND email_normalized = 'browser-tech@example.test' AND status = 'pending') AS invitations`,
+      [ORG_A]
+    );
+    assert.deepStrictEqual(pendingAuthority.rows[0], { users: 0, memberships: 0, profiles: 0, invitations: 1 });
+    for (const phase of ['rerender', 'reload']) {
+      if (phase === 'rerender') await ownerPage.evaluate(() => window.NorthStarWorkforce.reload());
+      else await ownerPage.reload({ waitUntil: 'domcontentloaded' });
+      await waitReady(ownerPage);
+      const pendingPhase = await mountedSnapshot(ownerPage);
+      assert.ok(pendingPhase.invitationNames.includes(RAW_INVITEE), 'pending invitation survives ' + phase);
+      assert.ok(!pendingPhase.memberNames.includes(RAW_INVITEE), 'pending invitation remains non-member after ' + phase);
+      assert.strictEqual(pendingPhase.xss, 0, 'pending invitation executes no script after ' + phase);
+      assert.strictEqual(pendingPhase.injectedImages, 0, 'pending invitation creates no image after ' + phase);
+      assert.strictEqual(pendingPhase.injectedScripts, 0, 'pending invitation creates no script after ' + phase);
+    }
 
     const acceptanceContext = await contextFor(
       browser, origin, null, { width: 390, height: 844 }, 'dark', ledger, 'invitee-mobile'
@@ -360,6 +398,21 @@ async function main() {
     assert.strictEqual(await acceptancePage.evaluate(() => window.__workforceXss), 0);
     assert.ok((await acceptancePage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) <= 1);
     await acceptanceContext.close();
+
+    await ownerPage.fill('#inviteName', RAW_PENDING);
+    await ownerPage.fill('#inviteEmail', 'pending-mobile@example.test');
+    await ownerPage.fill('#invitePhone', '');
+    await ownerPage.selectOption('#inviteAccessRole', 'viewer');
+    await ownerPage.selectOption('#inviteOperationalRole', 'employee');
+    await ownerPage.selectOption('#inviteLocation', '');
+    const pendingMobileResponse = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/workforce/invitations' && response.request().method() === 'POST'
+    );
+    await ownerPage.click('#inviteForm button[type="submit"]');
+    assert.strictEqual((await pendingMobileResponse).status(), 202, 'owner creates owner-only pending invitation');
+    assert.strictEqual(capture.messages.length, 2, 'two transactional invitations intercepted in memory');
+    await ownerPage.waitForFunction(name =>
+      Array.from(document.querySelectorAll('#invitationsList h3')).some(node => node.textContent === name), RAW_PENDING);
 
     await ownerPage.evaluate(() => window.NorthStarWorkforce.reload());
     await waitReady(ownerPage);
@@ -428,6 +481,13 @@ async function main() {
       policy_name_hex: Buffer.from(RAW_POLICY, 'utf8').toString('hex'),
       policy_description_hex: Buffer.from(RAW_POLICY_DESCRIPTION, 'utf8').toString('hex'),
     }]);
+    const pendingRaw = await pool.query(
+      `SELECT encode(convert_to(name, 'UTF8'), 'hex') AS name_hex
+         FROM workforce_invitations
+        WHERE organization_id = $1 AND email_normalized = 'pending-mobile@example.test' AND status = 'pending'`,
+      [ORG_A]
+    );
+    assert.deepStrictEqual(pendingRaw.rows, [{ name_hex: Buffer.from(RAW_PENDING, 'utf8').toString('hex') }]);
     assert.strictEqual((await getActiveBusinessProfile(pool, ORG_B)).id, otherProfile.id, 'other tenant unchanged');
     assert.deepStrictEqual(ledger.external, [], 'external/provider requests are intercepted and unused');
     assert.deepStrictEqual(ledger.consoleErrors, [], 'no unexpected console errors');

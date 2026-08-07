@@ -51,10 +51,9 @@
     .bp-hours-row .day { font-weight: 600; color: var(--neutral-700); }
     .bp-hours-row input { padding: 4px 8px; border: 1px solid var(--neutral-200); border-radius: 4px; font-size: 13px; width: 100%; }
     .bp-hours-row input[type="time"] { min-width: 80px; }
-    .bp-service-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 2fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--neutral-100); font-size: 13px; }
-    .bp-service-row:last-child { border-bottom: none; }
-    .bp-service-row input { padding: 4px 8px; border: 1px solid var(--neutral-200); border-radius: 4px; font-size: 13px; width: 100%; }
-    .bp-service-row .svc-name { font-weight: 600; }
+    .bp-service-card textarea.svc-pricing { min-height: 180px; resize: vertical; font-family: var(--font-mono, monospace); font-size: 12px; line-height: 1.45; }
+    .bp-service-card input[readonly] { background: var(--neutral-100); color: var(--neutral-600); }
+    .bp-service-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
     .bp-repeat-list { display: grid; gap: 12px; }
     .bp-repeat-card { border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); padding: 14px; background: var(--neutral-50); }
     .bp-repeat-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
@@ -65,7 +64,7 @@
     .bp-empty-note { padding: 12px; border: 1px dashed var(--neutral-200); border-radius: var(--radius-sm); color: var(--neutral-500); font-size: 12px; text-align: center; }
     .bp-policy-row { display: grid; grid-template-columns: minmax(150px, 1fr) 3fr auto; gap: 8px; align-items: start; }
     .bp-policy-row input, .bp-policy-row textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); color: var(--neutral-800); background: var(--neutral-50); font: inherit; }
-    @media (max-width: 768px) { .bp-container { padding: 16px; } .bp-grid { grid-template-columns: 1fr; } .bp-hours-row { grid-template-columns: 1fr; } .bp-service-row { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .bp-container { padding: 16px; } .bp-grid { grid-template-columns: 1fr; } .bp-hours-row { grid-template-columns: 1fr; } }
     .bp-full { grid-column: 1 / -1; }
     .bp-half { grid-column: span 1; }
     .bp-section-desc { font-size: 13px; color: var(--neutral-500); margin-bottom: 16px; line-height: 1.5; }
@@ -260,11 +259,11 @@
         <div class="bp-section" id="section-services">
           <div class="bp-card">
             <h3>Service Catalog</h3>
-            <div class="bp-section-desc">Define your services with default crew sizes, durations, and equipment. These become defaults for the Intelligence Engine.</div>
-            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 2fr;gap:8px;padding:8px 0;font-size:11px;font-weight:600;color:var(--neutral-500);text-transform:uppercase;border-bottom:2px solid var(--neutral-200);">
-              <div>Service</div><div>Crew</div><div>Hours</div><div>Confidence</div><div>Equipment</div>
-            </div>
-            <div id="servicesContainer"></div>
+            <div class="bp-section-desc">Maintain stable service identities and the exact pricing-rule contract consumed by canonical Polaris calculations.</div>
+            <div class="bp-authority-note">Existing IDs are immutable in this editor. Pricing rules use the versioned Business Profile contract: fixed, perUnit, perUnitByValue, and perItemByValue. Blank pricing JSON means the service is intentionally unpriced.</div>
+            <div class="bp-service-actions"><button id="addServiceButton" class="bp-add-btn" type="button">Add service</button></div>
+            <div id="servicesContainer" class="bp-repeat-list"></div>
+            <div id="serviceCatalogError" class="bp-validation-error" role="alert"></div>
           </div>
         </div>
 
@@ -510,6 +509,7 @@
 
       // Services
       renderServices(p.services);
+      clearServiceCatalogError();
 
       // Canonical pricing and costs. Legacy financial values are adapted by
       // the server only when the canonical blocks are genuinely absent.
@@ -674,6 +674,20 @@
 
     function clearCanonicalError() {
       var error = document.getElementById('canonicalFinancialError');
+      if (!error) return;
+      error.textContent = '';
+      error.classList.remove('show');
+    }
+
+    function showServiceCatalogError(message) {
+      var error = document.getElementById('serviceCatalogError');
+      if (!error) return;
+      error.textContent = message;
+      error.classList.add('show');
+    }
+
+    function clearServiceCatalogError() {
+      var error = document.getElementById('serviceCatalogError');
       if (!error) return;
       error.textContent = '';
       error.classList.remove('show');
@@ -945,41 +959,179 @@
       if (!container) return;
       if (!services || services.length === 0) {
         var empty = document.createElement('div');
-        empty.style.cssText = 'padding:16px;text-align:center;color:var(--neutral-400);font-size:13px;';
-        empty.textContent = 'No services configured. Add services to your catalog.';
+        empty.className = 'bp-empty-note';
+        empty.textContent = 'No services configured. Add a service to begin the catalogue.';
         container.replaceChildren(empty);
         return;
       }
       var fragment = document.createDocumentFragment();
       services.forEach(function(s, i) {
-        var row = document.createElement('div');
-        row.className = 'bp-service-row';
-
-        var name = document.createElement('div');
-        name.className = 'svc-name';
-        name.textContent = s.name;
-        row.appendChild(name);
-
-        function appendInput(type, className, value, attributes, width) {
-          var cell = document.createElement('div');
-          var input = document.createElement('input');
-          input.type = type;
-          input.className = className;
-          input.dataset.idx = String(i);
-          input.value = value;
-          Object.keys(attributes).forEach(function(key) { input.setAttribute(key, attributes[key]); });
-          if (width) input.style.width = width;
-          cell.appendChild(input);
-          row.appendChild(cell);
-        }
-
-        appendInput('number', 'svc-crew', s.crewSize || 2, { min: '1' }, '50px');
-        appendInput('number', 'svc-hours', s.avgHours || 3, { step: '0.5', min: '0.5' }, '60px');
-        appendInput('number', 'svc-confidence', s.confidence || 85, { min: '0', max: '100' }, '50px');
-        appendInput('text', 'svc-equipment', s.equipment || '', { placeholder: 'Equipment' });
-        fragment.appendChild(row);
+        fragment.appendChild(renderServiceCard(s || {}, i, false));
       });
       container.replaceChildren(fragment);
+    }
+
+    function appendServiceField(grid, labelText, className, value, options) {
+      var field = document.createElement('div');
+      field.className = 'bp-field' + (options && options.full ? ' bp-full' : '');
+      var label = document.createElement('label');
+      label.textContent = labelText;
+      var input = document.createElement(options && options.multiline ? 'textarea' : 'input');
+      input.className = className;
+      if (!(options && options.multiline)) input.type = options && options.type ? options.type : 'text';
+      input.value = value === null || value === undefined ? '' : String(value);
+      if (options && options.readOnly) input.readOnly = true;
+      if (options && options.step) input.step = options.step;
+      if (options && options.min !== undefined) input.min = String(options.min);
+      if (options && options.max !== undefined) input.max = String(options.max);
+      if (options && options.placeholder) input.placeholder = options.placeholder;
+      field.append(label, input);
+      if (options && options.help) {
+        var help = document.createElement('span');
+        help.className = 'help-text';
+        help.textContent = options.help;
+        field.appendChild(help);
+      }
+      grid.appendChild(field);
+      return input;
+    }
+
+    function renderServiceCard(service, index, isNew) {
+      var card = document.createElement('div');
+      card.className = 'bp-repeat-card bp-service-card';
+      if (!isNew) card.dataset.serviceIndex = String(index);
+
+      var header = document.createElement('div');
+      header.className = 'bp-repeat-header';
+      var title = document.createElement('div');
+      title.className = 'bp-repeat-title';
+      title.textContent = service.name || 'New service';
+      header.appendChild(title);
+      if (isNew) {
+        var discard = document.createElement('button');
+        discard.type = 'button';
+        discard.className = 'bp-remove-btn';
+        discard.textContent = 'Discard new service';
+        discard.addEventListener('click', function() {
+          card.remove();
+          var container = document.getElementById('servicesContainer');
+          if (container && !container.querySelector('.bp-service-card')) {
+            var empty = document.createElement('div');
+            empty.className = 'bp-empty-note';
+            empty.textContent = 'No services configured. Add a service to begin the catalogue.';
+            container.appendChild(empty);
+          }
+        });
+        header.appendChild(discard);
+      }
+      card.appendChild(header);
+
+      var grid = document.createElement('div');
+      grid.className = 'bp-grid';
+      appendServiceField(grid, 'Stable service ID', 'svc-id', service.id || '', {
+        readOnly: !isNew,
+        help: isNew ? 'Choose once; it becomes immutable after Save.' : 'Immutable identity used by canonical consumers.',
+      });
+      var name = appendServiceField(grid, 'Service name', 'svc-name', service.name || '', {});
+      name.addEventListener('input', function() { title.textContent = name.value || 'New service'; });
+      appendServiceField(grid, 'Description', 'svc-description', service.description || '', { full: true });
+      appendServiceField(grid, 'Default crew size', 'svc-crew', service.crewSize, { type: 'number', min: 1, step: '1' });
+      appendServiceField(grid, 'Average hours', 'svc-hours', service.avgHours, { type: 'number', min: 0.01, step: '0.25' });
+      appendServiceField(grid, 'Difficulty multiplier', 'svc-difficulty', service.difficulty, { type: 'number', min: 0.01, step: '0.01' });
+      appendServiceField(grid, 'Confidence (0-100)', 'svc-confidence', service.confidence, { type: 'number', min: 0, max: 100, step: '1' });
+      appendServiceField(grid, 'Equipment reference or description', 'svc-equipment', service.equipment || '', {
+        full: true,
+        multiline: true,
+      });
+      appendServiceField(
+        grid,
+        'Canonical pricing rules (JSON)',
+        'svc-pricing',
+        Object.prototype.hasOwnProperty.call(service, 'canonicalPricing')
+          ? JSON.stringify(service.canonicalPricing, null, 2) : '',
+        {
+          multiline: true,
+          full: true,
+          placeholder: '{\n  "requiredScope": [],\n  "rangePercent": 10,\n  "lineItems": []\n}',
+          help: 'Blank means unpriced. Configured JSON is validated server-side before a new version is written.',
+        }
+      );
+      card.appendChild(grid);
+      return card;
+    }
+
+    function generatedServiceId() {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') return 'service-' + window.crypto.randomUUID();
+      return 'service-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    function addService() {
+      var container = document.getElementById('servicesContainer');
+      if (!container) return;
+      var empty = container.querySelector('.bp-empty-note');
+      if (empty) empty.remove();
+      var card = renderServiceCard({ id: generatedServiceId(), name: '' }, -1, true);
+      container.appendChild(card);
+      var name = card.querySelector('.svc-name');
+      if (name) name.focus();
+    }
+
+    function serviceCatalogFailure(message) {
+      var error = new Error(message);
+      error.serviceCatalog = true;
+      throw error;
+    }
+
+    function collectServices() {
+      return Array.from(document.querySelectorAll('#servicesContainer .bp-service-card')).map(function(card, position) {
+        var hasOriginal = Object.prototype.hasOwnProperty.call(card.dataset, 'serviceIndex');
+        var sourceIndex = hasOriginal ? Number(card.dataset.serviceIndex) : -1;
+        var original = hasOriginal && profileData && Array.isArray(profileData.services)
+          ? profileData.services[sourceIndex] : {};
+        var service = JSON.parse(JSON.stringify(original || {}));
+        var id = card.querySelector('.svc-id').value;
+        var name = card.querySelector('.svc-name').value;
+        if (!id) serviceCatalogFailure('Service ' + (position + 1) + ' requires a stable ID.');
+        if (!name.trim()) serviceCatalogFailure('Service ' + (position + 1) + ' requires a name.');
+        service.id = id;
+        service.name = name;
+
+        function assignString(className, key) {
+          var value = card.querySelector(className).value;
+          if (value || Object.prototype.hasOwnProperty.call(service, key)) service[key] = value;
+          else delete service[key];
+        }
+        function assignNumber(className, key, label, integer) {
+          var value = readOptionalNumber(card.querySelector(className), label);
+          if (value === null) {
+            delete service[key];
+            return;
+          }
+          if (integer && !Number.isInteger(value)) serviceCatalogFailure(label + ' must be a whole number.');
+          service[key] = value;
+        }
+        assignString('.svc-description', 'description');
+        assignString('.svc-equipment', 'equipment');
+        assignNumber('.svc-crew', 'crewSize', 'Default crew size', true);
+        assignNumber('.svc-hours', 'avgHours', 'Average hours', false);
+        assignNumber('.svc-difficulty', 'difficulty', 'Difficulty multiplier', false);
+        assignNumber('.svc-confidence', 'confidence', 'Confidence', false);
+
+        var pricingText = card.querySelector('.svc-pricing').value.trim();
+        if (!pricingText) {
+          delete service.canonicalPricing;
+        } else {
+          var pricing;
+          try { pricing = JSON.parse(pricingText); } catch (_error) {
+            serviceCatalogFailure('Pricing rules for ' + name + ' must be valid JSON.');
+          }
+          if (!pricing || typeof pricing !== 'object' || Array.isArray(pricing)) {
+            serviceCatalogFailure('Pricing rules for ' + name + ' must be a JSON object.');
+          }
+          service.canonicalPricing = pricing;
+        }
+        return service;
+      });
     }
 
     function readOptionalNumber(element, label) {
@@ -1122,19 +1274,7 @@
       p.vehicles.equipmentTransportCapacity = parseInt(getVal('veh-equipmentTransportCapacity')) || 0;
 
       // Services
-      var svcInputs = document.querySelectorAll('.svc-crew');
-      if (p.services && svcInputs.length > 0) {
-        p.services.forEach(function(s, i) {
-          var crewEl = document.querySelector('.svc-crew[data-idx="' + i + '"]');
-          var hoursEl = document.querySelector('.svc-hours[data-idx="' + i + '"]');
-          var confEl = document.querySelector('.svc-confidence[data-idx="' + i + '"]');
-          var equipEl = document.querySelector('.svc-equipment[data-idx="' + i + '"]');
-          if (crewEl) s.crewSize = parseInt(crewEl.value) || 2;
-          if (hoursEl) s.avgHours = parseFloat(hoursEl.value) || 3;
-          if (confEl) s.confidence = parseInt(confEl.value) || 85;
-          if (equipEl) s.equipment = equipEl.value;
-        });
-      }
+      p.services = collectServices();
 
       p.canonicalPricing = p.canonicalPricing && typeof p.canonicalPricing === 'object' && !Array.isArray(p.canonicalPricing) ? p.canonicalPricing : {};
       p.canonicalCosts = p.canonicalCosts && typeof p.canonicalCosts === 'object' && !Array.isArray(p.canonicalCosts) ? p.canonicalCosts : {};
@@ -1231,9 +1371,11 @@
       var data;
       try {
         clearCanonicalError();
+        clearServiceCatalogError();
         data = collectProfile();
       } catch (error) {
-        showCanonicalError(error.message);
+        if (error.serviceCatalog) showServiceCatalogError(error.message);
+        else showCanonicalError(error.message);
         showToast('❌ ' + error.message, 'error');
         btn.disabled = false;
         btn.textContent = '💾 Save Profile';
@@ -1281,6 +1423,10 @@
     // Init
     // ====================================================================
     document.addEventListener('DOMContentLoaded', function() {
+      var addServiceButton = document.getElementById('addServiceButton');
+      if (addServiceButton) addServiceButton.addEventListener('click', addService);
+      var servicesContainer = document.getElementById('servicesContainer');
+      if (servicesContainer) servicesContainer.addEventListener('input', clearServiceCatalogError);
       document.querySelectorAll('[data-canonical-field]').forEach(function(el) {
         el.addEventListener('input', function() {
           el.dataset.userEdited = 'true';

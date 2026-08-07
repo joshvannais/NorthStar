@@ -379,4 +379,134 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     expect((await request(app).get('/api/v1/business-profile/company').set(auth(OWNER_A))).body.data.name)
       .toBe(sectionName);
   });
+
+  test('company identity, locations, service area, hours, holidays, and policies persist byte-exact with tenant and version authority', async () => {
+    const loadedA = await request(app).get('/api/v1/business-profile').set(auth(OWNER_A));
+    const loadedB = await request(app).get('/api/v1/business-profile').set(auth(OWNER_B));
+    const rawOffice = '  North <Office> \ud83e\uddf0  ';
+    const rawTerritory = '  Greater Boston\nNorth Shore e\u0301  ';
+    const rawHoliday = '  Winter <Holiday> \u2603  ';
+    const rawPolicy = '  Written terms <b>control</b>.\nSecond line.  ';
+    const body = {
+      ...loadedA.body.data,
+      company: {
+        ...loadedA.body.data.company,
+        name: 'Canonical Identity A',
+        email: 'dispatch@example.com',
+        phone: '  +1 (555) 010-0200  ',
+        website: 'https://example.com/about?source=profile',
+        logo: 'https://example.com/logo.svg',
+        timeZone: 'America/New_York',
+        currency: 'USD',
+      },
+      headquarters: {
+        street: '10 Main St', city: 'Boston', state: 'MA', zip: '02108', country: 'US',
+        latitude: 42.3601, longitude: -71.0589,
+        additionalOffices: [{
+          id: 'office-north', name: rawOffice, street: '20 North St', city: 'Lowell',
+          state: 'MA', zip: '01852', country: 'US', latitude: null, longitude: null,
+        }],
+      },
+      serviceArea: {
+        maxRadiusMiles: 75,
+        maxTravelMinutes: 90,
+        primaryTerritory: rawTerritory,
+        polygon: [[42.1, -71.4], [42.7, -71.4], [42.7, -70.7]],
+      },
+      hours: {
+        monday: {
+          open: '08:00', close: '17:00', lunch: '12:00-13:00',
+          emergency: false, afterHours: true, holiday: false,
+        },
+        holidays: [{
+          id: 'holiday-2026-12-25', name: rawHoliday, date: '2026-12-25',
+          closed: true, open: '', close: '',
+        }],
+      },
+      policies: { warranty: rawPolicy },
+    };
+
+    const saved = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send(body);
+    expect(saved.status).toBe(200);
+    expect(saved.body.data.headquarters.additionalOffices[0].name).toBe(rawOffice);
+    expect(saved.body.data.serviceArea.primaryTerritory).toBe(rawTerritory);
+    expect(saved.body.data.hours.holidays[0].name).toBe(rawHoliday);
+    expect(saved.body.data.policies.warranty).toBe(rawPolicy);
+
+    const stored = await db.getPool().query(
+      `SELECT
+         encode(convert_to(raw_profile #>> '{headquarters,additionalOffices,0,name}', 'UTF8'), 'hex') AS office_hex,
+         encode(convert_to(raw_profile #>> '{serviceArea,primaryTerritory}', 'UTF8'), 'hex') AS territory_hex,
+         encode(convert_to(raw_profile #>> '{hours,holidays,0,name}', 'UTF8'), 'hex') AS holiday_hex,
+         encode(convert_to(raw_profile #>> '{policies,warranty}', 'UTF8'), 'hex') AS policy_hex
+       FROM canonical_business_profiles WHERE id = $1`,
+      [saved.body.data.canonicalAuthority.id]
+    );
+    expect(stored.rows).toEqual([{
+      office_hex: Buffer.from(rawOffice, 'utf8').toString('hex'),
+      territory_hex: Buffer.from(rawTerritory, 'utf8').toString('hex'),
+      holiday_hex: Buffer.from(rawHoliday, 'utf8').toString('hex'),
+      policy_hex: Buffer.from(rawPolicy, 'utf8').toString('hex'),
+    }]);
+
+    const activeBeforeInvalid = await getActiveBusinessProfile(db.getPool(), ORG_A);
+    const countBeforeInvalid = await db.getPool().query(
+      'SELECT count(*)::int AS count FROM canonical_business_profiles WHERE organization_id = $1',
+      [ORG_A]
+    );
+    const invalidCases = [
+      {
+        mutate(profile) { profile.company.unowned = 'not-authority'; },
+        expected: 'company.unowned is not a supported company field',
+      },
+      {
+        mutate(profile) { profile.headquarters.additionalOffices.push({ ...profile.headquarters.additionalOffices[0] }); },
+        expected: 'headquarters.additionalOffices contains duplicate id office-north',
+      },
+      {
+        mutate(profile) { profile.serviceArea.polygon[1][0] = 99; },
+        expected: 'serviceArea.polygon[1] latitude must be between -90 and 90',
+      },
+      {
+        mutate(profile) { profile.hours.holidays[0].date = '2026-02-30'; },
+        expected: 'hours.holidays[0].date must be a real YYYY-MM-DD date',
+      },
+      {
+        mutate(profile) { profile.policies.warranty = { text: 'not canonical' }; },
+        expected: 'policies.warranty must be a string',
+      },
+    ];
+    for (const invalid of invalidCases) {
+      const profile = JSON.parse(JSON.stringify(saved.body.data));
+      invalid.mutate(profile);
+      const rejected = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send(profile);
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.errors.join('\n')).toContain(invalid.expected);
+      expect((await getActiveBusinessProfile(db.getPool(), ORG_A)).id).toBe(activeBeforeInvalid.id);
+    }
+    const countAfterInvalid = await db.getPool().query(
+      'SELECT count(*)::int AS count FROM canonical_business_profiles WHERE organization_id = $1',
+      [ORG_A]
+    );
+    expect(countAfterInvalid.rows[0].count).toBe(countBeforeInvalid.rows[0].count);
+
+    const viewer = await request(app)
+      .put('/api/v1/business-profile/policies')
+      .set(auth(VIEWER_A))
+      .send({ warranty: 'forbidden' });
+    expect(viewer.status).toBe(403);
+    expect((await getActiveBusinessProfile(db.getPool(), ORG_A)).id).toBe(activeBeforeInvalid.id);
+
+    const sectionPolicy = '  Section policy <literal> \ud83c\udf0c  ';
+    const section = await request(app)
+      .put('/api/v1/business-profile/policies')
+      .set(auth(OWNER_A))
+      .send({ warranty: sectionPolicy });
+    expect(section.status).toBe(200);
+    expect(section.body.data.policies.warranty).toBe(sectionPolicy);
+    expect((await request(app).get('/api/v1/business-profile/policies').set(auth(OWNER_A))).body.data.warranty)
+      .toBe(sectionPolicy);
+    expect((await request(app).get('/api/v1/business-profile').set(auth(OWNER_B))).body.data.company.name)
+      .toBe(loadedB.body.data.company.name);
+  });
 });

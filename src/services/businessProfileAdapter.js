@@ -42,6 +42,26 @@ const RAW_PROFILE_LIMITS = Object.freeze({
 });
 
 const UNSAFE_RAW_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const COMPANY_FIELDS = new Set([
+  'name', 'dba', 'email', 'phone', 'website', 'logo', 'taxId', 'timeZone', 'currency',
+]);
+const LOCATION_FIELDS = new Set([
+  'id', 'name', 'street', 'city', 'state', 'zip', 'country', 'latitude', 'longitude',
+]);
+const HEADQUARTERS_FIELDS = new Set([
+  'street', 'city', 'state', 'zip', 'country', 'latitude', 'longitude', 'additionalOffices',
+]);
+const SERVICE_AREA_FIELDS = new Set([
+  'maxRadiusMiles', 'maxTravelMinutes', 'primaryTerritory', 'polygon',
+]);
+const WEEKDAYS = Object.freeze([
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+]);
+const HOURS_FIELDS = new Set(['open', 'close', 'lunch', 'emergency', 'afterHours', 'holiday']);
+const HOLIDAY_FIELDS = new Set(['id', 'name', 'date', 'closed', 'open', 'close']);
+const STABLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
+const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function isPlainObject(value) {
   if (!value || Object.prototype.toString.call(value) !== '[object Object]') return false;
@@ -166,6 +186,255 @@ function validateRawBusinessProfile(profile) {
     }
   }
   inspect(profile, 'profile', 0);
+  return errors;
+}
+
+function addUnsupportedFieldErrors(value, allowed, path, label, errors) {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) errors.push(path + '.' + key + ' is not a supported ' + label + ' field.');
+  }
+}
+
+function validateStringFields(value, fields, path, errors) {
+  for (const field of fields) {
+    if (hasOwn(value, field) && typeof value[field] !== 'string') {
+      errors.push(path + '.' + field + ' must be a string.');
+    }
+  }
+}
+
+function validateCoordinatePair(value, path, errors) {
+  const latitude = value.latitude;
+  const longitude = value.longitude;
+  const hasLatitude = latitude !== null && latitude !== undefined;
+  const hasLongitude = longitude !== null && longitude !== undefined;
+  if (hasLatitude !== hasLongitude) {
+    errors.push(path + ' latitude and longitude must be configured together.');
+  }
+  if (hasLatitude && (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90)) {
+    errors.push(path + '.latitude must be a finite number between -90 and 90.');
+  }
+  if (hasLongitude && (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180)) {
+    errors.push(path + '.longitude must be a finite number between -180 and 180.');
+  }
+}
+
+function validateLocation(value, path, options, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(path + ' must be an object.');
+    return;
+  }
+  const allowed = options && options.headquarters ? HEADQUARTERS_FIELDS : LOCATION_FIELDS;
+  addUnsupportedFieldErrors(value, allowed, path, options && options.headquarters ? 'headquarters' : 'location', errors);
+  validateStringFields(value, ['id', 'name', 'street', 'city', 'state', 'zip', 'country'], path, errors);
+  if (hasOwn(value, 'country') && typeof value.country === 'string' && value.country && !/^[A-Z]{2}$/.test(value.country)) {
+    errors.push(path + '.country must be a two-letter uppercase country code.');
+  }
+  if (hasOwn(value, 'id') && typeof value.id === 'string' && value.id && !STABLE_ID_PATTERN.test(value.id)) {
+    errors.push(path + '.id must be a stable identifier using letters, numbers, dot, underscore, colon, or hyphen.');
+  }
+  if (!(options && options.headquarters)) {
+    if (!hasOwn(value, 'name') || typeof value.name !== 'string' || !value.name.trim()) {
+      errors.push(path + '.name must not be blank.');
+    }
+  }
+  validateCoordinatePair(value, path, errors);
+}
+
+function isHttpUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isIanaTimeZone(value) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function validateCompany(company, errors) {
+  if (!isPlainObject(company)) return;
+  addUnsupportedFieldErrors(company, COMPANY_FIELDS, 'company', 'company', errors);
+  validateStringFields(company, COMPANY_FIELDS, 'company', errors);
+  if (!hasOwn(company, 'name') || typeof company.name !== 'string' || !company.name.trim()) {
+    errors.push('company.name must not be blank.');
+  }
+  if (typeof company.email === 'string' && company.email && !EMAIL_PATTERN.test(company.email.trim())) {
+    errors.push('company.email must be a valid email address.');
+  }
+  for (const field of ['website', 'logo']) {
+    if (typeof company[field] === 'string' && company[field] && !isHttpUrl(company[field])) {
+      errors.push('company.' + field + ' must use http or https.');
+    }
+  }
+  if (typeof company.timeZone === 'string' && company.timeZone && !isIanaTimeZone(company.timeZone)) {
+    errors.push('company.timeZone must be an IANA time zone.');
+  }
+  if (typeof company.currency === 'string' && company.currency && !/^[A-Z]{3}$/.test(company.currency)) {
+    errors.push('company.currency must be a three-letter uppercase currency code.');
+  }
+}
+
+function validateHeadquarters(headquarters, errors) {
+  if (!isPlainObject(headquarters)) return;
+  validateLocation(headquarters, 'headquarters', { headquarters: true }, errors);
+  if (!hasOwn(headquarters, 'additionalOffices')) return;
+  if (!Array.isArray(headquarters.additionalOffices)) {
+    errors.push('headquarters.additionalOffices must be an array.');
+    return;
+  }
+  const ids = new Set();
+  headquarters.additionalOffices.forEach(function (office, index) {
+    const path = 'headquarters.additionalOffices[' + index + ']';
+    validateLocation(office, path, null, errors);
+    if (!isPlainObject(office) || typeof office.id !== 'string' || !office.id) return;
+    if (ids.has(office.id)) errors.push('headquarters.additionalOffices contains duplicate id ' + office.id + '.');
+    ids.add(office.id);
+  });
+}
+
+function validateBoundedNumber(value, path, minimum, maximum, errors) {
+  if (value === null || value === undefined) return;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < minimum || value > maximum) {
+    errors.push(path + ' must be a finite number between ' + minimum + ' and ' + maximum + '.');
+  }
+}
+
+function validateServiceArea(serviceArea, errors) {
+  if (!isPlainObject(serviceArea)) return;
+  addUnsupportedFieldErrors(serviceArea, SERVICE_AREA_FIELDS, 'serviceArea', 'service area', errors);
+  if (hasOwn(serviceArea, 'primaryTerritory') && typeof serviceArea.primaryTerritory !== 'string') {
+    errors.push('serviceArea.primaryTerritory must be a string.');
+  }
+  validateBoundedNumber(serviceArea.maxRadiusMiles, 'serviceArea.maxRadiusMiles', 1, 500, errors);
+  validateBoundedNumber(serviceArea.maxTravelMinutes, 'serviceArea.maxTravelMinutes', 1, 240, errors);
+  if (!hasOwn(serviceArea, 'polygon')) return;
+  if (!Array.isArray(serviceArea.polygon)) {
+    errors.push('serviceArea.polygon must be an array.');
+    return;
+  }
+  if (serviceArea.polygon.length > 0 && serviceArea.polygon.length < 3) {
+    errors.push('serviceArea.polygon must be empty or contain at least three coordinate points.');
+  }
+  serviceArea.polygon.forEach(function (point, index) {
+    const path = 'serviceArea.polygon[' + index + ']';
+    let latitude;
+    let longitude;
+    if (Array.isArray(point) && point.length === 2) {
+      [latitude, longitude] = point;
+    } else if (isPlainObject(point) && Object.keys(point).every(function (key) { return key === 'latitude' || key === 'longitude'; })) {
+      latitude = point.latitude;
+      longitude = point.longitude;
+    } else {
+      errors.push(path + ' must be a [latitude, longitude] pair or coordinate object.');
+      return;
+    }
+    if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+      errors.push(path + ' latitude must be between -90 and 90.');
+    }
+    if (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      errors.push(path + ' longitude must be between -180 and 180.');
+    }
+  });
+}
+
+function isTime(value) {
+  return typeof value === 'string' && TIME_PATTERN.test(value);
+}
+
+function validateTimePair(value, path, errors, required) {
+  const open = typeof value.open === 'string' ? value.open : null;
+  const close = typeof value.close === 'string' ? value.close : null;
+  const hasOpen = Boolean(open);
+  const hasClose = Boolean(close);
+  if (hasOpen !== hasClose) errors.push(path + ' open and close must be configured together.');
+  if (required && !hasOpen && !hasClose) errors.push(path + ' open and close are required when the date is not closed.');
+  if (hasOpen && !isTime(open)) errors.push(path + '.open must be empty or use HH:mm.');
+  if (hasClose && !isTime(close)) errors.push(path + '.close must be empty or use HH:mm.');
+}
+
+function isRealDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value + 'T00:00:00Z');
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function validateHours(hours, errors) {
+  if (!isPlainObject(hours)) return;
+  const allowed = new Set([...WEEKDAYS, 'holidays']);
+  addUnsupportedFieldErrors(hours, allowed, 'hours', 'hours', errors);
+  for (const day of WEEKDAYS) {
+    if (!hasOwn(hours, day)) continue;
+    const value = hours[day];
+    const path = 'hours.' + day;
+    if (!isPlainObject(value)) {
+      errors.push(path + ' must be an object.');
+      continue;
+    }
+    addUnsupportedFieldErrors(value, HOURS_FIELDS, path, 'hours', errors);
+    validateStringFields(value, ['open', 'close', 'lunch'], path, errors);
+    for (const field of ['emergency', 'afterHours', 'holiday']) {
+      if (hasOwn(value, field) && typeof value[field] !== 'boolean') errors.push(path + '.' + field + ' must be a boolean.');
+    }
+    validateTimePair(value, path, errors, false);
+    if (typeof value.lunch === 'string' && value.lunch && !/^((?:[01]\d|2[0-3]):[0-5]\d)-((?:[01]\d|2[0-3]):[0-5]\d)$/.test(value.lunch)) {
+      errors.push(path + '.lunch must be empty or use HH:mm-HH:mm.');
+    }
+  }
+  if (!hasOwn(hours, 'holidays')) return;
+  if (!Array.isArray(hours.holidays)) {
+    errors.push('hours.holidays must be an array.');
+    return;
+  }
+  const ids = new Set();
+  hours.holidays.forEach(function (holiday, index) {
+    const path = 'hours.holidays[' + index + ']';
+    if (!isPlainObject(holiday)) {
+      errors.push(path + ' must be an object.');
+      return;
+    }
+    addUnsupportedFieldErrors(holiday, HOLIDAY_FIELDS, path, 'holiday', errors);
+    validateStringFields(holiday, ['id', 'name', 'date', 'open', 'close'], path, errors);
+    if (!hasOwn(holiday, 'id') || typeof holiday.id !== 'string' || !STABLE_ID_PATTERN.test(holiday.id)) {
+      errors.push(path + '.id must be a stable identifier using letters, numbers, dot, underscore, colon, or hyphen.');
+    } else {
+      if (ids.has(holiday.id)) errors.push('hours.holidays contains duplicate id ' + holiday.id + '.');
+      ids.add(holiday.id);
+    }
+    if (!hasOwn(holiday, 'name') || typeof holiday.name !== 'string' || !holiday.name.trim()) {
+      errors.push(path + '.name must not be blank.');
+    }
+    if (!isRealDate(holiday.date)) errors.push(path + '.date must be a real YYYY-MM-DD date.');
+    if (typeof holiday.closed !== 'boolean') errors.push(path + '.closed must be a boolean.');
+    validateTimePair(holiday, path, errors, holiday.closed === false);
+    if (holiday.closed === true && (holiday.open || holiday.close)) {
+      errors.push(path + ' must not configure hours when closed.');
+    }
+  });
+}
+
+function validatePolicies(policies, errors) {
+  if (!isPlainObject(policies)) return;
+  for (const key of Object.keys(policies)) {
+    if (!key.trim()) errors.push('policies contains a blank key.');
+    if (typeof policies[key] !== 'string') errors.push('policies.' + key + ' must be a string.');
+  }
+}
+
+function validateOperationalBusinessProfile(profile) {
+  const errors = [];
+  if (hasOwn(profile, 'company')) validateCompany(profile.company, errors);
+  if (hasOwn(profile, 'headquarters')) validateHeadquarters(profile.headquarters, errors);
+  if (hasOwn(profile, 'serviceArea')) validateServiceArea(profile.serviceArea, errors);
+  if (hasOwn(profile, 'hours')) validateHours(profile.hours, errors);
+  if (hasOwn(profile, 'policies')) validatePolicies(profile.policies, errors);
   return errors;
 }
 
@@ -316,6 +585,10 @@ function prepareBusinessProfileForWrite(profile) {
   if (rawErrors.length) {
     return { profile: null, migratedFields: [], errors: rawErrors };
   }
+  const operationalErrors = validateOperationalBusinessProfile(profile);
+  if (operationalErrors.length) {
+    return { profile: null, migratedFields: [], errors: operationalErrors };
+  }
   const migrated = migrateLegacyCanonicalAuthority(profile);
   const errors = validateCanonicalBusinessProfile(migrated.profile);
   if (!errors.length) synchronizeLegacyFinancial(migrated.profile);
@@ -399,5 +672,6 @@ module.exports = {
   stableValue,
   synchronizeLegacyFinancial,
   validateCanonicalBusinessProfile,
+  validateOperationalBusinessProfile,
   validateRawBusinessProfile,
 };

@@ -42,6 +42,19 @@ describe('Mission 20 Part 2I notification preference presentation contract', () 
     expect(settings).not.toMatch(/settings\.smsUrgent = settingsState\.smsUrgent/);
   });
 
+  test('every canonical notification toggle is named by its visible heading', () => {
+    for (const [inputId, labelId, label] of [
+      ['emailEnabled', 'emailEnabledLabel', 'Email for new leads'],
+      ['emailCallSummary', 'emailCallSummaryLabel', 'Email call summaries'],
+      ['emailAppointment', 'emailAppointmentLabel', 'Email appointments'],
+      ['smsEnabled', 'smsEnabledLabel', 'SMS for new leads'],
+      ['smsUrgent', 'smsUrgentLabel', 'Urgent SMS alerts'],
+    ]) {
+      expect(settings).toContain(`<h4 id="${labelId}">${label}</h4>`);
+      expect(settings).toMatch(new RegExp(`id=["']${inputId}["'][^>]*aria-labelledby=["']${labelId}["']`));
+    }
+  });
+
   test('Business Profile retires notification toggles while preserving the untouched legacy object', () => {
     expect(businessProfile).toContain('id="canonicalNotificationsLink"');
     expect(businessProfile).toContain('href="/dashboard/settings"');

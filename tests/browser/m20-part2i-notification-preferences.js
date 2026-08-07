@@ -30,6 +30,13 @@ const LEGACY_NOTIFICATIONS = Object.freeze({
   criticalAlerts: true,
   legacyLabel: LEGACY_LABEL,
 });
+const NOTIFICATION_TOGGLE_NAMES = Object.freeze([
+  'Email for new leads',
+  'Email call summaries',
+  'Email appointments',
+  'SMS for new leads',
+  'Urgent SMS alerts',
+]);
 const INITIAL = Object.freeze({
   emailEnabled: true,
   emailCallSummary: false,
@@ -193,6 +200,14 @@ function assertSettingsSnapshot(snapshot, input, lifecycle) {
   assert.strictEqual(snapshot.overflow, false, label + ': no horizontal overflow');
 }
 
+async function assertAccessibleNotificationControls(page, input, lifecycle) {
+  const label = `${input.role}/${input.viewportLabel}/${input.theme}/${lifecycle}`;
+  for (const name of NOTIFICATION_TOGGLE_NAMES) {
+    assert.strictEqual(await page.getByRole('checkbox', { name, exact: true }).count(), 1,
+      `${label}: ${name} has one exact accessible name`);
+  }
+}
+
 async function exerciseCell(browser, origin, session, input, ledger) {
   const context = await contextFor(browser, origin, session, input, ledger);
   try {
@@ -202,13 +217,16 @@ async function exerciseCell(browser, origin, session, input, ledger) {
     assert.strictEqual(response.status(), 200);
     await waitForSettings(page);
     assertSettingsSnapshot(await settingsSnapshot(page), input, 'initial');
+    await assertAccessibleNotificationControls(page, input, 'initial');
 
     await page.evaluate(() => renderSettingsState());
     assertSettingsSnapshot(await settingsSnapshot(page), input, 'rerender');
+    await assertAccessibleNotificationControls(page, input, 'rerender');
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForSettings(page);
     assertSettingsSnapshot(await settingsSnapshot(page), input, 'reload');
+    await assertAccessibleNotificationControls(page, input, 'reload');
 
     const themeToggle = page.locator('[data-northstar-theme-toggle]');
     await themeToggle.focus();

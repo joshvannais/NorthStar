@@ -116,9 +116,12 @@ async function active(req) {
 }
 
 async function persist(req, rawProfile) {
-  const source = rawProfile && typeof rawProfile === 'object' && !Array.isArray(rawProfile)
-    ? { ...rawProfile } : {};
-  delete source.canonicalAuthority;
+  let source = rawProfile;
+  if (source && typeof source === 'object' && !Array.isArray(source)) {
+    source = { ...source };
+    delete source.canonicalAuthority;
+    delete source.onboardingDraft;
+  }
   const prepared = prepareBusinessProfileForWrite(source);
   if (prepared.errors.length) {
     const error = new Error('Business Profile validation failed.');
@@ -148,9 +151,13 @@ router.get('/', requireTenantAccess, async function (req, res) {
 
 router.put('/', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
   try {
-    return res.json({ success: true, data: response(await persist(req, req.body || {})) });
+    return res.json({ success: true, data: response(await persist(req, req.body)) });
   } catch (error) {
-    if (error.details) return res.status(400).json({ success: false, errors: error.details });
+    if (error.details) return res.status(400).json({
+      success: false,
+      error: { code: error.code, message: error.message },
+      errors: error.details,
+    });
     return sendError(res, error);
   }
 });
@@ -173,7 +180,11 @@ router.put('/:section', requireAccountMutation, requirePermission('settings', 'u
     const updated = { ...current, [section]: req.body };
     return res.json({ success: true, data: response(await persist(req, updated)) });
   } catch (error) {
-    if (error.details) return res.status(400).json({ success: false, errors: error.details });
+    if (error.details) return res.status(400).json({
+      success: false,
+      error: { code: error.code, message: error.message },
+      errors: error.details,
+    });
     return sendError(res, error);
   }
 });

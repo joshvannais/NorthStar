@@ -26,6 +26,8 @@ const { createProductionTransactionalEmail } = require('./email/transactional');
 const accountRoutes = require('./routes/account');
 const { WorkforceService } = require('./workforce/service');
 const { createWorkforceRouter } = require('./routes/workforce');
+const { AssetCatalogueService } = require('./assets/service');
+const { createAssetCatalogueRouter } = require('./routes/assets');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -111,6 +113,7 @@ const productionWorkforceService = new WorkforceService(undefined, {
   transactionalEmail: productionTransactionalEmail,
 });
 app.locals.workforceService = productionWorkforceService;
+app.locals.assetCatalogueService = new AssetCatalogueService();
 app.use('/api/auth', createAuthRouter({
   service: productionAccountService,
   signup: productionTransactionalEmail
@@ -119,6 +122,9 @@ app.use('/api/auth', createAuthRouter({
 }));
 app.use('/api/account', accountRoutes);
 app.use('/api/workforce', createWorkforceRouter());
+// The normalized catalogue owns only /api/assets. It must precede the broad
+// legacy retirement router; /api/v1/assets remains retired.
+app.use('/api/assets', createAssetCatalogueRouter());
 
 // Legacy demo credential minting is retired. Canonical demo access requires a
 // separately provisioned account attached to canonical_demo_authority.

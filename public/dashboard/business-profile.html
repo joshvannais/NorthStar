@@ -56,6 +56,14 @@
     .bp-service-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
     .bp-repeat-list { display: grid; gap: 12px; }
     .bp-repeat-card { border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); padding: 14px; background: var(--neutral-50); }
+    .bp-asset-card[data-catalogue-state="archived"] { border-style: dashed; opacity: 0.88; }
+    .bp-asset-status { font-size: 11px; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.5px; }
+    .bp-asset-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .bp-asset-services { border: 0; min-width: 0; }
+    .bp-asset-services legend { font-size: 12px; font-weight: 600; color: var(--neutral-600); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .bp-asset-service-options { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+    .bp-asset-service-option { display: inline-flex; align-items: center; gap: 6px; color: var(--neutral-700); font-size: 13px; overflow-wrap: anywhere; }
+    .bp-asset-service-option input { width: auto; }
     .bp-repeat-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
     .bp-repeat-title { font-size: 13px; font-weight: 600; color: var(--neutral-700); }
     .bp-add-btn, .bp-remove-btn { border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); background: var(--neutral-50); color: var(--neutral-700); font-size: 12px; font-weight: 600; cursor: pointer; padding: 7px 10px; }
@@ -94,7 +102,7 @@
           <button class="bp-nav-btn" data-section="hours" onclick="switchSection('hours')">🕐 Hours</button>
           <button class="bp-nav-btn" data-section="policies" onclick="switchSection('policies')">📜 Policies</button>
           <button class="bp-nav-btn" data-section="crew" onclick="switchSection('crew')">👥 Crews</button>
-          <button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Vehicles</button>
+          <button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Assets &amp; Fleet</button>
           <button class="bp-nav-btn" data-section="services" onclick="switchSection('services')">📋 Services</button>
           <button class="bp-nav-btn" data-section="financial" onclick="switchSection('financial')">💰 Financial</button>
           <button class="bp-nav-btn" data-section="scheduling" onclick="switchSection('scheduling')">📅 Scheduling</button>
@@ -241,8 +249,8 @@
         <!-- Section: Vehicles -->
         <div class="bp-section" id="section-vehicles">
           <div class="bp-card">
-            <h3>Fleet & Vehicles</h3>
-            <div class="bp-section-desc">Vehicle configuration used by production and travel cost calculations.</div>
+            <h3>Fleet Planning Assumptions</h3>
+            <div class="bp-section-desc">Existing Business Profile assumptions used by production and travel cost calculations. These values remain separate from individual asset identities.</div>
             <div class="bp-grid">
               <div class="bp-field"><label>Truck Count</label><input id="veh-truckCount" type="number" min="0"></div>
               <div class="bp-field"><label>Trailer Count</label><input id="veh-trailerCount" type="number" min="0"></div>
@@ -252,6 +260,18 @@
               <div class="bp-field"><label>Maintenance Reserve (%)</label><input id="veh-maintenanceReserve" type="number" step="0.01" min="0"></div>
               <div class="bp-field"><label>Equipment Transport Capacity</label><input id="veh-equipmentTransportCapacity" type="number" min="0"></div>
             </div>
+          </div>
+          <div class="bp-card">
+            <div class="bp-repeat-header">
+              <div>
+                <h3>Asset &amp; Equipment Catalogue</h3>
+                <div class="bp-section-desc">Stable vehicle, equipment, tool, trailer, attachment, and other durable-asset identities. Operational state is managed outside Business Profile.</div>
+              </div>
+              <button id="addAssetButton" class="bp-add-btn" type="button" hidden>Add asset</button>
+            </div>
+            <div id="assetCatalogueAuthority" class="bp-authority-note" role="status">Loading PostgreSQL asset authority…</div>
+            <div id="assetCatalogueError" class="bp-validation-error" role="alert"></div>
+            <div id="assetCatalogueContainer" class="bp-repeat-list" aria-live="polite"></div>
           </div>
         </div>
 
@@ -403,6 +423,7 @@
     // Data model
     // ====================================================================
     var profileData = null;
+    var assetCatalogueData = null;
 
     function profileRequest(url, options) {
       var request = options || {};
@@ -438,6 +459,360 @@
           showToast('Could not connect to server', 'error');
         });
     }
+
+    // ====================================================================
+    // Normalized PostgreSQL asset catalogue (separate from profileData)
+    // ====================================================================
+    function assetCatalogueState(state) {
+      document.documentElement.setAttribute('data-asset-catalogue-state', state);
+    }
+
+    function showAssetCatalogueError(message) {
+      var error = document.getElementById('assetCatalogueError');
+      if (!error) return;
+      error.textContent = message;
+      error.classList.add('show');
+    }
+
+    function clearAssetCatalogueError() {
+      var error = document.getElementById('assetCatalogueError');
+      if (!error) return;
+      error.textContent = '';
+      error.classList.remove('show');
+    }
+
+    function appendAssetField(grid, labelText, className, value, options) {
+      var field = document.createElement('div');
+      field.className = 'bp-field' + (options && options.full ? ' bp-full' : '');
+      var label = document.createElement('label');
+      label.textContent = labelText;
+      var control = options && options.multiline
+        ? document.createElement('textarea') : document.createElement('input');
+      if (!(options && options.multiline)) control.type = options && options.type ? options.type : 'text';
+      control.id = stableRowId('asset-field');
+      label.htmlFor = control.id;
+      control.className = className;
+      control.value = value === null || value === undefined ? '' : String(value);
+      if (options && options.min !== undefined) control.min = String(options.min);
+      if (options && options.max !== undefined) control.max = String(options.max);
+      if (options && options.step !== undefined) control.step = String(options.step);
+      control.disabled = Boolean(options && options.disabled);
+      field.append(label, control);
+      grid.appendChild(field);
+      return control;
+    }
+
+    function appendAssetSelect(grid, labelText, className, optionsList, selected, disabled) {
+      var field = document.createElement('div');
+      field.className = 'bp-field';
+      var label = document.createElement('label');
+      label.textContent = labelText;
+      var select = document.createElement('select');
+      select.id = stableRowId('asset-field');
+      label.htmlFor = select.id;
+      select.className = className;
+      optionsList.forEach(function(optionValue) {
+        var option = document.createElement('option');
+        option.value = optionValue.value;
+        option.textContent = optionValue.label;
+        select.appendChild(option);
+      });
+      select.value = selected === null || selected === undefined ? '' : String(selected);
+      select.disabled = Boolean(disabled);
+      field.append(label, select);
+      grid.appendChild(field);
+      return select;
+    }
+
+    function renderAssetServices(grid, selectedIds, disabled) {
+      var fieldset = document.createElement('fieldset');
+      fieldset.className = 'bp-field bp-full bp-asset-services asset-service-capabilities';
+      var legend = document.createElement('legend');
+      legend.textContent = 'Supported services';
+      fieldset.appendChild(legend);
+      var options = document.createElement('div');
+      options.className = 'bp-asset-service-options';
+      var selectedValues = Array.isArray(selectedIds) ? selectedIds : [];
+      var selected = new Set(selectedValues);
+      var rendered = new Set();
+      var services = assetCatalogueData && Array.isArray(assetCatalogueData.services)
+        ? assetCatalogueData.services : [];
+      if (services.length === 0) {
+        var empty = document.createElement('span');
+        empty.className = 'help-text';
+        empty.textContent = 'No canonical Business Profile services are configured.';
+        options.appendChild(empty);
+      } else {
+        services.forEach(function(service) {
+          rendered.add(service.id);
+          var label = document.createElement('label');
+          label.className = 'bp-asset-service-option';
+          var checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = service.id;
+          checkbox.checked = selected.has(service.id);
+          checkbox.disabled = Boolean(disabled);
+          var text = document.createElement('span');
+          text.textContent = service.name || service.id;
+          label.append(checkbox, text);
+          options.appendChild(label);
+        });
+      }
+      selectedValues.filter(function(serviceId) { return !rendered.has(serviceId); }).forEach(function(serviceId) {
+        var label = document.createElement('label');
+        label.className = 'bp-asset-service-option';
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = serviceId;
+        checkbox.checked = true;
+        checkbox.disabled = Boolean(disabled);
+        var text = document.createElement('span');
+        text.textContent = serviceId + ' (not in active Business Profile)';
+        label.append(checkbox, text);
+        options.appendChild(label);
+      });
+      fieldset.appendChild(options);
+      grid.appendChild(fieldset);
+    }
+
+    function renderAssetCard(asset, isNew) {
+      var value = asset && typeof asset === 'object' ? asset : {};
+      var canManage = Boolean(assetCatalogueData && assetCatalogueData.canManage);
+      var archived = value.catalogueState === 'archived';
+      var controlsDisabled = !canManage;
+      var card = document.createElement('div');
+      card.className = 'bp-repeat-card bp-asset-card';
+      if (isNew) card.dataset.new = 'true';
+      else card.dataset.assetId = value.id;
+      card.dataset.assetVersion = String(value.version || 0);
+      card.dataset.catalogueState = archived ? 'archived' : 'active';
+
+      var header = document.createElement('div');
+      header.className = 'bp-repeat-header';
+      var title = document.createElement('div');
+      title.className = 'bp-repeat-title';
+      title.textContent = value.name || 'New asset identity';
+      var status = document.createElement('div');
+      status.className = 'bp-asset-status';
+      status.textContent = isNew ? 'Unsaved' : (archived ? 'Archived' : 'Active') + ' • v' + value.version;
+      header.append(title, status);
+      card.appendChild(header);
+
+      var grid = document.createElement('div');
+      grid.className = 'bp-grid';
+      appendAssetSelect(grid, 'Category', 'asset-category', [
+        { value: 'vehicle', label: 'Vehicle' },
+        { value: 'equipment', label: 'Equipment' },
+        { value: 'tool', label: 'Tool' },
+        { value: 'trailer', label: 'Trailer' },
+        { value: 'attachment', label: 'Attachment' },
+        { value: 'other', label: 'Other durable asset' },
+      ], value.category || 'vehicle', controlsDisabled);
+      var name = appendAssetField(grid, 'Display name', 'asset-name', value.name, { disabled: controlsDisabled });
+      name.addEventListener('input', function() { title.textContent = name.value || 'New asset identity'; });
+      appendAssetField(grid, 'Internal reference', 'asset-internal-reference', value.internalReference, { disabled: controlsDisabled });
+      appendAssetField(grid, 'Make / manufacturer', 'asset-manufacturer', value.manufacturer, { disabled: controlsDisabled });
+      appendAssetField(grid, 'Model', 'asset-model', value.model, { disabled: controlsDisabled });
+      appendAssetField(grid, 'Model year', 'asset-model-year', value.modelYear, {
+        disabled: controlsDisabled, type: 'number', min: 1800, max: 3000, step: 1,
+      });
+      appendAssetField(grid, 'Configuration', 'asset-configuration', value.configuration, {
+        disabled: controlsDisabled, multiline: true, full: true,
+      });
+      appendAssetField(grid, 'Authorized serial number', 'asset-serial-number', value.serialNumber, { disabled: controlsDisabled });
+      appendAssetField(grid, 'Authorized VIN', 'asset-vin', value.vin, { disabled: controlsDisabled });
+      var locations = [{ value: '', label: 'No home location' }].concat(
+        (assetCatalogueData.locations || []).map(function(location) {
+          return { value: location.id, label: location.name || location.id };
+        })
+      );
+      if (value.homeLocationId && !locations.some(function(location) { return location.value === value.homeLocationId; })) {
+        locations.splice(1, 0, {
+          value: value.homeLocationId,
+          label: value.homeLocationId + ' (not in active Business Profile)',
+        });
+      }
+      appendAssetSelect(grid, 'Home location', 'asset-home-location', locations, value.homeLocationId, controlsDisabled);
+      renderAssetServices(grid, value.serviceIds, controlsDisabled);
+      card.appendChild(grid);
+
+      if (canManage) {
+        var actions = document.createElement('div');
+        actions.className = 'bp-asset-actions';
+        if (isNew) {
+          var discard = document.createElement('button');
+          discard.type = 'button';
+          discard.className = 'bp-remove-btn';
+          discard.textContent = 'Discard new asset';
+          discard.addEventListener('click', function() {
+            card.remove();
+            var container = document.getElementById('assetCatalogueContainer');
+            if (container && !container.querySelector('.bp-asset-card')) {
+              appendEmptyNote(container, 'No asset identities configured.');
+            }
+          });
+          actions.appendChild(discard);
+        }
+        var save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'bp-save-btn';
+        save.textContent = 'Save asset';
+        save.addEventListener('click', function() {
+          runAssetCardMutation(card, function() { return saveAssetCard(card); });
+        });
+        actions.appendChild(save);
+        if (!isNew) {
+          var lifecycle = document.createElement('button');
+          lifecycle.type = 'button';
+          lifecycle.className = archived ? 'bp-add-btn' : 'bp-remove-btn';
+          lifecycle.textContent = archived ? 'Restore asset' : 'Archive asset';
+          lifecycle.addEventListener('click', function() {
+            runAssetCardMutation(card, function() {
+              return setAssetCatalogueState(card, archived ? 'active' : 'archived');
+            });
+          });
+          actions.appendChild(lifecycle);
+        }
+        card.appendChild(actions);
+      }
+      return card;
+    }
+
+    function renderAssetCatalogue(data) {
+      assetCatalogueData = data;
+      var authority = document.getElementById('assetCatalogueAuthority');
+      if (authority) {
+        authority.textContent = 'PostgreSQL is the canonical tenant asset identity authority. Business Profile displays this catalogue without copying it into profile JSON.';
+      }
+      var add = document.getElementById('addAssetButton');
+      if (add) add.hidden = !data.canManage;
+      var container = document.getElementById('assetCatalogueContainer');
+      if (!container) return;
+      var fragment = document.createDocumentFragment();
+      var assets = Array.isArray(data.assets) ? data.assets : [];
+      if (assets.length === 0) appendEmptyNote(fragment, 'No asset identities configured.');
+      else assets.forEach(function(asset) { fragment.appendChild(renderAssetCard(asset, false)); });
+      container.replaceChildren(fragment);
+    }
+
+    function assetPayload(card) {
+      var yearText = card.querySelector('.asset-model-year').value;
+      var payload = {
+        category: card.querySelector('.asset-category').value,
+        name: card.querySelector('.asset-name').value,
+        internalReference: card.querySelector('.asset-internal-reference').value,
+        manufacturer: card.querySelector('.asset-manufacturer').value,
+        model: card.querySelector('.asset-model').value,
+        modelYear: yearText === '' ? null : Number(yearText),
+        configuration: card.querySelector('.asset-configuration').value,
+        serialNumber: card.querySelector('.asset-serial-number').value,
+        vin: card.querySelector('.asset-vin').value,
+        homeLocationId: card.querySelector('.asset-home-location').value || null,
+        serviceIds: Array.from(card.querySelectorAll('.asset-service-capabilities input:checked'))
+          .map(function(input) { return input.value; }),
+      };
+      if (card.dataset.new !== 'true') payload.version = Number(card.dataset.assetVersion);
+      return payload;
+    }
+
+    async function runAssetCardMutation(card, work) {
+      if (card.dataset.pending === 'true') return;
+      card.dataset.pending = 'true';
+      Array.from(card.querySelectorAll('button')).forEach(function(button) { button.disabled = true; });
+      try {
+        await work();
+      } finally {
+        if (card.isConnected) {
+          delete card.dataset.pending;
+          Array.from(card.querySelectorAll('button')).forEach(function(button) { button.disabled = false; });
+        }
+      }
+    }
+
+    async function catalogueMutation(url, options) {
+      clearAssetCatalogueError();
+      try {
+        var response = await profileRequest(url, options);
+        var body = await response.json();
+        if (!response.ok || !body.success) {
+          var message = body && body.error && body.error.message
+            ? body.error.message : 'Asset catalogue update failed.';
+          showAssetCatalogueError(message);
+          showToast('❌ ' + message, 'error');
+          if (response.status === 409) await loadAssetCatalogue();
+          return false;
+        }
+        await loadAssetCatalogue();
+        showToast('✅ Asset catalogue updated', 'success');
+        return true;
+      } catch (_error) {
+        showAssetCatalogueError('Could not connect to the PostgreSQL asset authority.');
+        showToast('❌ Could not connect to asset authority', 'error');
+        assetCatalogueState('error');
+        return false;
+      }
+    }
+
+    function saveAssetCard(card) {
+      var isNew = card.dataset.new === 'true';
+      var url = isNew ? '/api/assets' : '/api/assets/' + encodeURIComponent(card.dataset.assetId);
+      return catalogueMutation(url, {
+        method: isNew ? 'POST' : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assetPayload(card)),
+      });
+    }
+
+    function setAssetCatalogueState(card, state) {
+      return catalogueMutation('/api/assets/' + encodeURIComponent(card.dataset.assetId) + '/catalogue-state', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: Number(card.dataset.assetVersion), catalogueState: state }),
+      });
+    }
+
+    async function loadAssetCatalogue() {
+      assetCatalogueState('loading');
+      clearAssetCatalogueError();
+      try {
+        var response = await profileRequest('/api/assets');
+        var body = await response.json();
+        if (!response.ok || !body.success || !body.data) {
+          throw new Error('asset_catalogue_unavailable');
+        }
+        renderAssetCatalogue(body.data);
+        assetCatalogueState('ready');
+        return body.data;
+      } catch (_error) {
+        var authority = document.getElementById('assetCatalogueAuthority');
+        if (authority) authority.textContent = 'PostgreSQL asset identity authority is unavailable.';
+        var add = document.getElementById('addAssetButton');
+        if (add) add.hidden = true;
+        var container = document.getElementById('assetCatalogueContainer');
+        if (container) container.replaceChildren();
+        showAssetCatalogueError('Asset catalogue could not be loaded.');
+        assetCatalogueState('error');
+        return null;
+      }
+    }
+
+    function addAssetCard() {
+      if (!assetCatalogueData || !assetCatalogueData.canManage) return;
+      var container = document.getElementById('assetCatalogueContainer');
+      if (!container) return;
+      var empty = container.querySelector('.bp-empty-note');
+      if (empty) empty.remove();
+      var card = renderAssetCard({
+        category: 'vehicle', name: '', internalReference: '', manufacturer: '', model: '',
+        modelYear: null, configuration: '', serialNumber: '', vin: '', homeLocationId: null,
+        serviceIds: [], catalogueState: 'active', version: 0,
+      }, true);
+      container.appendChild(card);
+      var name = card.querySelector('.asset-name');
+      if (name) name.focus();
+    }
+
+    window.NorthStarAssetCatalogue = Object.freeze({ reload: loadAssetCatalogue });
 
     // ====================================================================
     // Render profile to form
@@ -1423,6 +1798,8 @@
     // Init
     // ====================================================================
     document.addEventListener('DOMContentLoaded', function() {
+      var addAssetButton = document.getElementById('addAssetButton');
+      if (addAssetButton) addAssetButton.addEventListener('click', addAssetCard);
       var addServiceButton = document.getElementById('addServiceButton');
       if (addServiceButton) addServiceButton.addEventListener('click', addService);
       var servicesContainer = document.getElementById('servicesContainer');
@@ -1436,6 +1813,7 @@
         });
       });
       loadProfile();
+      loadAssetCatalogue();
     });
   </script>
   <script src="/js/nav-component.js"></script>

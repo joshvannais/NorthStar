@@ -24,7 +24,7 @@ const SURFACES = Object.freeze([
   Object.freeze({ label: 'Business Profile', route: '/dashboard/business-profile', mode: 'bp' }),
   Object.freeze({ label: 'My Number', route: '/dashboard/my-number', mode: 'legacy', natural: 'my-number', expected: 'Please enter a full phone number' }),
   Object.freeze({ label: 'Settings', route: '/dashboard/settings', mode: 'legacy', natural: 'settings', expected: 'Twilio integration coming soon' }),
-  Object.freeze({ label: 'Integrations', route: '/dashboard/integrations', mode: 'legacy', natural: 'integrations', expected: 'Please enter a valid email address' }),
+  Object.freeze({ label: 'Integrations', route: '/dashboard/integrations', mode: 'legacy' }),
   Object.freeze({ label: 'Leads', route: '/dashboard/leads', mode: 'premium' }),
   Object.freeze({ label: 'Communications', route: '/dashboard/communications', mode: 'premium' }),
   Object.freeze({ label: 'Calendar', route: '/dashboard/calendar', mode: 'legacy' }),
@@ -129,11 +129,6 @@ async function triggerNatural(page, surface) {
     });
   } else if (surface.natural === 'settings') {
     await page.locator('#integration-twilio button').click();
-  } else if (surface.natural === 'integrations') {
-    await page.evaluate(() => {
-      window.connectIntegration('email');
-      window.confirmConnection();
-    });
   }
   await page.waitForFunction(expected => {
     const element = document.getElementById('toast');

@@ -28,6 +28,7 @@ const { WorkforceService } = require('./workforce/service');
 const { createWorkforceRouter } = require('./routes/workforce');
 const { AssetCatalogueService } = require('./assets/service');
 const { createAssetCatalogueRouter } = require('./routes/assets');
+const { createIntegrationStatusRouter } = require('./routes/integrationStatus');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -151,6 +152,7 @@ app.use('/api/v1', createCompatibilityRouter());
 // its router-wide authentication from touching paths it does not own.
 app.use('/api/v1/business-profile', businessProfileRoutes);
 app.use('/api/v1/voice', voiceRoutes);
+app.use('/api/v1/integrations', createIntegrationStatusRouter());
 app.use('/api/v1', createLegacyAuthorityRetirementRouter());
 
 // Canonical /api lead adapters precede the file-era router. The compatibility

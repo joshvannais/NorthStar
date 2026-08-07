@@ -4,349 +4,341 @@
   <meta charset="UTF-8">
   <script src="/js/theme.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Integrations — NorthStar AI</title>
+  <title>Integrations &mdash; NorthStar AI</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <style>
+    .integration-toolbar {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+    }
+    .integration-authority {
+      color: var(--neutral-500);
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .integration-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+      margin-top: 16px;
+    }
+    .authority-card {
+      align-items: flex-start;
+      background: var(--neutral-50);
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-md);
+      display: flex;
+      gap: 12px;
+      min-width: 0;
+      padding: 16px;
+    }
+    .authority-card .connector-mark {
+      align-items: center;
+      background: var(--neutral-100);
+      border-radius: 8px;
+      color: var(--neutral-700);
+      display: flex;
+      flex: 0 0 36px;
+      font-size: 11px;
+      font-weight: 700;
+      height: 36px;
+      justify-content: center;
+      letter-spacing: .04em;
+    }
+    .authority-card .connector-copy { flex: 1 1 auto; min-width: 0; }
+    .authority-card h3 { font-size: 15px; margin: 0 0 4px; }
+    .authority-card p {
+      color: var(--neutral-500);
+      font-size: 13px;
+      line-height: 1.45;
+      margin: 0;
+    }
+    .connector-status {
+      border-radius: 999px;
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 650;
+      margin-top: 10px;
+      padding: 5px 9px;
+    }
+    .connector-status[data-status="active"] { background: rgba(22, 163, 74, .12); color: #15803d; }
+    .connector-status[data-status="inactive"],
+    .connector-status[data-status="not_provisioned"],
+    .connector-status[data-status="unavailable"] { background: var(--neutral-100); color: var(--neutral-600); }
+    .connector-status[data-status="ambiguous"],
+    .connector-status[data-status="error"] { background: rgba(220, 38, 38, .1); color: #b91c1c; }
+    .jobber-action { flex: 0 0 auto; margin-left: auto; }
+    .unavailable-card { opacity: .78; }
+    .status-message {
+      color: var(--neutral-500);
+      font-size: 13px;
+      margin: 10px 0 0;
+      min-height: 20px;
+    }
+    #integrationStatusRoot[data-state="error"] .status-message { color: #b91c1c; }
+    @media (max-width: 640px) {
+      .main-content { min-width: 0; padding-left: 16px; padding-right: 16px; }
+      .integration-toolbar { align-items: flex-start; flex-direction: column; }
+      .authority-card { flex-wrap: wrap; }
+      .jobber-action { margin-left: 48px; }
+    }
+  </style>
 </head>
 <body>
-
   <div class="dashboard-layout">
-
     <main class="main-content">
-      <div class="page-header">
+      <div class="page-header integration-toolbar">
         <div>
           <h1>Integrations</h1>
-          <p>Connect your NorthStar AI Office Manager to your tools.</p>
+          <p>Read-only connection status from each connector's reviewed authority.</p>
         </div>
+        <button class="btn btn-ghost btn-sm" id="refreshIntegrationsBtn" type="button">Refresh status</button>
       </div>
 
-      <!-- Jobber CRM -->
-      <div class="settings-section">
-        <h2>🔧 Jobber CRM</h2>
-        <p class="description">Auto-create clients and jobs in Jobber when your AI captures a new lead.</p>
-        <div class="integration-card" id="integration-jobber">
-          <div class="icon">🔧</div>
-          <div class="info">
-            <h4>Client &amp; Job Sync</h4>
-            <p>Leads automatically become clients and jobs in your Jobber account</p>
+      <div id="integrationStatusRoot" data-state="loading" aria-busy="true">
+        <section class="settings-section" aria-labelledby="canonicalConnectionsHeading">
+          <div class="integration-toolbar">
+            <div>
+              <h2 id="canonicalConnectionsHeading">Canonical NorthStar connections</h2>
+              <p class="description">Status is projected from tenant-scoped PostgreSQL ownership. Provider identifiers and metadata are never shown here.</p>
+            </div>
+            <div class="integration-authority" id="integrationAuthority">Authority: canonical_integration_ownership</div>
           </div>
-          <span id="jobber-status"><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-sm" id="jobber-btn" onclick="connectJobber()">Connect</button>
-        </div>
+          <div class="integration-grid">
+            <article class="authority-card">
+              <span class="connector-mark" aria-hidden="true">RT</span>
+              <div class="connector-copy">
+                <h3>Retell connection authority</h3>
+                <p>Reviewed provider ownership used by canonical voice sessions.</p>
+                <span class="connector-status" id="canonical-retell-status" data-status="loading">Loading</span>
+              </div>
+            </article>
+            <article class="authority-card">
+              <span class="connector-mark" aria-hidden="true">VO</span>
+              <div class="connector-copy">
+                <h3>Voice connection authority</h3>
+                <p>Provider-neutral voice ownership for this organization.</p>
+                <span class="connector-status" id="canonical-voice-status" data-status="loading">Loading</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="jobberHeading">
+          <h2 id="jobberHeading">Jobber CRM</h2>
+          <p class="description">Jobber has a separate reviewed capability boundary. It is not inferred from Business Profile data.</p>
+          <article class="authority-card">
+            <span class="connector-mark" aria-hidden="true">JB</span>
+            <div class="connector-copy">
+              <h3>Client and job sync</h3>
+              <p>Connection actions remain disabled unless the server exposes a complete durable capability.</p>
+              <span class="connector-status" id="jobber-status" data-status="loading">Loading</span>
+            </div>
+            <button class="btn btn-sm jobber-action" id="jobber-btn" type="button" disabled>Unavailable</button>
+          </article>
+        </section>
+
+        <section class="settings-section" aria-labelledby="unavailableHeading">
+          <h2 id="unavailableHeading">Other connectors</h2>
+          <p class="description">These connectors have no reviewed canonical ownership or provisioning authority yet.</p>
+          <div class="integration-grid">
+            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
+              <span class="connector-mark" aria-hidden="true">HC</span>
+              <div class="connector-copy"><h3>Housecall Pro</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
+            </article>
+            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
+              <span class="connector-mark" aria-hidden="true">ST</span>
+              <div class="connector-copy"><h3>ServiceTitan</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
+            </article>
+            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
+              <span class="connector-mark" aria-hidden="true">GS</span>
+              <div class="connector-copy"><h3>Google Sheets</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
+            </article>
+            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
+              <span class="connector-mark" aria-hidden="true">GC</span>
+              <div class="connector-copy"><h3>Google Calendar</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
+            </article>
+            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
+              <span class="connector-mark" aria-hidden="true">AC</span>
+              <div class="connector-copy"><h3>Apple Calendar</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
+            </article>
+            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
+              <span class="connector-mark" aria-hidden="true">EM</span>
+              <div class="connector-copy"><h3>Email connector</h3><p>Unavailable &mdash; notification preferences are owned separately.</p></div>
+            </article>
+          </div>
+        </section>
+
+        <p class="status-message" id="integrationStatusMessage" role="status" aria-live="polite">Loading authoritative connection status.</p>
       </div>
-
-      <!-- Coming Soon CRMs -->
-      <div class="settings-section">
-        <h2>🔄 More CRMs (Coming Soon)</h2>
-        <p class="description">We're actively building integrations with these platforms.</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:8px;">
-          <div class="integration-card" style="opacity:0.6;cursor:default;">
-            <div class="icon">📋</div>
-            <div class="info"><h4>Housecall Pro</h4><p>Sync jobs, customers, and scheduling</p></div>
-            <span style="font-size:11px;color:var(--brand-500);font-weight:600;">Coming Soon</span>
-          </div>
-          <div class="integration-card" style="opacity:0.6;cursor:default;">
-            <div class="icon">📋</div>
-            <div class="info"><h4>ServiceTitan</h4><p>Two-way sync for estimates and jobs</p></div>
-            <span style="font-size:11px;color:var(--brand-500);font-weight:600;">Coming Soon</span>
-          </div>
-          <div class="integration-card" style="opacity:0.6;cursor:default;">
-            <div class="icon">📋</div>
-            <div class="info"><h4>Service Fusion</h4><p>Auto-create clients and work orders</p></div>
-            <span style="font-size:11px;color:var(--brand-500);font-weight:600;">Coming Soon</span>
-          </div>
-          <div class="integration-card" style="opacity:0.6;cursor:default;">
-            <div class="icon">📋</div>
-            <div class="info"><h4>Kickserv</h4><p>Create customers and jobs from calls</p></div>
-            <span style="font-size:11px;color:var(--brand-500);font-weight:600;">Coming Soon</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Google Sheets -->
-      <div class="settings-section">
-        <h2>📊 Google Sheets</h2>
-        <p class="description">Every lead captured by your AI Office Manager is auto-saved to a spreadsheet.</p>
-        <div class="integration-card" id="integration-sheets">
-          <div class="icon">📋</div>
-          <div class="info">
-            <h4>Lead Sync</h4>
-            <p>Auto-save name, phone, address, service &amp; time to Google Sheets</p>
-          </div>
-          <span id="sheets-status"><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-sm" id="sheets-btn" onclick="connectIntegration('sheets')">Connect</button>
-        </div>
-      </div>
-
-      <!-- Google Calendar -->
-      <div class="settings-section">
-        <h2>📅 Google Calendar</h2>
-        <p class="description">Auto-schedule estimate appointments so you never double-book.</p>
-        <div class="integration-card" id="integration-calendar">
-          <div class="icon">📅</div>
-          <div class="info">
-            <h4>Appointment Sync</h4>
-            <p>Estimates scheduled by your AI appear on your Google Calendar</p>
-          </div>
-          <span id="calendar-status"><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-sm" id="calendar-btn" onclick="connectIntegration('calendar')">Connect</button>
-        </div>
-      </div>
-
-      <!-- Apple Calendar -->
-      <div class="settings-section">
-        <h2>🍎 Apple Calendar</h2>
-        <p class="description">Sync appointments to your iCloud calendar.</p>
-        <div class="integration-card" id="integration-apple">
-          <div class="icon">📆</div>
-          <div class="info">
-            <h4>iCloud Sync</h4>
-            <p>Push estimates and appointments to Apple Calendar</p>
-          </div>
-          <span id="apple-status"><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-sm" id="apple-btn" onclick="connectIntegration('apple')">Connect</button>
-        </div>
-      </div>
-
-      <!-- Email Notifications -->
-      <div class="settings-section">
-        <h2>📧 Email Notifications</h2>
-        <p class="description">Get instant email alerts when your AI captures a new lead.</p>
-        <div class="integration-card" id="integration-email">
-          <div class="icon">✉️</div>
-          <div class="info">
-            <h4>Lead Alerts</h4>
-            <p>Full lead details delivered to your inbox after every call</p>
-          </div>
-          <span id="email-status"><span class="status-dot disconnected"></span>Not connected</span>
-          <button class="btn btn-sm" id="email-btn" onclick="connectIntegration('email')">Connect</button>
-        </div>
-      </div>
-      <!-- Connection Modal -->
-      <div class="modal-overlay" id="connectModal" style="display:none;" onclick="closeModal(event)">
-        <div class="modal-content" style="max-width:440px;" onclick="event.stopPropagation()">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-            <h3 id="modalTitle" style="font-size:17px;font-weight:600;">Connect</h3>
-            <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--neutral-500);">&times;</button>
-          </div>
-          <div id="modalBody"></div>
-          <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end;">
-            <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" id="modalConfirm" onclick="confirmConnection()">Connect</button>
-          </div>
-        </div>
-      </div>
-
-      <script>
-      const connectionConfigs = {
-        sheets: {
-          title: 'Connect Google Sheets',
-          fields: [
-            { label: 'Google Sheet Name', id: 'sheets-input', placeholder: 'e.g. NorthStar Leads', type: 'text' }
-          ],
-          desc: 'Every new lead will be appended as a row in your spreadsheet.',
-          icon: '📋'
-        },
-        calendar: {
-          title: 'Connect Google Calendar',
-          fields: [
-            { label: 'Calendar Name', id: 'calendar-input', placeholder: 'e.g. Work Calendar', type: 'text' }
-          ],
-          desc: 'Estimates and appointments are auto-scheduled to your Google Calendar.',
-          icon: '📅'
-        },
-        apple: {
-          title: 'Connect Apple Calendar',
-          fields: [
-            { label: 'Calendar Name', id: 'apple-input', placeholder: 'e.g. iCloud', type: 'text' }
-          ],
-          desc: 'Push appointments to your Apple Calendar for seamless syncing across devices.',
-          icon: '📆'
-        },
-        email: {
-          title: 'Connect Email Notifications',
-          fields: [
-            { label: 'Email Address', id: 'email-input', placeholder: 'you@example.com', type: 'email' }
-          ],
-          desc: 'Get notified instantly when a new lead comes in.',
-          icon: '✉️'
-        }
-      };
-
-      let currentIntegration = null;
-
-      function connectIntegration(type) {
-        currentIntegration = type;
-        const config = connectionConfigs[type];
-        if (!config) return;
-
-        // If already connected, disconnect
-        const saved = null;
-        if (saved) {
-          if (!confirm('Disconnect from ' + config.title.replace('Connect ', '') + '?')) return;
-          updateIntegrationUI(type);
-          return;
-        }
-
-        document.getElementById('modalTitle').textContent = config.title;
-        let bodyHTML = '<p style="font-size:14px;color:var(--neutral-500);margin-bottom:16px;">' + config.desc + '</p>';
-        config.fields.forEach(f => {
-          bodyHTML += '<div style="margin-bottom:12px;">';
-          bodyHTML += '<label style="display:block;font-size:13px;font-weight:500;color:var(--neutral-600);margin-bottom:4px;">' + f.label + '</label>';
-          bodyHTML += '<input type="' + f.type + '" id="' + f.id + '" placeholder="' + f.placeholder + '" style="width:100%;padding:10px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;background:var(--neutral-100);color:var(--neutral-800);box-sizing:border-box;">';
-          bodyHTML += '</div>';
-        });
-        document.getElementById('modalBody').innerHTML = bodyHTML;
-        document.getElementById('connectModal').style.display = 'flex';
-
-        // Pre-fill if reconnecting
-        if (saved) {
-          const data = JSON.parse(saved);
-          config.fields.forEach(f => {
-            const el = document.getElementById(f.id);
-            if (el && data[f.id]) el.value = data[f.id];
-          });
-        }
-      }
-
-      function confirmConnection() {
-        if (!currentIntegration) return;
-        const config = connectionConfigs[currentIntegration];
-        const data = {};
-        config.fields.forEach(f => {
-          const el = document.getElementById(f.id);
-          data[f.id] = el ? el.value.trim() : '';
-        });
-
-        // Validate
-        if (currentIntegration === 'email') {
-          const val = data['email-input'];
-          if (!val || !val.includes('@')) {
-            showToast('Please enter a valid email address');
-            return;
-          }
-        }
-
-        // Integration credentials require a canonical server-side provisioning flow.
-        const integrationType = currentIntegration;
-        closeModal();
-        updateIntegrationUI(integrationType);
-        showToast('Server-side integration provisioning is not available from this screen.');
-      }
-
-      function updateIntegrationUI(type) {
-        const saved = null;
-        const statusEl = document.getElementById(type + '-status');
-        const btnEl = document.getElementById(type + '-btn');
-        const cardEl = document.getElementById('integration-' + type);
-
-        if (saved) {
-          const data = JSON.parse(saved);
-          statusEl.innerHTML = '<span class="status-dot connected"></span>Connected';
-          btnEl.textContent = 'Disconnect';
-          btnEl.className = 'btn btn-ghost btn-sm';
-          if (cardEl) cardEl.style.borderLeft = '3px solid var(--brand-500)';
-        } else {
-          statusEl.innerHTML = '<span class="status-dot disconnected"></span>Not connected';
-          btnEl.textContent = 'Connect';
-          btnEl.className = 'btn btn-sm';
-          if (cardEl) cardEl.style.borderLeft = '3px solid transparent';
-        }
-      }
-
-      function closeModal(e) {
-        if (e && e.target !== e.currentTarget && !e.currentTarget) return;
-        document.getElementById('connectModal').style.display = 'none';
-        currentIntegration = null;
-      }
-
-      // Init UI on load
-      ['sheets', 'calendar', 'apple', 'email'].forEach(updateIntegrationUI);
-
-      // Dark mode support for modal
-      const style = document.createElement('style');
-      style.textContent = `
-        .modal-overlay {
-          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-          background: rgba(0,0,0,0.4); z-index: 2000;
-          display: flex; align-items: center; justify-content: center;
-          padding: 20px; box-sizing: border-box;
-        }
-        .modal-content {
-          background: white; border-radius: 12px; padding: 24px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%;
-          max-height: 80vh; overflow-y: auto;
-        }
-        [data-theme="dark"] .modal-content { background: var(--neutral-50); }
-        [data-theme="dark"] .modal-overlay { background: rgba(0,0,0,0.6); }
-      `;
-      document.head.appendChild(style);
-
-      // Jobber integration
-      async function connectJobber() {
-        try {
-          const r = await NorthStarAccountSession.fetch('/api/integrations/jobber/status');
-          const status = await r.json();
-          if (!r.ok || status.available !== true || status.configured !== true) {
-            showToast('Jobber integration is not currently available.');
-            return;
-          }
-          if (status.connected) {
-            if (!confirm('Disconnect Jobber? This will stop lead sync.')) return;
-            const disconnected = await NorthStarAccountSession.fetch('/api/integrations/jobber/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-            const result = await disconnected.json();
-            if (!disconnected.ok || result.success !== true) {
-              showToast('Jobber integration is not currently available.');
-              return;
-            }
-            document.getElementById('jobber-status').innerHTML = '<span class="status-dot disconnected"></span>Not connected';
-            document.getElementById('jobber-btn').textContent = 'Connect';
-            showToast('Jobber disconnected');
-          } else {
-            window.location.href = '/api/integrations/jobber/auth';
-          }
-        } catch(e) { showToast('Failed to check Jobber status'); }
-      }
-      // Check Jobber status on load
-      (async function() {
-        try {
-          const account = await NorthStarAccountSession.load();
-          if (account.user.id) {
-            const r = await NorthStarAccountSession.fetch('/api/integrations/jobber/status');
-            const status = await r.json();
-            if (r.ok && status.available === true && status.connected === true) {
-              document.getElementById('jobber-status').innerHTML = '<span class="status-dot connected"></span>Connected';
-              document.getElementById('jobber-btn').textContent = 'Disconnect';
-            }
-          }
-        } catch(e) {}
-      })();
-      // A query string is not evidence of connection. Confirm the durable
-      // server projection before presenting success.
-      (async function confirmJobberCallback() {
-        if (new URLSearchParams(window.location.search).get('jobber') !== 'connected') return;
-        window.history.replaceState({}, '', window.location.pathname);
-        try {
-          const r = await NorthStarAccountSession.fetch('/api/integrations/jobber/status');
-          const status = await r.json();
-          if (r.ok && status.available === true && status.connected === true) {
-            showToast('Jobber connected successfully!');
-          } else {
-            showToast('Jobber connection could not be confirmed.');
-          }
-        } catch (_error) {
-          showToast('Jobber connection could not be confirmed.');
-        }
-      })();
-      </script>
-      </main>
+    </main>
   </div>
 
   <div id="toast" class="toast"></div>
   <script src="/js/notification-service.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/nav-component.js"></script>
-  <script>NavComponent.init("integrations");</script>
+  <script>
+    (function() {
+      'use strict';
+
+      var root = document.getElementById('integrationStatusRoot');
+      var refreshButton = document.getElementById('refreshIntegrationsBtn');
+      var jobberButton = document.getElementById('jobber-btn');
+      var currentJobber = Object.freeze({ available: false, configured: false, connected: false });
+      var canManageJobber = false;
+      var callbackPending = new URLSearchParams(window.location.search).get('jobber') === 'connected';
+      var canonicalLabels = Object.freeze({
+        active: 'Active authority',
+        inactive: 'Inactive',
+        not_provisioned: 'Not provisioned',
+        ambiguous: 'Ambiguous - review required'
+      });
+
+      function setStatus(id, status, label) {
+        var element = document.getElementById(id);
+        element.dataset.status = status;
+        element.textContent = label;
+      }
+
+      function readJson(response) {
+        return response.json().catch(function() { throw new Error('Integration status response is invalid.'); });
+      }
+
+      function canonicalProjection(response, body) {
+        if (!response.ok || !body || body.success !== true || !body.data ||
+            body.data.authority !== 'canonical_integration_ownership' ||
+            !Array.isArray(body.data.connectors) || body.data.connectors.length !== 2) {
+          throw new Error('Canonical integration status is unavailable.');
+        }
+        var projected = Object.create(null);
+        body.data.connectors.forEach(function(connector) {
+          if (!connector || !['retell', 'voice'].includes(connector.provider) ||
+              !Object.prototype.hasOwnProperty.call(canonicalLabels, connector.status) ||
+              projected[connector.provider]) {
+            throw new Error('Canonical integration status is invalid.');
+          }
+          projected[connector.provider] = connector.status;
+        });
+        if (!projected.retell || !projected.voice) throw new Error('Canonical integration status is incomplete.');
+        return projected;
+      }
+
+      function jobberProjection(response, body) {
+        if (!response.ok || !body || typeof body.available !== 'boolean' ||
+            typeof body.configured !== 'boolean' || typeof body.connected !== 'boolean') {
+          throw new Error('Jobber connection status is unavailable.');
+        }
+        return Object.freeze({
+          available: body.available,
+          configured: body.configured,
+          connected: body.connected
+        });
+      }
+
+      function renderCanonical(projected) {
+        ['retell', 'voice'].forEach(function(provider) {
+          setStatus('canonical-' + provider + '-status', projected[provider], canonicalLabels[projected[provider]]);
+        });
+      }
+
+      function renderJobber(status) {
+        currentJobber = status;
+        if (!status.available || !status.configured) {
+          setStatus('jobber-status', 'unavailable', 'Unavailable');
+          jobberButton.textContent = 'Unavailable';
+          jobberButton.disabled = true;
+          return;
+        }
+        setStatus('jobber-status', status.connected ? 'active' : 'inactive', status.connected ? 'Connected' : 'Not connected');
+        jobberButton.textContent = canManageJobber ? (status.connected ? 'Disconnect' : 'Connect') : 'Owner or admin required';
+        jobberButton.disabled = !canManageJobber;
+      }
+
+      function showToast(message, type) {
+        if (!window.NotificationService) return;
+        window.NotificationService.showInline(message, type || 'info', {
+          targetId: 'toast', className: 'toast', includeTypeClass: true, duration: 3500
+        });
+      }
+
+      function finishCallbackConfirmation() {
+        if (!callbackPending) return;
+        callbackPending = false;
+        window.history.replaceState({}, '', window.location.pathname);
+        if (currentJobber.available && currentJobber.configured && currentJobber.connected) {
+          showToast('Jobber connection confirmed.', 'success');
+        } else {
+          showToast('Jobber connection could not be confirmed.', 'error');
+        }
+      }
+
+      async function loadIntegrationStatus() {
+        root.dataset.state = 'loading';
+        root.setAttribute('aria-busy', 'true');
+        refreshButton.disabled = true;
+        document.getElementById('integrationStatusMessage').textContent = 'Loading authoritative connection status.';
+        try {
+          var results = await Promise.all([
+            NorthStarAccountSession.load(),
+            NorthStarAccountSession.fetch('/api/v1/integrations/status', { cache: 'no-store' }),
+            NorthStarAccountSession.fetch('/api/integrations/jobber/status', { cache: 'no-store' })
+          ]);
+          var account = results[0];
+          var bodies = await Promise.all([readJson(results[1]), readJson(results[2])]);
+          var canonical = canonicalProjection(results[1], bodies[0]);
+          var jobber = jobberProjection(results[2], bodies[1]);
+          var role = account && account.membership ? account.membership.role : '';
+          canManageJobber = role === 'owner' || role === 'admin';
+          renderCanonical(canonical);
+          renderJobber(jobber);
+          root.dataset.state = 'ready';
+          document.getElementById('integrationStatusMessage').textContent = 'Authoritative connection status loaded.';
+          finishCallbackConfirmation();
+        } catch (_error) {
+          setStatus('canonical-retell-status', 'error', 'Unavailable');
+          setStatus('canonical-voice-status', 'error', 'Unavailable');
+          renderJobber(Object.freeze({ available: false, configured: false, connected: false }));
+          root.dataset.state = 'error';
+          document.getElementById('integrationStatusMessage').textContent = 'Authoritative connection status is temporarily unavailable.';
+        } finally {
+          root.setAttribute('aria-busy', 'false');
+          refreshButton.disabled = false;
+        }
+      }
+
+      async function manageJobber() {
+        if (!canManageJobber || !currentJobber.available || !currentJobber.configured) return;
+        if (!currentJobber.connected) {
+          window.location.assign('/api/integrations/jobber/auth');
+          return;
+        }
+        if (!window.confirm('Disconnect Jobber? This will stop lead sync.')) return;
+        try {
+          var response = await NorthStarAccountSession.fetch('/api/integrations/jobber/disconnect', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+          });
+          var body = await readJson(response);
+          if (!response.ok || !body || body.success !== true) throw new Error('disconnect failed');
+          showToast('Jobber disconnected.', 'success');
+          await loadIntegrationStatus();
+        } catch (_error) {
+          showToast('Jobber integration is not currently available.', 'error');
+        }
+      }
+
+      refreshButton.addEventListener('click', loadIntegrationStatus);
+      jobberButton.addEventListener('click', manageJobber);
+      window.NorthStarIntegrations = Object.freeze({ reload: loadIntegrationStatus });
+      loadIntegrationStatus();
+    })();
+  </script>
+  <script>NavComponent.init('integrations');</script>
 </body>
 </html>

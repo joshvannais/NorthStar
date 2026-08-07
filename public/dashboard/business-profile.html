@@ -93,7 +93,7 @@
             <div class="bp-title">⚙️ Business Profile</div>
             <div class="bp-subtitle">Configure how your business operates — this is the DNA of your NorthStar platform.</div>
           </div>
-          <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()">💾 Save Profile</button>
+          <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()" disabled>💾 Save Profile</button>
         </div>
 
         <!-- Navigation Tabs -->
@@ -411,25 +411,9 @@
         <div class="bp-section" id="section-integrations">
           <div class="bp-card">
             <h3>Integrations</h3>
-            <div class="bp-section-desc">Configure third-party integrations. These are configuration placeholders — no logic is implemented yet.</div>
-            <div class="bp-grid">
-              <div class="bp-field"><label class="bp-toggle"><input id="int-openai" type="checkbox"><span class="slider"></span> OpenAI</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-retell" type="checkbox"><span class="slider"></span> Retell AI</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-googleCalendar" type="checkbox"><span class="slider"></span> Google Calendar</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-microsoftCalendar" type="checkbox"><span class="slider"></span> Microsoft Calendar</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-googleMaps" type="checkbox"><span class="slider"></span> Google Maps</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-appleMaps" type="checkbox"><span class="slider"></span> Apple Maps</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-waze" type="checkbox"><span class="slider"></span> Waze</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-quickbooks" type="checkbox"><span class="slider"></span> QuickBooks</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-stripe" type="checkbox"><span class="slider"></span> Stripe</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-square" type="checkbox"><span class="slider"></span> Square</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-twilio" type="checkbox"><span class="slider"></span> Twilio</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-weather" type="checkbox"><span class="slider"></span> Weather</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-fleetTracking" type="checkbox"><span class="slider"></span> Fleet Tracking</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-payroll" type="checkbox"><span class="slider"></span> Payroll</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="int-inventory" type="checkbox"><span class="slider"></span> Inventory</label></div>
-            </div>
-            <div style="margin-top:12px;padding:12px;background:var(--neutral-100);border-radius:var(--radius-sm);font-size:12px;color:var(--neutral-500);">🔌 Integration configuration only. No API keys or logic stored here. Each integration will be implemented in its own mission.</div>
+            <div class="bp-section-desc">Connection status belongs to each connector's reviewed server authority, not to Business Profile.</div>
+            <p id="legacyIntegrationsAuthority" style="margin:0 0 16px;color:var(--neutral-500);font-size:13px;line-height:1.5;">Existing legacy integration values are preserved during unrelated profile saves and ignored as connection status.</p>
+            <a class="btn btn-primary" id="canonicalIntegrationsLink" href="/dashboard/integrations">View authoritative integration status</a>
           </div>
         </div>
 
@@ -447,6 +431,7 @@
     // ====================================================================
     var profileData = null;
     var assetCatalogueData = null;
+    var profileCanEdit = false;
 
     function profileRequest(url, options) {
       var request = options || {};
@@ -467,8 +452,20 @@
     // ====================================================================
     // Load profile
     // ====================================================================
+    function applyProfileAccess(account) {
+      var role = account && account.membership ? account.membership.role : '';
+      profileCanEdit = role === 'owner' || role === 'admin';
+      var saveButton = document.getElementById('saveBtn');
+      saveButton.disabled = !profileCanEdit;
+      saveButton.textContent = profileCanEdit ? '💾 Save Profile' : 'Read-only profile';
+    }
+
     function loadProfile() {
-      profileRequest('/api/v1/business-profile')
+      NorthStarAccountSession.load()
+        .then(function(account) {
+          applyProfileAccess(account);
+          return profileRequest('/api/v1/business-profile');
+        })
         .then(function(r) { return r.json(); })
         .then(function(resp) {
           if (resp.success && resp.data) {
@@ -977,22 +974,6 @@
       setCheck('notif-crewAlerts', p.notifications.crewAlerts);
       setCheck('notif-criticalAlerts', p.notifications.criticalAlerts);
 
-      // Integrations
-      setCheck('int-openai', p.integrations.openai.enabled);
-      setCheck('int-retell', p.integrations.retell.enabled);
-      setCheck('int-googleCalendar', p.integrations.googleCalendar.enabled);
-      setCheck('int-microsoftCalendar', p.integrations.microsoftCalendar.enabled);
-      setCheck('int-googleMaps', p.integrations.googleMaps.enabled);
-      setCheck('int-appleMaps', p.integrations.appleMaps.enabled);
-      setCheck('int-waze', p.integrations.waze.enabled);
-      setCheck('int-quickbooks', p.integrations.quickbooks.enabled);
-      setCheck('int-stripe', p.integrations.stripe.enabled);
-      setCheck('int-square', p.integrations.square.enabled);
-      setCheck('int-twilio', p.integrations.twilio.enabled);
-      setCheck('int-weather', p.integrations.weather.enabled);
-      setCheck('int-fleetTracking', p.integrations.fleetTracking.enabled);
-      setCheck('int-payroll', p.integrations.payroll.enabled);
-      setCheck('int-inventory', p.integrations.inventory.enabled);
     }
 
     function preferredLineEnding(raw) {
@@ -1874,22 +1855,6 @@
       p.notifications.crewAlerts = getCheck('notif-crewAlerts');
       p.notifications.criticalAlerts = getCheck('notif-criticalAlerts');
 
-      p.integrations.openai.enabled = getCheck('int-openai');
-      p.integrations.retell.enabled = getCheck('int-retell');
-      p.integrations.googleCalendar.enabled = getCheck('int-googleCalendar');
-      p.integrations.microsoftCalendar.enabled = getCheck('int-microsoftCalendar');
-      p.integrations.googleMaps.enabled = getCheck('int-googleMaps');
-      p.integrations.appleMaps.enabled = getCheck('int-appleMaps');
-      p.integrations.waze.enabled = getCheck('int-waze');
-      p.integrations.quickbooks.enabled = getCheck('int-quickbooks');
-      p.integrations.stripe.enabled = getCheck('int-stripe');
-      p.integrations.square.enabled = getCheck('int-square');
-      p.integrations.twilio.enabled = getCheck('int-twilio');
-      p.integrations.weather.enabled = getCheck('int-weather');
-      p.integrations.fleetTracking.enabled = getCheck('int-fleetTracking');
-      p.integrations.payroll.enabled = getCheck('int-payroll');
-      p.integrations.inventory.enabled = getCheck('int-inventory');
-
       return p;
     }
 
@@ -1902,6 +1867,7 @@
     // ====================================================================
     function saveProfile() {
       var btn = document.getElementById('saveBtn');
+      if (!profileCanEdit) return;
       btn.disabled = true;
       btn.textContent = '⏳ Saving...';
 
@@ -1939,8 +1905,8 @@
           showToast('❌ Could not connect to server', 'error');
         })
         .finally(function() {
-          btn.disabled = false;
-          btn.textContent = '💾 Save Profile';
+          btn.disabled = !profileCanEdit;
+          btn.textContent = profileCanEdit ? '💾 Save Profile' : 'Read-only profile';
         });
     }
 

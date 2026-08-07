@@ -53,6 +53,19 @@ function emailAddress(value, label) {
   return `${local.toLowerCase()}@${dnsHostname(domain)}`;
 }
 
+function workforceInvitationEnvelope(recipient, invite = {}) {
+  const rawName = invite.name || 'Team member';
+  if (typeof rawName !== 'string' || !rawName.trim() ||
+      Buffer.byteLength(rawName, 'utf8') > 480 || Array.from(rawName).length > 120 ||
+      BODY_CONTROL.test(rawName)) {
+    throw new Error('Invalid transactional email invited name');
+  }
+  return {
+    recipient: emailAddress(recipient, 'recipient'),
+    person: rawName,
+  };
+}
+
 function canonicalOrigin(raw, production = true) {
   if (typeof raw !== 'string' || !raw || raw !== raw.trim() || CONTROL.test(raw) ||
       (production && /[^\x21-\x7e]/.test(raw))) return null;
@@ -372,10 +385,11 @@ class TransactionalEmail {
     const link = new URL('/accept-invitation', this.publicOrigin);
     link.searchParams.set('token', bounded(rawToken, 128, 'invitation token'));
     const href = link.toString();
-    const person = bounded(invite.name || 'Team member', 160, 'invited name');
+    const envelope = workforceInvitationEnvelope(recipient, invite);
+    const person = envelope.person;
     const organization = bounded(invite.organizationName || 'your organization', 200, 'organization name');
     return this.deliver(
-      recipient,
+      envelope.recipient,
       'workforce-invitation',
       `Join ${organization} on NorthStar`,
       `${person}, you were invited to join ${organization} on NorthStar. Set your password within 72 hours: ${href}`,
@@ -406,4 +420,5 @@ module.exports = {
   createProductionTransactionalEmail,
   createResendAdapter,
   validatedProductionConfiguration,
+  workforceInvitationEnvelope,
 };

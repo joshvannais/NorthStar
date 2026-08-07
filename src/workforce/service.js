@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const credentials = require('../auth/credentials');
 const { AccountRepository } = require('../accounts/repository');
+const { workforceInvitationEnvelope } = require('../email/transactional');
 const {
   actionToken,
   hashPassword,
@@ -141,9 +142,20 @@ class WorkforceService {
     if (phone && !/^[+\d\s().-]+$/.test(phone)) {
       throw new WorkforceError(400, 'invalid_workforce_invitation', 'Phone is invalid');
     }
+    const name = rawText(body.name, 480, 'invalid_workforce_invitation', 'Name', true, 120);
+    const email = normalizeEmail(body.email);
+    try {
+      workforceInvitationEnvelope(email, { name });
+    } catch (_error) {
+      throw new WorkforceError(
+        400,
+        'invalid_workforce_invitation',
+        'Invitation name or email is invalid'
+      );
+    }
     return {
-      name: rawText(body.name, 480, 'invalid_workforce_invitation', 'Name', true, 120),
-      email: normalizeEmail(body.email),
+      name,
+      email,
       phone,
       accessRole: accessRole(body.accessRole, INVITATION_ACCESS_ROLES),
       operationalRole: operationalRole(body.operationalRole),

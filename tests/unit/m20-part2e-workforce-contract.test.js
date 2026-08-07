@@ -7,7 +7,8 @@ const {
   rawText,
 } = require('../../src/workforce/service');
 const { prepareBusinessProfileForWrite } = require('../../src/services/businessProfileAdapter');
-const { TransactionalEmail } = require('../../src/email/transactional');
+const { TransactionalEmail, workforceInvitationEnvelope } = require('../../src/email/transactional');
+const { WorkforceRepository } = require('../../src/workforce/repository');
 
 function service(repository = {}) {
   return new WorkforceService(repository, {
@@ -65,6 +66,36 @@ describe('Mission 20 Part 2E workforce contract', () => {
       .toThrow(expect.objectContaining({ code: 'invalid', status: 400 }));
     expect(() => rawText('🧰'.repeat(121), 480, 'invalid', 'Name', true, 120))
       .toThrow(expect.objectContaining({ code: 'invalid', status: 400 }));
+  });
+
+  test('the pre-commit invitation envelope matches canonical delivery for body whitespace and Unicode boundaries', async () => {
+    const rawName = 'Line One\r\nLine Two ' + '\u{1F9F0}'.repeat(81);
+    expect(service().parseInvitation({
+      name: rawName, email: 'WORKER@Example.Test', phone: '', accessRole: 'member',
+      operationalRole: 'employee', homeLocationId: null, skillIds: [],
+    })).toMatchObject({ name: rawName, email: 'worker@example.test' });
+    expect(workforceInvitationEnvelope('worker@example.test', { name: rawName }))
+      .toEqual({ recipient: 'worker@example.test', person: rawName });
+    expect(() => service().parseInvitation({
+      name: 'Worker', email: 'worker@例子.test', phone: '', accessRole: 'member',
+      operationalRole: 'employee', homeLocationId: null, skillIds: [],
+    })).toThrow(expect.objectContaining({ code: 'invalid_workforce_invitation', status: 400 }));
+  });
+
+  test('Business Profile references resolve to exact canonical casing and fail closed on ambiguity', () => {
+    const repository = new WorkforceRepository({});
+    const references = {
+      locations: [{ id: 'Office-North' }],
+      services: [{ id: 'Fence-Repair' }],
+    };
+    expect(repository.canonicalLocation(references, 'office-north')).toBe('Office-North');
+    expect(repository.canonicalService(references, 'FENCE-REPAIR')).toBe('Fence-Repair');
+    expect(() => repository.canonicalLocation({
+      ...references,
+      locations: [{ id: 'Office-North' }, { id: 'office-north' }],
+    }, 'OFFICE-NORTH')).toThrow(expect.objectContaining({
+      code: 'ambiguous_workforce_location', status: 409,
+    }));
   });
 
   test('unknown fields, duplicate ids, controls, and cross-contract values fail closed', () => {

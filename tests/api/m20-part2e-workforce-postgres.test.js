@@ -66,10 +66,11 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
     }
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
     const profileA = canonicalFenceProfile({ companyName: 'Workforce A' });
+    profileA.services[0].id = 'Fence';
     profileA.headquarters = {
       street: '', city: '', state: '', zip: '', country: 'US', latitude: null, longitude: null,
       additionalOffices: [{
-        id: 'office-north', name: '  North <Office> 🧰  ', street: '', city: '', state: '',
+        id: 'Office-North', name: '  North <Office> 🧰  ', street: '', city: '', state: '',
         zip: '', country: 'US', latitude: null, longitude: null,
       }],
     };
@@ -97,11 +98,19 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
 
     ({ app } = require('../../src/server'));
     const { AccountRepository } = require('../../src/accounts/repository');
+    const { TransactionalEmail } = require('../../src/email/transactional');
     const { WorkforceRepository } = require('../../src/workforce/repository');
     const { WorkforceService } = require('../../src/workforce/service');
+    const canonicalDelivery = new TransactionalEmail({
+      adapter: { async send() { return { accepted: true }; } },
+      publicOrigin: 'https://app.example.test',
+      from: 'notifications@northstar-os.ai',
+      production: true,
+    });
     delivery = {
       messages: [],
       async invitation(recipient, rawToken, context, invite) {
+        await canonicalDelivery.invitation(recipient, rawToken, context, invite);
         this.messages.push({ recipient, rawToken, context, invite });
         return { delivered: true };
       },
@@ -222,9 +231,10 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
       name: rawPersonName,
       phone: rawPhone,
       operationalRole: 'technician',
-      homeLocationId: 'office-north',
+      homeLocationId: 'Office-North',
       skillIds: [skillId],
     });
+    expect(ownerSnapshot.body.data.skills.find(item => item.id === skillId).serviceId).toBe('Fence');
 
     const crossTenantProfile = await request(app)
       .put('/api/workforce/profiles/' + invitedProfile.profileId)
@@ -248,6 +258,9 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
       ],
     });
     expect(crew.status).toBe(201);
+    const canonicalReferenceSnapshot = await request(app).get('/api/workforce').set(auth.get(OWNER_A));
+    expect(canonicalReferenceSnapshot.body.data.crews.find(item => item.id === crew.body.data.id).homeLocationId)
+      .toBe('Office-North');
     const twoLeads = await request(app).put('/api/workforce/crews/' + crew.body.data.id).set(auth.get(ADMIN_A)).send({
       name: rawCrewName, homeLocationId: 'office-north',
       members: [
@@ -275,7 +288,10 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
          encode(convert_to(account.phone, 'UTF8'), 'hex') AS phone_hex,
          encode(convert_to(skill.name, 'UTF8'), 'hex') AS skill_name_hex,
          encode(convert_to(skill.description, 'UTF8'), 'hex') AS skill_description_hex,
+         skill.service_id,
          encode(convert_to(crew.name, 'UTF8'), 'hex') AS crew_name_hex,
+         workforce.home_location_id AS member_home_location_id,
+         crew.home_location_id AS crew_home_location_id,
          encode(convert_to(profile.raw_profile #>> '{workforce,policies,0,name}', 'UTF8'), 'hex') AS policy_name_hex,
          encode(convert_to(profile.raw_profile #>> '{workforce,policies,0,description}', 'UTF8'), 'hex') AS policy_description_hex
        FROM users account
@@ -291,7 +307,10 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
       phone_hex: hex(rawPhone),
       skill_name_hex: hex(rawSkillName),
       skill_description_hex: hex(rawSkillDescription),
+      service_id: 'Fence',
       crew_name_hex: hex(rawCrewName),
+      member_home_location_id: 'Office-North',
+      crew_home_location_id: 'Office-North',
       policy_name_hex: hex(rawPolicyName),
       policy_description_hex: hex(rawPolicyDescription),
     }]);
@@ -353,6 +372,94 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
     expect(otherTenant.body.data.skills.some(item => item.id === skillId)).toBe(false);
     expect(otherTenant.body.data.crews.some(item => item.id === crew.body.data.id)).toBe(false);
     expect(delivery.messages).toHaveLength(2);
+  }, 60000);
+
+  test('canonical invitation envelopes and ambiguous Business Profile references fail closed before durable drift', async () => {
+    const startingDeliveryCount = delivery.messages.length;
+    const rawBoundaryName = 'Line One\nLine Two ' + '\u{1F9F0}'.repeat(81);
+    const boundaryInvite = await request(app).post('/api/workforce/invitations').set(auth.get(OWNER_A)).send({
+      name: rawBoundaryName, email: 'boundary@example.test', phone: '', accessRole: 'viewer',
+      operationalRole: 'employee', homeLocationId: 'office-north', skillIds: [],
+    });
+    expect(boundaryInvite.status).toBe(202);
+    expect(delivery.messages).toHaveLength(startingDeliveryCount + 1);
+    const storedBoundary = await pool.query(
+      `SELECT encode(convert_to(account.name, 'UTF8'), 'hex') AS name_hex,
+              profile.home_location_id
+         FROM users account
+         JOIN workforce_profiles profile
+           ON profile.organization_id = account.organization_id AND profile.id = $2
+        WHERE account.organization_id = $1 AND account.email_normalized = 'boundary@example.test'`,
+      [ORG_A, boundaryInvite.body.data.profileId]
+    );
+    expect(storedBoundary.rows).toEqual([{
+      name_hex: hex(rawBoundaryName),
+      home_location_id: 'Office-North',
+    }]);
+    const boundaryResend = await request(app)
+      .post('/api/workforce/members/' + boundaryInvite.body.data.membershipId + '/resend-invitation')
+      .set(auth.get(OWNER_A)).send({});
+    expect(boundaryResend.status).toBe(202);
+    expect(delivery.messages).toHaveLength(startingDeliveryCount + 2);
+
+    const beforeInvalid = await pool.query(
+      `SELECT
+         (SELECT count(*)::int FROM users WHERE organization_id = $1) AS users,
+         (SELECT count(*)::int FROM organization_memberships WHERE organization_id = $1) AS memberships,
+         (SELECT count(*)::int FROM account_action_tokens WHERE organization_id = $1) AS tokens`,
+      [ORG_A]
+    );
+    const invalidRecipient = await request(app).post('/api/workforce/invitations').set(auth.get(OWNER_A)).send({
+      name: 'Unicode recipient', email: 'worker@例子.test', phone: '', accessRole: 'member',
+      operationalRole: 'employee', homeLocationId: null, skillIds: [],
+    });
+    expect(invalidRecipient.status).toBe(400);
+    expect(invalidRecipient.body.error.code).toBe('invalid_workforce_invitation');
+    const afterInvalid = await pool.query(
+      `SELECT
+         (SELECT count(*)::int FROM users WHERE organization_id = $1) AS users,
+         (SELECT count(*)::int FROM organization_memberships WHERE organization_id = $1) AS memberships,
+         (SELECT count(*)::int FROM account_action_tokens WHERE organization_id = $1) AS tokens`,
+      [ORG_A]
+    );
+    expect(afterInvalid.rows).toEqual(beforeInvalid.rows);
+    expect(delivery.messages).toHaveLength(startingDeliveryCount + 2);
+
+    const activeProfile = await pool.query(
+      `SELECT id, raw_profile FROM canonical_business_profiles
+        WHERE organization_id = $1 AND is_active = TRUE`,
+      [ORG_A]
+    );
+    const rawProfile = activeProfile.rows[0].raw_profile;
+    const ambiguousProfile = JSON.parse(JSON.stringify(rawProfile));
+    ambiguousProfile.headquarters.additionalOffices.push({
+      ...ambiguousProfile.headquarters.additionalOffices[0],
+      id: 'office-north',
+      name: 'Ambiguous case variant',
+    });
+    await pool.query(
+      `UPDATE canonical_business_profiles SET raw_profile = $3::jsonb
+        WHERE organization_id = $1 AND id = $2`,
+      [ORG_A, activeProfile.rows[0].id, JSON.stringify(ambiguousProfile)]
+    );
+    try {
+      const ambiguousCrew = await request(app).post('/api/workforce/crews').set(auth.get(OWNER_A)).send({
+        key: 'ambiguous-office', name: 'Ambiguous office', homeLocationId: 'OFFICE-NORTH', members: [],
+      });
+      expect(ambiguousCrew.status).toBe(409);
+      expect(ambiguousCrew.body.error.code).toBe('ambiguous_workforce_location');
+      expect((await pool.query(
+        `SELECT count(*)::int AS count FROM workforce_crews
+          WHERE organization_id = $1 AND crew_key = 'ambiguous-office'`,
+        [ORG_A]
+      )).rows[0].count).toBe(0);
+    } finally {
+      await pool.query(
+        `UPDATE canonical_business_profiles SET raw_profile = $3::jsonb
+          WHERE organization_id = $1 AND id = $2`,
+        [ORG_A, activeProfile.rows[0].id, JSON.stringify(rawProfile)]
+      );
+    }
   }, 60000);
 
   test('future memberships receive stable workforce profiles while unsupported mission state is absent', async () => {

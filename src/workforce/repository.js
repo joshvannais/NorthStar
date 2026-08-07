@@ -108,22 +108,34 @@ class WorkforceRepository {
       hash: row.normalized_profile_hash,
       locations,
       services,
-      locationIds: new Set(locations.map(location => location.id.toLowerCase())),
-      serviceIds: new Set(services.map(service => service.id.toLowerCase())),
       policies: clone(raw.workforce && Array.isArray(raw.workforce.policies) ? raw.workforce.policies : []),
     };
   }
 
-  validateLocation(references, locationId) {
-    if (locationId !== null && !references.locationIds.has(locationId.toLowerCase())) {
-      throw workforceError(400, 'invalid_workforce_location', 'Workforce location is not in the active Business Profile');
+  canonicalReference(items, requestedId, invalidCode, ambiguousCode, label) {
+    if (requestedId === null) return null;
+    const matches = items.filter(item => item.id.toLowerCase() === requestedId.toLowerCase());
+    if (matches.length === 0) {
+      throw workforceError(400, invalidCode, `Workforce ${label} is not in the active Business Profile`);
     }
+    if (matches.length !== 1) {
+      throw workforceError(409, ambiguousCode, `Workforce ${label} is ambiguous in the active Business Profile`);
+    }
+    return matches[0].id;
   }
 
-  validateService(references, serviceId) {
-    if (serviceId !== null && !references.serviceIds.has(serviceId.toLowerCase())) {
-      throw workforceError(400, 'invalid_workforce_service', 'Workforce service is not in the active Business Profile');
-    }
+  canonicalLocation(references, locationId) {
+    return this.canonicalReference(
+      references.locations, locationId,
+      'invalid_workforce_location', 'ambiguous_workforce_location', 'location'
+    );
+  }
+
+  canonicalService(references, serviceId) {
+    return this.canonicalReference(
+      references.services, serviceId,
+      'invalid_workforce_service', 'ambiguous_workforce_service', 'service'
+    );
   }
 
   async insertAudit(client, input) {
@@ -285,7 +297,7 @@ class WorkforceRepository {
       const organization = await this.lockOrganization(client, input.organizationId);
       await this.requireActor(client, input.organizationId, input.actorUserId, ['owner']);
       const references = await this.profileReferences(client, input.organizationId);
-      this.validateLocation(references, input.homeLocationId);
+      const homeLocationId = this.canonicalLocation(references, input.homeLocationId);
       if (input.skillIds.length) {
         const skills = await client.query(
           `SELECT id FROM workforce_skills
@@ -319,7 +331,7 @@ class WorkforceRepository {
           WHERE organization_id = $1 AND membership_id = $2 AND id = $2
           RETURNING id`,
         [input.organizationId, input.membershipId, input.operationalRole,
-          input.homeLocationId, input.actorUserId]
+          homeLocationId, input.actorUserId]
       );
       if (profile.rows.length !== 1 || profile.rows[0].id !== input.profileId) {
         throw new Error('Workforce invitation profile authority was not created');
@@ -562,7 +574,7 @@ class WorkforceRepository {
       await this.lockOrganization(client, input.organizationId);
       await this.requireActor(client, input.organizationId, input.actorUserId, ['owner', 'admin']);
       const references = await this.profileReferences(client, input.organizationId);
-      this.validateLocation(references, input.homeLocationId);
+      const homeLocationId = this.canonicalLocation(references, input.homeLocationId);
       const profileResult = await client.query(
         `SELECT id FROM workforce_profiles
           WHERE organization_id = $1 AND id = $2
@@ -586,7 +598,7 @@ class WorkforceRepository {
                 updated_by_user_id = $5, updated_at = NOW()
           WHERE organization_id = $1 AND id = $2`,
         [input.organizationId, input.profileId, input.operationalRole,
-          input.homeLocationId, input.actorUserId]
+          homeLocationId, input.actorUserId]
       );
       await client.query(
         `DELETE FROM workforce_profile_skills
@@ -609,7 +621,7 @@ class WorkforceRepository {
         action: 'member_profile_updated',
         subjectType: 'profile',
         subjectId: input.profileId,
-        details: { operationalRole: input.operationalRole, homeLocationId: input.homeLocationId, skillIds: input.skillIds },
+        details: { operationalRole: input.operationalRole, homeLocationId, skillIds: input.skillIds },
       });
       return { profileId: input.profileId };
     });
@@ -620,7 +632,7 @@ class WorkforceRepository {
       await this.lockOrganization(client, input.organizationId);
       await this.requireActor(client, input.organizationId, input.actorUserId, ['owner', 'admin']);
       const references = await this.profileReferences(client, input.organizationId);
-      this.validateService(references, input.serviceId);
+      const serviceId = this.canonicalService(references, input.serviceId);
       const result = await client.query(
         `INSERT INTO workforce_skills
           (id, organization_id, skill_key, name, description, service_id,
@@ -628,7 +640,7 @@ class WorkforceRepository {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$7)
          RETURNING id`,
         [input.skillId, input.organizationId, input.key, input.name,
-          input.description, input.serviceId, input.actorUserId]
+          input.description, serviceId, input.actorUserId]
       );
       await this.insertAudit(client, {
         organizationId: input.organizationId,
@@ -636,7 +648,7 @@ class WorkforceRepository {
         action: 'skill_created',
         subjectType: 'skill',
         subjectId: result.rows[0].id,
-        details: { key: input.key, serviceId: input.serviceId },
+        details: { key: input.key, serviceId },
       });
       return { id: result.rows[0].id };
     });
@@ -647,7 +659,7 @@ class WorkforceRepository {
       await this.lockOrganization(client, input.organizationId);
       await this.requireActor(client, input.organizationId, input.actorUserId, ['owner', 'admin']);
       const references = await this.profileReferences(client, input.organizationId);
-      this.validateService(references, input.serviceId);
+      const serviceId = this.canonicalService(references, input.serviceId);
       const result = await client.query(
         `UPDATE workforce_skills
             SET name = $3, description = $4, service_id = $5,
@@ -655,7 +667,7 @@ class WorkforceRepository {
           WHERE organization_id = $1 AND id = $2
           RETURNING id, skill_key`,
         [input.organizationId, input.skillId, input.name, input.description,
-          input.serviceId, input.actorUserId]
+          serviceId, input.actorUserId]
       );
       if (result.rows.length !== 1) throw workforceError(404, 'workforce_skill_not_found', 'Workforce skill not found');
       await this.insertAudit(client, {
@@ -664,7 +676,7 @@ class WorkforceRepository {
         action: 'skill_updated',
         subjectType: 'skill',
         subjectId: input.skillId,
-        details: { key: result.rows[0].skill_key, serviceId: input.serviceId },
+        details: { key: result.rows[0].skill_key, serviceId },
       });
       return { id: input.skillId };
     });
@@ -701,14 +713,14 @@ class WorkforceRepository {
       await this.lockOrganization(client, input.organizationId);
       await this.requireActor(client, input.organizationId, input.actorUserId, ['owner', 'admin']);
       const references = await this.profileReferences(client, input.organizationId);
-      this.validateLocation(references, input.homeLocationId);
+      const homeLocationId = this.canonicalLocation(references, input.homeLocationId);
       await client.query(
         `INSERT INTO workforce_crews
           (id, organization_id, crew_key, name, home_location_id,
            created_by_user_id, updated_by_user_id)
          VALUES ($1,$2,$3,$4,$5,$6,$6)`,
         [input.crewId, input.organizationId, input.key, input.name,
-          input.homeLocationId, input.actorUserId]
+          homeLocationId, input.actorUserId]
       );
       await this.replaceCrewMembers(client, input);
       await this.insertAudit(client, {
@@ -717,7 +729,7 @@ class WorkforceRepository {
         action: 'crew_created',
         subjectType: 'crew',
         subjectId: input.crewId,
-        details: { key: input.key, homeLocationId: input.homeLocationId, members: input.members },
+        details: { key: input.key, homeLocationId, members: input.members },
       });
       return { id: input.crewId };
     });
@@ -728,14 +740,14 @@ class WorkforceRepository {
       await this.lockOrganization(client, input.organizationId);
       await this.requireActor(client, input.organizationId, input.actorUserId, ['owner', 'admin']);
       const references = await this.profileReferences(client, input.organizationId);
-      this.validateLocation(references, input.homeLocationId);
+      const homeLocationId = this.canonicalLocation(references, input.homeLocationId);
       const result = await client.query(
         `UPDATE workforce_crews
             SET name = $3, home_location_id = $4,
                 updated_by_user_id = $5, updated_at = NOW()
           WHERE organization_id = $1 AND id = $2
           RETURNING id, crew_key`,
-        [input.organizationId, input.crewId, input.name, input.homeLocationId, input.actorUserId]
+        [input.organizationId, input.crewId, input.name, homeLocationId, input.actorUserId]
       );
       if (result.rows.length !== 1) throw workforceError(404, 'workforce_crew_not_found', 'Workforce crew not found');
       await this.replaceCrewMembers(client, input);
@@ -745,7 +757,7 @@ class WorkforceRepository {
         action: 'crew_updated',
         subjectType: 'crew',
         subjectId: input.crewId,
-        details: { key: result.rows[0].crew_key, homeLocationId: input.homeLocationId, members: input.members },
+        details: { key: result.rows[0].crew_key, homeLocationId, members: input.members },
       });
       return { id: input.crewId };
     });

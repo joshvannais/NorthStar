@@ -14,8 +14,12 @@ const { requirePermission } = require('../auth/permissions');
 const { getActiveBusinessProfile, putBusinessProfile } = require('../services/organizationAuthority');
 const {
   migrateLegacyCanonicalAuthority,
+  OPERATIONAL_CONFIGURATION_FIELDS,
   prepareBusinessProfileForWrite,
+  projectOperationalConfiguration,
+  stableValue,
   synchronizeLegacyFinancial,
+  validateOperationalConfiguration,
 } = require('../services/businessProfileAdapter');
 
 const VALID_SECTIONS = new Set([
@@ -149,12 +153,92 @@ async function persist(req, rawProfile, options) {
   const input = {
     organizationId: req.tenantContext.organizationId,
     userId: req.tenantContext.userId,
-    profile: prepared.profile,
+    profile: options && options.preserveUnrelatedRaw === true ? stableValue(source) : prepared.profile,
     preserveVoiceAssistant: !(options && options.allowVoiceAssistantWrite === true),
   };
   if (options && hasOwn(options, 'expectedVersion')) input.expectedVersion = options.expectedVersion;
   const stored = await putBusinessProfile(db.getPool(), input);
   return stored;
+}
+
+function invalidWrite(code, message, details) {
+  const error = new Error(message);
+  error.status = 400;
+  error.code = code;
+  error.details = details;
+  return error;
+}
+
+function parseWholeProfileWrite(body) {
+  const isEnvelope = isPlainObject(body) && (hasOwn(body, 'expectedVersion') || hasOwn(body, 'value'));
+  if (!isEnvelope) return { value: body, versioned: false };
+  if (!hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
+      Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
+      (body.expectedVersion !== null &&
+       (typeof body.expectedVersion !== 'string' || !BUSINESS_PROFILE_VERSION_PATTERN.test(body.expectedVersion))) ||
+      !isPlainObject(body.value)) {
+    throw invalidWrite(
+      'INVALID_BUSINESS_PROFILE_WRITE',
+      'Versioned Business Profile writes require a value and the expected canonical profile version.',
+      ['Body must contain exactly expectedVersion and value; expectedVersion must be a canonical version label or null, and value must be an object.']
+    );
+  }
+  return { expectedVersion: body.expectedVersion, value: body.value, versioned: true };
+}
+
+function parseOperationalConfigurationWrite(body) {
+  if (!isPlainObject(body) || !hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
+      Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
+      (body.expectedVersion !== null &&
+       (typeof body.expectedVersion !== 'string' || !BUSINESS_PROFILE_VERSION_PATTERN.test(body.expectedVersion))) ||
+      !isPlainObject(body.value)) {
+    throw invalidWrite(
+      'INVALID_OPERATIONAL_CONFIGURATION_WRITE',
+      'Operational Configuration writes require recognized values and the expected canonical profile version.',
+      ['Body must contain exactly expectedVersion and value; expectedVersion must be a canonical version label or null, and value must be an object.']
+    );
+  }
+  const errors = [];
+  for (const section of Object.keys(body.value)) {
+    const allowed = OPERATIONAL_CONFIGURATION_FIELDS[section];
+    if (!allowed) {
+      errors.push(section + ' is not a supported Operational Configuration section.');
+      continue;
+    }
+    if (!isPlainObject(body.value[section])) {
+      errors.push(section + ' must be a plain object.');
+      continue;
+    }
+    for (const field of Object.keys(body.value[section])) {
+      if (!allowed.has(field)) errors.push(section + '.' + field + ' is not a supported Operational Configuration field.');
+    }
+  }
+  validateOperationalConfiguration(body.value, errors);
+  if (errors.length) {
+    throw invalidWrite(
+      'INVALID_OPERATIONAL_CONFIGURATION_WRITE',
+      'Operational Configuration validation failed.',
+      errors
+    );
+  }
+  return { expectedVersion: body.expectedVersion, value: body.value };
+}
+
+function mergeOperationalConfiguration(current, value) {
+  const updated = { ...current };
+  for (const section of Object.keys(value)) {
+    const currentSection = isPlainObject(current[section]) ? current[section] : {};
+    updated[section] = { ...currentSection, ...value[section] };
+  }
+  return updated;
+}
+
+function operationalResponse(profile) {
+  const full = response(profile);
+  return {
+    ...projectOperationalConfiguration(profile.rawProfile),
+    canonicalAuthority: full.canonicalAuthority,
+  };
 }
 
 function parseVoiceAssistantWrite(body) {
@@ -185,7 +269,47 @@ router.get('/', requireTenantAccess, async function (req, res) {
 
 router.put('/', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
   try {
-    return res.json({ success: true, data: response(await persist(req, req.body)) });
+    const write = parseWholeProfileWrite(req.body);
+    const options = write.versioned ? { expectedVersion: write.expectedVersion } : null;
+    return res.json({ success: true, data: response(await persist(req, write.value, options)) });
+  } catch (error) {
+    if (error.details) return res.status(400).json({
+      success: false,
+      error: { code: error.code, message: error.message },
+      errors: error.details,
+    });
+    return sendError(res, error);
+  }
+});
+
+router.put('/operationalConfiguration', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
+  try {
+    const write = parseOperationalConfigurationWrite(req.body);
+    let current;
+    try {
+      current = (await active(req)).rawProfile;
+    } catch (error) {
+      if (!isMissingProfile(error)) throw error;
+      current = onboardingDraft(req);
+      delete current.canonicalAuthority;
+      delete current.onboardingDraft;
+    }
+    const updated = mergeOperationalConfiguration(current, write.value);
+    const operationalErrors = validateOperationalConfiguration(updated);
+    if (operationalErrors.length) {
+      throw invalidWrite(
+        'INVALID_OPERATIONAL_CONFIGURATION_WRITE',
+        'Operational Configuration validation failed.',
+        operationalErrors
+      );
+    }
+    return res.json({
+      success: true,
+      data: response(await persist(req, updated, {
+        expectedVersion: write.expectedVersion,
+        preserveUnrelatedRaw: true,
+      })),
+    });
   } catch (error) {
     if (error.details) return res.status(400).json({
       success: false,
@@ -261,6 +385,26 @@ router.get('/voiceAssistant', requireTenantAccess, async function (req, res) {
   } catch (error) {
     if (isMissingProfile(error)) {
       return res.json({ success: true, data: null, onboardingDraft: true });
+    }
+    return sendError(res, error);
+  }
+});
+
+router.get('/operationalConfiguration', requireTenantAccess, async function (req, res) {
+  try {
+    return res.json({ success: true, data: operationalResponse(await active(req)) });
+  } catch (error) {
+    if (isMissingProfile(error)) {
+      const draft = onboardingDraft(req);
+      return res.json({
+        success: true,
+        data: {
+          ...projectOperationalConfiguration(draft),
+          canonicalAuthority: null,
+          onboardingDraft: true,
+        },
+        onboardingDraft: true,
+      });
     }
     return sendError(res, error);
   }

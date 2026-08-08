@@ -11,6 +11,7 @@
     body { font-family: var(--font-sans); color: inherit; background: inherit; }
     .bp-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
     .bp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .bp-header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
     .bp-title { font-size: 24px; font-weight: 700; color: var(--neutral-900); }
     .bp-subtitle { font-size: 14px; color: var(--neutral-500); margin-top: 4px; }
     .bp-nav { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 24px; padding: 4px; background: var(--neutral-100); border-radius: var(--radius); }
@@ -109,8 +110,13 @@
             <div class="bp-subtitle">Configure how your business operates — this is the DNA of your NorthStar platform.</div>
             <p id="businessProfileStatus" role="status" aria-live="polite" aria-atomic="true">Loading your durable Business Profile authority. Editing remains disabled.</p>
           </div>
-          <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()" disabled>💾 Save Profile</button>
+          <div class="bp-header-actions">
+            <button class="bp-add-btn" id="reloadOperationalConfigurationBtn" type="button" hidden disabled>Reload operational policies</button>
+            <button class="bp-save-btn" id="saveOperationalConfigurationBtn" type="button" disabled>Save operational policies</button>
+            <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()" disabled>💾 Save Profile</button>
+          </div>
         </div>
+        <div id="operationalConfigurationError" class="bp-validation-error" role="alert" tabindex="-1"></div>
 
         <!-- Navigation Tabs -->
         <div class="bp-nav" id="bpNav" role="tablist" aria-label="Business Profile sections">
@@ -197,17 +203,18 @@
         <div class="bp-section" id="section-routing">
           <div class="bp-card">
             <h3>Routing Preferences</h3>
-            <div class="bp-section-desc">Configure how your crews navigate. These settings are consumed by the routing engine.</div>
+            <div class="bp-section-desc">Planning policies only. Routing and travel assumptions inform later NorthStar planning; Mission 22/23 owns scheduling, dispatch, and field execution.</div>
+            <div class="bp-authority-note">The provider preference remains separate Integration Configuration groundwork. Saving operational policies never contacts a mapping provider.</div>
             <div class="bp-grid">
               <div class="bp-field"><label>Preferred Provider</label>
-                <select id="routing-preferredProvider"><option value="google-maps">Google Maps</option><option value="apple-maps">Apple Maps</option><option value="waze">Waze</option></select></div>
+                <select id="routing-preferredProvider"><option value="">Not configured</option><option value="google-maps">Google Maps</option><option value="apple-maps">Apple Maps</option><option value="waze">Waze</option></select></div>
               <div class="bp-field"><label>Dispatch From</label>
-                <select id="routing-dispatchFrom"><option value="headquarters">Headquarters</option><option value="nearest-office">Nearest Office</option><option value="assigned-crew">Assigned Crew</option></select></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="routing-trafficEnabled" type="checkbox"><span class="slider"></span> Traffic Enabled</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="routing-useLiveTraffic" type="checkbox"><span class="slider"></span> Use Live Traffic</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="routing-avoidTolls" type="checkbox"><span class="slider"></span> Avoid Tolls</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="routing-avoidHighways" type="checkbox"><span class="slider"></span> Avoid Highways</label></div>
-              <div class="bp-field"><label class="bp-toggle"><input id="routing-avoidFerries" type="checkbox"><span class="slider"></span> Avoid Ferries</label></div>
+                <select id="routing-dispatchFrom" data-operational-control data-operational-section="routing" data-operational-field="dispatchFrom"><option value="">Not configured</option><option value="headquarters">Headquarters</option><option value="nearest-office">Nearest Office</option><option value="assigned-crew">Assigned Crew</option></select></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-trafficEnabled" data-operational-control data-operational-section="routing" data-operational-field="trafficEnabled" type="checkbox"><span class="slider"></span> Traffic Enabled</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-useLiveTraffic" data-operational-control data-operational-section="routing" data-operational-field="useLiveTraffic" type="checkbox"><span class="slider"></span> Use Live Traffic</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-avoidTolls" data-operational-control data-operational-section="routing" data-operational-field="avoidTolls" type="checkbox"><span class="slider"></span> Avoid Tolls</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-avoidHighways" data-operational-control data-operational-section="routing" data-operational-field="avoidHighways" type="checkbox"><span class="slider"></span> Avoid Highways</label></div>
+              <div class="bp-field"><label class="bp-toggle"><input id="routing-avoidFerries" data-operational-control data-operational-section="routing" data-operational-field="avoidFerries" type="checkbox"><span class="slider"></span> Avoid Ferries</label></div>
             </div>
           </div>
         </div>
@@ -252,14 +259,15 @@
         <div class="bp-section" id="section-crew">
           <div class="bp-card">
             <h3>Crew Defaults</h3>
-            <div class="bp-section-desc">Default crew settings used by the Business Intelligence Engine for labor cost calculations.</div>
+            <div class="bp-section-desc">Crew sizing and shop-time are planning policies only. Team owns individual accounts, memberships, skills, and crew identities; scheduling and dispatch execution remain outside this surface.</div>
+            <div class="bp-authority-note">Rate fields remain Financial Configuration groundwork and are not part of this operational-policy save.</div>
             <div class="bp-grid">
-              <div class="bp-field"><label>Default Crew Size</label><input id="crew-defaultCrewSize" type="number" min="1" max="10"></div>
-              <div class="bp-field"><label>Maximum Crew Size</label><input id="crew-maxCrewSize" type="number" min="1" max="20"></div>
+              <div class="bp-field"><label>Default Crew Size</label><input id="crew-defaultCrewSize" data-operational-control data-operational-section="crew" data-operational-field="defaultCrewSize" type="number" min="1" max="10"></div>
+              <div class="bp-field"><label>Maximum Crew Size</label><input id="crew-maxCrewSize" data-operational-control data-operational-section="crew" data-operational-field="maxCrewSize" type="number" min="1" max="20"></div>
               <div class="bp-field"><label>Average Hourly Rate ($/hr)</label><input id="crew-averageHourlyRate" type="number" step="0.5" min="15" max="200"></div>
               <div class="bp-field"><label>Overtime Multiplier</label><input id="crew-overtimeMultiplier" type="number" step="0.1" min="1" max="3"></div>
               <div class="bp-field"><label>Travel Pay ($/trip)</label><input id="crew-travelPay" type="number" step="0.5" min="0"></div>
-              <div class="bp-field"><label>Shop Time (hours)</label><input id="crew-shopTime" type="number" step="0.25" min="0"></div>
+              <div class="bp-field"><label>Shop Time (hours)</label><input id="crew-shopTime" data-operational-control data-operational-section="crew" data-operational-field="shopTime" type="number" step="0.25" min="0"></div>
               <div class="bp-field"><label>Minimum Billable Hours</label><input id="crew-minimumBillableHours" type="number" step="0.5" min="0.5"></div>
             </div>
           </div>
@@ -269,15 +277,16 @@
         <div class="bp-section" id="section-vehicles">
           <div class="bp-card">
             <h3>Fleet Planning Assumptions</h3>
-            <div class="bp-section-desc">Existing Business Profile assumptions used by production and travel cost calculations. These values remain separate from individual asset identities.</div>
+            <div class="bp-section-desc">Fleet counts, efficiency, and transport capacity are planning assumptions only. The Asset &amp; Equipment Catalogue owns normalized individual equipment and vehicle identities.</div>
+            <div class="bp-authority-note">Fuel, vehicle-cost, and maintenance-rate fields remain Financial Configuration groundwork and are not part of this operational-policy save.</div>
             <div class="bp-grid">
-              <div class="bp-field"><label>Truck Count</label><input id="veh-truckCount" type="number" min="0"></div>
-              <div class="bp-field"><label>Trailer Count</label><input id="veh-trailerCount" type="number" min="0"></div>
-              <div class="bp-field"><label>Average MPG</label><input id="veh-averageMpg" type="number" step="0.5" min="5"></div>
+              <div class="bp-field"><label>Truck Count</label><input id="veh-truckCount" data-operational-control data-operational-section="vehicles" data-operational-field="truckCount" type="number" min="0"></div>
+              <div class="bp-field"><label>Trailer Count</label><input id="veh-trailerCount" data-operational-control data-operational-section="vehicles" data-operational-field="trailerCount" type="number" min="0"></div>
+              <div class="bp-field"><label>Average MPG</label><input id="veh-averageMpg" data-operational-control data-operational-section="vehicles" data-operational-field="averageMpg" type="number" step="0.5" min="5"></div>
               <div class="bp-field"><label>Average Fuel Cost ($/gal)</label><input id="veh-averageFuelCost" type="number" step="0.1" min="0"></div>
               <div class="bp-field"><label>Hourly Vehicle Cost ($/hr)</label><input id="veh-hourlyVehicleCost" type="number" step="0.5" min="0"></div>
               <div class="bp-field"><label>Maintenance Reserve (%)</label><input id="veh-maintenanceReserve" type="number" step="0.01" min="0"></div>
-              <div class="bp-field"><label>Equipment Transport Capacity</label><input id="veh-equipmentTransportCapacity" type="number" min="0"></div>
+              <div class="bp-field"><label>Equipment Transport Capacity</label><input id="veh-equipmentTransportCapacity" data-operational-control data-operational-section="vehicles" data-operational-field="equipmentTransportCapacity" type="number" min="0"></div>
             </div>
           </div>
           <div class="bp-card">
@@ -331,15 +340,15 @@
         <div class="bp-section" id="section-scheduling">
           <div class="bp-card">
             <h3>Scheduling Defaults</h3>
-            <div class="bp-section-desc">Defaults consumed by the Scheduling Engine for daily planning.</div>
+            <div class="bp-section-desc">Planning policies only. These defaults can inform future scheduling decisions; Mission 22 owns assignment and dispatch execution, and Mission 23 owns live operational state.</div>
             <div class="bp-grid">
-              <div class="bp-field"><label>Max Jobs Per Day</label><input id="sched-maxJobsPerDay" type="number" min="1"></div>
-              <div class="bp-field"><label>Travel Buffer (minutes)</label><input id="sched-travelBuffer" type="number" min="0"></div>
-              <div class="bp-field"><label>Appointment Buffer (minutes)</label><input id="sched-appointmentBuffer" type="number" min="0"></div>
-              <div class="bp-field"><label>Work Day Length (hours)</label><input id="sched-workDayLength" type="number" step="0.5" min="1"></div>
-              <div class="bp-field"><label>Max Daily Travel (minutes)</label><input id="sched-maxDailyTravel" type="number" min="0"></div>
+              <div class="bp-field"><label>Max Jobs Per Day</label><input id="sched-maxJobsPerDay" data-operational-control data-operational-section="scheduling" data-operational-field="maxJobsPerDay" type="number" min="1"></div>
+              <div class="bp-field"><label>Travel Buffer (minutes)</label><input id="sched-travelBuffer" data-operational-control data-operational-section="scheduling" data-operational-field="travelBuffer" type="number" min="0"></div>
+              <div class="bp-field"><label>Appointment Buffer (minutes)</label><input id="sched-appointmentBuffer" data-operational-control data-operational-section="scheduling" data-operational-field="appointmentBuffer" type="number" min="0"></div>
+              <div class="bp-field"><label>Work Day Length (hours)</label><input id="sched-workDayLength" data-operational-control data-operational-section="scheduling" data-operational-field="workDayLength" type="number" step="0.5" min="1"></div>
+              <div class="bp-field"><label>Max Daily Travel (minutes)</label><input id="sched-maxDailyTravel" data-operational-control data-operational-section="scheduling" data-operational-field="maxDailyTravel" type="number" min="0"></div>
               <div class="bp-field"><label>Dispatch Strategy</label>
-                <select id="sched-preferredDispatchStrategy"><option value="efficiency">Efficiency (shortest route)</option><option value="priority">Priority (highest value first)</option><option value="balanced">Balanced</option></select></div>
+                <select id="sched-preferredDispatchStrategy" data-operational-control data-operational-section="scheduling" data-operational-field="preferredDispatchStrategy"><option value="">Not configured</option><option value="efficiency">Efficiency (shortest route)</option><option value="priority">Priority (highest value first)</option><option value="balanced">Balanced</option></select></div>
             </div>
           </div>
         </div>
@@ -504,6 +513,10 @@
     var voiceAssistantDirty = false;
     var voiceAssistantSaving = false;
     var voiceAssistantConflicted = false;
+    var operationalConfigurationBaseline = Object.create(null);
+    var operationalConfigurationDirty = false;
+    var operationalConfigurationSaving = false;
+    var operationalConfigurationConflicted = false;
 
     function profileRequest(url, options) {
       var request = options || {};
@@ -589,6 +602,7 @@
         : state === 'loading' ? 'Loading profile…'
         : profileCanEdit ? 'Profile unavailable' : 'Read-only profile';
       updateVoiceActionState(profileAvailable);
+      updateOperationalConfigurationActionState(profileAvailable);
     }
 
     // ====================================================================
@@ -979,6 +993,249 @@
     }
 
     window.NorthStarAssetCatalogue = Object.freeze({ reload: loadAssetCatalogue });
+
+    // ====================================================================
+    // Versioned Operational Configuration planning policies
+    // ====================================================================
+    function operationalControls() {
+      return Array.from(document.querySelectorAll('[data-operational-control]'));
+    }
+
+    function operationalControlState(control) {
+      return control.type === 'checkbox' ? control.checked : control.value;
+    }
+
+    function operationalProfileAvailable() {
+      var root = document.getElementById('businessProfileRoot');
+      return Boolean(root && root.dataset.state === 'ready');
+    }
+
+    function clearOperationalConfigurationError() {
+      var element = document.getElementById('operationalConfigurationError');
+      if (!element) return;
+      element.textContent = '';
+      element.classList.remove('show');
+    }
+
+    function showOperationalConfigurationError(message, focus) {
+      var element = document.getElementById('operationalConfigurationError');
+      if (!element) return;
+      element.textContent = message;
+      element.classList.add('show');
+      if (focus) element.focus();
+    }
+
+    function captureOperationalConfigurationBaseline() {
+      operationalConfigurationBaseline = Object.create(null);
+      operationalControls().forEach(function(control) {
+        operationalConfigurationBaseline[control.id] = operationalControlState(control);
+      });
+      operationalConfigurationDirty = false;
+    }
+
+    function refreshOperationalConfigurationDirty() {
+      operationalControls().forEach(function(control) {
+        if (operationalConfigurationBaseline[control.id] === operationalControlState(control)) {
+          control.setAttribute('aria-invalid', 'false');
+        }
+      });
+      operationalConfigurationDirty = operationalControls().some(function(control) {
+        return operationalConfigurationBaseline[control.id] !== operationalControlState(control);
+      });
+      if (!operationalConfigurationConflicted) clearOperationalConfigurationError();
+      updateOperationalConfigurationActionState();
+    }
+
+    function updateOperationalConfigurationActionState(profileAvailable) {
+      var available = profileAvailable === undefined ? operationalProfileAvailable() : profileAvailable;
+      var editable = available && profileCanEdit;
+      operationalControls().forEach(function(control) {
+        control.disabled = !editable || operationalConfigurationSaving;
+      });
+      var saveButton = document.getElementById('saveOperationalConfigurationBtn');
+      if (saveButton) {
+        saveButton.disabled = !editable || !operationalConfigurationDirty ||
+          operationalConfigurationSaving || operationalConfigurationConflicted;
+        saveButton.textContent = operationalConfigurationSaving ? 'Saving operational policies...'
+          : profileCanEdit ? 'Save operational policies' : 'Read-only operational policies';
+      }
+      var reloadButton = document.getElementById('reloadOperationalConfigurationBtn');
+      if (reloadButton) {
+        reloadButton.hidden = !operationalConfigurationConflicted;
+        reloadButton.disabled = !editable || operationalConfigurationSaving;
+      }
+    }
+
+    function readOperationalNumber(control, label, options) {
+      var raw = control.value.trim();
+      control.setAttribute('aria-invalid', 'false');
+      if (!raw) return null;
+      var value = Number(raw);
+      var invalid = !Number.isFinite(value) || (options.integer && !Number.isInteger(value)) ||
+        (options.minimum !== undefined && value < options.minimum) ||
+        (options.maximum !== undefined && value > options.maximum);
+      if (invalid) {
+        control.setAttribute('aria-invalid', 'true');
+        var expectation = options.integer ? 'a whole number' : 'a number';
+        if (options.minimum !== undefined && options.maximum !== undefined) {
+          expectation += ' from ' + options.minimum + ' through ' + options.maximum;
+        } else if (options.minimum !== undefined) {
+          expectation += ' of at least ' + options.minimum;
+        }
+        var error = new Error(label + ' must be blank or ' + expectation + '.');
+        error.operationalControl = control;
+        throw error;
+      }
+      return value;
+    }
+
+    function operationalNumberOptions(field) {
+      return {
+        defaultCrewSize: { integer: true, minimum: 1, maximum: 10 },
+        maxCrewSize: { integer: true, minimum: 1, maximum: 20 },
+        shopTime: { integer: false, minimum: 0 },
+        truckCount: { integer: true, minimum: 0 },
+        trailerCount: { integer: true, minimum: 0 },
+        averageMpg: { integer: false, minimum: 5 },
+        equipmentTransportCapacity: { integer: true, minimum: 0 },
+        maxJobsPerDay: { integer: true, minimum: 1 },
+        travelBuffer: { integer: true, minimum: 0 },
+        appointmentBuffer: { integer: true, minimum: 0 },
+        workDayLength: { integer: false, minimum: 1 },
+        maxDailyTravel: { integer: true, minimum: 0 },
+      }[field];
+    }
+
+    function operationalFieldLabel(control) {
+      var label = document.querySelector('label[for="' + control.id + '"]');
+      return label ? label.textContent.trim() : control.dataset.operationalField;
+    }
+
+    function readOperationalControl(control) {
+      if (control.type === 'checkbox') return control.checked;
+      var options = operationalNumberOptions(control.dataset.operationalField);
+      if (options) return readOperationalNumber(control, operationalFieldLabel(control), options);
+      control.setAttribute('aria-invalid', 'false');
+      return control.value;
+    }
+
+    function collectOperationalConfiguration() {
+      var value = {};
+      operationalControls().forEach(function(control) {
+        if (operationalConfigurationBaseline[control.id] === operationalControlState(control)) return;
+        var section = control.dataset.operationalSection;
+        if (!value[section]) value[section] = {};
+        value[section][control.dataset.operationalField] = readOperationalControl(control);
+      });
+
+      var defaultCrew = readOperationalControl(document.getElementById('crew-defaultCrewSize'));
+      var maximumCrew = readOperationalControl(document.getElementById('crew-maxCrewSize'));
+      if (defaultCrew !== null && maximumCrew !== null && defaultCrew > maximumCrew) {
+        var defaultControl = document.getElementById('crew-defaultCrewSize');
+        var maximumControl = document.getElementById('crew-maxCrewSize');
+        defaultControl.setAttribute('aria-invalid', 'true');
+        maximumControl.setAttribute('aria-invalid', 'true');
+        var error = new Error('Default crew size must not exceed maximum crew size.');
+        error.operationalControl = defaultControl;
+        throw error;
+      }
+      return value;
+    }
+
+    function renderOperationalConfiguration(profile) {
+      var routing = profile && profile.routing && typeof profile.routing === 'object' ? profile.routing : {};
+      var crew = profile && profile.crew && typeof profile.crew === 'object' ? profile.crew : {};
+      var vehicles = profile && profile.vehicles && typeof profile.vehicles === 'object' ? profile.vehicles : {};
+      var scheduling = profile && profile.scheduling && typeof profile.scheduling === 'object' ? profile.scheduling : {};
+      setSelect('routing-dispatchFrom', routing.dispatchFrom);
+      setCheck('routing-trafficEnabled', routing.trafficEnabled);
+      setCheck('routing-useLiveTraffic', routing.useLiveTraffic);
+      setCheck('routing-avoidTolls', routing.avoidTolls);
+      setCheck('routing-avoidHighways', routing.avoidHighways);
+      setCheck('routing-avoidFerries', routing.avoidFerries);
+      setVal('crew-defaultCrewSize', crew.defaultCrewSize);
+      setVal('crew-maxCrewSize', crew.maxCrewSize);
+      setVal('crew-shopTime', crew.shopTime);
+      setVal('veh-truckCount', vehicles.truckCount);
+      setVal('veh-trailerCount', vehicles.trailerCount);
+      setVal('veh-averageMpg', vehicles.averageMpg);
+      setVal('veh-equipmentTransportCapacity', vehicles.equipmentTransportCapacity);
+      setVal('sched-maxJobsPerDay', scheduling.maxJobsPerDay);
+      setVal('sched-travelBuffer', scheduling.travelBuffer);
+      setVal('sched-appointmentBuffer', scheduling.appointmentBuffer);
+      setVal('sched-workDayLength', scheduling.workDayLength);
+      setVal('sched-maxDailyTravel', scheduling.maxDailyTravel);
+      setSelect('sched-preferredDispatchStrategy', scheduling.preferredDispatchStrategy);
+      operationalControls().forEach(function(control) { control.setAttribute('aria-invalid', 'false'); });
+      operationalConfigurationSaving = false;
+      operationalConfigurationConflicted = false;
+      captureOperationalConfigurationBaseline();
+      clearOperationalConfigurationError();
+      updateOperationalConfigurationActionState();
+    }
+
+    async function saveOperationalConfiguration() {
+      if (!profileCanEdit || !operationalConfigurationDirty ||
+          operationalConfigurationSaving || operationalConfigurationConflicted) return;
+      var value;
+      try {
+        value = collectOperationalConfiguration();
+      } catch (error) {
+        showOperationalConfigurationError(error.message, true);
+        if (error.operationalControl) error.operationalControl.focus();
+        return;
+      }
+      operationalConfigurationSaving = true;
+      clearOperationalConfigurationError();
+      updateOperationalConfigurationActionState();
+      try {
+        var expectedVersion = profileData && profileData.canonicalAuthority
+          ? profileData.canonicalAuthority.version : null;
+        var response = await profileRequest('/api/v1/business-profile/operationalConfiguration', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedVersion: expectedVersion, value: value }),
+        });
+        var payload = await response.json();
+        if (!payload.success) {
+          if (response.status === 409 && payload.error && payload.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT') {
+            operationalConfigurationConflicted = true;
+            showOperationalConfigurationError('Business Profile changed; reload operational policies and try again. Your unsaved operational values remain in this form.', true);
+            var reload = document.getElementById('reloadOperationalConfigurationBtn');
+            if (reload) {
+              reload.hidden = false;
+              reload.disabled = false;
+              reload.focus();
+            }
+            return;
+          }
+          throw new Error(payload.errors ? payload.errors.join('; ') : payload.error && payload.error.message || 'Operational policies could not be saved.');
+        }
+        profileData = payload.data;
+        renderOperationalConfiguration(profileData);
+        showToast('Operational planning policies saved successfully', 'success');
+      } catch (error) {
+        showOperationalConfigurationError(error.message || 'Operational policies could not be saved.', true);
+      } finally {
+        operationalConfigurationSaving = false;
+        updateOperationalConfigurationActionState();
+      }
+    }
+
+    async function reloadOperationalConfiguration() {
+      if (!profileCanEdit || operationalConfigurationSaving) return;
+      try {
+        var response = await profileRequest('/api/v1/business-profile');
+        var payload = await response.json();
+        if (!payload.success || !payload.data) throw new Error('Latest operational policies are unavailable.');
+        profileData = payload.data;
+        renderOperationalConfiguration(profileData);
+        var save = document.getElementById('saveOperationalConfigurationBtn');
+        if (save) save.focus();
+      } catch (error) {
+        showOperationalConfigurationError(error.message || 'Latest operational policies are unavailable.', true);
+      }
+    }
 
     // ====================================================================
     // Provider-neutral, versioned AI configuration
@@ -1391,6 +1648,9 @@
       var headquarters = p.headquarters && typeof p.headquarters === 'object' ? p.headquarters : {};
       var serviceArea = p.serviceArea && typeof p.serviceArea === 'object' ? p.serviceArea : {};
       var hours = p.hours && typeof p.hours === 'object' ? p.hours : {};
+      var routing = p.routing && typeof p.routing === 'object' ? p.routing : {};
+      var crew = p.crew && typeof p.crew === 'object' ? p.crew : {};
+      var vehicles = p.vehicles && typeof p.vehicles === 'object' ? p.vehicles : {};
 
       // Company
       setVal('company-name', company.name);
@@ -1420,13 +1680,8 @@
       setVal('sa-polygon', JSON.stringify(Array.isArray(serviceArea.polygon) ? serviceArea.polygon : [], null, 2));
 
       // Routing
-      setSelect('routing-preferredProvider', p.routing.preferredProvider);
-      setSelect('routing-dispatchFrom', p.routing.dispatchFrom);
-      setCheck('routing-trafficEnabled', p.routing.trafficEnabled);
-      setCheck('routing-useLiveTraffic', p.routing.useLiveTraffic);
-      setCheck('routing-avoidTolls', p.routing.avoidTolls);
-      setCheck('routing-avoidHighways', p.routing.avoidHighways);
-      setCheck('routing-avoidFerries', p.routing.avoidFerries);
+      setSelect('routing-preferredProvider', routing.preferredProvider);
+      renderOperationalConfiguration(p);
 
       // Hours
       renderHours(hours);
@@ -1434,22 +1689,15 @@
       renderPolicies(p.policies);
 
       // Crew
-      setVal('crew-defaultCrewSize', p.crew.defaultCrewSize);
-      setVal('crew-maxCrewSize', p.crew.maxCrewSize);
-      setVal('crew-averageHourlyRate', p.crew.averageHourlyRate);
-      setVal('crew-overtimeMultiplier', p.crew.overtimeMultiplier);
-      setVal('crew-travelPay', p.crew.travelPay);
-      setVal('crew-shopTime', p.crew.shopTime);
-      setVal('crew-minimumBillableHours', p.crew.minimumBillableHours);
+      setVal('crew-averageHourlyRate', crew.averageHourlyRate);
+      setVal('crew-overtimeMultiplier', crew.overtimeMultiplier);
+      setVal('crew-travelPay', crew.travelPay);
+      setVal('crew-minimumBillableHours', crew.minimumBillableHours);
 
       // Vehicles
-      setVal('veh-truckCount', p.vehicles.truckCount);
-      setVal('veh-trailerCount', p.vehicles.trailerCount);
-      setVal('veh-averageMpg', p.vehicles.averageMpg);
-      setVal('veh-averageFuelCost', p.vehicles.averageFuelCost);
-      setVal('veh-hourlyVehicleCost', p.vehicles.hourlyVehicleCost);
-      setVal('veh-maintenanceReserve', p.vehicles.maintenanceReserve);
-      setVal('veh-equipmentTransportCapacity', p.vehicles.equipmentTransportCapacity);
+      setVal('veh-averageFuelCost', vehicles.averageFuelCost);
+      setVal('veh-hourlyVehicleCost', vehicles.hourlyVehicleCost);
+      setVal('veh-maintenanceReserve', vehicles.maintenanceReserve);
 
       // Services
       renderServices(p.services);
@@ -1474,14 +1722,6 @@
         ? 'Legacy values are shown for a one-way migration. They become canonical only after explicit Save.'
         : 'Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.';
       clearCanonicalError();
-
-      // Scheduling
-      setVal('sched-maxJobsPerDay', p.scheduling.maxJobsPerDay);
-      setVal('sched-travelBuffer', p.scheduling.travelBuffer);
-      setVal('sched-appointmentBuffer', p.scheduling.appointmentBuffer);
-      setVal('sched-workDayLength', p.scheduling.workDayLength);
-      setVal('sched-maxDailyTravel', p.scheduling.maxDailyTravel);
-      setSelect('sched-preferredDispatchStrategy', p.scheduling.preferredDispatchStrategy);
 
       // Polaris
       setSelect('pol-responseStyle', p.polaris.responseStyle);
@@ -2262,6 +2502,9 @@
       p.headquarters = p.headquarters && typeof p.headquarters === 'object' ? p.headquarters : {};
       p.serviceArea = p.serviceArea && typeof p.serviceArea === 'object' ? p.serviceArea : {};
       p.hours = p.hours && typeof p.hours === 'object' ? p.hours : {};
+      p.routing = p.routing && typeof p.routing === 'object' ? p.routing : {};
+      p.crew = p.crew && typeof p.crew === 'object' ? p.crew : {};
+      p.vehicles = p.vehicles && typeof p.vehicles === 'object' ? p.vehicles : {};
 
       p.company.name = getVal('company-name');
       p.company.dba = getVal('company-dba');
@@ -2296,12 +2539,6 @@
       p.customPrompt = getVal('profile-customPrompt');
 
       p.routing.preferredProvider = getSelect('routing-preferredProvider');
-      p.routing.dispatchFrom = getSelect('routing-dispatchFrom');
-      p.routing.trafficEnabled = getCheck('routing-trafficEnabled');
-      p.routing.useLiveTraffic = getCheck('routing-useLiveTraffic');
-      p.routing.avoidTolls = getCheck('routing-avoidTolls');
-      p.routing.avoidHighways = getCheck('routing-avoidHighways');
-      p.routing.avoidFerries = getCheck('routing-avoidFerries');
 
       // Hours
       var days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
@@ -2321,21 +2558,14 @@
       p.hours.holidays = collectHolidays();
       p.policies = collectPolicies();
 
-      p.crew.defaultCrewSize = parseInt(getVal('crew-defaultCrewSize')) || 2;
-      p.crew.maxCrewSize = parseInt(getVal('crew-maxCrewSize')) || 6;
       p.crew.averageHourlyRate = parseFloat(getVal('crew-averageHourlyRate')) || 42;
       p.crew.overtimeMultiplier = parseFloat(getVal('crew-overtimeMultiplier')) || 1.5;
       p.crew.travelPay = parseFloat(getVal('crew-travelPay')) || 0;
-      p.crew.shopTime = parseFloat(getVal('crew-shopTime')) || 0;
       p.crew.minimumBillableHours = parseFloat(getVal('crew-minimumBillableHours')) || 1;
 
-      p.vehicles.truckCount = parseInt(getVal('veh-truckCount')) || 0;
-      p.vehicles.trailerCount = parseInt(getVal('veh-trailerCount')) || 0;
-      p.vehicles.averageMpg = parseFloat(getVal('veh-averageMpg')) || 14;
       p.vehicles.averageFuelCost = parseFloat(getVal('veh-averageFuelCost')) || 3.5;
       p.vehicles.hourlyVehicleCost = parseFloat(getVal('veh-hourlyVehicleCost')) || 0;
       p.vehicles.maintenanceReserve = parseFloat(getVal('veh-maintenanceReserve')) || 0;
-      p.vehicles.equipmentTransportCapacity = parseInt(getVal('veh-equipmentTransportCapacity')) || 0;
 
       // Services
       p.services = collectServices();
@@ -2370,13 +2600,6 @@
       if (travelCharge.configured) p.financial.travelCharge = travelCharge.value; else delete p.financial.travelCharge;
       if (minimumJob.configured) p.financial.minimumJobPrice = minimumJob.value; else delete p.financial.minimumJobPrice;
 
-      p.scheduling.maxJobsPerDay = parseInt(getVal('sched-maxJobsPerDay')) || 4;
-      p.scheduling.travelBuffer = parseInt(getVal('sched-travelBuffer')) || 0;
-      p.scheduling.appointmentBuffer = parseInt(getVal('sched-appointmentBuffer')) || 0;
-      p.scheduling.workDayLength = parseFloat(getVal('sched-workDayLength')) || 8;
-      p.scheduling.maxDailyTravel = parseInt(getVal('sched-maxDailyTravel')) || 0;
-      p.scheduling.preferredDispatchStrategy = getSelect('sched-preferredDispatchStrategy');
-
       p.polaris.responseStyle = getSelect('pol-responseStyle');
       p.polaris.detailLevel = getSelect('pol-detailLevel');
       p.polaris.recommendationStyle = getSelect('pol-recommendationStyle');
@@ -2399,6 +2622,12 @@
     function saveProfile() {
       var btn = document.getElementById('saveBtn');
       if (!profileCanEdit) return;
+      if (operationalConfigurationDirty) {
+        showOperationalConfigurationError('Save or reload operational policies before saving the rest of the Business Profile.', true);
+        var operationalSaveButton = document.getElementById('saveOperationalConfigurationBtn');
+        if (operationalSaveButton) operationalSaveButton.focus();
+        return;
+      }
       if (voiceAssistantDirty) {
         switchSection('retell');
         showVoiceAssistantError('Save or reload the AI configuration before saving the rest of the Business Profile.', true);
@@ -2426,16 +2655,25 @@
       profileRequest('/api/v1/business-profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          expectedVersion: profileData && profileData.canonicalAuthority
+            ? profileData.canonicalAuthority.version : null,
+          value: data,
+        }),
       })
-        .then(function(r) { return r.json(); })
-        .then(function(resp) {
+        .then(function(r) {
+          return r.json().then(function(payload) { return { status: r.status, payload: payload }; });
+        })
+        .then(function(result) {
+          var resp = result.payload;
           if (resp.success) {
             profileData = resp.data;
             renderProfile(profileData);
             showToast('✅ Profile saved successfully', 'success');
           } else {
-            var msg = resp.errors ? resp.errors.join('; ') : 'Validation failed';
+            var msg = result.status === 409 && resp.error && resp.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT'
+              ? 'Business Profile changed; reload the page before saving general profile changes.'
+              : resp.errors ? resp.errors.join('; ') : resp.error && resp.error.message || 'Validation failed';
             showToast('❌ ' + msg, 'error');
           }
         })
@@ -2492,6 +2730,11 @@
       document.getElementById('add-voice-escalation-rule').addEventListener('click', addVoiceEscalationRule);
       document.getElementById('saveVoiceAssistantBtn').addEventListener('click', saveVoiceAssistant);
       document.getElementById('reloadVoiceAssistantBtn').addEventListener('click', reloadVoiceAssistant);
+      document.getElementById('saveOperationalConfigurationBtn').addEventListener('click', saveOperationalConfiguration);
+      document.getElementById('reloadOperationalConfigurationBtn').addEventListener('click', reloadOperationalConfiguration);
+      operationalControls().forEach(function(control) {
+        control.addEventListener(control.type === 'checkbox' || control.tagName === 'SELECT' ? 'change' : 'input', refreshOperationalConfigurationDirty);
+      });
       document.getElementById('insert-saved-company-name').addEventListener('click', insertSavedCompanyName);
       var servicesContainer = document.getElementById('servicesContainer');
       if (servicesContainer) servicesContainer.addEventListener('input', clearServiceCatalogError);

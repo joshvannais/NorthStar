@@ -34,6 +34,10 @@ const VALID_SECTIONS = new Set([
   'workforce',
 ]);
 const BUSINESS_PROFILE_VERSION_PATTERN = /^org-profile-v[1-9][0-9]*$/;
+const LEGACY_FINANCIAL_AUTHORITY_FIELDS = Object.freeze([
+  'markup', 'taxRate', 'emergencyMarkup', 'travelCharge', 'minimumJobPrice',
+  'desiredGrossMargin', 'desiredNetMargin', 'maximumDiscount',
+]);
 
 function isPlainObject(value) {
   return Boolean(value) && Object.prototype.toString.call(value) === '[object Object]' &&
@@ -140,6 +144,18 @@ async function active(req) {
   return getActiveBusinessProfile(db.getPool(), req.tenantContext.organizationId);
 }
 
+function withoutFinancialConfiguration(profile) {
+  const source = stableValue(profile);
+  for (const [section, fields] of Object.entries(FINANCIAL_CONFIGURATION_FIELDS)) {
+    if (!isPlainObject(source[section])) continue;
+    for (const field of fields) delete source[section][field];
+  }
+  if (isPlainObject(source.financial)) {
+    for (const field of LEGACY_FINANCIAL_AUTHORITY_FIELDS) delete source.financial[field];
+  }
+  return source;
+}
+
 async function persist(req, rawProfile, options) {
   let source = rawProfile;
   if (source && typeof source === 'object' && !Array.isArray(source)) {
@@ -147,7 +163,20 @@ async function persist(req, rawProfile, options) {
     delete source.canonicalAuthority;
     delete source.onboardingDraft;
   }
-  const prepared = prepareBusinessProfileForWrite(source);
+  const preserveFinancialConfiguration = !(options && options.allowFinancialConfigurationWrite === true);
+  if (preserveFinancialConfiguration) {
+    const rawErrors = validateRawBusinessProfile(source);
+    if (rawErrors.length) {
+      const error = new Error('Business Profile validation failed.');
+      error.status = 400;
+      error.code = 'INVALID_BUSINESS_PROFILE';
+      error.details = rawErrors;
+      throw error;
+    }
+  }
+  const prepared = prepareBusinessProfileForWrite(
+    preserveFinancialConfiguration ? withoutFinancialConfiguration(source) : source
+  );
   if (prepared.errors.length) {
     const error = new Error('Business Profile validation failed.');
     error.status = 400;
@@ -160,8 +189,9 @@ async function persist(req, rawProfile, options) {
     userId: req.tenantContext.userId,
     profile: options && options.preserveUnrelatedRaw === true ? stableValue(source) : prepared.profile,
     preserveVoiceAssistant: !(options && options.allowVoiceAssistantWrite === true),
-    preserveFinancialConfiguration: !(options && options.allowFinancialConfigurationWrite === true),
+    preserveFinancialConfiguration,
   };
+  if (input.preserveFinancialConfiguration) input.financialMutationCandidate = stableValue(source);
   if (options && hasOwn(options, 'expectedVersion')) input.expectedVersion = options.expectedVersion;
   const stored = await putBusinessProfile(db.getPool(), input);
   return stored;
@@ -307,7 +337,7 @@ function rejectFinancialOnlySectionWrite(section, value) {
   if (financialFields.length === 0 || unownedFields.length > 0) return;
   const error = new Error('Financial Configuration changes require the versioned Financial Configuration endpoint.');
   error.status = 409;
-  error.code = 'FINANCIAL_CONFIGURATION_VERSION_REQUIRED';
+  error.code = 'FINANCIAL_CONFIGURATION_ROUTE_REQUIRED';
   throw error;
 }
 
@@ -375,7 +405,6 @@ router.put('/', requireAccountMutation, requirePermission('settings', 'update'),
     const write = parseWholeProfileWrite(req.body);
     const options = write.versioned ? {
       expectedVersion: write.expectedVersion,
-      allowFinancialConfigurationWrite: true,
     } : null;
     return res.json({ success: true, data: response(await persist(req, write.value, options)) });
   } catch (error) {

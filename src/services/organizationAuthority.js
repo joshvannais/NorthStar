@@ -3,13 +3,13 @@
 const {
   adaptBusinessProfile,
   FINANCIAL_CONFIGURATION_FIELDS,
-  migrateLegacyFinancialConfiguration,
   stableValue,
   validateRawBusinessProfile,
 } = require('./businessProfileAdapter');
 const repository = require('../persistence/v2/repository');
 
 const LEGACY_FINANCIAL_AUTHORITY_FIELDS = Object.freeze([
+  'markup', 'taxRate', 'emergencyMarkup', 'travelCharge', 'minimumJobPrice',
   'desiredGrossMargin', 'desiredNetMargin', 'maximumDiscount',
 ]);
 
@@ -73,32 +73,34 @@ function defineOwn(target, key, value) {
 
 function preserveAuthorityFields(candidate, active, section, fields) {
   const candidateHasSection = isPlainObject(candidate[section]);
+  const activeHasSection = hasOwn(active, section) && isPlainObject(active[section]);
   const activeSection = isPlainObject(active[section]) ? active[section] : null;
   const nextSection = candidateHasSection ? { ...candidate[section] } : {};
-  let keepSection = candidateHasSection;
 
   for (const field of fields) {
     if (activeSection && hasOwn(activeSection, field)) {
       defineOwn(nextSection, field, clone(activeSection[field]));
-      keepSection = true;
     } else {
       delete nextSection[field];
     }
   }
 
-  if (keepSection) defineOwn(candidate, section, nextSection);
+  if (activeHasSection || Object.keys(nextSection).length > 0) defineOwn(candidate, section, nextSection);
   else delete candidate[section];
 }
 
 function preserveFinancialConfiguration(candidate, active) {
   const updated = { ...candidate };
   const current = isPlainObject(active) ? active : {};
-  const effective = migrateLegacyFinancialConfiguration(current).profile;
   for (const [section, fields] of Object.entries(FINANCIAL_CONFIGURATION_FIELDS)) {
-    preserveAuthorityFields(updated, effective, section, fields);
+    preserveAuthorityFields(updated, current, section, fields);
   }
   preserveAuthorityFields(updated, current, 'financial', LEGACY_FINANCIAL_AUTHORITY_FIELDS);
   return updated;
+}
+
+function profilesEqual(left, right) {
+  return JSON.stringify(stableValue(left)) === JSON.stringify(stableValue(right));
 }
 
 function projectProfile(row) {
@@ -201,6 +203,18 @@ async function putBusinessProfile(pool, input) {
     if (input.preserveFinancialConfiguration === true) {
       const activeRawProfile = active.rows.length === 1 && isPlainObject(active.rows[0].raw_profile)
         ? active.rows[0].raw_profile : {};
+      const mutationCandidate = validatedRawProfile(
+        hasOwn(input, 'financialMutationCandidate') ? input.financialMutationCandidate : rawProfile
+      );
+      const containedCandidate = preserveFinancialConfiguration(mutationCandidate, activeRawProfile);
+      const attemptedFinancialMutation = !profilesEqual(mutationCandidate, containedCandidate);
+      if (attemptedFinancialMutation && profilesEqual(containedCandidate, activeRawProfile)) {
+        throw authorityError(
+          'FINANCIAL_CONFIGURATION_ROUTE_REQUIRED',
+          'Financial Configuration changes require the versioned Financial Configuration endpoint.',
+          409
+        );
+      }
       rawProfile = preserveFinancialConfiguration(rawProfile, activeRawProfile);
     }
     rawProfile = validatedRawProfile(rawProfile);

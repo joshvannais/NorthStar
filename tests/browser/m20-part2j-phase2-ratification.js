@@ -41,12 +41,25 @@ function account(role) {
 
 function workforceFixture() {
   return {
-    members: [], invitations: [], skills: [], crews: [], locations: [], services: [],
+    members: [],
+    invitations: [{
+      invitationId: 'invite-ratification',
+      name: 'Pending ratification',
+      email: 'pending-ratification@example.test',
+      phone: '',
+      accessRole: 'member',
+      operationalRole: 'employee',
+      homeLocationId: null,
+      skillIds: [],
+      status: 'pending',
+    }],
+    skills: [], crews: [], locations: [], services: [],
     policies: [{ id: 'policy-ratification', name: 'Ratification policy', description: 'Literal policy bytes.', enabled: true }],
   };
 }
 
 async function installBoundary(context, origin, role, evidence, options = {}) {
+  let workforceRequests = 0;
   await context.route('**/*', async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -82,7 +95,9 @@ async function installBoundary(context, origin, role, evidence, options = {}) {
       } }));
     }
     if (url.pathname === '/api/workforce') {
-      return route.fulfill(authorityFailure ? json({ error: 'unavailable' }, 503) : json({ success: true, data: workforceFixture() }));
+      workforceRequests += 1;
+      const workforceFailure = authorityFailure || (options.failWorkforceAfterReady && workforceRequests > 1);
+      return route.fulfill(workforceFailure ? json({ error: 'unavailable' }, 503) : json({ success: true, data: workforceFixture() }));
     }
     if (url.pathname === '/api/v1/integrations/status') {
       return route.fulfill(authorityFailure ? json({ success: false }, 503) : json({ success: true, data: {
@@ -95,7 +110,8 @@ async function installBoundary(context, origin, role, evidence, options = {}) {
         ? json({ error: 'unavailable' }, 503)
         : json({ available: false, configured: false, connected: false }));
     }
-    return route.fulfill(json({ success: true, data: {}, records: [], items: [] }));
+    evidence.unexpectedApi.push({ role, method: request.method(), path: url.pathname });
+    return route.fulfill(json({ error: 'unexpected API path' }, 500));
   });
 }
 
@@ -141,7 +157,10 @@ async function pageSnapshot(page) {
         const text = Array.from(element.labels).map(label => label.textContent || '').join(' ').trim();
         if (text) return text;
       }
-      return (element.textContent || element.getAttribute('title') || '').trim();
+      const title = (element.getAttribute('title') || '').trim();
+      if (title) return title;
+      if (element.matches('button,a[href],[role="tab"]')) return (element.textContent || '').trim();
+      return '';
     }
     const controls = Array.from(document.querySelectorAll('main a[href],main button,main input:not([type="hidden"]),main select,main textarea,main [role="tab"]'))
       .filter(visible);
@@ -178,6 +197,8 @@ async function assertBusinessProfile(page, role) {
 }
 
 async function assertSettings(page, role) {
+  assert.strictEqual(await page.locator('#integration-twilio').evaluate(node =>
+    document.getElementById('mainContent').contains(node)), true, 'Settings main landmark contains Integrations');
   if (role === 'owner') {
     await page.fill('#companyInfoAiContext', 'secondary edit');
     assert.strictEqual(await page.inputValue('#companyInfo'), 'secondary edit');
@@ -186,6 +207,24 @@ async function assertSettings(page, role) {
   } else {
     assert.strictEqual(await page.locator('[data-settings-mutable]:not(:disabled)').count(), 0, 'viewer settings are fail-closed');
   }
+}
+
+async function assertTeam(page, role) {
+  if (role === 'owner') {
+    assert.strictEqual(await page.locator('#invitationsPanel').isVisible(), true, 'owner sees pending invitations');
+    assert.strictEqual(await page.locator('#invitationsList button').count(), 2, 'owner invitation actions render');
+  } else {
+    assert.strictEqual(await page.locator('#invitationsPanel').isHidden(), true, 'viewer invitation authority stays hidden');
+    assert.strictEqual(await page.locator('#invitationsList button').count(), 0, 'viewer receives no invitation actions');
+  }
+}
+
+async function assertIntegrations(page) {
+  assert.strictEqual(await page.getAttribute('#integrationStatusRoot', 'data-state'), 'ready');
+  assert.strictEqual(await page.getAttribute('#canonical-retell-status', 'data-status'), 'not_provisioned');
+  assert.strictEqual(await page.getAttribute('#canonical-voice-status', 'data-status'), 'inactive');
+  assert.strictEqual(await page.getAttribute('#jobber-status', 'data-status'), 'unavailable');
+  assert.strictEqual(await page.locator('#jobber-btn').isDisabled(), true, 'unavailable Jobber action stays disabled');
 }
 
 async function runMatrix(browser, engine, origin, evidence) {
@@ -212,8 +251,14 @@ async function runMatrix(browser, engine, origin, evidence) {
             assert.ok(snapshot.overflow <= 1, `${label} ${route} horizontal overflow ${snapshot.overflow}`);
             assert.strictEqual(snapshot.theme, theme, `${label} ${route} theme`);
             assertAccessibilityAudit(await auditMountedAccessibility(page), `${label} ${route}`);
+            await page.locator('.skip-link').focus();
+            await page.keyboard.press('Enter');
+            assert.strictEqual(await page.locator('#mainContent').evaluate(node => document.activeElement === node), true,
+              `${label} ${route} skip link moves focus to main`);
             if (route === '/dashboard/business-profile') await assertBusinessProfile(page, role);
             if (route === '/dashboard/settings') await assertSettings(page, role);
+            if (route === '/dashboard/team') await assertTeam(page, role);
+            if (route === '/dashboard/integrations') await assertIntegrations(page);
           }
           rows.push({ engine, viewport: viewport.label, theme, role, routes: ROUTES.length });
         } finally {
@@ -223,6 +268,33 @@ async function runMatrix(browser, engine, origin, evidence) {
     }
   }
   return rows;
+}
+
+async function runWorkforceReloadFailure(browser, engine, origin, evidence) {
+  const context = await browser.newContext({ viewport: VIEWPORTS[1] });
+  await context.addInitScript(() => localStorage.setItem('northstar-theme', 'dark'));
+  await installBoundary(context, origin, 'owner', evidence, { failWorkforceAfterReady: true });
+  const page = await context.newPage();
+  attachPage(page, evidence, engine + ' workforce reload error');
+  try {
+    await page.goto(origin + '/dashboard/team', { waitUntil: 'domcontentloaded' });
+    await waitReady(page, '/dashboard/team');
+    assert.strictEqual(await page.locator('#invitationsPanel').isVisible(), true, 'pending invitation starts visible');
+    assert.strictEqual(await page.locator('#invitationsList button:not(:disabled)').count(), 2, 'pending invitation actions start enabled');
+    await page.evaluate(() => window.NorthStarWorkforce.reload());
+    await page.waitForFunction(() => document.documentElement.dataset.workforceState === 'error');
+    assert.strictEqual(await page.locator('#invitationsPanel').isHidden(), true, 'reload error hides stale invitation authority');
+    assert.strictEqual(await page.locator('#invitationsList button').count(), 0, 'reload error removes stale invitation actions');
+    const activeControls = await page.locator('#workforceShell button,#workforceShell input,#workforceShell select,#workforceShell textarea')
+      .evaluateAll(controls => controls.filter(control => {
+        const style = getComputedStyle(control);
+        const rect = control.getBoundingClientRect();
+        return !control.disabled && style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      }).length);
+    assert.strictEqual(activeControls, 0, 'reload error exposes no stale workforce actions');
+  } finally {
+    await context.close();
+  }
 }
 
 async function runErrorStates(browser, engine, origin, evidence) {
@@ -273,15 +345,18 @@ async function main() {
   const { browserType, executablePath } = resolveBrowserRuntime(selected);
   const server = await listen(app);
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const evidence = { api: [], external: [], consoleErrors: [], pageErrors: [] };
+  const evidence = { api: [], external: [], unexpectedApi: [], consoleErrors: [], pageErrors: [] };
   let browser;
   try {
     browser = await browserType.launch({ headless: true, executablePath });
     const matrix = await runMatrix(browser, selected, origin, evidence);
     await runErrorStates(browser, selected, origin, evidence);
+    await runWorkforceReloadFailure(browser, selected, origin, evidence);
     assert.deepStrictEqual(evidence.external, [], 'provider/external requests');
+    assert.deepStrictEqual(evidence.unexpectedApi, [], 'unexpected API paths');
     const expectedAuthorityErrors = evidence.consoleErrors.filter(entry =>
-      entry.includes('error states: Failed to load resource: the server responded with a status of 503'));
+      entry.includes('error states: Failed to load resource: the server responded with a status of 503') ||
+      entry.includes('workforce reload error: Failed to load resource: the server responded with a status of 503'));
     const unexpectedConsoleErrors = evidence.consoleErrors.filter(entry => !expectedAuthorityErrors.includes(entry));
     assert.deepStrictEqual(unexpectedConsoleErrors, [], 'unexpected console errors');
     assert.ok(expectedAuthorityErrors.length >= ROUTES.length, 'negative controls must observe failed authority responses');
@@ -292,6 +367,7 @@ async function main() {
       physicalSafari: false,
       matrix,
       errorRoutes: ROUTES,
+      reloadErrorRoutes: ['/dashboard/team'],
       automaticMethods: [...new Set(evidence.api.map(item => item.method))],
       providerRequests: evidence.external.length,
       expectedAuthorityConsoleErrors: expectedAuthorityErrors.length,

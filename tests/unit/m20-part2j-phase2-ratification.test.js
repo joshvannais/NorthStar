@@ -71,6 +71,7 @@ describe('Mission 20 Part 2J additive Phase 2 ratification contract', () => {
     expect(settings).toMatch(/companyInfoAiContext[^\n]*addEventListener\('input'/);
     expect(settings).toMatch(/renderSettingsState\(\)[\s\S]*synchronizeCompanyInfoControls\(document\.getElementById\('companyInfo'\)\)/);
     expect(settings).toMatch(/const fields = \[[^\]]*'companyInfo'/);
+    expect(settings).not.toMatch(/<\/details>\s*<\/div>\s*<\/div>\s*<!-- Integrations Section -->/);
   });
 
   test('Settings retains accepted preferences and UI foundations while naming controls and status', () => {
@@ -95,6 +96,7 @@ describe('Mission 20 Part 2J additive Phase 2 ratification contract', () => {
     expect(team).toMatch(/id=["']crewsList["'][^>]*>[\s\S]*Loading crews/);
     expect(team).toMatch(/id=["']policiesList["'][^>]*>[\s\S]*Loading workforce policies/);
     expect(team).toMatch(/function renderWorkforceError\(message\)[\s\S]*membersList[\s\S]*skillsList[\s\S]*crewsList[\s\S]*policiesList/);
+    expect(team).toMatch(/function renderWorkforceError\(message\)[\s\S]*invitationsPanel[\s\S]*invitationsList/);
     expect(team).toMatch(/empty\(document\.getElementById\(id\), unavailable, 'wf-error'\)/);
     expect(team).toMatch(/className === 'wf-error'[\s\S]*setAttribute\('role', 'alert'\)/);
     expect(team).toMatch(/function setWorkforceLoading\(initial\)[\s\S]*aria-busy', 'true'[\s\S]*if \(!initial\) return/);

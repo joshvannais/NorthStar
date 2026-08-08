@@ -420,6 +420,8 @@
         empty(document.getElementById(id), unavailable, 'wf-error');
       });
       document.getElementById('invitePanel').hidden = true;
+      document.getElementById('invitationsPanel').hidden = true;
+      document.getElementById('invitationsList').replaceChildren();
       document.getElementById('skillForm').hidden = true;
       document.getElementById('crewForm').hidden = true;
       document.getElementById('addPolicy').hidden = true;

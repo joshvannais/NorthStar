@@ -7,53 +7,30 @@
   <title>AI Settings — NorthStar AI</title>
   <link rel="stylesheet" href="/css/style.css">
 <style>
-.coming-soon-page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: calc(100vh - 180px);
-  text-align: center;
-  padding: 40px 20px;
-}
-.coming-soon-icon { font-size: 64px; margin-bottom: 24px; opacity: 0.6; }
-.coming-soon-title { font-size: 28px; font-weight: 700; color: var(--neutral-900); margin-bottom: 12px; }
-.coming-soon-desc { font-size: 16px; color: var(--neutral-500); max-width: 480px; line-height: 1.6; }
-.coming-soon-badge {
-  display: inline-block; margin-top: 24px; padding: 6px 20px;
-  background: linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.08));
-  border: 1px solid rgba(212,175,55,0.3); border-radius: 100px;
-  color: #b8960f; font-size: 13px; font-weight: 600; letter-spacing: 0.03em;
-}
-[data-theme="dark"] .coming-soon-title { color: var(--neutral-100); }
-[data-theme="dark"] .coming-soon-desc { color: var(--neutral-400); }
-[data-theme="dark"] .coming-soon-badge { background: linear-gradient(135deg, rgba(212,175,55,0.12), rgba(212,175,55,0.06)); color: var(--brand-400); }
+.ai-settings-gateway { max-width: 760px; margin: 24px auto; padding: 24px; border: 1px solid var(--neutral-200); border-radius: var(--radius); background: var(--neutral-50); }
+.ai-settings-gateway h2 { margin: 0 0 10px; color: var(--neutral-900); font-size: 22px; }
+.ai-settings-gateway p { margin: 0 0 18px; color: var(--neutral-600); line-height: 1.6; }
+.ai-settings-gateway .authority-note { padding: 12px; border-left: 3px solid var(--brand-500); background: rgba(196,155,44,0.08); font-size: 13px; }
+@media (max-width: 640px) { .ai-settings-gateway { margin: 16px; padding: 18px; } }
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
 </head>
 <body>
 <a href="#mainContent" class="skip-link">Skip to main content</a><div class="dashboard-layout">
-  <main class="main-content" id="mainContent">
+  <main class="main-content" id="mainContent" tabindex="-1">
     <div class="page-header">
       <div><h1>AI Settings</h1><p>Configure your AI Office Manager's behavior and preferences.</p></div>
     </div>
-    <div class="coming-soon-page">
-      <div class="coming-soon-icon">🤖</div>
-      <div class="coming-soon-title">AI Settings Coming Soon</div>
-      <div class="coming-soon-desc">Configure your AI Office Manager's personality, response style, script customization, and advanced AI behavior to match your business perfectly.</div>
-      <div class="coming-soon-badge">POLARIS™ — Coming in Next Release</div>
-    </div>
+    <section class="ai-settings-gateway" aria-labelledby="canonicalAiSettingsHeading">
+      <h2 id="canonicalAiSettingsHeading">Canonical AI Configuration</h2>
+      <p>Name, literal greeting, personality, conversation style, and ordered escalation policies are maintained in the versioned Business Profile.</p>
+      <p class="authority-note">This page is a gateway, not a second settings authority. Opening the editor does not contact or configure a provider.</p>
+      <a class="btn btn-primary" id="openCanonicalAiSettings" href="/dashboard/business-profile?section=retell#voice-assistant-configuration">Open Voice &amp; Knowledge in Business Profile</a>
+    </section>
   </main>
 </div>
-<div id="toast" class="toast"></div>
-<script src="/js/simulator.js"></script>
-<script src="/js/api.js"></script>
-<script src="/js/event-bus.js"></script>
-<script src="/js/business-models.js"></script>
-<script src="/js/app-store.js"></script>
-<script src="/js/polaris-engine.js"></script>
-<script src="/js/notification-service.js"></script>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("ai-settings");</script>
 </body>

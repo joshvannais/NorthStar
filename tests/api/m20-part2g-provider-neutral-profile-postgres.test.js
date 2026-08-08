@@ -143,10 +143,15 @@ realPostgres('Mission 20 Part 2G mounted provider-neutral Business Profile autho
   test('mounted owner write preserves exact bytes while invalid, viewer, and other-tenant mutations fail closed', async () => {
     const loaded = await request(app).get('/api/v1/business-profile').set(auth.get(OWNER_A));
     expect(loaded.status).toBe(200);
+    const voiceSaved = await request(app)
+      .put('/api/v1/business-profile/voiceAssistant')
+      .set(auth.get(OWNER_A))
+      .send({ expectedVersion: loaded.body.data.canonicalAuthority.version, value: RAW.voiceAssistant });
+    expect(voiceSaved.status).toBe(200);
     const saved = await request(app)
       .put('/api/v1/business-profile')
       .set(auth.get(OWNER_A))
-      .send(neutralProfile(loaded.body.data));
+      .send(neutralProfile(voiceSaved.body.data));
     expect(saved.status).toBe(200);
     expect(saved.body.data).toMatchObject(RAW);
     expect(saved.body.data.retell).toEqual(LEGACY);

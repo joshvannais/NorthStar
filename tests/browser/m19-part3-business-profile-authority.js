@@ -165,9 +165,9 @@ async function main() {
     await page.locator('#cost-overheadPercent').fill('0');
     await page.locator('#cost-travelCostPerMile').fill('0');
     const saveResponse = page.waitForResponse((response) =>
-      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT'
+      response.url() === origin + '/api/v1/business-profile/financialConfiguration' && response.request().method() === 'PUT'
     );
-    await page.locator('#saveBtn').click();
+    await page.locator('#saveFinancialConfigurationBtn').click();
     assert.strictEqual((await saveResponse).status(), 200, 'explicit Save must persist');
     await waitForValue(page, '#fin-taxRatePercent', '9');
 
@@ -182,14 +182,17 @@ async function main() {
     const configured = await getActiveBusinessProfile(pool, ORG_A);
     assert.deepStrictEqual(configured.rawProfile.canonicalPricing, {
       customerMarkupPercent: 0,
+      desiredGrossMarginPercent: 40,
+      desiredNetMarginPercent: 20,
       emergencyMultiplier: 0,
+      maximumDiscountPercent: 15,
       minimumJobPrice: 0,
       taxRatePercent: 9,
       travelCustomerChargePerMile: 0,
     });
-    assert.strictEqual(configured.rawProfile.financial.taxRate, 9);
-    assert.strictEqual(configured.rawProfile.financial.emergencyMarkup, 0);
-    assert.strictEqual(configured.rawProfile.financial.travelCharge, 0);
+    assert.strictEqual(configured.rawProfile.financial.taxRate, 77, 'dedicated save does not create a canonical-to-legacy mirror write');
+    assert.strictEqual(configured.rawProfile.financial.emergencyMarkup, 8.88, 'recognized legacy bytes remain untouched');
+    assert.strictEqual(configured.rawProfile.financial.travelCharge, 7.77, 'recognized legacy bytes remain untouched');
 
     const graph = await request(app)
       .post('/api/v1/simulations/leads')
@@ -207,9 +210,9 @@ async function main() {
     const putsBeforeMalformed = requestLedger.filter((entry) => entry.method === 'PUT').length;
     await page.locator('[data-section="financial"]').click();
     await page.locator('#fin-taxRatePercent').fill('101');
-    await page.locator('#saveBtn').click();
+    await page.locator('#saveFinancialConfigurationBtn').click();
     await page.locator('#canonicalFinancialError.show').waitFor({ state: 'visible' });
-    assert.match(await page.locator('#canonicalFinancialError').textContent(), /Tax rate must be/);
+    assert.match(await page.locator('#canonicalFinancialError').textContent(), /Tax Rate.*0 through 100/i);
     assert.strictEqual(requestLedger.filter((entry) => entry.method === 'PUT').length, putsBeforeMalformed, 'malformed input must not be transmitted');
     assert.strictEqual((await getActiveBusinessProfile(pool, ORG_A)).id, configured.id, 'malformed UI input must not advance profile authority');
 
@@ -217,9 +220,9 @@ async function main() {
     await page.locator('#fin-emergencyMultiplier').fill('');
     await page.locator('#fin-travelCustomerChargePerMile').fill('');
     const missingResponse = page.waitForResponse((response) =>
-      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT'
+      response.url() === origin + '/api/v1/business-profile/financialConfiguration' && response.request().method() === 'PUT'
     );
-    await page.locator('#saveBtn').click();
+    await page.locator('#saveFinancialConfigurationBtn').click();
     assert.strictEqual((await missingResponse).status(), 200, 'explicit missing configuration must save without defaults');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelector('#fin-taxRatePercent') && document.querySelector('#fin-taxRatePercent').dataset.authorityState === 'missing');
@@ -228,7 +231,7 @@ async function main() {
     assert.strictEqual(await page.locator('#fin-travelCustomerChargePerMile').inputValue(), '');
     const missing = await getActiveBusinessProfile(pool, ORG_A);
     assert.ok(!Object.prototype.hasOwnProperty.call(missing.rawProfile.canonicalPricing, 'taxRatePercent'));
-    assert.ok(!Object.prototype.hasOwnProperty.call(missing.rawProfile.financial, 'taxRate'));
+    assert.strictEqual(missing.rawProfile.financial.taxRate, 77, 'blank deletes canonical authority without rewriting retained legacy bytes');
     assert.strictEqual((await getActiveBusinessProfile(pool, ORG_B)).id, originalB.id, 'organization B remains unchanged');
 
     const bodyText = await page.locator('body').innerText();

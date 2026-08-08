@@ -190,6 +190,7 @@ realPostgres('Mission 20 Phase 3A mounted AI configuration authority', () => {
 
     const afterRace = await request(app).get('/api/v1/business-profile').set(sessions.owner.headers);
     const staleWhole = JSON.parse(JSON.stringify(ownerSaved.body.data));
+    delete staleWhole.canonicalAuthority;
     staleWhole.company.dba = 'Stale non-voice client';
     staleWhole.voiceAssistant = voice('WholeBypass');
     const contained = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers).send(staleWhole);

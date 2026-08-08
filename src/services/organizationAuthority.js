@@ -1,7 +1,17 @@
 'use strict';
 
-const { adaptBusinessProfile, stableValue } = require('./businessProfileAdapter');
+const {
+  adaptBusinessProfile,
+  FINANCIAL_CONFIGURATION_FIELDS,
+  migrateLegacyFinancialConfiguration,
+  stableValue,
+  validateRawBusinessProfile,
+} = require('./businessProfileAdapter');
 const repository = require('../persistence/v2/repository');
+
+const LEGACY_FINANCIAL_AUTHORITY_FIELDS = Object.freeze([
+  'desiredGrossMargin', 'desiredNetMargin', 'maximumDiscount',
+]);
 
 function authorityError(code, message, status) {
   const error = new Error(message);
@@ -27,6 +37,68 @@ function clone(value) {
 
 function hasOwn(value, key) {
   return Boolean(value) && Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function isPlainObject(value) {
+  if (!value || Object.prototype.toString.call(value) !== '[object Object]') return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function invalidBusinessProfile(errors) {
+  const error = authorityError(
+    'INVALID_BUSINESS_PROFILE',
+    'Business Profile validation failed.',
+    400
+  );
+  error.details = errors;
+  return error;
+}
+
+function validatedRawProfile(profile) {
+  const value = profile === undefined ? {} : profile;
+  const errors = validateRawBusinessProfile(value);
+  if (errors.length) throw invalidBusinessProfile(errors);
+  return stableValue(value);
+}
+
+function defineOwn(target, key, value) {
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function preserveAuthorityFields(candidate, active, section, fields) {
+  const candidateHasSection = isPlainObject(candidate[section]);
+  const activeSection = isPlainObject(active[section]) ? active[section] : null;
+  const nextSection = candidateHasSection ? { ...candidate[section] } : {};
+  let keepSection = candidateHasSection;
+
+  for (const field of fields) {
+    if (activeSection && hasOwn(activeSection, field)) {
+      defineOwn(nextSection, field, clone(activeSection[field]));
+      keepSection = true;
+    } else {
+      delete nextSection[field];
+    }
+  }
+
+  if (keepSection) defineOwn(candidate, section, nextSection);
+  else delete candidate[section];
+}
+
+function preserveFinancialConfiguration(candidate, active) {
+  const updated = { ...candidate };
+  const current = isPlainObject(active) ? active : {};
+  const effective = migrateLegacyFinancialConfiguration(current).profile;
+  for (const [section, fields] of Object.entries(FINANCIAL_CONFIGURATION_FIELDS)) {
+    preserveAuthorityFields(updated, effective, section, fields);
+  }
+  preserveAuthorityFields(updated, current, 'financial', LEGACY_FINANCIAL_AUTHORITY_FIELDS);
+  return updated;
 }
 
 function projectProfile(row) {
@@ -82,7 +154,7 @@ async function getBusinessProfileById(pool, organizationId, profileId) {
 
 async function putBusinessProfile(pool, input) {
   const source = requirePool(pool);
-  let rawProfile = stableValue(input.profile || {});
+  let rawProfile = validatedRawProfile(input.profile || {});
   return repository.withTransaction(source, async function (client) {
     const organization = await client.query(
       'SELECT id FROM organizations WHERE id = $1 FOR UPDATE',
@@ -92,7 +164,8 @@ async function putBusinessProfile(pool, input) {
       throw authorityError('ORGANIZATION_NOT_FOUND', 'Organization not found.', 404);
     }
     let active = null;
-    if (hasOwn(input, 'expectedVersion') || input.preserveVoiceAssistant === true) {
+    if (hasOwn(input, 'expectedVersion') || input.preserveVoiceAssistant === true ||
+        input.preserveFinancialConfiguration === true) {
       active = await client.query(
         `SELECT version_label, raw_profile
            FROM canonical_business_profiles
@@ -125,6 +198,12 @@ async function putBusinessProfile(pool, input) {
       }
       rawProfile = stableValue(rawProfile);
     }
+    if (input.preserveFinancialConfiguration === true) {
+      const activeRawProfile = active.rows.length === 1 && isPlainObject(active.rows[0].raw_profile)
+        ? active.rows[0].raw_profile : {};
+      rawProfile = preserveFinancialConfiguration(rawProfile, activeRawProfile);
+    }
+    rawProfile = validatedRawProfile(rawProfile);
     const sequence = await client.query(
       `SELECT COALESCE(MAX(version_number), 0)::bigint + 1 AS next_version
          FROM canonical_business_profiles

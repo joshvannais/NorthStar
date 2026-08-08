@@ -83,6 +83,21 @@ const OPERATIONAL_CONFIGURATION_FIELDS = Object.freeze({
     'maxDailyTravel', 'preferredDispatchStrategy',
   ]),
 });
+const FINANCIAL_CONFIGURATION_FIELDS = Object.freeze({
+  canonicalPricing: new Set([
+    'customerMarkupPercent', 'taxRatePercent', 'emergencyMultiplier',
+    'travelCustomerChargePerMile', 'minimumJobPrice', 'desiredGrossMarginPercent',
+    'desiredNetMarginPercent', 'maximumDiscountPercent', 'defaultRangePercent',
+  ]),
+  canonicalCosts: new Set([
+    'overheadPercent', 'travelCostPerMile', 'materialCostByService',
+    'equipmentCostByReference',
+  ]),
+  crew: new Set([
+    'averageHourlyRate', 'overtimeMultiplier', 'travelPay', 'minimumBillableHours',
+  ]),
+  vehicles: new Set(['averageFuelCost', 'hourlyVehicleCost', 'maintenanceReserve']),
+});
 const OPERATIONAL_DISPATCH_ORIGINS = new Set(['', 'headquarters', 'nearest-office', 'assigned-crew']);
 const OPERATIONAL_DISPATCH_STRATEGIES = new Set(['', 'efficiency', 'priority', 'balanced']);
 const SERVICE_PRICING_FIELDS = new Set([
@@ -677,6 +692,18 @@ function projectOperationalConfiguration(profile) {
   }, {});
 }
 
+function projectFinancialConfiguration(profile) {
+  const source = isPlainObject(profile) ? profile : {};
+  return Object.keys(FINANCIAL_CONFIGURATION_FIELDS).reduce(function (projection, section) {
+    const sectionSource = isPlainObject(source[section]) ? source[section] : {};
+    projection[section] = {};
+    for (const field of FINANCIAL_CONFIGURATION_FIELDS[section]) {
+      if (hasOwn(sectionSource, field)) projection[section][field] = stableValue(sectionSource[field]);
+    }
+    return projection;
+  }, {});
+}
+
 function validateNonNegativeNumber(value, path, errors) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     errors.push(path + ' must be a non-negative finite number.');
@@ -918,6 +945,41 @@ function hasOwn(source, key) {
   return Boolean(source) && Object.prototype.hasOwnProperty.call(source, key);
 }
 
+function migrateLegacyFinancialFields(source, migratedFields) {
+  const financial = isPlainObject(source.financial) ? source.financial : {};
+  const mappings = [
+    ['desiredGrossMarginPercent', 'desiredGrossMargin'],
+    ['desiredNetMarginPercent', 'desiredNetMargin'],
+    ['maximumDiscountPercent', 'maximumDiscount'],
+  ];
+  const existingPricing = isPlainObject(source.canonicalPricing) ? source.canonicalPricing : null;
+  const candidates = mappings.filter(function (mapping) {
+    const canonicalKey = mapping[0];
+    const legacyKey = mapping[1];
+    if (existingPricing && hasOwn(existingPricing, canonicalKey)) return false;
+    if (!hasOwn(financial, legacyKey)) return false;
+    const value = financial[legacyKey];
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100;
+  });
+  if (candidates.length === 0) return;
+  if (!hasOwn(source, 'canonicalPricing')) source.canonicalPricing = {};
+  if (!isPlainObject(source.canonicalPricing)) return;
+  candidates.forEach(function (mapping) {
+    const canonicalKey = mapping[0];
+    const legacyKey = mapping[1];
+    const value = financial[legacyKey];
+    source.canonicalPricing[canonicalKey] = value;
+    migratedFields.push('canonicalPricing.' + canonicalKey);
+  });
+}
+
+function migrateLegacyFinancialConfiguration(profile) {
+  const source = stableValue(isPlainObject(profile) ? profile : {});
+  const migratedFields = [];
+  migrateLegacyFinancialFields(source, migratedFields);
+  return { profile: source, migratedFields };
+}
+
 function migrateLegacyCanonicalAuthority(profile) {
   const source = stableValue(profile && typeof profile === 'object' ? profile : {});
   const migratedFields = [];
@@ -939,6 +1001,7 @@ function migrateLegacyCanonicalAuthority(profile) {
     source.canonicalPricing = canonicalPricing;
     migratedFields.push('canonicalPricing');
   }
+  migrateLegacyFinancialFields(source, migratedFields);
   if (!hasOwn(source, 'canonicalCosts')) {
     const canonicalCosts = {};
     const overhead = finiteOrNull(financial.overheadPercent, { nonNegative: true });
@@ -958,40 +1021,72 @@ function migrateLegacyCanonicalAuthority(profile) {
   return { profile: source, migratedFields };
 }
 
-function validateCanonicalBusinessProfile(profile) {
-  const errors = [];
-  function validateContainer(name, fields) {
-    const container = profile[name];
-    if (!container || typeof container !== 'object' || Array.isArray(container)) {
-      errors.push(name + ' must be an object.');
+function validateFinancialConfiguration(profile, targetErrors) {
+  const errors = targetErrors || [];
+  const source = isPlainObject(profile) ? profile : {};
+
+  function validateNumberFields(sectionName, fields) {
+    if (!hasOwn(source, sectionName)) return;
+    const section = source[sectionName];
+    if (!isPlainObject(section)) {
+      errors.push(sectionName + ' must be an object.');
       return;
     }
     for (const field of fields) {
-      if (!hasOwn(container, field.key)) continue;
-      const value = container[field.key];
-      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 ||
+      if (!hasOwn(section, field.key)) continue;
+      const value = section[field.key];
+      if (field.nullable && value === null) continue;
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < field.minimum ||
           (field.maximum !== undefined && value > field.maximum)) {
-        errors.push(name + '.' + field.key + ' must be a finite number ' +
-          (field.maximum === undefined ? 'greater than or equal to 0.' : 'between 0 and ' + field.maximum + '.'));
+        let expectation = 'a finite number greater than or equal to ' + field.minimum;
+        if (field.maximum !== undefined) expectation = 'a finite number between ' + field.minimum + ' and ' + field.maximum;
+        if (field.nullable) expectation = 'null or ' + expectation;
+        errors.push(sectionName + '.' + field.key + ' must be ' + expectation + '.');
       }
     }
   }
-  validateContainer('canonicalPricing', [
-    { key: 'customerMarkupPercent' },
-    { key: 'travelCustomerChargePerMile' },
-    { key: 'emergencyMultiplier' },
-    { key: 'taxRatePercent', maximum: 100 },
-    { key: 'minimumJobPrice' },
+
+  validateNumberFields('canonicalPricing', [
+    { key: 'customerMarkupPercent', minimum: 0 },
+    { key: 'taxRatePercent', minimum: 0, maximum: 100 },
+    { key: 'emergencyMultiplier', minimum: 0 },
+    { key: 'travelCustomerChargePerMile', minimum: 0 },
+    { key: 'minimumJobPrice', minimum: 0 },
+    { key: 'desiredGrossMarginPercent', minimum: 0, maximum: 100 },
+    { key: 'desiredNetMarginPercent', minimum: 0, maximum: 100 },
+    { key: 'maximumDiscountPercent', minimum: 0, maximum: 100 },
+    { key: 'defaultRangePercent', minimum: 0, maximum: 100 },
   ]);
-  validateContainer('canonicalCosts', [
-    { key: 'overheadPercent' },
-    { key: 'travelCostPerMile' },
+  validateNumberFields('canonicalCosts', [
+    { key: 'overheadPercent', minimum: 0 },
+    { key: 'travelCostPerMile', minimum: 0 },
   ]);
+  validateNumberFields('crew', [
+    { key: 'averageHourlyRate', minimum: 0, nullable: true },
+    { key: 'overtimeMultiplier', minimum: 1, nullable: true },
+    { key: 'travelPay', minimum: 0, nullable: true },
+    { key: 'minimumBillableHours', minimum: 0, nullable: true },
+  ]);
+  validateNumberFields('vehicles', [
+    { key: 'averageFuelCost', minimum: 0, nullable: true },
+    { key: 'hourlyVehicleCost', minimum: 0, nullable: true },
+    { key: 'maintenanceReserve', minimum: 0, maximum: 100, nullable: true },
+  ]);
+
+  const pricing = isPlainObject(source.canonicalPricing) ? source.canonicalPricing : null;
+  if (pricing && typeof pricing.desiredGrossMarginPercent === 'number' &&
+      Number.isFinite(pricing.desiredGrossMarginPercent) &&
+      typeof pricing.desiredNetMarginPercent === 'number' &&
+      Number.isFinite(pricing.desiredNetMarginPercent) &&
+      pricing.desiredNetMarginPercent > pricing.desiredGrossMarginPercent) {
+    errors.push('canonicalPricing.desiredNetMarginPercent must not exceed canonicalPricing.desiredGrossMarginPercent.');
+  }
+
+  const costs = isPlainObject(source.canonicalCosts) ? source.canonicalCosts : null;
   for (const mapName of ['materialCostByService', 'equipmentCostByReference']) {
-    const costs = profile.canonicalCosts;
     if (!costs || !hasOwn(costs, mapName)) continue;
     const map = costs[mapName];
-    if (!map || typeof map !== 'object' || Array.isArray(map)) {
+    if (!isPlainObject(map)) {
       errors.push('canonicalCosts.' + mapName + ' must be an object of non-negative finite numbers.');
       continue;
     }
@@ -1002,6 +1097,10 @@ function validateCanonicalBusinessProfile(profile) {
     }
   }
   return errors;
+}
+
+function validateCanonicalBusinessProfile(profile) {
+  return validateFinancialConfiguration(profile, []);
 }
 
 function synchronizeLegacyFinancial(profile) {
@@ -1076,6 +1175,10 @@ function adaptBusinessProfile(profile, version) {
       emergencyMultiplier: configured(canonicalPricing, 'emergencyMultiplier', { nonNegative: true }),
       taxRatePercent: configuredTaxRate !== null && configuredTaxRate <= 100 ? configuredTaxRate : null,
       minimumJobPrice: configured(canonicalPricing, 'minimumJobPrice', { nonNegative: true }),
+      defaultRangePercent: (function () {
+        const value = configured(canonicalPricing, 'defaultRangePercent', { nonNegative: true });
+        return value !== null && value <= 100 ? value : null;
+      }()),
       legacyCatalogMarkupMultiplier: finiteOrNull(financial.markup, { positive: true }),
       legacyTravelChargePerMile: finiteOrNull(financial.travelCharge, { nonNegative: true }),
       legacyEmergencyMultiplier: finiteOrNull(financial.emergencyMarkup, { positive: true }),
@@ -1111,16 +1214,20 @@ function adaptBusinessProfile(profile, version) {
 
 module.exports = {
   adaptBusinessProfile,
+  FINANCIAL_CONFIGURATION_FIELDS,
   finiteOrNull,
   migrateLegacyCanonicalAuthority,
+  migrateLegacyFinancialConfiguration,
   OPERATIONAL_CONFIGURATION_FIELDS,
   prepareBusinessProfileForWrite,
+  projectFinancialConfiguration,
   projectOperationalConfiguration,
   sha256,
   stableStringify,
   stableValue,
   synchronizeLegacyFinancial,
   validateCanonicalBusinessProfile,
+  validateFinancialConfiguration,
   validateOperationalConfiguration,
   validateOperationalBusinessProfile,
   validateRawBusinessProfile,

@@ -16,15 +16,16 @@
     .wf-badge{display:inline-flex;padding:3px 8px;border-radius:999px;background:var(--brand-50);color:var(--brand-700);font-size:11px;font-weight:700;text-transform:capitalize}.wf-badge[data-status="suspended"],.wf-badge[data-status="revoked"]{background:#fee2e2;color:#991b1b}.wf-badge[data-status="pending"],.wf-badge[data-status="expired"]{background:#fef3c7;color:#92400e}
     .wf-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.wf-form-grid .form-group{margin:0}.wf-span{grid-column:1/-1}.wf-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.wf-actions .btn{min-width:0}
     .wf-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:7px;padding:10px;border:1px solid var(--neutral-200);border-radius:var(--radius-sm);max-height:180px;overflow:auto}.wf-check{display:flex;gap:7px;align-items:flex-start;font-size:13px}.wf-check input{margin-top:2px}
+    .policy-enabled{-webkit-appearance:none;appearance:none;width:16px;height:16px;border:2px solid var(--neutral-600);border-radius:3px;background:var(--neutral-50)}.policy-enabled:checked{background:var(--brand-700);box-shadow:inset 0 0 0 3px var(--neutral-50)}.policy-enabled:disabled{opacity:1}.policy-enabled:focus-visible{outline:3px solid var(--theme-focus,var(--brand-500));outline-offset:2px}
     .wf-empty,.wf-loading,.wf-error{padding:24px;border:1px dashed var(--neutral-300);border-radius:var(--radius-md);color:var(--neutral-500);text-align:center}.wf-error{color:var(--danger);border-color:var(--danger)}
     .wf-status{min-height:22px;font-size:13px;font-weight:600;margin-top:8px}.wf-status[data-state="success"]{color:var(--success)}.wf-status[data-state="error"]{color:var(--danger)}
     .wf-readonly{padding:10px 12px;border-radius:var(--radius-sm);background:var(--neutral-50);font-size:12px;color:var(--neutral-500);margin-bottom:14px}.wf-id{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--neutral-400);overflow-wrap:anywhere}
     [data-theme="dark"] .wf-panel,[data-theme="dark"] .wf-card{background:var(--neutral-50);border-color:var(--neutral-200)}[data-theme="dark"] .wf-readonly{background:var(--neutral-100)}
-    @media(max-width:700px){.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-actions .btn{width:100%}}
+    @media(max-width:700px){.wf-shell{padding-right:56px}.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-actions .btn{width:100%}}
   </style>
 </head>
 <body>
-  <a href="#mainContent" class="skip-link">Skip to main content</a>
+  <a class="skip-link" href="#mainContent">Skip to main content</a>
   <div class="dashboard-layout">
     <main class="main-content" id="mainContent" tabindex="-1">
       <div class="page-header">
@@ -66,7 +67,7 @@
             <div class="form-group"><label for="skillDescription">Description</label><textarea id="skillDescription" maxlength="4096"></textarea></div>
             <div class="wf-actions wf-span"><button class="btn btn-primary" type="submit">Add skill</button></div>
           </form>
-          <div id="skillsList" class="wf-grid"></div>
+          <div id="skillsList" class="wf-grid"><div class="wf-loading" role="status">Loading skills…</div></div>
         </section>
 
         <section class="wf-panel" aria-labelledby="crewsTitle">
@@ -77,23 +78,24 @@
             <div class="form-group"><label for="crewLocation">Home location</label><select id="crewLocation"></select></div>
             <div class="wf-actions wf-span"><button class="btn btn-primary" type="submit">Add crew</button></div>
           </form>
-          <div id="crewsList" class="wf-grid"></div>
+          <div id="crewsList" class="wf-grid"><div class="wf-loading" role="status">Loading crews…</div></div>
         </section>
 
         <section class="wf-panel" aria-labelledby="policiesTitle">
           <div class="wf-panel-head"><div><h2 id="policiesTitle">Workforce policies</h2><p class="wf-panel-desc">Versioned Business Profile policy authority. These entries do not create assignments or field state.</p></div><button id="addPolicy" class="btn btn-secondary btn-sm" type="button" hidden>Add policy</button></div>
-          <div id="policiesList" class="wf-grid"></div>
+          <div id="policiesList" class="wf-grid"><div class="wf-loading" role="status">Loading workforce policies…</div></div>
           <div id="policyActions" class="wf-actions" hidden><button id="savePolicies" class="btn btn-primary" type="button">Save policies</button></div>
         </section>
       </div>
     </main>
   </div>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/js/nav-component.js"></script>
   <script>
   (function () {
     'use strict';
     var state = { account: null, data: null, policies: [] };
+    var generatedControlId = 0;
     var operationalRoles = [
       ['owner','Owner'],['administrator','Administrator'],['dispatcher','Dispatcher'],
       ['estimator','Estimator'],['crew_lead','Crew lead'],['technician','Technician'],
@@ -159,6 +161,10 @@
     function field(labelText, control) {
       var group = element('div', 'form-group');
       var label = element('label', '', labelText);
+      if (!control.id) {
+        generatedControlId += 1;
+        control.id = 'workforce-control-' + generatedControlId;
+      }
       label.htmlFor = control.id;
       group.append(label, control);
       return group;
@@ -177,8 +183,10 @@
       select.disabled = Boolean(disabled);
       return select;
     }
-    function empty(container, message) {
-      container.replaceChildren(element('div', 'wf-empty', message));
+    function empty(container, message, className) {
+      var placeholder = element('div', className || 'wf-empty', message);
+      if (className === 'wf-error') placeholder.setAttribute('role', 'alert');
+      container.replaceChildren(placeholder);
     }
     function labelFor(entries, selected, fallback) {
       var match = entries.find(function (entry) { return entry[0] === selected; });
@@ -386,19 +394,52 @@
     function render() {
       state.policies = JSON.parse(JSON.stringify(state.data.policies || []));
       renderForms(); renderInvitations(); renderMembers(); renderSkills(); renderCrews(); renderPolicies();
+      document.getElementById('workforceShell').removeAttribute('inert');
       document.getElementById('workforceShell').setAttribute('aria-busy', 'false');
       document.documentElement.setAttribute('data-workforce-state', 'ready');
     }
+    function setWorkforceLoading(initial) {
+      var shell = document.getElementById('workforceShell');
+      shell.setAttribute('aria-busy', 'true');
+      document.documentElement.setAttribute('data-workforce-state', 'loading');
+      if (!initial) return;
+      shell.setAttribute('inert', '');
+      document.getElementById('invitePanel').hidden = true;
+      document.getElementById('skillForm').hidden = true;
+      document.getElementById('crewForm').hidden = true;
+      document.getElementById('addPolicy').hidden = true;
+      document.getElementById('policyActions').hidden = true;
+      empty(document.getElementById('membersList'), 'Loading workforce…');
+      empty(document.getElementById('skillsList'), 'Loading skills…');
+      empty(document.getElementById('crewsList'), 'Loading crews…');
+      empty(document.getElementById('policiesList'), 'Loading workforce policies…');
+    }
+    function renderWorkforceError(message) {
+      var unavailable = message || 'Workforce authority is unavailable.';
+      ['membersList', 'skillsList', 'crewsList', 'policiesList'].forEach(function(id) {
+        empty(document.getElementById(id), unavailable, 'wf-error');
+      });
+      document.getElementById('invitePanel').hidden = true;
+      document.getElementById('invitationsPanel').hidden = true;
+      document.getElementById('invitationsList').replaceChildren();
+      document.getElementById('skillForm').hidden = true;
+      document.getElementById('crewForm').hidden = true;
+      document.getElementById('addPolicy').hidden = true;
+      document.getElementById('policyActions').hidden = true;
+      document.getElementById('workforceShell').removeAttribute('inert');
+      document.getElementById('workforceShell').setAttribute('aria-busy', 'false');
+      document.documentElement.setAttribute('data-workforce-state', 'error');
+      status(unavailable, 'error');
+    }
     async function loadData(initial) {
+      setWorkforceLoading(initial);
       try {
         if (initial || !state.account) state.account = await window.NorthStarAccountSession.load();
         var response = await api('/api/workforce', { method: 'GET' });
         state.data = response.data;
         render();
       } catch (error) {
-        document.getElementById('workforceShell').setAttribute('aria-busy', 'false');
-        document.documentElement.setAttribute('data-workforce-state', 'error');
-        status(error && error.message ? error.message : 'Workforce authority is unavailable.', 'error');
+        renderWorkforceError(error && error.message ? error.message : 'Workforce authority is unavailable.');
       }
     }
     document.getElementById('inviteForm').addEventListener('submit', function (event) {

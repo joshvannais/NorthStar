@@ -25,6 +25,10 @@ function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
+function hasOwn(value, key) {
+  return Boolean(value) && Object.prototype.hasOwnProperty.call(value, key);
+}
+
 function projectProfile(row) {
   if (!row) return null;
   return Object.freeze({
@@ -78,7 +82,7 @@ async function getBusinessProfileById(pool, organizationId, profileId) {
 
 async function putBusinessProfile(pool, input) {
   const source = requirePool(pool);
-  const rawProfile = stableValue(input.profile || {});
+  let rawProfile = stableValue(input.profile || {});
   return repository.withTransaction(source, async function (client) {
     const organization = await client.query(
       'SELECT id FROM organizations WHERE id = $1 FOR UPDATE',
@@ -86,6 +90,40 @@ async function putBusinessProfile(pool, input) {
     );
     if (organization.rows.length !== 1) {
       throw authorityError('ORGANIZATION_NOT_FOUND', 'Organization not found.', 404);
+    }
+    let active = null;
+    if (hasOwn(input, 'expectedVersion') || input.preserveVoiceAssistant === true) {
+      active = await client.query(
+        `SELECT version_label, raw_profile
+           FROM canonical_business_profiles
+          WHERE organization_id = $1 AND is_active = TRUE`,
+        [input.organizationId]
+      );
+      if (active.rows.length > 1) {
+        throw authorityError('CANONICAL_PROFILE_CONFLICT', 'Multiple active Business Profiles were found.', 409);
+      }
+    }
+    if (hasOwn(input, 'expectedVersion')) {
+      const actualVersion = active.rows.length === 1 ? active.rows[0].version_label : null;
+      const expectedVersion = input.expectedVersion === null ? null : String(input.expectedVersion);
+      if (actualVersion !== expectedVersion) {
+        throw authorityError(
+          'BUSINESS_PROFILE_VERSION_CONFLICT',
+          'Business Profile changed; reload and try again.',
+          409
+        );
+      }
+    }
+    if (input.preserveVoiceAssistant === true) {
+      const activeRawProfile = active.rows.length === 1 && active.rows[0].raw_profile &&
+        typeof active.rows[0].raw_profile === 'object' && !Array.isArray(active.rows[0].raw_profile)
+        ? active.rows[0].raw_profile : {};
+      if (hasOwn(activeRawProfile, 'voiceAssistant')) {
+        rawProfile.voiceAssistant = stableValue(activeRawProfile.voiceAssistant);
+      } else {
+        delete rawProfile.voiceAssistant;
+      }
+      rawProfile = stableValue(rawProfile);
     }
     const sequence = await client.query(
       `SELECT COALESCE(MAX(version_number), 0)::bigint + 1 AS next_version

@@ -405,31 +405,16 @@ router.post('/calendar/schedule', requireVerifiedExternalAction, requirePermissi
 
 /**
  * POST /api/retell/create-agent
- * Create a new Retell AI agent for a contractor.
+ * Retained compatibility boundary for the retired request-body provider mutation.
  */
 router.post('/retell/create-agent', requireVerifiedExternalAction, requirePermission('integrations', 'create'), async (req, res) => {
-  const { createAgent } = require('../retell/client');
-  const result = await createAgent({
-    name: req.body.name || 'Northstar Receptionist',
-    companyName: req.body.companyName || 'Your Company',
-    services: req.body.services || 'home services',
-    scheduleUrl: req.body.scheduleUrl,
+  return res.status(410).json({
+    success: false,
+    error: {
+      code: 'LEGACY_PROVIDER_MUTATION_DISABLED',
+      message: 'Request-body provider agent creation is disabled. Configure canonical Voice & Knowledge settings instead.',
+    },
   });
-  if (!result) return res.status(503).json({ success: false, error: { code: 'RETELL_UNCONFIGURED', message: 'Retell API is not configured.' } });
-  const agentId = result.agent_id || result.agentId || result.id;
-  if (!agentId) return res.status(502).json({ success: false, error: { code: 'RETELL_AGENT_ID_MISSING', message: 'Retell did not return an agent identifier.' } });
-  try {
-    await require('../services/organizationAuthority').bindIntegrationOwner(db.getPool(), {
-      organizationId: req.tenantContext.organizationId,
-      userId: req.tenantContext.userId,
-      provider: 'retell',
-      externalIntegrationId: agentId,
-      metadata: { provisionedBy: 'api' },
-    });
-    return res.json({ ...result, canonicalOwnershipPersisted: true });
-  } catch (error) {
-    return res.status(error.status || 503).json({ success: false, error: { code: error.code || 'CANONICAL_PERSISTENCE_UNAVAILABLE', message: error.status === 409 ? error.message : 'Canonical PostgreSQL persistence is unavailable.' } });
-  }
 });
 
 /**

@@ -63,7 +63,15 @@ const HOURS_FIELDS = new Set(['open', 'close', 'lunch', 'emergency', 'afterHours
 const HOLIDAY_FIELDS = new Set(['id', 'name', 'date', 'closed', 'open', 'close']);
 const WORKFORCE_FIELDS = new Set(['policies']);
 const WORKFORCE_POLICY_FIELDS = new Set(['id', 'name', 'description', 'enabled']);
-const VOICE_ASSISTANT_FIELDS = new Set(['name', 'style', 'greeting']);
+const VOICE_ASSISTANT_FIELDS = new Set([
+  'name', 'style', 'greeting', 'personality', 'conversationStyle', 'escalationRules',
+]);
+const VOICE_PERSONALITIES = new Set(['professional', 'friendly', 'consultative', 'efficient']);
+const VOICE_CONVERSATION_STYLES = new Set(['consultative', 'direct', 'warm']);
+const ESCALATION_RULES_FIELDS = new Set(['rules']);
+const ESCALATION_RULE_FIELDS = new Set(['id', 'enabled', 'when', 'action', 'fallbackAction']);
+const ESCALATION_ACTIONS = new Set(['take_message', 'request_callback', 'transfer_if_available']);
+const ESCALATION_FALLBACK_ACTIONS = new Set(['take_message', 'request_callback']);
 const SERVICE_PRICING_FIELDS = new Set([
   'requiredScope', 'allowedScopeValues', 'rangePercent', 'lineItems',
 ]);
@@ -487,10 +495,61 @@ function validateStringList(value, path, errors) {
   });
 }
 
+function validateEscalationRules(escalationRules, errors) {
+  if (!isPlainObject(escalationRules)) {
+    errors.push('voiceAssistant.escalationRules must be an object.');
+    return;
+  }
+  addUnsupportedFieldErrors(
+    escalationRules,
+    ESCALATION_RULES_FIELDS,
+    'voiceAssistant.escalationRules',
+    'escalation rules',
+    errors
+  );
+  if (!Array.isArray(escalationRules.rules)) {
+    errors.push('voiceAssistant.escalationRules.rules must be an array.');
+    return;
+  }
+  if (escalationRules.rules.length > 20) {
+    errors.push('voiceAssistant.escalationRules.rules must contain at most 20 entries.');
+  }
+  const ids = new Set();
+  escalationRules.rules.forEach(function (rule, index) {
+    const path = 'voiceAssistant.escalationRules.rules[' + index + ']';
+    if (!isPlainObject(rule)) {
+      errors.push(path + ' must be an object.');
+      return;
+    }
+    addUnsupportedFieldErrors(rule, ESCALATION_RULE_FIELDS, path, 'escalation rule', errors);
+    if (!hasOwn(rule, 'id') || typeof rule.id !== 'string' || !STABLE_ID_PATTERN.test(rule.id)) {
+      errors.push(path + '.id must be a stable identifier.');
+    } else {
+      const normalized = rule.id.toLowerCase();
+      if (ids.has(normalized)) errors.push('voiceAssistant.escalationRules.rules contains duplicate id ' + rule.id + '.');
+      ids.add(normalized);
+    }
+    if (typeof rule.enabled !== 'boolean') errors.push(path + '.enabled must be a boolean.');
+    if (typeof rule.when !== 'string' || !rule.when.trim() || Array.from(rule.when).length > 512 ||
+        Buffer.byteLength(typeof rule.when === 'string' ? rule.when : '', 'utf8') > 2048) {
+      errors.push(path + '.when must be non-blank text of at most 512 characters and 2048 UTF-8 bytes.');
+    }
+    if (typeof rule.action !== 'string' || !ESCALATION_ACTIONS.has(rule.action)) {
+      errors.push(path + '.action must be take_message, request_callback, or transfer_if_available.');
+    }
+    if (typeof rule.fallbackAction !== 'string' || !ESCALATION_FALLBACK_ACTIONS.has(rule.fallbackAction)) {
+      errors.push(path + '.fallbackAction must be take_message or request_callback.');
+    }
+  });
+}
+
 function validateVoiceAssistant(voiceAssistant, errors) {
-  if (!isPlainObject(voiceAssistant)) return;
+  if (!isPlainObject(voiceAssistant)) {
+    errors.push('voiceAssistant must be an object.');
+    return;
+  }
   addUnsupportedFieldErrors(voiceAssistant, VOICE_ASSISTANT_FIELDS, 'voiceAssistant', 'voice assistant', errors);
-  for (const field of VOICE_ASSISTANT_FIELDS) {
+  for (const field of ['name', 'style', 'greeting']) {
     if (!hasOwn(voiceAssistant, field)) continue;
     const value = voiceAssistant[field];
     if (typeof value !== 'string') {
@@ -506,6 +565,18 @@ function validateVoiceAssistant(voiceAssistant, errors) {
     if (field === 'greeting' && Buffer.byteLength(value, 'utf8') > 8192) {
       errors.push('voiceAssistant.greeting must be text of at most 8192 UTF-8 bytes.');
     }
+  }
+  if (hasOwn(voiceAssistant, 'personality') &&
+      (typeof voiceAssistant.personality !== 'string' || !VOICE_PERSONALITIES.has(voiceAssistant.personality))) {
+    errors.push('voiceAssistant.personality must be professional, friendly, consultative, or efficient.');
+  }
+  if (hasOwn(voiceAssistant, 'conversationStyle') &&
+      (typeof voiceAssistant.conversationStyle !== 'string' ||
+       !VOICE_CONVERSATION_STYLES.has(voiceAssistant.conversationStyle))) {
+    errors.push('voiceAssistant.conversationStyle must be consultative, direct, or warm.');
+  }
+  if (hasOwn(voiceAssistant, 'escalationRules')) {
+    validateEscalationRules(voiceAssistant.escalationRules, errors);
   }
 }
 

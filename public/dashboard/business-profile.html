@@ -76,7 +76,20 @@
     .bp-empty-note { padding: 12px; border: 1px dashed var(--neutral-200); border-radius: var(--radius-sm); color: var(--neutral-500); font-size: 12px; text-align: center; }
     .bp-policy-row { display: grid; grid-template-columns: minmax(150px, 1fr) 3fr auto; gap: 8px; align-items: start; }
     .bp-policy-row input, .bp-policy-row textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); color: var(--neutral-800); background: var(--neutral-50); font: inherit; }
-    @media (max-width: 768px) { .bp-container { padding: 16px; } .bp-grid { grid-template-columns: 1fr; } .bp-hours-row { grid-template-columns: 1fr; } .bp-string-row { grid-template-columns: minmax(0, 1fr); } }
+    .bp-voice-editor { border-top: 3px solid var(--brand-500); }
+    .bp-voice-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: 4px; }
+    .bp-count { color: var(--neutral-500); font-size: 11px; }
+    .bp-inline-actions, .bp-voice-actions, .bp-rule-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .bp-inline-actions { margin-top: 8px; }
+    .bp-voice-actions { justify-content: flex-end; margin-top: 16px; }
+    .bp-greeting-preview { display: block; min-height: 72px; padding: 12px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); background: var(--neutral-100); color: var(--neutral-800); font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .bp-rule-card { margin: 0; min-width: 0; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); padding: 14px; }
+    .bp-rule-card legend { padding: 0 6px; color: var(--neutral-700); font-size: 13px; font-weight: 600; }
+    .bp-rule-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(150px, 1fr) minmax(150px, 1fr); gap: 12px; align-items: start; }
+    .bp-rule-enabled { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--neutral-700); font-size: 13px; }
+    .bp-rule-id { color: var(--neutral-500); font-family: var(--font-mono, monospace); font-size: 11px; overflow-wrap: anywhere; }
+    .bp-rule-actions { justify-content: flex-end; margin-top: 12px; }
+    @media (max-width: 768px) { .bp-container { padding: 16px; } .bp-grid { grid-template-columns: 1fr; } .bp-hours-row { grid-template-columns: 1fr; } .bp-string-row { grid-template-columns: minmax(0, 1fr); } .bp-rule-grid { grid-template-columns: minmax(0, 1fr); } }
     .bp-full { grid-column: 1 / -1; }
     .bp-half { grid-column: span 1; }
     .bp-section-desc { font-size: 13px; color: var(--neutral-500); margin-bottom: 16px; line-height: 1.5; }
@@ -384,11 +397,68 @@
             </div>
             <div id="companyValuesContainer" class="bp-repeat-list"></div>
 
-            <h3 style="margin-top:24px;">Voice Assistant</h3>
+          </div>
+
+          <div class="bp-card bp-voice-editor" id="voiceAssistantEditor" aria-labelledby="voice-assistant-configuration">
+            <h3 id="voice-assistant-configuration" tabindex="-1">AI Configuration</h3>
+            <div class="bp-section-desc">Maintain provider-neutral receptionist preferences and ordered escalation policies. Saving does not connect to or configure a provider.</div>
+            <p class="bp-authority-note" id="voiceAssistantAuthorityStatus" role="status" aria-live="polite"></p>
             <div class="bp-grid">
-              <div class="bp-field bp-full"><label for="voice-assistant-name">Assistant Name</label><input id="voice-assistant-name"><span class="help-text">Up to 120 Unicode characters and 480 UTF-8 bytes.</span></div>
-              <div class="bp-field bp-full"><label for="voice-assistant-style">Communication Style</label><textarea id="voice-assistant-style" rows="4"></textarea></div>
-              <div class="bp-field bp-full"><label for="voice-assistant-greeting">Greeting</label><textarea id="voice-assistant-greeting" rows="4"></textarea></div>
+              <div class="bp-field bp-full">
+                <label for="voice-assistant-name">Assistant Name</label>
+                <input id="voice-assistant-name" data-voice-control data-voice-field="name" autocomplete="off" aria-describedby="voice-assistant-name-count">
+                <span class="bp-count" id="voice-assistant-name-count">0 characters / 0 UTF-8 bytes; maximum 120 characters / 480 bytes.</span>
+              </div>
+              <div class="bp-field">
+                <label for="voice-assistant-personality">Personality</label>
+                <select id="voice-assistant-personality" data-voice-control data-voice-field="personality">
+                  <option value="">Not configured</option>
+                  <option value="professional">Professional</option>
+                  <option value="friendly">Friendly</option>
+                  <option value="consultative">Consultative</option>
+                  <option value="efficient">Efficient</option>
+                </select>
+              </div>
+              <div class="bp-field">
+                <label for="voice-assistant-conversation-style">Conversation Style</label>
+                <select id="voice-assistant-conversation-style" data-voice-control data-voice-field="conversationStyle">
+                  <option value="">Not configured</option>
+                  <option value="consultative">Consultative</option>
+                  <option value="direct">Direct</option>
+                  <option value="warm">Warm</option>
+                </select>
+              </div>
+              <div class="bp-field bp-full">
+                <label for="voice-assistant-style">Additional Communication Guidance</label>
+                <textarea id="voice-assistant-style" data-voice-control data-voice-field="style" rows="4" aria-describedby="voice-assistant-style-count"></textarea>
+                <span class="bp-count" id="voice-assistant-style-count">0 UTF-8 bytes; maximum 4096 bytes.</span>
+              </div>
+              <div class="bp-field bp-full">
+                <label for="voice-assistant-greeting">Greeting</label>
+                <textarea id="voice-assistant-greeting" data-voice-control data-voice-field="greeting" rows="5" aria-describedby="voice-assistant-greeting-count"></textarea>
+                <div class="bp-voice-meta">
+                  <span class="bp-count" id="voice-assistant-greeting-count">0 UTF-8 bytes; maximum 8192 bytes.</span>
+                  <button class="bp-add-btn" id="insert-saved-company-name" data-voice-action type="button">Insert saved company name</button>
+                </div>
+              </div>
+              <div class="bp-field bp-full">
+                <label for="voice-assistant-greeting-preview">Literal Greeting Preview</label>
+                <output class="bp-greeting-preview" id="voice-assistant-greeting-preview">No greeting configured.</output>
+              </div>
+            </div>
+
+            <div class="bp-repeat-header" style="margin-top:24px;">
+              <div>
+                <h3>Escalation Rules</h3>
+                <div class="bp-section-desc">Rules are evaluated in the displayed order and remain provider-neutral configuration.</div>
+              </div>
+              <button class="bp-add-btn" id="add-voice-escalation-rule" data-voice-action type="button">Add escalation rule</button>
+            </div>
+            <div id="voice-escalation-rules" class="bp-repeat-list"></div>
+            <div id="voiceAssistantError" class="bp-validation-error" role="alert" tabindex="-1"></div>
+            <div class="bp-voice-actions">
+              <button class="bp-add-btn" id="reloadVoiceAssistantBtn" data-voice-action type="button" hidden>Reload latest configuration</button>
+              <button class="bp-save-btn" id="saveVoiceAssistantBtn" data-voice-action type="button" disabled>Save AI Configuration</button>
             </div>
           </div>
         </div>
@@ -428,6 +498,12 @@
     var profileData = null;
     var assetCatalogueData = null;
     var profileCanEdit = false;
+    var voiceAssistantOriginal = null;
+    var voiceAssistantHasAuthority = false;
+    var voiceAssistantTouched = Object.create(null);
+    var voiceAssistantDirty = false;
+    var voiceAssistantSaving = false;
+    var voiceAssistantConflicted = false;
 
     function profileRequest(url, options) {
       var request = options || {};
@@ -512,6 +588,7 @@
       saveButton.textContent = editable ? '💾 Save Profile'
         : state === 'loading' ? 'Loading profile…'
         : profileCanEdit ? 'Profile unavailable' : 'Read-only profile';
+      updateVoiceActionState(profileAvailable);
     }
 
     // ====================================================================
@@ -904,6 +981,409 @@
     window.NorthStarAssetCatalogue = Object.freeze({ reload: loadAssetCatalogue });
 
     // ====================================================================
+    // Provider-neutral, versioned AI configuration
+    // ====================================================================
+    function voiceUtf8Bytes(value) {
+      return new TextEncoder().encode(String(value || '')).length;
+    }
+
+    function voiceCodePoints(value) {
+      return Array.from(String(value || '')).length;
+    }
+
+    function clearVoiceAssistantError() {
+      var element = document.getElementById('voiceAssistantError');
+      if (!element) return;
+      element.textContent = '';
+      element.classList.remove('show');
+    }
+
+    function showVoiceAssistantError(message, focus) {
+      var element = document.getElementById('voiceAssistantError');
+      if (!element) return;
+      element.textContent = message;
+      element.classList.add('show');
+      if (focus) element.focus();
+    }
+
+    function voiceProfileAvailable() {
+      var root = document.getElementById('businessProfileRoot');
+      return Boolean(root && root.dataset.state === 'ready');
+    }
+
+    function updateVoiceActionState(profileAvailable) {
+      var available = profileAvailable === undefined ? voiceProfileAvailable() : profileAvailable;
+      var canAct = available && profileCanEdit && !voiceAssistantSaving && !voiceAssistantConflicted;
+      document.querySelectorAll('[data-voice-action]').forEach(function(button) {
+        if (button.id === 'reloadVoiceAssistantBtn') return;
+        button.disabled = !canAct;
+      });
+      var addButton = document.getElementById('add-voice-escalation-rule');
+      if (addButton && document.querySelectorAll('#voice-escalation-rules .bp-rule-card').length >= 20) {
+        addButton.disabled = true;
+      }
+      var saveButton = document.getElementById('saveVoiceAssistantBtn');
+      if (saveButton) {
+        saveButton.disabled = !canAct || (!voiceAssistantDirty && voiceAssistantHasAuthority);
+        saveButton.textContent = voiceAssistantSaving ? 'Saving AI Configuration...'
+          : profileCanEdit ? 'Save AI Configuration' : 'Read-only AI Configuration';
+      }
+      var reloadButton = document.getElementById('reloadVoiceAssistantBtn');
+      if (reloadButton) {
+        reloadButton.hidden = !voiceAssistantConflicted;
+        reloadButton.disabled = !available || !profileCanEdit || voiceAssistantSaving;
+      }
+    }
+
+    function markVoiceAssistantDirty(field) {
+      voiceAssistantTouched[field] = true;
+      voiceAssistantDirty = true;
+      if (!voiceAssistantConflicted) clearVoiceAssistantError();
+      updateVoiceCountersAndPreview();
+      updateVoiceActionState();
+    }
+
+    function updateVoiceCountersAndPreview() {
+      var name = getVal('voice-assistant-name');
+      var style = getVal('voice-assistant-style');
+      var greeting = getVal('voice-assistant-greeting');
+      var nameCount = document.getElementById('voice-assistant-name-count');
+      var styleCount = document.getElementById('voice-assistant-style-count');
+      var greetingCount = document.getElementById('voice-assistant-greeting-count');
+      if (nameCount) nameCount.textContent = voiceCodePoints(name) + ' characters / ' + voiceUtf8Bytes(name) + ' UTF-8 bytes; maximum 120 characters / 480 bytes.';
+      if (styleCount) styleCount.textContent = voiceUtf8Bytes(style) + ' UTF-8 bytes; maximum 4096 bytes.';
+      if (greetingCount) greetingCount.textContent = voiceUtf8Bytes(greeting) + ' UTF-8 bytes; maximum 8192 bytes.';
+      var preview = document.getElementById('voice-assistant-greeting-preview');
+      if (preview) preview.textContent = greeting || 'No greeting configured.';
+    }
+
+    function renumberVoiceRuleCards() {
+      var cards = Array.from(document.querySelectorAll('#voice-escalation-rules .bp-rule-card'));
+      cards.forEach(function(card, index) {
+        var legend = card.querySelector('legend');
+        if (legend) legend.textContent = 'Escalation rule ' + (index + 1);
+        var up = card.querySelector('[data-rule-action="up"]');
+        var down = card.querySelector('[data-rule-action="down"]');
+        var remove = card.querySelector('[data-rule-action="remove"]');
+        if (up) {
+          up.disabled = !profileCanEdit || voiceAssistantSaving || voiceAssistantConflicted || index === 0;
+          up.setAttribute('aria-label', 'Move escalation rule ' + (index + 1) + ' up');
+        }
+        if (down) {
+          down.disabled = !profileCanEdit || voiceAssistantSaving || voiceAssistantConflicted || index === cards.length - 1;
+          down.setAttribute('aria-label', 'Move escalation rule ' + (index + 1) + ' down');
+        }
+        if (remove) {
+          remove.disabled = !profileCanEdit || voiceAssistantSaving || voiceAssistantConflicted;
+          remove.setAttribute('aria-label', 'Remove escalation rule ' + (index + 1));
+        }
+      });
+    }
+
+    function createVoiceRuleCard(rule) {
+      var fieldset = document.createElement('fieldset');
+      fieldset.className = 'bp-rule-card';
+      fieldset.dataset.ruleId = rule.id;
+
+      var legend = document.createElement('legend');
+      fieldset.appendChild(legend);
+
+      var enabledLabel = document.createElement('label');
+      enabledLabel.className = 'bp-rule-enabled';
+      var enabled = document.createElement('input');
+      enabled.type = 'checkbox';
+      enabled.className = 'voice-rule-enabled';
+      enabled.checked = rule.enabled === true;
+      enabledLabel.appendChild(enabled);
+      enabledLabel.appendChild(document.createTextNode(' Enabled'));
+      fieldset.appendChild(enabledLabel);
+
+      var grid = document.createElement('div');
+      grid.className = 'bp-rule-grid';
+      var controls = [
+        { key: 'when', label: 'When', type: 'textarea', value: rule.when || '' },
+        { key: 'action', label: 'Action', type: 'select', value: rule.action || 'take_message', options: [
+          ['take_message', 'Take a message'], ['request_callback', 'Request a callback'], ['transfer_if_available', 'Transfer if available'],
+        ] },
+        { key: 'fallbackAction', label: 'Fallback action', type: 'select', value: rule.fallbackAction || 'take_message', options: [
+          ['take_message', 'Take a message'], ['request_callback', 'Request a callback'],
+        ] },
+      ];
+      controls.forEach(function(definition) {
+        var field = document.createElement('div');
+        field.className = 'bp-field';
+        var controlId = stableRowId('voice-rule-' + definition.key);
+        var label = document.createElement('label');
+        label.htmlFor = controlId;
+        label.textContent = definition.label;
+        field.appendChild(label);
+        var control;
+        if (definition.type === 'textarea') {
+          control = document.createElement('textarea');
+          control.rows = 3;
+          setTextControlValue(control, definition.value);
+        } else {
+          control = document.createElement('select');
+          definition.options.forEach(function(optionDefinition) {
+            var option = document.createElement('option');
+            option.value = optionDefinition[0];
+            option.textContent = optionDefinition[1];
+            control.appendChild(option);
+          });
+          control.value = definition.value;
+        }
+        control.id = controlId;
+        control.className = 'voice-rule-' + definition.key;
+        control.addEventListener(definition.type === 'select' ? 'change' : 'input', function() {
+          markVoiceAssistantDirty('escalationRules');
+        });
+        field.appendChild(control);
+        grid.appendChild(field);
+      });
+      fieldset.appendChild(grid);
+
+      var idText = document.createElement('p');
+      idText.className = 'bp-rule-id';
+      idText.textContent = 'Stable ID: ' + rule.id;
+      fieldset.appendChild(idText);
+
+      var actions = document.createElement('div');
+      actions.className = 'bp-rule-actions';
+      [['up', 'Move up'], ['down', 'Move down'], ['remove', 'Remove']].forEach(function(definition) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = definition[0] === 'remove' ? 'bp-remove-btn' : 'bp-add-btn';
+        button.dataset.voiceAction = '';
+        button.dataset.ruleAction = definition[0];
+        button.textContent = definition[1];
+        button.addEventListener('click', function() {
+          var container = fieldset.parentElement;
+          if (!container) return;
+          if (definition[0] === 'remove') {
+            var nextFocus = fieldset.nextElementSibling || fieldset.previousElementSibling;
+            fieldset.remove();
+            if (!container.querySelector('.bp-rule-card')) appendEmptyNote(container, 'No escalation rules configured.');
+            markVoiceAssistantDirty('escalationRules');
+            renumberVoiceRuleCards();
+            if (nextFocus) {
+              var focusTarget = nextFocus.querySelector('textarea, select, button');
+              if (focusTarget) focusTarget.focus();
+            }
+            return;
+          }
+          var sibling = definition[0] === 'up' ? fieldset.previousElementSibling : fieldset.nextElementSibling;
+          if (!sibling || !sibling.classList.contains('bp-rule-card')) return;
+          if (definition[0] === 'up') container.insertBefore(fieldset, sibling);
+          else container.insertBefore(sibling, fieldset);
+          markVoiceAssistantDirty('escalationRules');
+          renumberVoiceRuleCards();
+          button.focus();
+        });
+        actions.appendChild(button);
+      });
+      fieldset.appendChild(actions);
+      enabled.addEventListener('change', function() { markVoiceAssistantDirty('escalationRules'); });
+      return fieldset;
+    }
+
+    function renderVoiceRules(rules) {
+      var container = document.getElementById('voice-escalation-rules');
+      if (!container) return;
+      var fragment = document.createDocumentFragment();
+      if (!Array.isArray(rules) || rules.length === 0) {
+        appendEmptyNote(fragment, 'No escalation rules configured.');
+      } else {
+        rules.forEach(function(rule) { fragment.appendChild(createVoiceRuleCard(rule)); });
+      }
+      container.replaceChildren(fragment);
+      renumberVoiceRuleCards();
+    }
+
+    function addVoiceEscalationRule() {
+      if (!profileCanEdit || voiceAssistantSaving || voiceAssistantConflicted) return;
+      var container = document.getElementById('voice-escalation-rules');
+      if (!container || container.querySelectorAll('.bp-rule-card').length >= 20) return;
+      var empty = container.querySelector('.bp-empty-note');
+      if (empty) empty.remove();
+      var card = createVoiceRuleCard({
+        id: stableRowId('voice-rule'), enabled: false, when: '', action: 'take_message', fallbackAction: 'take_message',
+      });
+      container.appendChild(card);
+      markVoiceAssistantDirty('escalationRules');
+      renumberVoiceRuleCards();
+      var when = card.querySelector('.voice-rule-when');
+      if (when) when.focus();
+    }
+
+    function renderVoiceAssistant(profile) {
+      voiceAssistantHasAuthority = hasOwn(profile, 'voiceAssistant');
+      voiceAssistantOriginal = voiceAssistantHasAuthority && profile.voiceAssistant &&
+        typeof profile.voiceAssistant === 'object' && !Array.isArray(profile.voiceAssistant)
+        ? JSON.parse(JSON.stringify(profile.voiceAssistant)) : {};
+      voiceAssistantTouched = Object.create(null);
+      voiceAssistantDirty = false;
+      voiceAssistantSaving = false;
+      voiceAssistantConflicted = false;
+
+      var displayed = voiceAssistantHasAuthority ? voiceAssistantOriginal : {};
+      setVal('voice-assistant-name', displayed.name);
+      setVal('voice-assistant-style', displayed.style);
+      setVal('voice-assistant-greeting', displayed.greeting);
+      document.getElementById('voice-assistant-personality').value = displayed.personality || '';
+      document.getElementById('voice-assistant-conversation-style').value = displayed.conversationStyle || '';
+      var rules = displayed.escalationRules && Array.isArray(displayed.escalationRules.rules)
+        ? displayed.escalationRules.rules : [];
+      renderVoiceRules(rules);
+
+      var status = document.getElementById('voiceAssistantAuthorityStatus');
+      if (status) status.textContent = voiceAssistantHasAuthority
+        ? 'This versioned provider-neutral configuration is canonical. Optional blank selections remain not configured.'
+        : 'Provider-neutral AI configuration is absent. Legacy compatibility remains in effect. Only Save AI Configuration creates neutral authority; unrelated Profile saves preserve this state.';
+      clearVoiceAssistantError();
+      updateVoiceCountersAndPreview();
+      updateVoiceActionState();
+    }
+
+    function collectVoiceAssistant() {
+      var value = voiceAssistantOriginal && typeof voiceAssistantOriginal === 'object'
+        ? JSON.parse(JSON.stringify(voiceAssistantOriginal)) : {};
+      [['name', 'voice-assistant-name'], ['style', 'voice-assistant-style'], ['greeting', 'voice-assistant-greeting']].forEach(function(definition) {
+        if (voiceAssistantTouched[definition[0]]) value[definition[0]] = getVal(definition[1]);
+      });
+      [['personality', 'voice-assistant-personality'], ['conversationStyle', 'voice-assistant-conversation-style']].forEach(function(definition) {
+        if (!voiceAssistantTouched[definition[0]]) return;
+        var selected = getSelect(definition[1]);
+        if (selected) value[definition[0]] = selected;
+        else delete value[definition[0]];
+      });
+      if (voiceAssistantTouched.escalationRules) {
+        var rules = Array.from(document.querySelectorAll('#voice-escalation-rules .bp-rule-card')).map(function(card) {
+          return {
+            id: card.dataset.ruleId,
+            enabled: card.querySelector('.voice-rule-enabled').checked,
+            when: readTextControlValue(card.querySelector('.voice-rule-when')),
+            action: card.querySelector('.voice-rule-action').value,
+            fallbackAction: card.querySelector('.voice-rule-fallbackAction').value,
+          };
+        });
+        if (rules.length) value.escalationRules = { rules: rules };
+        else delete value.escalationRules;
+      }
+      return value;
+    }
+
+    function validateVoiceAssistantDraft(value) {
+      var errors = [];
+      var name = hasOwn(value, 'name') ? value.name : '';
+      var style = hasOwn(value, 'style') ? value.style : '';
+      var greeting = hasOwn(value, 'greeting') ? value.greeting : '';
+      var nameControl = document.getElementById('voice-assistant-name');
+      var styleControl = document.getElementById('voice-assistant-style');
+      var greetingControl = document.getElementById('voice-assistant-greeting');
+      var nameInvalid = typeof name !== 'string' || voiceCodePoints(name) > 120 || voiceUtf8Bytes(name) > 480;
+      var styleInvalid = typeof style !== 'string' || voiceUtf8Bytes(style) > 4096;
+      var greetingInvalid = typeof greeting !== 'string' || voiceUtf8Bytes(greeting) > 8192;
+      nameControl.setAttribute('aria-invalid', nameInvalid ? 'true' : 'false');
+      styleControl.setAttribute('aria-invalid', styleInvalid ? 'true' : 'false');
+      greetingControl.setAttribute('aria-invalid', greetingInvalid ? 'true' : 'false');
+      if (nameInvalid) errors.push('Assistant name exceeds 120 characters or 480 UTF-8 bytes.');
+      if (styleInvalid) errors.push('Communication guidance exceeds 4096 UTF-8 bytes.');
+      if (greetingInvalid) errors.push('Greeting exceeds 8192 UTF-8 bytes.');
+
+      var ids = new Set();
+      var rules = value.escalationRules && Array.isArray(value.escalationRules.rules) ? value.escalationRules.rules : [];
+      if (rules.length > 20) errors.push('At most 20 escalation rules may be configured.');
+      rules.forEach(function(rule, index) {
+        var card = document.querySelectorAll('#voice-escalation-rules .bp-rule-card')[index];
+        var whenControl = card && card.querySelector('.voice-rule-when');
+        var normalizedId = String(rule.id || '').toLowerCase();
+        if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(rule.id) || ids.has(normalizedId)) {
+          errors.push('Escalation rule ' + (index + 1) + ' has an invalid or duplicate stable ID.');
+        }
+        ids.add(normalizedId);
+        var whenInvalid = typeof rule.when !== 'string' || !rule.when.trim() ||
+          voiceCodePoints(rule.when) > 512 || voiceUtf8Bytes(rule.when) > 2048;
+        if (whenControl) whenControl.setAttribute('aria-invalid', whenInvalid ? 'true' : 'false');
+        if (whenInvalid) errors.push('Escalation rule ' + (index + 1) + ' needs non-blank When text within 512 characters and 2048 UTF-8 bytes.');
+      });
+      return errors;
+    }
+
+    async function saveVoiceAssistant() {
+      if (!profileCanEdit || voiceAssistantSaving || voiceAssistantConflicted) return;
+      var value = collectVoiceAssistant();
+      var errors = validateVoiceAssistantDraft(value);
+      if (errors.length) {
+        showVoiceAssistantError(errors.join(' '), true);
+        return;
+      }
+      voiceAssistantSaving = true;
+      clearVoiceAssistantError();
+      updateVoiceActionState();
+      try {
+        var expectedVersion = profileData && profileData.canonicalAuthority
+          ? profileData.canonicalAuthority.version : null;
+        var response = await profileRequest('/api/v1/business-profile/voiceAssistant', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedVersion: expectedVersion, value: value }),
+        });
+        var payload = await response.json();
+        if (!payload.success) {
+          if (response.status === 409 && payload.error && payload.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT') {
+            voiceAssistantConflicted = true;
+            showVoiceAssistantError('Business Profile changed; reload and try again. Your unsaved AI configuration remains in this form.', true);
+            var reload = document.getElementById('reloadVoiceAssistantBtn');
+            if (reload) {
+              reload.hidden = false;
+              reload.disabled = false;
+              reload.focus();
+            }
+            return;
+          }
+          throw new Error(payload.errors ? payload.errors.join('; ') : payload.error && payload.error.message || 'AI configuration could not be saved.');
+        }
+        profileData = payload.data;
+        renderVoiceAssistant(profileData);
+        showToast('AI configuration saved successfully', 'success');
+      } catch (error) {
+        showVoiceAssistantError(error.message || 'AI configuration could not be saved.', true);
+      } finally {
+        voiceAssistantSaving = false;
+        updateVoiceActionState();
+      }
+    }
+
+    async function reloadVoiceAssistant() {
+      if (!profileCanEdit || voiceAssistantSaving) return;
+      try {
+        var response = await profileRequest('/api/v1/business-profile');
+        var payload = await response.json();
+        if (!payload.success || !payload.data) throw new Error('Latest AI configuration is unavailable.');
+        profileData = payload.data;
+        renderVoiceAssistant(profileData);
+        var heading = document.getElementById('voice-assistant-configuration');
+        if (heading) heading.focus();
+      } catch (error) {
+        showVoiceAssistantError(error.message || 'Latest AI configuration is unavailable.', true);
+      }
+    }
+
+    function insertSavedCompanyName() {
+      if (!profileCanEdit) return;
+      var companyName = profileData && profileData.company && typeof profileData.company.name === 'string'
+        ? profileData.company.name : '';
+      if (!companyName) {
+        showVoiceAssistantError('Save a company name before inserting it into the greeting.', true);
+        return;
+      }
+      var greeting = document.getElementById('voice-assistant-greeting');
+      greeting.setRangeText(companyName, greeting.selectionStart, greeting.selectionEnd, 'end');
+      greeting.dispatchEvent(new Event('input', { bubbles: true }));
+      greeting.focus();
+    }
+
+    // ====================================================================
     // Render profile to form
     // ====================================================================
     function renderProfile(p) {
@@ -911,8 +1391,6 @@
       var headquarters = p.headquarters && typeof p.headquarters === 'object' ? p.headquarters : {};
       var serviceArea = p.serviceArea && typeof p.serviceArea === 'object' ? p.serviceArea : {};
       var hours = p.hours && typeof p.hours === 'object' ? p.hours : {};
-      var voiceAssistant = p.voiceAssistant && typeof p.voiceAssistant === 'object' && !Array.isArray(p.voiceAssistant)
-        ? p.voiceAssistant : {};
 
       // Company
       setVal('company-name', company.name);
@@ -1030,9 +1508,7 @@
         idPrefix: 'company-value', valueClass: 'company-value', itemLabel: 'Company value', multiline: false,
         emptyMessage: 'No company values configured.',
       });
-      setVal('voice-assistant-name', voiceAssistant.name);
-      setVal('voice-assistant-style', voiceAssistant.style);
-      setVal('voice-assistant-greeting', voiceAssistant.greeting);
+      renderVoiceAssistant(p);
 
       // Notifications
     }
@@ -1818,11 +2294,6 @@
       p.faq = collectStringList('faqContainer', 'faq-value', 'FAQ');
       p.companyValues = collectStringList('companyValuesContainer', 'company-value', 'Company value');
       p.customPrompt = getVal('profile-customPrompt');
-      p.voiceAssistant = {
-        name: getVal('voice-assistant-name'),
-        style: getVal('voice-assistant-style'),
-        greeting: getVal('voice-assistant-greeting'),
-      };
 
       p.routing.preferredProvider = getSelect('routing-preferredProvider');
       p.routing.dispatchFrom = getSelect('routing-dispatchFrom');
@@ -1928,6 +2399,13 @@
     function saveProfile() {
       var btn = document.getElementById('saveBtn');
       if (!profileCanEdit) return;
+      if (voiceAssistantDirty) {
+        switchSection('retell');
+        showVoiceAssistantError('Save or reload the AI configuration before saving the rest of the Business Profile.', true);
+        var voiceSaveButton = document.getElementById('saveVoiceAssistantBtn');
+        if (voiceSaveButton) voiceSaveButton.focus();
+        return;
+      }
       btn.disabled = true;
       btn.textContent = '⏳ Saving...';
 
@@ -1982,6 +2460,16 @@
       });
     }
 
+    function activateRequestedVoiceSection() {
+      var requested = new URLSearchParams(window.location.search).get('section');
+      if (requested !== 'retell' && window.location.hash !== '#voice-assistant-configuration') return;
+      switchSection('retell');
+      window.setTimeout(function() {
+        var heading = document.getElementById('voice-assistant-configuration');
+        if (heading) heading.focus();
+      }, 0);
+    }
+
     // ====================================================================
     // Init
     // ====================================================================
@@ -1996,6 +2484,15 @@
       if (addFaqButton) addFaqButton.addEventListener('click', addFaqValue);
       var addCompanyValueButton = document.getElementById('addCompanyValueButton');
       if (addCompanyValueButton) addCompanyValueButton.addEventListener('click', addCompanyValue);
+      document.querySelectorAll('[data-voice-control]').forEach(function(control) {
+        control.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', function() {
+          markVoiceAssistantDirty(control.dataset.voiceField);
+        });
+      });
+      document.getElementById('add-voice-escalation-rule').addEventListener('click', addVoiceEscalationRule);
+      document.getElementById('saveVoiceAssistantBtn').addEventListener('click', saveVoiceAssistant);
+      document.getElementById('reloadVoiceAssistantBtn').addEventListener('click', reloadVoiceAssistant);
+      document.getElementById('insert-saved-company-name').addEventListener('click', insertSavedCompanyName);
       var servicesContainer = document.getElementById('servicesContainer');
       if (servicesContainer) servicesContainer.addEventListener('input', clearServiceCatalogError);
       document.querySelectorAll('[data-canonical-field]').forEach(function(el) {
@@ -2006,6 +2503,7 @@
           clearCanonicalError();
         });
       });
+      activateRequestedVoiceSection();
       loadProfile();
       loadAssetCatalogue();
     });

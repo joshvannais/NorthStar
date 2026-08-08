@@ -24,6 +24,16 @@ const VALID_SECTIONS = new Set([
   'notifications', 'integrations', 'canonicalPricing', 'canonicalCosts', 'policies',
   'workforce',
 ]);
+const BUSINESS_PROFILE_VERSION_PATTERN = /^org-profile-v[1-9][0-9]*$/;
+
+function isPlainObject(value) {
+  return Boolean(value) && Object.prototype.toString.call(value) === '[object Object]' &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+}
+
+function hasOwn(value, key) {
+  return Boolean(value) && Object.prototype.hasOwnProperty.call(value, key);
+}
 
 function sendError(res, error) {
   const status = error && error.status ? error.status : 503;
@@ -121,7 +131,7 @@ async function active(req) {
   return getActiveBusinessProfile(db.getPool(), req.tenantContext.organizationId);
 }
 
-async function persist(req, rawProfile) {
+async function persist(req, rawProfile, options) {
   let source = rawProfile;
   if (source && typeof source === 'object' && !Array.isArray(source)) {
     source = { ...source };
@@ -136,12 +146,30 @@ async function persist(req, rawProfile) {
     error.details = prepared.errors;
     throw error;
   }
-  const stored = await putBusinessProfile(db.getPool(), {
+  const input = {
     organizationId: req.tenantContext.organizationId,
     userId: req.tenantContext.userId,
     profile: prepared.profile,
-  });
+    preserveVoiceAssistant: !(options && options.allowVoiceAssistantWrite === true),
+  };
+  if (options && hasOwn(options, 'expectedVersion')) input.expectedVersion = options.expectedVersion;
+  const stored = await putBusinessProfile(db.getPool(), input);
   return stored;
+}
+
+function parseVoiceAssistantWrite(body) {
+  if (!isPlainObject(body) || !hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
+      Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
+      (body.expectedVersion !== null &&
+       (typeof body.expectedVersion !== 'string' || !BUSINESS_PROFILE_VERSION_PATTERN.test(body.expectedVersion))) ||
+      !isPlainObject(body.value)) {
+    const error = new Error('Voice Assistant writes require a value and the expected canonical profile version.');
+    error.status = 400;
+    error.code = 'INVALID_VOICE_ASSISTANT_WRITE';
+    error.details = ['Body must contain exactly expectedVersion and value; expectedVersion must be a canonical version label or null, and value must be an object.'];
+    throw error;
+  }
+  return { expectedVersion: body.expectedVersion, value: body.value };
 }
 
 router.get('/', requireTenantAccess, async function (req, res) {
@@ -158,6 +186,36 @@ router.get('/', requireTenantAccess, async function (req, res) {
 router.put('/', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
   try {
     return res.json({ success: true, data: response(await persist(req, req.body)) });
+  } catch (error) {
+    if (error.details) return res.status(400).json({
+      success: false,
+      error: { code: error.code, message: error.message },
+      errors: error.details,
+    });
+    return sendError(res, error);
+  }
+});
+
+router.put('/voiceAssistant', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
+  try {
+    const voiceWrite = parseVoiceAssistantWrite(req.body);
+    let current;
+    try {
+      current = (await active(req)).rawProfile;
+    } catch (error) {
+      if (!isMissingProfile(error)) throw error;
+      current = onboardingDraft(req);
+      delete current.canonicalAuthority;
+      delete current.onboardingDraft;
+    }
+    const updated = { ...current, voiceAssistant: voiceWrite.value };
+    return res.json({
+      success: true,
+      data: response(await persist(req, updated, {
+        expectedVersion: voiceWrite.expectedVersion,
+        allowVoiceAssistantWrite: true,
+      })),
+    });
   } catch (error) {
     if (error.details) return res.status(400).json({
       success: false,
@@ -191,6 +249,19 @@ router.put('/:section', requireAccountMutation, requirePermission('settings', 'u
       error: { code: error.code, message: error.message },
       errors: error.details,
     });
+    return sendError(res, error);
+  }
+});
+
+router.get('/voiceAssistant', requireTenantAccess, async function (req, res) {
+  try {
+    const profile = await active(req);
+    const value = profile.rawProfile.voiceAssistant;
+    return res.json({ success: true, data: value === undefined ? null : value });
+  } catch (error) {
+    if (isMissingProfile(error)) {
+      return res.json({ success: true, data: null, onboardingDraft: true });
+    }
     return sendError(res, error);
   }
 });

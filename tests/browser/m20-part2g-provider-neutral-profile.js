@@ -32,6 +32,12 @@ const INITIAL = Object.freeze({
   name: '  NorthStar Guide <name> 🧭  ',
   style: '  Warm, concise, and professional.\nNever invent availability.  ',
   greeting: '  Thank you for calling <NorthStar>. How may we help? 🌌  ',
+  personality: 'professional',
+  conversationStyle: 'direct',
+  rules: [
+    { id: 'voice-rule-alpha', enabled: true, when: '  Initial urgent <rule>.  ', action: 'transfer_if_available', fallbackAction: 'request_callback' },
+    { id: 'voice-rule-beta', enabled: false, when: '  Initial message rule.  ', action: 'take_message', fallbackAction: 'take_message' },
+  ],
 });
 
 const EDITED = Object.freeze({
@@ -48,6 +54,12 @@ const EDITED = Object.freeze({
   name: '  Edited Guide <name> 🌌  ',
   style: '  Edited calm style.\nKeep the response concise.  ',
   greeting: '  Admin greeting <literal>. How can we help? 🧭  ',
+  personality: 'consultative',
+  conversationStyle: 'warm',
+  rules: [
+    { id: 'voice-rule-beta', enabled: true, when: '  Edited beta </textarea><svg onload=window.__profileXss++>.  ', action: 'request_callback', fallbackAction: 'take_message' },
+    { id: 'voice-rule-alpha', enabled: false, when: '  Edited alpha e\u0301.\nLiteral markup <img>.  ', action: 'take_message', fallbackAction: 'request_callback' },
+  ],
 });
 
 const LEGACY = Object.freeze({
@@ -71,7 +83,14 @@ function profileFor(name, values) {
   profile.faq = [...values.faq];
   profile.companyValues = [...values.companyValues];
   profile.customPrompt = values.customPrompt;
-  profile.voiceAssistant = { name: values.name, style: values.style, greeting: values.greeting };
+  profile.voiceAssistant = {
+    name: values.name,
+    style: values.style,
+    greeting: values.greeting,
+    personality: values.personality,
+    conversationStyle: values.conversationStyle,
+    escalationRules: { rules: values.rules.map(rule => ({ ...rule })) },
+  };
   profile.retell = { ...LEGACY };
   return profile;
 }
@@ -155,8 +174,18 @@ async function snapshot(page) {
     name: document.getElementById('voice-assistant-name').value,
     style: document.getElementById('voice-assistant-style').value,
     greeting: document.getElementById('voice-assistant-greeting').value,
+    personality: document.getElementById('voice-assistant-personality').value,
+    conversationStyle: document.getElementById('voice-assistant-conversation-style').value,
+    rules: Array.from(document.querySelectorAll('#voice-escalation-rules .bp-rule-card')).map(card => ({
+      id: card.dataset.ruleId,
+      enabled: card.querySelector('.voice-rule-enabled').checked,
+      when: card.querySelector('.voice-rule-when').value,
+      action: card.querySelector('.voice-rule-action').value,
+      fallbackAction: card.querySelector('.voice-rule-fallbackAction').value,
+    })),
+    greetingPreview: document.getElementById('voice-assistant-greeting-preview').textContent,
     xss: window.__profileXss,
-    injectedNodes: document.querySelectorAll('#providerNeutralKnowledge img,#providerNeutralKnowledge script,#providerNeutralKnowledge svg').length,
+    injectedNodes: document.querySelectorAll('#providerNeutralKnowledge img,#providerNeutralKnowledge script,#providerNeutralKnowledge svg,#voiceAssistantEditor img,#voiceAssistantEditor script,#voiceAssistantEditor svg').length,
     legacyControls: document.querySelectorAll('#ret-voicePersonality,#ret-conversationStyle,#ret-maxConversationLength,#ret-questionStrategy,#ret-confirmationStyle,#ret-emergencyWorkflow').length,
     duplicateIds: Array.from(document.querySelectorAll('[id]')).map(node => node.id)
       .filter((id, index, ids) => ids.indexOf(id) !== index),
@@ -164,6 +193,7 @@ async function snapshot(page) {
     clientWidth: document.documentElement.clientWidth,
     activeBusinessProfileLinks: document.querySelectorAll('[data-nav-id="business-profile"][aria-current="page"]').length,
     authorityText: document.getElementById('providerNeutralAuthority').textContent,
+    voiceAuthorityText: document.getElementById('voiceAssistantAuthorityStatus').textContent,
   }));
 }
 
@@ -181,6 +211,10 @@ function assertSnapshot(value, input) {
   assert.strictEqual(value.name, input.expected.name, input.role + ' assistant name exact');
   assert.strictEqual(value.style, domText(input.expected.style), input.role + ' style DOM-normalized');
   assert.strictEqual(value.greeting, domText(input.expected.greeting), input.role + ' greeting DOM-normalized');
+  assert.strictEqual(value.personality, input.expected.personality, input.role + ' personality exact');
+  assert.strictEqual(value.conversationStyle, input.expected.conversationStyle, input.role + ' conversation style exact');
+  assert.deepStrictEqual(value.rules, input.expected.rules.map(rule => ({ ...rule, when: domText(rule.when) })), input.role + ' ordered escalation rules exact');
+  assert.strictEqual(value.greetingPreview, domText(input.expected.greeting), input.role + ' literal greeting preview exact');
   assert.strictEqual(value.xss, 0, input.role + ' executes no persisted markup');
   assert.strictEqual(value.injectedNodes, 0, input.role + ' creates no injected nodes');
   assert.strictEqual(value.legacyControls, 0, input.role + ' provider-specific placeholder controls retired');
@@ -188,6 +222,7 @@ function assertSnapshot(value, input) {
   assert.ok(value.scrollWidth - value.clientWidth <= 1, input.role + ' has no horizontal overflow');
   assert.strictEqual(value.activeBusinessProfileLinks, 2, input.role + ' canonical navigation active');
   assert.match(value.authorityText, /provider-neutral/i, input.role + ' authority is explicit');
+  assert.match(value.voiceAuthorityText, /versioned provider-neutral/i, input.role + ' voice authority is explicit');
 }
 
 async function lifecycle(browser, origin, session, input, ledger) {
@@ -299,10 +334,36 @@ async function main() {
     await ownerPage.locator('#voice-assistant-name').fill(EDITED.name);
     await ownerPage.locator('#voice-assistant-style').fill(EDITED.style);
     await ownerPage.locator('#voice-assistant-greeting').fill(INITIAL.greeting);
-    const ownerSave = ownerPage.waitForResponse(response =>
+    await ownerPage.locator('#voice-assistant-personality').selectOption(EDITED.personality);
+    await ownerPage.locator('#voice-assistant-conversation-style').selectOption(EDITED.conversationStyle);
+    for (const rule of EDITED.rules) {
+      const card = ownerPage.locator(`#voice-escalation-rules [data-rule-id="${rule.id}"]`);
+      await card.locator('.voice-rule-enabled').setChecked(rule.enabled);
+      await card.locator('.voice-rule-when').fill(rule.when);
+      await card.locator('.voice-rule-action').selectOption(rule.action);
+      await card.locator('.voice-rule-fallbackAction').selectOption(rule.fallbackAction);
+    }
+    await ownerPage.locator('#voice-escalation-rules [data-rule-id="voice-rule-alpha"] [data-rule-action="down"]').click();
+    const ownerVoiceSave = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/voiceAssistant' && response.request().method() === 'PUT');
+    await ownerPage.locator('#saveVoiceAssistantBtn').click();
+    const ownerVoiceResponse = await ownerVoiceSave;
+    assert.strictEqual(ownerVoiceResponse.status(), 200, 'owner saves versioned voice authority');
+    const ownerVoiceBody = ownerVoiceResponse.request().postDataJSON();
+    assert.deepStrictEqual(Object.keys(ownerVoiceBody).sort(), ['expectedVersion', 'value']);
+    assert.match(ownerVoiceBody.expectedVersion, /^org-profile-v[1-9][0-9]*$/);
+    assert.deepStrictEqual(ownerVoiceBody.value, {
+      name: EDITED.name,
+      style: EDITED.style,
+      greeting: INITIAL.greeting,
+      personality: EDITED.personality,
+      conversationStyle: EDITED.conversationStyle,
+      escalationRules: { rules: EDITED.rules },
+    });
+    const ownerProfileSave = ownerPage.waitForResponse(response =>
       response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT');
     await ownerPage.locator('#saveBtn').click();
-    assert.strictEqual((await ownerSave).status(), 200, 'owner saves neutral authority');
+    assert.strictEqual((await ownerProfileSave).status(), 200, 'owner saves preserved non-voice authority');
     await ownerContext.close();
 
     const adminInput = { role: 'admin-write', viewport: { width: 1280, height: 900 }, theme: 'dark' };
@@ -312,9 +373,9 @@ async function main() {
     await openNeutralProfile(adminPage, origin, 'Provider Neutral Company');
     await adminPage.locator('#voice-assistant-greeting').fill(EDITED.greeting);
     const adminSave = adminPage.waitForResponse(response =>
-      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT');
-    await adminPage.locator('#saveBtn').click();
-    assert.strictEqual((await adminSave).status(), 200, 'admin saves neutral authority');
+      response.url() === origin + '/api/v1/business-profile/voiceAssistant' && response.request().method() === 'PUT');
+    await adminPage.locator('#saveVoiceAssistantBtn').click();
+    assert.strictEqual((await adminSave).status(), 200, 'admin saves versioned voice authority');
     await adminContext.close();
 
     const viewports = [
@@ -349,6 +410,10 @@ async function main() {
          encode(convert_to(raw_profile #>> '{voiceAssistant,name}', 'UTF8'), 'hex') AS assistant_hex,
          encode(convert_to(raw_profile #>> '{voiceAssistant,style}', 'UTF8'), 'hex') AS style_hex,
          encode(convert_to(raw_profile #>> '{voiceAssistant,greeting}', 'UTF8'), 'hex') AS greeting_hex,
+         raw_profile #>> '{voiceAssistant,personality}' AS personality,
+         raw_profile #>> '{voiceAssistant,conversationStyle}' AS conversation_style,
+         raw_profile #> '{voiceAssistant,escalationRules,rules}' AS escalation_rules,
+         encode(convert_to(raw_profile #>> '{voiceAssistant,escalationRules,rules,0,when}', 'UTF8'), 'hex') AS escalation_when_hex,
          raw_profile -> 'retell' AS legacy_retell
        FROM canonical_business_profiles WHERE id = $1`,
       [authority.id]
@@ -366,6 +431,10 @@ async function main() {
       assistant_hex: Buffer.from(EDITED.name, 'utf8').toString('hex'),
       style_hex: Buffer.from(EDITED.style, 'utf8').toString('hex'),
       greeting_hex: Buffer.from(EDITED.greeting, 'utf8').toString('hex'),
+      personality: EDITED.personality,
+      conversation_style: EDITED.conversationStyle,
+      escalation_rules: EDITED.rules,
+      escalation_when_hex: Buffer.from(EDITED.rules[0].when, 'utf8').toString('hex'),
       legacy_retell: LEGACY,
     }]);
     assert.strictEqual((await getActiveBusinessProfile(pool, ORG_B)).id, otherAuthority.id, 'other tenant unchanged');

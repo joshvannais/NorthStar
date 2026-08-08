@@ -685,6 +685,9 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     // The same durable session reloads the current PostgreSQL membership on every request.
     await pool.query("UPDATE organization_memberships SET role = 'owner' WHERE id = $1", [membershipId]);
     headers['X-User-Role'] = 'viewer';
+    const retellOwnershipCountBefore = (await pool.query(
+      "SELECT COUNT(*)::int AS count FROM canonical_integration_ownership WHERE provider = 'retell'"
+    )).rows[0].count;
     const agent = await request(app).post('/api/retell/create-agent').set(headers).send({
       organizationId: foreignOrganizationId,
       role: 'viewer',
@@ -692,10 +695,27 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       companyName: 'Request-provided provider label',
       services: 'fence installation',
     });
-    expect(agent.status).toBe(200);
-    expect(agent.body.canonicalOwnershipPersisted).toBe(true);
-    expect(providerSpies.retellAgent).toHaveBeenCalledTimes(1);
-    const retellExternalId = agent.body.agent_id;
+    expect(agent.status).toBe(410);
+    expect(agent.body).toEqual({
+      success: false,
+      error: {
+        code: 'LEGACY_PROVIDER_MUTATION_DISABLED',
+        message: 'Request-body provider agent creation is disabled. Configure canonical Voice & Knowledge settings instead.',
+      },
+    });
+    expect(providerSpies.retellAgent).not.toHaveBeenCalled();
+    expect((await pool.query("SELECT COUNT(*)::int AS count FROM canonical_integration_ownership WHERE provider = 'retell'")).rows[0].count).toBe(retellOwnershipCountBefore);
+
+    // Test fixture only: the later mounted canonical call requires an existing,
+    // separately owned Retell integration. The retired route above cannot create it.
+    const retellExternalId = `intercepted-retell-agent-${crypto.randomUUID()}`;
+    await require('../../src/services/organizationAuthority').bindIntegrationOwner(pool, {
+      organizationId,
+      userId,
+      provider: 'retell',
+      externalIntegrationId: retellExternalId,
+      metadata: { source: 'test-fixture' },
+    });
     const retellOwnership = await pool.query(
       `SELECT organization_id, created_by, provider, external_integration_id
          FROM canonical_integration_ownership WHERE provider = 'retell' AND external_integration_id = $1`,
@@ -848,7 +868,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       'provider_creation_requested', 'call_started', 'human_handoff', 'call_cancelled',
     ]));
 
-    expect(providerSpies.retellAgent).toHaveBeenCalledTimes(1);
+    expect(providerSpies.retellAgent).not.toHaveBeenCalled();
     expect(providerSpies.retellSms).toHaveBeenCalledTimes(1);
     expect(providerSpies.retellCall).toHaveBeenCalledTimes(1);
     expect(providerSpies.jobberAuth).toHaveBeenCalledTimes(1);

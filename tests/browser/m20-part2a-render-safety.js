@@ -120,15 +120,28 @@ async function seedOrganization(pool) {
 
 async function assertPersistentAuthority(app, pool, ownerSession, viewerSession) {
   const profile = completeProfile();
+  const writableProfile = JSON.parse(JSON.stringify(profile));
+  writableProfile.hours.tuesday = { open: '09:00', close: '18:00', emergency: false };
   const profileWrite = await request(app)
     .put('/api/v1/business-profile')
     .set(ownerSession.headers)
-    .send(profile);
+    .send(writableProfile);
   assert.strictEqual(profileWrite.status, 200, 'owner writes through mounted Business Profile route');
-  assert.strictEqual(profileWrite.body.data.hours.tuesday.open, HOUR_OPEN);
-  assert.strictEqual(profileWrite.body.data.hours.tuesday.close, HOUR_CLOSE);
+  assert.strictEqual(profileWrite.body.data.hours.tuesday.open, '09:00');
+  assert.strictEqual(profileWrite.body.data.hours.tuesday.close, '18:00');
   assert.strictEqual(profileWrite.body.data.services[0].name, SERVICE_NAME);
   assert.strictEqual(profileWrite.body.data.services[0].equipment, SERVICE_EQUIPMENT);
+
+  // Accepted server validation rejects new non-HH:mm hour writes. Preserve the
+  // original Part 2A regression purpose by exercising historically persisted
+  // raw bytes through the canonical authority, then mounting the real GET/UI
+  // consumers below. This does not weaken or copy the production validator.
+  const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+  await putBusinessProfile(pool, {
+    organizationId: ORGANIZATION_ID,
+    userId: OWNER_ID,
+    profile,
+  });
 
   const preferenceWrite = await request(app)
     .put('/api/account/preferences')
@@ -184,20 +197,20 @@ async function assertPersistentAuthority(app, pool, ownerSession, viewerSession)
     equipment_hex: utf8Hex(SERVICE_EQUIPMENT),
     hour_open_hex: utf8Hex(HOUR_OPEN),
     hour_close_hex: utf8Hex(HOUR_CLOSE),
-    version_number: '2',
+    version_number: '3',
     contact_name_hex: utf8Hex(CONTACT_NAME),
     contact_phone_hex: utf8Hex(CONTACT_PHONE),
   }]);
 }
 
 async function snapshotBusinessProfile(page) {
-  await page.waitForSelector('#servicesContainer .bp-service-row', { state: 'attached' });
+  await page.waitForSelector('#servicesContainer .bp-service-card', { state: 'attached' });
   return page.evaluate(function () {
     const container = document.getElementById('servicesContainer');
-    const row = container.querySelector('.bp-service-row');
+    const row = container.querySelector('.bp-service-card');
     const equipment = row.querySelector('.svc-equipment');
     return {
-      nameText: row.querySelector('.svc-name').textContent,
+      nameText: row.querySelector('.bp-repeat-title').textContent,
       equipmentValue: equipment.value,
       legitimateOpen: document.querySelector('.hours-open[data-day="monday"]').value,
       legitimateClose: document.querySelector('.hours-close[data-day="monday"]').value,

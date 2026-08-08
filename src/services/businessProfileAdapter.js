@@ -72,6 +72,19 @@ const ESCALATION_RULES_FIELDS = new Set(['rules']);
 const ESCALATION_RULE_FIELDS = new Set(['id', 'enabled', 'when', 'action', 'fallbackAction']);
 const ESCALATION_ACTIONS = new Set(['take_message', 'request_callback', 'transfer_if_available']);
 const ESCALATION_FALLBACK_ACTIONS = new Set(['take_message', 'request_callback']);
+const OPERATIONAL_CONFIGURATION_FIELDS = Object.freeze({
+  routing: new Set([
+    'dispatchFrom', 'trafficEnabled', 'useLiveTraffic', 'avoidTolls', 'avoidHighways', 'avoidFerries',
+  ]),
+  crew: new Set(['defaultCrewSize', 'maxCrewSize', 'shopTime']),
+  vehicles: new Set(['truckCount', 'trailerCount', 'averageMpg', 'equipmentTransportCapacity']),
+  scheduling: new Set([
+    'maxJobsPerDay', 'travelBuffer', 'appointmentBuffer', 'workDayLength',
+    'maxDailyTravel', 'preferredDispatchStrategy',
+  ]),
+});
+const OPERATIONAL_DISPATCH_ORIGINS = new Set(['', 'headquarters', 'nearest-office', 'assigned-crew']);
+const OPERATIONAL_DISPATCH_STRATEGIES = new Set(['', 'efficiency', 'priority', 'balanced']);
 const SERVICE_PRICING_FIELDS = new Set([
   'requiredScope', 'allowedScopeValues', 'rangePercent', 'lineItems',
 ]);
@@ -580,6 +593,90 @@ function validateVoiceAssistant(voiceAssistant, errors) {
   }
 }
 
+function validateOptionalOperationalNumber(value, path, options, errors) {
+  if (value === null || value === undefined) return;
+  const minimum = options && options.minimum;
+  const maximum = options && options.maximum;
+  if (typeof value !== 'number' || !Number.isFinite(value) ||
+      (options && options.integer && !Number.isInteger(value)) ||
+      (minimum !== undefined && value < minimum) ||
+      (maximum !== undefined && value > maximum)) {
+    let expectation = options && options.integer ? 'an integer' : 'a finite number';
+    if (minimum !== undefined && maximum !== undefined) expectation += ' between ' + minimum + ' and ' + maximum;
+    else if (minimum !== undefined) expectation += ' greater than or equal to ' + minimum;
+    else if (maximum !== undefined) expectation += ' less than or equal to ' + maximum;
+    errors.push(path + ' must be null or ' + expectation + '.');
+  }
+}
+
+function validateOperationalConfiguration(profile, targetErrors) {
+  const errors = targetErrors || [];
+  const routing = isPlainObject(profile.routing) ? profile.routing : null;
+  if (routing) {
+    if (hasOwn(routing, 'dispatchFrom') &&
+        (typeof routing.dispatchFrom !== 'string' || !OPERATIONAL_DISPATCH_ORIGINS.has(routing.dispatchFrom))) {
+      errors.push('routing.dispatchFrom must be empty, headquarters, nearest-office, or assigned-crew.');
+    }
+    for (const field of ['trafficEnabled', 'useLiveTraffic', 'avoidTolls', 'avoidHighways', 'avoidFerries']) {
+      if (hasOwn(routing, field) && typeof routing[field] !== 'boolean') {
+        errors.push('routing.' + field + ' must be a boolean.');
+      }
+    }
+  }
+
+  const crew = isPlainObject(profile.crew) ? profile.crew : null;
+  if (crew) {
+    validateOptionalOperationalNumber(crew.defaultCrewSize, 'crew.defaultCrewSize', { integer: true, minimum: 1, maximum: 10 }, errors);
+    validateOptionalOperationalNumber(crew.maxCrewSize, 'crew.maxCrewSize', { integer: true, minimum: 1, maximum: 20 }, errors);
+    validateOptionalOperationalNumber(crew.shopTime, 'crew.shopTime', { minimum: 0 }, errors);
+    if (typeof crew.defaultCrewSize === 'number' && Number.isFinite(crew.defaultCrewSize) &&
+        typeof crew.maxCrewSize === 'number' && Number.isFinite(crew.maxCrewSize) &&
+        crew.defaultCrewSize > crew.maxCrewSize) {
+      errors.push('crew.defaultCrewSize must not exceed crew.maxCrewSize.');
+    }
+  }
+
+  const vehicles = isPlainObject(profile.vehicles) ? profile.vehicles : null;
+  if (vehicles) {
+    validateOptionalOperationalNumber(vehicles.truckCount, 'vehicles.truckCount', { integer: true, minimum: 0 }, errors);
+    validateOptionalOperationalNumber(vehicles.trailerCount, 'vehicles.trailerCount', { integer: true, minimum: 0 }, errors);
+    validateOptionalOperationalNumber(vehicles.averageMpg, 'vehicles.averageMpg', { minimum: 5 }, errors);
+    validateOptionalOperationalNumber(
+      vehicles.equipmentTransportCapacity,
+      'vehicles.equipmentTransportCapacity',
+      { integer: true, minimum: 0 },
+      errors
+    );
+  }
+
+  const scheduling = isPlainObject(profile.scheduling) ? profile.scheduling : null;
+  if (scheduling) {
+    validateOptionalOperationalNumber(scheduling.maxJobsPerDay, 'scheduling.maxJobsPerDay', { integer: true, minimum: 1 }, errors);
+    validateOptionalOperationalNumber(scheduling.travelBuffer, 'scheduling.travelBuffer', { integer: true, minimum: 0 }, errors);
+    validateOptionalOperationalNumber(scheduling.appointmentBuffer, 'scheduling.appointmentBuffer', { integer: true, minimum: 0 }, errors);
+    validateOptionalOperationalNumber(scheduling.workDayLength, 'scheduling.workDayLength', { minimum: 1 }, errors);
+    validateOptionalOperationalNumber(scheduling.maxDailyTravel, 'scheduling.maxDailyTravel', { integer: true, minimum: 0 }, errors);
+    if (hasOwn(scheduling, 'preferredDispatchStrategy') &&
+        (typeof scheduling.preferredDispatchStrategy !== 'string' ||
+         !OPERATIONAL_DISPATCH_STRATEGIES.has(scheduling.preferredDispatchStrategy))) {
+      errors.push('scheduling.preferredDispatchStrategy must be empty, efficiency, priority, or balanced.');
+    }
+  }
+  return errors;
+}
+
+function projectOperationalConfiguration(profile) {
+  const source = isPlainObject(profile) ? profile : {};
+  return Object.keys(OPERATIONAL_CONFIGURATION_FIELDS).reduce(function (projection, section) {
+    const sectionSource = isPlainObject(source[section]) ? source[section] : {};
+    projection[section] = {};
+    for (const field of OPERATIONAL_CONFIGURATION_FIELDS[section]) {
+      if (hasOwn(sectionSource, field)) projection[section][field] = stableValue(sectionSource[field]);
+    }
+    return projection;
+  }, {});
+}
+
 function validateNonNegativeNumber(value, path, errors) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     errors.push(path + ' must be a non-negative finite number.');
@@ -774,6 +871,7 @@ function validateOperationalBusinessProfile(profile) {
   if (hasOwn(profile, 'faq')) validateStringList(profile.faq, 'faq', errors);
   if (hasOwn(profile, 'companyValues')) validateStringList(profile.companyValues, 'companyValues', errors);
   if (hasOwn(profile, 'voiceAssistant')) validateVoiceAssistant(profile.voiceAssistant, errors);
+  validateOperationalConfiguration(profile, errors);
   return errors;
 }
 
@@ -971,6 +1069,7 @@ function adaptBusinessProfile(profile, version) {
       averageHourlyCost: finiteOrNull(crew.averageHourlyRate, { nonNegative: true }),
       overtimeMultiplier: finiteOrNull(crew.overtimeMultiplier, { positive: true }),
     },
+    operationalConfiguration: projectOperationalConfiguration(source),
     pricing: {
       customerMarkupPercent: configured(canonicalPricing, 'customerMarkupPercent', { nonNegative: true }),
       travelCustomerChargePerMile: configured(canonicalPricing, 'travelCustomerChargePerMile', { nonNegative: true }),
@@ -1014,12 +1113,15 @@ module.exports = {
   adaptBusinessProfile,
   finiteOrNull,
   migrateLegacyCanonicalAuthority,
+  OPERATIONAL_CONFIGURATION_FIELDS,
   prepareBusinessProfileForWrite,
+  projectOperationalConfiguration,
   sha256,
   stableStringify,
   stableValue,
   synchronizeLegacyFinancial,
   validateCanonicalBusinessProfile,
+  validateOperationalConfiguration,
   validateOperationalBusinessProfile,
   validateRawBusinessProfile,
 };

@@ -142,6 +142,56 @@ async function assertNoOverflow(page) {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth <= 1));
 }
 
+async function assertFinancialAccessibility(page) {
+  const result = await page.evaluate(() => {
+    const controls = Array.from(document.querySelectorAll('[data-financial-control]'));
+    const labelFailures = controls.filter(control => {
+      const labels = Array.from(control.labels || []);
+      return !control.id || labels.length !== 1 || labels[0].htmlFor !== control.id || !labels[0].textContent.trim();
+    }).map(control => control.id || '(missing id)');
+    const section = document.getElementById('section-financial');
+    const heading = document.getElementById('financialConfigurationHeading');
+    const note = document.getElementById('canonicalAuthorityNote');
+    const error = document.getElementById('canonicalFinancialError');
+    const save = document.getElementById('saveFinancialConfigurationBtn');
+    const reload = document.getElementById('reloadFinancialConfigurationBtn');
+    const action = button => ({
+      controls: button.getAttribute('aria-controls'),
+      describedBy: (button.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean).sort(),
+      name: button.textContent.trim(),
+      type: button.type,
+    });
+    return {
+      controlCount: controls.length,
+      labelFailures,
+      region: {
+        role: section.getAttribute('role'),
+        labelledBy: section.getAttribute('aria-labelledby'),
+        heading: heading.textContent.trim(),
+      },
+      status: { role: note.getAttribute('role'), live: note.getAttribute('aria-live') },
+      error: { role: error.getAttribute('role'), live: error.getAttribute('aria-live'), tabIndex: error.tabIndex },
+      save: action(save),
+      reload: action(reload),
+    };
+  });
+  assert.strictEqual(result.controlCount, 20);
+  assert.deepStrictEqual(result.labelFailures, []);
+  assert.deepStrictEqual(result.region, {
+    role: 'tabpanel',
+    labelledBy: 'profile-tab-financial',
+    heading: 'Canonical Pricing & Cost Authority',
+  });
+  assert.deepStrictEqual(result.status, { role: 'status', live: 'polite' });
+  assert.deepStrictEqual(result.error, { role: 'alert', live: 'assertive', tabIndex: -1 });
+  for (const action of [result.save, result.reload]) {
+    assert.strictEqual(action.controls, 'section-financial');
+    assert.deepStrictEqual(action.describedBy, ['canonicalAuthorityNote', 'canonicalFinancialError'].sort());
+    assert.strictEqual(action.type, 'button');
+    assert.ok(action.name.length > 0);
+  }
+}
+
 async function active(pool) {
   return (await pool.query(
     `SELECT version_label AS version, raw_profile,
@@ -226,6 +276,7 @@ async function main() {
     await assertNoOverflow(ownerPage);
     assert.strictEqual(await ownerPage.evaluate(() => window.__financialXss), 0);
     await ownerPage.click('[data-section="financial"]');
+    await assertFinancialAccessibility(ownerPage);
     assert.strictEqual(await ownerPage.locator('#fin-defaultRangePercent').inputValue(), '0');
     assert.strictEqual(await ownerPage.locator('#crew-averageHourlyRate').inputValue(), '0');
     assert.strictEqual((await ownerPage.locator('#section-financial').textContent()).includes(UNKNOWN), false);
@@ -324,12 +375,23 @@ async function main() {
     // dirty Voice token.
     await ownerPage.click('[data-section="retell"]');
     await ownerPage.fill('#voice-assistant-name', 'Stale voice must not borrow Financial token');
-    state = await active(pool);
-    const adminFinancial = await request(app).put('/api/v1/business-profile/financialConfiguration').set(sessions.admin.headers).send({
-      expectedVersion: state.version,
-      value: { canonicalPricing: { defaultRangePercent: 9 } },
-    });
-    assert.strictEqual(adminFinancial.status, 200);
+    const adminContext = await contextFor(browser, origin, sessions.admin, {
+      role: 'admin-mobile-dark', viewport: { width: 390, height: 844 }, theme: 'dark',
+    }, ledger);
+    const adminPage = await adminContext.newPage();
+    attachPage(adminPage, ledger, 'admin-mobile-dark');
+    await openProfile(adminPage, origin);
+    await adminPage.click('[data-section="financial"]');
+    await assertFinancialAccessibility(adminPage);
+    assert.strictEqual(await adminPage.locator('#fin-defaultRangePercent').isDisabled(), false);
+    await adminPage.fill('#fin-defaultRangePercent', '9');
+    const adminFinancial = adminPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/financialConfiguration' && response.request().method() === 'PUT');
+    await adminPage.click('#saveFinancialConfigurationBtn');
+    assert.strictEqual((await adminFinancial).status(), 200);
+    assert.strictEqual(await adminPage.evaluate(() => window.__financialXss), 0);
+    await assertNoOverflow(adminPage);
+    await adminContext.close();
     await ownerPage.click('[data-section="financial"]');
     await ownerPage.fill('#fin-defaultRangePercent', '8');
     const secondStaleFinancial = ownerPage.waitForResponse(response =>
@@ -404,6 +466,7 @@ async function main() {
       attachPage(page, ledger, input.role);
       await openProfile(page, origin);
       await page.click('[data-section="financial"]');
+      await assertFinancialAccessibility(page);
       assert.strictEqual(await page.locator('#fin-defaultRangePercent').isDisabled(), true);
       assert.strictEqual(await page.locator('#saveFinancialConfigurationBtn').isDisabled(), true);
       assert.strictEqual(await page.evaluate(() => window.__financialXss), 0);
@@ -470,6 +533,7 @@ async function main() {
       themes: ['light', 'dark'],
       lifecycle: [
         'loading', 'initial', 'dirty', 'validation', 'save', 'zero', 'blank-delete',
+        'admin-browser-write', 'programmatic-labels',
         'aligned-sibling-rebase', 'operational-reload-stale-financial',
         'financial-reload-stale-general', 'financial-reload-stale-voice', 'error',
       ],

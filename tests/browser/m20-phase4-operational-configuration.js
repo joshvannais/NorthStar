@@ -290,7 +290,22 @@ async function main() {
       response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'GET');
     await ownerPage.click('#reloadOperationalConfigurationBtn');
     assert.strictEqual((await reloadOperational).status(), 200);
+    await ownerPage.waitForFunction(() => {
+      const travelBuffer = document.getElementById('sched-travelBuffer');
+      const error = document.getElementById('operationalConfigurationError');
+      const reload = document.getElementById('reloadOperationalConfigurationBtn');
+      const save = document.getElementById('saveOperationalConfigurationBtn');
+      return travelBuffer && travelBuffer.value === '15' &&
+        travelBuffer.getAttribute('aria-invalid') === 'false' &&
+        error && error.textContent === '' && !error.classList.contains('show') &&
+        reload && reload.hidden && save && save.disabled;
+    });
     assert.strictEqual(await ownerPage.inputValue('#sched-travelBuffer'), '15');
+    assert.strictEqual(await ownerPage.locator('#sched-travelBuffer').getAttribute('aria-invalid'), 'false');
+    assert.strictEqual(await ownerPage.locator('#operationalConfigurationError').textContent(), '');
+    assert.strictEqual(await ownerPage.locator('#operationalConfigurationError').evaluate(element => element.classList.contains('show')), false);
+    assert.strictEqual(await ownerPage.locator('#reloadOperationalConfigurationBtn').isVisible(), false);
+    assert.strictEqual(await ownerPage.locator('#saveOperationalConfigurationBtn').isDisabled(), true);
     assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Unsaved general edit survives operational save');
     assert.strictEqual(await ownerPage.inputValue('#voice-assistant-name'), 'Unsaved voice edit survives operational save');
 

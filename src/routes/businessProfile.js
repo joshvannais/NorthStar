@@ -13,12 +13,16 @@ const { requireAccountMutation, requireTenantAccess } = require('../auth/middlew
 const { requirePermission } = require('../auth/permissions');
 const { getActiveBusinessProfile, putBusinessProfile } = require('../services/organizationAuthority');
 const {
+  FINANCIAL_CONFIGURATION_FIELDS,
   migrateLegacyCanonicalAuthority,
+  migrateLegacyFinancialConfiguration,
   OPERATIONAL_CONFIGURATION_FIELDS,
   prepareBusinessProfileForWrite,
+  projectFinancialConfiguration,
   projectOperationalConfiguration,
   stableValue,
   synchronizeLegacyFinancial,
+  validateFinancialConfiguration,
   validateOperationalConfiguration,
 } = require('../services/businessProfileAdapter');
 
@@ -241,6 +245,80 @@ function operationalResponse(profile) {
   };
 }
 
+function parseFinancialConfigurationWrite(body) {
+  if (!isPlainObject(body) || !hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
+      Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
+      (body.expectedVersion !== null &&
+       (typeof body.expectedVersion !== 'string' || !BUSINESS_PROFILE_VERSION_PATTERN.test(body.expectedVersion))) ||
+      !isPlainObject(body.value)) {
+    throw invalidWrite(
+      'INVALID_FINANCIAL_CONFIGURATION_WRITE',
+      'Financial Configuration writes require recognized values and the expected canonical profile version.',
+      ['Body must contain exactly expectedVersion and value; expectedVersion must be a canonical version label or null, and value must be an object.']
+    );
+  }
+  const errors = [];
+  if (Object.keys(body.value).length === 0) {
+    errors.push('value must supply at least one Financial Configuration section.');
+  }
+  for (const section of Object.keys(body.value)) {
+    const allowed = FINANCIAL_CONFIGURATION_FIELDS[section];
+    if (!allowed) {
+      errors.push(section + ' is not a supported Financial Configuration section.');
+      continue;
+    }
+    if (!isPlainObject(body.value[section])) {
+      errors.push(section + ' must be a plain object.');
+      continue;
+    }
+    for (const field of Object.keys(body.value[section])) {
+      if (!allowed.has(field)) errors.push(section + '.' + field + ' is not a supported Financial Configuration field.');
+    }
+  }
+  validateFinancialConfiguration(body.value, errors);
+  if (errors.length) {
+    throw invalidWrite(
+      'INVALID_FINANCIAL_CONFIGURATION_WRITE',
+      'Financial Configuration validation failed.',
+      errors
+    );
+  }
+  return { expectedVersion: body.expectedVersion, value: body.value };
+}
+
+function mergeFinancialConfiguration(current, value) {
+  const updated = { ...current };
+  for (const section of Object.keys(value)) {
+    const existing = isPlainObject(current[section]) ? current[section] : {};
+    const next = { ...existing };
+    for (const field of FINANCIAL_CONFIGURATION_FIELDS[section]) delete next[field];
+    updated[section] = { ...next, ...value[section] };
+  }
+  return updated;
+}
+
+function clearSuppliedLegacyFinancialSources(profile, value) {
+  if (!hasOwn(value, 'canonicalPricing') || !isPlainObject(value.canonicalPricing) ||
+      !isPlainObject(profile.financial)) return profile;
+  const updated = { ...profile, financial: { ...profile.financial } };
+  for (const mapping of [
+    ['desiredGrossMarginPercent', 'desiredGrossMargin'],
+    ['desiredNetMarginPercent', 'desiredNetMargin'],
+    ['maximumDiscountPercent', 'maximumDiscount'],
+  ]) {
+    if (!hasOwn(value.canonicalPricing, mapping[0])) delete updated.financial[mapping[1]];
+  }
+  return updated;
+}
+
+function financialResponse(profile) {
+  const full = response(profile);
+  return {
+    ...projectFinancialConfiguration(full),
+    canonicalAuthority: full.canonicalAuthority,
+  };
+}
+
 function parseVoiceAssistantWrite(body) {
   if (!isPlainObject(body) || !hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
       Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
@@ -306,6 +384,46 @@ router.put('/operationalConfiguration', requireAccountMutation, requirePermissio
     return res.json({
       success: true,
       data: response(await persist(req, updated, {
+        expectedVersion: write.expectedVersion,
+        preserveUnrelatedRaw: true,
+      })),
+    });
+  } catch (error) {
+    if (error.details) return res.status(400).json({
+      success: false,
+      error: { code: error.code, message: error.message },
+      errors: error.details,
+    });
+    return sendError(res, error);
+  }
+});
+
+router.put('/financialConfiguration', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
+  try {
+    const write = parseFinancialConfigurationWrite(req.body);
+    let current;
+    try {
+      current = (await active(req)).rawProfile;
+    } catch (error) {
+      if (!isMissingProfile(error)) throw error;
+      current = onboardingDraft(req);
+      delete current.canonicalAuthority;
+      delete current.onboardingDraft;
+    }
+    const merged = mergeFinancialConfiguration(current, write.value);
+    const cleared = clearSuppliedLegacyFinancialSources(merged, write.value);
+    const migrated = migrateLegacyFinancialConfiguration(cleared).profile;
+    const financialErrors = validateFinancialConfiguration(migrated);
+    if (financialErrors.length) {
+      throw invalidWrite(
+        'INVALID_FINANCIAL_CONFIGURATION_WRITE',
+        'Financial Configuration validation failed.',
+        financialErrors
+      );
+    }
+    return res.json({
+      success: true,
+      data: financialResponse(await persist(req, migrated, {
         expectedVersion: write.expectedVersion,
         preserveUnrelatedRaw: true,
       })),
@@ -400,6 +518,26 @@ router.get('/operationalConfiguration', requireTenantAccess, async function (req
         success: true,
         data: {
           ...projectOperationalConfiguration(draft),
+          canonicalAuthority: null,
+          onboardingDraft: true,
+        },
+        onboardingDraft: true,
+      });
+    }
+    return sendError(res, error);
+  }
+});
+
+router.get('/financialConfiguration', requireTenantAccess, async function (req, res) {
+  try {
+    return res.json({ success: true, data: financialResponse(await active(req)) });
+  } catch (error) {
+    if (isMissingProfile(error)) {
+      const draft = onboardingDraft(req);
+      return res.json({
+        success: true,
+        data: {
+          ...projectFinancialConfiguration(draft),
           canonicalAuthority: null,
           onboardingDraft: true,
         },

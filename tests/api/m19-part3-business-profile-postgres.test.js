@@ -184,7 +184,11 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     missingBody.canonicalCosts = {};
     const missing = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send(missingBody);
     expect(missing.status).toBe(200);
-    expect(missing.body.data.canonicalPricing).toEqual({ customerMarkupPercent: 0 });
+    expect(missing.body.data.canonicalPricing).toEqual({
+      customerMarkupPercent: 0,
+      desiredGrossMarginPercent: 40,
+      desiredNetMarginPercent: 20,
+    });
     expect(missing.body.data.financial).not.toHaveProperty('taxRate');
     expect(missing.body.data.financial).not.toHaveProperty('emergencyMarkup');
     expect(missing.body.data.financial).not.toHaveProperty('travelCharge');

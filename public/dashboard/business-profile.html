@@ -260,15 +260,11 @@
           <div class="bp-card">
             <h3>Crew Defaults</h3>
             <div class="bp-section-desc">Crew sizing and shop-time are planning policies only. Team owns individual accounts, memberships, skills, and crew identities; scheduling and dispatch execution remain outside this surface.</div>
-            <div class="bp-authority-note">Rate fields remain Financial Configuration groundwork and are not part of this operational-policy save.</div>
+            <div class="bp-authority-note">Labor-rate and billing assumptions are managed in Financial Configuration. This surface retains only crew planning policies.</div>
             <div class="bp-grid">
               <div class="bp-field"><label>Default Crew Size</label><input id="crew-defaultCrewSize" data-operational-control data-operational-section="crew" data-operational-field="defaultCrewSize" type="number" min="1" max="10"></div>
               <div class="bp-field"><label>Maximum Crew Size</label><input id="crew-maxCrewSize" data-operational-control data-operational-section="crew" data-operational-field="maxCrewSize" type="number" min="1" max="20"></div>
-              <div class="bp-field"><label>Average Hourly Rate ($/hr)</label><input id="crew-averageHourlyRate" type="number" step="0.5" min="15" max="200"></div>
-              <div class="bp-field"><label>Overtime Multiplier</label><input id="crew-overtimeMultiplier" type="number" step="0.1" min="1" max="3"></div>
-              <div class="bp-field"><label>Travel Pay ($/trip)</label><input id="crew-travelPay" type="number" step="0.5" min="0"></div>
               <div class="bp-field"><label>Shop Time (hours)</label><input id="crew-shopTime" data-operational-control data-operational-section="crew" data-operational-field="shopTime" type="number" step="0.25" min="0"></div>
-              <div class="bp-field"><label>Minimum Billable Hours</label><input id="crew-minimumBillableHours" type="number" step="0.5" min="0.5"></div>
             </div>
           </div>
         </div>
@@ -278,14 +274,11 @@
           <div class="bp-card">
             <h3>Fleet Planning Assumptions</h3>
             <div class="bp-section-desc">Fleet counts, efficiency, and transport capacity are planning assumptions only. The Asset &amp; Equipment Catalogue owns normalized individual equipment and vehicle identities.</div>
-            <div class="bp-authority-note">Fuel, vehicle-cost, and maintenance-rate fields remain Financial Configuration groundwork and are not part of this operational-policy save.</div>
+            <div class="bp-authority-note">Fuel, vehicle-cost, and maintenance assumptions are managed in Financial Configuration. This surface retains only fleet planning policies.</div>
             <div class="bp-grid">
               <div class="bp-field"><label>Truck Count</label><input id="veh-truckCount" data-operational-control data-operational-section="vehicles" data-operational-field="truckCount" type="number" min="0"></div>
               <div class="bp-field"><label>Trailer Count</label><input id="veh-trailerCount" data-operational-control data-operational-section="vehicles" data-operational-field="trailerCount" type="number" min="0"></div>
               <div class="bp-field"><label>Average MPG</label><input id="veh-averageMpg" data-operational-control data-operational-section="vehicles" data-operational-field="averageMpg" type="number" step="0.5" min="5"></div>
-              <div class="bp-field"><label>Average Fuel Cost ($/gal)</label><input id="veh-averageFuelCost" type="number" step="0.1" min="0"></div>
-              <div class="bp-field"><label>Hourly Vehicle Cost ($/hr)</label><input id="veh-hourlyVehicleCost" type="number" step="0.5" min="0"></div>
-              <div class="bp-field"><label>Maintenance Reserve (%)</label><input id="veh-maintenanceReserve" type="number" step="0.01" min="0"></div>
               <div class="bp-field"><label>Equipment Transport Capacity</label><input id="veh-equipmentTransportCapacity" data-operational-control data-operational-section="vehicles" data-operational-field="equipmentTransportCapacity" type="number" min="0"></div>
             </div>
           </div>
@@ -318,21 +311,36 @@
         <!-- Section: Financial -->
         <div class="bp-section" id="section-financial">
           <div class="bp-card">
-            <h3>Canonical Pricing &amp; Cost Authority</h3>
-            <div class="bp-section-desc">These persisted organization fields are consumed directly by canonical estimates and voice-session context.</div>
-            <div class="bp-authority-note" id="canonicalAuthorityNote">Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.</div>
+            <h3 id="financialConfigurationHeading">Canonical Pricing &amp; Cost Authority</h3>
+            <div class="bp-section-desc">Tenant-scoped pricing philosophy, cost inputs, rates, and preliminary advisory-range preferences. Mission 24 owns estimate execution and authorized customer pricing.</div>
+            <div class="bp-authority-note" id="canonicalAuthorityNote" role="status" aria-live="polite">Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.</div>
             <div class="bp-grid">
-              <div class="bp-field"><label>Customer Markup (%)</label><input id="fin-customerMarkupPercent" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.customerMarkupPercent</span></div>
-              <div class="bp-field"><label>Tax Rate (%)</label><input id="fin-taxRatePercent" data-canonical-field type="number" step="0.01" min="0" max="100"><span class="help-text">canonicalPricing.taxRatePercent</span></div>
-              <div class="bp-field"><label>Emergency Multiplier</label><input id="fin-emergencyMultiplier" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.emergencyMultiplier</span></div>
-              <div class="bp-field"><label>Customer Travel Charge ($/mile)</label><input id="fin-travelCustomerChargePerMile" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.travelCustomerChargePerMile</span></div>
-              <div class="bp-field"><label>Minimum Job Price ($)</label><input id="fin-minimumJobPrice" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.minimumJobPrice</span></div>
-              <div class="bp-field"><label>Overhead (%)</label><input id="cost-overheadPercent" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalCosts.overheadPercent</span></div>
-              <div class="bp-field"><label>Internal Travel Cost ($/mile)</label><input id="cost-travelCostPerMile" data-canonical-field type="number" step="0.01" min="0"><span class="help-text">canonicalCosts.travelCostPerMile</span></div>
-              <div class="bp-field bp-full"><label>Material Cost by Service (JSON)</label><textarea id="cost-materialCostByService" data-canonical-field rows="3" placeholder='{"fence:cedar": 120}'></textarea><span class="help-text">canonicalCosts.materialCostByService; values must be non-negative numbers.</span></div>
-              <div class="bp-field bp-full"><label>Equipment Cost by Reference (JSON)</label><textarea id="cost-equipmentCostByReference" data-canonical-field rows="3" placeholder='{"mini-excavator": 350}'></textarea><span class="help-text">canonicalCosts.equipmentCostByReference; values must be non-negative numbers.</span></div>
+              <div class="bp-field"><label for="fin-customerMarkupPercent">Customer Markup (%)</label><input id="fin-customerMarkupPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="customerMarkupPercent" type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.customerMarkupPercent</span></div>
+              <div class="bp-field"><label for="fin-taxRatePercent">Tax Rate (%)</label><input id="fin-taxRatePercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="taxRatePercent" type="number" step="0.01" min="0" max="100"><span class="help-text">canonicalPricing.taxRatePercent</span></div>
+              <div class="bp-field"><label for="fin-emergencyMultiplier">Emergency Multiplier</label><input id="fin-emergencyMultiplier" data-financial-control data-financial-section="canonicalPricing" data-financial-field="emergencyMultiplier" type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.emergencyMultiplier</span></div>
+              <div class="bp-field"><label for="fin-travelCustomerChargePerMile">Customer Travel Charge ($/mile)</label><input id="fin-travelCustomerChargePerMile" data-financial-control data-financial-section="canonicalPricing" data-financial-field="travelCustomerChargePerMile" type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.travelCustomerChargePerMile</span></div>
+              <div class="bp-field"><label for="fin-minimumJobPrice">Minimum Job Price ($)</label><input id="fin-minimumJobPrice" data-financial-control data-financial-section="canonicalPricing" data-financial-field="minimumJobPrice" type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.minimumJobPrice</span></div>
+              <div class="bp-field"><label for="fin-desiredGrossMarginPercent">Desired Gross Margin (%)</label><input id="fin-desiredGrossMarginPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="desiredGrossMarginPercent" type="number" step="0.01" min="0" max="100"></div>
+              <div class="bp-field"><label for="fin-desiredNetMarginPercent">Desired Net Margin (%)</label><input id="fin-desiredNetMarginPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="desiredNetMarginPercent" type="number" step="0.01" min="0" max="100"></div>
+              <div class="bp-field"><label for="fin-maximumDiscountPercent">Maximum Discount (%)</label><input id="fin-maximumDiscountPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="maximumDiscountPercent" type="number" step="0.01" min="0" max="100"></div>
+              <div class="bp-field"><label for="fin-defaultRangePercent">Default Preliminary Range (%)</label><input id="fin-defaultRangePercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="defaultRangePercent" type="number" step="0.01" min="0" max="100"><span class="help-text">Fallback only when a service has no valid explicit rangePercent.</span></div>
+              <div class="bp-field"><label for="cost-overheadPercent">Overhead (%)</label><input id="cost-overheadPercent" data-financial-control data-financial-section="canonicalCosts" data-financial-field="overheadPercent" type="number" step="0.01" min="0"><span class="help-text">canonicalCosts.overheadPercent</span></div>
+              <div class="bp-field"><label for="cost-travelCostPerMile">Internal Travel Cost ($/mile)</label><input id="cost-travelCostPerMile" data-financial-control data-financial-section="canonicalCosts" data-financial-field="travelCostPerMile" type="number" step="0.01" min="0"><span class="help-text">canonicalCosts.travelCostPerMile</span></div>
+              <div class="bp-field bp-full"><label for="cost-materialCostByService">Material Cost by Service (JSON)</label><textarea id="cost-materialCostByService" data-financial-control data-financial-section="canonicalCosts" data-financial-field="materialCostByService" data-financial-map rows="3" placeholder='{"fence:cedar": 120}'></textarea><span class="help-text">canonicalCosts.materialCostByService; values must be non-negative numbers.</span></div>
+              <div class="bp-field bp-full"><label for="cost-equipmentCostByReference">Equipment Cost by Reference (JSON)</label><textarea id="cost-equipmentCostByReference" data-financial-control data-financial-section="canonicalCosts" data-financial-field="equipmentCostByReference" data-financial-map rows="3" placeholder='{"mini-excavator": 350}'></textarea><span class="help-text">canonicalCosts.equipmentCostByReference; values must be non-negative numbers.</span></div>
+              <div class="bp-field"><label for="crew-averageHourlyRate">Average Hourly Rate ($/hr)</label><input id="crew-averageHourlyRate" data-financial-control data-financial-section="crew" data-financial-field="averageHourlyRate" type="number" step="0.5" min="0"></div>
+              <div class="bp-field"><label for="crew-overtimeMultiplier">Overtime Multiplier</label><input id="crew-overtimeMultiplier" data-financial-control data-financial-section="crew" data-financial-field="overtimeMultiplier" type="number" step="0.1" min="1"></div>
+              <div class="bp-field"><label for="crew-travelPay">Travel Pay ($/trip)</label><input id="crew-travelPay" data-financial-control data-financial-section="crew" data-financial-field="travelPay" type="number" step="0.5" min="0"></div>
+              <div class="bp-field"><label for="crew-minimumBillableHours">Minimum Billable Hours</label><input id="crew-minimumBillableHours" data-financial-control data-financial-section="crew" data-financial-field="minimumBillableHours" type="number" step="0.5" min="0"></div>
+              <div class="bp-field"><label for="veh-averageFuelCost">Average Fuel Cost ($/gal)</label><input id="veh-averageFuelCost" data-financial-control data-financial-section="vehicles" data-financial-field="averageFuelCost" type="number" step="0.1" min="0"></div>
+              <div class="bp-field"><label for="veh-hourlyVehicleCost">Hourly Vehicle Cost ($/hr)</label><input id="veh-hourlyVehicleCost" data-financial-control data-financial-section="vehicles" data-financial-field="hourlyVehicleCost" type="number" step="0.5" min="0"></div>
+              <div class="bp-field"><label for="veh-maintenanceReserve">Maintenance Reserve (%)</label><input id="veh-maintenanceReserve" data-financial-control data-financial-section="vehicles" data-financial-field="maintenanceReserve" type="number" step="0.01" min="0" max="100"><span class="help-text">Presentation-only planning reserve; not consumed by current pricing calculations.</span></div>
             </div>
-            <div id="canonicalFinancialError" class="bp-validation-error" role="alert"></div>
+            <div id="canonicalFinancialError" class="bp-validation-error" role="alert" aria-live="assertive" tabindex="-1"></div>
+            <div class="bp-header-actions">
+              <button class="bp-add-btn" id="reloadFinancialConfigurationBtn" type="button" aria-controls="section-financial" aria-describedby="canonicalAuthorityNote canonicalFinancialError" hidden disabled>Reload financial configuration</button>
+              <button class="bp-save-btn" id="saveFinancialConfigurationBtn" type="button" aria-controls="section-financial" aria-describedby="canonicalAuthorityNote canonicalFinancialError" disabled>Save financial configuration</button>
+            </div>
           </div>
         </div>
 
@@ -521,6 +529,11 @@
     var operationalConfigurationSaving = false;
     var operationalConfigurationConflicted = false;
     var operationalConfigurationExpectedVersion = null;
+    var financialConfigurationBaseline = Object.create(null);
+    var financialConfigurationDirty = false;
+    var financialConfigurationSaving = false;
+    var financialConfigurationConflicted = false;
+    var financialConfigurationExpectedVersion = null;
 
     function profileRequest(url, options) {
       var request = options || {};
@@ -543,6 +556,9 @@
       }
       if (source !== 'operational' && operationalConfigurationExpectedVersion === expectedVersion) {
         operationalConfigurationExpectedVersion = nextVersion;
+      }
+      if (source !== 'financial' && financialConfigurationExpectedVersion === expectedVersion) {
+        financialConfigurationExpectedVersion = nextVersion;
       }
     }
 
@@ -643,6 +659,7 @@
       updateGeneralProfileActionState(profileAvailable);
       updateVoiceActionState(profileAvailable);
       updateOperationalConfigurationActionState(profileAvailable);
+      updateFinancialConfigurationActionState(profileAvailable);
     }
 
     // ====================================================================
@@ -1279,6 +1296,257 @@
     }
 
     // ====================================================================
+    // Versioned Financial Configuration authority
+    // ====================================================================
+    function financialControls() {
+      return Array.from(document.querySelectorAll('[data-financial-control]'));
+    }
+
+    function financialControlState(control) {
+      return control.value;
+    }
+
+    function captureFinancialConfigurationBaseline() {
+      financialConfigurationBaseline = Object.create(null);
+      financialControls().forEach(function(control) {
+        financialConfigurationBaseline[control.id] = financialControlState(control);
+      });
+      financialConfigurationDirty = false;
+    }
+
+    function refreshFinancialConfigurationDirty() {
+      financialControls().forEach(function(control) {
+        if (financialConfigurationBaseline[control.id] === financialControlState(control)) {
+          control.setAttribute('aria-invalid', 'false');
+        }
+      });
+      financialConfigurationDirty = financialControls().some(function(control) {
+        return financialConfigurationBaseline[control.id] !== financialControlState(control);
+      });
+      if (!financialConfigurationConflicted) clearCanonicalError();
+      updateFinancialConfigurationActionState();
+    }
+
+    function updateFinancialConfigurationActionState(profileAvailable) {
+      var available = profileAvailable === undefined ? operationalProfileAvailable() : profileAvailable;
+      var editable = available && profileCanEdit;
+      financialControls().forEach(function(control) {
+        control.disabled = !editable || financialConfigurationSaving;
+      });
+      var saveButton = document.getElementById('saveFinancialConfigurationBtn');
+      if (saveButton) {
+        saveButton.disabled = !editable || !financialConfigurationDirty ||
+          financialConfigurationSaving || financialConfigurationConflicted;
+        saveButton.textContent = financialConfigurationSaving ? 'Saving financial configuration...'
+          : profileCanEdit ? 'Save financial configuration' : 'Read-only financial configuration';
+      }
+      var reloadButton = document.getElementById('reloadFinancialConfigurationBtn');
+      if (reloadButton) {
+        reloadButton.hidden = !financialConfigurationConflicted;
+        reloadButton.disabled = !editable || financialConfigurationSaving;
+      }
+    }
+
+    function financialNumberOptions(section, field) {
+      var key = section + '.' + field;
+      return {
+        'canonicalPricing.customerMarkupPercent': { minimum: 0 },
+        'canonicalPricing.taxRatePercent': { minimum: 0, maximum: 100 },
+        'canonicalPricing.emergencyMultiplier': { minimum: 0 },
+        'canonicalPricing.travelCustomerChargePerMile': { minimum: 0 },
+        'canonicalPricing.minimumJobPrice': { minimum: 0 },
+        'canonicalPricing.desiredGrossMarginPercent': { minimum: 0, maximum: 100 },
+        'canonicalPricing.desiredNetMarginPercent': { minimum: 0, maximum: 100 },
+        'canonicalPricing.maximumDiscountPercent': { minimum: 0, maximum: 100 },
+        'canonicalPricing.defaultRangePercent': { minimum: 0, maximum: 100 },
+        'canonicalCosts.overheadPercent': { minimum: 0 },
+        'canonicalCosts.travelCostPerMile': { minimum: 0 },
+        'crew.averageHourlyRate': { minimum: 0 },
+        'crew.overtimeMultiplier': { minimum: 1 },
+        'crew.travelPay': { minimum: 0 },
+        'crew.minimumBillableHours': { minimum: 0 },
+        'vehicles.averageFuelCost': { minimum: 0 },
+        'vehicles.hourlyVehicleCost': { minimum: 0 },
+        'vehicles.maintenanceReserve': { minimum: 0, maximum: 100 },
+      }[key];
+    }
+
+    function financialControlLabel(control) {
+      var label = document.querySelector('label[for="' + control.id + '"]');
+      return label ? label.textContent.trim() : control.dataset.financialField;
+    }
+
+    function readFinancialControl(control) {
+      if (control.hasAttribute('data-financial-map')) {
+        return readCanonicalMap(control.id, financialControlLabel(control));
+      }
+      var options = financialNumberOptions(control.dataset.financialSection, control.dataset.financialField);
+      return readCanonicalNumber(
+        control.id,
+        financialControlLabel(control),
+        options.minimum,
+        options.maximum
+      );
+    }
+
+    function collectFinancialConfiguration() {
+      var changedSections = new Set();
+      financialControls().forEach(function(control) {
+        if (financialConfigurationBaseline[control.id] !== financialControlState(control)) {
+          changedSections.add(control.dataset.financialSection);
+        }
+      });
+      var value = {};
+      changedSections.forEach(function(section) { value[section] = {}; });
+      financialControls().forEach(function(control) {
+        var section = control.dataset.financialSection;
+        if (!changedSections.has(section)) return;
+        var state = readFinancialControl(control);
+        if (state.configured) value[section][control.dataset.financialField] = state.value;
+      });
+      var pricing = value.canonicalPricing;
+      if (pricing && typeof pricing.desiredGrossMarginPercent === 'number' &&
+          typeof pricing.desiredNetMarginPercent === 'number' &&
+          pricing.desiredNetMarginPercent > pricing.desiredGrossMarginPercent) {
+        var netMargin = document.getElementById('fin-desiredNetMarginPercent');
+        if (netMargin) netMargin.setAttribute('aria-invalid', 'true');
+        var error = new Error('Desired net margin must not exceed desired gross margin.');
+        error.financialControl = netMargin;
+        throw error;
+      }
+      return value;
+    }
+
+    function renderFinancialConfiguration(profile) {
+      financialConfigurationExpectedVersion = profileVersion(profile);
+      var pricing = profile && profile.canonicalPricing && typeof profile.canonicalPricing === 'object' && !Array.isArray(profile.canonicalPricing) ? profile.canonicalPricing : {};
+      var costs = profile && profile.canonicalCosts && typeof profile.canonicalCosts === 'object' && !Array.isArray(profile.canonicalCosts) ? profile.canonicalCosts : {};
+      var crew = profile && profile.crew && typeof profile.crew === 'object' && !Array.isArray(profile.crew) ? profile.crew : {};
+      var vehicles = profile && profile.vehicles && typeof profile.vehicles === 'object' && !Array.isArray(profile.vehicles) ? profile.vehicles : {};
+      [
+        ['fin-customerMarkupPercent', pricing, 'customerMarkupPercent', 0],
+        ['fin-taxRatePercent', pricing, 'taxRatePercent', 0, 100],
+        ['fin-emergencyMultiplier', pricing, 'emergencyMultiplier', 0],
+        ['fin-travelCustomerChargePerMile', pricing, 'travelCustomerChargePerMile', 0],
+        ['fin-minimumJobPrice', pricing, 'minimumJobPrice', 0],
+        ['fin-desiredGrossMarginPercent', pricing, 'desiredGrossMarginPercent', 0, 100],
+        ['fin-desiredNetMarginPercent', pricing, 'desiredNetMarginPercent', 0, 100],
+        ['fin-maximumDiscountPercent', pricing, 'maximumDiscountPercent', 0, 100],
+        ['fin-defaultRangePercent', pricing, 'defaultRangePercent', 0, 100],
+        ['cost-overheadPercent', costs, 'overheadPercent', 0],
+        ['cost-travelCostPerMile', costs, 'travelCostPerMile', 0],
+        ['crew-averageHourlyRate', crew, 'averageHourlyRate', 0, undefined, true],
+        ['crew-overtimeMultiplier', crew, 'overtimeMultiplier', 1, undefined, true],
+        ['crew-travelPay', crew, 'travelPay', 0, undefined, true],
+        ['crew-minimumBillableHours', crew, 'minimumBillableHours', 0, undefined, true],
+        ['veh-averageFuelCost', vehicles, 'averageFuelCost', 0, undefined, true],
+        ['veh-hourlyVehicleCost', vehicles, 'hourlyVehicleCost', 0, undefined, true],
+        ['veh-maintenanceReserve', vehicles, 'maintenanceReserve', 0, 100, true],
+      ].forEach(function(args) { renderCanonicalNumber.apply(null, args); });
+      renderCanonicalMap('cost-materialCostByService', costs, 'materialCostByService');
+      renderCanonicalMap('cost-equipmentCostByReference', costs, 'equipmentCostByReference');
+      var migration = profile && profile.canonicalAuthority && profile.canonicalAuthority.legacyMigration;
+      var note = document.getElementById('canonicalAuthorityNote');
+      if (note) note.textContent = migration && migration.pending
+        ? 'Legacy margin or discount values are shown for one-way migration. Canonical values take precedence, and legacy bytes remain unchanged.'
+        : 'Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.';
+      financialConfigurationSaving = false;
+      financialConfigurationConflicted = false;
+      captureFinancialConfigurationBaseline();
+      clearCanonicalError();
+      updateFinancialConfigurationActionState();
+    }
+
+    function mergeFinancialProjection(target, projection) {
+      var next = target && typeof target === 'object' ? target : {};
+      ['canonicalPricing', 'canonicalCosts', 'crew', 'vehicles'].forEach(function(section) {
+        var existing = next[section] && typeof next[section] === 'object' && !Array.isArray(next[section]) ? next[section] : {};
+        var merged = Object.assign({}, existing);
+        financialControls().filter(function(control) {
+          return control.dataset.financialSection === section;
+        }).forEach(function(control) {
+          delete merged[control.dataset.financialField];
+        });
+        var supplied = projection && projection[section] && typeof projection[section] === 'object' ? projection[section] : {};
+        Object.keys(supplied).forEach(function(key) { merged[key] = supplied[key]; });
+        next[section] = merged;
+      });
+      if (projection && Object.prototype.hasOwnProperty.call(projection, 'canonicalAuthority')) {
+        next.canonicalAuthority = projection.canonicalAuthority;
+      }
+      return next;
+    }
+
+    async function saveFinancialConfiguration() {
+      if (!profileCanEdit || !financialConfigurationDirty ||
+          financialConfigurationSaving || financialConfigurationConflicted) return;
+      var value;
+      try {
+        value = collectFinancialConfiguration();
+      } catch (error) {
+        showCanonicalError(error.message);
+        var errorElement = document.getElementById('canonicalFinancialError');
+        if (errorElement) errorElement.focus();
+        if (error.financialControl) error.financialControl.focus();
+        return;
+      }
+      financialConfigurationSaving = true;
+      clearCanonicalError();
+      updateFinancialConfigurationActionState();
+      try {
+        var expectedVersion = financialConfigurationExpectedVersion;
+        var response = await profileRequest('/api/v1/business-profile/financialConfiguration', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedVersion: expectedVersion, value: value }),
+        });
+        var payload = await response.json();
+        if (!payload.success) {
+          if (response.status === 409 && payload.error && payload.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT') {
+            financialConfigurationConflicted = true;
+            showCanonicalError('Business Profile changed; reload Financial Configuration and try again. Your unsaved financial values remain in this form.');
+            var reload = document.getElementById('reloadFinancialConfigurationBtn');
+            if (reload) {
+              reload.hidden = false;
+              reload.disabled = false;
+              reload.focus();
+            }
+            return;
+          }
+          throw new Error(payload.errors ? payload.errors.join('; ') : payload.error && payload.error.message || 'Financial Configuration could not be saved.');
+        }
+        advancePreservedSiblingVersions('financial', expectedVersion, profileVersion(payload.data));
+        profileData = mergeFinancialProjection(profileData, payload.data);
+        renderFinancialConfiguration(profileData);
+        showToast('Financial Configuration saved successfully', 'success');
+      } catch (error) {
+        showCanonicalError(error.message || 'Financial Configuration could not be saved.');
+        var alert = document.getElementById('canonicalFinancialError');
+        if (alert) alert.focus();
+      } finally {
+        financialConfigurationSaving = false;
+        updateFinancialConfigurationActionState();
+      }
+    }
+
+    async function reloadFinancialConfiguration() {
+      if (!profileCanEdit || financialConfigurationSaving) return;
+      try {
+        var response = await profileRequest('/api/v1/business-profile/financialConfiguration');
+        var payload = await response.json();
+        if (!payload.success || !payload.data) throw new Error('Latest Financial Configuration is unavailable.');
+        profileData = mergeFinancialProjection(profileData, payload.data);
+        renderFinancialConfiguration(profileData);
+        var save = document.getElementById('saveFinancialConfigurationBtn');
+        if (save) save.focus();
+      } catch (error) {
+        showCanonicalError(error.message || 'Latest Financial Configuration is unavailable.');
+        var alert = document.getElementById('canonicalFinancialError');
+        if (alert) alert.focus();
+      }
+    }
+
+    // ====================================================================
     // Provider-neutral, versioned AI configuration
     // ====================================================================
     function voiceUtf8Bytes(value) {
@@ -1732,40 +2000,13 @@
       renderHolidays(hours.holidays);
       renderPolicies(p.policies);
 
-      // Crew
-      setVal('crew-averageHourlyRate', crew.averageHourlyRate);
-      setVal('crew-overtimeMultiplier', crew.overtimeMultiplier);
-      setVal('crew-travelPay', crew.travelPay);
-      setVal('crew-minimumBillableHours', crew.minimumBillableHours);
-
-      // Vehicles
-      setVal('veh-averageFuelCost', vehicles.averageFuelCost);
-      setVal('veh-hourlyVehicleCost', vehicles.hourlyVehicleCost);
-      setVal('veh-maintenanceReserve', vehicles.maintenanceReserve);
-
       // Services
       renderServices(p.services);
       clearServiceCatalogError();
 
-      // Canonical pricing and costs. Legacy financial values are adapted by
-      // the server only when the canonical blocks are genuinely absent.
-      var canonicalPricing = p.canonicalPricing && typeof p.canonicalPricing === 'object' && !Array.isArray(p.canonicalPricing) ? p.canonicalPricing : {};
-      var canonicalCosts = p.canonicalCosts && typeof p.canonicalCosts === 'object' && !Array.isArray(p.canonicalCosts) ? p.canonicalCosts : {};
-      renderCanonicalNumber('fin-customerMarkupPercent', canonicalPricing, 'customerMarkupPercent', 0);
-      renderCanonicalNumber('fin-taxRatePercent', canonicalPricing, 'taxRatePercent', 0, 100);
-      renderCanonicalNumber('fin-emergencyMultiplier', canonicalPricing, 'emergencyMultiplier', 0);
-      renderCanonicalNumber('fin-travelCustomerChargePerMile', canonicalPricing, 'travelCustomerChargePerMile', 0);
-      renderCanonicalNumber('fin-minimumJobPrice', canonicalPricing, 'minimumJobPrice', 0);
-      renderCanonicalNumber('cost-overheadPercent', canonicalCosts, 'overheadPercent', 0);
-      renderCanonicalNumber('cost-travelCostPerMile', canonicalCosts, 'travelCostPerMile', 0);
-      renderCanonicalMap('cost-materialCostByService', canonicalCosts, 'materialCostByService');
-      renderCanonicalMap('cost-equipmentCostByReference', canonicalCosts, 'equipmentCostByReference');
-      var migration = p.canonicalAuthority && p.canonicalAuthority.legacyMigration;
-      var note = document.getElementById('canonicalAuthorityNote');
-      if (note) note.textContent = migration && migration.pending
-        ? 'Legacy values are shown for a one-way migration. They become canonical only after explicit Save.'
-        : 'Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.';
-      clearCanonicalError();
+      // Financial Configuration owns pricing, costs, rate assumptions, and
+      // its own optimistic-concurrency token.
+      renderFinancialConfiguration(p);
 
       // Polaris
       setSelect('pol-responseStyle', p.polaris.responseStyle);
@@ -1846,14 +2087,16 @@
       return !!source && Object.prototype.hasOwnProperty.call(source, key);
     }
 
-    function renderCanonicalNumber(id, source, key, minimum, maximum) {
+    function renderCanonicalNumber(id, source, key, minimum, maximum, nullable) {
       var el = document.getElementById(id);
       if (!el) return;
       var present = hasOwn(source, key);
       var value = present ? source[key] : null;
-      var valid = typeof value === 'number' && Number.isFinite(value) && value >= minimum && (maximum === undefined || value <= maximum);
-      el.value = valid ? String(value) : '';
-      el.dataset.authorityState = present ? (valid ? 'configured' : 'malformed') : 'missing';
+      var configured = typeof value === 'number' && Number.isFinite(value) && value >= minimum && (maximum === undefined || value <= maximum);
+      var nullValue = nullable === true && value === null;
+      var valid = configured || nullValue;
+      el.value = configured ? String(value) : '';
+      el.dataset.authorityState = present ? (nullValue ? 'missing' : (valid ? 'configured' : 'malformed')) : 'missing';
       el.dataset.userEdited = 'false';
       el.setAttribute('aria-invalid', present && !valid ? 'true' : 'false');
     }
@@ -1903,11 +2146,6 @@
         return key.trim() && typeof value[key] === 'number' && Number.isFinite(value[key]) && value[key] >= 0;
       })) throw new Error(label + ' must be a JSON object of non-negative finite numbers.');
       return { configured: true, value: value };
-    }
-
-    function assignCanonical(target, key, state) {
-      if (state.configured) target[key] = state.value;
-      else delete target[key];
     }
 
     function showCanonicalError(message) {
@@ -2602,47 +2840,8 @@
       p.hours.holidays = collectHolidays();
       p.policies = collectPolicies();
 
-      p.crew.averageHourlyRate = parseFloat(getVal('crew-averageHourlyRate')) || 42;
-      p.crew.overtimeMultiplier = parseFloat(getVal('crew-overtimeMultiplier')) || 1.5;
-      p.crew.travelPay = parseFloat(getVal('crew-travelPay')) || 0;
-      p.crew.minimumBillableHours = parseFloat(getVal('crew-minimumBillableHours')) || 1;
-
-      p.vehicles.averageFuelCost = parseFloat(getVal('veh-averageFuelCost')) || 3.5;
-      p.vehicles.hourlyVehicleCost = parseFloat(getVal('veh-hourlyVehicleCost')) || 0;
-      p.vehicles.maintenanceReserve = parseFloat(getVal('veh-maintenanceReserve')) || 0;
-
       // Services
       p.services = collectServices();
-
-      p.canonicalPricing = p.canonicalPricing && typeof p.canonicalPricing === 'object' && !Array.isArray(p.canonicalPricing) ? p.canonicalPricing : {};
-      p.canonicalCosts = p.canonicalCosts && typeof p.canonicalCosts === 'object' && !Array.isArray(p.canonicalCosts) ? p.canonicalCosts : {};
-      var markup = readCanonicalNumber('fin-customerMarkupPercent', 'Customer markup', 0);
-      var tax = readCanonicalNumber('fin-taxRatePercent', 'Tax rate', 0, 100);
-      var emergency = readCanonicalNumber('fin-emergencyMultiplier', 'Emergency multiplier', 0);
-      var travelCharge = readCanonicalNumber('fin-travelCustomerChargePerMile', 'Customer travel charge', 0);
-      var minimumJob = readCanonicalNumber('fin-minimumJobPrice', 'Minimum job price', 0);
-      var overhead = readCanonicalNumber('cost-overheadPercent', 'Overhead percent', 0);
-      var travelCost = readCanonicalNumber('cost-travelCostPerMile', 'Internal travel cost', 0);
-      var materialCosts = readCanonicalMap('cost-materialCostByService', 'Material cost map');
-      var equipmentCosts = readCanonicalMap('cost-equipmentCostByReference', 'Equipment cost map');
-      assignCanonical(p.canonicalPricing, 'customerMarkupPercent', markup);
-      assignCanonical(p.canonicalPricing, 'taxRatePercent', tax);
-      assignCanonical(p.canonicalPricing, 'emergencyMultiplier', emergency);
-      assignCanonical(p.canonicalPricing, 'travelCustomerChargePerMile', travelCharge);
-      assignCanonical(p.canonicalPricing, 'minimumJobPrice', minimumJob);
-      assignCanonical(p.canonicalCosts, 'overheadPercent', overhead);
-      assignCanonical(p.canonicalCosts, 'travelCostPerMile', travelCost);
-      assignCanonical(p.canonicalCosts, 'materialCostByService', materialCosts);
-      assignCanonical(p.canonicalCosts, 'equipmentCostByReference', equipmentCosts);
-
-      // Legacy fields are compatibility mirrors only. They can never override
-      // canonical values and disappear when the canonical value is missing.
-      p.financial = p.financial && typeof p.financial === 'object' ? p.financial : {};
-      if (markup.configured) p.financial.markup = 1 + markup.value / 100; else delete p.financial.markup;
-      if (tax.configured) p.financial.taxRate = tax.value; else delete p.financial.taxRate;
-      if (emergency.configured) p.financial.emergencyMarkup = emergency.value; else delete p.financial.emergencyMarkup;
-      if (travelCharge.configured) p.financial.travelCharge = travelCharge.value; else delete p.financial.travelCharge;
-      if (minimumJob.configured) p.financial.minimumJobPrice = minimumJob.value; else delete p.financial.minimumJobPrice;
 
       p.polaris.responseStyle = getSelect('pol-responseStyle');
       p.polaris.detailLevel = getSelect('pol-detailLevel');
@@ -2677,6 +2876,13 @@
         showVoiceAssistantError('Save or reload the AI configuration before saving the rest of the Business Profile.', true);
         var voiceSaveButton = document.getElementById('saveVoiceAssistantBtn');
         if (voiceSaveButton) voiceSaveButton.focus();
+        return;
+      }
+      if (financialConfigurationDirty) {
+        switchSection('financial');
+        showCanonicalError('Save or reload Financial Configuration before saving the rest of the Business Profile.');
+        var financialSaveButton = document.getElementById('saveFinancialConfigurationBtn');
+        if (financialSaveButton) financialSaveButton.focus();
         return;
       }
       btn.disabled = true;
@@ -2774,18 +2980,20 @@
       document.getElementById('reloadVoiceAssistantBtn').addEventListener('click', reloadVoiceAssistant);
       document.getElementById('saveOperationalConfigurationBtn').addEventListener('click', saveOperationalConfiguration);
       document.getElementById('reloadOperationalConfigurationBtn').addEventListener('click', reloadOperationalConfiguration);
+      document.getElementById('saveFinancialConfigurationBtn').addEventListener('click', saveFinancialConfiguration);
+      document.getElementById('reloadFinancialConfigurationBtn').addEventListener('click', reloadFinancialConfiguration);
       operationalControls().forEach(function(control) {
         control.addEventListener(control.type === 'checkbox' || control.tagName === 'SELECT' ? 'change' : 'input', refreshOperationalConfigurationDirty);
       });
       document.getElementById('insert-saved-company-name').addEventListener('click', insertSavedCompanyName);
       var servicesContainer = document.getElementById('servicesContainer');
       if (servicesContainer) servicesContainer.addEventListener('input', clearServiceCatalogError);
-      document.querySelectorAll('[data-canonical-field]').forEach(function(el) {
+      financialControls().forEach(function(el) {
         el.addEventListener('input', function() {
           el.dataset.userEdited = 'true';
           el.dataset.authorityState = el.value.trim() ? 'edited' : 'missing';
           el.setAttribute('aria-invalid', 'false');
-          clearCanonicalError();
+          refreshFinancialConfigurationDirty();
         });
       });
       activateRequestedVoiceSection();

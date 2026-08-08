@@ -108,32 +108,28 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
   });
 
   test('explicit 9 percent tax and zero emergency/travel round-trip and drive the next canonical calculation', async () => {
-    const loaded = await request(app).get('/api/v1/business-profile').set(auth(OWNER_A));
+    const loaded = await request(app).get('/api/v1/business-profile/financialConfiguration').set(auth(OWNER_A));
     expect(loaded.status).toBe(200);
     expect(loaded.body.data.canonicalPricing).toMatchObject({
       taxRatePercent: 0,
       emergencyMultiplier: 1,
       travelCustomerChargePerMile: 0,
     });
-    expect(loaded.body.data.financial).toMatchObject({
-      markup: 1,
-      taxRate: 0,
-      emergencyMarkup: 1,
-      travelCharge: 0,
-    });
-    const body = loaded.body.data;
-    body.canonicalPricing = {
-      ...body.canonicalPricing,
+    const canonicalPricing = {
+      ...loaded.body.data.canonicalPricing,
       customerMarkupPercent: 0,
       taxRatePercent: 9,
       emergencyMultiplier: 0,
       travelCustomerChargePerMile: 0,
       minimumJobPrice: 0,
     };
-    body.canonicalCosts = { ...body.canonicalCosts, overheadPercent: 0, travelCostPerMile: 0 };
-    body.financial = { ...body.financial, markup: 9.99, taxRate: 77, emergencyMarkup: 8.88, travelCharge: 7.77, minimumJobPrice: 999 };
+    const canonicalCosts = { ...loaded.body.data.canonicalCosts, overheadPercent: 0, travelCostPerMile: 0 };
 
-    const saved = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send(body);
+    const saved = await request(app).put('/api/v1/business-profile/financialConfiguration')
+      .set(auth(OWNER_A)).send({
+        expectedVersion: loaded.body.data.canonicalAuthority.version,
+        value: { canonicalPricing, canonicalCosts },
+      });
     expect(saved.status).toBe(200);
     expect(saved.body.data.canonicalPricing).toMatchObject({
       customerMarkupPercent: 0,
@@ -142,18 +138,20 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       travelCustomerChargePerMile: 0,
       minimumJobPrice: 0,
     });
-    expect(saved.body.data.financial).toMatchObject({
-      markup: 1,
-      taxRate: 9,
-      emergencyMarkup: 0,
-      travelCharge: 0,
-      minimumJobPrice: 0,
-    });
     expect(saved.body.data.canonicalAuthority.id).not.toBe(baselineA.id);
     expect(saved.body.data.canonicalAuthority.version).not.toBe(baselineA.versionLabel);
     expect(saved.body.data.canonicalAuthority.hash).not.toBe(baselineA.profileHash);
 
-    const reloaded = await request(app).get('/api/v1/business-profile').set(auth(OWNER_A));
+    const whole = await request(app).get('/api/v1/business-profile').set(auth(OWNER_A));
+    whole.body.data.company.dba = 'Nonfinancial root authority proof';
+    whole.body.data.canonicalPricing.taxRatePercent = 77;
+    const rootSaved = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A))
+      .send(whole.body.data);
+    expect(rootSaved.status).toBe(200);
+    expect(rootSaved.body.data.company.dba).toBe('Nonfinancial root authority proof');
+    expect(rootSaved.body.data.canonicalPricing.taxRatePercent).toBe(9);
+
+    const reloaded = await request(app).get('/api/v1/business-profile/financialConfiguration').set(auth(OWNER_A));
     expect(reloaded.body.data.canonicalPricing).toEqual(saved.body.data.canonicalPricing);
     expect(reloaded.body.data.canonicalCosts).toEqual(saved.body.data.canonicalCosts);
 
@@ -168,8 +166,8 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     expect(graph.body.polaris.totalIncludingTax).toBe(
       Math.round((graph.body.polaris.customerFacingPrice + graph.body.polaris.tax) * 100) / 100
     );
-    expect(graph.body.polaris.businessProfileInputId).toBe(saved.body.data.canonicalAuthority.id);
-    expect(graph.body.polaris.businessProfileInputHash).toBe(saved.body.data.canonicalAuthority.hash);
+    expect(graph.body.polaris.businessProfileInputId).toBe(rootSaved.body.data.canonicalAuthority.id);
+    expect(graph.body.polaris.businessProfileInputHash).toBe(rootSaved.body.data.canonicalAuthority.hash);
     expect(graph.body.polaris.businessProfileFieldsUsed).toEqual(expect.arrayContaining([
       'canonicalPricing.taxRatePercent',
       'canonicalPricing.emergencyMultiplier',
@@ -178,16 +176,25 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
   });
 
   test('missing remains unavailable, malformed input is rejected, and organizations remain isolated', async () => {
-    const loaded = await request(app).get('/api/v1/business-profile').set(auth(OWNER_A));
-    const missingBody = loaded.body.data;
-    missingBody.canonicalPricing = { customerMarkupPercent: 0 };
-    missingBody.canonicalCosts = {};
-    const missing = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send(missingBody);
+    const loaded = await request(app).get('/api/v1/business-profile/financialConfiguration').set(auth(OWNER_A));
+    const missing = await request(app).put('/api/v1/business-profile/financialConfiguration')
+      .set(auth(OWNER_A)).send({
+        expectedVersion: loaded.body.data.canonicalAuthority.version,
+        value: {
+          canonicalPricing: {
+            customerMarkupPercent: 0,
+            desiredGrossMarginPercent: 40,
+            desiredNetMarginPercent: 20,
+          },
+          canonicalCosts: {},
+        },
+      });
     expect(missing.status).toBe(200);
-    expect(missing.body.data.canonicalPricing).toEqual({ customerMarkupPercent: 0 });
-    expect(missing.body.data.financial).not.toHaveProperty('taxRate');
-    expect(missing.body.data.financial).not.toHaveProperty('emergencyMarkup');
-    expect(missing.body.data.financial).not.toHaveProperty('travelCharge');
+    expect(missing.body.data.canonicalPricing).toEqual({
+      customerMarkupPercent: 0,
+      desiredGrossMarginPercent: 40,
+      desiredNetMarginPercent: 20,
+    });
 
     const graph = await request(app)
       .post('/api/v1/simulations/leads')
@@ -200,11 +207,14 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     expect(graph.body.polaris.notCalculated).toContainEqual(expect.objectContaining({ field: 'tax' }));
 
     const activeBeforeMalformed = await getActiveBusinessProfile(db.getPool(), ORG_A);
-    const malformed = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send({
-      ...missing.body.data,
-      canonicalPricing: { taxRatePercent: '9', emergencyMultiplier: -1 },
-      canonicalCosts: { materialCostByService: { 'fence:cedar': 'invalid' } },
-    });
+    const malformed = await request(app).put('/api/v1/business-profile/financialConfiguration')
+      .set(auth(OWNER_A)).send({
+        expectedVersion: missing.body.data.canonicalAuthority.version,
+        value: {
+          canonicalPricing: { taxRatePercent: '9', emergencyMultiplier: -1 },
+          canonicalCosts: { materialCostByService: { 'fence:cedar': 'invalid' } },
+        },
+      });
     expect(malformed.status).toBe(400);
     expect(malformed.body.errors).toEqual(expect.arrayContaining([
       expect.stringContaining('canonicalPricing.taxRatePercent'),
@@ -548,7 +558,13 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     expect(saved.body.data.services[1]).toEqual({
       ...services[1], id: expect.stringMatching(/^service-[0-9a-f]{16}$/),
     });
-    expect(saved.body.data.canonicalAuthority.legacyMigration).toEqual({ pending: false, fields: [] });
+    expect(saved.body.data.canonicalAuthority.legacyMigration).toEqual({
+      pending: true,
+      fields: [
+        'canonicalPricing.desiredGrossMarginPercent',
+        'canonicalPricing.desiredNetMarginPercent',
+      ],
+    });
     expect(saved.body.data.canonicalAuthority.id).not.toBe(baselineA.id);
 
     const section = await request(app).get('/api/v1/business-profile/services').set(auth(OWNER_A));

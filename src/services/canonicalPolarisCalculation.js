@@ -162,6 +162,12 @@ function configuredNumberState(source, key, options) {
   return value === null ? { status: 'malformed', value: null } : { status: 'configured', value };
 }
 
+function configuredPercentState(source, key) {
+  const state = configuredNumberState(source, key, { nonNegative: true });
+  if (state.status === 'configured' && state.value > 100) return { status: 'malformed', value: null };
+  return state;
+}
+
 function exactCondition(condition, scope) {
   if (condition === undefined || condition === null) return { applies: true, field: null, error: null };
   if (!condition || typeof condition !== 'object' || !condition.field || !hasOwn(condition, 'equals')) {
@@ -518,9 +524,14 @@ function calculateCanonicalPolaris(source) {
   const fingerprintSource = clone(input);
   const normalizedInputFingerprint = sha256(fingerprintSource);
   let preliminaryRange = null;
-  const rangeState = profileService && profileService.canonicalPricing
-    ? configuredNumberState(profileService.canonicalPricing, 'rangePercent', { nonNegative: true })
+  const serviceRangeState = profileService && profileService.canonicalPricing
+    ? configuredPercentState(profileService.canonicalPricing, 'rangePercent')
     : { status: 'missing', value: null };
+  const profileRangeState = configuredPercentState(input.businessProfile.pricing, 'defaultRangePercent');
+  const rangeState = serviceRangeState.status === 'configured' ? serviceRangeState : profileRangeState;
+  const rangeFieldUsed = serviceRangeState.status === 'configured' && profileService
+    ? 'services[' + profileService.id + '].canonicalPricing.rangePercent'
+    : (profileRangeState.status === 'configured' ? 'canonicalPricing.defaultRangePercent' : null);
   if (pricingCalculated && rangeState.status === 'configured') {
     const rangeMultiplier = rangeState.value / 100;
     preliminaryRange = {
@@ -541,8 +552,7 @@ function calculateCanonicalPolaris(source) {
     'canonicalCosts.equipmentCostByReference',
     'crew.defaultCrewSize',
     'crew.averageHourlyRate',
-  ], rangeState.status === 'configured' && profileService
-    ? ['services[' + profileService.id + '].canonicalPricing.rangePercent'] : []))).sort();
+  ], rangeFieldUsed ? [rangeFieldUsed] : []))).sort();
   const output = {
     contract: 'CanonicalPolarisOutput',
     organizationId: input.organizationId,

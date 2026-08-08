@@ -13,13 +13,18 @@ const { requireAccountMutation, requireTenantAccess } = require('../auth/middlew
 const { requirePermission } = require('../auth/permissions');
 const { getActiveBusinessProfile, putBusinessProfile } = require('../services/organizationAuthority');
 const {
+  FINANCIAL_CONFIGURATION_FIELDS,
   migrateLegacyCanonicalAuthority,
+  migrateLegacyFinancialConfiguration,
   OPERATIONAL_CONFIGURATION_FIELDS,
   prepareBusinessProfileForWrite,
+  projectFinancialConfiguration,
   projectOperationalConfiguration,
   stableValue,
   synchronizeLegacyFinancial,
+  validateFinancialConfiguration,
   validateOperationalConfiguration,
+  validateRawBusinessProfile,
 } = require('../services/businessProfileAdapter');
 
 const VALID_SECTIONS = new Set([
@@ -29,6 +34,10 @@ const VALID_SECTIONS = new Set([
   'workforce',
 ]);
 const BUSINESS_PROFILE_VERSION_PATTERN = /^org-profile-v[1-9][0-9]*$/;
+const LEGACY_FINANCIAL_AUTHORITY_FIELDS = Object.freeze([
+  'markup', 'taxRate', 'emergencyMarkup', 'travelCharge', 'minimumJobPrice',
+  'desiredGrossMargin', 'desiredNetMargin', 'maximumDiscount',
+]);
 
 function isPlainObject(value) {
   return Boolean(value) && Object.prototype.toString.call(value) === '[object Object]' &&
@@ -135,6 +144,18 @@ async function active(req) {
   return getActiveBusinessProfile(db.getPool(), req.tenantContext.organizationId);
 }
 
+function withoutFinancialConfiguration(profile) {
+  const source = stableValue(profile);
+  for (const [section, fields] of Object.entries(FINANCIAL_CONFIGURATION_FIELDS)) {
+    if (!isPlainObject(source[section])) continue;
+    for (const field of fields) delete source[section][field];
+  }
+  if (isPlainObject(source.financial)) {
+    for (const field of LEGACY_FINANCIAL_AUTHORITY_FIELDS) delete source.financial[field];
+  }
+  return source;
+}
+
 async function persist(req, rawProfile, options) {
   let source = rawProfile;
   if (source && typeof source === 'object' && !Array.isArray(source)) {
@@ -142,7 +163,20 @@ async function persist(req, rawProfile, options) {
     delete source.canonicalAuthority;
     delete source.onboardingDraft;
   }
-  const prepared = prepareBusinessProfileForWrite(source);
+  const preserveFinancialConfiguration = !(options && options.allowFinancialConfigurationWrite === true);
+  if (preserveFinancialConfiguration) {
+    const rawErrors = validateRawBusinessProfile(source);
+    if (rawErrors.length) {
+      const error = new Error('Business Profile validation failed.');
+      error.status = 400;
+      error.code = 'INVALID_BUSINESS_PROFILE';
+      error.details = rawErrors;
+      throw error;
+    }
+  }
+  const prepared = prepareBusinessProfileForWrite(
+    preserveFinancialConfiguration ? withoutFinancialConfiguration(source) : source
+  );
   if (prepared.errors.length) {
     const error = new Error('Business Profile validation failed.');
     error.status = 400;
@@ -155,7 +189,9 @@ async function persist(req, rawProfile, options) {
     userId: req.tenantContext.userId,
     profile: options && options.preserveUnrelatedRaw === true ? stableValue(source) : prepared.profile,
     preserveVoiceAssistant: !(options && options.allowVoiceAssistantWrite === true),
+    preserveFinancialConfiguration,
   };
+  if (input.preserveFinancialConfiguration) input.financialMutationCandidate = stableValue(source);
   if (options && hasOwn(options, 'expectedVersion')) input.expectedVersion = options.expectedVersion;
   const stored = await putBusinessProfile(db.getPool(), input);
   return stored;
@@ -171,7 +207,17 @@ function invalidWrite(code, message, details) {
 
 function parseWholeProfileWrite(body) {
   const isEnvelope = isPlainObject(body) && (hasOwn(body, 'expectedVersion') || hasOwn(body, 'value'));
-  if (!isEnvelope) return { value: body, versioned: false };
+  if (!isEnvelope) {
+    const authority = isPlainObject(body) && isPlainObject(body.canonicalAuthority)
+      ? body.canonicalAuthority : null;
+    const expectedVersion = authority && typeof authority.version === 'string' &&
+      BUSINESS_PROFILE_VERSION_PATTERN.test(authority.version) ? authority.version : undefined;
+    return {
+      expectedVersion,
+      value: body,
+      versioned: expectedVersion !== undefined,
+    };
+  }
   if (!hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
       Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
       (body.expectedVersion !== null &&
@@ -241,6 +287,93 @@ function operationalResponse(profile) {
   };
 }
 
+function parseFinancialConfigurationWrite(body) {
+  if (!isPlainObject(body) || !hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
+      Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
+      (body.expectedVersion !== null &&
+       (typeof body.expectedVersion !== 'string' || !BUSINESS_PROFILE_VERSION_PATTERN.test(body.expectedVersion))) ||
+      !isPlainObject(body.value)) {
+    throw invalidWrite(
+      'INVALID_FINANCIAL_CONFIGURATION_WRITE',
+      'Financial Configuration writes require recognized values and the expected canonical profile version.',
+      ['Body must contain exactly expectedVersion and value; expectedVersion must be a canonical version label or null, and value must be an object.']
+    );
+  }
+  const errors = validateRawBusinessProfile(body.value);
+  if (Object.keys(body.value).length === 0) {
+    errors.push('value must supply at least one Financial Configuration section.');
+  }
+  for (const section of Object.keys(body.value)) {
+    const allowed = FINANCIAL_CONFIGURATION_FIELDS[section];
+    if (!allowed) {
+      errors.push(section + ' is not a supported Financial Configuration section.');
+      continue;
+    }
+    if (!isPlainObject(body.value[section])) {
+      errors.push(section + ' must be a plain object.');
+      continue;
+    }
+    for (const field of Object.keys(body.value[section])) {
+      if (!allowed.has(field)) errors.push(section + '.' + field + ' is not a supported Financial Configuration field.');
+    }
+  }
+  validateFinancialConfiguration(body.value, errors);
+  if (errors.length) {
+    throw invalidWrite(
+      'INVALID_FINANCIAL_CONFIGURATION_WRITE',
+      'Financial Configuration validation failed.',
+      errors
+    );
+  }
+  return { expectedVersion: body.expectedVersion, value: body.value };
+}
+
+function rejectFinancialOnlySectionWrite(section, value) {
+  const recognized = FINANCIAL_CONFIGURATION_FIELDS[section];
+  if (!recognized || !isPlainObject(value)) return;
+  const supplied = Object.keys(value);
+  const financialFields = supplied.filter(function (field) { return recognized.has(field); });
+  const unownedFields = supplied.filter(function (field) { return !recognized.has(field); });
+  if (financialFields.length === 0 || unownedFields.length > 0) return;
+  const error = new Error('Financial Configuration changes require the versioned Financial Configuration endpoint.');
+  error.status = 409;
+  error.code = 'FINANCIAL_CONFIGURATION_ROUTE_REQUIRED';
+  throw error;
+}
+
+function mergeFinancialConfiguration(current, value) {
+  const updated = { ...current };
+  for (const section of Object.keys(value)) {
+    const existing = isPlainObject(current[section]) ? current[section] : {};
+    const next = { ...existing };
+    for (const field of FINANCIAL_CONFIGURATION_FIELDS[section]) delete next[field];
+    updated[section] = { ...next, ...value[section] };
+  }
+  return updated;
+}
+
+function clearSuppliedLegacyFinancialSources(profile, value) {
+  if (!hasOwn(value, 'canonicalPricing') || !isPlainObject(value.canonicalPricing) ||
+      !isPlainObject(profile.financial)) return profile;
+  const updated = { ...profile, financial: { ...profile.financial } };
+  for (const mapping of [
+    ['desiredGrossMarginPercent', 'desiredGrossMargin'],
+    ['desiredNetMarginPercent', 'desiredNetMargin'],
+    ['maximumDiscountPercent', 'maximumDiscount'],
+  ]) {
+    if (!hasOwn(value.canonicalPricing, mapping[0])) delete updated.financial[mapping[1]];
+  }
+  return updated;
+}
+
+function financialResponse(profile) {
+  const full = response(profile);
+  return {
+    ...projectFinancialConfiguration(full),
+    canonicalAuthority: full.canonicalAuthority,
+  };
+}
+
 function parseVoiceAssistantWrite(body) {
   if (!isPlainObject(body) || !hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
       Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
@@ -270,7 +403,9 @@ router.get('/', requireTenantAccess, async function (req, res) {
 router.put('/', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
   try {
     const write = parseWholeProfileWrite(req.body);
-    const options = write.versioned ? { expectedVersion: write.expectedVersion } : null;
+    const options = write.versioned ? {
+      expectedVersion: write.expectedVersion,
+    } : null;
     return res.json({ success: true, data: response(await persist(req, write.value, options)) });
   } catch (error) {
     if (error.details) return res.status(400).json({
@@ -320,6 +455,47 @@ router.put('/operationalConfiguration', requireAccountMutation, requirePermissio
   }
 });
 
+router.put('/financialConfiguration', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
+  try {
+    const write = parseFinancialConfigurationWrite(req.body);
+    let current;
+    try {
+      current = (await active(req)).rawProfile;
+    } catch (error) {
+      if (!isMissingProfile(error)) throw error;
+      current = onboardingDraft(req);
+      delete current.canonicalAuthority;
+      delete current.onboardingDraft;
+    }
+    const merged = mergeFinancialConfiguration(current, write.value);
+    const cleared = clearSuppliedLegacyFinancialSources(merged, write.value);
+    const migrated = migrateLegacyFinancialConfiguration(cleared).profile;
+    const financialErrors = validateFinancialConfiguration(migrated);
+    if (financialErrors.length) {
+      throw invalidWrite(
+        'INVALID_FINANCIAL_CONFIGURATION_WRITE',
+        'Financial Configuration validation failed.',
+        financialErrors
+      );
+    }
+    return res.json({
+      success: true,
+      data: financialResponse(await persist(req, migrated, {
+        expectedVersion: write.expectedVersion,
+        allowFinancialConfigurationWrite: true,
+        preserveUnrelatedRaw: true,
+      })),
+    });
+  } catch (error) {
+    if (error.details) return res.status(400).json({
+      success: false,
+      error: { code: error.code, message: error.message },
+      errors: error.details,
+    });
+    return sendError(res, error);
+  }
+});
+
 router.put('/voiceAssistant', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
   try {
     const voiceWrite = parseVoiceAssistantWrite(req.body);
@@ -356,6 +532,7 @@ router.put('/:section', requireAccountMutation, requirePermission('settings', 'u
     return res.status(400).json({ success: false, error: { code: 'INVALID_PROFILE_SECTION', message: 'Business Profile section is invalid.' } });
   }
   try {
+    rejectFinancialOnlySectionWrite(section, req.body);
     let current;
     try {
       current = (await active(req)).rawProfile;
@@ -400,6 +577,26 @@ router.get('/operationalConfiguration', requireTenantAccess, async function (req
         success: true,
         data: {
           ...projectOperationalConfiguration(draft),
+          canonicalAuthority: null,
+          onboardingDraft: true,
+        },
+        onboardingDraft: true,
+      });
+    }
+    return sendError(res, error);
+  }
+});
+
+router.get('/financialConfiguration', requireTenantAccess, async function (req, res) {
+  try {
+    return res.json({ success: true, data: financialResponse(await active(req)) });
+  } catch (error) {
+    if (isMissingProfile(error)) {
+      const draft = onboardingDraft(req);
+      return res.json({
+        success: true,
+        data: {
+          ...projectFinancialConfiguration(draft),
           canonicalAuthority: null,
           onboardingDraft: true,
         },

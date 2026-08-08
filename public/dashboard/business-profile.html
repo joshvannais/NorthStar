@@ -507,21 +507,43 @@
     var profileData = null;
     var assetCatalogueData = null;
     var profileCanEdit = false;
+    var generalProfileExpectedVersion = null;
+    var generalProfileConflicted = false;
     var voiceAssistantOriginal = null;
     var voiceAssistantHasAuthority = false;
     var voiceAssistantTouched = Object.create(null);
     var voiceAssistantDirty = false;
     var voiceAssistantSaving = false;
     var voiceAssistantConflicted = false;
+    var voiceAssistantExpectedVersion = null;
     var operationalConfigurationBaseline = Object.create(null);
     var operationalConfigurationDirty = false;
     var operationalConfigurationSaving = false;
     var operationalConfigurationConflicted = false;
+    var operationalConfigurationExpectedVersion = null;
 
     function profileRequest(url, options) {
       var request = options || {};
       request.headers = request.headers || {};
       return NorthStarAccountSession.fetch(url, request);
+    }
+
+    function profileVersion(profile) {
+      var authority = profile && profile.canonicalAuthority;
+      return authority && typeof authority.version === 'string' ? authority.version : null;
+    }
+
+    function advancePreservedSiblingVersions(source, expectedVersion, nextVersion) {
+      if (typeof nextVersion !== 'string') return;
+      if (source !== 'general' && generalProfileExpectedVersion === expectedVersion) {
+        generalProfileExpectedVersion = nextVersion;
+      }
+      if (source !== 'voice' && voiceAssistantExpectedVersion === expectedVersion) {
+        voiceAssistantExpectedVersion = nextVersion;
+      }
+      if (source !== 'operational' && operationalConfigurationExpectedVersion === expectedVersion) {
+        operationalConfigurationExpectedVersion = nextVersion;
+      }
     }
 
     // ====================================================================
@@ -584,11 +606,33 @@
       associateProfileLabels(document);
     }
 
+    function updateGeneralProfileActionState(profileAvailable) {
+      var root = document.getElementById('businessProfileRoot');
+      var state = root ? root.dataset.state : 'error';
+      var available = profileAvailable === undefined ? state === 'ready' : profileAvailable;
+      var editable = available && profileCanEdit;
+      var saveButton = document.getElementById('saveBtn');
+      if (!saveButton) return;
+      saveButton.disabled = !editable || generalProfileConflicted;
+      saveButton.textContent = generalProfileConflicted ? 'Reload page before saving'
+        : editable ? '💾 Save Profile'
+        : state === 'loading' ? 'Loading profile…'
+        : profileCanEdit ? 'Profile unavailable' : 'Read-only profile';
+    }
+
+    function latchGeneralProfileConflict() {
+      generalProfileConflicted = true;
+      var status = document.getElementById('businessProfileStatus');
+      if (status) {
+        status.textContent = 'Business Profile changed. Your unsaved general profile values remain in this form, but Save Profile is blocked until you reload the page.';
+      }
+      updateGeneralProfileActionState();
+    }
+
     function setProfileInteractionState(state, message) {
       var root = document.getElementById('businessProfileRoot');
       var status = document.getElementById('businessProfileStatus');
       var profileAvailable = state === 'ready';
-      var editable = profileAvailable && profileCanEdit;
       root.dataset.state = state;
       root.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
       if (status) status.textContent = message;
@@ -596,11 +640,7 @@
         if (control.id === 'addAssetButton' || control.closest('#assetCatalogueContainer')) return;
         control.disabled = !profileAvailable;
       });
-      var saveButton = document.getElementById('saveBtn');
-      saveButton.disabled = !editable;
-      saveButton.textContent = editable ? '💾 Save Profile'
-        : state === 'loading' ? 'Loading profile…'
-        : profileCanEdit ? 'Profile unavailable' : 'Read-only profile';
+      updateGeneralProfileActionState(profileAvailable);
       updateVoiceActionState(profileAvailable);
       updateOperationalConfigurationActionState(profileAvailable);
     }
@@ -1143,6 +1183,7 @@
     }
 
     function renderOperationalConfiguration(profile) {
+      operationalConfigurationExpectedVersion = profileVersion(profile);
       var routing = profile && profile.routing && typeof profile.routing === 'object' ? profile.routing : {};
       var crew = profile && profile.crew && typeof profile.crew === 'object' ? profile.crew : {};
       var vehicles = profile && profile.vehicles && typeof profile.vehicles === 'object' ? profile.vehicles : {};
@@ -1189,8 +1230,7 @@
       clearOperationalConfigurationError();
       updateOperationalConfigurationActionState();
       try {
-        var expectedVersion = profileData && profileData.canonicalAuthority
-          ? profileData.canonicalAuthority.version : null;
+        var expectedVersion = operationalConfigurationExpectedVersion;
         var response = await profileRequest('/api/v1/business-profile/operationalConfiguration', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -1211,6 +1251,7 @@
           }
           throw new Error(payload.errors ? payload.errors.join('; ') : payload.error && payload.error.message || 'Operational policies could not be saved.');
         }
+        advancePreservedSiblingVersions('operational', expectedVersion, profileVersion(payload.data));
         profileData = payload.data;
         renderOperationalConfiguration(profileData);
         showToast('Operational planning policies saved successfully', 'success');
@@ -1473,6 +1514,7 @@
     }
 
     function renderVoiceAssistant(profile) {
+      voiceAssistantExpectedVersion = profileVersion(profile);
       voiceAssistantHasAuthority = hasOwn(profile, 'voiceAssistant');
       voiceAssistantOriginal = voiceAssistantHasAuthority && profile.voiceAssistant &&
         typeof profile.voiceAssistant === 'object' && !Array.isArray(profile.voiceAssistant)
@@ -1578,8 +1620,7 @@
       clearVoiceAssistantError();
       updateVoiceActionState();
       try {
-        var expectedVersion = profileData && profileData.canonicalAuthority
-          ? profileData.canonicalAuthority.version : null;
+        var expectedVersion = voiceAssistantExpectedVersion;
         var response = await profileRequest('/api/v1/business-profile/voiceAssistant', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -1600,6 +1641,7 @@
           }
           throw new Error(payload.errors ? payload.errors.join('; ') : payload.error && payload.error.message || 'AI configuration could not be saved.');
         }
+        advancePreservedSiblingVersions('voice', expectedVersion, profileVersion(payload.data));
         profileData = payload.data;
         renderVoiceAssistant(profileData);
         showToast('AI configuration saved successfully', 'success');
@@ -1644,6 +1686,8 @@
     // Render profile to form
     // ====================================================================
     function renderProfile(p) {
+      generalProfileExpectedVersion = profileVersion(p);
+      generalProfileConflicted = false;
       var company = p.company && typeof p.company === 'object' ? p.company : {};
       var headquarters = p.headquarters && typeof p.headquarters === 'object' ? p.headquarters : {};
       var serviceArea = p.serviceArea && typeof p.serviceArea === 'object' ? p.serviceArea : {};
@@ -2621,7 +2665,7 @@
     // ====================================================================
     function saveProfile() {
       var btn = document.getElementById('saveBtn');
-      if (!profileCanEdit) return;
+      if (!profileCanEdit || generalProfileConflicted) return;
       if (operationalConfigurationDirty) {
         showOperationalConfigurationError('Save or reload operational policies before saving the rest of the Business Profile.', true);
         var operationalSaveButton = document.getElementById('saveOperationalConfigurationBtn');
@@ -2647,8 +2691,7 @@
         if (error.serviceCatalog) showServiceCatalogError(error.message);
         else showCanonicalError(error.message);
         showToast('❌ ' + error.message, 'error');
-        btn.disabled = false;
-        btn.textContent = '💾 Save Profile';
+        updateGeneralProfileActionState();
         return;
       }
 
@@ -2656,8 +2699,7 @@
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          expectedVersion: profileData && profileData.canonicalAuthority
-            ? profileData.canonicalAuthority.version : null,
+          expectedVersion: generalProfileExpectedVersion,
           value: data,
         }),
       })
@@ -2671,8 +2713,9 @@
             renderProfile(profileData);
             showToast('✅ Profile saved successfully', 'success');
           } else {
-            var msg = result.status === 409 && resp.error && resp.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT'
-              ? 'Business Profile changed; reload the page before saving general profile changes.'
+            var versionConflict = result.status === 409 && resp.error && resp.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT';
+            if (versionConflict) latchGeneralProfileConflict();
+            var msg = versionConflict ? 'Business Profile changed; reload the page before saving general profile changes.'
               : resp.errors ? resp.errors.join('; ') : resp.error && resp.error.message || 'Validation failed';
             showToast('❌ ' + msg, 'error');
           }
@@ -2681,8 +2724,7 @@
           showToast('❌ Could not connect to server', 'error');
         })
         .finally(function() {
-          btn.disabled = !profileCanEdit;
-          btn.textContent = profileCanEdit ? '💾 Save Profile' : 'Read-only profile';
+          updateGeneralProfileActionState();
         });
     }
 

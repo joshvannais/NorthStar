@@ -22,6 +22,8 @@ const OWNER_B = '9f000000-0000-4000-8000-000000000005';
 const UNKNOWN_MARKER = '  保留🧭 <svg onload=window.__operationalXss++>\r\ne\u0301  ';
 const LEGACY_LEAD_TIME = '  legacy lead time 0️⃣ <raw>  ';
 const COMPANY_NAME = 'Operational <img src=x onerror=window.__operationalXss++> Company 🧭';
+const CONCURRENT_VOICE_NAME = '  Concurrent admin voice 🧭 <raw>  ';
+const CONCURRENT_GENERAL_DBA = '  Concurrent admin DBA 🧭 <raw>  ';
 
 function baseProfile(name) {
   const value = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'business-profile.json'), 'utf8'));
@@ -42,6 +44,18 @@ function baseProfile(name) {
 
 function hex(value) {
   return Buffer.from(value, 'utf8').toString('hex');
+}
+
+async function activeProfileState(pool) {
+  return (await pool.query(
+    `SELECT version_label AS version,
+            encode(convert_to(raw_profile #>> '{voiceAssistant,name}', 'UTF8'), 'hex') AS voice_name_hex,
+            encode(convert_to(raw_profile #>> '{company,dba}', 'UTF8'), 'hex') AS company_dba_hex,
+            (SELECT count(*)::int FROM canonical_business_profiles WHERE organization_id = $1) AS version_count
+       FROM canonical_business_profiles
+      WHERE organization_id = $1 AND is_active = TRUE`,
+    [ORG_A]
+  )).rows[0];
 }
 
 async function listen(app) {
@@ -226,6 +240,7 @@ async function main() {
     await ownerPage.click('#saveOperationalConfigurationBtn');
     const operationalResponse = await operationalSave;
     assert.strictEqual(operationalResponse.status(), 200);
+    const operationalPayload = await operationalResponse.json();
     const operationalBody = operationalResponse.request().postDataJSON();
     assert.deepStrictEqual(Object.keys(operationalBody).sort(), ['expectedVersion', 'value']);
     assert.match(operationalBody.expectedVersion, /^org-profile-v[1-9][0-9]*$/);
@@ -270,26 +285,85 @@ async function main() {
     await ownerPage.fill('#sched-travelBuffer', '15');
     assert.strictEqual(await ownerPage.locator('#saveOperationalConfigurationBtn').isDisabled(), true, 'reverting exact baseline clears dirty');
 
-    await ownerPage.fill('#sched-travelBuffer', '25');
-    const current = await request(app).get('/api/v1/business-profile').set(sessions.admin.headers);
-    const advanced = await request(app).put('/api/v1/business-profile/operationalConfiguration').set(sessions.admin.headers).send({
-      expectedVersion: current.body.data.canonicalAuthority.version,
-      value: { scheduling: { maxDailyTravel: 130 } },
+    const normalVoiceSave = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/voiceAssistant' && response.request().method() === 'PUT');
+    await ownerPage.click('[data-section="retell"]');
+    await ownerPage.click('#saveVoiceAssistantBtn');
+    const normalVoiceResponse = await normalVoiceSave;
+    assert.strictEqual(normalVoiceResponse.status(), 200, 'own operational merge safely rebases the unchanged voice token');
+    const normalVoicePayload = await normalVoiceResponse.json();
+    assert.strictEqual(normalVoiceResponse.request().postDataJSON().expectedVersion,
+      operationalPayload.data.canonicalAuthority.version);
+    await ownerPage.waitForFunction(() => {
+      const error = document.getElementById('voiceAssistantError');
+      const reload = document.getElementById('reloadVoiceAssistantBtn');
+      const save = document.getElementById('saveVoiceAssistantBtn');
+      return error && error.textContent === '' && !error.classList.contains('show') &&
+        reload && reload.hidden && save && save.disabled;
     });
-    assert.strictEqual(advanced.status, 200);
-    const conflict = ownerPage.waitForResponse(response =>
+    assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Unsaved general edit survives operational save');
+
+    await ownerPage.locator('#veh-truckCount').evaluate(element => { element.value = '999'; });
+    const normalGlobalSave = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT');
+    await ownerPage.click('#saveBtn');
+    const normalGlobalResponse = await normalGlobalSave;
+    assert.strictEqual(normalGlobalResponse.status(), 200, 'own voice merge safely rebases the unchanged general token');
+    const normalGlobalBody = normalGlobalResponse.request().postDataJSON();
+    assert.deepStrictEqual(Object.keys(normalGlobalBody).sort(), ['expectedVersion', 'value']);
+    assert.strictEqual(normalGlobalBody.expectedVersion, normalVoicePayload.data.canonicalAuthority.version);
+    assert.strictEqual(normalGlobalBody.value.vehicles.truckCount, 0, 'global collection ignores the operational control value');
+    assert.strictEqual(normalGlobalBody.value.company.dba, 'Unsaved general edit survives operational save');
+    const normalGlobalPayload = await normalGlobalResponse.json();
+    await ownerPage.waitForFunction(() =>
+      document.getElementById('company-dba').value === 'Unsaved general edit survives operational save' &&
+      document.getElementById('veh-truckCount').value === '0' &&
+      !document.getElementById('saveBtn').disabled);
+
+    await ownerPage.reload({ waitUntil: 'domcontentloaded' });
+    await ownerPage.waitForFunction(() => document.getElementById('businessProfileRoot').dataset.state === 'ready');
+    assert.strictEqual(await ownerPage.inputValue('#veh-truckCount'), '0');
+    assert.strictEqual(await ownerPage.inputValue('#veh-averageMpg'), '15');
+    assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Unsaved general edit survives operational save');
+
+    // External Voice advance: an Operational-only reload must not rebase the
+    // Voice or General write tokens for surfaces it intentionally does not render.
+    const voiceCycleSnapshot = await request(app).get('/api/v1/business-profile').set(sessions.admin.headers);
+    assert.strictEqual(voiceCycleSnapshot.status, 200);
+    const voiceCycleStaleVersion = voiceCycleSnapshot.body.data.canonicalAuthority.version;
+    assert.strictEqual(voiceCycleStaleVersion, normalGlobalPayload.data.canonicalAuthority.version);
+    await ownerPage.click('[data-section="company"]');
+    await ownerPage.fill('#company-dba', 'Owner general draft before concurrent voice write');
+    await ownerPage.click('[data-section="retell"]');
+    await ownerPage.fill('#voice-assistant-name', 'Owner voice draft before concurrent voice write');
+    await ownerPage.click('[data-section="scheduling"]');
+    await ownerPage.fill('#sched-travelBuffer', '25');
+
+    const concurrentVoice = JSON.parse(JSON.stringify(voiceCycleSnapshot.body.data.voiceAssistant));
+    concurrentVoice.name = CONCURRENT_VOICE_NAME;
+    const voiceAdvanced = await request(app).put('/api/v1/business-profile/voiceAssistant').set(sessions.admin.headers).send({
+      expectedVersion: voiceCycleStaleVersion,
+      value: concurrentVoice,
+    });
+    assert.strictEqual(voiceAdvanced.status, 200);
+    const voiceCommitted = await activeProfileState(pool);
+    assert.strictEqual(voiceCommitted.version, voiceAdvanced.body.data.canonicalAuthority.version);
+    assert.strictEqual(voiceCommitted.voice_name_hex, hex(CONCURRENT_VOICE_NAME));
+
+    const voiceCycleOperationalConflict = ownerPage.waitForResponse(response =>
       response.url() === origin + '/api/v1/business-profile/operationalConfiguration' && response.request().method() === 'PUT');
     await ownerPage.click('#saveOperationalConfigurationBtn');
-    assert.strictEqual((await conflict).status(), 409);
+    const voiceCycleOperationalResponse = await voiceCycleOperationalConflict;
+    assert.strictEqual(voiceCycleOperationalResponse.status(), 409);
+    assert.strictEqual(voiceCycleOperationalResponse.request().postDataJSON().expectedVersion, voiceCycleStaleVersion);
     await ownerPage.waitForFunction(() => /unsaved operational values remain/.test(document.getElementById('operationalConfigurationError').textContent));
     assert.strictEqual(await ownerPage.locator('#reloadOperationalConfigurationBtn').isVisible(), true);
-    assert.strictEqual(await ownerPage.locator('#reloadOperationalConfigurationBtn').evaluate(element => document.activeElement === element), true);
     await ownerPage.fill('#sched-travelBuffer', '26');
-    assert.strictEqual(await ownerPage.locator('#saveOperationalConfigurationBtn').isDisabled(), true, 'conflict remains latched after edit');
-    const reloadOperational = ownerPage.waitForResponse(response =>
+    assert.strictEqual(await ownerPage.locator('#saveOperationalConfigurationBtn').isDisabled(), true, 'operational conflict remains latched after edit');
+    const voiceCycleOperationalReload = ownerPage.waitForResponse(response =>
       response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'GET');
     await ownerPage.click('#reloadOperationalConfigurationBtn');
-    assert.strictEqual((await reloadOperational).status(), 200);
+    assert.strictEqual((await voiceCycleOperationalReload).status(), 200);
     await ownerPage.waitForFunction(() => {
       const travelBuffer = document.getElementById('sched-travelBuffer');
       const error = document.getElementById('operationalConfigurationError');
@@ -306,32 +380,131 @@ async function main() {
     assert.strictEqual(await ownerPage.locator('#operationalConfigurationError').evaluate(element => element.classList.contains('show')), false);
     assert.strictEqual(await ownerPage.locator('#reloadOperationalConfigurationBtn').isVisible(), false);
     assert.strictEqual(await ownerPage.locator('#saveOperationalConfigurationBtn').isDisabled(), true);
-    assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Unsaved general edit survives operational save');
-    assert.strictEqual(await ownerPage.inputValue('#voice-assistant-name'), 'Unsaved voice edit survives operational save');
+    assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Owner general draft before concurrent voice write');
+    assert.strictEqual(await ownerPage.inputValue('#voice-assistant-name'), 'Owner voice draft before concurrent voice write');
 
-    const voiceSave = ownerPage.waitForResponse(response =>
+    const staleVoiceSave = ownerPage.waitForResponse(response =>
       response.url() === origin + '/api/v1/business-profile/voiceAssistant' && response.request().method() === 'PUT');
     await ownerPage.click('[data-section="retell"]');
     await ownerPage.click('#saveVoiceAssistantBtn');
-    assert.strictEqual((await voiceSave).status(), 200);
-    assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Unsaved general edit survives operational save');
-    await ownerPage.locator('#veh-truckCount').evaluate(element => { element.value = '999'; });
-    const globalSave = ownerPage.waitForResponse(response =>
+    const staleVoiceResponse = await staleVoiceSave;
+    assert.strictEqual(staleVoiceResponse.status(), 409);
+    assert.strictEqual(staleVoiceResponse.request().postDataJSON().expectedVersion, voiceCycleStaleVersion);
+    await ownerPage.waitForFunction(() => /unsaved AI configuration remains/.test(document.getElementById('voiceAssistantError').textContent));
+    assert.strictEqual(await ownerPage.inputValue('#voice-assistant-name'), 'Owner voice draft before concurrent voice write');
+    assert.deepStrictEqual(await activeProfileState(pool), voiceCommitted, 'stale Voice write cannot advance or replace admin bytes');
+
+    const voiceCycleVoiceReload = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'GET');
+    await ownerPage.click('#reloadVoiceAssistantBtn');
+    assert.strictEqual((await voiceCycleVoiceReload).status(), 200);
+    await ownerPage.waitForFunction(expectedName => {
+      const error = document.getElementById('voiceAssistantError');
+      const reload = document.getElementById('reloadVoiceAssistantBtn');
+      const save = document.getElementById('saveVoiceAssistantBtn');
+      return document.getElementById('voice-assistant-name').value === expectedName &&
+        error && error.textContent === '' && !error.classList.contains('show') &&
+        reload && reload.hidden && save && save.disabled;
+    }, CONCURRENT_VOICE_NAME);
+    assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Owner general draft before concurrent voice write');
+
+    const staleGeneralSave = ownerPage.waitForResponse(response =>
       response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT');
     await ownerPage.click('#saveBtn');
-    const globalResponse = await globalSave;
-    assert.strictEqual(globalResponse.status(), 200);
-    const globalBody = globalResponse.request().postDataJSON();
-    assert.deepStrictEqual(Object.keys(globalBody).sort(), ['expectedVersion', 'value']);
-    assert.match(globalBody.expectedVersion, /^org-profile-v[1-9][0-9]*$/);
-    assert.strictEqual(globalBody.value.vehicles.truckCount, 0, 'global collection ignores the operational control value');
-    assert.strictEqual(globalBody.value.company.dba, 'Unsaved general edit survives operational save');
+    const staleGeneralResponse = await staleGeneralSave;
+    assert.strictEqual(staleGeneralResponse.status(), 409);
+    const staleGeneralBody = staleGeneralResponse.request().postDataJSON();
+    assert.strictEqual(staleGeneralBody.expectedVersion, voiceCycleStaleVersion);
+    assert.strictEqual(staleGeneralBody.value.company.dba, 'Owner general draft before concurrent voice write');
+    await ownerPage.waitForFunction(() => /Save Profile is blocked until you reload the page/.test(document.getElementById('businessProfileStatus').textContent));
+    assert.strictEqual(await ownerPage.locator('#saveBtn').isDisabled(), true);
+    assert.strictEqual(await ownerPage.locator('#saveBtn').textContent(), 'Reload page before saving');
+    assert.deepStrictEqual(await activeProfileState(pool), voiceCommitted, 'stale General write cannot advance after external Voice change');
+
     await ownerPage.reload({ waitUntil: 'domcontentloaded' });
     await ownerPage.waitForFunction(() => document.getElementById('businessProfileRoot').dataset.state === 'ready');
-    assert.strictEqual(await ownerPage.inputValue('#veh-truckCount'), '0');
-    assert.strictEqual(await ownerPage.inputValue('#veh-averageMpg'), '15');
-    assert.strictEqual(await ownerPage.inputValue('#sched-maxDailyTravel'), '130');
+    assert.strictEqual(await ownerPage.inputValue('#voice-assistant-name'), CONCURRENT_VOICE_NAME);
     assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Unsaved general edit survives operational save');
+    assert.strictEqual(await ownerPage.locator('#saveBtn').isDisabled(), false);
+
+    // External General advance: repeat the stale Operational reload path and
+    // prove neither Voice nor whole-profile writes borrow its newer version.
+    const generalCycleSnapshot = await request(app).get('/api/v1/business-profile').set(sessions.admin.headers);
+    assert.strictEqual(generalCycleSnapshot.status, 200);
+    const generalCycleStaleVersion = generalCycleSnapshot.body.data.canonicalAuthority.version;
+    await ownerPage.click('[data-section="company"]');
+    await ownerPage.fill('#company-dba', 'Owner general draft before concurrent general write');
+    await ownerPage.click('[data-section="retell"]');
+    await ownerPage.fill('#voice-assistant-name', 'Owner voice draft before concurrent general write');
+    await ownerPage.click('[data-section="scheduling"]');
+    await ownerPage.fill('#sched-travelBuffer', '27');
+
+    const concurrentGeneral = JSON.parse(JSON.stringify(generalCycleSnapshot.body.data));
+    delete concurrentGeneral.canonicalAuthority;
+    concurrentGeneral.company.dba = CONCURRENT_GENERAL_DBA;
+    const generalAdvanced = await request(app).put('/api/v1/business-profile').set(sessions.admin.headers).send({
+      expectedVersion: generalCycleStaleVersion,
+      value: concurrentGeneral,
+    });
+    assert.strictEqual(generalAdvanced.status, 200);
+    const generalCommitted = await activeProfileState(pool);
+    assert.strictEqual(generalCommitted.version, generalAdvanced.body.data.canonicalAuthority.version);
+    assert.strictEqual(generalCommitted.company_dba_hex, hex(CONCURRENT_GENERAL_DBA));
+
+    const generalCycleOperationalConflict = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/operationalConfiguration' && response.request().method() === 'PUT');
+    await ownerPage.click('#saveOperationalConfigurationBtn');
+    const generalCycleOperationalResponse = await generalCycleOperationalConflict;
+    assert.strictEqual(generalCycleOperationalResponse.status(), 409);
+    assert.strictEqual(generalCycleOperationalResponse.request().postDataJSON().expectedVersion, generalCycleStaleVersion);
+    await ownerPage.waitForFunction(() => /unsaved operational values remain/.test(document.getElementById('operationalConfigurationError').textContent));
+    const generalCycleOperationalReload = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'GET');
+    await ownerPage.click('#reloadOperationalConfigurationBtn');
+    assert.strictEqual((await generalCycleOperationalReload).status(), 200);
+    await ownerPage.waitForFunction(() =>
+      document.getElementById('sched-travelBuffer').value === '15' &&
+      document.getElementById('reloadOperationalConfigurationBtn').hidden &&
+      document.getElementById('saveOperationalConfigurationBtn').disabled);
+    assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Owner general draft before concurrent general write');
+    assert.strictEqual(await ownerPage.inputValue('#voice-assistant-name'), 'Owner voice draft before concurrent general write');
+
+    const generalCycleStaleVoice = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/voiceAssistant' && response.request().method() === 'PUT');
+    await ownerPage.click('[data-section="retell"]');
+    await ownerPage.click('#saveVoiceAssistantBtn');
+    const generalCycleStaleVoiceResponse = await generalCycleStaleVoice;
+    assert.strictEqual(generalCycleStaleVoiceResponse.status(), 409);
+    assert.strictEqual(generalCycleStaleVoiceResponse.request().postDataJSON().expectedVersion, generalCycleStaleVersion);
+    assert.deepStrictEqual(await activeProfileState(pool), generalCommitted, 'stale Voice write cannot advance after external General change');
+
+    const generalCycleVoiceReload = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'GET');
+    await ownerPage.click('#reloadVoiceAssistantBtn');
+    assert.strictEqual((await generalCycleVoiceReload).status(), 200);
+    await ownerPage.waitForFunction(expectedName =>
+      document.getElementById('voice-assistant-name').value === expectedName &&
+      document.getElementById('reloadVoiceAssistantBtn').hidden &&
+      document.getElementById('saveVoiceAssistantBtn').disabled, CONCURRENT_VOICE_NAME);
+    assert.strictEqual(await ownerPage.inputValue('#company-dba'), 'Owner general draft before concurrent general write');
+
+    const generalCycleStaleGeneral = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT');
+    await ownerPage.click('#saveBtn');
+    const generalCycleStaleGeneralResponse = await generalCycleStaleGeneral;
+    assert.strictEqual(generalCycleStaleGeneralResponse.status(), 409);
+    const generalCycleStaleGeneralBody = generalCycleStaleGeneralResponse.request().postDataJSON();
+    assert.strictEqual(generalCycleStaleGeneralBody.expectedVersion, generalCycleStaleVersion);
+    assert.strictEqual(generalCycleStaleGeneralBody.value.company.dba, 'Owner general draft before concurrent general write');
+    await ownerPage.waitForFunction(() => /Save Profile is blocked until you reload the page/.test(document.getElementById('businessProfileStatus').textContent));
+    assert.strictEqual(await ownerPage.locator('#saveBtn').isDisabled(), true);
+    assert.deepStrictEqual(await activeProfileState(pool), generalCommitted, 'stale General write cannot replace admin bytes or advance the version');
+
+    await ownerPage.reload({ waitUntil: 'domcontentloaded' });
+    await ownerPage.waitForFunction(() => document.getElementById('businessProfileRoot').dataset.state === 'ready');
+    assert.strictEqual(await ownerPage.inputValue('#company-dba'), CONCURRENT_GENERAL_DBA);
+    assert.strictEqual(await ownerPage.inputValue('#voice-assistant-name'), CONCURRENT_VOICE_NAME);
+    assert.strictEqual(await ownerPage.locator('#saveBtn').isDisabled(), false);
     assert.strictEqual(await ownerPage.evaluate(() => window.__operationalXss), 0);
     await ownerContext.close();
 
@@ -393,7 +566,7 @@ async function main() {
     assert.deepStrictEqual(ledger.providers, [], 'provider requests remain zero');
     assert.deepStrictEqual(ledger.external, [], 'unexpected external requests remain zero');
     assert.deepStrictEqual(ledger.consoleErrors, [], 'unexpected console errors remain zero');
-    assert.strictEqual(ledger.expectedConflictConsole.length, 1, 'one intentional stale write reports one expected 409 resource error');
+    assert.strictEqual(ledger.expectedConflictConsole.length, 6, 'six intentional cross-session stale writes report expected 409 resource errors');
     assert.ok(ledger.expectedErrorConsole.length <= 1, 'the intentional error state emits at most one expected 503 resource error');
     assert.deepStrictEqual(ledger.pageErrors, [], 'page errors remain zero');
     assert.ok(ledger.requests.every(entry => entry.authorization === null), 'browser sends no Authorization headers');
@@ -409,7 +582,11 @@ async function main() {
       roles: ['owner', 'admin', 'member', 'viewer'],
       viewports: ['desktop', 'mobile'],
       themes: ['light', 'dark'],
-      lifecycle: ['initial', 'dirty', 'save', 'rerender', 'conflict', 'reload', 'page-reload', 'error'],
+      lifecycle: [
+        'initial', 'dirty', 'save', 'safe-own-section-rebase', 'rerender',
+        'cross-session-voice-conflict', 'cross-session-general-conflict',
+        'surface-reload', 'page-reload', 'error',
+      ],
       rawBytes: 'exact',
       providerRequests: 0,
       providerActions: 0,

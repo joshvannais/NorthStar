@@ -149,6 +149,14 @@ describe('Voice Webhook Framework', () => {
   // ── Event Routing ─────────────────────────────────────────
 
   describe('provider event identity', () => {
+    const organizationId = '66000000-0000-0000-0000-000000000001';
+    const otherOrganizationId = '66000000-0000-0000-0000-000000000002';
+    const identity = (payload, overrides = {}) => webhook.providerEventIdentity(payload, {
+      organizationId,
+      ingestionSource: 'retell',
+      ...overrides,
+    });
+
     test('uses the exact existing supported-event contract', () => {
       expect(webhook.SUPPORTED_EVENTS).toEqual([
         'call_started', 'call_ended', 'call_analyzed', 'transcript_ready', 'transcript', 'ping',
@@ -159,32 +167,48 @@ describe('Voice Webhook Framework', () => {
       expect(webhook.isSupportedEvent(undefined)).toBe(false);
     });
 
-    test('preserves explicit legacy identity and derives stable official lifecycle identity', () => {
-      expect(webhook.providerEventIdentity({ event_id: '  provider-event-1  ' })).toBe('provider-event-1');
+    test('hashes supplied identity into provider, source, tenant, call, and event domains', () => {
       const first = {
+        event_id: '  provider-event-1  ',
         event: 'call_ended',
         call: { call_id: 'official-call-1', agent_id: 'agent-a', transcript: 'safe transcript' },
       };
       const reordered = {
         call: { transcript: 'safe transcript', agent_id: 'agent-a', call_id: 'official-call-1' },
+        event_id: 'provider-event-1',
         event: 'call_ended',
       };
-      const identity = webhook.providerEventIdentity(first);
-      expect(identity).toMatch(/^retell-event-v1:[0-9a-f]{64}$/);
-      expect(webhook.providerEventIdentity(reordered)).toBe(identity);
-      expect(webhook.providerEventIdentity({ ...reordered, event: 'call_analyzed' })).not.toBe(identity);
+      const eventIdentity = identity(first);
+      expect(eventIdentity).toMatch(/^retell-provider-event-v2:[0-9a-f]{64}$/);
+      expect(eventIdentity).not.toContain('provider-event-1');
+      expect(identity(reordered)).toBe(eventIdentity);
+      expect(identity({ ...reordered, event: 'call_analyzed' })).not.toBe(eventIdentity);
+      expect(identity({ ...reordered, call: { ...reordered.call, call_id: 'official-call-2' } })).not.toBe(eventIdentity);
+      expect(identity(reordered, { ingestionSource: 'voice' })).not.toBe(eventIdentity);
+      expect(identity(reordered, { organizationId: otherOrganizationId })).not.toBe(eventIdentity);
+      expect(eventIdentity).not.toBe('provider-event-1');
     });
 
-    test('serialization-only transcript variation converges while distinct content remains distinct', () => {
+    test('derives stable official no-ID identity and separates distinct transcript semantics', () => {
+      const lifecycle = {
+        event: 'call_ended',
+        call: { call_id: 'official-call-1', agent_id: 'agent-a', transcript: 'safe transcript' },
+      };
+      const lifecycleReordered = {
+        call: { transcript: 'safe transcript', agent_id: 'agent-a', call_id: 'official-call-1' },
+        event: 'call_ended',
+      };
+      expect(identity(lifecycleReordered)).toBe(identity(lifecycle));
+
       const first = {
         event: 'transcript', call_id: 'transcript-call-1', speaker: 'user', text: 'first update',
       };
       const reordered = {
         text: 'first update', speaker: 'user', call_id: 'transcript-call-1', event: 'transcript',
       };
-      expect(webhook.providerEventIdentity(reordered)).toBe(webhook.providerEventIdentity(first));
-      expect(webhook.providerEventIdentity({ ...reordered, text: 'second update' }))
-        .not.toBe(webhook.providerEventIdentity(first));
+      expect(identity(reordered)).toBe(identity(first));
+      expect(identity({ ...reordered, text: 'second update' }))
+        .not.toBe(identity(first));
     });
   });
 

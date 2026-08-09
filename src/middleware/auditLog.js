@@ -56,7 +56,7 @@ function requestAuditEntry(req, status, duration) {
  */
 function auditLogger(req, res, next) {
   // Skip logging for non-API routes
-  if (!req.path.startsWith('/api/')) return next();
+  if (!req.path.toLowerCase().startsWith('/api/')) return next();
 
   const start = Date.now();
 

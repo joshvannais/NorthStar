@@ -13,7 +13,11 @@ const rawWebhookBody = express.raw({
 });
 
 function createRetellWebhookBoundaryRouter() {
-  const router = express.Router();
+  // Only the two documented spellings below own the raw signed boundary and
+  // its transaction-scoped audit row. Express defaults would also accept case
+  // variants and an optional trailing slash, while the audit classifier is
+  // intentionally exact.
+  const router = express.Router({ caseSensitive: true, strict: true });
 
   // These exact provider entry points must run before the application's global
   // JSON parser. Composite signature and replay validation therefore operate on

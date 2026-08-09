@@ -239,6 +239,27 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     return response;
   }
 
+  async function auditRowsForResponse(response) {
+    await settleAudit();
+    const correlationId = response.headers['x-correlation-id'];
+    expect(correlationId).toMatch(/^[0-9a-f-]{36}$/i);
+    const rows = await db.getPool().query(
+      `SELECT organization_id, user_id, action, entity_type, entity_id, details
+         FROM audit_logs
+        WHERE details->>'correlationId' = $1
+        ORDER BY created_at, id`,
+      [correlationId]
+    );
+    return { correlationId, rows: rows.rows };
+  }
+
+  function expectOnlyAuditChanged(before, after, expectedAuditDelta) {
+    for (const table of AUTHORITY_TABLES.filter(name => name !== 'audit_logs')) {
+      expect(after[table]).toEqual(before[table]);
+    }
+    expect(after.audit_logs.count - before.audit_logs.count).toBe(expectedAuditDelta);
+  }
+
   async function startTrackedWebhookProcess() {
     const worker = await startWebhookProcess({
       DATABASE_URL: suiteDatabase.connectionString,
@@ -381,6 +402,40 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
       }
     }
     expect(await tableState()).toEqual(before);
+  });
+
+  test.each([
+    ['/API/RETELL/WEBHOOK', 'legacy mixed case'],
+    ['/api/retell/webhook/', 'legacy trailing slash'],
+    ['/api/v1/Voice/Webhook', 'voice mixed case'],
+    ['/api/v1/voice/webhook/', 'voice trailing slash'],
+  ])('only the documented exact webhook URLs own the signed boundary: %s (%s)', async (route) => {
+    const payload = nonterminalEvent('strict-route-' + crypto.randomUUID());
+    const raw = JSON.stringify(payload);
+    const before = await tableState();
+    const response = await sendRaw(route, raw, { signature: sign(raw) });
+    expect(response.status).toBe(404);
+
+    const audit = await auditRowsForResponse(response);
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0]).toMatchObject({
+      organization_id: null,
+      user_id: null,
+      action: 'POST 404',
+      entity_type: expect.any(String),
+    });
+    expect(audit.rows[0].details).toMatchObject({
+      actorLabel: 'anonymous',
+      role: 'anonymous',
+      requestId: audit.correlationId,
+      correlationId: audit.correlationId,
+      afterState: {
+        method: 'POST',
+        path: route,
+        status: 404,
+      },
+    });
+    expectOnlyAuditChanged(before, await tableState(), 1);
   });
 
   test.each([
@@ -536,6 +591,8 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     const first = await sendRaw('/api/retell/webhook', raw, { signature });
     expect(first.status).toBe(201);
     expect(first.body.received).toBe(true);
+    expect(first.body).not.toHaveProperty('auditContext');
+    expect(collectKeysAndStrings(first.body).keys).not.toContain('auditContext');
     const stored = await db.getPool().query(
       `SELECT t.source, count(*)::int AS count
          FROM canonical_operations o
@@ -548,6 +605,42 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     const afterFirst = await tableState();
     expect(afterFirst).not.toEqual(before);
     expect(afterFirst.audit_logs.count - before.audit_logs.count).toBe(1);
+    const acceptedAudit = await auditRowsForResponse(first);
+    expect(acceptedAudit.rows).toHaveLength(1);
+    const session = await db.getPool().query(
+      `SELECT id FROM canonical_voice_sessions
+        WHERE organization_id = $1 AND external_session_id = $2`,
+      [ORG_A, payload.call.call_id]
+    );
+    const serializedBody = JSON.stringify(first.body);
+    expect(serializedBody).not.toContain(session.rows[0].id);
+    expect(serializedBody).not.toContain('retell_webhook.accepted');
+    expect(serializedBody).not.toContain('canonical_voice_session');
+    expect(acceptedAudit.rows[0]).toMatchObject({
+      organization_id: ORG_A,
+      user_id: null,
+      action: 'retell_webhook.accepted',
+      entity_type: 'canonical_voice_session',
+      entity_id: session.rows[0].id,
+    });
+    expect(acceptedAudit.rows[0].details).toMatchObject({
+      actorLabel: 'provider',
+      role: 'system',
+      requestId: acceptedAudit.correlationId,
+      correlationId: acceptedAudit.correlationId,
+      afterState: {
+        method: 'POST',
+        path: '/api/retell/webhook',
+        status: 201,
+        provider: 'retell',
+        source: 'retell',
+        accepted: true,
+      },
+    });
+    const auditText = JSON.stringify(acceptedAudit.rows[0]);
+    for (const forbidden of [payload.call.agent_id, payload.call.call_id, TEST_SECRET, FORBIDDEN_API_KEY]) {
+      expect(auditText).not.toContain(forbidden);
+    }
 
     const replay = await sendRaw('/api/retell/webhook', raw, { signature });
     expect(replay.status).toBe(409);
@@ -566,6 +659,7 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     const firstRaw = JSON.stringify(payload);
     const first = await sendRaw('/api/retell/webhook', firstRaw, { signature: sign(firstRaw) });
     expect(first.status).toBe(201);
+    const acceptedState = await tableState();
 
     const durableTables = [
       ...GRAPH_TABLES,
@@ -584,7 +678,7 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
       [ORG_A, payload.call.call_id]
     );
     expect(identity.rows).toEqual([{
-      external_event_id: expect.stringMatching(/^retell-event-v1:[0-9a-f]{64}$/),
+      external_event_id: expect.stringMatching(/^retell-provider-event-v2:[0-9a-f]{64}$/),
     }]);
 
     const reordered = {
@@ -605,6 +699,77 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     expect(second.status).toBe(201);
     expect(second.body.replayed).toBe(true);
     expect(await tableState(durableTables)).toEqual(afterFirst);
+    const retriedState = await tableState();
+    for (const table of AUTHORITY_TABLES.filter(name => !['audit_logs', 'retell_webhook_replay_claims'].includes(name))) {
+      expect(retriedState[table]).toEqual(acceptedState[table]);
+    }
+    expect(retriedState.audit_logs.count - acceptedState.audit_logs.count).toBe(1);
+    expect(retriedState.retell_webhook_replay_claims.count - acceptedState.retell_webhook_replay_claims.count).toBe(1);
+  });
+
+  test('supplied event identity converges on semantic retry and rejects changed semantics atomically', async () => {
+    const payload = {
+      ...terminalEvent('supplied-semantic-retry'),
+      event_id: 'shared-provider-event-id',
+    };
+    const firstRaw = JSON.stringify(payload);
+    const first = await sendRaw('/api/retell/webhook', firstRaw, { signature: sign(firstRaw) });
+    expect(first.status).toBe(201);
+    const afterFirst = await tableState();
+
+    const reordered = {
+      call: {
+        call_analysis: {
+          service_requested: payload.call.call_analysis.service_requested,
+          customer_name: payload.call.call_analysis.customer_name,
+        },
+        transcript_object: payload.call.transcript_object.map(turn => ({ words: turn.words, role: turn.role })),
+        from_number: payload.call.from_number,
+        agent_id: payload.call.agent_id,
+        call_id: payload.call.call_id,
+      },
+      event: payload.event,
+      event_id: payload.event_id,
+    };
+    const retryRaw = JSON.stringify(reordered, null, 2).replace(/\n/g, '\r\n');
+    const retry = await sendRaw('/api/retell/webhook', retryRaw, { signature: sign(retryRaw) });
+    expect(retry.status).toBe(201);
+    expect(retry.body.replayed).toBe(true);
+    expect(retry.body.operationId).toBe(first.body.operationId);
+
+    const afterRetry = await tableState();
+    for (const table of AUTHORITY_TABLES.filter(name => !['audit_logs', 'retell_webhook_replay_claims'].includes(name))) {
+      expect(afterRetry[table]).toEqual(afterFirst[table]);
+    }
+    expect(afterRetry.audit_logs.count - afterFirst.audit_logs.count).toBe(1);
+    expect(afterRetry.retell_webhook_replay_claims.count - afterFirst.retell_webhook_replay_claims.count).toBe(1);
+
+    const conflict = JSON.parse(JSON.stringify(reordered));
+    conflict.call.transcript_object[1].words = 'I need materially different electrical service.';
+    const conflictRaw = JSON.stringify(conflict);
+    const conflictResponse = await sendRaw('/api/retell/webhook', conflictRaw, { signature: sign(conflictRaw) });
+    expect(conflictResponse.status).toBe(409);
+    expect(conflictResponse.body.error.code).toBe('VOICE_EVENT_IDENTITY_CONFLICT');
+    expect(await tableState()).toEqual(afterRetry);
+
+    const stored = await db.getPool().query(
+      `SELECT event_record.external_event_id, event_record.event_type, session_record.status,
+              session_record.canonical_operation_id
+         FROM canonical_voice_session_events event_record
+         JOIN canonical_voice_sessions session_record
+           ON session_record.organization_id = event_record.organization_id
+          AND session_record.id = event_record.voice_session_id
+        WHERE session_record.organization_id = $1
+          AND session_record.external_session_id = $2`,
+      [ORG_A, payload.call.call_id]
+    );
+    expect(stored.rows).toEqual([expect.objectContaining({
+      external_event_id: expect.stringMatching(/^retell-provider-event-v2:[0-9a-f]{64}$/),
+      event_type: 'call_ended',
+      status: 'completed',
+      canonical_operation_id: first.body.operationId,
+    })]);
+    expect(stored.rows[0].external_event_id).not.toContain(payload.event_id);
   });
 
   test('concurrent identical signed deliveries use one atomic replay claim', async () => {
@@ -658,7 +823,10 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
   }, 60000);
 
   test('a distinct signed provider event for the same completed call retains downstream durable graph idempotency', async () => {
-    const firstPayload = terminalEvent('durable-first', 'phase6a-agent-a', 'phase6a-call-durable');
+    const firstPayload = {
+      ...terminalEvent('durable-first', 'phase6a-agent-a', 'phase6a-call-durable'),
+      event_id: 'shared-lifecycle-provider-id',
+    };
     const firstRaw = JSON.stringify(firstPayload);
     const first = await sendRaw('/api/retell/webhook', firstRaw, {
       signature: sign(firstRaw),
@@ -677,6 +845,26 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     expect(duplicate.status).toBe(201);
     expect(duplicate.body.replayed).toBe(true);
     expect(await tableState(GRAPH_TABLES)).toEqual(graphState);
+    const events = await db.getPool().query(
+      `SELECT event_record.external_event_id, event_record.event_type, session_record.status
+         FROM canonical_voice_session_events event_record
+         JOIN canonical_voice_sessions session_record
+           ON session_record.organization_id = event_record.organization_id
+          AND session_record.id = event_record.voice_session_id
+        WHERE session_record.organization_id = $1
+          AND session_record.external_session_id = $2
+        ORDER BY event_record.event_type`,
+      [ORG_A, firstPayload.call.call_id]
+    );
+    expect(events.rows).toEqual([
+      expect.objectContaining({ event_type: 'call_analyzed', status: 'completed' }),
+      expect.objectContaining({ event_type: 'call_ended', status: 'completed' }),
+    ]);
+    expect(new Set(events.rows.map(row => row.external_event_id)).size).toBe(2);
+    events.rows.forEach(row => {
+      expect(row.external_event_id).toMatch(/^retell-provider-event-v2:[0-9a-f]{64}$/);
+      expect(row.external_event_id).not.toContain(firstPayload.event_id);
+    });
   });
 
   test('the existing voice URL keeps its signed canonical voice source and replay response contract', async () => {
@@ -688,6 +876,7 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
       contentType: 'application/vnd.retell+json',
     });
     expect(response.status).toBe(201);
+    expect(response.body).not.toHaveProperty('auditContext');
     const stored = await db.getPool().query(
       `SELECT t.source, count(*)::int AS count
          FROM canonical_operations o
@@ -697,12 +886,138 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
       [ORG_A, payload.call.call_id]
     );
     expect(stored.rows).toEqual([{ source: 'voice', count: 1 }]);
+    const acceptedAudit = await auditRowsForResponse(response);
+    expect(acceptedAudit.rows).toHaveLength(1);
+    expect(acceptedAudit.rows[0]).toMatchObject({
+      organization_id: ORG_A,
+      user_id: null,
+      action: 'retell_webhook.accepted',
+      entity_type: 'canonical_voice_session',
+    });
+    expect(acceptedAudit.rows[0].details).toMatchObject({
+      actorLabel: 'provider',
+      role: 'system',
+      requestId: acceptedAudit.correlationId,
+      correlationId: acceptedAudit.correlationId,
+      afterState: {
+        path: '/api/v1/voice/webhook',
+        status: 201,
+        provider: 'retell',
+        source: 'voice',
+        accepted: true,
+      },
+    });
 
     const after = await tableState();
     const replay = await sendRaw('/api/v1/voice/webhook', raw, { signature });
     expect(replay.status).toBe(409);
     expect(replay.body.error.code).toBe('WEBHOOK_REPLAYED');
     expect(await tableState()).toEqual(after);
+  });
+
+  test('the same supplied event ID is source-separated across both exact aliases', async () => {
+    const payload = {
+      ...nonterminalEvent('source-domain', 'phase6a-agent-a', 'phase6a-call-source-domain'),
+      event_id: 'shared-source-provider-id',
+    };
+    const retellRaw = JSON.stringify(payload);
+    const retell = await sendRaw('/api/retell/webhook', retellRaw, { signature: sign(retellRaw) });
+    expect(retell.status).toBe(202);
+
+    const reordered = {
+      call: {
+        from_number: payload.call.from_number,
+        agent_id: payload.call.agent_id,
+        call_id: payload.call.call_id,
+      },
+      event_id: payload.event_id,
+      event: payload.event,
+    };
+    const voiceRaw = JSON.stringify(reordered, null, 2);
+    expect(voiceRaw).not.toBe(retellRaw);
+    const voice = await sendRaw('/api/v1/voice/webhook', voiceRaw, { signature: sign(voiceRaw) });
+    expect(voice.status).toBe(202);
+
+    const events = await db.getPool().query(
+      `SELECT event_record.external_event_id
+         FROM canonical_voice_session_events event_record
+         JOIN canonical_voice_sessions session_record
+           ON session_record.organization_id = event_record.organization_id
+          AND session_record.id = event_record.voice_session_id
+        WHERE session_record.organization_id = $1
+          AND session_record.external_session_id = $2
+        ORDER BY event_record.external_event_id`,
+      [ORG_A, payload.call.call_id]
+    );
+    expect(events.rows).toHaveLength(2);
+    expect(new Set(events.rows.map(row => row.external_event_id)).size).toBe(2);
+    events.rows.forEach(row => expect(row.external_event_id).toMatch(/^retell-provider-event-v2:[0-9a-f]{64}$/));
+
+    const retellAudit = await auditRowsForResponse(retell);
+    const voiceAudit = await auditRowsForResponse(voice);
+    expect(retellAudit.rows[0].details.afterState.source).toBe('retell');
+    expect(voiceAudit.rows[0].details.afterState.source).toBe('voice');
+  });
+
+  test('supplied IDs are tenant/call separated and cannot collide with a member runtime-action key', async () => {
+    const suppliedEventId = 'shared-provider-and-member-id';
+    const fixtures = [
+      { organizationId: ORG_A, agentId: 'phase6a-agent-a', callId: 'phase6a-domain-call-a1' },
+      { organizationId: ORG_A, agentId: 'phase6a-agent-a', callId: 'phase6a-domain-call-a2' },
+      { organizationId: ORG_B, agentId: 'phase6a-agent-b', callId: 'phase6a-domain-call-b1' },
+    ];
+    for (const fixture of fixtures) {
+      const payload = {
+        ...nonterminalEvent('domain', fixture.agentId, fixture.callId),
+        event_id: suppliedEventId,
+      };
+      const raw = JSON.stringify(payload);
+      const response = await sendRaw('/api/retell/webhook', raw, { signature: sign(raw) });
+      expect(response.status).toBe(202);
+    }
+
+    const providerEvents = await db.getPool().query(
+      `SELECT event_record.external_event_id, session_record.organization_id,
+              session_record.external_session_id
+         FROM canonical_voice_session_events event_record
+         JOIN canonical_voice_sessions session_record
+           ON session_record.organization_id = event_record.organization_id
+          AND session_record.id = event_record.voice_session_id
+        WHERE session_record.external_session_id = ANY($1::text[])
+        ORDER BY session_record.organization_id, session_record.external_session_id`,
+      [fixtures.map(fixture => fixture.callId)]
+    );
+    expect(providerEvents.rows).toHaveLength(3);
+    expect(new Set(providerEvents.rows.map(row => row.external_event_id)).size).toBe(3);
+    providerEvents.rows.forEach(row => {
+      expect(row.external_event_id).toMatch(/^retell-provider-event-v2:[0-9a-f]{64}$/);
+      expect(row.external_event_id).not.toBe(suppliedEventId);
+    });
+
+    const voiceSessions = require('../../src/services/voiceSessionAuthority');
+    const runtimeLike = await voiceSessions.appendEvent(db.getPool(), {
+      organizationId: ORG_A,
+      externalSessionId: fixtures[0].callId,
+      externalEventId: suppliedEventId,
+      eventType: 'human_handoff',
+      payload: { requestedBy: 'member-runtime-action' },
+    });
+    expect(runtimeLike.inserted).toBe(true);
+    const sharedSessionEvents = await db.getPool().query(
+      `SELECT event_record.external_event_id, event_record.event_type
+         FROM canonical_voice_session_events event_record
+         JOIN canonical_voice_sessions session_record
+           ON session_record.organization_id = event_record.organization_id
+          AND session_record.id = event_record.voice_session_id
+        WHERE session_record.organization_id = $1
+          AND session_record.external_session_id = $2
+        ORDER BY event_record.event_type`,
+      [ORG_A, fixtures[0].callId]
+    );
+    expect(sharedSessionEvents.rows).toEqual([
+      { external_event_id: expect.stringMatching(/^retell-provider-event-v2:[0-9a-f]{64}$/), event_type: 'call_started' },
+      { external_event_id: suppliedEventId, event_type: 'human_handoff' },
+    ]);
   });
 
   test('a canonical 5xx releases the matching claim so a legitimate retry is not misclassified as replay', async () => {

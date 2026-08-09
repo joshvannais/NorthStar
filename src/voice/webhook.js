@@ -18,8 +18,11 @@ const businessEvents = require('./businessEvents');
 const transcriptStream = require('./transcriptStream');
 const audit = require('../audit/client');
 const { requestAuditEntry } = require('../middleware/auditLog');
-const { stableValue } = require('../services/businessProfileAdapter');
-const { callIdentifier, ingestRetellPayload } = require('../services/canonicalRetellIngestion');
+const {
+  callIdentifier,
+  ingestRetellPayload,
+  providerEventIdentity,
+} = require('../services/canonicalRetellIngestion');
 const replayAuthority = require('../retell/webhookReplayAuthority');
 
 // ── Configuration ──────────────────────────────────────────────
@@ -215,31 +218,9 @@ function validateTimestamp(timestamp) {
 
 /** Supported event types */
 const SUPPORTED_EVENTS = Object.freeze(['call_started', 'call_ended', 'call_analyzed', 'transcript_ready', 'transcript', 'ping']);
-const SINGLETON_CALL_EVENTS = new Set(['call_started', 'call_ended', 'call_analyzed']);
 
 function isSupportedEvent(event) {
   return typeof event === 'string' && SUPPORTED_EVENTS.includes(event);
-}
-
-function providerEventIdentity(payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
-  const explicit = typeof payload.event_id === 'string' ? payload.event_id.trim() : '';
-  if (explicit) return explicit;
-  const event = payload.event;
-  const callId = callIdentifier(payload);
-  if (!isSupportedEvent(event) || !callId) return null;
-
-  let semantics = { event, callId };
-  if (!SINGLETON_CALL_EVENTS.has(event)) {
-    const semanticPayload = { ...payload };
-    delete semanticPayload.event_id;
-    semantics = { event, callId, payload: stableValue(semanticPayload) };
-  }
-  const digest = crypto.createHash('sha256')
-    .update('northstar:retell-provider-event:v1\0', 'utf8')
-    .update(JSON.stringify(stableValue(semantics)), 'utf8')
-    .digest('hex');
-  return 'retell-event-v1:' + digest;
 }
 
 /**
@@ -378,6 +359,32 @@ function decodeWebhookBody(rawBody) {
   return payload;
 }
 
+function acceptedWebhookAuditEntry(req, canonical, ingestionSource, duration) {
+  const context = canonical && canonical.auditContext;
+  if (!context || !context.organizationId || !context.voiceSessionId || context.source !== ingestionSource) {
+    const error = new Error('Canonical webhook audit attribution is unavailable');
+    error.code = 'webhook_audit_attribution_unavailable';
+    throw error;
+  }
+  const entry = requestAuditEntry(req, canonical.status, duration);
+  return {
+    ...entry,
+    organizationId: context.organizationId,
+    userId: null,
+    actorLabel: 'provider',
+    actorRole: 'system',
+    action: 'retell_webhook.accepted',
+    entityType: 'canonical_voice_session',
+    entityId: context.voiceSessionId,
+    afterState: {
+      ...entry.afterState,
+      provider: 'retell',
+      source: context.source,
+      accepted: true,
+    },
+  };
+}
+
 /**
  * Handle a signed Retell webhook without decoding JSON until the official
  * HMAC/timestamp contract and durable cross-process replay claim have passed.
@@ -448,9 +455,7 @@ async function handleSignedWebhook(req, res, ingestionSource) {
         error: { code: 'UNSUPPORTED_WEBHOOK_EVENT', message: 'Webhook event type is not supported' },
       });
     }
-    const externalEventId = providerEventIdentity(payload);
-    const eventId = payload.event_id || payload.call_id || 'unknown';
-    console.log(`[Voice:Webhook] Received: ${payload.event || 'unknown'} (id: ${eventId})`);
+    console.log(`[Voice:Webhook] Received supported event: ${payload.event}`);
 
     // 4. Canonical session/event/graph state, one accepted audit row, and the
     // token-owned replay transition share one recoverable PostgreSQL outcome.
@@ -461,14 +466,13 @@ async function handleSignedWebhook(req, res, ingestionSource) {
       const canonical = await ingestRetellPayload(payload, {
         ingestionSource,
         transactionClient: client,
-        externalEventId,
       });
       if (canonical.status < 200 || canonical.status >= 300) {
         return { accepted: false, canonical };
       }
       const auditEntry = await audit.recordInTransaction(
         client,
-        requestAuditEntry(req, canonical.status, Date.now() - startTime)
+        acceptedWebhookAuditEntry(req, canonical, ingestionSource, Date.now() - startTime)
       );
       return { accepted: true, auditEntry, canonical };
     });

@@ -174,6 +174,9 @@ async function listSessions(pool, organizationId, includeCompleted) {
 
 async function appendEventWithClient(client, input) {
   const source = requirePool(client);
+  const eventType = String(input.eventType);
+  const eventPayload = stableValue(input.payload || {});
+  const eventPayloadJson = JSON.stringify(eventPayload);
   const session = await source.query(
     'SELECT id FROM canonical_voice_sessions WHERE organization_id = $1 AND external_session_id = $2 FOR UPDATE',
     [input.organizationId, String(input.externalSessionId)]
@@ -187,8 +190,27 @@ async function appendEventWithClient(client, input) {
        WHERE external_event_id IS NOT NULL DO NOTHING
      RETURNING id`,
     [input.organizationId, session.rows[0].id, input.externalEventId || null,
-      String(input.eventType), JSON.stringify(stableValue(input.payload || {})), input.occurredAt || null]
+      eventType, eventPayloadJson, input.occurredAt || null]
   );
+  if (inserted.rows.length === 0 && input.requireSemanticMatch && input.externalEventId) {
+    const existing = await source.query(
+      `SELECT event_type, payload
+         FROM canonical_voice_session_events
+        WHERE organization_id = $1 AND voice_session_id = $2 AND external_event_id = $3
+        FOR UPDATE`,
+      [input.organizationId, session.rows[0].id, input.externalEventId]
+    );
+    const matches = existing.rows.length === 1 &&
+      existing.rows[0].event_type === eventType &&
+      JSON.stringify(stableValue(existing.rows[0].payload || {})) === eventPayloadJson;
+    if (!matches) {
+      throw authorityError(
+        'VOICE_EVENT_IDENTITY_CONFLICT',
+        'The provider event identity was already used for different event data.',
+        409
+      );
+    }
+  }
   if (input.status && inserted.rows.length === 1) {
     const terminal = TERMINAL_STATUSES.has(input.status);
     await source.query(

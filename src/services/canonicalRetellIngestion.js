@@ -1,13 +1,16 @@
 'use strict';
 
+const crypto = require('crypto');
 const db = require('../db');
 const { ingestRetell, ingestVoice } = require('./canonicalGraphService');
 const { getActiveBusinessProfile, resolveIntegrationOwner } = require('./organizationAuthority');
 const voiceSessions = require('./voiceSessionAuthority');
 const { AccountRepository } = require('../accounts/repository');
 const { canPerformExternal, projectSubscription } = require('../accounts/subscriptionPolicy');
+const { stableValue } = require('./businessProfileAdapter');
 
 const TERMINAL_EVENTS = new Set(['call_ended', 'call_analyzed']);
+const SINGLETON_PROVIDER_EVENTS = new Set(['call_started', 'call_ended', 'call_analyzed']);
 const KNOWN_SERVICES = ['fence', 'roofing', 'hvac', 'plumbing', 'electrical', 'concrete'];
 
 function text(value) {
@@ -26,6 +29,39 @@ function agentIdentifier(payload) {
 function callIdentifier(payload) {
   const call = callFrom(payload);
   return text(call.call_id) || text(payload && payload.call_id);
+}
+
+function providerEventIdentity(payload, context = {}) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const organizationId = text(context.organizationId);
+  const ingestionSource = context.ingestionSource === 'voice' ? 'voice' : 'retell';
+  const event = text(payload.event);
+  const callId = callIdentifier(payload);
+  if (!organizationId || !event || !callId) return null;
+
+  const suppliedEventId = text(payload.event_id);
+  const semantics = {
+    provider: 'retell',
+    source: ingestionSource,
+    organizationId,
+    callId,
+    event,
+  };
+  if (suppliedEventId) {
+    // The provider value contributes to the digest but is never persisted as
+    // the shared external_event_id itself.
+    semantics.suppliedEventId = suppliedEventId;
+  } else if (!SINGLETON_PROVIDER_EVENTS.has(event)) {
+    const semanticPayload = { ...payload };
+    delete semanticPayload.event_id;
+    semantics.payload = stableValue(semanticPayload);
+  }
+
+  const digest = crypto.createHash('sha256')
+    .update('northstar:retell-provider-event:v2\0', 'utf8')
+    .update(JSON.stringify(stableValue(semantics)), 'utf8')
+    .digest('hex');
+  return 'retell-provider-event-v2:' + digest;
 }
 
 function transcriptTurns(payload) {
@@ -71,14 +107,14 @@ function serviceKey(payload, turns) {
   return KNOWN_SERVICES.find(function (key) { return candidate.includes(key); }) || 'general';
 }
 
-function graphRequest(payload, ownership, voiceSession) {
+function graphRequest(payload, ownership, voiceSession, externalEventId) {
   const call = callFrom(payload);
   const analysis = analysisFrom(payload);
   const turns = transcriptTurns(payload);
   const callId = callIdentifier(payload);
   return {
     tenantContext: { organizationId: ownership.organizationId, trusted: true },
-    idempotencyKey: 'retell-call:' + callId,
+    idempotencyKey: 'retell-webhook-event:' + externalEventId,
     sourceVersion: 'retell-webhook-canonical-v1',
     external: {
       callId,
@@ -130,15 +166,28 @@ async function ingestRetellPayload(payload, options) {
     return { status: 503, body: { success: false, error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE', message: 'Canonical PostgreSQL persistence is unavailable.' } } };
   }
   const event = text(payload && payload.event);
-  const externalEventId = text(options && options.externalEventId) || text(payload && payload.event_id);
   const appendVoiceEvent = transactionClient
-    ? (input) => voiceSessions.appendEventWithClient(transactionClient, input)
-    : (input) => voiceSessions.appendEvent(pool, input);
+    ? (input) => voiceSessions.appendEventWithClient(transactionClient, {
+      ...input,
+      requireSemanticMatch: true,
+    })
+    : (input) => voiceSessions.appendEvent(pool, {
+      ...input,
+      requireSemanticMatch: true,
+    });
   try {
     const ownership = await resolveIntegrationOwner(pool, 'retell', agentIdentifier(payload));
     const callId = callIdentifier(payload);
     if (!callId) {
       return { status: 400, body: { success: false, error: { code: 'RETELL_CALL_ID_REQUIRED', message: 'Retell call identifier is required.' } } };
+    }
+    const ingestionSource = options && options.ingestionSource === 'voice' ? 'voice' : 'retell';
+    const externalEventId = providerEventIdentity(payload, {
+      organizationId: ownership.organizationId,
+      ingestionSource,
+    });
+    if (!externalEventId) {
+      return { status: 400, body: { success: false, error: { code: 'RETELL_EVENT_IDENTITY_REQUIRED', message: 'Retell event identity is required.' } } };
     }
     const subscription = projectSubscription(
       await new AccountRepository(pool).expireAndReadSubscription(
@@ -185,6 +234,11 @@ async function ingestRetellPayload(payload, options) {
       });
     }
     const authoritySessionId = voiceSession.externalSessionId;
+    const auditContext = Object.freeze({
+      organizationId: ownership.organizationId,
+      voiceSessionId: voiceSession.id,
+      source: ingestionSource,
+    });
     const canonicalEventPayload = {
       transcript: transcriptTurns(payload),
       analysis: analysisFrom(payload),
@@ -197,7 +251,11 @@ async function ingestRetellPayload(payload, options) {
         eventType: event || 'unknown',
         payload: canonicalEventPayload,
       });
-      return { status: 202, body: { received: true, processed: false, canonical: true } };
+      return {
+        status: 202,
+        body: { received: true, processed: false, canonical: true },
+        auditContext,
+      };
     }
     if (existingCompleted) {
       await appendVoiceEvent({
@@ -205,7 +263,7 @@ async function ingestRetellPayload(payload, options) {
         externalSessionId: authoritySessionId,
         externalEventId,
         eventType: event,
-        payload: { ...canonicalEventPayload, replayed: true },
+        payload: { ...canonicalEventPayload, graphStatus: existingCompleted.result_status },
         status: 'completed',
         summary: existingCompleted.result_body,
         canonicalOperationId: existingCompleted.result_body && existingCompleted.result_body.operationId,
@@ -214,9 +272,10 @@ async function ingestRetellPayload(payload, options) {
         status: existingCompleted.result_status,
         body: { ...existingCompleted.result_body, received: true, replayed: true },
         replayed: true,
+        auditContext,
       };
     }
-    const request = graphRequest(payload, ownership, voiceSession);
+    const request = graphRequest(payload, ownership, voiceSession, externalEventId);
     if (!request.transcript.length) throw Object.assign(new Error('Validated Retell transcript is unavailable.'), {
       code: 'RETELL_TRANSCRIPT_UNAVAILABLE', status: 503,
     });
@@ -232,7 +291,11 @@ async function ingestRetellPayload(payload, options) {
       summary: result.body,
       canonicalOperationId: result.body && result.body.operationId,
     });
-    return { ...result, body: { ...result.body, received: result.status === 201 } };
+    return {
+      ...result,
+      body: { ...result.body, received: result.status === 201 },
+      auditContext,
+    };
   } catch (error) {
     const status = error && error.status ? error.status : 503;
     const code = error && error.code ? error.code : 'CANONICAL_PERSISTENCE_UNAVAILABLE';
@@ -260,5 +323,6 @@ module.exports = {
   graphRequest,
   handleCanonicalRetellWebhook,
   ingestRetellPayload,
+  providerEventIdentity,
   transcriptTurns,
 };

@@ -189,6 +189,67 @@ realPostgres('Mission 20 Phase 6A durable Retell replay authority', () => {
     }, { pool })).toBe(true);
   });
 
+  test('stale and mid-transaction expired tokens cannot commit or release a newer claim', async () => {
+    const fingerprint = digest('phase6a-finalization-takeover');
+    const stale = await authority.claimWebhookDelivery({ requestFingerprint: fingerprint }, { pool });
+    await pool.query(
+      `UPDATE retell_webhook_replay_claims
+          SET claimed_at = clock_timestamp() - INTERVAL '2 minutes',
+              lease_expires_at = clock_timestamp() - INTERVAL '1 minute'
+        WHERE request_fingerprint = $1`,
+      [fingerprint]
+    );
+    const takeover = await authority.claimWebhookDelivery({ requestFingerprint: fingerprint }, { pool });
+    expect(takeover.kind).toBe('claimed');
+    let staleWorkCalled = false;
+    await expect(authority.finalizeWebhookDelivery({
+      requestFingerprint: fingerprint,
+      claimToken: stale.claimToken,
+    }, async () => {
+      staleWorkCalled = true;
+      return { accepted: true };
+    }, { pool })).rejects.toMatchObject({ code: 'webhook_replay_claim_ownership_mismatch' });
+    expect(staleWorkCalled).toBe(false);
+    expect(await authority.releaseWebhookDelivery({
+      requestFingerprint: fingerprint,
+      claimToken: stale.claimToken,
+    }, { pool })).toBe(false);
+    expect((await pool.query(
+      `SELECT claim_token, state FROM retell_webhook_replay_claims
+        WHERE request_fingerprint = $1`,
+      [fingerprint]
+    )).rows).toEqual([{ claim_token: takeover.claimToken, state: 'claimed' }]);
+    expect((await authority.finalizeWebhookDelivery({
+      requestFingerprint: fingerprint,
+      claimToken: takeover.claimToken,
+    }, async () => ({ accepted: true }), { pool })).accepted).toBe(true);
+
+    const expiringFingerprint = digest('phase6a-finalization-expiry');
+    const expiring = await authority.claimWebhookDelivery({ requestFingerprint: expiringFingerprint }, { pool });
+    await expect(authority.finalizeWebhookDelivery({
+      requestFingerprint: expiringFingerprint,
+      claimToken: expiring.claimToken,
+    }, async client => {
+      await client.query(
+        `UPDATE retell_webhook_replay_claims
+            SET claimed_at = clock_timestamp() - INTERVAL '2 minutes',
+                lease_expires_at = clock_timestamp() - INTERVAL '1 second'
+          WHERE request_fingerprint = $1 AND claim_token = $2`,
+        [expiringFingerprint, expiring.claimToken]
+      );
+      return { accepted: true };
+    }, { pool })).rejects.toMatchObject({ code: 'webhook_replay_claim_ownership_mismatch' });
+    expect((await pool.query(
+      `SELECT state, lease_expires_at > clock_timestamp() AS lease_live
+         FROM retell_webhook_replay_claims WHERE request_fingerprint = $1`,
+      [expiringFingerprint]
+    )).rows).toEqual([{ state: 'claimed', lease_live: true }]);
+    expect(await authority.releaseWebhookDelivery({
+      requestFingerprint: expiringFingerprint,
+      claimToken: expiring.claimToken,
+    }, { pool })).toBe(true);
+  });
+
   test('the exact 10000-live-row cap fails closed without eviction or mutation', async () => {
     const marker = new Date('2040-01-01T00:00:00.000Z');
     const existing = (await pool.query('SELECT count(*)::int AS count FROM retell_webhook_replay_claims')).rows[0].count;

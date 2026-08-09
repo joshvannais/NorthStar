@@ -20,6 +20,23 @@ class WebhookReplayPersistenceError extends Error {
   }
 }
 
+class WebhookReplayClaimOwnershipError extends Error {
+  constructor() {
+    super('Retell webhook replay claim ownership changed or expired');
+    this.name = 'WebhookReplayClaimOwnershipError';
+    this.code = 'webhook_replay_claim_ownership_mismatch';
+  }
+}
+
+class WebhookDeliveryRejected extends Error {
+  constructor(outcome) {
+    super('Retell webhook delivery was rejected before commit');
+    this.name = 'WebhookDeliveryRejected';
+    this.code = 'webhook_delivery_rejected';
+    this.outcome = outcome;
+  }
+}
+
 function requestFingerprint(rawBody) {
   if (!Buffer.isBuffer(rawBody)) throw new TypeError('rawBody must be a Buffer');
   return crypto.createHash('sha256').update(FINGERPRINT_DOMAIN).update(rawBody).digest('hex');
@@ -57,7 +74,9 @@ async function withTransaction(pool, work) {
     if (transactionOpen) {
       try { await client.query('ROLLBACK'); } catch (_rollbackError) { /* Preserve the original failure. */ }
     }
-    if (error instanceof WebhookReplayPersistenceError) throw error;
+    if (error instanceof WebhookReplayPersistenceError ||
+        error instanceof WebhookReplayClaimOwnershipError ||
+        error instanceof WebhookDeliveryRejected) throw error;
     throw new WebhookReplayPersistenceError(error);
   } finally {
     client.release();
@@ -133,38 +152,77 @@ async function releaseWebhookDelivery(input, options = {}) {
   }
 }
 
-async function acceptWebhookDelivery(input, options = {}) {
+async function acceptWebhookDeliveryWithClient(client, input) {
   const fingerprint = input && input.requestFingerprint;
   const claimToken = input && input.claimToken;
   assertFingerprint(fingerprint);
   assertClaimToken(claimToken);
+  if (!client || typeof client.query !== 'function') throw new TypeError('transaction client is required');
+  const result = await client.query(
+    `UPDATE retell_webhook_replay_claims
+        SET state = 'accepted',
+            accepted_at = clock_timestamp(),
+            lease_expires_at = NULL,
+            expires_at = clock_timestamp() + ($3 * INTERVAL '1 millisecond'),
+            updated_at = clock_timestamp()
+      WHERE request_fingerprint = $1
+        AND claim_token = $2
+        AND state = 'claimed'
+        AND lease_expires_at > clock_timestamp()`,
+    [fingerprint, claimToken, REPLAY_RETENTION_MS]
+  );
+  return result.rowCount === 1;
+}
+
+async function acceptWebhookDelivery(input, options = {}) {
   try {
-    const result = await resolvePool(options.pool).query(
-      `UPDATE retell_webhook_replay_claims
-          SET state = 'accepted',
-              accepted_at = NOW(),
-              lease_expires_at = NULL,
-              expires_at = NOW() + ($3 * INTERVAL '1 millisecond'),
-              updated_at = NOW()
-        WHERE request_fingerprint = $1
-          AND claim_token = $2
-          AND state = 'claimed'`,
-      [fingerprint, claimToken, REPLAY_RETENTION_MS]
-    );
-    return result.rowCount === 1;
+    return await acceptWebhookDeliveryWithClient(resolvePool(options.pool), input);
   } catch (error) {
     if (error instanceof WebhookReplayPersistenceError) throw error;
     throw new WebhookReplayPersistenceError(error);
   }
 }
 
+async function finalizeWebhookDelivery(input, work, options = {}) {
+  const fingerprint = input && input.requestFingerprint;
+  const claimToken = input && input.claimToken;
+  assertFingerprint(fingerprint);
+  assertClaimToken(claimToken);
+  if (typeof work !== 'function') throw new TypeError('finalization work callback is required');
+
+  return withTransaction(options.pool, async client => {
+    const owned = await client.query(
+      `SELECT request_fingerprint
+         FROM retell_webhook_replay_claims
+        WHERE request_fingerprint = $1
+          AND claim_token = $2
+          AND state = 'claimed'
+          AND lease_expires_at > clock_timestamp()
+        FOR UPDATE`,
+      [fingerprint, claimToken]
+    );
+    if (owned.rows.length !== 1) throw new WebhookReplayClaimOwnershipError();
+
+    const outcome = await work(client);
+    if (!outcome || outcome.accepted !== true) throw new WebhookDeliveryRejected(outcome);
+    if (!await acceptWebhookDeliveryWithClient(client, input)) {
+      throw new WebhookReplayClaimOwnershipError();
+    }
+    return outcome;
+  });
+}
+
 module.exports = {
   CLAIM_LEASE_MS,
   MAX_REPLAY_ENTRIES,
   REPLAY_RETENTION_MS,
+  WebhookDeliveryRejected,
+  WebhookReplayClaimOwnershipError,
   WebhookReplayPersistenceError,
   acceptWebhookDelivery,
+  acceptWebhookDeliveryWithClient,
   claimWebhookDelivery,
+  finalizeWebhookDelivery,
   releaseWebhookDelivery,
   requestFingerprint,
 };

@@ -16,7 +16,10 @@
 const crypto = require('crypto');
 const businessEvents = require('./businessEvents');
 const transcriptStream = require('./transcriptStream');
-const { ingestRetellPayload } = require('../services/canonicalRetellIngestion');
+const audit = require('../audit/client');
+const { requestAuditEntry } = require('../middleware/auditLog');
+const { stableValue } = require('../services/businessProfileAdapter');
+const { callIdentifier, ingestRetellPayload } = require('../services/canonicalRetellIngestion');
 const replayAuthority = require('../retell/webhookReplayAuthority');
 
 // ── Configuration ──────────────────────────────────────────────
@@ -211,7 +214,33 @@ function validateTimestamp(timestamp) {
 // ── Event Routing ──────────────────────────────────────────────
 
 /** Supported event types */
-const SUPPORTED_EVENTS = ['call_started', 'call_ended', 'call_analyzed', 'transcript_ready', 'transcript', 'ping'];
+const SUPPORTED_EVENTS = Object.freeze(['call_started', 'call_ended', 'call_analyzed', 'transcript_ready', 'transcript', 'ping']);
+const SINGLETON_CALL_EVENTS = new Set(['call_started', 'call_ended', 'call_analyzed']);
+
+function isSupportedEvent(event) {
+  return typeof event === 'string' && SUPPORTED_EVENTS.includes(event);
+}
+
+function providerEventIdentity(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const explicit = typeof payload.event_id === 'string' ? payload.event_id.trim() : '';
+  if (explicit) return explicit;
+  const event = payload.event;
+  const callId = callIdentifier(payload);
+  if (!isSupportedEvent(event) || !callId) return null;
+
+  let semantics = { event, callId };
+  if (!SINGLETON_CALL_EVENTS.has(event)) {
+    const semanticPayload = { ...payload };
+    delete semanticPayload.event_id;
+    semantics = { event, callId, payload: stableValue(semanticPayload) };
+  }
+  const digest = crypto.createHash('sha256')
+    .update('northstar:retell-provider-event:v1\0', 'utf8')
+    .update(JSON.stringify(stableValue(semantics)), 'utf8')
+    .digest('hex');
+  return 'retell-event-v1:' + digest;
+}
 
 /**
  * Map Retell raw event names to our standardized business event types.
@@ -236,7 +265,7 @@ async function routeEvent(payload) {
   const event = payload.event;
   const eventId = payload.event_id || payload.call_id || '';
 
-  if (!event || !SUPPORTED_EVENTS.includes(event)) {
+  if (!isSupportedEvent(event)) {
     console.warn(`[Voice:Webhook] Unknown or missing event type: ${event}`);
     return { received: true, routed: false, reason: 'unknown_event' };
   }
@@ -413,22 +442,39 @@ async function handleSignedWebhook(req, res, ingestionSource) {
       return res.status(400).json({ error: { code: 'INVALID_WEBHOOK_BODY', message: 'Webhook body must be valid JSON' } });
     }
     req.body = payload;
+    if (!isSupportedEvent(payload.event)) {
+      await releaseClaim();
+      return res.status(400).json({
+        error: { code: 'UNSUPPORTED_WEBHOOK_EVENT', message: 'Webhook event type is not supported' },
+      });
+    }
+    const externalEventId = providerEventIdentity(payload);
     const eventId = payload.event_id || payload.call_id || 'unknown';
     console.log(`[Voice:Webhook] Received: ${payload.event || 'unknown'} (id: ${eventId})`);
 
-    // 4. Preserve the path-specific canonical source while retaining the same
-    // ownership, subscription, session pinning, and graph transaction.
-    const canonical = await ingestRetellPayload(payload, { ingestionSource });
-    if (canonical.status < 200 || canonical.status >= 300) {
-      await releaseClaim();
-    } else {
-      const accepted = await replayAuthority.acceptWebhookDelivery({
-        requestFingerprint: fingerprint,
-        claimToken: replayClaim.claimToken,
+    // 4. Canonical session/event/graph state, one accepted audit row, and the
+    // token-owned replay transition share one recoverable PostgreSQL outcome.
+    const outcome = await replayAuthority.finalizeWebhookDelivery({
+      requestFingerprint: fingerprint,
+      claimToken: replayClaim.claimToken,
+    }, async client => {
+      const canonical = await ingestRetellPayload(payload, {
+        ingestionSource,
+        transactionClient: client,
+        externalEventId,
       });
-      if (!accepted) throw new Error('Retell webhook replay claim finalization failed');
-      replayClaim = null;
-    }
+      if (canonical.status < 200 || canonical.status >= 300) {
+        return { accepted: false, canonical };
+      }
+      const auditEntry = await audit.recordInTransaction(
+        client,
+        requestAuditEntry(req, canonical.status, Date.now() - startTime)
+      );
+      return { accepted: true, auditEntry, canonical };
+    });
+    replayClaim = null;
+    try { audit.remember(outcome.auditEntry); } catch (_memoryError) { /* PostgreSQL is authoritative. */ }
+    const canonical = outcome.canonical;
 
     const elapsed = Date.now() - startTime;
     console.log(`[Voice:Webhook] Completed: ${payload.event} (${elapsed}ms)`);
@@ -437,8 +483,15 @@ async function handleSignedWebhook(req, res, ingestionSource) {
     if (replayClaim) {
       try { await releaseClaim(); } catch (_releaseError) { /* The fail-closed 503 remains authoritative. */ }
     }
+    if (err instanceof replayAuthority.WebhookDeliveryRejected &&
+        err.outcome && err.outcome.canonical) {
+      return res.status(err.outcome.canonical.status).json(err.outcome.canonical.body);
+    }
     console.error('[Voice:Webhook] Fatal signed webhook error:', err.message);
-    const replayUnavailable = err && err.code === 'webhook_replay_persistence_unavailable';
+    const replayUnavailable = err && (
+      err.code === 'webhook_replay_persistence_unavailable' ||
+      err.code === 'webhook_replay_claim_ownership_mismatch'
+    );
     return res.status(503).json({
       success: false,
       error: replayUnavailable
@@ -482,6 +535,9 @@ module.exports = {
   handleRetellWebhook,
   rawBodyCapture,
   parseSignature,
+  providerEventIdentity,
+  isSupportedEvent,
+  SUPPORTED_EVENTS,
   validateSignature,
   validateTimestamp,
   routeEvent,

@@ -65,7 +65,6 @@ function sign(raw, timestamp = String(Date.now())) {
 function terminalEvent(suffix, agentId = 'phase6a-agent-a', callId = 'phase6a-call-' + suffix) {
   return {
     event: 'call_ended',
-    event_id: 'phase6a-event-' + suffix,
     call: {
       call_id: callId,
       agent_id: agentId,
@@ -85,7 +84,6 @@ function terminalEvent(suffix, agentId = 'phase6a-agent-a', callId = 'phase6a-ca
 function nonterminalEvent(suffix, agentId = 'phase6a-agent-a', callId = 'phase6a-call-' + suffix) {
   return {
     event: 'call_started',
-    event_id: 'phase6a-event-' + suffix,
     call: {
       call_id: callId,
       agent_id: agentId,
@@ -448,6 +446,23 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     }
   });
 
+  test.each([
+    ['missing', (payload) => { delete payload.event; }],
+    ['unknown', (payload) => { payload.event = 'phase6a_unknown_event'; }],
+  ])('authenticated %s event is rejected before canonical or audit mutation', async (_label, mutate) => {
+    const payload = nonterminalEvent('unsupported-event-' + _label);
+    mutate(payload);
+    const raw = JSON.stringify(payload);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expectRejectedWithoutMutation({
+        raw,
+        signature: sign(raw),
+        status: 400,
+        code: 'UNSUPPORTED_WEBHOOK_EVENT',
+      });
+    }
+  });
+
   test('authenticated unsupported content is released and remains zero-mutation on retry', async () => {
     const raw = JSON.stringify(nonterminalEvent('unsupported-content'));
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -545,6 +560,53 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     expect(await tableState()).toEqual(afterFirst);
   });
 
+  test('official no-event_id lifecycle retries converge across JSON serialization variations', async () => {
+    const payload = terminalEvent('official-no-event-id');
+    expect(payload).not.toHaveProperty('event_id');
+    const firstRaw = JSON.stringify(payload);
+    const first = await sendRaw('/api/retell/webhook', firstRaw, { signature: sign(firstRaw) });
+    expect(first.status).toBe(201);
+
+    const durableTables = [
+      ...GRAPH_TABLES,
+      'canonical_voice_sessions',
+      'canonical_voice_session_events',
+    ];
+    const afterFirst = await tableState(durableTables);
+    const identity = await db.getPool().query(
+      `SELECT external_event_id
+         FROM canonical_voice_session_events event_record
+         JOIN canonical_voice_sessions session_record
+           ON session_record.organization_id = event_record.organization_id
+          AND session_record.id = event_record.voice_session_id
+        WHERE session_record.organization_id = $1
+          AND session_record.external_session_id = $2`,
+      [ORG_A, payload.call.call_id]
+    );
+    expect(identity.rows).toEqual([{
+      external_event_id: expect.stringMatching(/^retell-event-v1:[0-9a-f]{64}$/),
+    }]);
+
+    const reordered = {
+      call: {
+        call_analysis: {
+          service_requested: payload.call.call_analysis.service_requested,
+          customer_name: payload.call.call_analysis.customer_name,
+        },
+        transcript_object: payload.call.transcript_object.map(turn => ({ words: turn.words, role: turn.role })),
+        from_number: payload.call.from_number,
+        agent_id: payload.call.agent_id,
+        call_id: payload.call.call_id,
+      },
+      event: payload.event,
+    };
+    const secondRaw = JSON.stringify(reordered, null, 2).replace(/\n/g, '\r\n');
+    const second = await sendRaw('/api/retell/webhook', secondRaw, { signature: sign(secondRaw) });
+    expect(second.status).toBe(201);
+    expect(second.body.replayed).toBe(true);
+    expect(await tableState(durableTables)).toEqual(afterFirst);
+  });
+
   test('concurrent identical signed deliveries use one atomic replay claim', async () => {
     const payload = nonterminalEvent('concurrent');
     const raw = JSON.stringify(payload);
@@ -607,7 +669,6 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     const duplicatePayload = {
       ...firstPayload,
       event: 'call_analyzed',
-      event_id: 'phase6a-event-durable-second',
     };
     const duplicateRaw = JSON.stringify(duplicatePayload);
     const duplicate = await sendRaw('/api/retell/webhook', duplicateRaw, {
@@ -654,6 +715,65 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
         status: 503,
         code: 'CANONICAL_BUSINESS_PROFILE_REQUIRED',
       });
+    }
+  });
+
+  test('accepted-transition failure rolls canonical and audit writes back before token-matched release', async () => {
+    const pool = db.getPool();
+    await pool.query(
+      `CREATE FUNCTION phase6a_fail_replay_accept() RETURNS trigger
+         LANGUAGE plpgsql AS $trigger$
+         BEGIN
+           IF NEW.state = 'accepted' AND OLD.state = 'claimed' THEN
+             RAISE EXCEPTION 'phase6a injected accepted transition failure';
+           END IF;
+           RETURN NEW;
+         END
+       $trigger$;
+       CREATE TRIGGER phase6a_fail_replay_accept
+         BEFORE UPDATE ON retell_webhook_replay_claims
+         FOR EACH ROW EXECUTE FUNCTION phase6a_fail_replay_accept()`
+    );
+    try {
+      const payload = terminalEvent('accept-rollback');
+      const raw = JSON.stringify(payload);
+      await expectRejectedWithoutMutation({
+        raw,
+        signature: sign(raw),
+        status: 503,
+        code: 'WEBHOOK_REPLAY_PROTECTION_UNAVAILABLE',
+      });
+    } finally {
+      await pool.query('DROP TRIGGER phase6a_fail_replay_accept ON retell_webhook_replay_claims');
+      await pool.query('DROP FUNCTION phase6a_fail_replay_accept()');
+    }
+  });
+
+  test('accepted-audit failure rolls canonical and replay writes back before token-matched release', async () => {
+    const pool = db.getPool();
+    await pool.query(
+      `CREATE FUNCTION phase6a_fail_webhook_audit() RETURNS trigger
+         LANGUAGE plpgsql AS $trigger$
+         BEGIN
+           RAISE EXCEPTION 'phase6a injected accepted audit failure';
+         END
+       $trigger$;
+       CREATE TRIGGER phase6a_fail_webhook_audit
+         BEFORE INSERT ON audit_logs
+         FOR EACH ROW EXECUTE FUNCTION phase6a_fail_webhook_audit()`
+    );
+    try {
+      const payload = terminalEvent('audit-rollback');
+      const raw = JSON.stringify(payload);
+      await expectRejectedWithoutMutation({
+        raw,
+        signature: sign(raw),
+        status: 503,
+        code: 'WEBHOOK_REPLAY_PROTECTION_UNAVAILABLE',
+      });
+    } finally {
+      await pool.query('DROP TRIGGER phase6a_fail_webhook_audit ON audit_logs');
+      await pool.query('DROP FUNCTION phase6a_fail_webhook_audit()');
     }
   });
 

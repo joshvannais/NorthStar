@@ -148,6 +148,46 @@ describe('Voice Webhook Framework', () => {
 
   // ── Event Routing ─────────────────────────────────────────
 
+  describe('provider event identity', () => {
+    test('uses the exact existing supported-event contract', () => {
+      expect(webhook.SUPPORTED_EVENTS).toEqual([
+        'call_started', 'call_ended', 'call_analyzed', 'transcript_ready', 'transcript', 'ping',
+      ]);
+      webhook.SUPPORTED_EVENTS.forEach(event => expect(webhook.isSupportedEvent(event)).toBe(true));
+      expect(webhook.isSupportedEvent('transcript_updated')).toBe(false);
+      expect(webhook.isSupportedEvent('')).toBe(false);
+      expect(webhook.isSupportedEvent(undefined)).toBe(false);
+    });
+
+    test('preserves explicit legacy identity and derives stable official lifecycle identity', () => {
+      expect(webhook.providerEventIdentity({ event_id: '  provider-event-1  ' })).toBe('provider-event-1');
+      const first = {
+        event: 'call_ended',
+        call: { call_id: 'official-call-1', agent_id: 'agent-a', transcript: 'safe transcript' },
+      };
+      const reordered = {
+        call: { transcript: 'safe transcript', agent_id: 'agent-a', call_id: 'official-call-1' },
+        event: 'call_ended',
+      };
+      const identity = webhook.providerEventIdentity(first);
+      expect(identity).toMatch(/^retell-event-v1:[0-9a-f]{64}$/);
+      expect(webhook.providerEventIdentity(reordered)).toBe(identity);
+      expect(webhook.providerEventIdentity({ ...reordered, event: 'call_analyzed' })).not.toBe(identity);
+    });
+
+    test('serialization-only transcript variation converges while distinct content remains distinct', () => {
+      const first = {
+        event: 'transcript', call_id: 'transcript-call-1', speaker: 'user', text: 'first update',
+      };
+      const reordered = {
+        text: 'first update', speaker: 'user', call_id: 'transcript-call-1', event: 'transcript',
+      };
+      expect(webhook.providerEventIdentity(reordered)).toBe(webhook.providerEventIdentity(first));
+      expect(webhook.providerEventIdentity({ ...reordered, text: 'second update' }))
+        .not.toBe(webhook.providerEventIdentity(first));
+    });
+  });
+
   describe('routeEvent', () => {
     test('handles unknown event type gracefully', async () => {
       const result = await webhook.routeEvent({ event: 'unknown_event', event_id: 'evt1' });

@@ -124,11 +124,16 @@ async function completedCall(pool, organizationId, callId) {
 }
 
 async function ingestRetellPayload(payload, options) {
-  const pool = (options && options.pool) || db.getPool();
+  const transactionClient = options && options.transactionClient;
+  const pool = transactionClient || (options && options.pool) || db.getPool();
   if (!pool || typeof pool.query !== 'function') {
     return { status: 503, body: { success: false, error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE', message: 'Canonical PostgreSQL persistence is unavailable.' } } };
   }
   const event = text(payload && payload.event);
+  const externalEventId = text(options && options.externalEventId) || text(payload && payload.event_id);
+  const appendVoiceEvent = transactionClient
+    ? (input) => voiceSessions.appendEventWithClient(transactionClient, input)
+    : (input) => voiceSessions.appendEvent(pool, input);
   try {
     const ownership = await resolveIntegrationOwner(pool, 'retell', agentIdentifier(payload));
     const callId = callIdentifier(payload);
@@ -136,7 +141,10 @@ async function ingestRetellPayload(payload, options) {
       return { status: 400, body: { success: false, error: { code: 'RETELL_CALL_ID_REQUIRED', message: 'Retell call identifier is required.' } } };
     }
     const subscription = projectSubscription(
-      await new AccountRepository(pool).expireAndReadSubscription(ownership.organizationId)
+      await new AccountRepository(pool).expireAndReadSubscription(
+        ownership.organizationId,
+        transactionClient ? { client: transactionClient } : {}
+      )
     );
     if (!canPerformExternal(subscription)) {
       throw Object.assign(new Error('Organization subscription access is read-only.'), {
@@ -177,26 +185,27 @@ async function ingestRetellPayload(payload, options) {
       });
     }
     const authoritySessionId = voiceSession.externalSessionId;
-    await voiceSessions.appendEvent(pool, {
-      organizationId: ownership.organizationId,
-      externalSessionId: authoritySessionId,
-      externalEventId: text(payload && payload.event_id),
-      eventType: event || 'unknown',
-      payload: {
-        transcript: transcriptTurns(payload),
-        analysis: analysisFrom(payload),
-      },
-    });
+    const canonicalEventPayload = {
+      transcript: transcriptTurns(payload),
+      analysis: analysisFrom(payload),
+    };
     if (!TERMINAL_EVENTS.has(event)) {
+      await appendVoiceEvent({
+        organizationId: ownership.organizationId,
+        externalSessionId: authoritySessionId,
+        externalEventId,
+        eventType: event || 'unknown',
+        payload: canonicalEventPayload,
+      });
       return { status: 202, body: { received: true, processed: false, canonical: true } };
     }
     if (existingCompleted) {
-      await voiceSessions.appendEvent(pool, {
+      await appendVoiceEvent({
         organizationId: ownership.organizationId,
         externalSessionId: authoritySessionId,
-        externalEventId: text(payload && payload.event_id),
+        externalEventId,
         eventType: event,
-        payload: { replayed: true },
+        payload: { ...canonicalEventPayload, replayed: true },
         status: 'completed',
         summary: existingCompleted.result_body,
         canonicalOperationId: existingCompleted.result_body && existingCompleted.result_body.operationId,
@@ -213,12 +222,12 @@ async function ingestRetellPayload(payload, options) {
     });
     const ingest = options && options.ingestionSource === 'voice' ? ingestVoice : ingestRetell;
     const result = await ingest(pool, request, options);
-    await voiceSessions.appendEvent(pool, {
+    await appendVoiceEvent({
       organizationId: ownership.organizationId,
       externalSessionId: authoritySessionId,
-      externalEventId: text(payload && payload.event_id),
+      externalEventId,
       eventType: event,
-      payload: { graphStatus: result.status },
+      payload: { ...canonicalEventPayload, graphStatus: result.status },
       status: result.status === 201 ? 'completed' : 'failed',
       summary: result.body,
       canonicalOperationId: result.body && result.body.operationId,

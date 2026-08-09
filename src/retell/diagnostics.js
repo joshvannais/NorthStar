@@ -1,9 +1,9 @@
 'use strict';
 
 const VERIFICATION = Object.freeze({
-  algorithm: 'hmac-sha256',
   signatureHeader: 'x-retell-signature',
-  timestampHeader: 'x-retell-timestamp',
+  signatureFormat: 'v=<unix_ms>,d=<hex_digest>',
+  timestamp: 'embedded-unix-milliseconds',
   maximumAgeSeconds: 300,
 });
 

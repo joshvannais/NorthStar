@@ -143,6 +143,15 @@ async function ingestRetellPayload(payload, options) {
         code: 'SUBSCRIPTION_READ_ONLY', status: 403,
       });
     }
+    const existingCompleted = TERMINAL_EVENTS.has(event)
+      ? await completedCall(pool, ownership.organizationId, callId)
+      : null;
+    // A later provider analysis may legitimately replay an already-completed
+    // graph without repeating its transcript. Only a new incomplete terminal
+    // delivery is rejected before session/event authority can change.
+    if (TERMINAL_EVENTS.has(event) && !existingCompleted && transcriptTurns(payload).length === 0) {
+      return { status: 400, body: { success: false, error: { code: 'RETELL_TRANSCRIPT_REQUIRED', message: 'A completed Retell call requires a transcript.' } } };
+    }
     const call = callFrom(payload);
     let voiceSession = await voiceSessions.findSessionByProviderIdentity(pool, 'retell', callId);
     if (voiceSession && voiceSession.organizationId !== ownership.organizationId) {
@@ -181,8 +190,7 @@ async function ingestRetellPayload(payload, options) {
     if (!TERMINAL_EVENTS.has(event)) {
       return { status: 202, body: { received: true, processed: false, canonical: true } };
     }
-    const existing = await completedCall(pool, ownership.organizationId, callId);
-    if (existing) {
+    if (existingCompleted) {
       await voiceSessions.appendEvent(pool, {
         organizationId: ownership.organizationId,
         externalSessionId: authoritySessionId,
@@ -190,15 +198,19 @@ async function ingestRetellPayload(payload, options) {
         eventType: event,
         payload: { replayed: true },
         status: 'completed',
-        summary: existing.result_body,
-        canonicalOperationId: existing.result_body && existing.result_body.operationId,
+        summary: existingCompleted.result_body,
+        canonicalOperationId: existingCompleted.result_body && existingCompleted.result_body.operationId,
       });
-      return { status: existing.result_status, body: { ...existing.result_body, received: true, replayed: true }, replayed: true };
+      return {
+        status: existingCompleted.result_status,
+        body: { ...existingCompleted.result_body, received: true, replayed: true },
+        replayed: true,
+      };
     }
     const request = graphRequest(payload, ownership, voiceSession);
-    if (!request.transcript.length) {
-      return { status: 400, body: { success: false, error: { code: 'RETELL_TRANSCRIPT_REQUIRED', message: 'A completed Retell call requires a transcript.' } } };
-    }
+    if (!request.transcript.length) throw Object.assign(new Error('Validated Retell transcript is unavailable.'), {
+      code: 'RETELL_TRANSCRIPT_UNAVAILABLE', status: 503,
+    });
     const ingest = options && options.ingestionSource === 'voice' ? ingestVoice : ingestRetell;
     const result = await ingest(pool, request, options);
     await voiceSessions.appendEvent(pool, {

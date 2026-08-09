@@ -16,7 +16,7 @@ function createRetellWebhookBoundaryRouter() {
   const router = express.Router();
 
   // These exact provider entry points must run before the application's global
-  // JSON parser. HMAC, timestamp, and replay validation therefore operate on
+  // JSON parser. Composite signature and replay validation therefore operate on
   // the received bytes before JSON decoding or canonical persistence.
   router.post('/api/retell/webhook', securityHeaders, auditLogger, rawWebhookBody, handleRetellWebhook);
   router.post('/api/v1/voice/webhook', securityHeaders, auditLogger, rawWebhookBody, handleWebhook);

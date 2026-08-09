@@ -2,13 +2,12 @@
  * Retell Voice Webhook Framework — Part 4
  *
  * Secure webhook handling for Retell AI call events.
- * Canonical signed voice webhook transport. The retired process-local Retell
- * webhook implementation has been removed.
+ * Canonical signed voice webhook transport with provider-global replay state.
  *
  * Security:
  * - HMAC-SHA256 signature validation
- * - Timestamp check (±5min replay protection)
- * - Event ID deduplication (24h window)
+ * - Embedded millisecond timestamp check (±5min)
+ * - Durable PostgreSQL replay protection (24h window)
  * - 10s handler timeout
  */
 
@@ -18,12 +17,12 @@ const crypto = require('crypto');
 const businessEvents = require('./businessEvents');
 const transcriptStream = require('./transcriptStream');
 const { ingestRetellPayload } = require('../services/canonicalRetellIngestion');
+const replayAuthority = require('../retell/webhookReplayAuthority');
 
 // ── Configuration ──────────────────────────────────────────────
 const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
-const DEDUP_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const MAX_REPLAY_ENTRIES = 10000;
 const HANDLER_TIMEOUT_MS = 10000;
+const OFFICIAL_SIGNATURE = /^v=(\d+),d=([0-9a-f]{64})$/;
 
 // Each in-flight business-event handler owns exactly one timeout. Entries are
 // keyed by Retell event ID so replacement, cancellation, and shutdown can
@@ -120,84 +119,62 @@ function shutdown() {
 }
 
 /**
- * Get the webhook secret dynamically (supports runtime env changes).
+ * Retell designates one API key for webhook signing. Availability of the live
+ * provider-side designation is an external configuration gate.
  */
-function getWebhookSecret() {
-  return process.env.RETELL_WEBHOOK_SECRET || process.env.RETELL_API_KEY || '';
+function getWebhookApiKey() {
+  return process.env.RETELL_API_KEY || '';
 }
-
-// This bounded replay store is intentionally process-local. A process restart
-// clears it; durable canonical idempotency remains the cross-process fallback.
-const dedupStore = new Map();
 
 // ── Deduplication ──────────────────────────────────────────────
-
-function cleanReplayStore(now) {
-  for (const [id, timestamp] of dedupStore.entries()) {
-    if (now - timestamp > DEDUP_TTL_MS) dedupStore.delete(id);
-  }
-}
-
-/**
- * Atomically check and claim one replay key before the handler yields.
- * Saturation fails closed instead of evicting a live claim.
- */
-function claimReplay(replayKey) {
-  if (!replayKey) return { claimed: false, reason: 'missing' };
-  const now = Date.now();
-  cleanReplayStore(now);
-  if (dedupStore.has(replayKey)) return { claimed: false, reason: 'replayed' };
-  if (dedupStore.size >= MAX_REPLAY_ENTRIES) return { claimed: false, reason: 'saturated' };
-  dedupStore.set(replayKey, now);
-  return { claimed: true, reason: null };
-}
-
-function releaseReplay(replayKey) {
-  return replayKey ? dedupStore.delete(replayKey) : false;
-}
-
-/**
- * Check if an event_id has been processed within the dedup window.
- * Also cleans up expired entries.
- */
-function isDuplicate(eventId) {
-  if (!eventId) return false;
-  return claimReplay(eventId).claimed === false;
-}
 
 // ── Signature Validation ───────────────────────────────────────
 
 /**
- * Validate HMAC-SHA256 signature from Retell.
- * Retell signs the raw request body with the webhook secret.
+ * Parse the complete official Retell signature header. The timestamp is part
+ * of this header and is never accepted from another header or the body.
+ *
+ * @param {string} signature - Value of the X-Retell-Signature header
+ * @returns {{timestamp:string,digest:string}|null}
+ */
+function parseSignature(signature) {
+  if (typeof signature !== 'string') return null;
+  const match = signature.match(OFFICIAL_SIGNATURE);
+  if (!match) return null;
+  return { timestamp: match[1], digest: match[2] };
+}
+
+/**
+ * Validate HMAC-SHA256 signature from Retell. Retell signs the exact raw body
+ * string concatenated with the exact embedded Unix-millisecond timestamp.
  *
  * @param {string|Buffer} rawBody - Raw request body
  * @param {string} signature - Value of the X-Retell-Signature header
  * @returns {boolean}
  */
 function validateSignature(rawBody, signature) {
-  const secret = getWebhookSecret();
-  if (!secret) {
+  const apiKey = getWebhookApiKey();
+  const parsed = parseSignature(signature);
+  if (!apiKey) {
     console.warn('[Voice:Webhook] Signature validation unavailable');
     return false;
   }
 
-  if (typeof signature !== 'string' || !/^[a-f0-9]{64}$/i.test(signature)) {
+  if (!parsed) {
     console.warn('[Voice:Webhook] Missing X-Retell-Signature header');
     return false;
   }
 
   try {
     const computed = crypto
-      .createHmac('sha256', secret)
+      .createHmac('sha256', apiKey)
       .update(rawBody)
-      .digest('hex');
+      .update(parsed.timestamp, 'ascii')
+      .digest();
 
-    // Constant-time comparison to prevent timing attacks
-    const sigBuffer = Buffer.from(signature, 'hex');
-    const computedBuffer = Buffer.from(computed, 'hex');
-
-    return crypto.timingSafeEqual(sigBuffer, computedBuffer);
+    // Both buffers are fixed-size before the constant-time comparison.
+    const received = Buffer.from(parsed.digest, 'hex');
+    return received.length === computed.length && crypto.timingSafeEqual(received, computed);
   } catch (err) {
     console.error('[Voice:Webhook] Signature validation error:', err.message);
     return false;
@@ -209,7 +186,7 @@ function validateSignature(rawBody, signature) {
 /**
  * Check that the webhook timestamp is within ±5 minutes of current time.
  *
- * @param {string|number} timestamp - Unix timestamp (seconds or ms) from Retell
+ * @param {string} timestamp - Unix timestamp in milliseconds from the signature
  * @returns {boolean}
  */
 function validateTimestamp(timestamp) {
@@ -220,11 +197,8 @@ function validateTimestamp(timestamp) {
 
   const ts = Number(timestamp);
   if (!Number.isSafeInteger(ts) || ts <= 0) return false;
-  // Normalize to milliseconds (Retell may send seconds)
-  const tsMs = ts > 1e12 ? ts : ts * 1000;
-  if (!Number.isSafeInteger(tsMs)) return false;
   const now = Date.now();
-  const diff = Math.abs(now - tsMs);
+  const diff = Math.abs(now - ts);
 
   if (diff > MAX_AGE_MS) {
     console.warn(`[Voice:Webhook] Timestamp outside ±5min window: diff=${diff}ms`);
@@ -376,41 +350,58 @@ function decodeWebhookBody(rawBody) {
 }
 
 /**
- * Handle a signed Retell webhook without decoding JSON until HMAC, timestamp,
- * and the process-local replay claim have all passed.
+ * Handle a signed Retell webhook without decoding JSON until the official
+ * HMAC/timestamp contract and durable cross-process replay claim have passed.
  */
 async function handleSignedWebhook(req, res, ingestionSource) {
   const startTime = Date.now();
   const rawBody = requestRawBody(req) || Buffer.alloc(0);
   const signature = req.headers['x-retell-signature'] || '';
-  let replayKey = null;
+  const fingerprint = replayAuthority.requestFingerprint(rawBody);
+  let replayClaim = null;
+
+  async function releaseClaim() {
+    if (!replayClaim) return;
+    const released = await replayAuthority.releaseWebhookDelivery({
+      requestFingerprint: fingerprint,
+      claimToken: replayClaim.claimToken,
+    });
+    if (!released) throw new Error('Retell webhook replay claim release failed');
+    replayClaim = null;
+  }
 
   try {
-    // 1. Validate the exact received bytes. Missing runtime validation material
-    // intentionally returns the same response as any other invalid signature.
+    // 1. Parse the exact official composite header. Missing runtime validation
+    // material intentionally returns the same response as a bad digest.
+    const parsedSignature = parseSignature(signature);
+    if (!parsedSignature) {
+      return res.status(401).json({ error: { code: 'INVALID_SIGNATURE', message: 'Invalid webhook signature' } });
+    }
+
+    // 2. Retell embeds a strict Unix-millisecond timestamp in the signature.
+    if (!validateTimestamp(parsedSignature.timestamp)) {
+      return res.status(400).json({ error: { code: 'INVALID_TIMESTAMP', message: 'Timestamp outside acceptable window' } });
+    }
+
     if (!validateSignature(rawBody, signature)) {
       return res.status(401).json({ error: { code: 'INVALID_SIGNATURE', message: 'Invalid webhook signature' } });
     }
 
-    // 2. Validate a strict header timestamp before decoding the body.
-    if (!validateTimestamp(req.headers['x-retell-timestamp'])) {
-      return res.status(400).json({ error: { code: 'INVALID_TIMESTAMP', message: 'Timestamp outside acceptable window' } });
-    }
-
-    // 3. A validated HMAC identifies the exact signed body without decoding it.
-    // Check-and-claim is synchronous and atomic within this process.
-    replayKey = 'hmac:' + signature.toLowerCase();
-    const replayClaim = claimReplay(replayKey);
-    if (!replayClaim.claimed) {
-      if (replayClaim.reason === 'saturated') {
+    // 3. The provider-global PostgreSQL claim is visible to every application
+    // process before content-type checks, JSON decoding, or canonical ingestion.
+    const claimResult = await replayAuthority.claimWebhookDelivery({ requestFingerprint: fingerprint });
+    if (claimResult.kind !== 'claimed') {
+      if (claimResult.kind === 'saturated') {
         return res.status(503).json({
           error: { code: 'WEBHOOK_REPLAY_PROTECTION_UNAVAILABLE', message: 'Webhook replay protection is unavailable' },
         });
       }
       return res.status(409).json({ error: { code: 'WEBHOOK_REPLAYED', message: 'Webhook request was already received' } });
     }
+    replayClaim = claimResult;
 
     if (!supportedJsonContentType(req)) {
+      await releaseClaim();
       return res.status(415).json({ error: { code: 'UNSUPPORTED_WEBHOOK_MEDIA_TYPE', message: 'Webhook body must be JSON' } });
     }
 
@@ -418,6 +409,7 @@ async function handleSignedWebhook(req, res, ingestionSource) {
     try {
       payload = decodeWebhookBody(rawBody);
     } catch (_error) {
+      await releaseClaim();
       return res.status(400).json({ error: { code: 'INVALID_WEBHOOK_BODY', message: 'Webhook body must be valid JSON' } });
     }
     req.body = payload;
@@ -427,17 +419,31 @@ async function handleSignedWebhook(req, res, ingestionSource) {
     // 4. Preserve the path-specific canonical source while retaining the same
     // ownership, subscription, session pinning, and graph transaction.
     const canonical = await ingestRetellPayload(payload, { ingestionSource });
-    if (canonical.status >= 500) releaseReplay(replayKey);
+    if (canonical.status < 200 || canonical.status >= 300) {
+      await releaseClaim();
+    } else {
+      const accepted = await replayAuthority.acceptWebhookDelivery({
+        requestFingerprint: fingerprint,
+        claimToken: replayClaim.claimToken,
+      });
+      if (!accepted) throw new Error('Retell webhook replay claim finalization failed');
+      replayClaim = null;
+    }
 
     const elapsed = Date.now() - startTime;
     console.log(`[Voice:Webhook] Completed: ${payload.event} (${elapsed}ms)`);
     return res.status(canonical.status).json(canonical.body);
   } catch (err) {
-    releaseReplay(replayKey);
+    if (replayClaim) {
+      try { await releaseClaim(); } catch (_releaseError) { /* The fail-closed 503 remains authoritative. */ }
+    }
     console.error('[Voice:Webhook] Fatal signed webhook error:', err.message);
+    const replayUnavailable = err && err.code === 'webhook_replay_persistence_unavailable';
     return res.status(503).json({
       success: false,
-      error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE', message: 'Canonical PostgreSQL persistence is unavailable.' },
+      error: replayUnavailable
+        ? { code: 'WEBHOOK_REPLAY_PROTECTION_UNAVAILABLE', message: 'Webhook replay protection is unavailable' }
+        : { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE', message: 'Canonical PostgreSQL persistence is unavailable.' },
     });
   }
 }
@@ -475,15 +481,12 @@ module.exports = {
   handleWebhook,
   handleRetellWebhook,
   rawBodyCapture,
+  parseSignature,
   validateSignature,
   validateTimestamp,
-  isDuplicate,
-  claimReplay,
-  releaseReplay,
   routeEvent,
   cancelPendingEvent,
   start,
   shutdown,
-  DEDUP_TTL_MS,
-  MAX_REPLAY_ENTRIES,
+  MAX_AGE_MS,
 };

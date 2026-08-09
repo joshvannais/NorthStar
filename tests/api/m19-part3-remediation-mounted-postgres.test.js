@@ -128,12 +128,15 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
 
   function postSignedWebhook(route, payload) {
     const raw = JSON.stringify(payload);
-    const signature = crypto.createHmac('sha256', MOUNTED_WEBHOOK_SECRET).update(raw).digest('hex');
+    const timestamp = String(Date.now());
+    const digest = crypto.createHmac('sha256', MOUNTED_WEBHOOK_SECRET)
+      .update(raw)
+      .update(timestamp, 'ascii')
+      .digest('hex');
     return request(app)
       .post(route)
       .set('Content-Type', 'application/json')
-      .set('X-Retell-Timestamp', String(Math.floor(Date.now() / 1000)))
-      .set('X-Retell-Signature', signature)
+      .set('X-Retell-Signature', `v=${timestamp},d=${digest}`)
       .send(raw);
   }
 
@@ -147,8 +150,8 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     originalDemoOrganizationId = process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
     process.env.DATABASE_URL = suiteDatabase.connectionString;
     delete process.env.OPENAI_API_KEY;
-    delete process.env.RETELL_API_KEY;
-    process.env.RETELL_WEBHOOK_SECRET = MOUNTED_WEBHOOK_SECRET;
+    process.env.RETELL_API_KEY = MOUNTED_WEBHOOK_SECRET;
+    delete process.env.RETELL_WEBHOOK_SECRET;
     jest.resetModules();
     db = require('../../src/db');
     expect(await db.initDatabase()).toBe(true);

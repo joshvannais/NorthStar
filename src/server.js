@@ -17,6 +17,7 @@ const apiRoutes = require('./routes/api');
 const businessProfileRoutes = require('./routes/businessProfile');
 const voiceRoutes = require('./routes/voice');
 const voiceWebhook = require('./voice/webhook');
+const { createRetellWebhookBoundaryRouter } = require('./routes/retellWebhookBoundary');
 const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
 const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
 const canonicalLeadsRoutes = require('./routes/canonicalLeads');
@@ -42,6 +43,9 @@ const PORT = config.port || 3000;
 // Middleware
 app.use(cors(corsOptions));
 app.use(correlationId);
+// The two signed Retell entry points must receive bounded raw bytes before the
+// global JSON parser. The boundary router owns only those exact paths.
+app.use(createRetellWebhookBoundaryRouter());
 app.use(express.json({
   limit: '1mb',
   verify(req, _res, buffer) {

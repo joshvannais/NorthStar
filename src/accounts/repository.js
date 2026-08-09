@@ -470,8 +470,8 @@ class AccountRepository {
     });
   }
 
-  async expireAndReadSubscription(organizationId) {
-    return this.transaction(async client => {
+  async expireAndReadSubscription(organizationId, options = {}) {
+    const work = async client => {
       const currentTime = this.currentTimeOverride();
       await client.query(
         `UPDATE subscriptions
@@ -487,7 +487,14 @@ class AccountRepository {
         [organizationId, currentTime]
       );
       return rows(result)[0] || null;
-    });
+    };
+    if (options.client) {
+      if (typeof options.client.query !== 'function') {
+        throw new AccountPersistenceError('PostgreSQL account transaction client is unavailable');
+      }
+      return work(options.client);
+    }
+    return this.transaction(work);
   }
 
   async accountPreferences(organizationId) {

@@ -25,6 +25,7 @@ jest.mock('../../src/sheets/client', () => ({
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ORG_A = '10000000-0000-0000-0000-000000000001';
 const ORG_B = '10000000-0000-0000-0000-000000000002';
+const MOUNTED_WEBHOOK_SECRET = 'm19-mounted-local-webhook-secret';
 const USERS = {
   owner: '20000000-0000-0000-0000-000000000001',
   admin: '20000000-0000-0000-0000-000000000002',
@@ -125,6 +126,20 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     return authHeaders.get(userId) || {};
   }
 
+  function postSignedWebhook(route, payload) {
+    const raw = JSON.stringify(payload);
+    const timestamp = String(Date.now());
+    const digest = crypto.createHmac('sha256', MOUNTED_WEBHOOK_SECRET)
+      .update(raw)
+      .update(timestamp, 'ascii')
+      .digest('hex');
+    return request(app)
+      .post(route)
+      .set('Content-Type', 'application/json')
+      .set('X-Retell-Signature', `v=${timestamp},d=${digest}`)
+      .send(raw);
+  }
+
   beforeAll(async () => {
     dataBefore = directoryDigest(process.env.NORTHSTAR_DATA_DIR);
     suiteDatabase = await createSuiteDatabase('remediation-mounted');
@@ -135,7 +150,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     originalDemoOrganizationId = process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
     process.env.DATABASE_URL = suiteDatabase.connectionString;
     delete process.env.OPENAI_API_KEY;
-    delete process.env.RETELL_API_KEY;
+    process.env.RETELL_API_KEY = MOUNTED_WEBHOOK_SECRET;
     delete process.env.RETELL_WEBHOOK_SECRET;
     jest.resetModules();
     db = require('../../src/db');
@@ -380,11 +395,12 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
         call_analysis: { customer_name: 'Riley Retell', service_requested: 'plumbing' },
       },
     };
-    const first = await request(app).post('/api/retell/webhook').send(event);
+    const first = await postSignedWebhook('/api/retell/webhook', event);
     expect(first.status).toBe(201);
-    const replay = await request(app).post('/api/retell/webhook').send({
+    const replayPayload = {
       ...event, event: 'call_analyzed', event_id: 'evt-mounted-retell-2', call: { ...event.call, transcript_object: undefined },
-    });
+    };
+    const replay = await postSignedWebhook('/api/retell/webhook', replayPayload);
     expect(replay.status).toBe(201);
     expect(replay.body.replayed).toBe(true);
     const graphs = await pool.query(
@@ -405,7 +421,9 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     )).rows[0]).toEqual(legacyCountsBefore);
 
     const beforeUnknown = (await pool.query('SELECT count(*)::int AS count FROM canonical_operations')).rows[0].count;
-    const unknown = await request(app).post('/api/retell/webhook').send({ ...event, call: { ...event.call, call_id: 'unknown-call', agent_id: 'unknown-agent' } });
+    const unknown = await postSignedWebhook('/api/retell/webhook', {
+      ...event, call: { ...event.call, call_id: 'unknown-call', agent_id: 'unknown-agent' },
+    });
     expect(unknown.status).toBe(404);
     expect((await pool.query('SELECT count(*)::int AS count FROM canonical_operations')).rows[0].count).toBe(beforeUnknown);
   });
@@ -426,10 +444,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
         call_analysis: { customer_name: 'Voice Customer', service_requested: 'electrical' },
       },
     };
-    const response = await request(app)
-      .post('/api/v1/voice/webhook')
-      .set('X-Retell-Timestamp', String(payload.timestamp))
-      .send(payload);
+    const response = await postSignedWebhook('/api/v1/voice/webhook', payload);
     expect(response.status).toBe(201);
     const stored = await db.getPool().query(
       `SELECT t.source, count(*)::int AS count

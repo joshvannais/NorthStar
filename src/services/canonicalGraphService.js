@@ -301,6 +301,18 @@ async function claimOrReplay(pool, claimInput, options) {
   return claim;
 }
 
+async function claimOrReplayInTransaction(client, claimInput) {
+  // Webhook delivery finalization already owns one outer transaction. A
+  // transaction-scoped advisory lock serializes semantically equivalent raw
+  // deliveries before the canonical operation row is inspected or claimed.
+  await client.query(
+    'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+    ['northstar:canonical-graph-webhook:v1:' + claimInput.organizationId + ':' + claimInput.keyHash]
+  );
+  const claim = await repository.claimOperationWithClient(client, claimInput);
+  return claim.kind === 'active' ? { kind: 'active_timeout', operation: claim.operation } : claim;
+}
+
 async function insertGraph(client, operation, leaseOwner, request, options) {
   const ids = artifactIds(operation.graph_id, request.facts.length);
   const persistedFacts = request.facts.map(function (fact, index) {
@@ -457,7 +469,8 @@ async function executeCanonicalGraph(pool, source, options) {
     return safeError(error.status || 400, error.code || 'INVALID_GRAPH_REQUEST', error.message);
   }
   const request = parsed.normalized;
-  const resolvedPool = pool || db.getPool();
+  const transactionClient = options && options.transactionClient;
+  const resolvedPool = transactionClient || pool || db.getPool();
   if (!resolvedPool || typeof resolvedPool.query !== 'function') {
     return safeError(503, 'CANONICAL_PERSISTENCE_UNAVAILABLE', 'Canonical PostgreSQL persistence is unavailable.');
   }
@@ -474,7 +487,9 @@ async function executeCanonicalGraph(pool, source, options) {
 
   let claim;
   try {
-    claim = await claimOrReplay(resolvedPool, claimInput, options || {});
+    claim = transactionClient
+      ? await claimOrReplayInTransaction(transactionClient, claimInput)
+      : await claimOrReplay(resolvedPool, claimInput, options || {});
   } catch (error) {
     return safeError(503, 'CANONICAL_PERSISTENCE_UNAVAILABLE', 'Canonical PostgreSQL persistence is unavailable.');
   }
@@ -513,6 +528,13 @@ async function executeCanonicalGraph(pool, source, options) {
     request.businessProfile = authority.normalizedProfile;
     request.businessProfileAuthority = authority;
   } catch (error) {
+    if (transactionClient) {
+      return safeError(503,
+        error.code === 'CANONICAL_BUSINESS_PROFILE_REQUIRED'
+          ? 'CANONICAL_BUSINESS_PROFILE_REQUIRED' : 'CANONICAL_PERSISTENCE_UNAVAILABLE',
+        error.code === 'CANONICAL_BUSINESS_PROFILE_REQUIRED'
+          ? 'An active organization Business Profile is required.' : 'Canonical PostgreSQL persistence is unavailable.');
+    }
     try {
       await repository.failOperation(resolvedPool, {
         organizationId: request.organizationId,
@@ -534,10 +556,19 @@ async function executeCanonicalGraph(pool, source, options) {
 
   let result;
   try {
-    result = await repository.withTransaction(resolvedPool, function (client) {
-      return insertGraph(client, claim.operation, leaseOwner, request, options || {});
-    });
+    result = transactionClient
+      ? await insertGraph(transactionClient, claim.operation, leaseOwner, request, options || {})
+      : await repository.withTransaction(resolvedPool, function (client) {
+        return insertGraph(client, claim.operation, leaseOwner, request, options || {});
+      });
   } catch (error) {
+    if (transactionClient) {
+      return safeError(error.code === 'CANONICAL_CUSTOMER_IDENTITY_CONFLICT' ? 409 : (error.retryable === false ? 422 : 503),
+        error.code === 'CANONICAL_CUSTOMER_IDENTITY_CONFLICT'
+          ? 'CANONICAL_CUSTOMER_IDENTITY_CONFLICT'
+          : (error.retryable === false ? 'PERMANENT_GRAPH_FAILURE' : 'RETRYABLE_GRAPH_FAILURE'),
+        error.retryable === false ? 'The canonical graph request cannot be completed.' : 'The canonical graph was not created; retry is safe.');
+    }
     try {
       await repository.failOperation(resolvedPool, {
         organizationId: request.organizationId,

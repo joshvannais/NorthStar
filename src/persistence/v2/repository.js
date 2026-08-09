@@ -86,7 +86,10 @@ function leaseDeadline(now, leaseMs) {
   return new Date(now.getTime() + duration);
 }
 
-async function claimOperation(pool, input) {
+async function claimOperationWithClient(client, input) {
+  if (!client || typeof client.query !== 'function') {
+    throw new TypeError('transaction client is required');
+  }
   const organizationId = input.organizationId;
   const keyHash = input.keyHash;
   const payloadFingerprint = input.payloadFingerprint;
@@ -98,66 +101,68 @@ async function claimOperation(pool, input) {
   assertHexDigest(payloadFingerprint, 'payloadFingerprint');
   const leaseExpiresAt = leaseDeadline(now, input.leaseMs || 30000);
 
-  return withTransaction(pool, async client => {
-    const inserted = await client.query(
-      `INSERT INTO canonical_operations
-        (organization_id, idempotency_key_hash, payload_fingerprint, state,
-         attempt_count, lease_owner, lease_expires_at, claimed_at, expires_at)
-       VALUES ($1, $2, $3, 'claimed', 1, $4, $5, $6, $7)
-       ON CONFLICT (organization_id, idempotency_key_hash) DO NOTHING
-       RETURNING *`,
-      [organizationId, keyHash, payloadFingerprint, leaseOwner, leaseExpiresAt, now, input.expiresAt || null]
-    );
-    if (inserted.rows.length === 1) {
-      return { kind: 'claimed', operation: inserted.rows[0] };
-    }
+  const inserted = await client.query(
+    `INSERT INTO canonical_operations
+      (organization_id, idempotency_key_hash, payload_fingerprint, state,
+       attempt_count, lease_owner, lease_expires_at, claimed_at, expires_at)
+     VALUES ($1, $2, $3, 'claimed', 1, $4, $5, $6, $7)
+     ON CONFLICT (organization_id, idempotency_key_hash) DO NOTHING
+     RETURNING *`,
+    [organizationId, keyHash, payloadFingerprint, leaseOwner, leaseExpiresAt, now, input.expiresAt || null]
+  );
+  if (inserted.rows.length === 1) {
+    return { kind: 'claimed', operation: inserted.rows[0] };
+  }
 
-    const selected = await client.query(
-      `SELECT * FROM canonical_operations
-        WHERE organization_id = $1 AND idempotency_key_hash = $2
-        FOR UPDATE`,
-      [organizationId, keyHash]
-    );
-    if (selected.rows.length !== 1) {
-      const error = new Error('Operation disappeared during claim');
-      error.code = 'persistence_unavailable';
-      throw error;
-    }
-    const existing = selected.rows[0];
-    if (existing.payload_fingerprint !== payloadFingerprint) {
-      return { kind: 'conflict', operation: existing };
-    }
-    if (existing.state === OPERATION_STATES.COMPLETED) {
-      return { kind: 'replay', operation: existing };
-    }
-    if (existing.state === OPERATION_STATES.PERMANENT_FAILED) {
-      return { kind: 'permanent_failure', operation: existing };
-    }
-    if (existing.state === OPERATION_STATES.CLAIMED && new Date(existing.lease_expires_at) > now) {
-      return { kind: 'active', operation: existing };
-    }
-
-    const takeover = await client.query(
-      `UPDATE canonical_operations
-          SET state = 'claimed',
-              attempt_count = attempt_count + 1,
-              lease_owner = $3,
-              lease_expires_at = $4,
-              claimed_at = $5,
-              safe_error_code = NULL,
-              updated_at = $5
-        WHERE organization_id = $1
-          AND idempotency_key_hash = $2
-          AND payload_fingerprint = $6
-          AND (state = 'retryable_failed' OR (state = 'claimed' AND lease_expires_at <= $5))
-       RETURNING *`,
-      [organizationId, keyHash, leaseOwner, leaseExpiresAt, now, payloadFingerprint]
-    );
-    if (takeover.rows.length === 1) {
-      return { kind: 'claimed', takeover: true, operation: takeover.rows[0] };
-    }
+  const selected = await client.query(
+    `SELECT * FROM canonical_operations
+      WHERE organization_id = $1 AND idempotency_key_hash = $2
+      FOR UPDATE`,
+    [organizationId, keyHash]
+  );
+  if (selected.rows.length !== 1) {
+    const error = new Error('Operation disappeared during claim');
+    error.code = 'persistence_unavailable';
+    throw error;
+  }
+  const existing = selected.rows[0];
+  if (existing.payload_fingerprint !== payloadFingerprint) {
+    return { kind: 'conflict', operation: existing };
+  }
+  if (existing.state === OPERATION_STATES.COMPLETED) {
+    return { kind: 'replay', operation: existing };
+  }
+  if (existing.state === OPERATION_STATES.PERMANENT_FAILED) {
+    return { kind: 'permanent_failure', operation: existing };
+  }
+  if (existing.state === OPERATION_STATES.CLAIMED && new Date(existing.lease_expires_at) > now) {
     return { kind: 'active', operation: existing };
-  });
+  }
+
+  const takeover = await client.query(
+    `UPDATE canonical_operations
+        SET state = 'claimed',
+            attempt_count = attempt_count + 1,
+            lease_owner = $3,
+            lease_expires_at = $4,
+            claimed_at = $5,
+            safe_error_code = NULL,
+            updated_at = $5
+      WHERE organization_id = $1
+        AND idempotency_key_hash = $2
+        AND payload_fingerprint = $6
+        AND (state = 'retryable_failed' OR (state = 'claimed' AND lease_expires_at <= $5))
+     RETURNING *`,
+    [organizationId, keyHash, leaseOwner, leaseExpiresAt, now, payloadFingerprint]
+  );
+  if (takeover.rows.length === 1) {
+    return { kind: 'claimed', takeover: true, operation: takeover.rows[0] };
+  }
+  return { kind: 'active', operation: existing };
+}
+
+async function claimOperation(pool, input) {
+  return withTransaction(pool, client => claimOperationWithClient(client, input));
 }
 
 async function completeOperation(client, input) {
@@ -245,6 +250,7 @@ module.exports = {
   rollback,
   withTransaction,
   claimOperation,
+  claimOperationWithClient,
   completeOperation,
   failOperation,
   getOperation,

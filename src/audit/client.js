@@ -18,8 +18,8 @@ const MAX_MEMORY_LOGS = 10000;
  * 
  * @param {Object} entry - { actorId, actorRole, action, entityType, entityId, beforeState, afterState, ipAddress, userAgent }
  */
-async function record(entry) {
-  const logEntry = {
+function createEntry(entry) {
+  return {
     id: uuidv4(),
     createdAt: new Date().toISOString(),
     organizationId: entry.organizationId || null,
@@ -35,27 +35,51 @@ async function record(entry) {
     userAgent: entry.userAgent || null,
     correlationId: entry.correlationId || null
   };
+}
+
+function detailsFor(logEntry) {
+  return {
+    actorLabel: logEntry.actorLabel,
+    role: logEntry.actorRole,
+    requestId: logEntry.correlationId,
+    correlationId: logEntry.correlationId,
+    userAgent: logEntry.userAgent,
+    beforeState: logEntry.beforeState,
+    afterState: logEntry.afterState,
+  };
+}
+
+async function persistWith(queryable, logEntry) {
+  await queryable.query(
+    `INSERT INTO audit_logs
+      (organization_id, user_id, action, entity_type, entity_id, details, ip_address, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+    [logEntry.organizationId, logEntry.userId, logEntry.action,
+      logEntry.entityType, logEntry.entityId || '', JSON.stringify(detailsFor(logEntry)),
+      logEntry.ipAddress || '', logEntry.createdAt]
+  );
+}
+
+function remember(logEntry) {
+  auditLog.unshift(logEntry);
+  if (auditLog.length > MAX_MEMORY_LOGS) auditLog.pop();
+  return logEntry;
+}
+
+async function recordInTransaction(client, entry) {
+  if (!client || typeof client.query !== 'function') throw new TypeError('audit transaction client is required');
+  const logEntry = createEntry(entry);
+  await persistWith(client, logEntry);
+  return logEntry;
+}
+
+async function record(entry) {
+  const logEntry = createEntry(entry);
 
   // Persist to PostgreSQL if available
   if (db.isAvailable()) {
     try {
-      const details = {
-        actorLabel: logEntry.actorLabel,
-        role: logEntry.actorRole,
-        requestId: logEntry.correlationId,
-        correlationId: logEntry.correlationId,
-        userAgent: logEntry.userAgent,
-        beforeState: logEntry.beforeState,
-        afterState: logEntry.afterState,
-      };
-      await db.query(
-        `INSERT INTO audit_logs
-          (organization_id, user_id, action, entity_type, entity_id, details, ip_address, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
-        [logEntry.organizationId, logEntry.userId, logEntry.action,
-         logEntry.entityType, logEntry.entityId || '', JSON.stringify(details),
-         logEntry.ipAddress || '', logEntry.createdAt]
-      );
+      await persistWith({ query: db.query }, logEntry);
     } catch (_err) {
       console.warn('[Audit] Persistence warning:', {
         requestId: logEntry.correlationId || 'unavailable',
@@ -65,8 +89,7 @@ async function record(entry) {
   }
 
   // Also keep in memory for fast access
-  auditLog.unshift(logEntry);
-  if (auditLog.length > MAX_MEMORY_LOGS) auditLog.pop();
+  remember(logEntry);
 }
 
 /**
@@ -122,4 +145,4 @@ async function ensureTable() {
   }
 }
 
-module.exports = { record, query, ensureTable };
+module.exports = { createEntry, ensureTable, query, record, recordInTransaction, remember };

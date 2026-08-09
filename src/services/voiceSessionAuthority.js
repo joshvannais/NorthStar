@@ -172,39 +172,64 @@ async function listSessions(pool, organizationId, includeCompleted) {
   return result.rows.map(projectSession);
 }
 
-async function appendEvent(pool, input) {
-  return repository.withTransaction(requirePool(pool), async function (client) {
-    const session = await client.query(
-      'SELECT id FROM canonical_voice_sessions WHERE organization_id = $1 AND external_session_id = $2 FOR UPDATE',
-      [input.organizationId, String(input.externalSessionId)]
+async function appendEventWithClient(client, input) {
+  const source = requirePool(client);
+  const eventType = String(input.eventType);
+  const eventPayload = stableValue(input.payload || {});
+  const eventPayloadJson = JSON.stringify(eventPayload);
+  const session = await source.query(
+    'SELECT id FROM canonical_voice_sessions WHERE organization_id = $1 AND external_session_id = $2 FOR UPDATE',
+    [input.organizationId, String(input.externalSessionId)]
+  );
+  if (session.rows.length !== 1) throw authorityError('VOICE_SESSION_NOT_FOUND', 'Voice session not found.', 404);
+  const inserted = await source.query(
+    `INSERT INTO canonical_voice_session_events
+      (organization_id, voice_session_id, external_event_id, event_type, payload, occurred_at)
+     VALUES ($1,$2,$3,$4,$5::jsonb,COALESCE($6::timestamptz,NOW()))
+     ON CONFLICT (organization_id, voice_session_id, external_event_id)
+       WHERE external_event_id IS NOT NULL DO NOTHING
+     RETURNING id`,
+    [input.organizationId, session.rows[0].id, input.externalEventId || null,
+      eventType, eventPayloadJson, input.occurredAt || null]
+  );
+  if (inserted.rows.length === 0 && input.requireSemanticMatch && input.externalEventId) {
+    const existing = await source.query(
+      `SELECT event_type, payload
+         FROM canonical_voice_session_events
+        WHERE organization_id = $1 AND voice_session_id = $2 AND external_event_id = $3
+        FOR UPDATE`,
+      [input.organizationId, session.rows[0].id, input.externalEventId]
     );
-    if (session.rows.length !== 1) throw authorityError('VOICE_SESSION_NOT_FOUND', 'Voice session not found.', 404);
-    const inserted = await client.query(
-      `INSERT INTO canonical_voice_session_events
-        (organization_id, voice_session_id, external_event_id, event_type, payload, occurred_at)
-       VALUES ($1,$2,$3,$4,$5::jsonb,COALESCE($6::timestamptz,NOW()))
-       ON CONFLICT (organization_id, voice_session_id, external_event_id)
-         WHERE external_event_id IS NOT NULL DO NOTHING
-       RETURNING id`,
-      [input.organizationId, session.rows[0].id, input.externalEventId || null,
-        String(input.eventType), JSON.stringify(stableValue(input.payload || {})), input.occurredAt || null]
-    );
-    if (input.status) {
-      const terminal = TERMINAL_STATUSES.has(input.status);
-      await client.query(
-        `UPDATE canonical_voice_sessions
-            SET status = $3, summary = COALESCE($4::jsonb, summary),
-                canonical_operation_id = COALESCE($5::uuid, canonical_operation_id),
-                completed_at = CASE WHEN $6 THEN COALESCE(completed_at, NOW()) ELSE NULL END,
-                updated_at = NOW()
-          WHERE organization_id = $1 AND external_session_id = $2`,
-        [input.organizationId, String(input.externalSessionId), input.status,
-          input.summary === undefined ? null : JSON.stringify(stableValue(input.summary)),
-          input.canonicalOperationId || null, terminal]
+    const matches = existing.rows.length === 1 &&
+      existing.rows[0].event_type === eventType &&
+      JSON.stringify(stableValue(existing.rows[0].payload || {})) === eventPayloadJson;
+    if (!matches) {
+      throw authorityError(
+        'VOICE_EVENT_IDENTITY_CONFLICT',
+        'The provider event identity was already used for different event data.',
+        409
       );
     }
-    return { inserted: inserted.rows.length === 1, session: await getSession(client, input.organizationId, input.externalSessionId) };
-  });
+  }
+  if (input.status && inserted.rows.length === 1) {
+    const terminal = TERMINAL_STATUSES.has(input.status);
+    await source.query(
+      `UPDATE canonical_voice_sessions
+          SET status = $3, summary = COALESCE($4::jsonb, summary),
+              canonical_operation_id = COALESCE($5::uuid, canonical_operation_id),
+              completed_at = CASE WHEN $6 THEN COALESCE(completed_at, NOW()) ELSE NULL END,
+              updated_at = NOW()
+        WHERE organization_id = $1 AND external_session_id = $2`,
+      [input.organizationId, String(input.externalSessionId), input.status,
+        input.summary === undefined ? null : JSON.stringify(stableValue(input.summary)),
+        input.canonicalOperationId || null, terminal]
+    );
+  }
+  return { inserted: inserted.rows.length === 1, session: await getSession(source, input.organizationId, input.externalSessionId) };
+}
+
+async function appendEvent(pool, input) {
+  return repository.withTransaction(requirePool(pool), client => appendEventWithClient(client, input));
 }
 
 async function timeline(pool, organizationId, externalSessionId) {
@@ -266,6 +291,7 @@ module.exports = {
   attachProviderIdentity,
   assignProviderIdentity,
   appendEvent,
+  appendEventWithClient,
   clearRuntimeHandlesForTests,
   createSession,
   findSessionByProviderIdentity,

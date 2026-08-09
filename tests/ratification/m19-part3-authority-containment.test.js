@@ -134,14 +134,22 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     const service = source('src/services/canonicalVoiceSessionCreation.js');
     const voiceRoute = source('src/routes/voice.js');
     const apiRoute = source('src/routes/api.js');
+    const webhookBoundary = source('src/routes/retellWebhookBoundary.js');
+    const server = source('src/server.js');
 
     expect(client).not.toMatch(/retell_llm_tools|createAgentWithTools|webhook_url/);
     expect(service).not.toMatch(/getFAQ|get_faq|getPinnedVoiceSessionTools|canonicalSessionTools|sessionTools|toolDefinitions/);
     expect(voiceRoute).toContain('createCanonicalVoiceCall({');
     expect(apiRoute).toContain("router.post('/retell/create-call'");
     expect(apiRoute).toContain('createCanonicalVoiceCall({');
-    expect(apiRoute).toContain("router.post('/retell/webhook'");
-    expect(apiRoute).not.toMatch(/retell\/webhook[\s\S]{0,300}(?:getFAQ|get_faq)/);
+    expect(apiRoute).not.toContain("router.post('/retell/webhook'");
+    expect(voiceRoute).not.toContain("router.post('/webhook'");
+    expect(webhookBoundary).toContain("router.post('/api/retell/webhook'");
+    expect(webhookBoundary).toContain('handleRetellWebhook');
+    expect(webhookBoundary).not.toMatch(/retell\/webhook[\s\S]{0,300}(?:getFAQ|get_faq)/);
+    expect(server.indexOf('app.use(createRetellWebhookBoundaryRouter())')).toBeGreaterThan(-1);
+    expect(server.indexOf('app.use(createRetellWebhookBoundaryRouter())'))
+      .toBeLessThan(server.indexOf('app.use(express.json({'));
     expect(fs.existsSync(path.join(ROOT, 'src/voice/canonicalSessionTools.js'))).toBe(false);
   });
 

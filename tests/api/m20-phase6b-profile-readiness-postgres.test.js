@@ -293,6 +293,109 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     }
   });
 
+  test('valid mark_applicable clears historical provenance until the restored source is explicitly reviewed again', async () => {
+    const reviewed = await save('owner', 'org-profile-v1', [change('service_area')]);
+    expect(reviewed.status).toBe(200);
+    expect(reviewed.body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'reviewed', applicability: 'applicable', canReview: false,
+      lastReviewedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    }));
+    let row = await activeRow();
+    const historical = JSON.parse(JSON.stringify(row.raw_profile.profileReadiness.items.service_area));
+    const reviewedReadinessHex = row.readiness_hex;
+    expect(historical).toEqual({
+      applicability: 'applicable',
+      lastReviewedAt: reviewed.body.data.items.service_area.lastReviewedAt,
+      reviewedValueHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+
+    const removed = await request(app).put('/api/v1/business-profile/serviceArea')
+      .set(sessions.owner.headers).send({
+        maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+      });
+    expect(removed.status).toBe(200);
+    row = await activeRow();
+    expect(row.version_label).toBe('org-profile-v3');
+    expect(row.readiness_hex).toBe(reviewedReadinessHex);
+    expect((await readiness('owner')).body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'missing', canMarkNotApplicable: true, canReview: false,
+      lastReviewedAt: historical.lastReviewedAt,
+    }));
+
+    const marked = await save('owner', row.version_label, [change('service_area', 'mark_not_applicable')]);
+    expect(marked.status).toBe(200);
+    expect(marked.body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'not_applicable', canMarkApplicable: true, lastReviewedAt: historical.lastReviewedAt,
+    }));
+    row = await activeRow();
+    expect(row.raw_profile.profileReadiness.items.service_area).toEqual({
+      applicability: 'not_applicable',
+      lastReviewedAt: historical.lastReviewedAt,
+      reviewedValueHash: historical.reviewedValueHash,
+    });
+    const markedVersion = row.version_label;
+    const markedReadinessHex = row.readiness_hex;
+
+    const unrelatedAdvance = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({ ...row.raw_profile.company, dba: 'Historical provenance stale control' });
+    expect(unrelatedAdvance.status).toBe(200);
+    const beforeStale = await activeRow();
+    expect(beforeStale.readiness_hex).toBe(markedReadinessHex);
+    const stale = await save('owner', markedVersion, [change('service_area', 'mark_applicable')]);
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe('BUSINESS_PROFILE_VERSION_CONFLICT');
+    expect(await activeRow()).toEqual(beforeStale);
+
+    const cleared = await save(
+      'owner', beforeStale.version_label, [change('service_area', 'mark_applicable')]
+    );
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'missing', applicability: 'applicable', canReview: false, lastReviewedAt: null,
+    }));
+    row = await activeRow();
+    expect(row.raw_profile.profileReadiness.items.service_area).toEqual({
+      applicability: 'applicable', lastReviewedAt: null, reviewedValueHash: null,
+    });
+    const clearedReadinessHex = row.readiness_hex;
+    expect(row.raw_profile.company.dba).toBe('Historical provenance stale control');
+
+    const restored = await request(app).put('/api/v1/business-profile/serviceArea')
+      .set(sessions.owner.headers).send({
+        maxRadiusMiles: 50, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+      });
+    expect(restored.status).toBe(200);
+    row = await activeRow();
+    expect(row.readiness_hex).toBe(clearedReadinessHex);
+    const needsReview = await readiness('owner');
+    expect(needsReview.body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'needs_review', applicability: 'applicable', canReview: true, lastReviewedAt: null,
+    }));
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const reviewedAgain = await save('owner', row.version_label, [change('service_area')]);
+    expect(reviewedAgain.status).toBe(200);
+    expect(reviewedAgain.body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'reviewed', canReview: false,
+      lastReviewedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    }));
+    expect(Date.parse(reviewedAgain.body.data.items.service_area.lastReviewedAt))
+      .toBeGreaterThan(Date.parse(historical.lastReviewedAt));
+    row = await activeRow();
+    expect(row.raw_profile.profileReadiness.items.service_area).toEqual({
+      applicability: 'applicable',
+      lastReviewedAt: reviewedAgain.body.data.items.service_area.lastReviewedAt,
+      reviewedValueHash: historical.reviewedValueHash,
+    });
+    expect(row.version_count).toBe(8);
+
+    const beforeRejected = await activeRow();
+    const rejected = await save('owner', row.version_label, [change('service_area', 'mark_applicable')]);
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.error.code).toBe('PROFILE_READINESS_MARK_APPLICABLE_UNAVAILABLE');
+    expect(await activeRow()).toEqual(beforeRejected);
+  });
+
   test('mark_applicable is state-guarded, stale-safe, and clears Not applicable without review provenance', async () => {
     let cleared = await request(app).put('/api/v1/business-profile/serviceArea')
       .set(sessions.owner.headers).send({

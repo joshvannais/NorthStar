@@ -41,7 +41,7 @@ function profileFor(name) {
     latitude: 35.5951, longitude: -82.5515, additionalOffices: [],
   };
   profile.routing = { dispatchFrom: 'headquarters', trafficEnabled: false };
-  profile.serviceArea = { maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [] };
+  profile.serviceArea = { maxRadiusMiles: 25, maxTravelMinutes: null, primaryTerritory: '', polygon: [] };
   profile.hours = { monday: { open: '08:00', close: '17:00' }, holidays: [] };
   profile.services = canonical.services;
   profile.canonicalPricing = canonical.canonicalPricing;
@@ -305,7 +305,7 @@ async function main() {
     assert.match(await ownerPage.locator('#profileReadinessStatus').textContent(), /^Action needed/);
     assert.strictEqual(await ownerPage.locator('#profileReadinessEmpty').isVisible(), true);
     assert.strictEqual(await ownerPage.locator('[data-item-id="business_contact"] .bp-readiness-state').textContent(), 'Recommended');
-    assert.strictEqual(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-state').textContent(), 'Missing');
+    assert.strictEqual(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-state').textContent(), 'Needs review');
     assert.strictEqual((await ownerPage.locator('#profileReadiness').textContent()).includes(HOSTILE), false);
 
     const companyReview = ownerPage.locator('[data-item-id="company_identity"] [data-readiness-action="review"]');
@@ -316,7 +316,7 @@ async function main() {
       action: document.activeElement.dataset.readinessAction,
       pressed: document.activeElement.getAttribute('aria-pressed'),
     })), { itemId: 'company_identity', action: 'review', pressed: 'true' });
-    await ownerPage.locator('[data-item-id="service_area"] [data-readiness-action="mark_not_applicable"]').click();
+    await ownerPage.locator('[data-item-id="service_area"] [data-readiness-action="review"]').click();
     assert.strictEqual(await ownerPage.locator('#saveProfileReadinessBtn').isEnabled(), true);
     const saveResponse = ownerPage.waitForResponse(response =>
       response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
@@ -325,28 +325,71 @@ async function main() {
     await ownerPage.keyboard.press('Enter');
     const saved = await saveResponse;
     assert.strictEqual(saved.status(), 200);
+    const savedBody = await saved.json();
     assert.deepStrictEqual(saved.request().postDataJSON(), {
       expectedVersion: 'org-profile-v1',
       changes: [
         { itemId: 'company_identity', action: 'review' },
-        { itemId: 'service_area', action: 'mark_not_applicable' },
+        { itemId: 'service_area', action: 'review' },
       ],
     });
     await ownerPage.waitForFunction(() =>
       document.querySelector('[data-item-id="company_identity"] .bp-readiness-state').textContent === 'Reviewed');
-    assert.strictEqual(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-state').textContent(), 'Not applicable');
-    assert.strictEqual(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-reviewed').count(), 0);
+    assert.strictEqual(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-state').textContent(), 'Reviewed');
     assert.match(await ownerPage.locator('[data-item-id="company_identity"] .bp-readiness-reviewed').textContent(),
       /Last reviewed:.*orientation only/);
     assert.strictEqual(await ownerPage.locator('#profileReadinessEmpty').isHidden(), true);
-    const storedAfterOwner = await active(pool);
-    assert.match(storedAfterOwner.readiness_hex, /^[0-9a-f]+$/);
-    assert.deepStrictEqual(storedAfterOwner.raw_profile.profileReadiness.items.service_area, {
-      applicability: 'not_applicable', lastReviewedAt: null, reviewedValueHash: null,
+    const storedAfterReview = await active(pool);
+    assert.match(storedAfterReview.readiness_hex, /^[0-9a-f]+$/);
+    const historicalReview = JSON.parse(JSON.stringify(
+      storedAfterReview.raw_profile.profileReadiness.items.service_area
+    ));
+    assert.strictEqual(historicalReview.applicability, 'applicable');
+    assert.strictEqual(historicalReview.lastReviewedAt, savedBody.data.items.service_area.lastReviewedAt);
+    assert.match(historicalReview.lastReviewedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(historicalReview.reviewedValueHash, /^[0-9a-f]{64}$/);
+
+    const removed = await request(app).put('/api/v1/business-profile/serviceArea')
+      .set(sessions.owner.headers).send({
+        maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+      });
+    assert.strictEqual(removed.status, 200);
+    const storedAfterRemoval = await active(pool);
+    assert.strictEqual(storedAfterRemoval.version, 'org-profile-v3');
+    assert.strictEqual(storedAfterRemoval.readiness_hex, storedAfterReview.readiness_hex);
+    const removalReload = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await ownerPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await removalReload).status(), 200);
+    await ownerPage.waitForFunction(() =>
+      document.querySelector('[data-item-id="service_area"] .bp-readiness-state').textContent === 'Missing');
+    assert.match(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-reviewed').textContent(),
+      /Last reviewed:.*orientation only/);
+
+    await ownerPage.locator('[data-item-id="service_area"] [data-readiness-action="mark_not_applicable"]').click();
+    const notApplicableSave = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'PUT');
+    await ownerPage.click('#saveProfileReadinessBtn');
+    const notApplicableSaved = await notApplicableSave;
+    assert.strictEqual(notApplicableSaved.status(), 200);
+    assert.deepStrictEqual(notApplicableSaved.request().postDataJSON(), {
+      expectedVersion: 'org-profile-v3',
+      changes: [{ itemId: 'service_area', action: 'mark_not_applicable' }],
+    });
+    await ownerPage.waitForFunction(() =>
+      document.querySelector('[data-item-id="service_area"] .bp-readiness-state').textContent === 'Not applicable');
+    const storedAfterNotApplicable = await active(pool);
+    assert.strictEqual(storedAfterNotApplicable.version, 'org-profile-v4');
+    assert.deepStrictEqual(storedAfterNotApplicable.raw_profile.profileReadiness.items.service_area, {
+      applicability: 'not_applicable',
+      lastReviewedAt: historicalReview.lastReviewedAt,
+      reviewedValueHash: historicalReview.reviewedValueHash,
     });
 
     // Only the effective Not applicable state offers Mark applicable. Clearing
-    // the override is a keyboard-accessible applicability action, not a review.
+    // the override is keyboard-accessible and erases historical review provenance.
     const markApplicable = ownerPage.locator(
       '[data-item-id="service_area"] [data-readiness-action="mark_applicable"]'
     );
@@ -360,7 +403,7 @@ async function main() {
     const applicableSaved = await applicableSave;
     assert.strictEqual(applicableSaved.status(), 200);
     assert.deepStrictEqual(applicableSaved.request().postDataJSON(), {
-      expectedVersion: 'org-profile-v2',
+      expectedVersion: 'org-profile-v4',
       changes: [{ itemId: 'service_area', action: 'mark_applicable' }],
     });
     await ownerPage.waitForFunction(() =>
@@ -373,10 +416,52 @@ async function main() {
       '[data-item-id="service_area"] [data-readiness-action="mark_not_applicable"]'
     ).count(), 1);
     const storedAfterApplicable = await active(pool);
-    assert.strictEqual(storedAfterApplicable.version, 'org-profile-v3');
-    assert.notStrictEqual(storedAfterApplicable.readiness_hex, storedAfterOwner.readiness_hex);
+    assert.strictEqual(storedAfterApplicable.version, 'org-profile-v5');
+    assert.notStrictEqual(storedAfterApplicable.readiness_hex, storedAfterNotApplicable.readiness_hex);
     assert.deepStrictEqual(storedAfterApplicable.raw_profile.profileReadiness.items.service_area, {
       applicability: 'applicable', lastReviewedAt: null, reviewedValueHash: null,
+    });
+
+    const restored = await request(app).put('/api/v1/business-profile/serviceArea')
+      .set(sessions.owner.headers).send({
+        maxRadiusMiles: 25, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+      });
+    assert.strictEqual(restored.status, 200);
+    const storedAfterRestore = await active(pool);
+    assert.strictEqual(storedAfterRestore.version, 'org-profile-v6');
+    assert.strictEqual(storedAfterRestore.readiness_hex, storedAfterApplicable.readiness_hex);
+    const restoredReload = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await ownerPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await restoredReload).status(), 200);
+    await ownerPage.waitForFunction(() =>
+      document.querySelector('[data-item-id="service_area"] .bp-readiness-state').textContent === 'Needs review');
+    assert.strictEqual(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-reviewed').count(), 0);
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    await ownerPage.locator('[data-item-id="service_area"] [data-readiness-action="review"]').click();
+    const reviewedAgainSave = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'PUT');
+    await ownerPage.click('#saveProfileReadinessBtn');
+    const reviewedAgainSaved = await reviewedAgainSave;
+    assert.strictEqual(reviewedAgainSaved.status(), 200);
+    assert.deepStrictEqual(reviewedAgainSaved.request().postDataJSON(), {
+      expectedVersion: 'org-profile-v6',
+      changes: [{ itemId: 'service_area', action: 'review' }],
+    });
+    const reviewedAgainBody = await reviewedAgainSaved.json();
+    const reviewedAgainAt = reviewedAgainBody.data.items.service_area.lastReviewedAt;
+    assert.ok(Date.parse(reviewedAgainAt) > Date.parse(historicalReview.lastReviewedAt));
+    await ownerPage.waitForFunction(() =>
+      document.querySelector('[data-item-id="service_area"] .bp-readiness-state').textContent === 'Reviewed');
+    const storedAfterReviewAgain = await active(pool);
+    assert.strictEqual(storedAfterReviewAgain.version, 'org-profile-v7');
+    assert.deepStrictEqual(storedAfterReviewAgain.raw_profile.profileReadiness.items.service_area, {
+      applicability: 'applicable',
+      lastReviewedAt: reviewedAgainAt,
+      reviewedValueHash: historicalReview.reviewedValueHash,
     });
 
     const adminContext = await contextFor(browser, origin, sessions.admin, {
@@ -531,14 +616,17 @@ async function main() {
     'read-only roles emit zero writes');
 
     console.log(JSON.stringify({
-      browser: selected === 'chrome' ? 'installed Chrome' : 'actual Playwright WebKit',
+      browser: selected === 'chrome' ? 'Chrome' : 'actual Playwright WebKit',
       version: browser.version(),
       database: suiteDatabase.databaseName,
       databaseIdentity: identity,
       roles: ['owner', 'admin', 'member', 'viewer'],
       viewports: ['desktop', 'mobile'],
       themes: ['light', 'dark'],
-      lifecycle: ['loading', 'empty', 'review', 'not_applicable', 'mark_applicable', 'save', 'stale', 'reload', 'error'],
+      lifecycle: [
+        'loading', 'empty', 'review', 'remove_configuration', 'not_applicable',
+        'mark_applicable_clear', 'restore_needs_review', 'review_again', 'save', 'stale', 'reload', 'error',
+      ],
       accessibility: ['region', 'headings', 'list', 'live status', 'alert', 'keyboard', 'focus'],
       rawReadiness: 'exact JSONB hex',
       providerRequests: 0,

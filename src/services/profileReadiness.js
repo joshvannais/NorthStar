@@ -617,8 +617,8 @@ function applyProfileReadinessChanges(profile, changes, now) {
       }
       items[change.itemId] = {
         applicability: 'applicable',
-        lastReviewedAt: items[change.itemId].lastReviewedAt,
-        reviewedValueHash: items[change.itemId].reviewedValueHash,
+        lastReviewedAt: null,
+        reviewedValueHash: null,
       };
       continue;
     }

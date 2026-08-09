@@ -228,6 +228,68 @@ describe('Mission 20 Phase 6B Profile Readiness contract', () => {
       }));
   });
 
+  test('clears historical review provenance when a valid mark_applicable removes a Not applicable override', () => {
+    const configured = configuredProfile();
+    const reviewed = applyProfileReadinessChanges(configured, [
+      { itemId: 'service_area', action: 'review' },
+    ], REVIEWED_AT);
+    const historical = reviewed.profileReadiness.items.service_area;
+    expect(historical).toEqual({
+      applicability: 'applicable',
+      lastReviewedAt: REVIEWED_AT.toISOString(),
+      reviewedValueHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+
+    const removed = JSON.parse(JSON.stringify(reviewed));
+    removed.serviceArea = {
+      maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+    };
+    const markedNotApplicable = applyProfileReadinessChanges(removed, [
+      { itemId: 'service_area', action: 'mark_not_applicable' },
+    ], new Date('invalid'));
+    expect(markedNotApplicable.profileReadiness.items.service_area).toEqual({
+      applicability: 'not_applicable',
+      lastReviewedAt: historical.lastReviewedAt,
+      reviewedValueHash: historical.reviewedValueHash,
+    });
+    expect(projectProfileReadiness(markedNotApplicable, { version: 'org-profile-v3' })
+      .items.service_area).toEqual(expect.objectContaining({
+      state: 'not_applicable', canMarkApplicable: true, lastReviewedAt: historical.lastReviewedAt,
+    }));
+
+    const cleared = applyProfileReadinessChanges(markedNotApplicable, [
+      { itemId: 'service_area', action: 'mark_applicable' },
+    ], new Date('invalid'));
+    expect(cleared.profileReadiness.items.service_area).toEqual({
+      applicability: 'applicable', lastReviewedAt: null, reviewedValueHash: null,
+    });
+    expect(projectProfileReadiness(cleared, { version: 'org-profile-v4' }).items.service_area)
+      .toEqual(expect.objectContaining({
+        state: 'missing', canReview: false, canMarkApplicable: false, lastReviewedAt: null,
+      }));
+
+    const restored = JSON.parse(JSON.stringify(cleared));
+    restored.serviceArea = JSON.parse(JSON.stringify(configured.serviceArea));
+    expect(projectProfileReadiness(restored, { version: 'org-profile-v5' }).items.service_area)
+      .toEqual(expect.objectContaining({
+        state: 'needs_review', canReview: true, lastReviewedAt: null,
+      }));
+
+    const reviewedAgainAt = new Date('2026-08-10T16:00:00.000Z');
+    const reviewedAgain = applyProfileReadinessChanges(restored, [
+      { itemId: 'service_area', action: 'review' },
+    ], reviewedAgainAt);
+    expect(reviewedAgain.profileReadiness.items.service_area).toEqual({
+      applicability: 'applicable',
+      lastReviewedAt: reviewedAgainAt.toISOString(),
+      reviewedValueHash: historical.reviewedValueHash,
+    });
+    expect(projectProfileReadiness(reviewedAgain, { version: 'org-profile-v6' }).items.service_area)
+      .toEqual(expect.objectContaining({
+        state: 'reviewed', canReview: false, lastReviewedAt: reviewedAgainAt.toISOString(),
+      }));
+  });
+
   test('allows operating-origin Not applicable only while dispatch origin is blank', () => {
     const profile = configuredProfile();
     profile.routing.dispatchFrom = '';

@@ -1,6 +1,9 @@
 'use strict';
 
-const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
+const {
+  adaptBusinessProfile,
+  validateRawBusinessProfile,
+} = require('../../src/services/businessProfileAdapter');
 const {
   applyProfileReadinessChanges,
   PROFILE_READINESS_SCHEMA_VERSION,
@@ -179,6 +182,52 @@ describe('Mission 20 Phase 6B Profile Readiness contract', () => {
     }).toThrow(/current configuration/i);
   });
 
+  test('accepts mark_applicable only for an effective Not applicable item and never treats it as review', () => {
+    const profile = configuredProfile();
+    profile.serviceArea = { maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [] };
+    const marked = applyProfileReadinessChanges(profile, [
+      { itemId: 'service_area', action: 'mark_not_applicable' },
+    ], REVIEWED_AT);
+    expect(marked.profileReadiness.items.service_area).toEqual({
+      applicability: 'not_applicable',
+      lastReviewedAt: null,
+      reviewedValueHash: null,
+    });
+    expect(projectProfileReadiness(marked, { version: 'org-profile-v2' }).items.service_area)
+      .toEqual(expect.objectContaining({
+        state: 'not_applicable', canMarkApplicable: true, canReview: false, lastReviewedAt: null,
+      }));
+
+    const configured = JSON.parse(JSON.stringify(marked));
+    configured.serviceArea.maxRadiusMiles = 25;
+    const auditorReproduction = projectProfileReadiness(configured, { version: 'org-profile-v3' })
+      .items.service_area;
+    expect(auditorReproduction).toEqual(expect.objectContaining({
+      state: 'needs_review', applicability: 'applicable', canMarkApplicable: false, canReview: true,
+    }));
+    const beforeRejectedAction = JSON.parse(JSON.stringify(configured));
+    expect(function () {
+      applyProfileReadinessChanges(configured, [
+        { itemId: 'service_area', action: 'mark_applicable' },
+      ], new Date('2026-08-09T17:00:00.000Z'));
+    }).toThrow(/only while its current state is Not applicable/i);
+    expect(configured).toEqual(beforeRejectedAction);
+
+    const cleared = applyProfileReadinessChanges(marked, [
+      { itemId: 'service_area', action: 'mark_applicable' },
+    ], new Date('invalid'));
+    expect(cleared.profileReadiness.items.service_area).toEqual({
+      applicability: 'applicable',
+      lastReviewedAt: null,
+      reviewedValueHash: null,
+    });
+    expect(projectProfileReadiness(cleared, { version: 'org-profile-v3' }).items.service_area)
+      .toEqual(expect.objectContaining({
+        state: 'missing', canMarkApplicable: false, canMarkNotApplicable: true,
+        canReview: false, lastReviewedAt: null,
+      }));
+  });
+
   test('allows operating-origin Not applicable only while dispatch origin is blank', () => {
     const profile = configuredProfile();
     profile.routing.dispatchFrom = '';
@@ -299,6 +348,39 @@ describe('Mission 20 Phase 6B Profile Readiness contract', () => {
     for (const itemId of ['active_services', 'operating_origin', 'voice_configuration']) {
       expect(projection.items[itemId].state).toBe('reviewed');
     }
+  });
+
+  test('hashes only qualifying nearest-office sources and invalidates when that authority changes', () => {
+    const profile = configuredProfile();
+    profile.routing.dispatchFrom = 'nearest-office';
+    profile.headquarters.additionalOffices.push({
+      name: 'Nonqualifying draft', city: 'Nowhere', country: 'US',
+    });
+    expect(validateRawBusinessProfile(profile)).toEqual([]);
+    const reviewed = applyProfileReadinessChanges(profile, [
+      { itemId: 'operating_origin', action: 'review' },
+    ], REVIEWED_AT);
+    expect(projectProfileReadiness(reviewed, { version: 'org-profile-v2' }).items.operating_origin.state)
+      .toBe('reviewed');
+
+    const nonqualifyingChanged = JSON.parse(JSON.stringify(reviewed));
+    nonqualifyingChanged.headquarters.additionalOffices[0].latitude = 36.5;
+    nonqualifyingChanged.headquarters.additionalOffices[0].unrecognized = 'ignored sibling detail';
+    nonqualifyingChanged.headquarters.additionalOffices[1].name = 'Changed nonqualifying draft';
+    nonqualifyingChanged.headquarters.additionalOffices[1].city = 'Still nowhere';
+    expect(validateRawBusinessProfile(nonqualifyingChanged)).toEqual([]);
+    nonqualifyingChanged.headquarters.additionalOffices[1].unrecognized = '<img src=x onerror=never()>';
+    expect(projectProfileReadiness(nonqualifyingChanged, { version: 'org-profile-v3' })
+      .items.operating_origin).toEqual(expect.objectContaining({
+      sourceState: 'configured', state: 'reviewed', lastReviewedAt: REVIEWED_AT.toISOString(),
+    }));
+
+    const qualifyingChanged = JSON.parse(JSON.stringify(nonqualifyingChanged));
+    qualifyingChanged.headquarters.additionalOffices[0].street = '22 West Street';
+    expect(projectProfileReadiness(qualifyingChanged, { version: 'org-profile-v4' })
+      .items.operating_origin).toEqual(expect.objectContaining({
+      sourceState: 'configured', state: 'needs_review', lastReviewedAt: REVIEWED_AT.toISOString(),
+    }));
   });
 
   test('does not alter the normalized calculation input hash when only readiness metadata changes', () => {

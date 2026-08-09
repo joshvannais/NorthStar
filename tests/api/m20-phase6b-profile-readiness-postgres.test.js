@@ -88,6 +88,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
   async function activeRow(organizationId = ORG_A) {
     return (await pool.query(
       `SELECT id, version_label, raw_profile, normalized_profile_hash,
+              encode(convert_to(raw_profile::text, 'UTF8'), 'hex') AS raw_hex,
               raw_profile ? 'profileReadiness' AS has_readiness,
               CASE WHEN raw_profile ? 'profileReadiness'
                    THEN encode(convert_to((raw_profile -> 'profileReadiness')::text, 'UTF8'), 'hex')
@@ -290,6 +291,80 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
       expect(await versionCount()).toBe(1);
       expect((await activeRow()).has_readiness).toBe(false);
     }
+  });
+
+  test('mark_applicable is state-guarded, stale-safe, and clears Not applicable without review provenance', async () => {
+    let cleared = await request(app).put('/api/v1/business-profile/serviceArea')
+      .set(sessions.owner.headers).send({
+        maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+      });
+    expect(cleared.status).toBe(200);
+    let row = await activeRow();
+    const marked = await save('owner', row.version_label, [change('service_area', 'mark_not_applicable')]);
+    expect(marked.status).toBe(200);
+    expect(marked.body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'not_applicable', canMarkApplicable: true, canReview: false, lastReviewedAt: null,
+    }));
+    row = await activeRow();
+    expect(row.raw_profile.profileReadiness.items.service_area).toEqual({
+      applicability: 'not_applicable', lastReviewedAt: null, reviewedValueHash: null,
+    });
+    const markedReadinessHex = row.readiness_hex;
+
+    const configured = await request(app).put('/api/v1/business-profile/serviceArea')
+      .set(sessions.owner.headers).send({
+        maxRadiusMiles: 25, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+      });
+    expect(configured.status).toBe(200);
+    row = await activeRow();
+    expect(row.readiness_hex).toBe(markedReadinessHex);
+    const auditorReproduction = await readiness('owner');
+    expect(auditorReproduction.body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'needs_review', applicability: 'applicable', canMarkApplicable: false,
+      canReview: true, lastReviewedAt: null,
+    }));
+    const beforeRejectedAction = await activeRow();
+    const rejected = await save('owner', row.version_label, [change('service_area', 'mark_applicable')]);
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.error.code).toBe('PROFILE_READINESS_MARK_APPLICABLE_UNAVAILABLE');
+    expect(await activeRow()).toEqual(beforeRejectedAction);
+
+    cleared = await request(app).put('/api/v1/business-profile/serviceArea')
+      .set(sessions.owner.headers).send({
+        maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+      });
+    expect(cleared.status).toBe(200);
+    row = await activeRow();
+    expect(row.readiness_hex).toBe(markedReadinessHex);
+    expect((await readiness('owner')).body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'not_applicable', canMarkApplicable: true, lastReviewedAt: null,
+    }));
+    const applicableVersion = row.version_label;
+
+    const unrelatedAdvance = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({ ...row.raw_profile.company, dba: 'Stale action control' });
+    expect(unrelatedAdvance.status).toBe(200);
+    const beforeStaleAction = await activeRow();
+    expect(beforeStaleAction.readiness_hex).toBe(markedReadinessHex);
+    const stale = await save('owner', applicableVersion, [change('service_area', 'mark_applicable')]);
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe('BUSINESS_PROFILE_VERSION_CONFLICT');
+    expect(await activeRow()).toEqual(beforeStaleAction);
+
+    const restored = await save(
+      'owner', beforeStaleAction.version_label, [change('service_area', 'mark_applicable')]
+    );
+    expect(restored.status).toBe(200);
+    expect(restored.body.data.items.service_area).toEqual(expect.objectContaining({
+      state: 'missing', applicability: 'applicable', canMarkApplicable: false,
+      canMarkNotApplicable: true, canReview: false, lastReviewedAt: null,
+    }));
+    const afterRestored = await activeRow();
+    expect(afterRestored.version_count).toBe(beforeStaleAction.version_count + 1);
+    expect(afterRestored.raw_profile.profileReadiness.items.service_area).toEqual({
+      applicability: 'applicable', lastReviewedAt: null, reviewedValueHash: null,
+    });
+    expect(afterRestored.raw_profile.company.dba).toBe('Stale action control');
   });
 
   test('null first-write, stale retry, and simultaneous expected-version writes are atomic', async () => {

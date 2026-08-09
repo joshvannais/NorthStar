@@ -75,6 +75,22 @@ function recognizedLocation(value, includeIdentity) {
   return projection;
 }
 
+function qualifyingAdditionalOffice(value) {
+  if (!isPlainObject(value) || typeof value.id !== 'string' || !STABLE_ID_PATTERN.test(value.id) ||
+      !nonblank(value.name) || (!validCoordinatePair(value) && !completeAddress(value))) {
+    return null;
+  }
+  const projection = { id: value.id, name: value.name };
+  if (completeAddress(value)) {
+    for (const field of ['street', 'city', 'state', 'zip', 'country']) projection[field] = value[field];
+  }
+  if (validCoordinatePair(value)) {
+    projection.latitude = value.latitude;
+    projection.longitude = value.longitude;
+  }
+  return projection;
+}
+
 function validPolygon(value) {
   if (!Array.isArray(value) || value.length < 3) return false;
   return value.every(function (point) {
@@ -185,20 +201,14 @@ function operatingOriginSource(profile) {
   }
   if (dispatchFrom === 'nearest-office') {
     const offices = Array.isArray(headquarters.additionalOffices)
-      ? headquarters.additionalOffices.filter(isPlainObject).map(function (office) {
-        return recognizedLocation(office, true);
-      }).sort(function (left, right) {
+      ? headquarters.additionalOffices.map(qualifyingAdditionalOffice).filter(Boolean).sort(function (left, right) {
         return compareText(String(left.id || '').toLowerCase(), String(right.id || '').toLowerCase()) ||
-          compareText(left.id || '', right.id || '') || compareText(left.name || '', right.name || '');
+          compareText(left.id || '', right.id || '') || compareText(left.name || '', right.name || '') ||
+          compareText(stableStringify(left), stableStringify(right));
       }) : [];
-    const present = Array.isArray(headquarters.additionalOffices) &&
-      headquarters.additionalOffices.some(function (office) {
-        return isPlainObject(office) && typeof office.id === 'string' && STABLE_ID_PATTERN.test(office.id) &&
-          nonblank(office.name) && (validCoordinatePair(office) || completeAddress(office));
-      });
     return sourceResult(
       'operating_origin',
-      present,
+      offices.length > 0,
       { dispatchFrom, offices },
       { notApplicableAllowed: false }
     );
@@ -410,11 +420,16 @@ function validIsoDate(value) {
 }
 
 function validStoredItem(value) {
-  return isPlainObject(value) && Object.keys(value).length === 3 &&
-    Object.keys(value).every(function (key) {
-      return ['applicability', 'lastReviewedAt', 'reviewedValueHash'].includes(key);
-    }) && APPLICABILITY.has(value.applicability) && validIsoDate(value.lastReviewedAt) &&
+  if (!isPlainObject(value) || Object.keys(value).length !== 3 ||
+      !Object.keys(value).every(function (key) {
+        return ['applicability', 'lastReviewedAt', 'reviewedValueHash'].includes(key);
+      }) || !APPLICABILITY.has(value.applicability)) {
+    return false;
+  }
+  const neverReviewed = value.lastReviewedAt === null && value.reviewedValueHash === null;
+  const reviewed = validIsoDate(value.lastReviewedAt) &&
     typeof value.reviewedValueHash === 'string' && REVIEWED_HASH_PATTERN.test(value.reviewedValueHash);
+  return neverReviewed || reviewed;
 }
 
 function storedReadiness(profile) {
@@ -560,14 +575,18 @@ function applyProfileReadinessChanges(profile, changes, now) {
   const sourceProfile = isPlainObject(profile) ? stableValue(profile) : {};
   const stored = storedReadiness(sourceProfile);
   const items = stableValue(stored.items);
-  const reviewedAt = now instanceof Date ? now : new Date();
-  if (Number.isNaN(reviewedAt.getTime())) {
-    throw readinessError('PROFILE_READINESS_TIME_UNAVAILABLE', 'Profile Readiness review time is unavailable.', null, 503);
+  let stamp = null;
+  if (changes.some(function (change) { return change.action === 'review'; })) {
+    const reviewedAt = now instanceof Date ? now : new Date();
+    if (Number.isNaN(reviewedAt.getTime())) {
+      throw readinessError('PROFILE_READINESS_TIME_UNAVAILABLE', 'Profile Readiness review time is unavailable.', null, 503);
+    }
+    stamp = reviewedAt.toISOString();
   }
-  const stamp = reviewedAt.toISOString();
   for (const change of changes) {
     const definition = REGISTRY_BY_ID.get(change.itemId);
     const source = definition.source(sourceProfile);
+    const current = itemProjection(definition, source, items[change.itemId]);
     if (change.action === 'mark_not_applicable') {
       if (!definition.allowNotApplicable) {
         throw readinessError(
@@ -581,12 +600,27 @@ function applyProfileReadinessChanges(profile, changes, now) {
           definition.label + ' cannot be marked Not applicable for the current configuration.'
         );
       }
+      const previous = validStoredItem(items[change.itemId]) ? items[change.itemId] : null;
+      items[change.itemId] = {
+        applicability: 'not_applicable',
+        lastReviewedAt: previous ? previous.lastReviewedAt : null,
+        reviewedValueHash: previous ? previous.reviewedValueHash : null,
+      };
+      continue;
     }
-    if (change.action === 'mark_applicable' && !definition.allowNotApplicable) {
-      throw readinessError(
-        'PROFILE_READINESS_APPLICABILITY_FIXED',
-        definition.label + ' is always applicable.'
-      );
+    if (change.action === 'mark_applicable') {
+      if (!current.canMarkApplicable) {
+        throw readinessError(
+          'PROFILE_READINESS_MARK_APPLICABLE_UNAVAILABLE',
+          definition.label + ' can be marked applicable only while its current state is Not applicable.'
+        );
+      }
+      items[change.itemId] = {
+        applicability: 'applicable',
+        lastReviewedAt: items[change.itemId].lastReviewedAt,
+        reviewedValueHash: items[change.itemId].reviewedValueHash,
+      };
+      continue;
     }
     if (change.action === 'review' && (!source.present || source.authorityUnavailable)) {
       throw readinessError(
@@ -595,7 +629,7 @@ function applyProfileReadinessChanges(profile, changes, now) {
       );
     }
     items[change.itemId] = {
-      applicability: change.action === 'mark_not_applicable' ? 'not_applicable' : 'applicable',
+      applicability: 'applicable',
       lastReviewedAt: stamp,
       reviewedValueHash: source.hash,
     };

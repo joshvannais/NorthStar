@@ -335,11 +335,49 @@ async function main() {
     await ownerPage.waitForFunction(() =>
       document.querySelector('[data-item-id="company_identity"] .bp-readiness-state').textContent === 'Reviewed');
     assert.strictEqual(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-state').textContent(), 'Not applicable');
+    assert.strictEqual(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-reviewed').count(), 0);
     assert.match(await ownerPage.locator('[data-item-id="company_identity"] .bp-readiness-reviewed').textContent(),
       /Last reviewed:.*orientation only/);
     assert.strictEqual(await ownerPage.locator('#profileReadinessEmpty').isHidden(), true);
     const storedAfterOwner = await active(pool);
     assert.match(storedAfterOwner.readiness_hex, /^[0-9a-f]+$/);
+    assert.deepStrictEqual(storedAfterOwner.raw_profile.profileReadiness.items.service_area, {
+      applicability: 'not_applicable', lastReviewedAt: null, reviewedValueHash: null,
+    });
+
+    // Only the effective Not applicable state offers Mark applicable. Clearing
+    // the override is a keyboard-accessible applicability action, not a review.
+    const markApplicable = ownerPage.locator(
+      '[data-item-id="service_area"] [data-readiness-action="mark_applicable"]'
+    );
+    await markApplicable.focus();
+    await ownerPage.keyboard.press(' ');
+    assert.strictEqual(await markApplicable.getAttribute('aria-pressed'), 'true');
+    const applicableSave = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'PUT');
+    await ownerPage.click('#saveProfileReadinessBtn');
+    const applicableSaved = await applicableSave;
+    assert.strictEqual(applicableSaved.status(), 200);
+    assert.deepStrictEqual(applicableSaved.request().postDataJSON(), {
+      expectedVersion: 'org-profile-v2',
+      changes: [{ itemId: 'service_area', action: 'mark_applicable' }],
+    });
+    await ownerPage.waitForFunction(() =>
+      document.querySelector('[data-item-id="service_area"] .bp-readiness-state').textContent === 'Missing');
+    assert.strictEqual(await ownerPage.locator('[data-item-id="service_area"] .bp-readiness-reviewed').count(), 0);
+    assert.strictEqual(await ownerPage.locator(
+      '[data-item-id="service_area"] [data-readiness-action="mark_applicable"]'
+    ).count(), 0);
+    assert.strictEqual(await ownerPage.locator(
+      '[data-item-id="service_area"] [data-readiness-action="mark_not_applicable"]'
+    ).count(), 1);
+    const storedAfterApplicable = await active(pool);
+    assert.strictEqual(storedAfterApplicable.version, 'org-profile-v3');
+    assert.notStrictEqual(storedAfterApplicable.readiness_hex, storedAfterOwner.readiness_hex);
+    assert.deepStrictEqual(storedAfterApplicable.raw_profile.profileReadiness.items.service_area, {
+      applicability: 'applicable', lastReviewedAt: null, reviewedValueHash: null,
+    });
 
     const adminContext = await contextFor(browser, origin, sessions.admin, {
       role: 'admin-mobile-dark', viewport: { width: 390, height: 844 }, theme: 'dark',
@@ -500,7 +538,7 @@ async function main() {
       roles: ['owner', 'admin', 'member', 'viewer'],
       viewports: ['desktop', 'mobile'],
       themes: ['light', 'dark'],
-      lifecycle: ['loading', 'empty', 'review', 'not_applicable', 'save', 'stale', 'reload', 'error'],
+      lifecycle: ['loading', 'empty', 'review', 'not_applicable', 'mark_applicable', 'save', 'stale', 'reload', 'error'],
       accessibility: ['region', 'headings', 'list', 'live status', 'alert', 'keyboard', 'focus'],
       rawReadiness: 'exact JSONB hex',
       providerRequests: 0,

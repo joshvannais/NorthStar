@@ -528,6 +528,118 @@ async function main() {
       await context.close();
     }
 
+    // The rendered authority stays reviewed when only a nonqualifying blank
+    // sibling changes, then invalidates when the qualifying value changes.
+    let regressionRow = await active(pool);
+    const contactBaseline = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        email: 'office@example.test',
+        phone: '',
+      });
+    assert.strictEqual(contactBaseline.status, 200);
+    regressionRow = await active(pool);
+    const contextBaseline = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    contextBaseline.businessDescription = '';
+    const contextBaselineSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: contextBaseline,
+      });
+    assert.strictEqual(contextBaselineSaved.status, 200);
+    regressionRow = await active(pool);
+    const sourcesReviewed = await request(app).put('/api/v1/business-profile/profileReadiness')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        changes: [
+          { itemId: 'business_contact', action: 'review' },
+          { itemId: 'business_context', action: 'review' },
+        ],
+      });
+    assert.strictEqual(sourcesReviewed.status, 200);
+    regressionRow = await active(pool);
+    const regressionReadinessHex = regressionRow.readiness_hex;
+    const storedContactReview = regressionRow.raw_profile.profileReadiness.items.business_contact;
+    const storedContextReview = regressionRow.raw_profile.profileReadiness.items.business_context;
+
+    const regressionContext = await contextFor(browser, origin, sessions.owner, {
+      role: 'owner-hash-regression-desktop-light', viewport: { width: 1440, height: 900 }, theme: 'light',
+    }, ledger);
+    const regressionPage = await regressionContext.newPage();
+    attachPage(regressionPage, ledger, 'owner-hash-regression-desktop-light');
+    await openProfile(regressionPage, origin);
+    for (const itemId of ['business_contact', 'business_context']) {
+      assert.strictEqual(await regressionPage.locator(
+        `[data-item-id="${itemId}"] .bp-readiness-state`
+      ).textContent(), 'Reviewed');
+    }
+
+    const phoneWhitespace = ' \t\r\n ';
+    const phoneSiblingSaved = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        phone: phoneWhitespace,
+      });
+    assert.strictEqual(phoneSiblingSaved.status, 200);
+    regressionRow = await active(pool);
+    const descriptionWhitespace = '\t \r\n';
+    const descriptionSibling = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    descriptionSibling.businessDescription = descriptionWhitespace;
+    const descriptionSiblingSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: descriptionSibling,
+      });
+    assert.strictEqual(descriptionSiblingSaved.status, 200);
+    regressionRow = await active(pool);
+    assert.strictEqual(regressionRow.raw_profile.company.phone, phoneWhitespace);
+    assert.strictEqual(regressionRow.raw_profile.businessDescription, descriptionWhitespace);
+    assert.strictEqual(regressionRow.readiness_hex, regressionReadinessHex);
+    assert.deepStrictEqual(
+      regressionRow.raw_profile.profileReadiness.items.business_contact,
+      storedContactReview
+    );
+    assert.deepStrictEqual(
+      regressionRow.raw_profile.profileReadiness.items.business_context,
+      storedContextReview
+    );
+    const neutralReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await neutralReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Reviewed'));
+
+    const qualifyingContactSaved = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        email: 'dispatch@example.test',
+      });
+    assert.strictEqual(qualifyingContactSaved.status, 200);
+    regressionRow = await active(pool);
+    const qualifyingContext = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    qualifyingContext.industry = 'Landscaping';
+    const qualifyingContextSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: qualifyingContext,
+      });
+    assert.strictEqual(qualifyingContextSaved.status, 200);
+    regressionRow = await active(pool);
+    assert.strictEqual(regressionRow.raw_profile.company.email, 'dispatch@example.test');
+    assert.strictEqual(regressionRow.raw_profile.industry, 'Landscaping');
+    assert.strictEqual(regressionRow.readiness_hex, regressionReadinessHex);
+    const qualifyingReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await qualifyingReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Needs review'));
+    await assertNoOverflow(regressionPage);
+    await regressionContext.close();
+
     // Loading is independent from the main profile and remains fail closed.
     const loadingContext = await contextFor(browser, origin, sessions.owner, {
       role: 'owner-mobile-loading-dark', viewport: { width: 390, height: 844 }, theme: 'dark',
@@ -626,6 +738,7 @@ async function main() {
       lifecycle: [
         'loading', 'empty', 'review', 'remove_configuration', 'not_applicable',
         'mark_applicable_clear', 'restore_needs_review', 'review_again', 'save', 'stale', 'reload', 'error',
+        'hash_neutral_blank_siblings', 'qualifying_hash_invalidation',
       ],
       accessibility: ['region', 'headings', 'list', 'live status', 'alert', 'keyboard', 'focus'],
       rawReadiness: 'exact JSONB hex',

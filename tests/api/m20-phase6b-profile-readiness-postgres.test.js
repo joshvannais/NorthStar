@@ -630,6 +630,94 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     expect(JSON.stringify(projected.body.data)).not.toMatch(/disconnected|opaque|<img/);
   });
 
+  test('blank contact and context siblings are hash-neutral while qualifying mounted changes invalidate', async () => {
+    let row = await activeRow();
+    const contextBaseline = JSON.parse(JSON.stringify(row.raw_profile));
+    contextBaseline.businessDescription = '';
+    const baselineSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: row.version_label,
+        value: contextBaseline,
+      });
+    expect(baselineSaved.status).toBe(200);
+
+    row = await activeRow();
+    expect(row.raw_profile.company).toEqual(expect.objectContaining({
+      email: 'office@example.test', phone: '',
+    }));
+    expect(row.raw_profile.industry).toBe('Tree care');
+    expect(row.raw_profile.businessDescription).toBe('');
+    const reviewed = await save('owner', row.version_label, [
+      change('business_contact'), change('business_context'),
+    ]);
+    expect(reviewed.status).toBe(200);
+    expect(reviewed.body.data.items.business_contact.state).toBe('reviewed');
+    expect(reviewed.body.data.items.business_context.state).toBe('reviewed');
+    const reviewedAt = reviewed.body.data.items.business_contact.lastReviewedAt;
+    expect(reviewed.body.data.items.business_context.lastReviewedAt).toBe(reviewedAt);
+
+    row = await activeRow();
+    const readinessHex = row.readiness_hex;
+    const storedContact = row.raw_profile.profileReadiness.items.business_contact;
+    const storedContext = row.raw_profile.profileReadiness.items.business_context;
+    const phoneWhitespace = ' \t\r\n ';
+    const phoneSaved = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({ ...row.raw_profile.company, phone: phoneWhitespace });
+    expect(phoneSaved.status).toBe(200);
+    row = await activeRow();
+    expect(row.raw_profile.company.phone).toBe(phoneWhitespace);
+    expect(row.readiness_hex).toBe(readinessHex);
+
+    const descriptionWhitespace = '\t \r\n';
+    const descriptionChanged = JSON.parse(JSON.stringify(row.raw_profile));
+    descriptionChanged.businessDescription = descriptionWhitespace;
+    const descriptionSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: row.version_label,
+        value: descriptionChanged,
+      });
+    expect(descriptionSaved.status).toBe(200);
+    row = await activeRow();
+    expect(row.raw_profile.businessDescription).toBe(descriptionWhitespace);
+    expect(row.raw_profile.profileReadiness.items.business_contact).toEqual(storedContact);
+    expect(row.raw_profile.profileReadiness.items.business_context).toEqual(storedContext);
+    expect(row.readiness_hex).toBe(readinessHex);
+
+    let projected = await readiness('owner');
+    for (const itemId of ['business_contact', 'business_context']) {
+      expect(projected.body.data.items[itemId]).toEqual(expect.objectContaining({
+        sourceState: 'configured', state: 'reviewed', lastReviewedAt: reviewedAt,
+      }));
+    }
+
+    const emailSaved = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...row.raw_profile.company,
+        email: 'dispatch@example.test',
+      });
+    expect(emailSaved.status).toBe(200);
+    row = await activeRow();
+    const industryChanged = JSON.parse(JSON.stringify(row.raw_profile));
+    industryChanged.industry = 'Landscaping';
+    const industrySaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: row.version_label,
+        value: industryChanged,
+      });
+    expect(industrySaved.status).toBe(200);
+    row = await activeRow();
+    expect(row.raw_profile.company.email).toBe('dispatch@example.test');
+    expect(row.raw_profile.industry).toBe('Landscaping');
+    expect(row.readiness_hex).toBe(readinessHex);
+
+    projected = await readiness('owner');
+    for (const itemId of ['business_contact', 'business_context']) {
+      expect(projected.body.data.items[itemId]).toEqual(expect.objectContaining({
+        sourceState: 'configured', state: 'needs_review', lastReviewedAt: reviewedAt,
+      }));
+    }
+  });
+
   test('Not applicable cannot hide later configuration and readiness metadata is calculation-neutral', async () => {
     let row = await activeRow();
     const cleared = await request(app).put('/api/v1/business-profile/serviceArea')

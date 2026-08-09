@@ -171,20 +171,25 @@ function activeServicesSource(profile) {
 
 function businessContactSource(profile) {
   const company = isPlainObject(profile.company) ? profile.company : {};
-  const email = typeof company.email === 'string' ? company.email : '';
-  const phone = typeof company.phone === 'string' ? company.phone : '';
-  const present = EMAIL_PATTERN.test(email.trim()) || nonblank(phone);
-  return sourceResult('business_contact', present, { email, phone });
+  const email = typeof company.email === 'string' ? company.email.trim() : '';
+  const phone = typeof company.phone === 'string' ? company.phone.trim() : '';
+  const source = {};
+  if (EMAIL_PATTERN.test(email)) source.email = email;
+  if (nonblank(phone)) source.phone = phone;
+  return sourceResult('business_contact', Object.keys(source).length > 0, source);
 }
 
 function businessContextSource(profile) {
-  const industry = typeof profile.industry === 'string' ? profile.industry : '';
+  const industry = typeof profile.industry === 'string' ? profile.industry.trim() : '';
   const businessDescription = typeof profile.businessDescription === 'string'
-    ? profile.businessDescription : '';
+    ? profile.businessDescription.trim() : '';
+  const source = {};
+  if (nonblank(businessDescription)) source.businessDescription = businessDescription;
+  if (nonblank(industry)) source.industry = industry;
   return sourceResult(
     'business_context',
-    nonblank(industry) || nonblank(businessDescription),
-    { businessDescription, industry }
+    Object.keys(source).length > 0,
+    source
   );
 }
 

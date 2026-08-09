@@ -137,6 +137,71 @@ describe('Mission 20 Phase 6B Profile Readiness contract', () => {
     expect(changedProjection.overallState).toBe('review_needed');
   });
 
+  test('hashes only qualifying normalized business contact values', () => {
+    const profile = configuredProfile();
+    profile.company.email = 'office@example.test';
+    profile.company.phone = '';
+    const reviewed = applyProfileReadinessChanges(profile, [
+      { itemId: 'business_contact', action: 'review' },
+    ], REVIEWED_AT);
+
+    const blankSiblingChanged = JSON.parse(JSON.stringify(reviewed));
+    blankSiblingChanged.company.phone = ' \t\r\n ';
+    expect(projectProfileReadiness(blankSiblingChanged, { version: 'org-profile-v2' })
+      .items.business_contact).toEqual(expect.objectContaining({
+      sourceState: 'configured', state: 'reviewed', lastReviewedAt: REVIEWED_AT.toISOString(),
+    }));
+
+    const phoneAuthority = configuredProfile();
+    phoneAuthority.company.email = 'not-an-email';
+    phoneAuthority.company.phone = '  +1 828 555 0100  ';
+    const phoneReviewed = applyProfileReadinessChanges(phoneAuthority, [
+      { itemId: 'business_contact', action: 'review' },
+    ], REVIEWED_AT);
+    phoneReviewed.company.email = 'still-not-an-email';
+    phoneReviewed.company.phone = '+1 828 555 0100';
+    expect(projectProfileReadiness(phoneReviewed, { version: 'org-profile-v2' })
+      .items.business_contact.state).toBe('reviewed');
+
+  });
+
+  test('hashes only qualifying normalized business context values', () => {
+    const profile = configuredProfile();
+    profile.industry = 'Tree care';
+    profile.businessDescription = '';
+    const reviewed = applyProfileReadinessChanges(profile, [
+      { itemId: 'business_context', action: 'review' },
+    ], REVIEWED_AT);
+
+    const blankSiblingChanged = JSON.parse(JSON.stringify(reviewed));
+    blankSiblingChanged.businessDescription = '\t \r\n';
+    expect(projectProfileReadiness(blankSiblingChanged, { version: 'org-profile-v2' })
+      .items.business_context).toEqual(expect.objectContaining({
+      sourceState: 'configured', state: 'reviewed', lastReviewedAt: REVIEWED_AT.toISOString(),
+    }));
+
+    const trimEquivalent = JSON.parse(JSON.stringify(reviewed));
+    trimEquivalent.industry = '  Tree care\r\n';
+    expect(projectProfileReadiness(trimEquivalent, { version: 'org-profile-v2' })
+      .items.business_context.state).toBe('reviewed');
+
+  });
+
+  test('invalidates changed qualifying normalized contact and context values', () => {
+    const reviewed = applyProfileReadinessChanges(configuredProfile(), [
+      { itemId: 'business_contact', action: 'review' },
+      { itemId: 'business_context', action: 'review' },
+    ], REVIEWED_AT);
+    reviewed.company.email = 'dispatch@example.test';
+    reviewed.industry = 'Landscaping';
+    const projection = projectProfileReadiness(reviewed, { version: 'org-profile-v3' });
+    for (const itemId of ['business_contact', 'business_context']) {
+      expect(projection.items[itemId]).toEqual(expect.objectContaining({
+        sourceState: 'configured', state: 'needs_review', lastReviewedAt: REVIEWED_AT.toISOString(),
+      }));
+    }
+  });
+
   test('preserves Not applicable only while a supported item is structurally unconfigured', () => {
     const profile = configuredProfile();
     profile.routing.dispatchFrom = '';

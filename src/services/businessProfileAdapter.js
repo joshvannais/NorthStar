@@ -31,6 +31,7 @@ const RAW_PROFILE_FIELD_TYPES = Object.freeze({
   workforce: 'object',
   companyValues: 'array',
   customPrompt: 'string',
+  profileReadiness: 'object',
 });
 
 const RAW_PROFILE_LIMITS = Object.freeze({

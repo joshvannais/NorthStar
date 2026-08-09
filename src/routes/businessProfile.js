@@ -11,7 +11,11 @@ const router = express.Router();
 const db = require('../db');
 const { requireAccountMutation, requireTenantAccess } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
-const { getActiveBusinessProfile, putBusinessProfile } = require('../services/organizationAuthority');
+const {
+  getActiveBusinessProfile,
+  putBusinessProfile,
+  putProfileReadiness,
+} = require('../services/organizationAuthority');
 const {
   FINANCIAL_CONFIGURATION_FIELDS,
   migrateLegacyCanonicalAuthority,
@@ -26,6 +30,10 @@ const {
   validateOperationalConfiguration,
   validateRawBusinessProfile,
 } = require('../services/businessProfileAdapter');
+const {
+  parseProfileReadinessWrite,
+  projectProfileReadiness,
+} = require('../services/profileReadiness');
 
 const VALID_SECTIONS = new Set([
   'company', 'headquarters', 'serviceArea', 'routing', 'hours', 'crew',
@@ -59,6 +67,7 @@ function sendError(res, error) {
 function response(profile) {
   const editable = migrateLegacyCanonicalAuthority(profile.rawProfile);
   synchronizeLegacyFinancial(editable.profile);
+  delete editable.profile.profileReadiness;
   return {
     ...editable.profile,
     canonicalAuthority: {
@@ -190,6 +199,7 @@ async function persist(req, rawProfile, options) {
     profile: options && options.preserveUnrelatedRaw === true ? stableValue(source) : prepared.profile,
     preserveVoiceAssistant: !(options && options.allowVoiceAssistantWrite === true),
     preserveFinancialConfiguration,
+    preserveProfileReadiness: true,
   };
   if (input.preserveFinancialConfiguration) input.financialMutationCandidate = stableValue(source);
   if (options && hasOwn(options, 'expectedVersion')) input.expectedVersion = options.expectedVersion;
@@ -389,6 +399,10 @@ function parseVoiceAssistantWrite(body) {
   return { expectedVersion: body.expectedVersion, value: body.value };
 }
 
+function readinessResponse(profile) {
+  return projectProfileReadiness(profile.rawProfile, { version: profile.versionLabel });
+}
+
 router.get('/', requireTenantAccess, async function (req, res) {
   try {
     return res.json({ success: true, data: response(await active(req)) });
@@ -526,6 +540,30 @@ router.put('/voiceAssistant', requireAccountMutation, requirePermission('setting
   }
 });
 
+router.put('/profileReadiness', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
+  try {
+    const write = parseProfileReadinessWrite(req.body);
+    const draft = onboardingDraft(req);
+    delete draft.canonicalAuthority;
+    delete draft.onboardingDraft;
+    const stored = await putProfileReadiness(db.getPool(), {
+      organizationId: req.tenantContext.organizationId,
+      userId: req.tenantContext.userId,
+      profile: draft,
+      expectedVersion: write.expectedVersion,
+      changes: write.changes,
+    });
+    return res.json({ success: true, data: readinessResponse(stored) });
+  } catch (error) {
+    if (error.details) return res.status(error.status || 400).json({
+      success: false,
+      error: { code: error.code, message: error.message },
+      errors: error.details,
+    });
+    return sendError(res, error);
+  }
+});
+
 router.put('/:section', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
   const section = req.params.section;
   if (!VALID_SECTIONS.has(section)) {
@@ -600,6 +638,21 @@ router.get('/financialConfiguration', requireTenantAccess, async function (req, 
           canonicalAuthority: null,
           onboardingDraft: true,
         },
+        onboardingDraft: true,
+      });
+    }
+    return sendError(res, error);
+  }
+});
+
+router.get('/profileReadiness', requireTenantAccess, async function (req, res) {
+  try {
+    return res.json({ success: true, data: readinessResponse(await active(req)) });
+  } catch (error) {
+    if (isMissingProfile(error)) {
+      return res.json({
+        success: true,
+        data: projectProfileReadiness(onboardingDraft(req), { version: null }),
         onboardingDraft: true,
       });
     }

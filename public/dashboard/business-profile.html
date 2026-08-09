@@ -94,6 +94,32 @@
     .bp-full { grid-column: 1 / -1; }
     .bp-half { grid-column: span 1; }
     .bp-section-desc { font-size: 13px; color: var(--neutral-500); margin-bottom: 16px; line-height: 1.5; }
+    .bp-guidance { max-width: 780px; margin-top: 8px; color: var(--neutral-700); font-size: 14px; line-height: 1.55; }
+    .bp-readiness { margin-bottom: 24px; }
+    .bp-readiness-heading-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+    .bp-readiness-title { color: var(--neutral-900); font-size: 18px; line-height: 1.3; }
+    .bp-readiness-description, .bp-readiness-separation { max-width: 760px; margin-top: 6px; color: var(--neutral-600); font-size: 13px; line-height: 1.5; }
+    .bp-readiness-overall { margin-top: 16px; padding: 10px 12px; border-left: 3px solid var(--brand-500); background: rgba(196,155,44,0.08); color: var(--neutral-800); font-size: 13px; line-height: 1.5; }
+    .bp-readiness-list { display: grid; gap: 10px; margin-top: 16px; }
+    .bp-readiness-row { min-width: 0; padding: 14px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); background: var(--neutral-50); }
+    .bp-readiness-row-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+    .bp-readiness-row h3 { margin: 0; color: var(--neutral-800); font-size: 14px; text-transform: none; letter-spacing: 0; }
+    .bp-readiness-help, .bp-readiness-reason, .bp-readiness-reviewed, .bp-readiness-pending { margin-top: 6px; color: var(--neutral-600); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+    .bp-readiness-reason { color: var(--neutral-700); }
+    .bp-readiness-pending { font-weight: 600; color: var(--brand-700); }
+    .bp-readiness-state { flex: 0 0 auto; padding: 3px 8px; border: 1px solid currentColor; border-radius: 999px; color: var(--neutral-700); font-size: 11px; font-weight: 700; }
+    .bp-readiness-state[data-state="missing"], .bp-readiness-state[data-state="authority_unavailable"] { color: #991b1b; }
+    .bp-readiness-state[data-state="recommended"], .bp-readiness-state[data-state="needs_review"] { color: #8a5a00; }
+    .bp-readiness-state[data-state="reviewed"] { color: #047857; }
+    .bp-readiness-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .bp-readiness-empty { margin-top: 14px; padding: 12px; border: 1px dashed var(--neutral-300); border-radius: var(--radius-sm); color: var(--neutral-600); font-size: 12px; line-height: 1.5; }
+    .bp-readiness-empty[hidden] { display: none; }
+    @media (max-width: 640px) {
+      .bp-readiness-heading-row, .bp-readiness-row-header { align-items: stretch; }
+      .bp-readiness-heading-row .bp-header-actions, .bp-readiness-heading-row .bp-header-actions button { width: 100%; }
+      .bp-readiness-state { align-self: flex-start; }
+      .bp-readiness-actions button { flex: 1 1 100%; }
+    }
   </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
@@ -107,6 +133,7 @@
         <div class="bp-header">
           <div>
             <h1 class="bp-title">⚙️ Business Profile</h1>
+            <p id="polarisProfileGuidance" class="bp-guidance">Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile. The more relevant detail you provide, the better Polaris can tailor its recommendations to your business.</p>
             <div class="bp-subtitle">Configure how your business operates — this is the DNA of your NorthStar platform.</div>
             <p id="businessProfileStatus" role="status" aria-live="polite" aria-atomic="true">Loading your durable Business Profile authority. Editing remains disabled.</p>
           </div>
@@ -117,6 +144,25 @@
           </div>
         </div>
         <div id="operationalConfigurationError" class="bp-validation-error" role="alert" tabindex="-1"></div>
+
+        <section class="bp-card bp-readiness" id="profileReadiness" data-state="loading" aria-labelledby="profileReadinessHeading" aria-describedby="profileReadinessDescription" aria-busy="true">
+          <div class="bp-readiness-heading-row">
+            <div>
+              <h2 id="profileReadinessHeading" class="bp-readiness-title" tabindex="-1">Profile Readiness</h2>
+              <p id="profileReadinessDescription" class="bp-readiness-description">Review whether recognized Business Profile details are present and current for configured uses.</p>
+              <p id="profileReadinessSeparation" class="bp-readiness-separation">Profile Readiness is separate from integration status and uses clear categories for recognized details.</p>
+            </div>
+            <div class="bp-header-actions">
+              <button class="bp-add-btn" id="reloadProfileReadinessBtn" type="button" disabled>Reload readiness</button>
+              <button class="bp-save-btn" id="saveProfileReadinessBtn" type="button" disabled>Save readiness</button>
+            </div>
+          </div>
+          <p id="profileReadinessStatus" class="bp-readiness-overall" role="status" aria-live="polite" aria-atomic="true">Loading Profile Readiness. Actions remain disabled.</p>
+          <div id="profileReadinessError" class="bp-validation-error" role="alert" tabindex="-1"></div>
+          <p id="profileReadinessEmpty" class="bp-readiness-empty" hidden>No readiness reviews have been saved.</p>
+          <div id="profileReadinessList" class="bp-readiness-list" role="list" aria-label="Profile Readiness items" aria-busy="true"></div>
+          <p id="profileReadinessLive" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+        </section>
 
         <!-- Navigation Tabs -->
         <div class="bp-nav" id="bpNav" role="tablist" aria-label="Business Profile sections">
@@ -534,6 +580,12 @@
     var financialConfigurationSaving = false;
     var financialConfigurationConflicted = false;
     var financialConfigurationExpectedVersion = null;
+    var profileReadinessData = null;
+    var profileReadinessExpectedVersion = null;
+    var profileReadinessPending = Object.create(null);
+    var profileReadinessSaving = false;
+    var profileReadinessConflicted = false;
+    var profileReadinessRequestSerial = 0;
 
     function profileRequest(url, options) {
       var request = options || {};
@@ -559,6 +611,9 @@
       }
       if (source !== 'financial' && financialConfigurationExpectedVersion === expectedVersion) {
         financialConfigurationExpectedVersion = nextVersion;
+      }
+      if (source !== 'readiness' && profileReadinessExpectedVersion === expectedVersion) {
+        profileReadinessExpectedVersion = nextVersion;
       }
     }
 
@@ -663,6 +718,323 @@
     }
 
     // ====================================================================
+    // Dedicated Profile Readiness authority
+    // ====================================================================
+    function profileReadinessVersion(data) {
+      var authority = data && data.canonicalAuthority;
+      return authority && typeof authority.version === 'string' ? authority.version : null;
+    }
+
+    function profileReadinessStateLabel(state) {
+      return {
+        missing: 'Missing',
+        recommended: 'Recommended',
+        needs_review: 'Needs review',
+        reviewed: 'Reviewed',
+        not_applicable: 'Not applicable',
+        authority_unavailable: 'Authority unavailable',
+      }[state] || 'Unavailable';
+    }
+
+    function profileReadinessOverallMessage(data) {
+      if (!data) return 'Profile Readiness is unavailable. Actions remain disabled.';
+      if (data.overallState === 'action_needed') {
+        return 'Action needed — Some recognized Business Profile details are missing, recommended, or unavailable.';
+      }
+      if (data.overallState === 'review_needed') {
+        return 'Review needed — Recognized Business Profile details changed or have not yet been reviewed.';
+      }
+      if (data.overallState === 'ready_for_configured_uses') {
+        return 'Ready for configured uses — Recognized configured details are reviewed.';
+      }
+      return 'Profile Readiness is unavailable. Actions remain disabled.';
+    }
+
+    function profileReadinessActionLabel(action) {
+      return {
+        review: 'Review current details',
+        mark_applicable: 'Mark applicable',
+        mark_not_applicable: 'Mark Not applicable',
+      }[action] || action;
+    }
+
+    function profileReadinessPendingCount() {
+      return Object.keys(profileReadinessPending).length;
+    }
+
+    function showProfileReadinessError(message, focus) {
+      var error = document.getElementById('profileReadinessError');
+      if (!error) return;
+      error.textContent = message;
+      error.classList.add('show');
+      if (focus) error.focus();
+    }
+
+    function clearProfileReadinessError() {
+      var error = document.getElementById('profileReadinessError');
+      if (!error) return;
+      error.textContent = '';
+      error.classList.remove('show');
+    }
+
+    function setProfileReadinessState(state, message) {
+      var section = document.getElementById('profileReadiness');
+      var list = document.getElementById('profileReadinessList');
+      var status = document.getElementById('profileReadinessStatus');
+      if (section) {
+        section.dataset.state = state;
+        section.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+      }
+      if (list) list.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+      if (status) status.textContent = message;
+      updateProfileReadinessActionState();
+    }
+
+    function profileReadinessReason(item) {
+      if (item.missingReason) return item.missingReason;
+      if (item.recommendedReason) return item.recommendedReason;
+      if (item.state === 'needs_review') return 'Review the current recognized details.';
+      if (item.state === 'reviewed') return 'The current recognized details were reviewed.';
+      if (item.state === 'not_applicable') return 'This item is marked Not applicable while no recognized configuration is present.';
+      return '';
+    }
+
+    function formatProfileReadinessDate(value) {
+      if (typeof value !== 'string') return '';
+      var date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      });
+    }
+
+    function appendProfileReadinessAction(container, item, action) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'bp-add-btn';
+      button.dataset.itemId = item.id;
+      button.dataset.readinessAction = action;
+      button.textContent = profileReadinessActionLabel(action);
+      button.setAttribute('aria-pressed', profileReadinessPending[item.id] === action ? 'true' : 'false');
+      button.addEventListener('click', function() {
+        queueProfileReadinessAction(item.id, action);
+      });
+      container.appendChild(button);
+    }
+
+    function renderProfileReadiness(data) {
+      var list = document.getElementById('profileReadinessList');
+      var empty = document.getElementById('profileReadinessEmpty');
+      if (!list || !data || !Array.isArray(data.itemOrder) || !data.items) return;
+      var fragment = document.createDocumentFragment();
+      data.itemOrder.forEach(function(itemId) {
+        var item = data.items[itemId];
+        if (!item) return;
+        var row = document.createElement('article');
+        row.className = 'bp-readiness-row';
+        row.dataset.itemId = item.id;
+        row.dataset.state = item.state;
+        row.dataset.sourceState = item.sourceState;
+        row.setAttribute('role', 'listitem');
+
+        var header = document.createElement('div');
+        header.className = 'bp-readiness-row-header';
+        var heading = document.createElement('h3');
+        heading.id = 'profile-readiness-item-' + item.id;
+        heading.textContent = item.label;
+        var state = document.createElement('span');
+        state.className = 'bp-readiness-state';
+        state.dataset.state = item.state;
+        state.textContent = profileReadinessStateLabel(item.state);
+        header.append(heading, state);
+        row.setAttribute('aria-labelledby', heading.id);
+        row.appendChild(header);
+
+        var help = document.createElement('p');
+        help.className = 'bp-readiness-help';
+        help.textContent = item.help;
+        row.appendChild(help);
+        var reasonText = profileReadinessReason(item);
+        if (reasonText) {
+          var reason = document.createElement('p');
+          reason.className = 'bp-readiness-reason';
+          reason.textContent = reasonText;
+          row.appendChild(reason);
+        }
+        var reviewed = formatProfileReadinessDate(item.lastReviewedAt);
+        if (reviewed) {
+          var reviewedAt = document.createElement('p');
+          reviewedAt.className = 'bp-readiness-reviewed';
+          reviewedAt.textContent = 'Last reviewed: ' + reviewed + '. The date is for orientation only.';
+          row.appendChild(reviewedAt);
+        }
+        if (profileReadinessPending[item.id]) {
+          var pending = document.createElement('p');
+          pending.className = 'bp-readiness-pending';
+          pending.textContent = 'Pending: ' + profileReadinessActionLabel(profileReadinessPending[item.id]) + '.';
+          row.appendChild(pending);
+        }
+
+        var actions = document.createElement('div');
+        actions.className = 'bp-readiness-actions';
+        actions.setAttribute('role', 'group');
+        actions.setAttribute('aria-label', 'Actions for ' + item.label);
+        if (item.canReview) appendProfileReadinessAction(actions, item, 'review');
+        if (item.canMarkNotApplicable) appendProfileReadinessAction(actions, item, 'mark_not_applicable');
+        if (item.canMarkApplicable) appendProfileReadinessAction(actions, item, 'mark_applicable');
+        if (actions.childElementCount) row.appendChild(actions);
+        fragment.appendChild(row);
+      });
+      list.replaceChildren(fragment);
+      if (empty) {
+        empty.hidden = data.hasStoredReadiness === true;
+        empty.textContent = profileCanEdit
+          ? 'No readiness reviews have been saved. Review recognized details or mark supported items Not applicable.'
+          : 'No readiness reviews have been saved. An owner or administrator can record reviews.';
+      }
+      updateProfileReadinessActionState();
+    }
+
+    function updateProfileReadinessActionState() {
+      var section = document.getElementById('profileReadiness');
+      var state = section ? section.dataset.state : 'error';
+      var interactive = state === 'ready' && !profileReadinessSaving && !profileReadinessConflicted;
+      document.querySelectorAll('[data-readiness-action]').forEach(function(button) {
+        button.disabled = !interactive || !profileCanEdit;
+      });
+      var reload = document.getElementById('reloadProfileReadinessBtn');
+      if (reload) reload.disabled = state === 'loading' || profileReadinessSaving;
+      var save = document.getElementById('saveProfileReadinessBtn');
+      if (save) {
+        save.disabled = !interactive || !profileCanEdit || profileReadinessPendingCount() === 0;
+        save.textContent = profileReadinessSaving ? 'Saving readiness…'
+          : profileReadinessConflicted ? 'Reload before saving'
+          : profileCanEdit ? 'Save readiness' : 'Read-only readiness';
+      }
+    }
+
+    function queueProfileReadinessAction(itemId, action) {
+      if (!profileCanEdit || profileReadinessSaving || profileReadinessConflicted) return;
+      if (profileReadinessPending[itemId] === action) delete profileReadinessPending[itemId];
+      else profileReadinessPending[itemId] = action;
+      renderProfileReadiness(profileReadinessData);
+      var live = document.getElementById('profileReadinessLive');
+      if (live) live.textContent = profileReadinessPending[itemId]
+        ? profileReadinessActionLabel(action) + ' queued for ' + profileReadinessData.items[itemId].label + '.'
+        : 'Pending change cleared for ' + profileReadinessData.items[itemId].label + '.';
+      var buttons = Array.from(document.querySelectorAll('[data-readiness-action]'));
+      var target = buttons.find(function(button) {
+        return button.dataset.itemId === itemId && button.dataset.readinessAction === action;
+      });
+      if (target) target.focus();
+    }
+
+    async function loadProfileReadiness(options) {
+      var requestSerial = ++profileReadinessRequestSerial;
+      setProfileReadinessState('loading', 'Loading Profile Readiness. Actions remain disabled.');
+      clearProfileReadinessError();
+      try {
+        var response = await profileRequest('/api/v1/business-profile/profileReadiness');
+        var payload = await response.json();
+        if (requestSerial !== profileReadinessRequestSerial) return;
+        if (!payload.success || !payload.data) {
+          throw new Error(payload.error && payload.error.message || 'Profile Readiness is unavailable.');
+        }
+        if (!['action_needed', 'review_needed', 'ready_for_configured_uses'].includes(payload.data.overallState)) {
+          throw new Error('Profile Readiness returned an unsupported state.');
+        }
+        profileReadinessData = payload.data;
+        profileReadinessExpectedVersion = profileReadinessVersion(payload.data);
+        profileReadinessPending = Object.create(null);
+        profileReadinessConflicted = false;
+        renderProfileReadiness(profileReadinessData);
+        setProfileReadinessState('ready', profileReadinessOverallMessage(profileReadinessData));
+        var live = document.getElementById('profileReadinessLive');
+        if (live && options && options.announce) live.textContent = 'Profile Readiness reloaded.';
+        if (options && options.focusHeading) document.getElementById('profileReadinessHeading').focus();
+      } catch (error) {
+        if (requestSerial !== profileReadinessRequestSerial) return;
+        setProfileReadinessState('error', 'Profile Readiness is unavailable. Actions remain disabled.');
+        showProfileReadinessError(error.message || 'Profile Readiness is unavailable.', Boolean(options && options.focusHeading));
+      }
+    }
+
+    async function saveProfileReadiness() {
+      if (!profileCanEdit || profileReadinessSaving || profileReadinessConflicted ||
+          profileReadinessPendingCount() === 0) return;
+      var changes = profileReadinessData.itemOrder.filter(function(itemId) {
+        return Boolean(profileReadinessPending[itemId]);
+      }).map(function(itemId) {
+        return { itemId: itemId, action: profileReadinessPending[itemId] };
+      });
+      profileReadinessSaving = true;
+      var focusReloadAfterSave = false;
+      clearProfileReadinessError();
+      updateProfileReadinessActionState();
+      try {
+        var expectedVersion = profileReadinessExpectedVersion;
+        var response = await profileRequest('/api/v1/business-profile/profileReadiness', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedVersion: expectedVersion, changes: changes }),
+        });
+        var payload = await response.json();
+        if (!payload.success || !payload.data) {
+          if (response.status === 409 && payload.error &&
+              payload.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT') {
+            profileReadinessConflicted = true;
+            showProfileReadinessError(
+              'Business Profile changed. Your pending readiness choices remain visible, but Save is blocked until you reload readiness.',
+              false
+            );
+            focusReloadAfterSave = true;
+            return;
+          }
+          throw new Error(payload.errors ? payload.errors.join('; ')
+            : payload.error && payload.error.message || 'Profile Readiness could not be saved.');
+        }
+        advancePreservedSiblingVersions('readiness', expectedVersion, profileReadinessVersion(payload.data));
+        profileReadinessData = payload.data;
+        profileReadinessExpectedVersion = profileReadinessVersion(payload.data);
+        profileReadinessPending = Object.create(null);
+        profileReadinessConflicted = false;
+        renderProfileReadiness(profileReadinessData);
+        setProfileReadinessState('ready', profileReadinessOverallMessage(profileReadinessData));
+        var live = document.getElementById('profileReadinessLive');
+        if (live) live.textContent = 'Profile Readiness saved.';
+        showToast('Profile Readiness saved successfully', 'success');
+      } catch (error) {
+        showProfileReadinessError(error.message || 'Profile Readiness could not be saved.', true);
+      } finally {
+        profileReadinessSaving = false;
+        updateProfileReadinessActionState();
+        if (focusReloadAfterSave) {
+          var reload = document.getElementById('reloadProfileReadinessBtn');
+          if (reload) reload.focus();
+        }
+      }
+    }
+
+    function reloadProfileReadiness() {
+      if (profileReadinessSaving) return;
+      return loadProfileReadiness({ announce: true, focusHeading: true });
+    }
+
+    function refreshProfileReadinessAfterPreservedWrite() {
+      if (profileReadinessSaving) return;
+      if (profileReadinessPendingCount() > 0) {
+        profileReadinessConflicted = true;
+        showProfileReadinessError(
+          'Business Profile details changed. Reload readiness before saving the pending readiness choices.',
+          false
+        );
+        updateProfileReadinessActionState();
+        return;
+      }
+      loadProfileReadiness();
+    }
+
+    // ====================================================================
     // Load profile
     // ====================================================================
     function applyProfileAccess(account) {
@@ -675,6 +1047,7 @@
       NorthStarAccountSession.load()
         .then(function(account) {
           applyProfileAccess(account);
+          loadProfileReadiness();
           return profileRequest('/api/v1/business-profile');
         })
         .then(function(r) { return r.json(); })
@@ -693,6 +1066,11 @@
         })
         .catch(function() {
           setProfileInteractionState('error', 'Business Profile authority is unavailable. Editing remains disabled.');
+          var readiness = document.getElementById('profileReadiness');
+          if (readiness && readiness.dataset.state === 'loading' && !profileReadinessData) {
+            setProfileReadinessState('error', 'Profile Readiness is unavailable. Actions remain disabled.');
+            showProfileReadinessError('Profile Readiness authority is unavailable.', false);
+          }
           showToast('Could not connect to server', 'error');
         });
     }
@@ -1271,6 +1649,7 @@
         advancePreservedSiblingVersions('operational', expectedVersion, profileVersion(payload.data));
         profileData = payload.data;
         renderOperationalConfiguration(profileData);
+        refreshProfileReadinessAfterPreservedWrite();
         showToast('Operational planning policies saved successfully', 'success');
       } catch (error) {
         showOperationalConfigurationError(error.message || 'Operational policies could not be saved.', true);
@@ -1518,6 +1897,7 @@
         advancePreservedSiblingVersions('financial', expectedVersion, profileVersion(payload.data));
         profileData = mergeFinancialProjection(profileData, payload.data);
         renderFinancialConfiguration(profileData);
+        refreshProfileReadinessAfterPreservedWrite();
         showToast('Financial Configuration saved successfully', 'success');
       } catch (error) {
         showCanonicalError(error.message || 'Financial Configuration could not be saved.');
@@ -1912,6 +2292,7 @@
         advancePreservedSiblingVersions('voice', expectedVersion, profileVersion(payload.data));
         profileData = payload.data;
         renderVoiceAssistant(profileData);
+        refreshProfileReadinessAfterPreservedWrite();
         showToast('AI configuration saved successfully', 'success');
       } catch (error) {
         showVoiceAssistantError(error.message || 'AI configuration could not be saved.', true);
@@ -2917,6 +3298,7 @@
           if (resp.success) {
             profileData = resp.data;
             renderProfile(profileData);
+            refreshProfileReadinessAfterPreservedWrite();
             showToast('✅ Profile saved successfully', 'success');
           } else {
             var versionConflict = result.status === 409 && resp.error && resp.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT';
@@ -2962,6 +3344,9 @@
     document.addEventListener('DOMContentLoaded', function() {
       initializeProfileAccessibility();
       setProfileInteractionState('loading', 'Loading your durable Business Profile authority. Editing remains disabled.');
+      setProfileReadinessState('loading', 'Loading Profile Readiness. Actions remain disabled.');
+      document.getElementById('saveProfileReadinessBtn').addEventListener('click', saveProfileReadiness);
+      document.getElementById('reloadProfileReadinessBtn').addEventListener('click', reloadProfileReadiness);
       var addAssetButton = document.getElementById('addAssetButton');
       if (addAssetButton) addAssetButton.addEventListener('click', addAssetCard);
       var addServiceButton = document.getElementById('addServiceButton');

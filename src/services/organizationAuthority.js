@@ -6,6 +6,7 @@ const {
   stableValue,
   validateRawBusinessProfile,
 } = require('./businessProfileAdapter');
+const { applyProfileReadinessChanges } = require('./profileReadiness');
 const repository = require('../persistence/v2/repository');
 
 const LEGACY_FINANCIAL_AUTHORITY_FIELDS = Object.freeze([
@@ -99,6 +100,13 @@ function preserveFinancialConfiguration(candidate, active) {
   return updated;
 }
 
+function preserveTopLevelField(candidate, active, field) {
+  const updated = { ...candidate };
+  if (hasOwn(active, field)) defineOwn(updated, field, clone(active[field]));
+  else delete updated[field];
+  return updated;
+}
+
 function profilesEqual(left, right) {
   return JSON.stringify(stableValue(left)) === JSON.stringify(stableValue(right));
 }
@@ -166,8 +174,10 @@ async function putBusinessProfile(pool, input) {
       throw authorityError('ORGANIZATION_NOT_FOUND', 'Organization not found.', 404);
     }
     let active = null;
+    const writesProfileReadiness = Array.isArray(input.profileReadinessChanges);
+    const preserveProfileReadiness = !writesProfileReadiness && input.preserveProfileReadiness !== false;
     if (hasOwn(input, 'expectedVersion') || input.preserveVoiceAssistant === true ||
-        input.preserveFinancialConfiguration === true) {
+        input.preserveFinancialConfiguration === true || preserveProfileReadiness || writesProfileReadiness) {
       active = await client.query(
         `SELECT version_label, raw_profile
            FROM canonical_business_profiles
@@ -178,6 +188,8 @@ async function putBusinessProfile(pool, input) {
         throw authorityError('CANONICAL_PROFILE_CONFLICT', 'Multiple active Business Profiles were found.', 409);
       }
     }
+    const activeRawProfile = active && active.rows.length === 1 && isPlainObject(active.rows[0].raw_profile)
+      ? active.rows[0].raw_profile : {};
     if (hasOwn(input, 'expectedVersion')) {
       const actualVersion = active.rows.length === 1 ? active.rows[0].version_label : null;
       const expectedVersion = input.expectedVersion === null ? null : String(input.expectedVersion);
@@ -189,10 +201,15 @@ async function putBusinessProfile(pool, input) {
         );
       }
     }
+    if (writesProfileReadiness) {
+      const readinessBase = active.rows.length === 1 ? activeRawProfile : rawProfile;
+      rawProfile = applyProfileReadinessChanges(
+        readinessBase,
+        input.profileReadinessChanges,
+        new Date()
+      );
+    }
     if (input.preserveVoiceAssistant === true) {
-      const activeRawProfile = active.rows.length === 1 && active.rows[0].raw_profile &&
-        typeof active.rows[0].raw_profile === 'object' && !Array.isArray(active.rows[0].raw_profile)
-        ? active.rows[0].raw_profile : {};
       if (hasOwn(activeRawProfile, 'voiceAssistant')) {
         rawProfile.voiceAssistant = stableValue(activeRawProfile.voiceAssistant);
       } else {
@@ -201,8 +218,6 @@ async function putBusinessProfile(pool, input) {
       rawProfile = stableValue(rawProfile);
     }
     if (input.preserveFinancialConfiguration === true) {
-      const activeRawProfile = active.rows.length === 1 && isPlainObject(active.rows[0].raw_profile)
-        ? active.rows[0].raw_profile : {};
       const mutationCandidate = validatedRawProfile(
         hasOwn(input, 'financialMutationCandidate') ? input.financialMutationCandidate : rawProfile
       );
@@ -216,6 +231,19 @@ async function putBusinessProfile(pool, input) {
         );
       }
       rawProfile = preserveFinancialConfiguration(rawProfile, activeRawProfile);
+    }
+    if (preserveProfileReadiness) {
+      const mutationCandidate = validatedRawProfile(rawProfile);
+      const containedCandidate = preserveTopLevelField(mutationCandidate, activeRawProfile, 'profileReadiness');
+      const attemptedReadinessMutation = !profilesEqual(mutationCandidate, containedCandidate);
+      if (attemptedReadinessMutation && profilesEqual(containedCandidate, activeRawProfile)) {
+        throw authorityError(
+          'PROFILE_READINESS_ROUTE_REQUIRED',
+          'Profile Readiness changes require the dedicated versioned endpoint.',
+          409
+        );
+      }
+      rawProfile = containedCandidate;
     }
     rawProfile = validatedRawProfile(rawProfile);
     const sequence = await client.query(
@@ -255,6 +283,17 @@ async function putBusinessProfile(pool, input) {
       [input.organizationId, inserted.rows[0].id]
     );
     return projectProfile(inserted.rows[0]);
+  });
+}
+
+async function putProfileReadiness(pool, input) {
+  return putBusinessProfile(pool, {
+    organizationId: input.organizationId,
+    userId: input.userId,
+    profile: input.profile,
+    expectedVersion: input.expectedVersion,
+    profileReadinessChanges: input.changes,
+    preserveProfileReadiness: false,
   });
 }
 
@@ -343,5 +382,6 @@ module.exports = {
   getOrganizationIntegration,
   projectProfile,
   putBusinessProfile,
+  putProfileReadiness,
   resolveIntegrationOwner,
 };

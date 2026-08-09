@@ -4,8 +4,6 @@
 
 const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
-const { getDiagnostics } = require('../retell/diagnostics');
-const { handleCanonicalRetellWebhook } = require('../services/canonicalRetellIngestion');
 const demoRouter = require('./demo');
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
@@ -68,49 +66,6 @@ router.get('/health', (req, res) => {
     uptime: process.uptime(),
     components,
   });
-});
-
-/**
- * POST /api/retell/webhook
- * Receive call events from Retell AI. PUBLIC — external webhook.
- */
-router.post('/retell/webhook', handleCanonicalRetellWebhook);
-
-/**
- * GET /api/retell/webhook/diagnostics
- * Returns webhook pipeline diagnostics: event count, recent events,
- * canonical authority and Retell configuration status. Tenant session state is
- * available only through tenant-scoped canonical endpoints.
- * PUBLIC — used for debugging the webhook pipeline.
- */
-router.get('/retell/webhook/diagnostics', (req, res) => {
-  try {
-    const diagnostics = getDiagnostics();
-    res.json(diagnostics);
-  } catch (err) {
-    console.error('[API] Webhook diagnostics error:', err.message);
-    res.status(500).json({ error: 'Failed to gather diagnostics' });
-  }
-});
-
-/**
- * GET /api/retell/webhook/config
- * Returns the configured webhook URL and Retell setup info.
- * PUBLIC — used to verify webhook registration.
- */
-router.get('/retell/webhook/config', (req, res) => {
-  try {
-    const config = require('../config');
-    res.json({
-      webhookUrl: `https://northstar-os.ai/api/retell/webhook`,
-      retellConfigured: !!(config.retell && config.retell.apiKey),
-      canonicalOwnershipRequired: true,
-      note: 'Configure this URL in your Retell dashboard → Agent settings → Webhook URL',
-    });
-  } catch (err) {
-    console.error('[API] Webhook config error:', err.message);
-    res.status(500).json({ error: 'Failed to load config' });
-  }
 });
 
 /**

@@ -5,7 +5,6 @@ const db = require('../db');
 const config = require('../config');
 const { requireTenantAccess, requireVerifiedExternalAction } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
-const { handleWebhook, rawBodyCapture } = require('../voice/webhook');
 const { createCanonicalVoiceCall } = require('../services/canonicalVoiceSessionCreation');
 const voiceSessions = require('../services/voiceSessionAuthority');
 
@@ -22,12 +21,6 @@ function errorResponse(res, error) {
 function organizationId(req) {
   return req.tenantContext.organizationId;
 }
-
-router.post('/webhook',
-  rawBodyCapture,
-  express.json({ verify: function (req, _res, buffer) { req.rawBody = req.rawBody || buffer.toString(); } }),
-  handleWebhook
-);
 
 router.get('/sessions', requireTenantAccess, requirePermission('calls', 'read'), async function (req, res) {
   try {

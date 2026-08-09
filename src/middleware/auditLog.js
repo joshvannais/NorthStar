@@ -51,8 +51,14 @@ function auditLogger(req, res, next) {
     const sourceDisabledSignup = req.method === 'POST' &&
       String(req.originalUrl || req.url || '').split('?')[0] === '/api/auth/signup' &&
       res.statusCode === 503;
+    const requestPath = String(req.originalUrl || req.url || '').split('?')[0];
+    const rejectedSignedWebhook = req.method === 'POST' && res.statusCode >= 400 && (
+      requestPath === '/api/retell/webhook' || requestPath === '/api/v1/voice/webhook'
+    );
 
-    if ((isModifying || isError) && !sourceDisabledSignup) {
+    // Rejected signed webhooks are a zero-database-write boundary. Valid,
+    // accepted deliveries retain the normal durable audit record.
+    if ((isModifying || isError) && !sourceDisabledSignup && !rejectedSignedWebhook) {
       const entityType = req.path.split('/').filter(Boolean)[1] || 'unknown';
 
       audit.record({

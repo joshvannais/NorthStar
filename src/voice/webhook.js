@@ -22,6 +22,7 @@ const { ingestRetellPayload } = require('../services/canonicalRetellIngestion');
 // ── Configuration ──────────────────────────────────────────────
 const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
 const DEDUP_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_REPLAY_ENTRIES = 10000;
 const HANDLER_TIMEOUT_MS = 10000;
 
 // Each in-flight business-event handler owns exactly one timeout. Entries are
@@ -125,10 +126,35 @@ function getWebhookSecret() {
   return process.env.RETELL_WEBHOOK_SECRET || process.env.RETELL_API_KEY || '';
 }
 
-// In-memory deduplication store (survives restarts for up to 24h via file)
+// This bounded replay store is intentionally process-local. A process restart
+// clears it; durable canonical idempotency remains the cross-process fallback.
 const dedupStore = new Map();
 
 // ── Deduplication ──────────────────────────────────────────────
+
+function cleanReplayStore(now) {
+  for (const [id, timestamp] of dedupStore.entries()) {
+    if (now - timestamp > DEDUP_TTL_MS) dedupStore.delete(id);
+  }
+}
+
+/**
+ * Atomically check and claim one replay key before the handler yields.
+ * Saturation fails closed instead of evicting a live claim.
+ */
+function claimReplay(replayKey) {
+  if (!replayKey) return { claimed: false, reason: 'missing' };
+  const now = Date.now();
+  cleanReplayStore(now);
+  if (dedupStore.has(replayKey)) return { claimed: false, reason: 'replayed' };
+  if (dedupStore.size >= MAX_REPLAY_ENTRIES) return { claimed: false, reason: 'saturated' };
+  dedupStore.set(replayKey, now);
+  return { claimed: true, reason: null };
+}
+
+function releaseReplay(replayKey) {
+  return replayKey ? dedupStore.delete(replayKey) : false;
+}
 
 /**
  * Check if an event_id has been processed within the dedup window.
@@ -136,21 +162,7 @@ const dedupStore = new Map();
  */
 function isDuplicate(eventId) {
   if (!eventId) return false;
-
-  // Clean expired entries first
-  const now = Date.now();
-  for (const [id, timestamp] of dedupStore.entries()) {
-    if (now - timestamp > DEDUP_TTL_MS) {
-      dedupStore.delete(id);
-    }
-  }
-
-  if (dedupStore.has(eventId)) {
-    return true;
-  }
-
-  dedupStore.set(eventId, now);
-  return false;
+  return claimReplay(eventId).claimed === false;
 }
 
 // ── Signature Validation ───────────────────────────────────────
@@ -166,11 +178,11 @@ function isDuplicate(eventId) {
 function validateSignature(rawBody, signature) {
   const secret = getWebhookSecret();
   if (!secret) {
-    console.warn('[Voice:Webhook] No RETELL_WEBHOOK_SECRET set — signature validation SKIPPED');
-    return true; // Skip validation if not configured (dev mode)
+    console.warn('[Voice:Webhook] Signature validation unavailable');
+    return false;
   }
 
-  if (!signature) {
+  if (typeof signature !== 'string' || !/^[a-f0-9]{64}$/i.test(signature)) {
     console.warn('[Voice:Webhook] Missing X-Retell-Signature header');
     return false;
   }
@@ -182,12 +194,8 @@ function validateSignature(rawBody, signature) {
       .digest('hex');
 
     // Constant-time comparison to prevent timing attacks
-    const sigBuffer = Buffer.from(signature);
-    const computedBuffer = Buffer.from(computed);
-
-    if (sigBuffer.length !== computedBuffer.length) {
-      return false;
-    }
+    const sigBuffer = Buffer.from(signature, 'hex');
+    const computedBuffer = Buffer.from(computed, 'hex');
 
     return crypto.timingSafeEqual(sigBuffer, computedBuffer);
   } catch (err) {
@@ -205,14 +213,16 @@ function validateSignature(rawBody, signature) {
  * @returns {boolean}
  */
 function validateTimestamp(timestamp) {
-  if (!timestamp) {
+  if (typeof timestamp !== 'string' || !/^\d+$/.test(timestamp)) {
     console.warn('[Voice:Webhook] Missing timestamp');
     return false;
   }
 
-  const ts = typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp;
+  const ts = Number(timestamp);
+  if (!Number.isSafeInteger(ts) || ts <= 0) return false;
   // Normalize to milliseconds (Retell may send seconds)
   const tsMs = ts > 1e12 ? ts : ts * 1000;
+  if (!Number.isSafeInteger(tsMs)) return false;
   const now = Date.now();
   const diff = Math.abs(now - tsMs);
 
@@ -345,60 +355,99 @@ async function routeEvent(payload) {
 
 // ── Main Handler ───────────────────────────────────────────────
 
-/**
- * Handle an incoming Retell webhook request.
- *
- * 1. Validate HMAC-SHA256 signature
- * 2. Check timestamp within ±5min
- * 3. Deduplicate by event_id
- * 4. Route to event handler
- * 5. Return 200 OK with { received: true }
- *
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @returns {Promise<void>}
- */
-async function handleWebhook(req, res) {
-  const startTime = Date.now();
-  const eventId = req.body?.event_id || req.body?.call_id || 'unknown';
+function requestRawBody(req) {
+  if (Buffer.isBuffer(req.body)) return req.body;
+  if (Buffer.isBuffer(req.rawBody)) return req.rawBody;
+  if (typeof req.rawBody === 'string') return Buffer.from(req.rawBody, 'utf8');
+  return null;
+}
 
-  console.log(`[Voice:Webhook] Received: ${req.body?.event || 'unknown'} (id: ${eventId})`);
+function supportedJsonContentType(req) {
+  const contentType = String(req.headers && req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  return contentType === 'application/json' || /^application\/[a-z0-9!#$&^_.+-]+\+json$/.test(contentType);
+}
+
+function decodeWebhookBody(rawBody) {
+  if (!rawBody || rawBody.length === 0) throw new Error('empty');
+  const decoded = new TextDecoder('utf-8', { fatal: true }).decode(rawBody);
+  const payload = JSON.parse(decoded);
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('shape');
+  return payload;
+}
+
+/**
+ * Handle a signed Retell webhook without decoding JSON until HMAC, timestamp,
+ * and the process-local replay claim have all passed.
+ */
+async function handleSignedWebhook(req, res, ingestionSource) {
+  const startTime = Date.now();
+  const rawBody = requestRawBody(req) || Buffer.alloc(0);
+  const signature = req.headers['x-retell-signature'] || '';
+  let replayKey = null;
 
   try {
-    // 1. Validate signature
-    const rawBody = req.rawBody || JSON.stringify(req.body);
-    const signature = req.headers['x-retell-signature'] || '';
+    // 1. Validate the exact received bytes. Missing runtime validation material
+    // intentionally returns the same response as any other invalid signature.
     if (!validateSignature(rawBody, signature)) {
-      console.warn(`[Voice:Webhook] Invalid signature for event ${eventId}`);
       return res.status(401).json({ error: { code: 'INVALID_SIGNATURE', message: 'Invalid webhook signature' } });
     }
 
-    // 2. Validate timestamp
-    const timestamp = req.headers['x-retell-timestamp'] || req.body.timestamp;
-    if (!validateTimestamp(timestamp)) {
-      console.warn(`[Voice:Webhook] Invalid timestamp for event ${eventId}`);
+    // 2. Validate a strict header timestamp before decoding the body.
+    if (!validateTimestamp(req.headers['x-retell-timestamp'])) {
       return res.status(400).json({ error: { code: 'INVALID_TIMESTAMP', message: 'Timestamp outside acceptable window' } });
     }
 
-    // 3. Durable graph idempotency replaces the legacy in-memory webhook
-    // deduplication check for mounted production events.
-    // 4. Route every mounted production Retell event through persisted
-    // integration ownership. Terminal events commit canonical graphs; other
-    // events are acknowledged without invoking legacy graph writers.
-    const canonical = await ingestRetellPayload(req.body, { ingestionSource: 'voice' });
+    // 3. A validated HMAC identifies the exact signed body without decoding it.
+    // Check-and-claim is synchronous and atomic within this process.
+    replayKey = 'hmac:' + signature.toLowerCase();
+    const replayClaim = claimReplay(replayKey);
+    if (!replayClaim.claimed) {
+      if (replayClaim.reason === 'saturated') {
+        return res.status(503).json({
+          error: { code: 'WEBHOOK_REPLAY_PROTECTION_UNAVAILABLE', message: 'Webhook replay protection is unavailable' },
+        });
+      }
+      return res.status(409).json({ error: { code: 'WEBHOOK_REPLAYED', message: 'Webhook request was already received' } });
+    }
 
-    // 5. Return success
+    if (!supportedJsonContentType(req)) {
+      return res.status(415).json({ error: { code: 'UNSUPPORTED_WEBHOOK_MEDIA_TYPE', message: 'Webhook body must be JSON' } });
+    }
+
+    let payload;
+    try {
+      payload = decodeWebhookBody(rawBody);
+    } catch (_error) {
+      return res.status(400).json({ error: { code: 'INVALID_WEBHOOK_BODY', message: 'Webhook body must be valid JSON' } });
+    }
+    req.body = payload;
+    const eventId = payload.event_id || payload.call_id || 'unknown';
+    console.log(`[Voice:Webhook] Received: ${payload.event || 'unknown'} (id: ${eventId})`);
+
+    // 4. Preserve the path-specific canonical source while retaining the same
+    // ownership, subscription, session pinning, and graph transaction.
+    const canonical = await ingestRetellPayload(payload, { ingestionSource });
+    if (canonical.status >= 500) releaseReplay(replayKey);
+
     const elapsed = Date.now() - startTime;
-    console.log(`[Voice:Webhook] Completed: ${req.body.event} (${elapsed}ms)`);
-
+    console.log(`[Voice:Webhook] Completed: ${payload.event} (${elapsed}ms)`);
     return res.status(canonical.status).json(canonical.body);
   } catch (err) {
-    console.error(`[Voice:Webhook] Fatal error for event ${eventId}:`, err.message);
+    releaseReplay(replayKey);
+    console.error('[Voice:Webhook] Fatal signed webhook error:', err.message);
     return res.status(503).json({
       success: false,
       error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE', message: 'Canonical PostgreSQL persistence is unavailable.' },
     });
   }
+}
+
+function handleWebhook(req, res) {
+  return handleSignedWebhook(req, res, 'voice');
+}
+
+function handleRetellWebhook(req, res) {
+  return handleSignedWebhook(req, res, 'retell');
 }
 
 /**
@@ -424,12 +473,17 @@ function rawBodyCapture(req, res, next) {
 
 module.exports = {
   handleWebhook,
+  handleRetellWebhook,
   rawBodyCapture,
   validateSignature,
   validateTimestamp,
   isDuplicate,
+  claimReplay,
+  releaseReplay,
   routeEvent,
   cancelPendingEvent,
   start,
   shutdown,
+  DEDUP_TTL_MS,
+  MAX_REPLAY_ENTRIES,
 };

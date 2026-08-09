@@ -10,6 +10,8 @@
 
 'use strict';
 
+const crypto = require('crypto');
+
 // We need to mock the businessEvents module used by webhook.js
 jest.mock('../../../src/voice/businessEvents', () => ({
   eventBus: {
@@ -29,12 +31,16 @@ describe('Voice Webhook Framework', () => {
   // ── Signature Validation ──────────────────────────────────
 
   describe('validateSignature', () => {
-    test('returns true when no secret is configured (dev mode)', () => {
-      // validateSignature checks process.env.RETELL_WEBHOOK_SECRET at call time
-      // If not set, it returns true (skip validation)
-      const result = webhook.validateSignature('body', 'sig123');
-      // This will skip if env var is not set
-      expect(typeof result).toBe('boolean');
+    test('fails closed when no validation material is configured', () => {
+      const originalSecret = process.env.RETELL_WEBHOOK_SECRET;
+      const originalApiKey = process.env.RETELL_API_KEY;
+      delete process.env.RETELL_WEBHOOK_SECRET;
+      delete process.env.RETELL_API_KEY;
+      expect(webhook.validateSignature('body', '0'.repeat(64))).toBe(false);
+      if (originalSecret === undefined) delete process.env.RETELL_WEBHOOK_SECRET;
+      else process.env.RETELL_WEBHOOK_SECRET = originalSecret;
+      if (originalApiKey === undefined) delete process.env.RETELL_API_KEY;
+      else process.env.RETELL_API_KEY = originalApiKey;
     });
 
     test('returns false when signature is missing', () => {
@@ -42,7 +48,8 @@ describe('Voice Webhook Framework', () => {
       const originalSecret = process.env.RETELL_WEBHOOK_SECRET;
       process.env.RETELL_WEBHOOK_SECRET = 'test-secret';
       const result = webhook.validateSignature('body', '');
-      process.env.RETELL_WEBHOOK_SECRET = originalSecret;
+      if (originalSecret === undefined) delete process.env.RETELL_WEBHOOK_SECRET;
+      else process.env.RETELL_WEBHOOK_SECRET = originalSecret;
       expect(result).toBe(false);
     });
 
@@ -50,10 +57,10 @@ describe('Voice Webhook Framework', () => {
       const originalSecret = process.env.RETELL_WEBHOOK_SECRET;
       process.env.RETELL_WEBHOOK_SECRET = 'correct-secret';
       // Generate an HMAC with a DIFFERENT secret
-      const crypto = require('crypto');
       const wrongSig = crypto.createHmac('sha256', 'wrong-secret').update('body').digest('hex');
       const result = webhook.validateSignature('body', wrongSig);
-      process.env.RETELL_WEBHOOK_SECRET = originalSecret;
+      if (originalSecret === undefined) delete process.env.RETELL_WEBHOOK_SECRET;
+      else process.env.RETELL_WEBHOOK_SECRET = originalSecret;
       expect(result).toBe(false);
     });
 
@@ -61,23 +68,34 @@ describe('Voice Webhook Framework', () => {
       const originalSecret = process.env.RETELL_WEBHOOK_SECRET;
       const secret = 'correct-secret';
       process.env.RETELL_WEBHOOK_SECRET = secret;
-      const crypto = require('crypto');
       const correctSig = crypto.createHmac('sha256', secret).update('body').digest('hex');
       const result = webhook.validateSignature('body', correctSig);
-      process.env.RETELL_WEBHOOK_SECRET = originalSecret;
+      if (originalSecret === undefined) delete process.env.RETELL_WEBHOOK_SECRET;
+      else process.env.RETELL_WEBHOOK_SECRET = originalSecret;
       expect(result).toBe(true);
+    });
+
+    test('accepts canonical hex case and rejects non-hex input of the correct length', () => {
+      const originalSecret = process.env.RETELL_WEBHOOK_SECRET;
+      const secret = 'strict-hex-secret';
+      process.env.RETELL_WEBHOOK_SECRET = secret;
+      const signature = crypto.createHmac('sha256', secret).update('body').digest('hex');
+      expect(webhook.validateSignature('body', signature.toUpperCase())).toBe(true);
+      expect(webhook.validateSignature('body', 'g'.repeat(64))).toBe(false);
+      if (originalSecret === undefined) delete process.env.RETELL_WEBHOOK_SECRET;
+      else process.env.RETELL_WEBHOOK_SECRET = originalSecret;
     });
 
     test('handles different body lengths securely', () => {
       const originalSecret = process.env.RETELL_WEBHOOK_SECRET;
       const secret = 'secure-secret';
       process.env.RETELL_WEBHOOK_SECRET = secret;
-      const crypto = require('crypto');
       const shortBody = 'hello';
       const shortSig = crypto.createHmac('sha256', secret).update(shortBody).digest('hex');
       // Using shortSig against a different body should fail
       const result = webhook.validateSignature('different body', shortSig);
-      process.env.RETELL_WEBHOOK_SECRET = originalSecret;
+      if (originalSecret === undefined) delete process.env.RETELL_WEBHOOK_SECRET;
+      else process.env.RETELL_WEBHOOK_SECRET = originalSecret;
       expect(result).toBe(false);
     });
   });
@@ -95,22 +113,30 @@ describe('Voice Webhook Framework', () => {
       const now = Date.now();
       // 2 minutes ago (in seconds)
       const ts = Math.floor((now - 2 * 60 * 1000) / 1000);
-      expect(webhook.validateTimestamp(ts)).toBe(true);
+      expect(webhook.validateTimestamp(String(ts))).toBe(true);
     });
 
     test('accepts timestamp in milliseconds', () => {
       const tsMs = Date.now() - 60000; // 1 minute ago
-      expect(webhook.validateTimestamp(tsMs)).toBe(true);
+      expect(webhook.validateTimestamp(String(tsMs))).toBe(true);
     });
 
     test('rejects timestamp older than 5 minutes', () => {
       const ts = Math.floor((Date.now() - 10 * 60 * 1000) / 1000); // 10 minutes ago
-      expect(webhook.validateTimestamp(ts)).toBe(false);
+      expect(webhook.validateTimestamp(String(ts))).toBe(false);
     });
 
     test('rejects future timestamp beyond 5 minutes', () => {
       const ts = Math.floor((Date.now() + 10 * 60 * 1000) / 1000); // 10 minutes in future
-      expect(webhook.validateTimestamp(ts)).toBe(false);
+      expect(webhook.validateTimestamp(String(ts))).toBe(false);
+    });
+
+    test('rejects numeric prefixes, decimals, non-finite values, and unsafe integers', () => {
+      expect(webhook.validateTimestamp('123abc')).toBe(false);
+      expect(webhook.validateTimestamp(String(Date.now() / 1000))).toBe(false);
+      expect(webhook.validateTimestamp(Math.floor(Date.now() / 1000))).toBe(false);
+      expect(webhook.validateTimestamp(Infinity)).toBe(false);
+      expect(webhook.validateTimestamp(Number.MAX_SAFE_INTEGER + 1)).toBe(false);
     });
   });
 
@@ -138,6 +164,48 @@ describe('Voice Webhook Framework', () => {
       const ids = ['evt_a', 'evt_b', 'evt_c'];
       ids.forEach(id => expect(webhook.isDuplicate(id)).toBe(false));
       ids.forEach(id => expect(webhook.isDuplicate(id)).toBe(true));
+    });
+  });
+
+  describe('bounded replay claims', () => {
+    test('one synchronous check-and-claim wins for concurrent callers', () => {
+      const key = 'atomic-claim-' + Math.random();
+      expect(webhook.claimReplay(key)).toEqual({ claimed: true, reason: null });
+      expect(webhook.claimReplay(key)).toEqual({ claimed: false, reason: 'replayed' });
+      expect(webhook.releaseReplay(key)).toBe(true);
+    });
+
+    test('expired entries are cleaned before a new atomic claim', () => {
+      const key = 'expiring-claim-' + Math.random();
+      const start = Date.now();
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(start);
+      try {
+        expect(webhook.claimReplay(key).claimed).toBe(true);
+        clock.mockReturnValue(start + webhook.DEDUP_TTL_MS + 1);
+        expect(webhook.claimReplay(key)).toEqual({ claimed: true, reason: null });
+      } finally {
+        webhook.releaseReplay(key);
+        clock.mockRestore();
+      }
+    });
+
+    test('capacity saturation fails closed and cleanup restores capacity without eviction', () => {
+      const prefix = 'capacity-claim-' + Math.random() + '-';
+      const start = Date.now() + webhook.DEDUP_TTL_MS + 1000;
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(start);
+      try {
+        for (let index = 0; index < webhook.MAX_REPLAY_ENTRIES; index += 1) {
+          expect(webhook.claimReplay(prefix + index).claimed).toBe(true);
+        }
+        expect(webhook.claimReplay(prefix + 'overflow')).toEqual({ claimed: false, reason: 'saturated' });
+        expect(webhook.claimReplay(prefix + '0')).toEqual({ claimed: false, reason: 'replayed' });
+
+        clock.mockReturnValue(start + webhook.DEDUP_TTL_MS + 1);
+        expect(webhook.claimReplay(prefix + 'after-cleanup')).toEqual({ claimed: true, reason: null });
+        webhook.releaseReplay(prefix + 'after-cleanup');
+      } finally {
+        clock.mockRestore();
+      }
     });
   });
 
@@ -403,24 +471,32 @@ describe('Voice Webhook Framework', () => {
   describe('handleWebhook', () => {
     // Save/restore env vars to avoid .env leakage
     let originalRetellKey, originalWebhookSecret;
+    const testSecret = 'voice-webhook-unit-secret';
 
     beforeEach(() => {
       originalRetellKey = process.env.RETELL_API_KEY;
       originalWebhookSecret = process.env.RETELL_WEBHOOK_SECRET;
       delete process.env.RETELL_API_KEY;
-      delete process.env.RETELL_WEBHOOK_SECRET;
+      process.env.RETELL_WEBHOOK_SECRET = testSecret;
     });
 
     afterEach(() => {
-      if (originalRetellKey !== undefined) process.env.RETELL_API_KEY = originalRetellKey;
-      if (originalWebhookSecret !== undefined) process.env.RETELL_WEBHOOK_SECRET = originalWebhookSecret;
+      if (originalRetellKey === undefined) delete process.env.RETELL_API_KEY;
+      else process.env.RETELL_API_KEY = originalRetellKey;
+      if (originalWebhookSecret === undefined) delete process.env.RETELL_WEBHOOK_SECRET;
+      else process.env.RETELL_WEBHOOK_SECRET = originalWebhookSecret;
     });
     // Mock express req/res
     function mockReq(body = {}, headers = {}) {
+      const rawBody = JSON.stringify(body);
       return {
         body,
-        rawBody: JSON.stringify(body),
-        headers,
+        rawBody,
+        headers: {
+          'content-type': 'application/json',
+          'x-retell-signature': crypto.createHmac('sha256', testSecret).update(rawBody).digest('hex'),
+          ...headers,
+        },
       };
     }
 
@@ -446,7 +522,6 @@ describe('Voice Webhook Framework', () => {
         call_id: 'call_test',
         timestamp: Math.floor(Date.now() / 1000),
       }, {
-        'x-retell-signature': '',
         'x-retell-timestamp': String(Math.floor(Date.now() / 1000)),
       });
 
@@ -464,7 +539,6 @@ describe('Voice Webhook Framework', () => {
         event_id: 'test_old',
         timestamp: oldTimestamp,
       }, {
-        'x-retell-signature': '',
         'x-retell-timestamp': oldTimestamp,
       });
 
@@ -476,14 +550,13 @@ describe('Voice Webhook Framework', () => {
       expect(res.responseBody.error.code).toBe('INVALID_TIMESTAMP');
     });
 
-    test('does not let in-memory deduplication bypass persisted ownership', async () => {
+    test('a canonical 5xx releases the replay claim for a legitimate retry', async () => {
       const eventId = 'dup_test_' + Date.now();
       const req = mockReq({
         event: 'call_started',
         event_id: eventId,
         timestamp: Math.floor(Date.now() / 1000),
       }, {
-        'x-retell-signature': '',
         'x-retell-timestamp': String(Math.floor(Date.now() / 1000)),
       });
 
@@ -498,6 +571,30 @@ describe('Voice Webhook Framework', () => {
       await webhook.handleWebhook(req, res2);
       expect(res2.statusCode).toBe(503);
       expect(res2.responseBody.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
+    });
+
+    test('a non-5xx malformed body retains the replay claim', async () => {
+      const rawBody = '{"event":';
+      const signature = crypto.createHmac('sha256', testSecret).update(rawBody).digest('hex');
+      const req = {
+        rawBody,
+        headers: {
+          'content-type': 'application/json',
+          'x-retell-signature': signature,
+          'x-retell-timestamp': String(Math.floor(Date.now() / 1000)),
+        },
+      };
+
+      const first = mockRes();
+      await webhook.handleWebhook(req, first);
+      expect(first.statusCode).toBe(400);
+      expect(first.responseBody.error.code).toBe('INVALID_WEBHOOK_BODY');
+
+      const replay = mockRes();
+      await webhook.handleWebhook(req, replay);
+      expect(replay.statusCode).toBe(409);
+      expect(replay.responseBody.error.code).toBe('WEBHOOK_REPLAYED');
+      webhook.releaseReplay('hmac:' + signature);
     });
   });
 });

@@ -1,17 +1,28 @@
 'use strict';
 
-const config = require('../config');
+const VERIFICATION = Object.freeze({
+  algorithm: 'hmac-sha256',
+  signatureHeader: 'x-retell-signature',
+  timestampHeader: 'x-retell-timestamp',
+  maximumAgeSeconds: 300,
+});
+
+function verificationProjection() {
+  return { ...VERIFICATION };
+}
 
 function getDiagnostics() {
   return {
-    status: 'ok',
-    canonicalWebhook: true,
-    lifecycleAuthority: 'postgresql',
-    activeSessions: 'tenant_scoped_canonical_endpoint_only',
-    retellPhoneNumbers: (config.retell && (config.retell.fromNumbers || config.retell.phoneNumbers)) || [],
-    retellAgentId: (config.retell && config.retell.agentId) || null,
-    retellConfigured: Boolean(config.retell && config.retell.apiKey),
+    endpoint: { method: 'POST', path: '/api/retell/webhook' },
+    verification: verificationProjection(),
   };
 }
 
-module.exports = { getDiagnostics };
+function getWebhookConfiguration() {
+  return {
+    endpoint: { method: 'POST', path: '/api/retell/webhook' },
+    verification: verificationProjection(),
+  };
+}
+
+module.exports = { getDiagnostics, getWebhookConfiguration, VERIFICATION };

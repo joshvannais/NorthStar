@@ -81,6 +81,39 @@ function terminalEvent(suffix, agentId = 'phase6a-agent-a', callId = 'phase6a-ca
   };
 }
 
+function analyzedEvent(suffix, agentId = 'phase6a-agent-a', callId = 'phase6a-call-' + suffix) {
+  return {
+    ...terminalEvent(suffix, agentId, callId),
+    event: 'call_analyzed',
+  };
+}
+
+function terminalRaceEvent(event, suffix, agentId, callId) {
+  const payload = event === 'call_analyzed'
+    ? analyzedEvent(suffix, agentId, callId)
+    : terminalEvent(suffix, agentId, callId);
+  const contactDigits = String(parseInt(
+    crypto.createHash('sha256').update(suffix).digest('hex').slice(0, 8),
+    16
+  ) % 10000000).padStart(7, '0');
+  return {
+    ...payload,
+    call: {
+      ...payload.call,
+      from_number: '+1555' + contactDigits,
+      transcript_object: [
+        { role: 'agent', words: 'How may I help?' },
+        { role: 'user', words: `I need safe café plumbing service for ${suffix}.` },
+      ],
+      call_analysis: {
+        ...payload.call.call_analysis,
+        customer_name: 'Race Customer ' + suffix,
+        customer_email: suffix + '@race.example.test',
+      },
+    },
+  };
+}
+
 function nonterminalEvent(suffix, agentId = 'phase6a-agent-a', callId = 'phase6a-call-' + suffix) {
   return {
     event: 'call_started',
@@ -162,7 +195,7 @@ function postRawToProcess(port, route, raw, signature) {
       res.setEncoding('utf8');
       res.on('data', chunk => { body += chunk; });
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(body) }); }
+        try { resolve({ status: res.statusCode, body: JSON.parse(body), headers: res.headers }); }
         catch (error) { reject(error); }
       });
     });
@@ -275,6 +308,317 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
   async function stopTrackedWebhookProcess(worker) {
     await stopWebhookProcess(worker);
     activeWorkers.delete(worker);
+  }
+
+  async function waitForLockWaiters(minimum, timeoutMs = 10000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const result = await db.getPool().query(
+        `SELECT count(*)::int AS count
+           FROM pg_stat_activity
+          WHERE datname = current_database()
+            AND pid <> pg_backend_pid()
+            AND wait_event_type = 'Lock'`
+      );
+      if (result.rows[0].count >= minimum) return result.rows[0].count;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw new Error(`Timed out waiting for ${minimum} PostgreSQL lock waiters`);
+  }
+
+  async function installTranscriptRaceGate(organizationId, callId, lockKey) {
+    const pool = db.getPool();
+    await pool.query(
+      `CREATE TABLE phase6a_terminal_race_gate (
+         organization_id UUID NOT NULL,
+         external_call_id TEXT NOT NULL,
+         lock_key BIGINT NOT NULL,
+         PRIMARY KEY (organization_id, external_call_id)
+       );
+       CREATE FUNCTION phase6a_hold_terminal_transcript_insert() RETURNS trigger
+         LANGUAGE plpgsql AS $trigger$
+         DECLARE gate_key BIGINT;
+         BEGIN
+           SELECT lock_key INTO gate_key
+             FROM phase6a_terminal_race_gate
+            WHERE organization_id = NEW.organization_id
+              AND external_call_id = NEW.external_call_id;
+           IF FOUND THEN
+             PERFORM pg_advisory_xact_lock(gate_key);
+           END IF;
+           RETURN NEW;
+         END
+       $trigger$;
+       CREATE TRIGGER phase6a_hold_terminal_transcript_insert
+         BEFORE INSERT ON canonical_transcripts
+         FOR EACH ROW EXECUTE FUNCTION phase6a_hold_terminal_transcript_insert()`
+    );
+    await pool.query(
+      `INSERT INTO phase6a_terminal_race_gate (organization_id, external_call_id, lock_key)
+       VALUES ($1, $2, $3::bigint)`,
+      [organizationId, callId, String(lockKey)]
+    );
+    const gateClient = await pool.connect();
+    await gateClient.query('SELECT pg_advisory_lock($1::bigint)', [String(lockKey)]);
+    let locked = true;
+    return {
+      async release() {
+        if (!locked) return;
+        await gateClient.query('SELECT pg_advisory_unlock($1::bigint)', [String(lockKey)]);
+        locked = false;
+        gateClient.release();
+      },
+      async cleanup() {
+        if (locked) await this.release();
+        await pool.query(
+          `DROP TRIGGER phase6a_hold_terminal_transcript_insert ON canonical_transcripts;
+           DROP FUNCTION phase6a_hold_terminal_transcript_insert();
+           DROP TABLE phase6a_terminal_race_gate`
+        );
+      },
+    };
+  }
+
+  function sourceForRoute(route) {
+    return route === '/api/v1/voice/webhook' ? 'voice' : 'retell';
+  }
+
+  async function expectPromiseWithin(promise, timeoutMs, label) {
+    let timeout;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((resolve, reject) => {
+          timeout = setTimeout(() => reject(new Error(label + ' timed out')), timeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function runTerminalRace({
+    suffix,
+    firstEvent,
+    firstRoute,
+    secondEvent,
+    secondRoute,
+    lockKey,
+    multiprocess = false,
+    verifyRestartReplay = false,
+  }) {
+    const pool = db.getPool();
+    const callId = 'phase6a-race-' + suffix;
+    const payloads = [
+      terminalRaceEvent(firstEvent, suffix, 'phase6a-agent-a', callId),
+      terminalRaceEvent(secondEvent, suffix, 'phase6a-agent-a', callId),
+    ];
+    const raws = [
+      JSON.stringify(payloads[0], null, 2).replace(/\n/g, '\r\n'),
+      JSON.stringify(payloads[1]),
+    ];
+    const rawBuffers = raws.map(raw => Buffer.from(raw, 'utf8'));
+    expect(rawBuffers.map(raw => crypto.createHash('sha256').update(raw).digest('hex')))
+      .toEqual(expect.arrayContaining([
+        expect.stringMatching(/^[0-9a-f]{64}$/),
+        expect.stringMatching(/^[0-9a-f]{64}$/),
+      ]));
+    expect(Buffer.compare(rawBuffers[0], rawBuffers[1])).not.toBe(0);
+
+    const before = await tableState();
+    const pinnedProfile = (await pool.query(
+      `SELECT id, version_label, normalized_profile_hash
+         FROM canonical_business_profiles
+        WHERE organization_id = $1 AND is_active = TRUE`,
+      [ORG_A]
+    )).rows[0];
+    const workers = multiprocess
+      ? await Promise.all([startTrackedWebhookProcess(), startTrackedWebhookProcess()])
+      : [];
+    const pendingRequests = [];
+    let gate;
+    let responses;
+
+    function dispatch(index, route, raw) {
+      const pending = multiprocess
+        ? postRawToProcess(workers[index].port, route, raw, sign(raw))
+        : sendRaw(route, raw, { signature: sign(raw) }).then(response => response);
+      pendingRequests.push(pending);
+      return pending;
+    }
+
+    try {
+      gate = await installTranscriptRaceGate(ORG_A, callId, lockKey);
+      try {
+        const firstRequest = dispatch(0, firstRoute, raws[0]);
+        await waitForLockWaiters(1);
+        const secondRequest = dispatch(1, secondRoute, raws[1]);
+        await waitForLockWaiters(2);
+        await gate.release();
+        responses = await Promise.all([firstRequest, secondRequest]);
+      } finally {
+        if (gate) {
+          await gate.release();
+          await Promise.allSettled(pendingRequests);
+          await gate.cleanup();
+        }
+      }
+
+      expect(responses.map(response => response.status)).toEqual([201, 201]);
+      expect(responses.every(response => response.body.received === true)).toBe(true);
+      expect(responses[0].body.replayed).not.toBe(true);
+      expect(responses[1].body.replayed).toBe(true);
+      expect(new Set(responses.map(response => response.body.operationId)).size).toBe(1);
+
+      const after = await tableState();
+      const exactDeltas = {
+        canonical_voice_sessions: 1,
+        canonical_voice_session_events: 2,
+        canonical_operations: 1,
+        canonical_customers: 1,
+        canonical_opportunities: 1,
+        canonical_estimates: 1,
+        canonical_polaris_snapshots: 1,
+        canonical_transcripts: 1,
+        canonical_communications: 1,
+        canonical_appointments: 1,
+        audit_logs: 2,
+        retell_webhook_replay_claims: 2,
+      };
+      for (const [table, delta] of Object.entries(exactDeltas)) {
+        expect(after[table].count - before[table].count).toBe(delta);
+        expect(after[table].hash).not.toBe(before[table].hash);
+      }
+      for (const table of AUTHORITY_TABLES.filter(name => !(name in exactDeltas))) {
+        expect(after[table]).toEqual(before[table]);
+      }
+
+      const graph = await pool.query(
+        `SELECT o.id AS operation_id, o.graph_id, o.result_status,
+                t.external_call_id, t.source
+           FROM canonical_operations o
+           JOIN canonical_transcripts t
+             ON t.organization_id = o.organization_id AND t.operation_id = o.id
+          WHERE o.organization_id = $1 AND t.external_call_id = $2`,
+        [ORG_A, callId]
+      );
+      expect(graph.rows).toEqual([expect.objectContaining({
+        operation_id: responses[0].body.operationId,
+        graph_id: responses[0].body.graphId,
+        result_status: 201,
+        external_call_id: callId,
+        source: sourceForRoute(firstRoute),
+      })]);
+
+      const session = await pool.query(
+        `SELECT id, provider, provider_session_id, status, metadata,
+                canonical_operation_id, business_profile_id,
+                business_profile_version, business_profile_hash
+           FROM canonical_voice_sessions
+          WHERE organization_id = $1 AND external_session_id = $2`,
+        [ORG_A, callId]
+      );
+      expect(session.rows).toEqual([expect.objectContaining({
+        provider: 'retell',
+        provider_session_id: callId,
+        status: 'completed',
+        canonical_operation_id: responses[0].body.operationId,
+        business_profile_id: pinnedProfile.id,
+        business_profile_version: pinnedProfile.version_label,
+        business_profile_hash: pinnedProfile.normalized_profile_hash,
+        metadata: expect.objectContaining({ source: sourceForRoute(firstRoute) + '-webhook' }),
+      })]);
+
+      const { providerEventIdentity } = require('../../src/services/canonicalRetellIngestion');
+      const expectedEventIds = payloads.map((payload, index) => providerEventIdentity(payload, {
+        organizationId: ORG_A,
+        ingestionSource: sourceForRoute(index === 0 ? firstRoute : secondRoute),
+      })).sort();
+      const events = await pool.query(
+        `SELECT external_event_id, event_type, payload
+           FROM canonical_voice_session_events event_record
+           JOIN canonical_voice_sessions session_record
+             ON session_record.organization_id = event_record.organization_id
+            AND session_record.id = event_record.voice_session_id
+          WHERE session_record.organization_id = $1
+            AND session_record.external_session_id = $2
+          ORDER BY external_event_id`,
+        [ORG_A, callId]
+      );
+      expect(events.rows.map(row => row.external_event_id)).toEqual(expectedEventIds);
+      expect(new Set(events.rows.map(row => row.external_event_id)).size).toBe(2);
+      expect(events.rows.map(row => row.event_type).sort()).toEqual(['call_analyzed', 'call_ended']);
+      events.rows.forEach(row => {
+        expect(row.external_event_id).toMatch(/^retell-provider-event-v2:[0-9a-f]{64}$/);
+        expect(row.payload.graphStatus).toBe(201);
+      });
+
+      const expectedFingerprints = rawBuffers.map(raw => replayAuthority.requestFingerprint(raw)).sort();
+      const replayRows = await pool.query(
+        `SELECT request_fingerprint::text AS request_fingerprint, state
+           FROM retell_webhook_replay_claims
+          WHERE request_fingerprint::text = ANY($1::text[])
+          ORDER BY request_fingerprint`,
+        [expectedFingerprints]
+      );
+      expect(replayRows.rows).toEqual(expectedFingerprints.map(requestFingerprint => ({
+        request_fingerprint: requestFingerprint,
+        state: 'accepted',
+      })));
+
+      const audits = await Promise.all(responses.map(response => auditRowsForResponse(response)));
+      expect(new Set(audits.map(item => item.correlationId)).size).toBe(2);
+      audits.forEach((item, index) => {
+        const route = index === 0 ? firstRoute : secondRoute;
+        expect(item.rows).toEqual([expect.objectContaining({
+          organization_id: ORG_A,
+          user_id: null,
+          action: 'retell_webhook.accepted',
+          entity_type: 'canonical_voice_session',
+          entity_id: session.rows[0].id,
+        })]);
+        expect(item.rows[0].details).toMatchObject({
+          actorLabel: 'provider',
+          role: 'system',
+          correlationId: item.correlationId,
+          afterState: {
+            method: 'POST',
+            path: route,
+            status: 201,
+            provider: 'retell',
+            source: sourceForRoute(route),
+            accepted: true,
+          },
+        });
+        const auditText = JSON.stringify(item.rows[0]);
+        for (const forbidden of [callId, payloads[index].call.agent_id, TEST_SECRET, FORBIDDEN_API_KEY]) {
+          expect(auditText).not.toContain(forbidden);
+        }
+      });
+
+      const acceptedState = await tableState();
+      const repeat = multiprocess
+        ? await postRawToProcess(workers[0].port, secondRoute, raws[1], sign(raws[1]))
+        : await sendRaw(secondRoute, raws[1], { signature: sign(raws[1]) });
+      expect(repeat.status).toBe(409);
+      expect(repeat.body.error.code).toBe('WEBHOOK_REPLAYED');
+      expect(await tableState()).toEqual(acceptedState);
+
+      if (verifyRestartReplay) {
+        await Promise.all(workers.splice(0).map(worker => stopTrackedWebhookProcess(worker)));
+        const restarted = await startTrackedWebhookProcess();
+        try {
+          const replay = await postRawToProcess(restarted.port, firstRoute, raws[0], sign(raws[0]));
+          expect(replay.status).toBe(409);
+          expect(replay.body.error.code).toBe('WEBHOOK_REPLAYED');
+        } finally {
+          await stopTrackedWebhookProcess(restarted);
+        }
+        expect(await tableState()).toEqual(acceptedState);
+      }
+    } finally {
+      await Promise.all(workers.splice(0).map(worker => stopTrackedWebhookProcess(worker)));
+    }
   }
 
   beforeAll(async () => {
@@ -866,6 +1210,169 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
       expect(row.external_event_id).not.toContain(firstPayload.event_id);
     });
   });
+
+  test.each([
+    {
+      label: 'same process call_ended then call_analyzed across Retell and Voice aliases',
+      suffix: 'same-ended-analyzed',
+      firstEvent: 'call_ended',
+      firstRoute: '/api/retell/webhook',
+      secondEvent: 'call_analyzed',
+      secondRoute: '/api/v1/voice/webhook',
+      lockKey: 862609200002n,
+    },
+    {
+      label: 'same process call_analyzed then call_ended across Voice and Retell aliases',
+      suffix: 'same-analyzed-ended',
+      firstEvent: 'call_analyzed',
+      firstRoute: '/api/v1/voice/webhook',
+      secondEvent: 'call_ended',
+      secondRoute: '/api/retell/webhook',
+      lockKey: 862609200003n,
+    },
+    {
+      label: 'two mounted processes call_ended then call_analyzed across Retell and Voice aliases',
+      suffix: 'process-ended-analyzed',
+      firstEvent: 'call_ended',
+      firstRoute: '/api/retell/webhook',
+      secondEvent: 'call_analyzed',
+      secondRoute: '/api/v1/voice/webhook',
+      lockKey: 862609200004n,
+      multiprocess: true,
+    },
+    {
+      label: 'two mounted processes call_analyzed then call_ended across Voice and Retell aliases',
+      suffix: 'process-analyzed-ended',
+      firstEvent: 'call_analyzed',
+      firstRoute: '/api/v1/voice/webhook',
+      secondEvent: 'call_ended',
+      secondRoute: '/api/retell/webhook',
+      lockKey: 862609200005n,
+      multiprocess: true,
+      verifyRestartReplay: true,
+    },
+  ])('serializes simultaneous distinct terminal events: $label', async fixture => {
+    await runTerminalRace(fixture);
+  }, 60000);
+
+  test('terminal-call serialization remains isolated by resolved tenant and call', async () => {
+    const targetCallId = 'phase6a-race-isolation-target';
+    const target = terminalRaceEvent('call_ended', 'isolation-target', 'phase6a-agent-a', targetCallId);
+    const sameTenantOtherCall = terminalRaceEvent(
+      'call_analyzed',
+      'isolation-other-call',
+      'phase6a-agent-a',
+      'phase6a-race-isolation-other-call'
+    );
+    const otherTenantOtherCall = terminalRaceEvent(
+      'call_analyzed',
+      'isolation-other-tenant',
+      'phase6a-agent-b',
+      'phase6a-race-isolation-other-tenant-call'
+    );
+    const targetRaw = JSON.stringify(target);
+    const controls = [sameTenantOtherCall, otherTenantOtherCall].map(payload => JSON.stringify(payload));
+    const before = await tableState();
+    const gate = await installTranscriptRaceGate(ORG_A, targetCallId, 862609200006n);
+    const requests = [];
+    let targetResponse;
+    let controlResponses;
+    try {
+      const targetRequest = sendRaw('/api/retell/webhook', targetRaw, {
+        signature: sign(targetRaw),
+      }).then(response => response);
+      requests.push(targetRequest);
+      await waitForLockWaiters(1);
+
+      const controlPromise = Promise.all([
+        sendRaw('/api/v1/voice/webhook', controls[0], { signature: sign(controls[0]) }).then(response => response),
+        sendRaw('/api/retell/webhook', controls[1], { signature: sign(controls[1]) }).then(response => response),
+      ]);
+      requests.push(controlPromise);
+      controlResponses = await expectPromiseWithin(
+        controlPromise,
+        5000,
+        'tenant/call-isolated terminal controls'
+      );
+      expect(controlResponses.map(response => response.status)).toEqual([201, 201]);
+
+      const visibleBeforeRelease = await db.getPool().query(
+        `SELECT organization_id, external_call_id
+           FROM canonical_transcripts
+          WHERE (organization_id = $1 AND external_call_id = $2)
+             OR (organization_id = $1 AND external_call_id = $3)
+             OR (organization_id = $4 AND external_call_id = $5)
+          ORDER BY organization_id, external_call_id`,
+        [ORG_A, targetCallId, sameTenantOtherCall.call.call_id, ORG_B, otherTenantOtherCall.call.call_id]
+      );
+      expect(visibleBeforeRelease.rows).toEqual([
+        { organization_id: ORG_A, external_call_id: sameTenantOtherCall.call.call_id },
+        { organization_id: ORG_B, external_call_id: otherTenantOtherCall.call.call_id },
+      ]);
+
+      await gate.release();
+      targetResponse = await targetRequest;
+    } finally {
+      await gate.release();
+      await Promise.allSettled(requests);
+      await gate.cleanup();
+    }
+
+    expect(targetResponse.status).toBe(201);
+    const acceptedState = await tableState();
+    const crossTenantPoison = terminalRaceEvent(
+      'call_analyzed',
+      'isolation-cross-tenant-poison',
+      'phase6a-agent-b',
+      targetCallId
+    );
+    const poisonRaw = JSON.stringify(crossTenantPoison);
+    const poisonResponse = await sendRaw('/api/retell/webhook', poisonRaw, {
+      signature: sign(poisonRaw),
+    });
+    expect(poisonResponse.status).toBe(409);
+    expect(poisonResponse.body.error.code).toBe('INTEGRATION_OWNERSHIP_CONFLICT');
+    expect(await tableState()).toEqual(acceptedState);
+
+    const after = await tableState();
+    const exactDeltas = {
+      canonical_voice_sessions: 3,
+      canonical_voice_session_events: 3,
+      canonical_operations: 3,
+      canonical_customers: 3,
+      canonical_opportunities: 3,
+      canonical_estimates: 3,
+      canonical_polaris_snapshots: 3,
+      canonical_transcripts: 3,
+      canonical_communications: 3,
+      canonical_appointments: 3,
+      audit_logs: 3,
+      retell_webhook_replay_claims: 3,
+    };
+    for (const [table, delta] of Object.entries(exactDeltas)) {
+      expect(after[table].count - before[table].count).toBe(delta);
+      expect(after[table].hash).not.toBe(before[table].hash);
+    }
+    for (const table of AUTHORITY_TABLES.filter(name => !(name in exactDeltas))) {
+      expect(after[table]).toEqual(before[table]);
+    }
+
+    const finalRows = await db.getPool().query(
+      `SELECT organization_id, external_call_id, count(*)::int AS count
+         FROM canonical_transcripts
+        WHERE (organization_id = $1 AND external_call_id = $2)
+           OR (organization_id = $1 AND external_call_id = $3)
+           OR (organization_id = $4 AND external_call_id = $5)
+        GROUP BY organization_id, external_call_id
+        ORDER BY organization_id, external_call_id`,
+      [ORG_A, targetCallId, sameTenantOtherCall.call.call_id, ORG_B, otherTenantOtherCall.call.call_id]
+    );
+    expect(finalRows.rows).toEqual([
+      { organization_id: ORG_A, external_call_id: sameTenantOtherCall.call.call_id, count: 1 },
+      { organization_id: ORG_A, external_call_id: targetCallId, count: 1 },
+      { organization_id: ORG_B, external_call_id: otherTenantOtherCall.call.call_id, count: 1 },
+    ]);
+  }, 60000);
 
   test('the existing voice URL keeps its signed canonical voice source and replay response contract', async () => {
     const payload = terminalEvent('voice-positive');

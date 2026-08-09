@@ -12,6 +12,7 @@ const { stableValue } = require('./businessProfileAdapter');
 const TERMINAL_EVENTS = new Set(['call_ended', 'call_analyzed']);
 const SINGLETON_PROVIDER_EVENTS = new Set(['call_started', 'call_ended', 'call_analyzed']);
 const KNOWN_SERVICES = ['fence', 'roofing', 'hvac', 'plumbing', 'electrical', 'concrete'];
+const TERMINAL_CALL_LOCK_DOMAIN = 'northstar:retell-terminal-call-finalization:v1';
 
 function text(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -159,6 +160,25 @@ async function completedCall(pool, organizationId, callId) {
   return result.rows[0] || null;
 }
 
+function terminalCallFinalizationLockKey(organizationId, callId) {
+  const digest = crypto.createHash('sha256')
+    .update(TERMINAL_CALL_LOCK_DOMAIN + '\0', 'utf8')
+    .update(JSON.stringify(stableValue({
+      provider: 'retell',
+      organizationId,
+      callId,
+    })), 'utf8')
+    .digest('hex');
+  return TERMINAL_CALL_LOCK_DOMAIN + ':' + digest;
+}
+
+async function lockTerminalCallFinalization(client, organizationId, callId) {
+  await client.query(
+    'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+    [terminalCallFinalizationLockKey(organizationId, callId)]
+  );
+}
+
 async function ingestRetellPayload(payload, options) {
   const transactionClient = options && options.transactionClient;
   const pool = transactionClient || (options && options.pool) || db.getPool();
@@ -199,6 +219,12 @@ async function ingestRetellPayload(payload, options) {
       throw Object.assign(new Error('Organization subscription access is read-only.'), {
         code: 'SUBSCRIPTION_READ_ONLY', status: 403,
       });
+    }
+    if (TERMINAL_EVENTS.has(event) && transactionClient) {
+      // Both signed aliases finalize through the same outer transaction. Lock
+      // the resolved tenant/provider/call before re-reading completion so
+      // distinct terminal event identities cannot race the one call graph.
+      await lockTerminalCallFinalization(transactionClient, ownership.organizationId, callId);
     }
     const existingCompleted = TERMINAL_EVENTS.has(event)
       ? await completedCall(pool, ownership.organizationId, callId)

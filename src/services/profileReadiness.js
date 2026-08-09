@@ -128,12 +128,15 @@ function stableHash(itemId, source) {
 
 function sourceResult(itemId, present, source, options) {
   const unavailable = Boolean(options && options.authorityUnavailable);
+  const legacyHash = options && hasOwn(options, 'legacySource')
+    ? stableHash(itemId, options.legacySource) : null;
   const notApplicableAllowed = options && hasOwn(options, 'notApplicableAllowed')
     ? Boolean(options.notApplicableAllowed)
     : !present && !unavailable;
   return Object.freeze({
     authorityUnavailable: unavailable,
     hash: stableHash(itemId, source),
+    legacyHash,
     notApplicableAllowed,
     present: Boolean(present),
     source: stableValue(source),
@@ -171,25 +174,37 @@ function activeServicesSource(profile) {
 
 function businessContactSource(profile) {
   const company = isPlainObject(profile.company) ? profile.company : {};
-  const email = typeof company.email === 'string' ? company.email.trim() : '';
-  const phone = typeof company.phone === 'string' ? company.phone.trim() : '';
+  const legacyEmail = typeof company.email === 'string' ? company.email : '';
+  const legacyPhone = typeof company.phone === 'string' ? company.phone : '';
+  const email = legacyEmail.trim();
+  const phone = legacyPhone.trim();
   const source = {};
   if (EMAIL_PATTERN.test(email)) source.email = email;
   if (nonblank(phone)) source.phone = phone;
-  return sourceResult('business_contact', Object.keys(source).length > 0, source);
+  return sourceResult('business_contact', Object.keys(source).length > 0, source, {
+    legacySource: { email: legacyEmail, phone: legacyPhone },
+  });
 }
 
 function businessContextSource(profile) {
-  const industry = typeof profile.industry === 'string' ? profile.industry.trim() : '';
-  const businessDescription = typeof profile.businessDescription === 'string'
-    ? profile.businessDescription.trim() : '';
+  const legacyIndustry = typeof profile.industry === 'string' ? profile.industry : '';
+  const legacyBusinessDescription = typeof profile.businessDescription === 'string'
+    ? profile.businessDescription : '';
+  const industry = legacyIndustry.trim();
+  const businessDescription = legacyBusinessDescription.trim();
   const source = {};
   if (nonblank(businessDescription)) source.businessDescription = businessDescription;
   if (nonblank(industry)) source.industry = industry;
   return sourceResult(
     'business_context',
     Object.keys(source).length > 0,
-    source
+    source,
+    {
+      legacySource: {
+        businessDescription: legacyBusinessDescription,
+        industry: legacyIndustry,
+      },
+    }
   );
 }
 
@@ -452,6 +467,13 @@ function storedReadiness(profile) {
   return { hasAuthority: true, items };
 }
 
+function reviewedHashMatches(source, reviewedValueHash) {
+  return Boolean(
+    typeof reviewedValueHash === 'string' &&
+    (reviewedValueHash === source.hash || reviewedValueHash === source.legacyHash)
+  );
+}
+
 function itemProjection(definition, source, stored) {
   const storedNotApplicable = Boolean(stored && stored.applicability === 'not_applicable');
   const notApplicable = Boolean(
@@ -463,7 +485,8 @@ function itemProjection(definition, source, stored) {
   if (source.authorityUnavailable) state = 'authority_unavailable';
   else if (notApplicable) state = 'not_applicable';
   else if (!source.present) state = definition.recommended ? 'recommended' : 'missing';
-  else if (stored && stored.applicability === 'applicable' && stored.reviewedValueHash === source.hash) state = 'reviewed';
+  else if (stored && stored.applicability === 'applicable' &&
+      reviewedHashMatches(source, stored.reviewedValueHash)) state = 'reviewed';
   else state = 'needs_review';
 
   return Object.freeze({
@@ -484,6 +507,32 @@ function itemProjection(definition, source, stored) {
       !source.present && !source.authorityUnavailable && state !== 'not_applicable'
     ),
   });
+}
+
+function transitionCompatibleProfileReadiness(activeProfile, candidateProfile) {
+  const activeSourceProfile = isPlainObject(activeProfile) ? activeProfile : {};
+  if (!isPlainObject(candidateProfile)) return candidateProfile;
+  const activeStored = storedReadiness(activeSourceProfile);
+  const candidateStored = storedReadiness(candidateProfile);
+  if (!activeStored.hasAuthority || !candidateStored.hasAuthority) return candidateProfile;
+
+  let next = null;
+  for (const itemId of ['business_contact', 'business_context']) {
+    const definition = REGISTRY_BY_ID.get(itemId);
+    const stored = activeStored.items[itemId];
+    const candidate = candidateStored.items[itemId];
+    if (!stored || !candidate || stableStringify(stored) !== stableStringify(candidate)) continue;
+    const before = definition.source(activeSourceProfile);
+    const after = definition.source(candidateProfile);
+    if (!before.present || !after.present || before.authorityUnavailable || after.authorityUnavailable ||
+        !reviewedHashMatches(before, stored.reviewedValueHash) || before.hash !== after.hash ||
+        before.legacyHash === after.legacyHash || stored.reviewedValueHash === after.hash) {
+      continue;
+    }
+    if (!next) next = stableValue(candidateProfile);
+    next.profileReadiness.items[itemId].reviewedValueHash = after.hash;
+  }
+  return next ? stableValue(next) : candidateProfile;
 }
 
 function projectProfileReadiness(profile, authority) {
@@ -655,4 +704,5 @@ module.exports = {
   parseProfileReadinessWrite,
   projectProfileReadiness,
   stableHash,
+  transitionCompatibleProfileReadiness,
 };

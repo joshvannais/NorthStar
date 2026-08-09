@@ -83,6 +83,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
   let sessions;
   let putBusinessProfile;
   let adaptBusinessProfile;
+  let stableHash;
   const providerAttempts = [];
 
   async function activeRow(organizationId = ORG_A) {
@@ -127,6 +128,31 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     });
   }
 
+  async function seedLegacyReadiness(mutate, sources) {
+    await pool.query('DELETE FROM organization_onboarding WHERE organization_id = $1', [ORG_A]);
+    await pool.query('DELETE FROM canonical_business_profiles WHERE organization_id = $1', [ORG_A]);
+    const profile = configuredProfile('Phase 6B Organization A');
+    mutate(profile);
+    profile.profileReadiness = {
+      schemaVersion: 'm20-profile-readiness-v1',
+      items: Object.keys(sources).reduce(function (items, itemId) {
+        items[itemId] = {
+          applicability: 'applicable',
+          lastReviewedAt: '2026-08-09T16:00:00.000Z',
+          reviewedValueHash: stableHash(itemId, sources[itemId]),
+        };
+        return items;
+      }, {}),
+    };
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      userId: OWNER_A,
+      profile,
+      preserveProfileReadiness: false,
+    });
+    return activeRow();
+  }
+
   beforeAll(async () => {
     originalFetch = global.fetch;
     global.fetch = function () {
@@ -169,6 +195,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     }
     ({ putBusinessProfile } = require('../../src/services/organizationAuthority'));
     ({ adaptBusinessProfile } = require('../../src/services/businessProfileAdapter'));
+    ({ stableHash } = require('../../src/services/profileReadiness'));
     await putBusinessProfile(pool, {
       organizationId: ORG_A, userId: OWNER_A, profile: configuredProfile('Phase 6B Organization A'),
     });
@@ -716,6 +743,219 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
         sourceState: 'configured', state: 'needs_review', lastReviewedAt: reviewedAt,
       }));
     }
+  });
+
+  test('unchanged legacy-v1 reads are inert and neutral mounted writes transition exactly one reviewed hash', async () => {
+    let row = await seedLegacyReadiness(function (profile) {
+      profile.company.phone = '';
+      profile.businessDescription = '';
+    }, {
+      business_contact: { email: 'office@example.test', phone: '' },
+      business_context: { businessDescription: '', industry: 'Tree care' },
+    });
+    const originalRawHex = row.raw_hex;
+    const originalReadinessHex = row.readiness_hex;
+    const originalReadiness = JSON.parse(JSON.stringify(row.raw_profile.profileReadiness));
+    const originalVersionCount = row.version_count;
+
+    const loaded = await readiness('owner');
+    expect(loaded.status).toBe(200);
+    expect(loaded.body.data.items.business_contact.state).toBe('reviewed');
+    expect(loaded.body.data.items.business_context.state).toBe('reviewed');
+    row = await activeRow();
+    expect(row.raw_hex).toBe(originalRawHex);
+    expect(row.readiness_hex).toBe(originalReadinessHex);
+    expect(row.version_count).toBe(originalVersionCount);
+
+    const noOp = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send(row.raw_profile.company);
+    expect(noOp.status).toBe(200);
+    row = await activeRow();
+    expect(row.readiness_hex).toBe(originalReadinessHex);
+    expect(row.raw_profile.profileReadiness).toEqual(originalReadiness);
+
+    const phoneWhitespace = ' \t\r\n ';
+    const contactTransition = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({ ...row.raw_profile.company, phone: phoneWhitespace });
+    expect(contactTransition.status).toBe(200);
+    row = await activeRow();
+    expect(row.raw_profile.company.phone).toBe(phoneWhitespace);
+    const afterContact = JSON.parse(JSON.stringify(originalReadiness));
+    afterContact.items.business_contact.reviewedValueHash = stableHash(
+      'business_contact', { email: 'office@example.test' }
+    );
+    expect(row.raw_profile.profileReadiness).toEqual(afterContact);
+    expect(row.raw_profile.profileReadiness.items.business_contact).toEqual({
+      ...originalReadiness.items.business_contact,
+      reviewedValueHash: stableHash('business_contact', { email: 'office@example.test' }),
+    });
+    expect(row.raw_profile.profileReadiness.items.business_context)
+      .toEqual(originalReadiness.items.business_context);
+
+    const descriptionWhitespace = '\t \r\n';
+    const contextCandidate = JSON.parse(JSON.stringify(row.raw_profile));
+    contextCandidate.businessDescription = descriptionWhitespace;
+    const contextTransition = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: row.version_label,
+        value: contextCandidate,
+      });
+    expect(contextTransition.status).toBe(200);
+    row = await activeRow();
+    expect(row.raw_profile.businessDescription).toBe(descriptionWhitespace);
+    const afterContext = JSON.parse(JSON.stringify(afterContact));
+    afterContext.items.business_context.reviewedValueHash = stableHash(
+      'business_context', { industry: 'Tree care' }
+    );
+    expect(row.raw_profile.profileReadiness).toEqual(afterContext);
+    for (const itemId of ['business_contact', 'business_context']) {
+      expect(row.raw_profile.profileReadiness.items[itemId].applicability).toBe('applicable');
+      expect(row.raw_profile.profileReadiness.items[itemId].lastReviewedAt)
+        .toBe('2026-08-09T16:00:00.000Z');
+    }
+    expect((await readiness('owner')).body.data.items.business_contact.state).toBe('reviewed');
+    expect((await readiness('owner')).body.data.items.business_context.state).toBe('reviewed');
+
+    const canonicalHex = row.readiness_hex;
+    const repeated = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send(row.raw_profile.company);
+    expect(repeated.status).toBe(200);
+    row = await activeRow();
+    expect(row.readiness_hex).toBe(canonicalHex);
+    expect(row.raw_profile.profileReadiness).toEqual(afterContext);
+  });
+
+  test('legacy missing and invalid siblings stay neutral while qualifying mounted changes preserve metadata and invalidate', async () => {
+    let row = await seedLegacyReadiness(function (profile) {
+      delete profile.company.phone;
+    }, {
+      business_contact: { email: 'office@example.test', phone: '' },
+    });
+    let before = JSON.parse(JSON.stringify(row.raw_profile.profileReadiness));
+    const missingToBlank = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({ ...row.raw_profile.company, phone: '' });
+    expect(missingToBlank.status).toBe(200);
+    row = await activeRow();
+    expect(row.raw_profile.company.phone).toBe('');
+    expect(row.raw_profile.profileReadiness).toEqual(before);
+    expect((await readiness('owner')).body.data.items.business_contact.state).toBe('reviewed');
+
+    row = await seedLegacyReadiness(function (profile) {
+      profile.company.email = 'not-an-email';
+      profile.company.phone = '  +1 828 555 0100  ';
+    }, {
+      business_contact: { email: 'not-an-email', phone: '  +1 828 555 0100  ' },
+    });
+    before = JSON.parse(JSON.stringify(row.raw_profile.profileReadiness));
+    const invalidRawHex = row.raw_hex;
+    const invalidVersionCount = row.version_count;
+    const rejectedInvalidSibling = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...row.raw_profile.company,
+        email: 'still-not-an-email',
+      });
+    expect(rejectedInvalidSibling.status).toBe(400);
+    row = await activeRow();
+    expect(row.raw_hex).toBe(invalidRawHex);
+    expect(row.version_count).toBe(invalidVersionCount);
+    expect(row.raw_profile.profileReadiness).toEqual(before);
+
+    const invalidSibling = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...row.raw_profile.company,
+        email: '',
+        phone: '+1 828 555 0100',
+      });
+    expect(invalidSibling.status).toBe(200);
+    row = await activeRow();
+    expect(row.raw_profile.company.email).toBe('');
+    expect(row.raw_profile.company.phone).toBe('+1 828 555 0100');
+    expect(row.raw_profile.profileReadiness.items.business_contact).toEqual({
+      ...before.items.business_contact,
+      reviewedValueHash: stableHash('business_contact', { phone: '+1 828 555 0100' }),
+    });
+    expect((await readiness('owner')).body.data.items.business_contact.state).toBe('reviewed');
+
+    row = await seedLegacyReadiness(function (profile) {
+      profile.company.email = 'not-an-email';
+      profile.company.phone = '+1 828 555 0100';
+    }, {
+      business_contact: { email: 'not-an-email', phone: '+1 828 555 0100' },
+    });
+    before = JSON.parse(JSON.stringify(row.raw_profile.profileReadiness));
+    const invalidToValid = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...row.raw_profile.company,
+        email: 'dispatch@example.test',
+      });
+    expect(invalidToValid.status).toBe(200);
+    row = await activeRow();
+    expect(row.raw_profile.company.email).toBe('dispatch@example.test');
+    expect(row.raw_profile.profileReadiness).toEqual(before);
+    expect((await readiness('owner')).body.data.items.business_contact.state).toBe('needs_review');
+
+    row = await seedLegacyReadiness(function (profile) {
+      profile.company.phone = '';
+      profile.businessDescription = '';
+    }, {
+      business_contact: { email: 'office@example.test', phone: '' },
+      business_context: { businessDescription: '', industry: 'Tree care' },
+    });
+    before = JSON.parse(JSON.stringify(row.raw_profile.profileReadiness));
+    const changed = JSON.parse(JSON.stringify(row.raw_profile));
+    changed.company.email = 'dispatch@example.test';
+    changed.industry = 'Landscaping';
+    const qualifying = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({ expectedVersion: row.version_label, value: changed });
+    expect(qualifying.status).toBe(200);
+    row = await activeRow();
+    expect(row.raw_profile.profileReadiness).toEqual(before);
+    const qualifyingProjection = await readiness('owner');
+    expect(qualifyingProjection.body.data.items.business_contact.state).toBe('needs_review');
+    expect(qualifyingProjection.body.data.items.business_context.state).toBe('needs_review');
+  });
+
+  test('stale and simultaneous mounted writers cannot create a hybrid legacy transition', async () => {
+    const baseline = await seedLegacyReadiness(function (profile) {
+      profile.company.phone = '';
+    }, {
+      business_contact: { email: 'office@example.test', phone: '' },
+    });
+    const originalReadiness = JSON.parse(JSON.stringify(baseline.raw_profile.profileReadiness));
+    const neutral = JSON.parse(JSON.stringify(baseline.raw_profile));
+    neutral.company.phone = ' \t\r\n ';
+    const qualifying = JSON.parse(JSON.stringify(baseline.raw_profile));
+    qualifying.company.email = 'dispatch@example.test';
+
+    const raced = await Promise.all([
+      request(app).put('/api/v1/business-profile').set(sessions.owner.headers).send({
+        expectedVersion: baseline.version_label, value: neutral,
+      }),
+      request(app).put('/api/v1/business-profile').set(sessions.admin.headers).send({
+        expectedVersion: baseline.version_label, value: qualifying,
+      }),
+    ]);
+    expect(raced.map(function (response) { return response.status; }).sort()).toEqual([200, 409]);
+    expect(raced.find(function (response) { return response.status === 409; }).body.error.code)
+      .toBe('BUSINESS_PROFILE_VERSION_CONFLICT');
+
+    const after = await activeRow();
+    const projected = await readiness('owner');
+    if (raced[0].status === 200) {
+      expect(after.raw_profile.company.email).toBe('office@example.test');
+      expect(after.raw_profile.company.phone).toBe(' \t\r\n ');
+      expect(after.raw_profile.profileReadiness.items.business_contact).toEqual({
+        ...originalReadiness.items.business_contact,
+        reviewedValueHash: stableHash('business_contact', { email: 'office@example.test' }),
+      });
+      expect(projected.body.data.items.business_contact.state).toBe('reviewed');
+    } else {
+      expect(after.raw_profile.company.email).toBe('dispatch@example.test');
+      expect(after.raw_profile.company.phone).toBe('');
+      expect(after.raw_profile.profileReadiness).toEqual(originalReadiness);
+      expect(projected.body.data.items.business_contact.state).toBe('needs_review');
+    }
+    expect(after.version_count).toBe(2);
   });
 
   test('Not applicable cannot hide later configuration and readiness metadata is calculation-neutral', async () => {

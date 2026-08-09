@@ -270,6 +270,7 @@ async function main() {
       );
     }
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+    const { stableHash } = require('../../src/services/profileReadiness');
     await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: profileFor('Phase 6B Browser Company') });
     const otherAuthority = await putBusinessProfile(pool, {
       organizationId: ORG_B, userId: OWNER_B, profile: profileFor('Other Tenant'),
@@ -637,6 +638,124 @@ async function main() {
     assert.strictEqual((await qualifyingReload).status(), 200);
     await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
       document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Needs review'));
+
+    const legacyProfile = profileFor('Phase 6B Browser Company');
+    legacyProfile.company.email = 'office@example.test';
+    legacyProfile.company.phone = '';
+    legacyProfile.businessDescription = '';
+    legacyProfile.profileReadiness = {
+      schemaVersion: 'm20-profile-readiness-v1',
+      items: {
+        business_contact: {
+          applicability: 'applicable',
+          lastReviewedAt: '2026-08-09T16:00:00.000Z',
+          reviewedValueHash: stableHash('business_contact', {
+            email: 'office@example.test', phone: '',
+          }),
+        },
+        business_context: {
+          applicability: 'applicable',
+          lastReviewedAt: '2026-08-09T16:00:00.000Z',
+          reviewedValueHash: stableHash('business_context', {
+            businessDescription: '', industry: 'Tree care',
+          }),
+        },
+      },
+    };
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      userId: OWNER_A,
+      profile: legacyProfile,
+      preserveProfileReadiness: false,
+    });
+    regressionRow = await active(pool);
+    const legacyVersionCount = regressionRow.version_count;
+    const legacyReadinessHex = regressionRow.readiness_hex;
+    const legacyReadiness = JSON.parse(JSON.stringify(regressionRow.raw_profile.profileReadiness));
+    const legacyReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await legacyReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Reviewed'));
+    regressionRow = await active(pool);
+    assert.strictEqual(regressionRow.version_count, legacyVersionCount);
+    assert.strictEqual(regressionRow.readiness_hex, legacyReadinessHex);
+    assert.deepStrictEqual(regressionRow.raw_profile.profileReadiness, legacyReadiness);
+
+    const legacyPhoneWhitespace = ' \t\r\n ';
+    const legacyPhoneSaved = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        phone: legacyPhoneWhitespace,
+      });
+    assert.strictEqual(legacyPhoneSaved.status, 200);
+    regressionRow = await active(pool);
+    const legacyDescriptionWhitespace = '\t \r\n';
+    const legacyDescriptionCandidate = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    legacyDescriptionCandidate.businessDescription = legacyDescriptionWhitespace;
+    const legacyDescriptionSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: legacyDescriptionCandidate,
+      });
+    assert.strictEqual(legacyDescriptionSaved.status, 200);
+    regressionRow = await active(pool);
+    const transitionedReadiness = JSON.parse(JSON.stringify(legacyReadiness));
+    transitionedReadiness.items.business_contact.reviewedValueHash = stableHash(
+      'business_contact', { email: 'office@example.test' }
+    );
+    transitionedReadiness.items.business_context.reviewedValueHash = stableHash(
+      'business_context', { industry: 'Tree care' }
+    );
+    assert.strictEqual(regressionRow.raw_profile.company.phone, legacyPhoneWhitespace);
+    assert.strictEqual(regressionRow.raw_profile.businessDescription, legacyDescriptionWhitespace);
+    assert.deepStrictEqual(regressionRow.raw_profile.profileReadiness, transitionedReadiness);
+    for (const itemId of ['business_contact', 'business_context']) {
+      assert.strictEqual(
+        regressionRow.raw_profile.profileReadiness.items[itemId].applicability,
+        legacyReadiness.items[itemId].applicability
+      );
+      assert.strictEqual(
+        regressionRow.raw_profile.profileReadiness.items[itemId].lastReviewedAt,
+        legacyReadiness.items[itemId].lastReviewedAt
+      );
+    }
+    const legacyNeutralReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await legacyNeutralReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Reviewed'));
+
+    const transitionedHex = regressionRow.readiness_hex;
+    const legacyQualifyingContact = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        email: 'dispatch@example.test',
+      });
+    assert.strictEqual(legacyQualifyingContact.status, 200);
+    regressionRow = await active(pool);
+    const legacyQualifyingContext = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    legacyQualifyingContext.industry = 'Landscaping';
+    const legacyQualifyingContextSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: legacyQualifyingContext,
+      });
+    assert.strictEqual(legacyQualifyingContextSaved.status, 200);
+    regressionRow = await active(pool);
+    assert.strictEqual(regressionRow.readiness_hex, transitionedHex);
+    assert.deepStrictEqual(regressionRow.raw_profile.profileReadiness, transitionedReadiness);
+    const legacyQualifyingReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await legacyQualifyingReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Needs review'));
     await assertNoOverflow(regressionPage);
     await regressionContext.close();
 
@@ -739,6 +858,7 @@ async function main() {
         'loading', 'empty', 'review', 'remove_configuration', 'not_applicable',
         'mark_applicable_clear', 'restore_needs_review', 'review_again', 'save', 'stale', 'reload', 'error',
         'hash_neutral_blank_siblings', 'qualifying_hash_invalidation',
+        'legacy_v1_read_compatibility', 'legacy_neutral_writer_transition',
       ],
       accessibility: ['region', 'headings', 'list', 'live status', 'alert', 'keyboard', 'focus'],
       rawReadiness: 'exact JSONB hex',

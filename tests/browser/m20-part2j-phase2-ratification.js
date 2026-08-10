@@ -4,6 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const { app } = require('../../src/server');
+const { projectIntegrationCatalogue } = require('../../src/integrations/catalogue');
 const { navigationFixture } = require('../helpers/navigation-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { auditMountedAccessibility, assertAccessibilityAudit } = require('../helpers/theme-accessibility-audit');
@@ -149,16 +150,14 @@ async function installBoundary(context, origin, role, evidence, options = {}) {
       const workforceFailure = authorityFailure || (options.failWorkforceAfterReady && workforceRequests > 1);
       return route.fulfill(workforceFailure ? json({ error: 'unavailable' }, 503) : json({ success: true, data: workforceFixture() }));
     }
-    if (url.pathname === '/api/v1/integrations/status') {
-      return route.fulfill(authorityFailure ? json({ success: false }, 503) : json({ success: true, data: {
+    if (url.pathname === '/api/v1/integrations/catalogue') {
+      const catalogue = projectIntegrationCatalogue({
         authority: 'canonical_integration_ownership',
         connectors: [{ provider: 'retell', status: 'not_provisioned' }, { provider: 'voice', status: 'inactive' }],
-      } }));
-    }
-    if (url.pathname === '/api/integrations/jobber/status') {
+      });
       return route.fulfill(authorityFailure
-        ? json({ error: 'unavailable' }, 503)
-        : json({ available: false, configured: false, connected: false }));
+        ? json({ success: false, error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE' } }, 503)
+        : json({ success: true, data: catalogue, requestId: 'part2j-browser-fixture' }));
     }
     evidence.unexpectedApi.push({ role, method: request.method(), path: url.pathname });
     return route.fulfill(json({ error: 'unexpected API path' }, 500));
@@ -180,7 +179,7 @@ async function waitReady(page, route) {
   } else if (route === '/dashboard/team') {
     await page.waitForFunction(() => document.documentElement.dataset.workforceState === 'ready');
   } else {
-    await page.waitForFunction(() => document.getElementById('integrationStatusRoot')?.dataset.state === 'ready');
+    await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'ready');
   }
 }
 
@@ -308,6 +307,8 @@ async function assertBusinessProfile(page, role, label, theme) {
 async function assertSettings(page, role) {
   assert.strictEqual(await page.locator('#integration-twilio').evaluate(node =>
     document.getElementById('mainContent').contains(node)), true, 'Settings main landmark contains Integrations');
+  assert.strictEqual(await page.locator('#settingsIntegrationsLink').getAttribute('href'), '/dashboard/integrations',
+    'Settings links to the canonical catalogue');
   if (role === 'owner') {
     await page.fill('#companyInfoAiContext', 'secondary edit');
     assert.strictEqual(await page.inputValue('#companyInfo'), 'secondary edit');
@@ -329,11 +330,14 @@ async function assertTeam(page, role) {
 }
 
 async function assertIntegrations(page) {
-  assert.strictEqual(await page.getAttribute('#integrationStatusRoot', 'data-state'), 'ready');
-  assert.strictEqual(await page.getAttribute('#canonical-retell-status', 'data-status'), 'not_provisioned');
-  assert.strictEqual(await page.getAttribute('#canonical-voice-status', 'data-status'), 'inactive');
-  assert.strictEqual(await page.getAttribute('#jobber-status', 'data-status'), 'unavailable');
-  assert.strictEqual(await page.locator('#jobber-btn').isDisabled(), true, 'unavailable Jobber action stays disabled');
+  assert.strictEqual(await page.getAttribute('#integrationCatalogueRoot', 'data-state'), 'ready');
+  assert.strictEqual(await page.getAttribute('#integration-provider-retell-status', 'data-status'), 'requires_provider_approval');
+  assert.strictEqual(await page.getAttribute('#integration-provider-voice-status', 'data-status'), 'disconnected');
+  assert.strictEqual(await page.getAttribute('#integration-provider-jobber-status', 'data-status'), 'coming_soon');
+  assert.strictEqual(await page.locator('[data-category-key]').count(), 7, 'all stable catalogue categories render');
+  assert.strictEqual(await page.locator('[data-provider-key]').count(), 26, 'all stable catalogue providers render');
+  assert.strictEqual(await page.locator('[data-provider-key] button,[data-provider-key] a[href],form').count(), 0,
+    'read-only provider catalogue exposes no provider management controls');
 }
 
 async function runMatrix(browser, engine, origin, evidence) {
@@ -447,8 +451,10 @@ async function runErrorStates(browser, engine, origin, evidence) {
           assert.match(await page.textContent('#' + id), /unavailable/i, `${engine} ${id} explicit error state`);
         }
       } else {
-        assert.strictEqual(await page.getAttribute('#integrationStatusRoot', 'aria-busy'), 'true');
-        await page.waitForFunction(() => document.getElementById('integrationStatusRoot')?.dataset.state === 'error');
+        assert.strictEqual(await page.getAttribute('#integrationCatalogueRoot', 'aria-busy'), 'true');
+        await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'error');
+        assert.strictEqual(await page.locator('#integrationErrorState').isVisible(), true);
+        assert.match(await page.textContent('#integrationStatusMessage'), /No connection status was inferred/i);
       }
     }
   } finally {

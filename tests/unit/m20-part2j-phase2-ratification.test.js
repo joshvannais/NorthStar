@@ -104,9 +104,11 @@ describe('Mission 20 Part 2J additive Phase 2 ratification contract', () => {
   });
 
   test('Integrations retains unavailable meaning without opacity-driven contrast loss', () => {
-    expect(integrations).toMatch(/\.unavailable-card\s*\{[^}]*opacity:\s*1[^}]*border-style:\s*dashed/);
-    expect(integrations).toMatch(/\.jobber-action:disabled\s*\{[^}]*opacity:\s*1[^}]*background:\s*var\(--neutral-200\)[^}]*color:\s*var\(--neutral-700\)/);
-    expect(integrations).toContain('data-connector-availability="unavailable"');
-    expect(integrations).toContain('id="integrationStatusRoot" data-state="loading" aria-busy="true"');
+    expect(integrations).toMatch(/\.integration-status\[data-status="coming_soon"\],[\s\S]*?background:\s*var\(--neutral-100\)[^}]*color:\s*var\(--neutral-700\)/);
+    expect(integrations).toMatch(/\.integration-card\s*\{[^}]*border:\s*1px solid var\(--neutral-200\)/);
+    expect(integrations).not.toMatch(/\.integration-card\s*\{[^}]*opacity:/);
+    expect(integrations).not.toContain('data-connector-availability="unavailable"');
+    expect(integrations).not.toContain('jobber-action');
+    expect(integrations).toContain('id="integrationCatalogueRoot" data-state="loading" aria-busy="true"');
   });
 });

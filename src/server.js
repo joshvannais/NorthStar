@@ -25,6 +25,7 @@ const { createAuthRouter } = require('./routes/auth');
 const { AccountService } = require('./accounts/service');
 const { createProductionTransactionalEmail } = require('./email/transactional');
 const accountRoutes = require('./routes/account');
+const { createMapPreferencesRouter } = require('./routes/mapPreferences');
 const { WorkforceService } = require('./workforce/service');
 const { createWorkforceRouter } = require('./routes/workforce');
 const { AssetCatalogueService } = require('./assets/service');
@@ -125,6 +126,7 @@ app.use('/api/auth', createAuthRouter({
     ? productionAccountService.signup.bind(productionAccountService)
     : null,
 }));
+app.use('/api/account/map-preferences', createMapPreferencesRouter());
 app.use('/api/account', accountRoutes);
 app.use('/api/workforce', createWorkforceRouter());
 // The normalized catalogue owns only /api/assets. It must precede the broad

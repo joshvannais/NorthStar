@@ -225,6 +225,106 @@
     [data-theme="dark"] .integration-status[data-status="requires_provider_approval"] { color: #fde68a; }
     [data-theme="dark"] .integration-status[data-status="needs_attention"] { color: #fca5a5; }
     [data-theme="dark"] #integrationCatalogueRoot[data-state="error"] .integration-status-message { color: #fca5a5; }
+    .map-preferences-boundary {
+      background: var(--neutral-50);
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-md);
+      color: var(--neutral-600);
+      font-size: 13px;
+      line-height: 1.55;
+      margin: 12px 0 18px;
+      padding: 12px 14px;
+    }
+    .map-preferences-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .map-preference-scope {
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-md);
+      min-width: 0;
+      padding: 16px;
+    }
+    .map-preference-scope h3 { color: var(--neutral-900); font-size: 16px; margin: 0; }
+    .map-preference-scope-copy {
+      color: var(--neutral-500);
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 6px 0 14px;
+      min-height: 40px;
+      overflow-wrap: anywhere;
+    }
+    .map-provider-list { display: grid; gap: 10px; }
+    .map-provider-row {
+      background: var(--neutral-50);
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-sm);
+      min-width: 0;
+      padding: 12px;
+    }
+    .map-provider-name {
+      align-items: center;
+      color: var(--neutral-900);
+      display: flex;
+      font-size: 14px;
+      font-weight: 700;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .map-provider-glyph {
+      align-items: center;
+      background: var(--neutral-100);
+      border: 1px solid var(--neutral-200);
+      border-radius: 8px;
+      color: var(--neutral-700);
+      display: inline-flex;
+      height: 28px;
+      justify-content: center;
+      width: 28px;
+    }
+    .map-provider-options { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+    .map-provider-options label {
+      align-items: center;
+      color: var(--neutral-700);
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 13px;
+      gap: 6px;
+    }
+    .map-provider-options input { margin: 0; }
+    .map-provider-options input:disabled + span { color: var(--neutral-400); }
+    .map-preference-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .map-preference-state {
+      background: var(--neutral-50);
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-md);
+      color: var(--neutral-600);
+      padding: 18px;
+      text-align: center;
+    }
+    .map-preference-state p { margin: 0 auto; max-width: 620px; }
+    .map-preference-state .btn { margin-top: 12px; }
+    .map-preference-status {
+      color: var(--neutral-500);
+      font-size: 13px;
+      margin: 12px 0 0;
+      min-height: 20px;
+      overflow-wrap: anywhere;
+    }
+    #mapPreferencesRoot[data-state="error"] .map-preference-status,
+    .map-preference-status[data-tone="error"] { color: #b91c1c; }
+    #mapPreferencesHeading:focus-visible,
+    #mapPreferencesRetry:focus-visible,
+    #saveOrganizationMapPreferences:focus-visible,
+    #saveUserMapPreferences:focus-visible,
+    #inheritMapPreferences:focus-visible,
+    .map-provider-options input:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, .35);
+      outline-offset: 3px;
+    }
+    [data-theme="dark"] #mapPreferencesRoot[data-state="error"] .map-preference-status,
+    [data-theme="dark"] .map-preference-status[data-tone="error"] { color: #fca5a5; }
     [hidden] { display: none !important; }
     @keyframes integration-shimmer { to { transform: translateX(100%); } }
     @media (prefers-reduced-motion: reduce) {
@@ -236,6 +336,9 @@
       .integration-toolbar .btn { align-self: flex-start; }
       .integration-detail-list { grid-template-columns: 1fr; gap: 3px; }
       .integration-detail-list dd { margin-bottom: 7px; }
+      .map-preferences-grid { grid-template-columns: 1fr; }
+      .map-preference-scope { padding: 14px; }
+      .map-preference-actions .btn { width: 100%; }
     }
   </style>
 </head>
@@ -284,6 +387,97 @@
 
           <ul class="integration-category-list" id="integrationCategoryList" aria-label="Integration provider categories" hidden></ul>
           <p class="integration-status-message" id="integrationStatusMessage" role="status" aria-live="polite" aria-atomic="true">Loading the authoritative integration catalogue.</p>
+        </div>
+      </section>
+
+      <section class="settings-section" aria-labelledby="mapPreferencesHeading">
+        <div>
+          <h2 id="mapPreferencesHeading" tabindex="-1">Map launch preferences</h2>
+          <p class="description">Choose which supported map providers should be available and which enabled provider is preferred by default.</p>
+        </div>
+        <p class="map-preferences-boundary">No map is opened from this page. Navigation launch behavior is not included. These preferences do not connect, authorize, inspect, or configure any provider.</p>
+
+        <div id="mapPreferencesRoot" data-state="loading" aria-busy="true">
+          <div class="map-preference-state" id="mapPreferencesLoading" role="status">
+            <p>Loading canonical map preferences.</p>
+          </div>
+
+          <div class="map-preference-state" id="mapPreferencesError" role="alert" tabindex="-1" hidden>
+            <p>Map preferences are unavailable. No preference is inferred while canonical authority cannot be loaded.</p>
+            <button class="btn btn-secondary btn-sm" id="mapPreferencesRetry" type="button">Try again</button>
+          </div>
+
+          <div class="map-preferences-grid" id="mapPreferencesContent" hidden>
+            <section class="map-preference-scope" id="mapPreferencesOrganization" aria-labelledby="organizationMapPreferencesHeading">
+              <h3 id="organizationMapPreferencesHeading">Company default</h3>
+              <p class="map-preference-scope-copy" id="organizationMapPreferencesCopy">Owners and admins can update the company default. Other roles can review it.</p>
+              <div class="map-provider-list" data-map-preference-scope="organization">
+                <div class="map-provider-row" data-map-provider="google_maps">
+                  <div class="map-provider-name"><span class="map-provider-glyph" aria-hidden="true">↗</span>Google Maps</div>
+                  <div class="map-provider-options">
+                    <label><input id="organization-google_maps-enabled" type="checkbox"><span>Enabled</span></label>
+                    <label><input id="organization-google_maps-visible" type="checkbox"><span>Visible</span></label>
+                    <label><input id="organization-google_maps-default" name="organization-map-default" type="radio" value="google_maps"><span>Default</span></label>
+                  </div>
+                </div>
+                <div class="map-provider-row" data-map-provider="apple_maps">
+                  <div class="map-provider-name"><span class="map-provider-glyph" aria-hidden="true">↗</span>Apple Maps</div>
+                  <div class="map-provider-options">
+                    <label><input id="organization-apple_maps-enabled" type="checkbox"><span>Enabled</span></label>
+                    <label><input id="organization-apple_maps-visible" type="checkbox"><span>Visible</span></label>
+                    <label><input id="organization-apple_maps-default" name="organization-map-default" type="radio" value="apple_maps"><span>Default</span></label>
+                  </div>
+                </div>
+                <div class="map-provider-row" data-map-provider="waze">
+                  <div class="map-provider-name"><span class="map-provider-glyph" aria-hidden="true">↗</span>Waze</div>
+                  <div class="map-provider-options">
+                    <label><input id="organization-waze-enabled" type="checkbox"><span>Enabled</span></label>
+                    <label><input id="organization-waze-visible" type="checkbox"><span>Visible</span></label>
+                    <label><input id="organization-waze-default" name="organization-map-default" type="radio" value="waze"><span>Default</span></label>
+                  </div>
+                </div>
+              </div>
+              <div class="map-preference-actions">
+                <button class="btn btn-primary btn-sm" id="saveOrganizationMapPreferences" type="button">Save company default</button>
+              </div>
+            </section>
+
+            <section class="map-preference-scope" id="mapPreferencesUser" aria-labelledby="userMapPreferencesHeading">
+              <h3 id="userMapPreferencesHeading">My preference</h3>
+              <p class="map-preference-scope-copy" id="userMapPreferencesCopy">You currently inherit the company default. Saving creates a complete personal override.</p>
+              <div class="map-provider-list" data-map-preference-scope="user">
+                <div class="map-provider-row" data-map-provider="google_maps">
+                  <div class="map-provider-name"><span class="map-provider-glyph" aria-hidden="true">↗</span>Google Maps</div>
+                  <div class="map-provider-options">
+                    <label><input id="user-google_maps-enabled" type="checkbox"><span>Enabled</span></label>
+                    <label><input id="user-google_maps-visible" type="checkbox"><span>Visible</span></label>
+                    <label><input id="user-google_maps-default" name="user-map-default" type="radio" value="google_maps"><span>Default</span></label>
+                  </div>
+                </div>
+                <div class="map-provider-row" data-map-provider="apple_maps">
+                  <div class="map-provider-name"><span class="map-provider-glyph" aria-hidden="true">↗</span>Apple Maps</div>
+                  <div class="map-provider-options">
+                    <label><input id="user-apple_maps-enabled" type="checkbox"><span>Enabled</span></label>
+                    <label><input id="user-apple_maps-visible" type="checkbox"><span>Visible</span></label>
+                    <label><input id="user-apple_maps-default" name="user-map-default" type="radio" value="apple_maps"><span>Default</span></label>
+                  </div>
+                </div>
+                <div class="map-provider-row" data-map-provider="waze">
+                  <div class="map-provider-name"><span class="map-provider-glyph" aria-hidden="true">↗</span>Waze</div>
+                  <div class="map-provider-options">
+                    <label><input id="user-waze-enabled" type="checkbox"><span>Enabled</span></label>
+                    <label><input id="user-waze-visible" type="checkbox"><span>Visible</span></label>
+                    <label><input id="user-waze-default" name="user-map-default" type="radio" value="waze"><span>Default</span></label>
+                  </div>
+                </div>
+              </div>
+              <div class="map-preference-actions">
+                <button class="btn btn-primary btn-sm" id="saveUserMapPreferences" type="button">Save my override</button>
+                <button class="btn btn-ghost btn-sm" id="inheritMapPreferences" type="button">Use company default</button>
+              </div>
+            </section>
+          </div>
+          <p class="map-preference-status" id="mapPreferencesStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Loading canonical map preferences.</p>
         </div>
       </section>
     </main>
@@ -540,6 +734,291 @@
         reload: function() { return loadCatalogue({ userInitiated: false }); }
       });
       loadCatalogue({ userInitiated: false });
+    })();
+  </script>
+  <script>
+    (function() {
+      'use strict';
+
+      var mapPreferenceContract = Object.freeze({
+        authority: 'canonical_map_preferences_v1',
+        version: 1,
+        providers: Object.freeze([
+          Object.freeze({ key: 'google_maps', name: 'Google Maps' }),
+          Object.freeze({ key: 'apple_maps', name: 'Apple Maps' }),
+          Object.freeze({ key: 'waze', name: 'Waze' })
+        ])
+      });
+      var mapRoot = document.getElementById('mapPreferencesRoot');
+      var mapHeading = document.getElementById('mapPreferencesHeading');
+      var mapLoading = document.getElementById('mapPreferencesLoading');
+      var mapError = document.getElementById('mapPreferencesError');
+      var mapRetry = document.getElementById('mapPreferencesRetry');
+      var mapContent = document.getElementById('mapPreferencesContent');
+      var mapStatus = document.getElementById('mapPreferencesStatus');
+      var organizationCopy = document.getElementById('organizationMapPreferencesCopy');
+      var userCopy = document.getElementById('userMapPreferencesCopy');
+      var saveOrganization = document.getElementById('saveOrganizationMapPreferences');
+      var saveUser = document.getElementById('saveUserMapPreferences');
+      var inheritUser = document.getElementById('inheritMapPreferences');
+      var mapState = null;
+      var mapBusy = false;
+
+      function exactKeys(value, expected) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+        var keys = Object.keys(value);
+        return keys.length === expected.length && keys.every(function(key) { return expected.indexOf(key) >= 0; });
+      }
+
+      function validVersion(value, minimum) {
+        return Number.isSafeInteger(value) && value >= minimum;
+      }
+
+      function validPreferences(value) {
+        if (!exactKeys(value, ['providers', 'defaultProvider']) ||
+            !exactKeys(value.providers, mapPreferenceContract.providers.map(function(provider) { return provider.key; }))) {
+          return false;
+        }
+        var anyEnabled = false;
+        for (var index = 0; index < mapPreferenceContract.providers.length; index += 1) {
+          var key = mapPreferenceContract.providers[index].key;
+          var provider = value.providers[key];
+          if (!exactKeys(provider, ['enabled', 'visible']) ||
+              typeof provider.enabled !== 'boolean' || typeof provider.visible !== 'boolean') return false;
+          anyEnabled = anyEnabled || provider.enabled;
+        }
+        return anyEnabled && Boolean(value.providers[value.defaultProvider]) &&
+          value.providers[value.defaultProvider].enabled;
+      }
+
+      function validProjection(body) {
+        if (!body || body.success !== true ||
+            !exactKeys(body.data, [
+              'authority', 'contractVersion', 'providers', 'organization',
+              'user', 'effective', 'permissions'
+            ]) || body.data.authority !== mapPreferenceContract.authority ||
+            body.data.contractVersion !== mapPreferenceContract.version ||
+            !Array.isArray(body.data.providers) ||
+            body.data.providers.length !== mapPreferenceContract.providers.length) return false;
+        for (var index = 0; index < mapPreferenceContract.providers.length; index += 1) {
+          if (!exactKeys(body.data.providers[index], ['key', 'name']) ||
+              body.data.providers[index].key !== mapPreferenceContract.providers[index].key ||
+              body.data.providers[index].name !== mapPreferenceContract.providers[index].name) return false;
+        }
+        var organization = body.data.organization;
+        var user = body.data.user;
+        var effective = body.data.effective;
+        var permissions = body.data.permissions;
+        if (!exactKeys(organization, ['version', 'preferences', 'source', 'updatedAt']) ||
+            !validVersion(organization.version, 1) || !validPreferences(organization.preferences) ||
+            ['system_default', 'user'].indexOf(organization.source) < 0 ||
+            typeof organization.updatedAt !== 'string') return false;
+        if (!exactKeys(user, ['version', 'mode', 'hasStoredAuthority', 'preferences', 'updatedAt']) ||
+            !validVersion(user.version, 0) || ['inherit', 'override'].indexOf(user.mode) < 0 ||
+            typeof user.hasStoredAuthority !== 'boolean' ||
+            (user.mode === 'inherit' && user.preferences !== null) ||
+            (user.mode === 'override' && !validPreferences(user.preferences))) return false;
+        if (!exactKeys(effective, [
+          'source', 'inheritsOrganization', 'organizationVersion', 'userVersion', 'preferences'
+        ]) || !validPreferences(effective.preferences) ||
+            effective.organizationVersion !== organization.version || effective.userVersion !== user.version ||
+            typeof effective.inheritsOrganization !== 'boolean' ||
+            effective.inheritsOrganization !== (user.mode === 'inherit') ||
+            effective.source !== (user.mode === 'inherit' ? 'organization' : 'user_override')) return false;
+        if (!exactKeys(permissions, ['canUpdateOrganization', 'canUpdateSelf']) ||
+            typeof permissions.canUpdateOrganization !== 'boolean' ||
+            typeof permissions.canUpdateSelf !== 'boolean') return false;
+        return body.data;
+      }
+
+      function input(scope, provider, field) {
+        return document.getElementById(scope + '-' + provider + '-' + field);
+      }
+
+      function setDocument(scope, preferences) {
+        mapPreferenceContract.providers.forEach(function(provider) {
+          input(scope, provider.key, 'enabled').checked = preferences.providers[provider.key].enabled;
+          input(scope, provider.key, 'visible').checked = preferences.providers[provider.key].visible;
+          input(scope, provider.key, 'default').checked = preferences.defaultProvider === provider.key;
+        });
+      }
+
+      function setScopeDisabled(scope, disabled) {
+        mapPreferenceContract.providers.forEach(function(provider) {
+          input(scope, provider.key, 'enabled').disabled = disabled;
+          input(scope, provider.key, 'visible').disabled = disabled;
+          input(scope, provider.key, 'default').disabled = disabled || !input(scope, provider.key, 'enabled').checked;
+        });
+      }
+
+      function documentFromControls(scope) {
+        var providers = {};
+        var defaultProvider = null;
+        mapPreferenceContract.providers.forEach(function(provider) {
+          providers[provider.key] = {
+            enabled: input(scope, provider.key, 'enabled').checked,
+            visible: input(scope, provider.key, 'visible').checked
+          };
+          if (input(scope, provider.key, 'default').checked) defaultProvider = provider.key;
+        });
+        var result = { providers: providers, defaultProvider: defaultProvider };
+        return validPreferences(result) ? result : null;
+      }
+
+      function setStatus(message, error, focus) {
+        mapStatus.textContent = message;
+        mapStatus.dataset.tone = error ? 'error' : 'neutral';
+        mapStatus.setAttribute('role', error ? 'alert' : 'status');
+        mapStatus.setAttribute('aria-live', error ? 'assertive' : 'polite');
+        if (focus) mapStatus.focus();
+      }
+
+      function setView(state) {
+        mapRoot.dataset.state = state;
+        mapRoot.setAttribute('aria-busy', state === 'loading' || mapBusy ? 'true' : 'false');
+        mapLoading.hidden = state !== 'loading';
+        mapError.hidden = state !== 'error';
+        mapContent.hidden = state !== 'ready';
+      }
+
+      function renderMapPreferences(data) {
+        mapState = data;
+        setDocument('organization', data.organization.preferences);
+        setDocument('user', data.effective.preferences);
+        setScopeDisabled('organization', !data.permissions.canUpdateOrganization || mapBusy);
+        setScopeDisabled('user', !data.permissions.canUpdateSelf || mapBusy);
+        saveOrganization.hidden = !data.permissions.canUpdateOrganization;
+        saveOrganization.disabled = mapBusy;
+        saveUser.hidden = !data.permissions.canUpdateSelf;
+        saveUser.disabled = mapBusy;
+        inheritUser.hidden = !data.permissions.canUpdateSelf;
+        inheritUser.disabled = mapBusy || data.effective.inheritsOrganization;
+        organizationCopy.textContent = data.permissions.canUpdateOrganization
+          ? 'You can update the company default for every account member who inherits it.'
+          : 'The company default is read-only for your role.';
+        userCopy.textContent = data.effective.inheritsOrganization
+          ? 'You currently inherit the company default. Saving creates a complete personal override.'
+          : 'Your complete personal override is effective. You can return to the company default.';
+        setView('ready');
+      }
+
+      function friendlyError(error) {
+        if (error && (error.status === 409 || error.code === 'MAP_PREFERENCES_VERSION_CONFLICT')) {
+          return 'Map preferences changed; reload and try again. No stale update was saved.';
+        }
+        if (error && error.status === 403) return 'Your current account authority does not allow that change.';
+        return 'Map preferences could not be saved. Reload and try again.';
+      }
+
+      async function loadMapPreferences(options) {
+        var userInitiated = Boolean(options && options.userInitiated);
+        mapBusy = true;
+        setView('loading');
+        mapRetry.disabled = true;
+        setStatus('Loading canonical map preferences.', false, false);
+        try {
+          var body = await NorthStarAccountSession.json('/api/account/map-preferences', { method: 'GET' });
+          var data = validProjection(body);
+          if (!data) throw new Error('Canonical map preference response is invalid.');
+          mapBusy = false;
+          renderMapPreferences(data);
+          setStatus('Canonical map preferences loaded.', false, false);
+          if (options && options.restoreFocus) mapHeading.focus();
+          return data;
+        } catch (_error) {
+          mapBusy = false;
+          setView('error');
+          setStatus('Map preference authority is unavailable. No preference was inferred.', true, false);
+          if (userInitiated) mapError.focus();
+          return null;
+        } finally {
+          mapRetry.disabled = false;
+          mapRoot.setAttribute('aria-busy', 'false');
+        }
+      }
+
+      async function saveMapPreferences(scope, mode) {
+        if (!mapState || mapBusy) return;
+        var preferences = mode === 'override' || scope === 'organization'
+          ? documentFromControls(scope) : null;
+        if ((mode === 'override' || scope === 'organization') && !preferences) {
+          setStatus('Keep at least one provider enabled and choose an enabled default provider.', true, true);
+          return;
+        }
+        mapBusy = true;
+        renderMapPreferences(mapState);
+        setStatus('Saving canonical map preferences.', false, false);
+        try {
+          var body;
+          if (scope === 'organization') {
+            body = await NorthStarAccountSession.json('/api/account/map-preferences/organization', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ expectedVersion: mapState.organization.version, preferences: preferences })
+            });
+          } else {
+            var userInput = { expectedVersion: mapState.user.version, mode: mode };
+            if (mode === 'override') userInput.preferences = preferences;
+            body = await NorthStarAccountSession.json('/api/account/map-preferences/me', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(userInput)
+            });
+          }
+          var data = validProjection(body);
+          if (!data || typeof body.changed !== 'boolean') throw new Error('Saved authority response is invalid.');
+          mapBusy = false;
+          renderMapPreferences(data);
+          var successMessage = body.changed
+            ? (scope === 'organization' ? 'Company map default saved.' :
+              mode === 'inherit' ? 'Your preference now inherits the company default.' : 'Your map preference override saved.')
+            : 'Map preferences were already current; no version changed.';
+          setStatus(successMessage, false, false);
+          if (window.NotificationService) window.NotificationService.show(successMessage, 'success');
+        } catch (error) {
+          mapBusy = false;
+          renderMapPreferences(mapState);
+          var message = friendlyError(error);
+          setStatus(message, true, true);
+          if (window.NotificationService) window.NotificationService.show(message, 'error');
+        }
+      }
+
+      function keepDefaultEnabled(scope, changedProvider) {
+        var changedEnabled = input(scope, changedProvider, 'enabled');
+        var changedDefault = input(scope, changedProvider, 'default');
+        if (!changedEnabled.checked && changedDefault.checked) {
+          var replacement = mapPreferenceContract.providers.find(function(provider) {
+            return input(scope, provider.key, 'enabled').checked;
+          });
+          if (replacement) input(scope, replacement.key, 'default').checked = true;
+          else {
+            changedEnabled.checked = true;
+            setStatus('At least one map provider must remain enabled.', true, true);
+          }
+        }
+        setScopeDisabled(scope, scope === 'organization'
+          ? !mapState.permissions.canUpdateOrganization || mapBusy
+          : !mapState.permissions.canUpdateSelf || mapBusy);
+      }
+
+      ['organization', 'user'].forEach(function(scope) {
+        mapPreferenceContract.providers.forEach(function(provider) {
+          input(scope, provider.key, 'enabled').addEventListener('change', function() {
+            keepDefaultEnabled(scope, provider.key);
+          });
+        });
+      });
+      saveOrganization.addEventListener('click', function() { saveMapPreferences('organization', 'override'); });
+      saveUser.addEventListener('click', function() { saveMapPreferences('user', 'override'); });
+      inheritUser.addEventListener('click', function() { saveMapPreferences('user', 'inherit'); });
+      mapRetry.addEventListener('click', function() {
+        loadMapPreferences({ userInitiated: true, restoreFocus: true });
+      });
+      window.NorthStarMapPreferences = Object.freeze({
+        reload: function() { return loadMapPreferences({ userInitiated: false }); }
+      });
+      loadMapPreferences({ userInitiated: false });
     })();
   </script>
   <script>NavComponent.init('integrations');</script>

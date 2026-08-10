@@ -98,6 +98,13 @@ function stateColor(theme, state) {
   return parseColor(resolveColor(declarationValue(declarations, 'color'), theme));
 }
 
+function pendingColor(theme) {
+  const selector = theme === 'dark'
+    ? '\n    [data-theme="dark"] .bp-readiness-pending {'
+    : '\n    .bp-readiness-pending {';
+  return parseColor(resolveColor(declarationValue(declarationsFor(HTML, selector), 'color'), theme));
+}
+
 describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
   test('renders the exact Polaris guidance directly beneath the Business Profile heading', () => {
     const guidance = 'Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile. The more relevant detail you provide, the better Polaris can tailor its recommendations to your business.';
@@ -117,7 +124,7 @@ describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
     expect(HTML).toContain('id="saveProfileReadinessBtn"');
   });
 
-  test('keeps every readiness state and its error at WCAG 2.2 AA contrast in both themes', () => {
+  test('keeps every readiness state, pending action, and error at WCAG 2.2 AA contrast in both themes', () => {
     const states = ['missing', 'authority_unavailable', 'recommended', 'needs_review', 'reviewed', 'not_applicable'];
     const expectedLightColors = {
       missing: '#991b1b',
@@ -139,6 +146,7 @@ describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
     expect(HTML).toContain('.bp-readiness-state[data-state="missing"], .bp-readiness-state[data-state="authority_unavailable"] { color: #991b1b; }');
     expect(HTML).toContain('.bp-readiness-state[data-state="recommended"], .bp-readiness-state[data-state="needs_review"] { color: #8a5a00; }');
     expect(HTML).toContain('.bp-readiness-state[data-state="reviewed"] { color: #047857; }');
+    expect(HTML).toContain('\n    .bp-readiness-pending { font-weight: 600; color: var(--brand-700); }\n');
     expect(declarationValue(declarationsFor(HTML, '.bp-validation-error {'), 'color')).toBe('#991b1b');
 
     for (const theme of ['light', 'dark']) {
@@ -150,6 +158,12 @@ describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
           .map(channel => channel.toString(16).padStart(2, '0')).join('')).toBe(expectedColors[state]);
         expect(contrast(foreground, background)).toBeGreaterThanOrEqual(4.5);
       }
+
+      const pendingForeground = pendingColor(theme);
+      expect('#' + [pendingForeground.r, pendingForeground.g, pendingForeground.b]
+        .map(channel => channel.toString(16).padStart(2, '0')).join('')).toBe(
+          theme === 'light' ? '#6d5005' : '#fbbf24');
+      expect(contrast(pendingForeground, background)).toBeGreaterThanOrEqual(4.5);
 
       const errorDeclarations = declarationsFor(HTML, '.bp-validation-error {');
       const errorColorValue = theme === 'dark'

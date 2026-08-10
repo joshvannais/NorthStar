@@ -5,6 +5,7 @@ const path = require('path');
 const { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS } = require('../helpers/site-theme-pages');
 const { navigationFixture } = require('../helpers/navigation-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const { projectIntegrationCatalogue } = require('../../src/integrations/catalogue');
 
 [
   'DATABASE_URL', 'RETELL_API_KEY', 'RETELL_AGENT_ID', 'RETELL_PHONE_NUMBER',
@@ -102,8 +103,11 @@ async function installBoundaries(context, origin, evidence) {
     }
     if (url.pathname === '/api/account/preferences') return route.fulfill(json({ preferences: {} }));
     if (url.pathname === '/api/v1/business-profile') return route.fulfill(json({ success: true, profile: null }));
-    if (url.pathname === '/api/integrations/jobber/status') {
-      return route.fulfill(json({ available: false, configured: false, connected: false }));
+    if (url.pathname === '/api/v1/integrations/catalogue') {
+      return route.fulfill(json({ success: true, data: projectIntegrationCatalogue({
+        authority: 'canonical_integration_ownership',
+        connectors: [{ provider: 'retell', status: 'not_provisioned' }, { provider: 'voice', status: 'not_provisioned' }],
+      }) }));
     }
     if (url.pathname === '/api/events') return route.fulfill(json([]));
     if (url.pathname === '/api/leads') return route.fulfill(json({ items: [], records: [] }));

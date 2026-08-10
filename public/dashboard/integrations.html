@@ -16,78 +16,226 @@
       gap: 12px;
       justify-content: space-between;
     }
+    .integration-intro { max-width: 760px; }
     .integration-authority {
       color: var(--neutral-500);
       font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
       font-size: 12px;
       overflow-wrap: anywhere;
     }
-    .integration-grid {
+    .integration-boundary {
+      background: var(--neutral-50);
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-md);
+      color: var(--neutral-600);
+      font-size: 13px;
+      line-height: 1.55;
+      margin: 14px 0 0;
+      padding: 12px 14px;
+    }
+    .integration-category-list,
+    .integration-provider-list,
+    .integration-loading-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .integration-category-list {
+      display: grid;
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .integration-category {
+      border-top: 1px solid var(--neutral-200);
+      min-width: 0;
+      padding-top: 18px;
+    }
+    .integration-category:first-child { border-top: 0; padding-top: 0; }
+    .integration-category h3 {
+      color: var(--neutral-900);
+      font-size: 16px;
+      margin: 0 0 10px;
+    }
+    .integration-provider-list,
+    .integration-loading-list {
       display: grid;
       gap: 12px;
-      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
-      margin-top: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr));
     }
-    .authority-card {
-      align-items: flex-start;
+    .integration-card {
       background: var(--neutral-50);
       border: 1px solid var(--neutral-200);
       border-radius: var(--radius-md);
       display: flex;
-      gap: 12px;
+      flex-direction: column;
       min-width: 0;
       padding: 16px;
     }
-    .authority-card .connector-mark {
+    .integration-card-header {
+      align-items: flex-start;
+      display: flex;
+      gap: 12px;
+      min-width: 0;
+    }
+    .integration-mark {
       align-items: center;
       background: var(--neutral-100);
-      border-radius: 8px;
+      border: 1px solid var(--neutral-200);
+      border-radius: 9px;
       color: var(--neutral-700);
-      display: flex;
-      flex: 0 0 36px;
+      display: inline-flex;
+      flex: 0 0 38px;
       font-size: 11px;
-      font-weight: 700;
-      height: 36px;
+      font-weight: 750;
+      height: 38px;
       justify-content: center;
       letter-spacing: .04em;
     }
-    .authority-card .connector-copy { flex: 1 1 auto; min-width: 0; }
-    .authority-card h3 { font-size: 15px; margin: 0 0 4px; }
-    .authority-card p {
+    .integration-card-copy { flex: 1 1 auto; min-width: 0; }
+    .integration-card h4 {
+      color: var(--neutral-900);
+      font-size: 15px;
+      margin: 0 0 4px;
+    }
+    .integration-card-description {
       color: var(--neutral-500);
       font-size: 13px;
-      line-height: 1.45;
+      line-height: 1.5;
       margin: 0;
+      overflow-wrap: anywhere;
     }
-    .connector-status {
+    .integration-status {
+      align-self: flex-start;
+      border: 1px solid transparent;
       border-radius: 999px;
-      display: inline-block;
+      display: inline-flex;
       font-size: 12px;
-      font-weight: 650;
-      margin-top: 10px;
+      font-weight: 700;
+      margin-top: 12px;
       padding: 5px 9px;
     }
-    .connector-status[data-status="active"] { background: rgba(22, 163, 74, .12); color: #15803d; }
-    .connector-status[data-status="inactive"],
-    .connector-status[data-status="not_provisioned"],
-    .connector-status[data-status="unavailable"] { background: var(--neutral-100); color: var(--neutral-600); }
-    .connector-status[data-status="ambiguous"],
-    .connector-status[data-status="error"] { background: rgba(220, 38, 38, .1); color: #b91c1c; }
-    .jobber-action { flex: 0 0 auto; margin-left: auto; }
-    .jobber-action:disabled { opacity: 1; background: var(--neutral-200); border-color: var(--neutral-300); color: var(--neutral-700); }
-    .unavailable-card { opacity: 1; border-style: dashed; }
-    .status-message {
+    .integration-status[data-status="connected"],
+    .integration-status[data-status="available"] {
+      background: rgba(22, 163, 74, .12);
+      border-color: rgba(22, 163, 74, .22);
+      color: #166534;
+    }
+    .integration-status[data-status="syncing"] {
+      background: rgba(37, 99, 235, .11);
+      border-color: rgba(37, 99, 235, .2);
+      color: #1d4ed8;
+    }
+    .integration-status[data-status="requires_provider_approval"] {
+      background: rgba(217, 119, 6, .12);
+      border-color: rgba(217, 119, 6, .2);
+      color: #92400e;
+    }
+    .integration-status[data-status="needs_attention"] {
+      background: rgba(220, 38, 38, .1);
+      border-color: rgba(220, 38, 38, .18);
+      color: #b91c1c;
+    }
+    .integration-status[data-status="coming_soon"],
+    .integration-status[data-status="disconnected"] {
+      background: var(--neutral-100);
+      border-color: var(--neutral-200);
+      color: var(--neutral-700);
+    }
+    .integration-details {
+      border-top: 1px solid var(--neutral-200);
+      margin-top: 14px;
+      padding-top: 10px;
+    }
+    .integration-details summary {
+      color: var(--brand-600);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 650;
+      list-style-position: outside;
+      margin-left: 16px;
+    }
+    .integration-details summary:focus-visible,
+    #integrationCatalogueHeading:focus-visible,
+    #refreshIntegrationsBtn:focus-visible,
+    #retryIntegrationsBtn:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, .35);
+      outline-offset: 3px;
+    }
+    .integration-detail-list {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(120px, .8fr) minmax(0, 1.2fr);
+      margin: 12px 0 0;
+    }
+    .integration-detail-list dt {
+      color: var(--neutral-500);
+      font-size: 12px;
+      font-weight: 650;
+      margin: 0;
+    }
+    .integration-detail-list dd {
+      color: var(--neutral-700);
+      font-size: 12px;
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+    .integration-state-panel {
+      background: var(--neutral-50);
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-md);
+      color: var(--neutral-600);
+      margin-top: 16px;
+      padding: 20px;
+      text-align: center;
+    }
+    .integration-state-panel h3 { color: var(--neutral-900); margin: 0 0 6px; }
+    .integration-state-panel p { margin: 0 auto; max-width: 580px; }
+    .integration-state-panel .btn { margin-top: 14px; }
+    .integration-loading-card {
+      min-height: 154px;
+      overflow: hidden;
+      position: relative;
+    }
+    .integration-loading-card::after {
+      animation: integration-shimmer 1.4s linear infinite;
+      background: linear-gradient(90deg, transparent, rgba(148, 163, 184, .16), transparent);
+      content: '';
+      inset: 0;
+      position: absolute;
+      transform: translateX(-100%);
+    }
+    .integration-loading-line {
+      background: var(--neutral-200);
+      border-radius: 999px;
+      height: 11px;
+      margin-top: 12px;
+      width: 82%;
+    }
+    .integration-loading-line.short { width: 42%; }
+    .integration-status-message {
       color: var(--neutral-500);
       font-size: 13px;
-      margin: 10px 0 0;
+      margin: 12px 0 0;
       min-height: 20px;
     }
-    #integrationStatusRoot[data-state="error"] .status-message { color: #b91c1c; }
+    #integrationCatalogueRoot[data-state="error"] .integration-status-message { color: #b91c1c; }
+    [data-theme="dark"] .integration-status[data-status="connected"],
+    [data-theme="dark"] .integration-status[data-status="available"] { color: #86efac; }
+    [data-theme="dark"] .integration-status[data-status="syncing"] { color: #93c5fd; }
+    [data-theme="dark"] .integration-status[data-status="requires_provider_approval"] { color: #fde68a; }
+    [data-theme="dark"] .integration-status[data-status="needs_attention"] { color: #fca5a5; }
+    [data-theme="dark"] #integrationCatalogueRoot[data-state="error"] .integration-status-message { color: #fca5a5; }
+    [hidden] { display: none !important; }
+    @keyframes integration-shimmer { to { transform: translateX(100%); } }
+    @media (prefers-reduced-motion: reduce) {
+      .integration-loading-card::after { animation: none; }
+    }
     @media (max-width: 640px) {
       .main-content { min-width: 0; padding-left: 16px; padding-right: 16px; }
-      .integration-toolbar { align-items: flex-start; flex-direction: column; }
-      .authority-card { flex-wrap: wrap; }
-      .jobber-action { margin-left: 48px; }
+      .integration-toolbar { align-items: stretch; flex-direction: column; }
+      .integration-toolbar .btn { align-self: flex-start; }
+      .integration-detail-list { grid-template-columns: 1fr; gap: 3px; }
+      .integration-detail-list dd { margin-bottom: 7px; }
     }
   </style>
 </head>
@@ -96,93 +244,53 @@
   <div class="dashboard-layout">
     <main class="main-content" id="mainContent" tabindex="-1">
       <div class="page-header integration-toolbar">
-        <div>
+        <div class="integration-intro">
           <h1>Integrations</h1>
-          <p>Read-only connection status from each connector's reviewed authority.</p>
+          <p>One read-only catalogue of provider availability and NorthStar-owned connection authority.</p>
         </div>
-        <button class="btn btn-ghost btn-sm" id="refreshIntegrationsBtn" type="button">Refresh status</button>
+        <button class="btn btn-ghost btn-sm" id="refreshIntegrationsBtn" type="button">Refresh catalogue</button>
       </div>
 
-      <div id="integrationStatusRoot" data-state="loading" aria-busy="true">
-        <section class="settings-section" aria-labelledby="canonicalConnectionsHeading">
-          <div class="integration-toolbar">
-            <div>
-              <h2 id="canonicalConnectionsHeading">Canonical NorthStar connections</h2>
-              <p class="description">Status is projected from tenant-scoped PostgreSQL ownership. Provider identifiers and metadata are never shown here.</p>
-            </div>
-            <div class="integration-authority" id="integrationAuthority">Authority: canonical_integration_ownership</div>
+      <section class="settings-section" aria-labelledby="integrationCatalogueHeading">
+        <div class="integration-toolbar">
+          <div>
+            <h2 id="integrationCatalogueHeading" tabindex="-1">Provider catalogue</h2>
+            <p class="description">Status is projected by the server from reviewed tenant authority. Logos, browser state, subscriptions, provider configuration, and legacy Business Profile flags are not connection evidence.</p>
           </div>
-          <div class="integration-grid">
-            <article class="authority-card">
-              <span class="connector-mark" aria-hidden="true">RT</span>
-              <div class="connector-copy">
-                <h3>Retell connection authority</h3>
-                <p>Reviewed provider ownership used by canonical voice sessions.</p>
-                <span class="connector-status" id="canonical-retell-status" data-status="loading">Loading</span>
-              </div>
-            </article>
-            <article class="authority-card">
-              <span class="connector-mark" aria-hidden="true">VO</span>
-              <div class="connector-copy">
-                <h3>Voice connection authority</h3>
-                <p>Provider-neutral voice ownership for this organization.</p>
-                <span class="connector-status" id="canonical-voice-status" data-status="loading">Loading</span>
-              </div>
-            </article>
+          <div class="integration-authority" id="integrationAuthority">Authority: northstar_integration_catalogue_v1</div>
+        </div>
+        <p class="integration-boundary">No connection or provider-management action is available from this read-only catalogue. Authorization, scopes, data direction, sync, last sync, errors, reconnect, mappings, and webhook health remain unavailable unless NorthStar owns a reviewed authority for them.</p>
+
+        <div id="integrationCatalogueRoot" data-state="loading" aria-busy="true">
+          <div id="integrationLoadingState" aria-label="Loading integration catalogue">
+            <ul class="integration-loading-list" aria-hidden="true">
+              <li class="integration-card integration-loading-card"><div class="integration-loading-line short"></div><div class="integration-loading-line"></div><div class="integration-loading-line short"></div></li>
+              <li class="integration-card integration-loading-card"><div class="integration-loading-line short"></div><div class="integration-loading-line"></div><div class="integration-loading-line short"></div></li>
+              <li class="integration-card integration-loading-card"><div class="integration-loading-line short"></div><div class="integration-loading-line"></div><div class="integration-loading-line short"></div></li>
+            </ul>
           </div>
-        </section>
+          <template id="integrationLoadingCardTemplate"><li class="integration-card integration-loading-card"><div class="integration-loading-line short"></div><div class="integration-loading-line"></div><div class="integration-loading-line short"></div></li></template>
 
-        <section class="settings-section" aria-labelledby="jobberHeading">
-          <h2 id="jobberHeading">Jobber CRM</h2>
-          <p class="description">Jobber has a separate reviewed capability boundary. It is not inferred from Business Profile data.</p>
-          <article class="authority-card">
-            <span class="connector-mark" aria-hidden="true">JB</span>
-            <div class="connector-copy">
-              <h3>Client and job sync</h3>
-              <p>Connection actions remain disabled unless the server exposes a complete durable capability.</p>
-              <span class="connector-status" id="jobber-status" data-status="loading">Loading</span>
-            </div>
-            <button class="btn btn-sm jobber-action" id="jobber-btn" type="button" disabled>Unavailable</button>
-          </article>
-        </section>
-
-        <section class="settings-section" aria-labelledby="unavailableHeading">
-          <h2 id="unavailableHeading">Other connectors</h2>
-          <p class="description">These connectors have no reviewed canonical ownership or provisioning authority yet.</p>
-          <div class="integration-grid">
-            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
-              <span class="connector-mark" aria-hidden="true">HC</span>
-              <div class="connector-copy"><h3>Housecall Pro</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
-            </article>
-            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
-              <span class="connector-mark" aria-hidden="true">ST</span>
-              <div class="connector-copy"><h3>ServiceTitan</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
-            </article>
-            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
-              <span class="connector-mark" aria-hidden="true">GS</span>
-              <div class="connector-copy"><h3>Google Sheets</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
-            </article>
-            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
-              <span class="connector-mark" aria-hidden="true">GC</span>
-              <div class="connector-copy"><h3>Google Calendar</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
-            </article>
-            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
-              <span class="connector-mark" aria-hidden="true">AC</span>
-              <div class="connector-copy"><h3>Apple Calendar</h3><p>Unavailable &mdash; no canonical connector authority.</p></div>
-            </article>
-            <article class="authority-card unavailable-card" data-connector-availability="unavailable">
-              <span class="connector-mark" aria-hidden="true">EM</span>
-              <div class="connector-copy"><h3>Email connector</h3><p>Unavailable &mdash; notification preferences are owned separately.</p></div>
-            </article>
+          <div class="integration-state-panel" id="integrationEmptyState" role="status" hidden>
+            <h3>No catalogue entries are available</h3>
+            <p>The server returned an empty reviewed catalogue. Refresh to check again.</p>
           </div>
-        </section>
 
-        <p class="status-message" id="integrationStatusMessage" role="status" aria-live="polite">Loading authoritative connection status.</p>
-      </div>
+          <div class="integration-state-panel" id="integrationErrorState" role="alert" tabindex="-1" hidden>
+            <h3>Integration catalogue unavailable</h3>
+            <p>NorthStar could not load reviewed provider status. No connection state is inferred while authority is unavailable.</p>
+            <button class="btn btn-secondary btn-sm" id="retryIntegrationsBtn" type="button">Try again</button>
+          </div>
+
+          <ul class="integration-category-list" id="integrationCategoryList" aria-label="Integration provider categories" hidden></ul>
+          <p class="integration-status-message" id="integrationStatusMessage" role="status" aria-live="polite" aria-atomic="true">Loading the authoritative integration catalogue.</p>
+        </div>
+      </section>
     </main>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
   <script src="/js/notification-service.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/nav-component.js"></script>
@@ -190,155 +298,248 @@
     (function() {
       'use strict';
 
-      var root = document.getElementById('integrationStatusRoot');
-      var refreshButton = document.getElementById('refreshIntegrationsBtn');
-      var jobberButton = document.getElementById('jobber-btn');
-      var currentJobber = Object.freeze({ available: false, configured: false, connected: false });
-      var canManageJobber = false;
-      var callbackPending = new URLSearchParams(window.location.search).get('jobber') === 'connected';
-      var canonicalLabels = Object.freeze({
-        active: 'Active authority',
-        inactive: 'Inactive',
-        not_provisioned: 'Not provisioned',
-        ambiguous: 'Ambiguous - review required'
+      var contract = Object.freeze({
+        authority: 'northstar_integration_catalogue_v1',
+        version: 1,
+        categories: Object.freeze([
+          Object.freeze({ key: 'communications_ai', label: 'Communications & AI', providers: Object.freeze(['retell', 'voice', 'twilio', 'openai', 'elevenlabs', 'email']) }),
+          Object.freeze({ key: 'calendar_scheduling', label: 'Calendar & Scheduling', providers: Object.freeze(['google_calendar', 'microsoft_calendar', 'apple_calendar']) }),
+          Object.freeze({ key: 'accounting_payments', label: 'Accounting & Payments', providers: Object.freeze(['quickbooks', 'stripe', 'square']) }),
+          Object.freeze({ key: 'field_service_crm', label: 'Field Service & CRM', providers: Object.freeze(['jobber', 'housecall_pro', 'servicetitan', 'salesforce']) }),
+          Object.freeze({ key: 'workflow_data', label: 'Workflow & Data', providers: Object.freeze(['google_sheets', 'zapier']) }),
+          Object.freeze({ key: 'maps_navigation', label: 'Maps & Navigation', providers: Object.freeze(['google_maps', 'apple_maps', 'waze']) }),
+          Object.freeze({ key: 'enterprise_assets_inventory', label: 'Enterprise Assets & Inventory', providers: Object.freeze(['procore', 'netsuite', 'dynamics_365', 'samsara', 'fleetio']) })
+        ])
       });
+      var statusLabels = Object.freeze({
+        available: 'Available',
+        coming_soon: 'Coming soon',
+        requires_provider_approval: 'Requires provider approval',
+        connected: 'Connected',
+        syncing: 'Syncing',
+        needs_attention: 'Needs attention',
+        disconnected: 'Disconnected'
+      });
+      var authorityLabels = Object.freeze({
+        'canonical_business_profiles.voiceAssistant': 'Provider-neutral Business Profile voice configuration',
+        canonical_integration_ownership: 'Canonical tenant connection ownership',
+        authority_missing: 'Not available'
+      });
+      var basisLabels = Object.freeze({
+        active: 'One active canonical ownership record',
+        inactive: 'Canonical ownership is explicitly inactive',
+        ambiguous: 'Multiple active ownership records require review',
+        not_provisioned: 'No canonical ownership is provisioned',
+        authority_missing: 'No reviewed connection authority exists',
+        source_disabled: 'Production connection capability is source-disabled',
+        provider_approval_required: 'Provider approval is required; subscriptions are separate',
+        deferred_read_only_connector: 'Future read-only connector; authority is deferred',
+        catalogue_only_navigation_deferred: 'Catalogue metadata only; preference and launcher logic are absent'
+      });
+      var capabilityLabels = Object.freeze([
+        Object.freeze(['management', 'Management']),
+        Object.freeze(['authorization', 'Authorization']),
+        Object.freeze(['scopes', 'Scopes']),
+        Object.freeze(['dataDirection', 'Data direction']),
+        Object.freeze(['sync', 'Sync']),
+        Object.freeze(['lastSync', 'Last sync']),
+        Object.freeze(['error', 'Error detail']),
+        Object.freeze(['reconnect', 'Reconnect']),
+        Object.freeze(['mappings', 'Mappings']),
+        Object.freeze(['webhookHealth', 'Webhook health'])
+      ]);
+      var root = document.getElementById('integrationCatalogueRoot');
+      var catalogueHeading = document.getElementById('integrationCatalogueHeading');
+      var refreshButton = document.getElementById('refreshIntegrationsBtn');
+      var retryButton = document.getElementById('retryIntegrationsBtn');
+      var list = document.getElementById('integrationCategoryList');
+      var loading = document.getElementById('integrationLoadingState');
+      var empty = document.getElementById('integrationEmptyState');
+      var error = document.getElementById('integrationErrorState');
+      var statusMessage = document.getElementById('integrationStatusMessage');
 
-      function setStatus(id, status, label) {
-        var element = document.getElementById(id);
-        element.dataset.status = status;
-        element.textContent = label;
+      function exactKeys(value, expected) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+        var keys = Object.keys(value);
+        return keys.length === expected.length && keys.every(function(key, index) { return key === expected[index]; });
       }
 
-      function readJson(response) {
-        return response.json().catch(function() { throw new Error('Integration status response is invalid.'); });
+      function boundedText(value, maximum) {
+        return typeof value === 'string' && value.length > 0 && value.length <= maximum;
       }
 
-      function canonicalProjection(response, body) {
-        if (!response.ok || !body || body.success !== true || !body.data ||
-            body.data.authority !== 'canonical_integration_ownership' ||
-            !Array.isArray(body.data.connectors) || body.data.connectors.length !== 2) {
-          throw new Error('Canonical integration status is unavailable.');
+      function validCapabilities(value) {
+        if (!exactKeys(value, capabilityLabels.map(function(item) { return item[0]; }))) return false;
+        return value.management === 'unavailable' && value.authorization === 'unavailable' &&
+          value.scopes === 'unavailable' && value.dataDirection === 'none' &&
+          value.sync === 'unavailable' && value.lastSync === 'unavailable' &&
+          value.error === 'unavailable' && value.reconnect === 'unavailable' &&
+          value.mappings === 'unavailable' && value.webhookHealth === 'unavailable';
+      }
+
+      function validProvider(provider, expectedKey) {
+        if (!exactKeys(provider, ['key', 'name', 'mark', 'description', 'presentation', 'authority', 'capabilities']) ||
+            provider.key !== expectedKey || !boundedText(provider.name, 80) ||
+            !/^[A-Z0-9]{2}$/.test(provider.mark) || !boundedText(provider.description, 512) ||
+            !exactKeys(provider.presentation, ['state', 'label']) ||
+            statusLabels[provider.presentation.state] !== provider.presentation.label ||
+            !exactKeys(provider.authority, ['configuration', 'connection', 'basis']) ||
+            !Object.prototype.hasOwnProperty.call(authorityLabels, provider.authority.configuration) ||
+            !Object.prototype.hasOwnProperty.call(authorityLabels, provider.authority.connection) ||
+            !Object.prototype.hasOwnProperty.call(basisLabels, provider.authority.basis) ||
+            !validCapabilities(provider.capabilities)) {
+          return false;
         }
-        var projected = Object.create(null);
-        body.data.connectors.forEach(function(connector) {
-          if (!connector || !['retell', 'voice'].includes(connector.provider) ||
-              !Object.prototype.hasOwnProperty.call(canonicalLabels, connector.status) ||
-              projected[connector.provider]) {
-            throw new Error('Canonical integration status is invalid.');
+        return true;
+      }
+
+      function catalogueProjection(response, body) {
+        if (!response.ok || !body || body.success !== true ||
+            !exactKeys(body.data, ['authority', 'version', 'readOnly', 'categories']) ||
+            body.data.authority !== contract.authority || body.data.version !== contract.version ||
+            body.data.readOnly !== true || !Array.isArray(body.data.categories)) {
+          throw new Error('Integration catalogue response is invalid.');
+        }
+        if (body.data.categories.length === 0) return body.data;
+        if (body.data.categories.length !== contract.categories.length) {
+          throw new Error('Integration catalogue response is incomplete.');
+        }
+        body.data.categories.forEach(function(category, categoryIndex) {
+          var expected = contract.categories[categoryIndex];
+          if (!exactKeys(category, ['key', 'label', 'providers']) || category.key !== expected.key ||
+              category.label !== expected.label || !Array.isArray(category.providers) ||
+              category.providers.length !== expected.providers.length) {
+            throw new Error('Integration catalogue category is invalid.');
           }
-          projected[connector.provider] = connector.status;
+          category.providers.forEach(function(provider, providerIndex) {
+            if (!validProvider(provider, expected.providers[providerIndex])) {
+              throw new Error('Integration catalogue provider is invalid.');
+            }
+          });
         });
-        if (!projected.retell || !projected.voice) throw new Error('Canonical integration status is incomplete.');
-        return projected;
+        return body.data;
       }
 
-      function jobberProjection(response, body) {
-        if (!response.ok || !body || typeof body.available !== 'boolean' ||
-            typeof body.configured !== 'boolean' || typeof body.connected !== 'boolean') {
-          throw new Error('Jobber connection status is unavailable.');
-        }
-        return Object.freeze({
-          available: body.available,
-          configured: body.configured,
-          connected: body.connected
+      function createElement(tag, className, text) {
+        var element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+      }
+
+      function appendDetail(listElement, label, value) {
+        listElement.append(
+          createElement('dt', '', label),
+          createElement('dd', '', value)
+        );
+      }
+
+      function capabilityValue(value) {
+        if (value === 'none') return 'None';
+        return value === 'unavailable' ? 'Unavailable' : value;
+      }
+
+      function providerCard(provider) {
+        var item = createElement('li', 'integration-card');
+        item.dataset.providerKey = provider.key;
+        var header = createElement('div', 'integration-card-header');
+        var mark = createElement('span', 'integration-mark', provider.mark);
+        mark.setAttribute('aria-hidden', 'true');
+        var copy = createElement('div', 'integration-card-copy');
+        copy.append(
+          createElement('h4', '', provider.name),
+          createElement('p', 'integration-card-description', provider.description)
+        );
+        header.append(mark, copy);
+
+        var pill = createElement('span', 'integration-status', provider.presentation.label);
+        pill.dataset.status = provider.presentation.state;
+        pill.id = 'integration-provider-' + provider.key + '-status';
+
+        var details = createElement('details', 'integration-details');
+        details.append(createElement('summary', '', 'Authority and capabilities'));
+        var detailList = createElement('dl', 'integration-detail-list');
+        appendDetail(detailList, 'Configuration authority', authorityLabels[provider.authority.configuration]);
+        appendDetail(detailList, 'Connection authority', authorityLabels[provider.authority.connection]);
+        appendDetail(detailList, 'Status basis', basisLabels[provider.authority.basis]);
+        capabilityLabels.forEach(function(definition) {
+          appendDetail(detailList, definition[1], capabilityValue(provider.capabilities[definition[0]]));
         });
+        details.append(detailList);
+        item.append(header, pill, details);
+        return item;
       }
 
-      function renderCanonical(projected) {
-        ['retell', 'voice'].forEach(function(provider) {
-          setStatus('canonical-' + provider + '-status', projected[provider], canonicalLabels[projected[provider]]);
+      function renderCatalogue(catalogue) {
+        var fragment = document.createDocumentFragment();
+        catalogue.categories.forEach(function(category) {
+          var categoryItem = createElement('li', 'integration-category');
+          categoryItem.dataset.categoryKey = category.key;
+          var heading = createElement('h3', '', category.label);
+          heading.id = 'integration-category-' + category.key;
+          var providerList = createElement('ul', 'integration-provider-list');
+          providerList.setAttribute('aria-labelledby', heading.id);
+          category.providers.forEach(function(provider) { providerList.append(providerCard(provider)); });
+          categoryItem.append(heading, providerList);
+          fragment.append(categoryItem);
         });
+        list.replaceChildren(fragment);
       }
 
-      function renderJobber(status) {
-        currentJobber = status;
-        if (!status.available || !status.configured) {
-          setStatus('jobber-status', 'unavailable', 'Unavailable');
-          jobberButton.textContent = 'Unavailable';
-          jobberButton.disabled = true;
-          return;
-        }
-        setStatus('jobber-status', status.connected ? 'active' : 'inactive', status.connected ? 'Connected' : 'Not connected');
-        jobberButton.textContent = canManageJobber ? (status.connected ? 'Disconnect' : 'Connect') : 'Owner or admin required';
-        jobberButton.disabled = !canManageJobber;
+      function setState(state) {
+        root.dataset.state = state;
+        loading.hidden = state !== 'loading';
+        empty.hidden = state !== 'empty';
+        error.hidden = state !== 'error';
+        list.hidden = state !== 'ready';
       }
 
-      function showToast(message, type) {
-        if (!window.NotificationService) return;
-        window.NotificationService.showInline(message, type || 'info', {
-          targetId: 'toast', className: 'toast', includeTypeClass: true, duration: 3500
-        });
-      }
-
-      function finishCallbackConfirmation() {
-        if (!callbackPending) return;
-        callbackPending = false;
-        window.history.replaceState({}, '', window.location.pathname);
-        if (currentJobber.available && currentJobber.configured && currentJobber.connected) {
-          showToast('Jobber connection confirmed.', 'success');
-        } else {
-          showToast('Jobber connection could not be confirmed.', 'error');
-        }
-      }
-
-      async function loadIntegrationStatus() {
-        root.dataset.state = 'loading';
+      async function loadCatalogue(options) {
+        var userInitiated = Boolean(options && options.userInitiated);
+        var restoreFocusOnSuccess = Boolean(
+          options && options.restoreFocusOnSuccess && error.contains(document.activeElement)
+        );
+        setState('loading');
         root.setAttribute('aria-busy', 'true');
         refreshButton.disabled = true;
-        document.getElementById('integrationStatusMessage').textContent = 'Loading authoritative connection status.';
+        retryButton.disabled = true;
+        statusMessage.textContent = 'Loading the authoritative integration catalogue.';
         try {
-          var results = await Promise.all([
-            NorthStarAccountSession.load(),
-            NorthStarAccountSession.fetch('/api/v1/integrations/status', { cache: 'no-store' }),
-            NorthStarAccountSession.fetch('/api/integrations/jobber/status', { cache: 'no-store' })
-          ]);
-          var account = results[0];
-          var bodies = await Promise.all([readJson(results[1]), readJson(results[2])]);
-          var canonical = canonicalProjection(results[1], bodies[0]);
-          var jobber = jobberProjection(results[2], bodies[1]);
-          var role = account && account.membership ? account.membership.role : '';
-          canManageJobber = role === 'owner' || role === 'admin';
-          renderCanonical(canonical);
-          renderJobber(jobber);
-          root.dataset.state = 'ready';
-          document.getElementById('integrationStatusMessage').textContent = 'Authoritative connection status loaded.';
-          finishCallbackConfirmation();
-        } catch (_error) {
-          setStatus('canonical-retell-status', 'error', 'Unavailable');
-          setStatus('canonical-voice-status', 'error', 'Unavailable');
-          renderJobber(Object.freeze({ available: false, configured: false, connected: false }));
-          root.dataset.state = 'error';
-          document.getElementById('integrationStatusMessage').textContent = 'Authoritative connection status is temporarily unavailable.';
+          var response = await NorthStarAccountSession.fetch('/api/v1/integrations/catalogue', { cache: 'no-store' });
+          var body = await response.json().catch(function() {
+            throw new Error('Integration catalogue response is not JSON.');
+          });
+          var catalogue = catalogueProjection(response, body);
+          if (catalogue.categories.length === 0) {
+            list.replaceChildren();
+            setState('empty');
+            statusMessage.textContent = 'The reviewed integration catalogue is empty.';
+          } else {
+            renderCatalogue(catalogue);
+            setState('ready');
+            statusMessage.textContent = 'Authoritative integration catalogue loaded.';
+          }
+          if (restoreFocusOnSuccess) catalogueHeading.focus();
+        } catch (_loadError) {
+          list.replaceChildren();
+          setState('error');
+          statusMessage.textContent = 'Integration authority is unavailable. No connection status was inferred.';
+          if (userInitiated) error.focus();
         } finally {
           root.setAttribute('aria-busy', 'false');
           refreshButton.disabled = false;
+          retryButton.disabled = false;
         }
       }
 
-      async function manageJobber() {
-        if (!canManageJobber || !currentJobber.available || !currentJobber.configured) return;
-        if (!currentJobber.connected) {
-          window.location.assign('/api/integrations/jobber/auth');
-          return;
-        }
-        if (!window.confirm('Disconnect Jobber? This will stop lead sync.')) return;
-        try {
-          var response = await NorthStarAccountSession.fetch('/api/integrations/jobber/disconnect', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
-          });
-          var body = await readJson(response);
-          if (!response.ok || !body || body.success !== true) throw new Error('disconnect failed');
-          showToast('Jobber disconnected.', 'success');
-          await loadIntegrationStatus();
-        } catch (_error) {
-          showToast('Jobber integration is not currently available.', 'error');
-        }
-      }
-
-      refreshButton.addEventListener('click', loadIntegrationStatus);
-      jobberButton.addEventListener('click', manageJobber);
-      window.NorthStarIntegrations = Object.freeze({ reload: loadIntegrationStatus });
-      loadIntegrationStatus();
+      refreshButton.addEventListener('click', function() { loadCatalogue({ userInitiated: true }); });
+      retryButton.addEventListener('click', function(event) {
+        loadCatalogue({ userInitiated: true, restoreFocusOnSuccess: event.isTrusted && event.detail === 0 });
+      });
+      window.NorthStarIntegrations = Object.freeze({
+        reload: function() { return loadCatalogue({ userInitiated: false }); }
+      });
+      loadCatalogue({ userInitiated: false });
     })();
   </script>
   <script>NavComponent.init('integrations');</script>

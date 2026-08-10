@@ -2,36 +2,24 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
-const path = require('path');
-const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
-const ROOT = path.resolve(__dirname, '..', '..');
-const VIEWPORTS = [
-  { label: '1440x900', width: 1440, height: 900 },
-  { label: '390x844', width: 390, height: 844 },
-];
-const JOBBER_STATUS_PATH = '/api/integrations/jobber/status';
-const JOBBER_AUTH_PATH = '/api/integrations/jobber/auth';
-const JOBBER_CALLBACK_PATH = '/api/integrations/jobber/callback';
-
-function responseCookies(response) {
-  const values = {};
-  for (const header of response.headers['set-cookie'] || []) {
-    const pair = header.split(';')[0];
-    const separator = pair.indexOf('=');
-    values[pair.slice(0, separator)] = decodeURIComponent(pair.slice(separator + 1));
-  }
-  return values;
-}
-
-function cookieHeader(values) {
-  return Object.entries(values)
-    .map(([name, value]) => `${name}=${encodeURIComponent(value)}`)
-    .join('; ');
-}
+const ORG_ID = '8f000000-0000-4000-8000-000000000001';
+const OWNER_ID = '8f000000-0000-4000-8000-000000000002';
+const VIEWPORTS = Object.freeze([
+  Object.freeze({ label: '1440x900', width: 1440, height: 900 }),
+  Object.freeze({ label: '390x844', width: 390, height: 844 }),
+]);
+const PROVIDER_ENVIRONMENT = Object.freeze([
+  'RETELL_API_KEY', 'RETELL_AGENT_ID', 'RETELL_PHONE_NUMBER', 'RETELL_WEBHOOK_SECRET',
+  'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN',
+  'TWILIO_PHONE_NUMBER', 'RESEND_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS',
+  'JOBBER_CLIENT_ID', 'JOBBER_CLIENT_SECRET', 'JOBBER_INTEGRATION_ENABLED',
+  'JOBBER_OAUTH_ENABLED', 'JOBBER_TOKEN_PERSISTENCE_ENABLED',
+]);
 
 async function listen(app) {
   const server = app.listen(0, '127.0.0.1');
@@ -44,579 +32,217 @@ async function listen(app) {
 
 async function closeServer(server) {
   if (!server) return;
-  await new Promise((resolve, reject) => {
-    server.close(error => error ? reject(error) : resolve());
-  });
+  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 }
 
-async function waitFor(predicate, label, timeoutMilliseconds = 10000) {
-  const deadline = Date.now() + timeoutMilliseconds;
-  while (Date.now() < deadline) {
-    if (predicate()) return;
-    await new Promise(resolve => setTimeout(resolve, 20));
-  }
-  throw new Error(`Timed out waiting for ${label}`);
-}
-
-function unavailableProjection(body) {
-  return {
-    available: body && body.available,
-    configured: body && body.configured,
-    connected: body && body.connected,
-  };
-}
-
-function assertUnavailableProjection(body, label) {
-  assert.deepStrictEqual(
-    unavailableProjection(body),
-    { available: false, configured: false, connected: false },
-    `${label} uses the mounted unavailable projection`
+async function persistedDigest(pool) {
+  const ownership = await pool.query(
+    `SELECT organization_id, id, provider, external_integration_id, status, metadata
+       FROM canonical_integration_ownership
+      ORDER BY organization_id, id`
   );
+  const oauth = await pool.query(
+    `SELECT id, organization_id, user_id, auth_session_id, provider, state_hash, status
+       FROM oauth_authorization_states
+      ORDER BY id`
+  );
+  const profiles = await pool.query(
+    `SELECT organization_id, id, version_number, is_active, raw_profile
+       FROM canonical_business_profiles
+      ORDER BY organization_id, id`
+  );
+  return crypto.createHash('sha256')
+    .update(JSON.stringify({ ownership: ownership.rows, oauth: oauth.rows, profiles: profiles.rows }))
+    .digest('hex');
 }
 
-function assertUnavailableBoundary(response, label) {
-  assert.strictEqual(response.status, 503, `${label} is unavailable`);
-  assert.strictEqual(response.headers.location, undefined, `${label} has no redirect Location`);
-  assert.strictEqual(response.headers['set-cookie'], undefined, `${label} creates no cookies`);
-  assert.deepStrictEqual(
-    { error: response.body.error, code: response.body.code },
-    { error: 'Jobber integration is unavailable', code: 'jobber_unavailable' },
-    `${label} returns the bounded source-owned response`
-  );
-}
-
-function requestInventory(entries) {
-  const counts = new Map();
-  for (const entry of entries) {
-    const key = `${entry.phase} ${entry.method} ${entry.pathname}`;
-    counts.set(key, (counts.get(key) || 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, count]) => ({ key, count }));
-}
-
-async function provisionMountedIdentity(app, pool) {
-  const email = `jobber-browser-${crypto.randomUUID()}@example.test`;
-  const password = 'Jobber browser password 123!';
-  await pool.query("DELETE FROM auth_rate_limits WHERE event_type = 'signup_ip'");
-  const signup = await request(app).post('/api/auth/signup').send({
-    name: 'Jobber Browser Owner',
-    businessName: 'Jobber Browser Company',
-    phone: '8605550177',
-    email,
-    password,
-  });
-  assert.strictEqual(signup.status, 202, 'mounted verification-first signup succeeds');
-  assert.strictEqual(signup.body.code, 'verification_required');
-  assert.strictEqual(signup.headers['set-cookie'], undefined, 'signup remains anonymous');
-  const provisioned = await pool.query(
-    'SELECT id, organization_id FROM users WHERE email_normalized = $1',
-    [email]
-  );
-  assert.strictEqual(provisioned.rowCount, 1, 'signup creates one pending PostgreSQL identity');
-  // TEST PROVISIONING ONLY: verification delivery is owned by the accepted
-  // account-lifecycle slice and is not under test in this Jobber harness.
-  await pool.query("UPDATE users SET status = 'active' WHERE id = $1", [provisioned.rows[0].id]);
-  await pool.query(
-    `UPDATE subscriptions
-        SET status = 'trialing',
-            trial_started_at = transaction_timestamp(),
-            trial_ends_at = transaction_timestamp() + INTERVAL '14 days',
-            updated_at = transaction_timestamp()
-      WHERE organization_id = $1`,
-    [provisioned.rows[0].organization_id]
-  );
-  const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-  await putBusinessProfile(pool, {
-    organizationId: provisioned.rows[0].organization_id,
-    userId: provisioned.rows[0].id,
-    profile: canonicalFenceProfile({ companyName: 'Jobber Browser Company' }),
-  });
-  const login = await request(app).post('/api/auth/login').send({ email, password });
-  assert.strictEqual(login.status, 200, 'verified test owner obtains a mounted session through login');
-  const cookies = responseCookies(login);
-  assert.ok(cookies.northstar_access && cookies.northstar_refresh && cookies.northstar_csrf, 'login sets the real credential cookies');
-  const cookie = cookieHeader(cookies);
-
-  const current = await request(app).get('/api/auth/me').set('Cookie', cookie);
-  assert.strictEqual(current.status, 200, 'verified identity can read its mounted account');
-  assert.strictEqual(current.body.account.user.status, 'active');
-  assert.strictEqual(current.body.account.onboarding.status, 'complete');
-
-  const authority = await pool.query(
-    `SELECT account.id AS user_id,
-            account.organization_id,
-            account.status AS user_status,
-            membership.status AS membership_status,
-            membership.role,
-            session.id AS session_id,
-            session.status AS session_status,
-            onboarding.status AS onboarding_status,
-            EXISTS (
-              SELECT 1
-                FROM canonical_business_profiles profile
-               WHERE profile.organization_id = account.organization_id
-                 AND profile.is_active = TRUE
-            ) AS active_profile
-       FROM users account
-       JOIN organization_memberships membership
-         ON membership.user_id = account.id
-        AND membership.organization_id = account.organization_id
-       JOIN auth_sessions session
-         ON session.user_id = account.id
-        AND session.organization_id = account.organization_id
-        AND session.membership_id = membership.id
-       JOIN organization_onboarding onboarding
-         ON onboarding.organization_id = account.organization_id
-      WHERE account.email_normalized = $1
-      ORDER BY session.created_at DESC
-      LIMIT 1`,
-    [email]
-  );
-  assert.strictEqual(authority.rowCount, 1, 'mounted identity has one current PostgreSQL authority graph');
-  assert.deepStrictEqual(
-    {
-      user: authority.rows[0].user_status,
-      membership: authority.rows[0].membership_status,
-      role: authority.rows[0].role,
-      session: authority.rows[0].session_status,
-      onboarding: authority.rows[0].onboarding_status,
-      activeProfile: authority.rows[0].active_profile,
-    },
-    {
-      user: 'active',
-      membership: 'active',
-      role: 'owner',
-      session: 'active',
-      onboarding: 'complete',
-      activeProfile: true,
-    },
-    'PostgreSQL reflects the mounted verified integration-test authority graph'
-  );
-
-  return {
-    email,
-    password,
-    cookie,
-    userId: authority.rows[0].user_id,
-    sessionId: authority.rows[0].session_id,
-  };
-}
-
-async function exerciseViewport(browser, engine, viewport, pool, baseUrl, identity, totals) {
+async function exerciseViewport(browser, origin, session, viewport, evidence) {
   const context = await browser.newContext({ viewport });
-  const requests = [];
-  const responses = [];
-  const responseReads = [];
-  const pageErrors = [];
-  const consoleErrors = [];
-  const requestFailures = [];
-  const interceptedNonlocal = [];
-  const requestPhases = new WeakMap();
-  let phase = 'login';
-  const oauthStateBefore = await pool.query(
-    'SELECT count(*)::int AS count FROM oauth_authorization_states WHERE user_id = $1',
-    [identity.userId]
-  );
-  assert.deepStrictEqual(oauthStateBefore.rows, [{ count: 0 }], 'browser flow begins with no OAuth state');
-
   await context.addInitScript(() => {
-    const evidence = window.__jobberUnavailableRatification = {
-      toastMessages: [],
-      statusTexts: [],
-      buttonTexts: [],
-    };
-    function appendUnique(target, value) {
-      const normalized = String(value || '').replace(/\s+/g, ' ').trim();
-      if (normalized && target[target.length - 1] !== normalized) target.push(normalized);
+    window.__jobberBrowserPoison = '<img src=x onerror=window.__jobberXss=1>';
+    window.__jobberXss = 0;
+    localStorage.setItem('northstar-theme', 'dark');
+    localStorage.setItem('jobber', 'connected');
+    sessionStorage.setItem('jobber_status', 'connected');
+  });
+  await context.addCookies([
+    { name: 'northstar_access', value: session.accessToken, url: origin, httpOnly: true, sameSite: 'Lax' },
+    { name: 'northstar_csrf', value: session.csrfToken, url: origin, httpOnly: false, sameSite: 'Lax' },
+  ]);
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.origin === origin) return route.continue();
+    if (['fonts.googleapis.com', 'fonts.gstatic.com'].includes(url.hostname)) {
+      return route.fulfill({
+        status: 200,
+        contentType: url.hostname === 'fonts.googleapis.com' ? 'text/css' : 'font/woff2',
+        body: '',
+      });
     }
-    function snapshot() {
-      const toast = document.getElementById('toast');
-      const status = document.getElementById('jobber-status');
-      const button = document.getElementById('jobber-btn');
-      if (toast) appendUnique(evidence.toastMessages, toast.textContent);
-      if (status) appendUnique(evidence.statusTexts, status.textContent);
-      if (button) appendUnique(evidence.buttonTexts, button.textContent);
-    }
-    new MutationObserver(snapshot).observe(document, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ['class'],
-    });
-    document.addEventListener('DOMContentLoaded', snapshot);
+    evidence.external.push({ method: route.request().method(), url: route.request().url() });
+    return route.fulfill({ status: 204, body: '' });
   });
-
-  await context.route('**/*', async route => {
-    const destination = new URL(route.request().url());
-    if (['http:', 'https:'].includes(destination.protocol) && destination.origin !== baseUrl) {
-      interceptedNonlocal.push({ phase, origin: destination.origin, pathname: destination.pathname });
-      if (['fonts.googleapis.com', 'fonts.gstatic.com'].includes(destination.hostname)) {
-        await route.fulfill({
-          status: 200,
-          contentType: destination.hostname === 'fonts.googleapis.com' ? 'text/css' : 'font/woff2',
-          body: '',
-        });
-      } else {
-        await route.abort('blockedbyclient');
-      }
-      return;
-    }
-    await route.continue();
-  });
-
-  context.on('request', browserRequest => {
-    const destination = new URL(browserRequest.url());
-    requestPhases.set(browserRequest, phase);
-    requests.push({
-      phase,
-      method: browserRequest.method(),
-      url: destination.toString(),
-      origin: destination.origin,
-      pathname: destination.pathname,
-      local: destination.origin === baseUrl,
-      navigation: browserRequest.isNavigationRequest(),
-      authorization: browserRequest.headers().authorization || null,
-    });
-    totals.requests += 1;
-  });
-  context.on('response', response => {
-    const destination = new URL(response.url());
-    if (destination.pathname !== JOBBER_STATUS_PATH) return;
-    const responsePhase = requestPhases.get(response.request()) || phase;
-    const reading = response.json().then(body => {
-      responses.push({ phase: responsePhase, status: response.status(), body });
-      totals.jobberStatusResponses += 1;
-    });
-    responseReads.push(reading);
-  });
-  context.on('requestfailed', browserRequest => {
-    requestFailures.push({
-      url: browserRequest.url(),
-      failure: browserRequest.failure() && browserRequest.failure().errorText,
-    });
+  context.on('request', request => {
+    const url = new URL(request.url());
+    if (url.origin !== origin) return;
+    evidence.local.push({ method: request.method(), path: url.pathname, authorization: request.headers().authorization || null });
   });
 
   const page = await context.newPage();
-  page.on('pageerror', error => pageErrors.push(error.message));
+  const label = viewport.label;
+  page.on('pageerror', error => evidence.pageErrors.push(label + ': ' + (error.stack || error.message)));
   page.on('console', message => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() === 'error') evidence.consoleErrors.push(label + ': ' + message.text());
   });
-
   try {
-    await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => Boolean(window.NorthStarAccountSession));
-    const account = await page.evaluate(credentials => (
-      window.NorthStarAccountSession.login(credentials.email, credentials.password)
-    ), { email: identity.email, password: identity.password });
-    assert.strictEqual(account.user.status, 'active', 'browser login reloads verified PostgreSQL authority');
-    assert.strictEqual(account.onboarding.status, 'complete', 'browser login reloads completed onboarding');
-
-    phase = 'forged_query';
-    const forgedResponse = await page.goto(
-      `${baseUrl}/dashboard/integrations?jobber=connected`,
+    const response = await page.goto(
+      origin + '/dashboard/integrations?jobber=connected&provider=jobber&status=connected#connected',
       { waitUntil: 'domcontentloaded' }
     );
-    assert.strictEqual(forgedResponse.status(), 200, 'real integrations page is served');
-    await page.waitForFunction(() => (
-      window.__jobberUnavailableRatification &&
-      window.__jobberUnavailableRatification.toastMessages.includes('Jobber connection could not be confirmed.')
-    ));
-    await waitFor(
-      () => responses.filter(entry => entry.phase === 'forged_query').length >= 1,
-      `${engine} ${viewport.label} initial Jobber status projection`
-    );
-    await Promise.all(responseReads);
+    assert.strictEqual(response.status(), 200, label + ': mounted integrations page');
+    await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'ready');
 
-    const initialStatusRequests = requests.filter(entry => (
-      entry.phase === 'forged_query' &&
-      entry.method === 'GET' &&
-      entry.pathname === JOBBER_STATUS_PATH
-    ));
-    assert.strictEqual(initialStatusRequests.length, 1, 'the fresh page projection confirms both load and forged callback state');
-    for (const entry of responses.filter(candidate => candidate.phase === 'forged_query')) {
-      assert.strictEqual(entry.status, 200);
-      assertUnavailableProjection(entry.body, 'forged query');
-    }
-
-    const forgedUi = await page.evaluate(() => ({
-      origin: location.origin,
-      pathname: location.pathname,
-      search: location.search,
-      status: document.getElementById('jobber-status').textContent.replace(/\s+/g, ' ').trim(),
-      button: document.getElementById('jobber-btn').textContent.trim(),
-      disabled: document.getElementById('jobber-btn').disabled,
-      sessionClient: Boolean(window.NorthStarAccountSession),
-      sessionClientFrozen: Object.isFrozen(window.NorthStarAccountSession),
-      sessionScriptCount: document.querySelectorAll('script[src="/js/auth-session.js"]').length,
-      evidence: window.__jobberUnavailableRatification,
-    }));
-    assert.strictEqual(forgedUi.origin, baseUrl, 'forged query stays on the disposable origin');
-    assert.strictEqual(forgedUi.pathname, '/dashboard/integrations');
-    assert.strictEqual(forgedUi.search, '', 'forged success query is removed');
-    assert.strictEqual(forgedUi.status, 'Unavailable');
-    assert.strictEqual(forgedUi.button, 'Unavailable');
-    assert.strictEqual(forgedUi.disabled, true, 'unavailable Jobber has no actionable control');
-    assert.strictEqual(forgedUi.sessionClient, true, 'real account session client is loaded');
-    assert.strictEqual(forgedUi.sessionClientFrozen, true, 'real account session client remains immutable');
-    assert.strictEqual(forgedUi.sessionScriptCount, 1, 'one real account session client is mounted');
-    assert.ok(forgedUi.evidence.toastMessages.includes('Jobber connection could not be confirmed.'));
-    assert.ok(!forgedUi.evidence.toastMessages.some(message => /Jobber connected successfully/i.test(message)), 'forged query never presents success');
-    assert.ok(!forgedUi.evidence.statusTexts.some(status => status === 'Connected'), 'forged query never presents connected status');
-    assert.ok(!forgedUi.evidence.buttonTexts.some(button => button === 'Disconnect'), 'forged query never presents a disconnect action');
-
-    phase = 'disabled_action';
-    const requestCountBeforeDisabledClick = requests.length;
-    await page.evaluate(() => document.getElementById('jobber-btn').click());
-    await page.waitForTimeout(500);
-    const disabledUi = await page.evaluate(() => ({
-      origin: location.origin,
-      pathname: location.pathname,
-      search: location.search,
-      status: document.getElementById('jobber-status').textContent.replace(/\s+/g, ' ').trim(),
-      button: document.getElementById('jobber-btn').textContent.trim(),
-      disabled: document.getElementById('jobber-btn').disabled,
-      readyState: document.readyState,
-      evidence: window.__jobberUnavailableRatification,
-    }));
-    assert.deepStrictEqual(
-      {
-        origin: disabledUi.origin,
-        pathname: disabledUi.pathname,
-        search: disabledUi.search,
-        status: disabledUi.status,
-        button: disabledUi.button,
-        disabled: disabledUi.disabled,
-      },
-      {
-        origin: baseUrl,
-        pathname: '/dashboard/integrations',
-        search: '',
-        status: 'Unavailable',
-        button: 'Unavailable',
-        disabled: true,
-      },
-      'the unavailable connector remains visibly and functionally disabled'
-    );
-    assert.ok(['interactive', 'complete'].includes(disabledUi.readyState), 'page remains operational');
-    assert.ok(!disabledUi.evidence.toastMessages.some(message => /Jobber connected successfully/i.test(message)));
-    assert.ok(!disabledUi.evidence.statusTexts.some(status => status === 'Connected'));
-    assert.ok(!disabledUi.evidence.buttonTexts.some(button => button === 'Disconnect'));
-
-    const disabledRequests = requests.slice(requestCountBeforeDisabledClick);
-    assert.strictEqual(disabledRequests.some(entry => entry.pathname === JOBBER_STATUS_PATH), false, 'disabled action performs no redundant status read');
-    assert.strictEqual(disabledRequests.some(entry => entry.pathname === JOBBER_AUTH_PATH), false, 'disabled action never navigates to OAuth');
-    assert.strictEqual(disabledRequests.some(entry => !entry.local), false, 'disabled action produces no nonlocal destination');
-    assert.strictEqual(
-      disabledRequests.some(entry => entry.navigation && entry.pathname !== '/dashboard/integrations'),
-      false,
-      'disabled action produces no navigation away from the local page'
-    );
-    assert.strictEqual(page.isClosed(), false, 'disabled action does not crash or close the page');
-    assert.deepStrictEqual(
-      requests.filter(entry => (
-        ['forged_query', 'disabled_action'].includes(entry.phase) &&
-        !['GET', 'HEAD', 'OPTIONS'].includes(entry.method)
-      )),
-      [],
-      'forged load and disabled action perform no browser mutation'
-    );
-
-    const providerDestinations = requests.filter(entry => /(?:^|\.)getjobber\.com$/i.test(new URL(entry.url).hostname));
-    assert.deepStrictEqual(providerDestinations, [], 'browser never targets a Jobber provider destination');
-    assert.ok(
-      requests.filter(entry => !entry.local).every(entry => (
-        ['fonts.googleapis.com', 'fonts.gstatic.com'].includes(new URL(entry.url).hostname)
-      )),
-      'the only nonlocal page assets are locally fulfilled font requests'
-    );
-    assert.ok(requests.every(entry => entry.authorization === null), 'browser sends no Authorization header');
-    assert.deepStrictEqual(requestFailures, [], 'browser has no failed requests');
-    assert.deepStrictEqual(pageErrors, [], 'browser has no uncaught page errors');
-    assert.deepStrictEqual(consoleErrors, [], 'browser has no console errors');
-    const oauthStateAfter = await pool.query(
-      'SELECT count(*)::int AS count FROM oauth_authorization_states WHERE user_id = $1',
-      [identity.userId]
-    );
-    assert.deepStrictEqual(oauthStateAfter.rows, oauthStateBefore.rows, 'browser unavailable flow creates no OAuth state');
-
-    return {
-      status: disabledUi.status,
-      button: disabledUi.button,
-      forgedQueryRemoved: forgedUi.search === '',
-      forgedSuccessPresented: false,
-      unavailableMessage: 'Jobber connection could not be confirmed.',
-      initialStatusRequests: initialStatusRequests.length,
-      connectStatusRequests: 0,
-      authNavigations: disabledRequests.filter(entry => entry.pathname === JOBBER_AUTH_PATH).length,
-      providerDestinations: providerDestinations.map(entry => entry.url),
-      nonlocalDestinations: Array.from(new Set(
-        requests.filter(entry => !entry.local).map(entry => new URL(entry.url).origin)
-      )).sort(),
-      interceptedNonlocalDestinations: Array.from(new Set(
-        interceptedNonlocal.map(entry => entry.origin)
-      )).sort(),
-      oauthStateRowsBefore: oauthStateBefore.rows[0].count,
-      oauthStateRowsAfter: oauthStateAfter.rows[0].count,
-      localRequestInventory: requestInventory(requests.filter(entry => entry.local)),
-      pageErrors,
-      consoleErrors,
+    const assertTruthful = async phase => {
+      const projection = await page.evaluate(() => ({
+        jobberState: document.getElementById('integration-provider-jobber-status')?.dataset.status,
+        jobberLabel: document.getElementById('integration-provider-jobber-status')?.textContent.trim(),
+        retellState: document.getElementById('integration-provider-retell-status')?.dataset.status,
+        providerCards: document.querySelectorAll('[data-provider-key]').length,
+        jobberCards: document.querySelectorAll('[data-provider-key="jobber"]').length,
+        providerActions: document.querySelectorAll('[data-provider-key] button,[data-provider-key] a[href],form').length,
+        oauthLinks: document.querySelectorAll('a[href*="jobber"],a[href*="oauth"],a[href*="callback"]').length,
+        poisonVisible: document.body.textContent.includes(window.__jobberBrowserPoison),
+        xss: window.__jobberXss,
+        query: location.search,
+        hash: location.hash,
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      }));
+      assert.deepStrictEqual(
+        [projection.jobberState, projection.jobberLabel],
+        ['coming_soon', 'Coming soon'],
+        `${label}/${phase}: source-disabled Jobber remains server-authoritative`
+      );
+      assert.strictEqual(projection.retellState, 'requires_provider_approval', `${label}/${phase}: missing authority fails closed`);
+      assert.strictEqual(projection.providerCards, 26, `${label}/${phase}: exact provider inventory`);
+      assert.strictEqual(projection.jobberCards, 1, `${label}/${phase}: Jobber is reconciled once`);
+      assert.strictEqual(projection.providerActions, 0, `${label}/${phase}: no provider management controls`);
+      assert.strictEqual(projection.oauthLinks, 0, `${label}/${phase}: no OAuth destination`);
+      assert.strictEqual(projection.poisonVisible, false, `${label}/${phase}: browser poison is not rendered`);
+      assert.strictEqual(projection.xss, 0, `${label}/${phase}: browser poison does not execute`);
+      assert.match(projection.query, /jobber=connected/, `${label}/${phase}: forged query is inert input, not status`);
+      assert.strictEqual(projection.hash, '#connected', `${label}/${phase}: forged fragment is inert`);
+      assert.strictEqual(projection.overflow, false, `${label}/${phase}: no responsive overflow`);
     };
+
+    await assertTruthful('initial');
+    await page.evaluate(() => {
+      document.documentElement.dataset.jobberStatus = 'connected';
+      document.body.dataset.provider = 'jobber';
+      window.jobberConnected = true;
+    });
+    await page.evaluate(() => window.NorthStarIntegrations.reload());
+    await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'ready');
+    await assertTruthful('rerender');
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'ready');
+    await assertTruthful('reload');
   } finally {
     await context.close();
   }
 }
 
 async function main() {
-  if (!process.env.M19_PG_ADMIN_URL) {
-    throw new Error('Disposable PostgreSQL 18 identity is required');
-  }
-  const browserSelection = String(process.env.NORTHSTAR_BROWSER || 'both').toLowerCase();
-  assert.ok(
-    ['chrome', 'webkit', 'both'].includes(browserSelection),
-    'NORTHSTAR_BROWSER must be chrome, webkit, or both'
-  );
-  const selectedEngines = browserSelection === 'both'
-    ? ['chrome', 'webkit']
-    : [browserSelection];
-  const runtimeSpecs = selectedEngines.map(engine => ({
-    engine,
-    label: engine === 'chrome' ? 'Chrome' : 'Playwright WebKit',
-    runtime: resolveBrowserRuntime(engine),
-  }));
-
-  const allocation = await createSuiteDatabase('jobber-browser');
-  const originalEnvironment = {};
-  for (const key of [
-    'DATABASE_URL',
-    'AUTH_ACCESS_SECRET',
-    'NODE_ENV',
-    'JOBBER_CLIENT_ID',
-    'JOBBER_CLIENT_SECRET',
-    'JOBBER_INTEGRATION_ENABLED',
-    'JOBBER_OAUTH_ENABLED',
-    'JOBBER_TOKEN_PERSISTENCE_ENABLED',
-  ]) {
-    originalEnvironment[key] = process.env[key];
-  }
-  process.env.DATABASE_URL = allocation.connectionString;
-  process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
-  process.env.NODE_ENV = 'test';
-  process.env.JOBBER_CLIENT_ID = 'disposable-browser-client';
-  process.env.JOBBER_CLIENT_SECRET = 'disposable-browser-secret';
-  process.env.JOBBER_INTEGRATION_ENABLED = 'true';
-  process.env.JOBBER_OAUTH_ENABLED = 'true';
-  process.env.JOBBER_TOKEN_PERSISTENCE_ENABLED = 'true';
-
+  if (!process.env.M19_PG_ADMIN_URL) throw new Error('Disposable PostgreSQL 18 identity is required');
+  const selection = String(process.env.NORTHSTAR_BROWSER || 'both').toLowerCase();
+  assert.ok(['chrome', 'webkit', 'both'].includes(selection), 'NORTHSTAR_BROWSER must be chrome, webkit, or both');
+  const engines = selection === 'both' ? ['chrome', 'webkit'] : [selection];
+  const original = new Map();
+  for (const key of ['DATABASE_URL', 'AUTH_ACCESS_SECRET', ...PROVIDER_ENVIRONMENT]) original.set(key, process.env[key]);
+  const suiteDatabase = await createSuiteDatabase('jobber-catalogue');
   let db;
   let server;
-  const browsers = [];
-  const totals = { requests: 0, jobberStatusResponses: 0 };
-  const engineEvidence = {};
+  const launched = [];
+  const evidence = { local: [], external: [], pageErrors: [], consoleErrors: [] };
+  const versions = {};
   try {
+    process.env.DATABASE_URL = suiteDatabase.connectionString;
+    process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
+    for (const key of PROVIDER_ENVIRONMENT) delete process.env[key];
     db = require('../../src/db');
     assert.strictEqual(await db.initDatabase(), true, 'disposable PostgreSQL initializes');
     const pool = db.getPool();
     const postgres = await pool.query(
-      `SELECT current_setting('server_version') AS server_version,
-              current_database() AS database,
-              current_setting('port')::int AS port,
-              current_setting('listen_addresses') AS listen_addresses,
-              host(inet_server_addr()) AS server_address`
+      `SELECT current_setting('server_version') AS version,
+              current_setting('TimeZone') AS timezone,
+              current_setting('data_checksums') AS checksums`
     );
-    assert.match(postgres.rows[0].server_version, /^18\./, 'physical PostgreSQL 18 is required');
-    assert.strictEqual(postgres.rows[0].database, allocation.databaseName);
-    assert.notStrictEqual(postgres.rows[0].port, 5432);
-    assert.strictEqual(postgres.rows[0].listen_addresses, '127.0.0.1');
-    assert.strictEqual(postgres.rows[0].server_address, '127.0.0.1');
-
-    const app = require('../helpers/account-test-app').createDisposableAccountApp();
-    app.get('/dashboard/integrations', (_req, res) => {
-      res.sendFile(path.join(ROOT, 'public', 'dashboard', 'integrations.html'));
+    assert.match(postgres.rows[0].version, /^18\./);
+    assert.strictEqual(postgres.rows[0].timezone, 'UTC');
+    assert.strictEqual(postgres.rows[0].checksums, 'on');
+    await pool.query(
+      `INSERT INTO organizations (id, name, email)
+       VALUES ($1, 'Jobber Catalogue Tenant', 'jobber-catalogue@example.test')`,
+      [ORG_ID]
+    );
+    await pool.query(
+      `INSERT INTO users (id, organization_id, name, email, password_hash, role, status)
+       VALUES ($1, $2, 'Jobber Catalogue Owner', 'jobber-owner@example.test', 'not-used', 'owner', 'active')`,
+      [OWNER_ID, ORG_ID]
+    );
+    const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+    await putBusinessProfile(pool, {
+      organizationId: ORG_ID,
+      userId: OWNER_ID,
+      profile: canonicalFenceProfile({ companyName: 'Jobber Catalogue Tenant' }),
     });
-    const identity = await provisionMountedIdentity(app, pool);
+    const session = await provisionDurableSession(pool, { userId: OWNER_ID, organizationId: ORG_ID, role: 'owner' });
+    const before = await persistedDigest(pool);
 
-    const stateBefore = await pool.query(
-      'SELECT count(*)::int AS count FROM oauth_authorization_states WHERE auth_session_id = $1',
-      [identity.sessionId]
-    );
-    assert.deepStrictEqual(stateBefore.rows, [{ count: 0 }], 'direct unavailable flow begins with no OAuth state');
-    const directStatus = await request(app)
-      .get(JOBBER_STATUS_PATH)
-      .set('Cookie', identity.cookie);
-    assert.strictEqual(directStatus.status, 200);
-    assert.strictEqual(directStatus.headers.location, undefined);
-    assertUnavailableProjection(directStatus.body, 'direct mounted status');
-
-    const directStart = await request(app)
-      .get(JOBBER_AUTH_PATH)
-      .set('Cookie', identity.cookie);
-    const directCallback = await request(app)
-      .get(JOBBER_CALLBACK_PATH)
-      .set('Cookie', identity.cookie)
-      .query({
-        code: `forged-${crypto.randomUUID()}`,
-        state: crypto.randomBytes(32).toString('base64url'),
-      });
-    assertUnavailableBoundary(directStart, 'direct mounted OAuth start');
-    assertUnavailableBoundary(directCallback, 'direct mounted OAuth callback');
-    const stateAfter = await pool.query(
-      'SELECT count(*)::int AS count FROM oauth_authorization_states WHERE auth_session_id = $1',
-      [identity.sessionId]
-    );
-    assert.deepStrictEqual(stateAfter.rows, stateBefore.rows, 'unavailable boundaries create no OAuth state');
-
+    const { app } = require('../../src/server');
     server = await listen(app);
-    const baseUrl = `http://127.0.0.1:${server.address().port}`;
-    for (const spec of runtimeSpecs) {
-      const browser = await spec.runtime.browserType.launch({
-        executablePath: spec.runtime.executablePath,
-        headless: true,
-      });
-      browsers.push(browser);
-      engineEvidence[spec.engine] = { label: spec.label, viewports: {} };
-      for (const viewport of VIEWPORTS) {
-        engineEvidence[spec.engine].viewports[viewport.label] = await exerciseViewport(
-          browser,
-          spec.engine,
-          viewport,
-          pool,
-          baseUrl,
-          identity,
-          totals
-        );
-      }
+    const origin = 'http://127.0.0.1:' + server.address().port;
+    for (const engine of engines) {
+      const runtime = resolveBrowserRuntime(engine);
+      const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
+      launched.push(browser);
+      versions[engine] = browser.version();
+      for (const viewport of VIEWPORTS) await exerciseViewport(browser, origin, session, viewport, evidence);
     }
 
-    console.log('JOBBER_UNAVAILABLE_BROWSER_EVIDENCE ' + JSON.stringify({
-      selected: selectedEngines,
-      postgres: {
-        serverVersion: postgres.rows[0].server_version,
-        port: postgres.rows[0].port,
-        listenAddresses: postgres.rows[0].listen_addresses,
-        serverAddress: postgres.rows[0].server_address,
-      },
-      directMounted: {
-        status: directStatus.status,
-        available: directStatus.body.available,
-        startStatus: directStart.status,
-        startLocation: directStart.headers.location || null,
-        callbackStatus: directCallback.status,
-        callbackLocation: directCallback.headers.location || null,
-        oauthStateRowsBefore: stateBefore.rows[0].count,
-        oauthStateRowsAfter: stateAfter.rows[0].count,
-      },
-      engines: engineEvidence,
-      totals,
+    assert.deepStrictEqual(evidence.external, [], 'no provider or unexpected external request');
+    assert.deepStrictEqual(evidence.pageErrors, [], 'no page errors');
+    assert.deepStrictEqual(evidence.consoleErrors, [], 'no console errors');
+    assert.ok(evidence.local.every(entry => entry.method === 'GET'), 'browser emits only GET requests');
+    assert.ok(evidence.local.every(entry => entry.authorization === null), 'browser emits no bearer authorization');
+    assert.strictEqual(evidence.local.some(entry => /\/api\/integrations\/jobber\/(?:status|auth|callback|disconnect)/.test(entry.path)), false,
+      'browser emits no provider-specific or OAuth request');
+    assert.strictEqual(evidence.local.some(entry => entry.path === '/api/v1/integrations/status'), false,
+      'browser does not consume the legacy status route');
+    assert.ok(evidence.local.filter(entry => entry.path === '/api/v1/integrations/catalogue').length >= engines.length * VIEWPORTS.length * 3,
+      'all forged-state lifecycles consume the server catalogue');
+    assert.strictEqual(await persistedDigest(pool), before, 'forged browser state causes no persisted authority or OAuth change');
+
+    console.log('JOBBER_CATALOGUE_BROWSER_EVIDENCE ' + JSON.stringify({
+      engines,
+      versions,
+      postgres: postgres.rows[0],
+      viewports: VIEWPORTS.map(value => value.label),
+      forgedStates: ['query', 'fragment', 'localStorage', 'sessionStorage', 'DOM dataset', 'window global'],
+      jobberPresentation: 'Coming soon',
+      providerSpecificRequests: 0,
+      oauthRequests: 0,
+      nonGetRequests: 0,
+      providerExternalRequests: 0,
+      persistedDigest: before,
+      physicalSafari: false,
     }));
   } finally {
-    for (const browser of browsers.reverse()) await browser.close().catch(() => {});
+    for (const browser of launched.reverse()) await browser.close().catch(() => {});
     await closeServer(server).catch(() => {});
-    if (db) await db.close().catch(() => {});
-    await allocation.cleanup();
-    for (const [key, value] of Object.entries(originalEnvironment)) {
+    if (db && db.getPool()) await db.getPool().end().catch(() => {});
+    await suiteDatabase.cleanup();
+    for (const [key, value] of original) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
@@ -624,6 +250,6 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error(error);
+  console.error(error && error.stack ? error.stack : error);
   process.exitCode = 1;
 });

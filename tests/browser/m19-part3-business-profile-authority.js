@@ -167,8 +167,12 @@ async function main() {
     const saveResponse = page.waitForResponse((response) =>
       response.url() === origin + '/api/v1/business-profile/financialConfiguration' && response.request().method() === 'PUT'
     );
+    const readinessAfterSave = page.waitForResponse((response) =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' && response.request().method() === 'GET'
+    );
     await page.locator('#saveFinancialConfigurationBtn').click();
     assert.strictEqual((await saveResponse).status(), 200, 'explicit Save must persist');
+    assert.strictEqual((await readinessAfterSave).status(), 200, 'post-save readiness refresh must complete before reload');
     await waitForValue(page, '#fin-taxRatePercent', '9');
 
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -222,8 +226,12 @@ async function main() {
     const missingResponse = page.waitForResponse((response) =>
       response.url() === origin + '/api/v1/business-profile/financialConfiguration' && response.request().method() === 'PUT'
     );
+    const readinessAfterMissingSave = page.waitForResponse((response) =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' && response.request().method() === 'GET'
+    );
     await page.locator('#saveFinancialConfigurationBtn').click();
     assert.strictEqual((await missingResponse).status(), 200, 'explicit missing configuration must save without defaults');
+    assert.strictEqual((await readinessAfterMissingSave).status(), 200, 'post-delete readiness refresh must complete before reload');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelector('#fin-taxRatePercent') && document.querySelector('#fin-taxRatePercent').dataset.authorityState === 'missing');
     assert.strictEqual(await page.locator('#fin-taxRatePercent').inputValue(), '');

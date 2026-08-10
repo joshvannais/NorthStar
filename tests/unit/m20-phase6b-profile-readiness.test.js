@@ -10,6 +10,8 @@ const {
   REGISTRY,
   parseProfileReadinessWrite,
   projectProfileReadiness,
+  stableHash,
+  transitionCompatibleProfileReadiness,
 } = require('../../src/services/profileReadiness');
 
 const REVIEWED_AT = new Date('2026-08-09T16:00:00.000Z');
@@ -74,6 +76,21 @@ function reviewAll(profile) {
   }), REVIEWED_AT);
 }
 
+function withLegacyReview(profile, itemId, source) {
+  const stored = JSON.parse(JSON.stringify(profile));
+  stored.profileReadiness = {
+    schemaVersion: PROFILE_READINESS_SCHEMA_VERSION,
+    items: {
+      [itemId]: {
+        applicability: 'applicable',
+        lastReviewedAt: REVIEWED_AT.toISOString(),
+        reviewedValueHash: stableHash(itemId, source),
+      },
+    },
+  };
+  return stored;
+}
+
 describe('Mission 20 Phase 6B Profile Readiness contract', () => {
   test('uses the exact ordered registry and only authorized categorical states', () => {
     expect(REGISTRY.map(function (item) { return item.id; })).toEqual(IDS);
@@ -135,6 +152,289 @@ describe('Mission 20 Phase 6B Profile Readiness contract', () => {
     expect(changedProjection.items.business_locale.state).toBe('reviewed');
     expect(changedProjection.items.voice_configuration.state).toBe('reviewed');
     expect(changedProjection.overallState).toBe('review_needed');
+  });
+
+  test.each([
+    {
+      label: 'contact with an explicit blank phone',
+      itemId: 'business_contact',
+      mutate: profile => { profile.company.phone = ''; },
+      legacySource: { email: 'office@example.test', phone: '' },
+      legacyHash: '6d9a8f90dd134237dfddcdc2e08ceba58a8a2f4325d73527826b2bac6238f0ca',
+    },
+    {
+      label: 'contact with a missing phone',
+      itemId: 'business_contact',
+      mutate: profile => { delete profile.company.phone; },
+      legacySource: { email: 'office@example.test', phone: '' },
+      legacyHash: '6d9a8f90dd134237dfddcdc2e08ceba58a8a2f4325d73527826b2bac6238f0ca',
+    },
+    {
+      label: 'contact with a whitespace phone',
+      itemId: 'business_contact',
+      mutate: profile => { profile.company.phone = ' \t\r\n '; },
+      legacySource: { email: 'office@example.test', phone: ' \t\r\n ' },
+    },
+    {
+      label: 'contact with a nonempty invalid email sibling',
+      itemId: 'business_contact',
+      mutate: profile => {
+        profile.company.email = 'not-an-email';
+        profile.company.phone = '  +1 828 555 0100  ';
+      },
+      legacySource: { email: 'not-an-email', phone: '  +1 828 555 0100  ' },
+      legacyHash: '4c7d0669382865bc37eac36fa57dd0c580288a85140bcc7c0b142bd4e508811e',
+    },
+    {
+      label: 'context with an explicit blank description',
+      itemId: 'business_context',
+      mutate: profile => { profile.businessDescription = ''; },
+      legacySource: { businessDescription: '', industry: 'Tree care' },
+      legacyHash: '7cb5504bb1e00b3aa13f63d708ec6f9c8afbbf1073ad81943ea8ffa5b1ca0520',
+    },
+    {
+      label: 'context with a missing description',
+      itemId: 'business_context',
+      mutate: profile => { delete profile.businessDescription; },
+      legacySource: { businessDescription: '', industry: 'Tree care' },
+      legacyHash: '7cb5504bb1e00b3aa13f63d708ec6f9c8afbbf1073ad81943ea8ffa5b1ca0520',
+    },
+    {
+      label: 'context with a whitespace description',
+      itemId: 'business_context',
+      mutate: profile => { profile.businessDescription = '\t \r\n'; },
+      legacySource: { businessDescription: '\t \r\n', industry: 'Tree care' },
+    },
+  ])('preserves an unchanged legacy-v1 review for $label', ({ itemId, mutate, legacySource, legacyHash }) => {
+    const profile = configuredProfile();
+    mutate(profile);
+    const reviewed = withLegacyReview(profile, itemId, legacySource);
+    if (legacyHash) {
+      expect(reviewed.profileReadiness.items[itemId].reviewedValueHash).toBe(legacyHash);
+    }
+    expect(projectProfileReadiness(reviewed, { version: 'org-profile-v2' }).items[itemId])
+      .toEqual(expect.objectContaining({
+        sourceState: 'configured', state: 'reviewed', lastReviewedAt: REVIEWED_AT.toISOString(),
+      }));
+  });
+
+  test('does not treat a changed qualifying value as a compatible legacy-v1 review', () => {
+    const contact = withLegacyReview(configuredProfile(), 'business_contact', {
+      email: 'office@example.test', phone: '',
+    });
+    contact.company.email = 'dispatch@example.test';
+    expect(projectProfileReadiness(contact, { version: 'org-profile-v2' })
+      .items.business_contact.state).toBe('needs_review');
+
+    const context = configuredProfile();
+    context.businessDescription = '';
+    const contextReviewed = withLegacyReview(context, 'business_context', {
+      businessDescription: '', industry: 'Tree care',
+    });
+    contextReviewed.industry = 'Landscaping';
+    expect(projectProfileReadiness(contextReviewed, { version: 'org-profile-v2' })
+      .items.business_context.state).toBe('needs_review');
+  });
+
+  test.each([
+    {
+      label: 'blank to whitespace contact sibling',
+      itemId: 'business_contact',
+      prepare: profile => { profile.company.phone = ''; },
+      legacySource: { email: 'office@example.test', phone: '' },
+      mutate: profile => { profile.company.phone = ' \t\r\n '; },
+      canonicalSource: { email: 'office@example.test' },
+    },
+    {
+      label: 'nonempty invalid contact sibling',
+      itemId: 'business_contact',
+      prepare: profile => {
+        profile.company.email = 'not-an-email';
+        profile.company.phone = '  +1 828 555 0100  ';
+      },
+      legacySource: { email: 'not-an-email', phone: '  +1 828 555 0100  ' },
+      mutate: profile => {
+        profile.company.email = 'still-not-an-email';
+        profile.company.phone = '+1 828 555 0100';
+      },
+      canonicalSource: { phone: '+1 828 555 0100' },
+    },
+    {
+      label: 'normalized qualifying contact formatting',
+      itemId: 'business_contact',
+      prepare: profile => {
+        profile.company.email = ' office@example.test ';
+        profile.company.phone = '';
+      },
+      legacySource: { email: ' office@example.test ', phone: '' },
+      mutate: profile => { profile.company.email = 'office@example.test'; },
+      canonicalSource: { email: 'office@example.test' },
+    },
+    {
+      label: 'blank to whitespace context sibling',
+      itemId: 'business_context',
+      prepare: profile => { profile.businessDescription = ''; },
+      legacySource: { businessDescription: '', industry: 'Tree care' },
+      mutate: profile => { profile.businessDescription = '\t \r\n'; },
+      canonicalSource: { industry: 'Tree care' },
+    },
+  ])('transitions only the legacy reviewed hash for a neutral writer change: $label', ({
+    itemId, prepare, legacySource, mutate, canonicalSource,
+  }) => {
+    const source = configuredProfile();
+    prepare(source);
+    const active = withLegacyReview(source, itemId, legacySource);
+    const candidate = JSON.parse(JSON.stringify(active));
+    mutate(candidate);
+    const beforeItem = JSON.parse(JSON.stringify(active.profileReadiness.items[itemId]));
+    const transitioned = transitionCompatibleProfileReadiness(active, candidate);
+    const expected = JSON.parse(JSON.stringify(candidate));
+    expected.profileReadiness.items[itemId].reviewedValueHash = stableHash(itemId, canonicalSource);
+
+    expect(transitioned).toEqual(expected);
+    expect(transitioned.profileReadiness.items[itemId]).toEqual({
+      ...beforeItem,
+      reviewedValueHash: stableHash(itemId, canonicalSource),
+    });
+    expect(transitioned.profileReadiness.items[itemId].applicability).toBe(beforeItem.applicability);
+    expect(transitioned.profileReadiness.items[itemId].lastReviewedAt).toBe(beforeItem.lastReviewedAt);
+    expect(projectProfileReadiness(transitioned, { version: 'org-profile-v3' })
+      .items[itemId].state).toBe('reviewed');
+
+    const repeatedCandidate = JSON.parse(JSON.stringify(transitioned));
+    const repeated = transitionCompatibleProfileReadiness(transitioned, repeatedCandidate);
+    expect(repeated).toBe(repeatedCandidate);
+    expect(repeated).toEqual(transitioned);
+  });
+
+  test('does not alter readiness metadata on projection, a no-op source write, or missing-to-blank legacy equivalence', () => {
+    const profile = configuredProfile();
+    delete profile.company.phone;
+    const active = withLegacyReview(profile, 'business_contact', {
+      email: 'office@example.test', phone: '',
+    });
+    const beforeRead = JSON.stringify(active);
+    expect(projectProfileReadiness(active, { version: 'org-profile-v2' })
+      .items.business_contact.state).toBe('reviewed');
+    expect(JSON.stringify(active)).toBe(beforeRead);
+
+    const noOp = JSON.parse(JSON.stringify(active));
+    const noOpResult = transitionCompatibleProfileReadiness(active, noOp);
+    expect(noOpResult).toBe(noOp);
+    expect(noOpResult.profileReadiness).toEqual(active.profileReadiness);
+
+    const explicitBlank = JSON.parse(JSON.stringify(active));
+    explicitBlank.company.phone = '';
+    const blankResult = transitionCompatibleProfileReadiness(active, explicitBlank);
+    expect(blankResult).toBe(explicitBlank);
+    expect(blankResult.profileReadiness).toEqual(active.profileReadiness);
+    expect(projectProfileReadiness(blankResult, { version: 'org-profile-v3' })
+      .items.business_contact.state).toBe('reviewed');
+  });
+
+  test.each([
+    {
+      label: 'invalid to valid contact sibling',
+      itemId: 'business_contact',
+      prepare: profile => {
+        profile.company.email = 'not-an-email';
+        profile.company.phone = '+1 828 555 0100';
+      },
+      legacySource: { email: 'not-an-email', phone: '+1 828 555 0100' },
+      mutate: profile => { profile.company.email = 'dispatch@example.test'; },
+    },
+    {
+      label: 'valid normalized contact value',
+      itemId: 'business_contact',
+      prepare: profile => { profile.company.phone = ''; },
+      legacySource: { email: 'office@example.test', phone: '' },
+      mutate: profile => { profile.company.email = 'dispatch@example.test'; },
+    },
+    {
+      label: 'valid normalized context value',
+      itemId: 'business_context',
+      prepare: profile => { profile.businessDescription = ''; },
+      legacySource: { businessDescription: '', industry: 'Tree care' },
+      mutate: profile => { profile.industry = 'Landscaping'; },
+    },
+  ])('does not transition metadata for a changed qualifying source: $label', ({
+    itemId, prepare, legacySource, mutate,
+  }) => {
+    const source = configuredProfile();
+    prepare(source);
+    const active = withLegacyReview(source, itemId, legacySource);
+    const candidate = JSON.parse(JSON.stringify(active));
+    mutate(candidate);
+    const result = transitionCompatibleProfileReadiness(active, candidate);
+    expect(result).toBe(candidate);
+    expect(result.profileReadiness).toEqual(active.profileReadiness);
+    expect(projectProfileReadiness(result, { version: 'org-profile-v3' })
+      .items[itemId].state).toBe('needs_review');
+  });
+
+  test('hashes only qualifying normalized business contact values', () => {
+    const profile = configuredProfile();
+    profile.company.email = 'office@example.test';
+    profile.company.phone = '';
+    const reviewed = applyProfileReadinessChanges(profile, [
+      { itemId: 'business_contact', action: 'review' },
+    ], REVIEWED_AT);
+
+    const blankSiblingChanged = JSON.parse(JSON.stringify(reviewed));
+    blankSiblingChanged.company.phone = ' \t\r\n ';
+    expect(projectProfileReadiness(blankSiblingChanged, { version: 'org-profile-v2' })
+      .items.business_contact).toEqual(expect.objectContaining({
+      sourceState: 'configured', state: 'reviewed', lastReviewedAt: REVIEWED_AT.toISOString(),
+    }));
+
+    const phoneAuthority = configuredProfile();
+    phoneAuthority.company.email = 'not-an-email';
+    phoneAuthority.company.phone = '  +1 828 555 0100  ';
+    const phoneReviewed = applyProfileReadinessChanges(phoneAuthority, [
+      { itemId: 'business_contact', action: 'review' },
+    ], REVIEWED_AT);
+    phoneReviewed.company.email = 'still-not-an-email';
+    phoneReviewed.company.phone = '+1 828 555 0100';
+    expect(projectProfileReadiness(phoneReviewed, { version: 'org-profile-v2' })
+      .items.business_contact.state).toBe('reviewed');
+
+  });
+
+  test('hashes only qualifying normalized business context values', () => {
+    const profile = configuredProfile();
+    profile.industry = 'Tree care';
+    profile.businessDescription = '';
+    const reviewed = applyProfileReadinessChanges(profile, [
+      { itemId: 'business_context', action: 'review' },
+    ], REVIEWED_AT);
+
+    const blankSiblingChanged = JSON.parse(JSON.stringify(reviewed));
+    blankSiblingChanged.businessDescription = '\t \r\n';
+    expect(projectProfileReadiness(blankSiblingChanged, { version: 'org-profile-v2' })
+      .items.business_context).toEqual(expect.objectContaining({
+      sourceState: 'configured', state: 'reviewed', lastReviewedAt: REVIEWED_AT.toISOString(),
+    }));
+
+    const trimEquivalent = JSON.parse(JSON.stringify(reviewed));
+    trimEquivalent.industry = '  Tree care\r\n';
+    expect(projectProfileReadiness(trimEquivalent, { version: 'org-profile-v2' })
+      .items.business_context.state).toBe('reviewed');
+
+  });
+
+  test('invalidates changed qualifying normalized contact and context values', () => {
+    const reviewed = applyProfileReadinessChanges(configuredProfile(), [
+      { itemId: 'business_contact', action: 'review' },
+      { itemId: 'business_context', action: 'review' },
+    ], REVIEWED_AT);
+    reviewed.company.email = 'dispatch@example.test';
+    reviewed.industry = 'Landscaping';
+    const projection = projectProfileReadiness(reviewed, { version: 'org-profile-v3' });
+    for (const itemId of ['business_contact', 'business_context']) {
+      expect(projection.items[itemId]).toEqual(expect.objectContaining({
+        sourceState: 'configured', state: 'needs_review', lastReviewedAt: REVIEWED_AT.toISOString(),
+      }));
+    }
   });
 
   test('preserves Not applicable only while a supported item is structurally unconfigured', () => {

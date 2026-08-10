@@ -270,6 +270,7 @@ async function main() {
       );
     }
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+    const { stableHash } = require('../../src/services/profileReadiness');
     await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: profileFor('Phase 6B Browser Company') });
     const otherAuthority = await putBusinessProfile(pool, {
       organizationId: ORG_B, userId: OWNER_B, profile: profileFor('Other Tenant'),
@@ -528,6 +529,236 @@ async function main() {
       await context.close();
     }
 
+    // The rendered authority stays reviewed when only a nonqualifying blank
+    // sibling changes, then invalidates when the qualifying value changes.
+    let regressionRow = await active(pool);
+    const contactBaseline = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        email: 'office@example.test',
+        phone: '',
+      });
+    assert.strictEqual(contactBaseline.status, 200);
+    regressionRow = await active(pool);
+    const contextBaseline = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    contextBaseline.businessDescription = '';
+    const contextBaselineSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: contextBaseline,
+      });
+    assert.strictEqual(contextBaselineSaved.status, 200);
+    regressionRow = await active(pool);
+    const sourcesReviewed = await request(app).put('/api/v1/business-profile/profileReadiness')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        changes: [
+          { itemId: 'business_contact', action: 'review' },
+          { itemId: 'business_context', action: 'review' },
+        ],
+      });
+    assert.strictEqual(sourcesReviewed.status, 200);
+    regressionRow = await active(pool);
+    const regressionReadinessHex = regressionRow.readiness_hex;
+    const storedContactReview = regressionRow.raw_profile.profileReadiness.items.business_contact;
+    const storedContextReview = regressionRow.raw_profile.profileReadiness.items.business_context;
+
+    const regressionContext = await contextFor(browser, origin, sessions.owner, {
+      role: 'owner-hash-regression-desktop-light', viewport: { width: 1440, height: 900 }, theme: 'light',
+    }, ledger);
+    const regressionPage = await regressionContext.newPage();
+    attachPage(regressionPage, ledger, 'owner-hash-regression-desktop-light');
+    await openProfile(regressionPage, origin);
+    for (const itemId of ['business_contact', 'business_context']) {
+      assert.strictEqual(await regressionPage.locator(
+        `[data-item-id="${itemId}"] .bp-readiness-state`
+      ).textContent(), 'Reviewed');
+    }
+
+    const phoneWhitespace = ' \t\r\n ';
+    const phoneSiblingSaved = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        phone: phoneWhitespace,
+      });
+    assert.strictEqual(phoneSiblingSaved.status, 200);
+    regressionRow = await active(pool);
+    const descriptionWhitespace = '\t \r\n';
+    const descriptionSibling = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    descriptionSibling.businessDescription = descriptionWhitespace;
+    const descriptionSiblingSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: descriptionSibling,
+      });
+    assert.strictEqual(descriptionSiblingSaved.status, 200);
+    regressionRow = await active(pool);
+    assert.strictEqual(regressionRow.raw_profile.company.phone, phoneWhitespace);
+    assert.strictEqual(regressionRow.raw_profile.businessDescription, descriptionWhitespace);
+    assert.strictEqual(regressionRow.readiness_hex, regressionReadinessHex);
+    assert.deepStrictEqual(
+      regressionRow.raw_profile.profileReadiness.items.business_contact,
+      storedContactReview
+    );
+    assert.deepStrictEqual(
+      regressionRow.raw_profile.profileReadiness.items.business_context,
+      storedContextReview
+    );
+    const neutralReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await neutralReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Reviewed'));
+
+    const qualifyingContactSaved = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        email: 'dispatch@example.test',
+      });
+    assert.strictEqual(qualifyingContactSaved.status, 200);
+    regressionRow = await active(pool);
+    const qualifyingContext = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    qualifyingContext.industry = 'Landscaping';
+    const qualifyingContextSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: qualifyingContext,
+      });
+    assert.strictEqual(qualifyingContextSaved.status, 200);
+    regressionRow = await active(pool);
+    assert.strictEqual(regressionRow.raw_profile.company.email, 'dispatch@example.test');
+    assert.strictEqual(regressionRow.raw_profile.industry, 'Landscaping');
+    assert.strictEqual(regressionRow.readiness_hex, regressionReadinessHex);
+    const qualifyingReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await qualifyingReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Needs review'));
+
+    const legacyProfile = profileFor('Phase 6B Browser Company');
+    legacyProfile.company.email = 'office@example.test';
+    legacyProfile.company.phone = '';
+    legacyProfile.businessDescription = '';
+    legacyProfile.profileReadiness = {
+      schemaVersion: 'm20-profile-readiness-v1',
+      items: {
+        business_contact: {
+          applicability: 'applicable',
+          lastReviewedAt: '2026-08-09T16:00:00.000Z',
+          reviewedValueHash: stableHash('business_contact', {
+            email: 'office@example.test', phone: '',
+          }),
+        },
+        business_context: {
+          applicability: 'applicable',
+          lastReviewedAt: '2026-08-09T16:00:00.000Z',
+          reviewedValueHash: stableHash('business_context', {
+            businessDescription: '', industry: 'Tree care',
+          }),
+        },
+      },
+    };
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      userId: OWNER_A,
+      profile: legacyProfile,
+      preserveProfileReadiness: false,
+    });
+    regressionRow = await active(pool);
+    const legacyVersionCount = regressionRow.version_count;
+    const legacyReadinessHex = regressionRow.readiness_hex;
+    const legacyReadiness = JSON.parse(JSON.stringify(regressionRow.raw_profile.profileReadiness));
+    const legacyReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await legacyReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Reviewed'));
+    regressionRow = await active(pool);
+    assert.strictEqual(regressionRow.version_count, legacyVersionCount);
+    assert.strictEqual(regressionRow.readiness_hex, legacyReadinessHex);
+    assert.deepStrictEqual(regressionRow.raw_profile.profileReadiness, legacyReadiness);
+
+    const legacyPhoneWhitespace = ' \t\r\n ';
+    const legacyPhoneSaved = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        phone: legacyPhoneWhitespace,
+      });
+    assert.strictEqual(legacyPhoneSaved.status, 200);
+    regressionRow = await active(pool);
+    const legacyDescriptionWhitespace = '\t \r\n';
+    const legacyDescriptionCandidate = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    legacyDescriptionCandidate.businessDescription = legacyDescriptionWhitespace;
+    const legacyDescriptionSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: legacyDescriptionCandidate,
+      });
+    assert.strictEqual(legacyDescriptionSaved.status, 200);
+    regressionRow = await active(pool);
+    const transitionedReadiness = JSON.parse(JSON.stringify(legacyReadiness));
+    transitionedReadiness.items.business_contact.reviewedValueHash = stableHash(
+      'business_contact', { email: 'office@example.test' }
+    );
+    transitionedReadiness.items.business_context.reviewedValueHash = stableHash(
+      'business_context', { industry: 'Tree care' }
+    );
+    assert.strictEqual(regressionRow.raw_profile.company.phone, legacyPhoneWhitespace);
+    assert.strictEqual(regressionRow.raw_profile.businessDescription, legacyDescriptionWhitespace);
+    assert.deepStrictEqual(regressionRow.raw_profile.profileReadiness, transitionedReadiness);
+    for (const itemId of ['business_contact', 'business_context']) {
+      assert.strictEqual(
+        regressionRow.raw_profile.profileReadiness.items[itemId].applicability,
+        legacyReadiness.items[itemId].applicability
+      );
+      assert.strictEqual(
+        regressionRow.raw_profile.profileReadiness.items[itemId].lastReviewedAt,
+        legacyReadiness.items[itemId].lastReviewedAt
+      );
+    }
+    const legacyNeutralReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await legacyNeutralReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Reviewed'));
+
+    const transitionedHex = regressionRow.readiness_hex;
+    const legacyQualifyingContact = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send({
+        ...regressionRow.raw_profile.company,
+        email: 'dispatch@example.test',
+      });
+    assert.strictEqual(legacyQualifyingContact.status, 200);
+    regressionRow = await active(pool);
+    const legacyQualifyingContext = JSON.parse(JSON.stringify(regressionRow.raw_profile));
+    legacyQualifyingContext.industry = 'Landscaping';
+    const legacyQualifyingContextSaved = await request(app).put('/api/v1/business-profile')
+      .set(sessions.owner.headers).send({
+        expectedVersion: regressionRow.version,
+        value: legacyQualifyingContext,
+      });
+    assert.strictEqual(legacyQualifyingContextSaved.status, 200);
+    regressionRow = await active(pool);
+    assert.strictEqual(regressionRow.readiness_hex, transitionedHex);
+    assert.deepStrictEqual(regressionRow.raw_profile.profileReadiness, transitionedReadiness);
+    const legacyQualifyingReload = regressionPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/profileReadiness' &&
+      response.request().method() === 'GET');
+    await regressionPage.click('#reloadProfileReadinessBtn');
+    assert.strictEqual((await legacyQualifyingReload).status(), 200);
+    await regressionPage.waitForFunction(() => ['business_contact', 'business_context'].every(itemId =>
+      document.querySelector(`[data-item-id="${itemId}"] .bp-readiness-state`).textContent === 'Needs review'));
+    await assertNoOverflow(regressionPage);
+    await regressionContext.close();
+
     // Loading is independent from the main profile and remains fail closed.
     const loadingContext = await contextFor(browser, origin, sessions.owner, {
       role: 'owner-mobile-loading-dark', viewport: { width: 390, height: 844 }, theme: 'dark',
@@ -626,6 +857,8 @@ async function main() {
       lifecycle: [
         'loading', 'empty', 'review', 'remove_configuration', 'not_applicable',
         'mark_applicable_clear', 'restore_needs_review', 'review_again', 'save', 'stale', 'reload', 'error',
+        'hash_neutral_blank_siblings', 'qualifying_hash_invalidation',
+        'legacy_v1_read_compatibility', 'legacy_neutral_writer_transition',
       ],
       accessibility: ['region', 'headings', 'list', 'live status', 'alert', 'keyboard', 'focus'],
       rawReadiness: 'exact JSONB hex',

@@ -6,7 +6,10 @@ const {
   stableValue,
   validateRawBusinessProfile,
 } = require('./businessProfileAdapter');
-const { applyProfileReadinessChanges } = require('./profileReadiness');
+const {
+  applyProfileReadinessChanges,
+  transitionCompatibleProfileReadiness,
+} = require('./profileReadiness');
 const repository = require('../persistence/v2/repository');
 
 const LEGACY_FINANCIAL_AUTHORITY_FIELDS = Object.freeze([
@@ -243,7 +246,7 @@ async function putBusinessProfile(pool, input) {
           409
         );
       }
-      rawProfile = containedCandidate;
+      rawProfile = transitionCompatibleProfileReadiness(activeRawProfile, containedCandidate);
     }
     rawProfile = validatedRawProfile(rawProfile);
     const sequence = await client.query(

@@ -347,15 +347,52 @@ describe('Mission 19 Part 4 Slice 4 notification consolidation', () => {
   test('auth bootstrap owns the early 3500ms fallback before API and service become available', () => {
     const runtime = createRuntime();
     const target = addToastTarget(runtime);
+    target.setAttribute('role', 'status');
+    target.setAttribute('aria-live', 'polite');
+    target.setAttribute('aria-atomic', 'true');
     load(runtime, 'auth');
     const bootstrap = runtime.sandbox.showToast;
-    bootstrap('Bootstrap <literal>');
-    expect(target.textContent).toBe('Bootstrap <literal>');
-    expect(target.className).toBe('toast show');
-    jest.advanceTimersByTime(3499);
-    expect(target.classList.contains('show')).toBe(true);
-    jest.advanceTimersByTime(1);
-    expect(target.classList.contains('show')).toBe(false);
+    const payload = '<svg onload="window.pwned=1">Bootstrap literal';
+    const hostileType = Object.freeze({
+      toString() { throw new Error('notification type must not execute object coercion'); },
+    });
+    const cases = [
+      { label: 'error', type: 'error', role: 'alert', live: 'assertive' },
+      { label: 'warning', type: 'warning', role: 'alert', live: 'assertive' },
+      { label: 'normalized error', type: ' ERROR ', role: 'alert', live: 'assertive' },
+      { label: 'normalized warning', type: 'WaRnInG', role: 'alert', live: 'assertive' },
+      { label: 'info', type: 'info', role: 'status', live: 'polite' },
+      { label: 'success', type: 'success', role: 'status', live: 'polite' },
+      { label: 'unknown', type: '<img src=x onerror=window.pwned=2>', role: 'status', live: 'polite' },
+      { label: 'hostile object', type: hostileType, role: 'status', live: 'polite' },
+      { label: 'omitted', omitted: true, role: 'status', live: 'polite' },
+    ];
+
+    cases.forEach(entry => {
+      target.setAttribute('role', 'status');
+      target.setAttribute('aria-live', 'polite');
+      target.setAttribute('aria-atomic', 'true');
+      if (entry.omitted) {
+        expect(() => bootstrap(payload)).not.toThrow();
+      } else {
+        expect(() => bootstrap(payload, entry.type)).not.toThrow();
+      }
+      expect(target.textContent).toBe(payload);
+      expect(runtime.document.innerHtmlAssignments).toEqual([]);
+      expect(runtime.sandbox.pwned).toBeUndefined();
+      expect(target.getAttribute('role')).toBe(entry.role);
+      expect(target.getAttribute('aria-live')).toBe(entry.live);
+      expect(target.getAttribute('aria-atomic')).toBe('true');
+      expect(target.className).toBe('toast show');
+      expect(target.style.background).toBe('');
+      expect(runtime.document.body.children.filter(child => child.id === 'toast')).toHaveLength(1);
+      expect(jest.getTimerCount()).toBe(1);
+      jest.advanceTimersByTime(3499);
+      expect(target.classList.contains('show')).toBe(true);
+      jest.advanceTimersByTime(1);
+      expect(target.classList.contains('show')).toBe(false);
+      expect(jest.getTimerCount()).toBe(0);
+    });
 
     load(runtime, 'api');
     load(runtime, 'service');
@@ -366,8 +403,12 @@ describe('Mission 19 Part 4 Slice 4 notification consolidation', () => {
       delegated += 1;
       return original.apply(runtime.sandbox.NotificationService, args);
     };
-    runtime.sandbox.showToast('Final ownership');
+    runtime.sandbox.showToast('Final ownership', 'error');
     expect(delegated).toBe(1);
+    expect(target.getAttribute('role')).toBe('alert');
+    expect(target.getAttribute('aria-live')).toBe('assertive');
+    expect(runtime.document.body.children.filter(child => child.id === 'toast')).toHaveLength(1);
+    expect(jest.getTimerCount()).toBe(1);
   });
 
   test('the four affected mounted pages load the shared facade without changing established page ownership', () => {

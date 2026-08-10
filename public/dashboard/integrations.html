@@ -155,6 +155,7 @@
       margin-left: 16px;
     }
     .integration-details summary:focus-visible,
+    #integrationCatalogueHeading:focus-visible,
     #refreshIntegrationsBtn:focus-visible,
     #retryIntegrationsBtn:focus-visible {
       outline: 3px solid rgba(37, 99, 235, .35);
@@ -253,7 +254,7 @@
       <section class="settings-section" aria-labelledby="integrationCatalogueHeading">
         <div class="integration-toolbar">
           <div>
-            <h2 id="integrationCatalogueHeading">Provider catalogue</h2>
+            <h2 id="integrationCatalogueHeading" tabindex="-1">Provider catalogue</h2>
             <p class="description">Status is projected by the server from reviewed tenant authority. Logos, browser state, subscriptions, provider configuration, and legacy Business Profile flags are not connection evidence.</p>
           </div>
           <div class="integration-authority" id="integrationAuthority">Authority: northstar_integration_catalogue_v1</div>
@@ -348,6 +349,7 @@
         Object.freeze(['webhookHealth', 'Webhook health'])
       ]);
       var root = document.getElementById('integrationCatalogueRoot');
+      var catalogueHeading = document.getElementById('integrationCatalogueHeading');
       var refreshButton = document.getElementById('refreshIntegrationsBtn');
       var retryButton = document.getElementById('retryIntegrationsBtn');
       var list = document.getElementById('integrationCategoryList');
@@ -494,6 +496,9 @@
 
       async function loadCatalogue(options) {
         var userInitiated = Boolean(options && options.userInitiated);
+        var restoreFocusOnSuccess = Boolean(
+          options && options.restoreFocusOnSuccess && error.contains(document.activeElement)
+        );
         setState('loading');
         root.setAttribute('aria-busy', 'true');
         refreshButton.disabled = true;
@@ -514,6 +519,7 @@
             setState('ready');
             statusMessage.textContent = 'Authoritative integration catalogue loaded.';
           }
+          if (restoreFocusOnSuccess) catalogueHeading.focus();
         } catch (_loadError) {
           list.replaceChildren();
           setState('error');
@@ -527,7 +533,9 @@
       }
 
       refreshButton.addEventListener('click', function() { loadCatalogue({ userInitiated: true }); });
-      retryButton.addEventListener('click', function() { loadCatalogue({ userInitiated: true }); });
+      retryButton.addEventListener('click', function(event) {
+        loadCatalogue({ userInitiated: true, restoreFocusOnSuccess: event.detail === 0 });
+      });
       window.NorthStarIntegrations = Object.freeze({
         reload: function() { return loadCatalogue({ userInitiated: false }); }
       });

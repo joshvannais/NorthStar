@@ -50,6 +50,15 @@ describe('Mission 20 Phase 6C integration catalogue presentation contract', () =
     expect(integrations).toMatch(/<template id="integrationLoadingCardTemplate"/);
   });
 
+  test('moves focus to visible results only after a keyboard retry succeeds', () => {
+    expect(integrations).toContain('id="integrationCatalogueHeading" tabindex="-1"');
+    expect(integrations).toContain("var catalogueHeading = document.getElementById('integrationCatalogueHeading');");
+    expect(integrations).toContain('error.contains(document.activeElement)');
+    expect(integrations).toContain('if (restoreFocusOnSuccess) catalogueHeading.focus();');
+    expect(integrations).toMatch(/retryButton\.addEventListener\('click', function\(event\)/);
+    expect(integrations).toContain('restoreFocusOnSuccess: event.detail === 0');
+  });
+
   test('keeps exact server status copy and stable machine-order validation without deriving connection state', () => {
     for (const [state, label] of [
       ['available', 'Available'],

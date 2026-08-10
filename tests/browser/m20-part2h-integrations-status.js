@@ -202,6 +202,17 @@ function assertIntegrationSnapshot(value, label) {
   assert.strictEqual(value.overflow, false, label + ': no responsive overflow');
 }
 
+async function activeFocus(page) {
+  return page.evaluate(() => {
+    const active = document.activeElement;
+    return {
+      id: active && active.id ? active.id : '',
+      hidden: Boolean(active && (active.hidden || active.closest('[hidden]'))),
+      focusVisible: Boolean(active && active.matches(':focus-visible')),
+    };
+  });
+}
+
 async function exerciseCell(browser, origin, session, input, ledger) {
   const context = await contextFor(browser, origin, session, input, ledger);
   const page = await context.newPage();
@@ -209,19 +220,24 @@ async function exerciseCell(browser, origin, session, input, ledger) {
   await page.goto(origin + '/dashboard/integrations', { waitUntil: 'domcontentloaded' });
   await waitForReady(page);
   assertIntegrationSnapshot(await integrationSnapshot(page), input.role + '/initial');
+  assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': initial load does not steal focus');
 
+  await page.locator('#refreshIntegrationsBtn').focus();
   await page.evaluate(() => window.NorthStarIntegrations.reload());
   await waitForReady(page);
   assertIntegrationSnapshot(await integrationSnapshot(page), input.role + '/rerender');
+  assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': programmatic rerender does not redirect focus to results');
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForReady(page);
   assertIntegrationSnapshot(await integrationSnapshot(page), input.role + '/reload');
+  assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': reload does not steal focus');
 
   await page.locator('#refreshIntegrationsBtn').focus();
   assert.strictEqual(await page.locator('#refreshIntegrationsBtn').evaluate(node => document.activeElement === node), true);
   await page.keyboard.press('Enter');
   await waitForReady(page);
+  assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': keyboard refresh does not redirect focus to results');
   const firstDetails = page.locator('.integration-details').first();
   await firstDetails.locator('summary').focus();
   await page.keyboard.press('Enter');
@@ -233,6 +249,57 @@ async function exerciseCell(browser, origin, session, input, ledger) {
     await page.keyboard.press('Escape');
     assert.strictEqual(await page.locator('#mobileMenu').evaluate(node => node.classList.contains('open')), false);
   }
+  await context.close();
+}
+
+async function exerciseRetryFocusCell(browser, origin, session, input, ledger) {
+  const failure = { status: 503, body: { success: false, error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE' } } };
+  const context = await contextFor(browser, origin, session, {
+    ...input,
+    catalogueResponses: [failure, 'continue', 'continue', 'continue', failure, 'continue', failure, failure],
+  }, ledger);
+  const page = await context.newPage();
+  attachPage(page, ledger, input.role);
+  await page.goto(origin + '/dashboard/integrations', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'error');
+  assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': initial failure does not focus results');
+
+  await page.locator('#retryIntegrationsBtn').focus();
+  await page.keyboard.press(input.activationKey);
+  await waitForReady(page);
+  const keyboardRecoveryFocus = await activeFocus(page);
+  assert.deepStrictEqual(keyboardRecoveryFocus, {
+    id: 'integrationCatalogueHeading', hidden: false, focusVisible: true,
+  }, input.role + ': keyboard retry success moves focus to visible catalogue results');
+  assertIntegrationSnapshot(await integrationSnapshot(page), input.role + '/keyboard-recovery');
+
+  await page.locator('#refreshIntegrationsBtn').focus();
+  await page.evaluate(() => window.NorthStarIntegrations.reload());
+  await waitForReady(page);
+  assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': rerender does not reuse retry focus intent');
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await waitForReady(page);
+  assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': reload does not reuse retry focus intent');
+
+  await page.evaluate(() => window.NorthStarIntegrations.reload());
+  await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'error');
+  await page.locator('#retryIntegrationsBtn').click();
+  await waitForReady(page);
+  assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': mouse retry does not steal focus');
+
+  await page.evaluate(() => window.NorthStarIntegrations.reload());
+  await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'error');
+  await page.locator('#retryIntegrationsBtn').focus();
+  await page.keyboard.press(input.activationKey);
+  await page.waitForFunction(() => (
+    document.getElementById('integrationCatalogueRoot')?.dataset.state === 'error' &&
+    document.getElementById('integrationCatalogueRoot')?.getAttribute('aria-busy') === 'false'
+  ));
+  const failedRetryFocus = await activeFocus(page);
+  assert.strictEqual(failedRetryFocus.id, 'integrationErrorState', input.role + ': failed retry retains the established error-panel focus');
+  assert.strictEqual(failedRetryFocus.hidden, false, input.role + ': failed retry focus remains visible');
+  assert.notStrictEqual(failedRetryFocus.id, 'integrationCatalogueHeading', input.role + ': failed retry never focuses results');
   await context.close();
 }
 
@@ -421,6 +488,19 @@ async function main() {
       }
     }
 
+    for (const role of ['owner', 'member']) {
+      for (const viewport of viewports) {
+        for (const theme of themes) {
+          await exerciseRetryFocusCell(browser, origin, sessions[role], {
+            role: role + '-focus-' + viewport.label + '-' + theme,
+            viewport: { width: viewport.width, height: viewport.height },
+            theme,
+            activationKey: (viewport.label === 'desktop') === (theme === 'light') ? 'Enter' : 'Space',
+          }, ledger);
+        }
+      }
+    }
+
     await exerciseCatalogueStates(browser, origin, sessions.owner, ledger);
     await inspectBusinessProfile(browser, origin, sessions.owner, sessions.viewer, pool, ledger);
     assert.strictEqual((await pool.query(
@@ -430,7 +510,8 @@ async function main() {
     assert.deepStrictEqual(ledger.external, [], 'unexpected external requests remain zero');
     assert.strictEqual(ledger.pageErrors.length, 0, ledger.pageErrors.join('\n'));
     const expectedConsoleErrors = ledger.consoleErrors.filter(entry => (
-      entry.startsWith('owner-error-retry:') && entry.includes('503')
+      (entry.startsWith('owner-error-retry:') || /(?:owner|member)-focus-(?:desktop|mobile)-(?:light|dark):/.test(entry)) &&
+      entry.includes('503')
     ));
     const unexpectedConsoleErrors = ledger.consoleErrors.filter(entry => !expectedConsoleErrors.includes(entry));
     assert.strictEqual(unexpectedConsoleErrors.length, 0, unexpectedConsoleErrors.join('\n'));

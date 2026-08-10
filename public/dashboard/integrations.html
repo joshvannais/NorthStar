@@ -534,7 +534,7 @@
 
       refreshButton.addEventListener('click', function() { loadCatalogue({ userInitiated: true }); });
       retryButton.addEventListener('click', function(event) {
-        loadCatalogue({ userInitiated: true, restoreFocusOnSuccess: event.detail === 0 });
+        loadCatalogue({ userInitiated: true, restoreFocusOnSuccess: event.isTrusted && event.detail === 0 });
       });
       window.NorthStarIntegrations = Object.freeze({
         reload: function() { return loadCatalogue({ userInitiated: false }); }

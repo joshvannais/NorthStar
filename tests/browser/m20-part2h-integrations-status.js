@@ -256,7 +256,10 @@ async function exerciseRetryFocusCell(browser, origin, session, input, ledger) {
   const failure = { status: 503, body: { success: false, error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE' } } };
   const context = await contextFor(browser, origin, session, {
     ...input,
-    catalogueResponses: [failure, 'continue', 'continue', 'continue', failure, 'continue', failure, failure],
+    catalogueResponses: [
+      failure, 'continue', 'continue', 'continue', failure, 'continue',
+      failure, 'continue', failure, 'continue', failure, failure,
+    ],
   }, ledger);
   const page = await context.newPage();
   attachPage(page, ledger, input.role);
@@ -287,6 +290,34 @@ async function exerciseRetryFocusCell(browser, origin, session, input, ledger) {
   await page.locator('#retryIntegrationsBtn').click();
   await waitForReady(page);
   assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': mouse retry does not steal focus');
+
+  await page.evaluate(() => window.NorthStarIntegrations.reload());
+  await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'error');
+  await page.locator('#retryIntegrationsBtn').focus();
+  const focusedSyntheticEvent = await page.evaluate(() => new Promise((resolve) => {
+    const retryButton = document.getElementById('retryIntegrationsBtn');
+    retryButton.addEventListener('click', (event) => {
+      resolve({ isTrusted: event.isTrusted, detail: event.detail });
+    }, { once: true });
+    retryButton.click();
+  }));
+  assert.deepStrictEqual(focusedSyntheticEvent, { isTrusted: false, detail: 0 }, input.role + ': programmatic click is untrusted even when Retry has focus');
+  await waitForReady(page);
+  assert.notStrictEqual((await activeFocus(page)).id, 'integrationCatalogueHeading', input.role + ': focused programmatic retry does not impersonate keyboard focus intent');
+
+  await page.evaluate(() => window.NorthStarIntegrations.reload());
+  await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'error');
+  await page.locator('#mainContent').focus();
+  const outsideSyntheticEvent = await page.evaluate(() => new Promise((resolve) => {
+    const retryButton = document.getElementById('retryIntegrationsBtn');
+    retryButton.addEventListener('click', (event) => {
+      resolve({ isTrusted: event.isTrusted, detail: event.detail });
+    }, { once: true });
+    retryButton.click();
+  }));
+  assert.deepStrictEqual(outsideSyntheticEvent, { isTrusted: false, detail: 0 }, input.role + ': outside-focus programmatic click remains untrusted');
+  await waitForReady(page);
+  assert.strictEqual((await activeFocus(page)).id, 'mainContent', input.role + ': outside-focus programmatic retry preserves unrelated visible focus');
 
   await page.evaluate(() => window.NorthStarIntegrations.reload());
   await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot')?.dataset.state === 'error');

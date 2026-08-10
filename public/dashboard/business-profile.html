@@ -107,10 +107,17 @@
     .bp-readiness-help, .bp-readiness-reason, .bp-readiness-reviewed, .bp-readiness-pending { margin-top: 6px; color: var(--neutral-600); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
     .bp-readiness-reason { color: var(--neutral-700); }
     .bp-readiness-pending { font-weight: 600; color: var(--brand-700); }
+    [data-theme="dark"] .bp-readiness-pending { color: var(--warning); }
     .bp-readiness-state { flex: 0 0 auto; padding: 3px 8px; border: 1px solid currentColor; border-radius: 999px; color: var(--neutral-700); font-size: 11px; font-weight: 700; }
     .bp-readiness-state[data-state="missing"], .bp-readiness-state[data-state="authority_unavailable"] { color: #991b1b; }
     .bp-readiness-state[data-state="recommended"], .bp-readiness-state[data-state="needs_review"] { color: #8a5a00; }
     .bp-readiness-state[data-state="reviewed"] { color: #047857; }
+    [data-theme="dark"] #profileReadinessError,
+    [data-theme="dark"] .bp-readiness-state[data-state="missing"],
+    [data-theme="dark"] .bp-readiness-state[data-state="authority_unavailable"] { color: var(--danger); }
+    [data-theme="dark"] .bp-readiness-state[data-state="recommended"],
+    [data-theme="dark"] .bp-readiness-state[data-state="needs_review"] { color: var(--warning); }
+    [data-theme="dark"] .bp-readiness-state[data-state="reviewed"] { color: var(--success); }
     .bp-readiness-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .bp-readiness-empty { margin-top: 14px; padding: 12px; border: 1px dashed var(--neutral-300); border-radius: var(--radius-sm); color: var(--neutral-600); font-size: 12px; line-height: 1.5; }
     .bp-readiness-empty[hidden] { display: none; }

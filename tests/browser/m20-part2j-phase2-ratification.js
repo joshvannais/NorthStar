@@ -21,6 +21,22 @@ const VIEWPORTS = Object.freeze([
 ]);
 const THEMES = Object.freeze(['light', 'dark']);
 const ROLES = Object.freeze(['owner', 'viewer']);
+const PROFILE_READINESS_STATES = Object.freeze([
+  'authority_unavailable', 'missing', 'needs_review', 'not_applicable', 'recommended', 'reviewed',
+]);
+const PROFILE_READINESS_ITEMS = Object.freeze([
+  ['company_identity', 'missing'],
+  ['business_locale', 'authority_unavailable'],
+  ['active_services', 'recommended'],
+  ['business_contact', 'needs_review'],
+  ['business_context', 'reviewed'],
+  ['operating_origin', 'not_applicable'],
+  ['service_area', 'missing'],
+  ['weekly_hours', 'recommended'],
+  ['customer_guidance', 'needs_review'],
+  ['financial_configuration', 'reviewed'],
+  ['voice_configuration', 'authority_unavailable'],
+]);
 const PROFILE = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'business-profile.json'), 'utf8'));
 
 function json(body, status = 200) {
@@ -58,6 +74,35 @@ function workforceFixture() {
   };
 }
 
+function profileReadinessFixture() {
+  const items = {};
+  for (const [id, state] of PROFILE_READINESS_ITEMS) {
+    items[id] = {
+      id,
+      label: 'Ratification ' + id.replaceAll('_', ' '),
+      help: 'Deterministic retained-gate readiness detail.',
+      applicability: state === 'not_applicable' ? 'not_applicable' : 'applicable',
+      state,
+      sourceState: state === 'authority_unavailable' ? 'authority_unavailable'
+        : state === 'missing' || state === 'recommended' || state === 'not_applicable' ? 'missing' : 'configured',
+      missingReason: state === 'missing' || state === 'authority_unavailable' ? 'Required detail is unavailable.' : null,
+      recommendedReason: state === 'recommended' ? 'This detail is recommended.' : null,
+      lastReviewedAt: state === 'reviewed' ? '2026-08-09T16:00:00.000Z' : null,
+      canReview: state === 'needs_review',
+      canMarkApplicable: state === 'not_applicable',
+      canMarkNotApplicable: false,
+    };
+  }
+  return {
+    schemaVersion: 'm20-profile-readiness-v1',
+    canonicalAuthority: { version: 'org-profile-v1' },
+    overallState: 'action_needed',
+    hasStoredReadiness: true,
+    itemOrder: PROFILE_READINESS_ITEMS.map(([id]) => id),
+    items,
+  };
+}
+
 async function installBoundary(context, origin, role, evidence, options = {}) {
   let workforceRequests = 0;
   await context.route('**/*', async route => {
@@ -80,6 +125,11 @@ async function installBoundary(context, origin, role, evidence, options = {}) {
     const authorityFailure = options.failAuthority === true;
     if (url.pathname === '/api/v1/business-profile') {
       return route.fulfill(authorityFailure ? json({ success: false }, 503) : json({ success: true, data: PROFILE }));
+    }
+    if (url.pathname === '/api/v1/business-profile/profileReadiness') {
+      return route.fulfill(authorityFailure
+        ? json({ success: false, error: { code: 'PROFILE_READINESS_UNAVAILABLE', message: 'Profile Readiness is unavailable.' } }, 503)
+        : json({ success: true, data: profileReadinessFixture() }));
     }
     if (url.pathname === '/api/assets') {
       return route.fulfill(authorityFailure ? json({ success: false }, 503) : json({
@@ -177,7 +227,65 @@ async function pageSnapshot(page) {
   });
 }
 
-async function assertBusinessProfile(page, role) {
+async function pendingContrastEvidence(page) {
+  return page.locator('.bp-readiness-pending').evaluate(element => {
+    function parseRgb(value) {
+      const match = value.match(/^rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/i);
+      if (!match) throw new Error('Unsupported mounted color: ' + value);
+      return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) };
+    }
+    function luminance(color) {
+      const channels = [color.r, color.g, color.b].map(channel => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+    }
+    const row = element.closest('.bp-readiness-row');
+    const foreground = parseRgb(getComputedStyle(element).color);
+    const background = parseRgb(getComputedStyle(row).backgroundColor);
+    const foregroundLuminance = luminance(foreground);
+    const backgroundLuminance = luminance(background);
+    return {
+      text: element.textContent,
+      foreground: getComputedStyle(element).color,
+      background: getComputedStyle(row).backgroundColor,
+      ratio: (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+        (Math.min(foregroundLuminance, backgroundLuminance) + 0.05),
+      theme: document.documentElement.dataset.theme,
+      focusedAction: document.activeElement?.dataset.readinessAction || null,
+    };
+  });
+}
+
+async function assertPendingReadinessAction(page, label, theme) {
+  const action = page.locator('[data-item-id="business_contact"] [data-readiness-action="review"]');
+  assert.strictEqual(await action.isEnabled(), true, `${label} authorized readiness action is enabled`);
+  await action.focus();
+  await page.keyboard.press('Enter');
+  const pending = page.locator('[data-item-id="business_contact"] .bp-readiness-pending');
+  await pending.waitFor({ state: 'visible' });
+  const evidence = await pendingContrastEvidence(page);
+  assert.strictEqual(evidence.text, 'Pending: Review current details.', `${label} pending copy`);
+  assert.strictEqual(evidence.theme, theme, `${label} effective theme`);
+  assert.strictEqual(evidence.focusedAction, 'review', `${label} keyboard action preserves focus`);
+  assert.strictEqual(evidence.foreground, theme === 'dark' ? 'rgb(251, 191, 36)' : 'rgb(109, 80, 5)',
+    `${label} pending foreground`);
+  assert.strictEqual(evidence.background, theme === 'dark' ? 'rgb(11, 13, 23)' : 'rgb(248, 250, 252)',
+    `${label} readiness row background`);
+  assert.ok(evidence.ratio >= 4.5, `${label} pending contrast ${evidence.ratio}`);
+  assertAccessibilityAudit(await auditMountedAccessibility(page), `${label} with pending action`);
+  return evidence;
+}
+
+async function assertBusinessProfile(page, role, label, theme) {
+  const readinessStates = await page.locator('.bp-readiness-state').evaluateAll(states =>
+    states.map(state => state.dataset.state));
+  assert.strictEqual(readinessStates.length, PROFILE_READINESS_ITEMS.length, 'all Profile Readiness items render');
+  assert.deepStrictEqual([...new Set(readinessStates)].sort(), [...PROFILE_READINESS_STATES],
+    'the retained mounted gate exercises every Profile Readiness state');
+  assert.strictEqual(await page.locator('#profileReadinessError').isHidden(), true,
+    'the deterministic Profile Readiness authority remains ready');
   const tabs = page.locator('#bpNav [role="tab"]');
   assert.strictEqual(await tabs.count(), 15, 'all Business Profile sections remain keyboard-addressable');
   await tabs.first().focus();
@@ -194,6 +302,7 @@ async function assertBusinessProfile(page, role) {
     .evaluateAll(controls => controls.filter(control => !control.disabled).length);
   assert.ok(enabledEditors > 0, `${role} Business Profile values remain locally inspectable after authority load`);
   assert.strictEqual(await page.locator('#saveBtn').isDisabled(), role === 'viewer', 'only authorized roles can persist Business Profile changes');
+  if (role === 'owner') await assertPendingReadinessAction(page, label, theme);
 }
 
 async function assertSettings(page, role) {
@@ -255,7 +364,7 @@ async function runMatrix(browser, engine, origin, evidence) {
             await page.keyboard.press('Enter');
             assert.strictEqual(await page.locator('#mainContent').evaluate(node => document.activeElement === node), true,
               `${label} ${route} skip link moves focus to main`);
-            if (route === '/dashboard/business-profile') await assertBusinessProfile(page, role);
+            if (route === '/dashboard/business-profile') await assertBusinessProfile(page, role, label, theme);
             if (route === '/dashboard/settings') await assertSettings(page, role);
             if (route === '/dashboard/team') await assertTeam(page, role);
             if (route === '/dashboard/integrations') await assertIntegrations(page);
@@ -268,6 +377,23 @@ async function runMatrix(browser, engine, origin, evidence) {
     }
   }
   return rows;
+}
+
+async function runSystemDarkPendingState(browser, engine, origin, evidence) {
+  const context = await browser.newContext({ viewport: VIEWPORTS[1], colorScheme: 'dark' });
+  await installBoundary(context, origin, 'owner', evidence);
+  const page = await context.newPage();
+  const label = `${engine} mobile system-dark owner`;
+  attachPage(page, evidence, label);
+  try {
+    await page.goto(origin + '/dashboard/business-profile', { waitUntil: 'domcontentloaded' });
+    await waitReady(page, '/dashboard/business-profile');
+    assert.strictEqual(await page.evaluate(() => localStorage.getItem('northstar-theme')), null,
+      `${label} has no stored theme override`);
+    return await assertPendingReadinessAction(page, label, 'dark');
+  } finally {
+    await context.close();
+  }
 }
 
 async function runWorkforceReloadFailure(browser, engine, origin, evidence) {
@@ -350,6 +476,7 @@ async function main() {
   try {
     browser = await browserType.launch({ headless: true, executablePath });
     const matrix = await runMatrix(browser, selected, origin, evidence);
+    const systemDarkPending = await runSystemDarkPendingState(browser, selected, origin, evidence);
     await runErrorStates(browser, selected, origin, evidence);
     await runWorkforceReloadFailure(browser, selected, origin, evidence);
     assert.deepStrictEqual(evidence.external, [], 'provider/external requests');
@@ -366,6 +493,7 @@ async function main() {
       engine: selected === 'chrome' ? 'installed Chrome' : 'actual Playwright WebKit',
       physicalSafari: false,
       matrix,
+      systemDarkPending,
       errorRoutes: ROUTES,
       reloadErrorRoutes: ['/dashboard/team'],
       automaticMethods: [...new Set(evidence.api.map(item => item.method))],

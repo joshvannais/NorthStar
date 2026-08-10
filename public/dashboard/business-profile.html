@@ -111,6 +111,12 @@
     .bp-readiness-state[data-state="missing"], .bp-readiness-state[data-state="authority_unavailable"] { color: #991b1b; }
     .bp-readiness-state[data-state="recommended"], .bp-readiness-state[data-state="needs_review"] { color: #8a5a00; }
     .bp-readiness-state[data-state="reviewed"] { color: #047857; }
+    [data-theme="dark"] #profileReadinessError,
+    [data-theme="dark"] .bp-readiness-state[data-state="missing"],
+    [data-theme="dark"] .bp-readiness-state[data-state="authority_unavailable"] { color: var(--danger); }
+    [data-theme="dark"] .bp-readiness-state[data-state="recommended"],
+    [data-theme="dark"] .bp-readiness-state[data-state="needs_review"] { color: var(--warning); }
+    [data-theme="dark"] .bp-readiness-state[data-state="reviewed"] { color: var(--success); }
     .bp-readiness-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .bp-readiness-empty { margin-top: 14px; padding: 12px; border: 1px dashed var(--neutral-300); border-radius: var(--radius-sm); color: var(--neutral-600); font-size: 12px; line-height: 1.5; }
     .bp-readiness-empty[hidden] { display: none; }

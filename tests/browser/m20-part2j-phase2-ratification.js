@@ -21,6 +21,22 @@ const VIEWPORTS = Object.freeze([
 ]);
 const THEMES = Object.freeze(['light', 'dark']);
 const ROLES = Object.freeze(['owner', 'viewer']);
+const PROFILE_READINESS_STATES = Object.freeze([
+  'authority_unavailable', 'missing', 'needs_review', 'not_applicable', 'recommended', 'reviewed',
+]);
+const PROFILE_READINESS_ITEMS = Object.freeze([
+  ['company_identity', 'missing'],
+  ['business_locale', 'authority_unavailable'],
+  ['active_services', 'recommended'],
+  ['business_contact', 'needs_review'],
+  ['business_context', 'reviewed'],
+  ['operating_origin', 'not_applicable'],
+  ['service_area', 'missing'],
+  ['weekly_hours', 'recommended'],
+  ['customer_guidance', 'needs_review'],
+  ['financial_configuration', 'reviewed'],
+  ['voice_configuration', 'authority_unavailable'],
+]);
 const PROFILE = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'business-profile.json'), 'utf8'));
 
 function json(body, status = 200) {
@@ -58,6 +74,35 @@ function workforceFixture() {
   };
 }
 
+function profileReadinessFixture() {
+  const items = {};
+  for (const [id, state] of PROFILE_READINESS_ITEMS) {
+    items[id] = {
+      id,
+      label: 'Ratification ' + id.replaceAll('_', ' '),
+      help: 'Deterministic retained-gate readiness detail.',
+      applicability: state === 'not_applicable' ? 'not_applicable' : 'applicable',
+      state,
+      sourceState: state === 'authority_unavailable' ? 'authority_unavailable'
+        : state === 'missing' || state === 'recommended' || state === 'not_applicable' ? 'missing' : 'configured',
+      missingReason: state === 'missing' || state === 'authority_unavailable' ? 'Required detail is unavailable.' : null,
+      recommendedReason: state === 'recommended' ? 'This detail is recommended.' : null,
+      lastReviewedAt: state === 'reviewed' ? '2026-08-09T16:00:00.000Z' : null,
+      canReview: state === 'needs_review',
+      canMarkApplicable: state === 'not_applicable',
+      canMarkNotApplicable: false,
+    };
+  }
+  return {
+    schemaVersion: 'm20-profile-readiness-v1',
+    canonicalAuthority: { version: 'org-profile-v1' },
+    overallState: 'action_needed',
+    hasStoredReadiness: true,
+    itemOrder: PROFILE_READINESS_ITEMS.map(([id]) => id),
+    items,
+  };
+}
+
 async function installBoundary(context, origin, role, evidence, options = {}) {
   let workforceRequests = 0;
   await context.route('**/*', async route => {
@@ -80,6 +125,11 @@ async function installBoundary(context, origin, role, evidence, options = {}) {
     const authorityFailure = options.failAuthority === true;
     if (url.pathname === '/api/v1/business-profile') {
       return route.fulfill(authorityFailure ? json({ success: false }, 503) : json({ success: true, data: PROFILE }));
+    }
+    if (url.pathname === '/api/v1/business-profile/profileReadiness') {
+      return route.fulfill(authorityFailure
+        ? json({ success: false, error: { code: 'PROFILE_READINESS_UNAVAILABLE', message: 'Profile Readiness is unavailable.' } }, 503)
+        : json({ success: true, data: profileReadinessFixture() }));
     }
     if (url.pathname === '/api/assets') {
       return route.fulfill(authorityFailure ? json({ success: false }, 503) : json({
@@ -178,6 +228,13 @@ async function pageSnapshot(page) {
 }
 
 async function assertBusinessProfile(page, role) {
+  const readinessStates = await page.locator('.bp-readiness-state').evaluateAll(states =>
+    states.map(state => state.dataset.state));
+  assert.strictEqual(readinessStates.length, PROFILE_READINESS_ITEMS.length, 'all Profile Readiness items render');
+  assert.deepStrictEqual([...new Set(readinessStates)].sort(), [...PROFILE_READINESS_STATES],
+    'the retained mounted gate exercises every Profile Readiness state');
+  assert.strictEqual(await page.locator('#profileReadinessError').isHidden(), true,
+    'the deterministic Profile Readiness authority remains ready');
   const tabs = page.locator('#bpNav [role="tab"]');
   assert.strictEqual(await tabs.count(), 15, 'all Business Profile sections remain keyboard-addressable');
   await tabs.first().focus();

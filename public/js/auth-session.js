@@ -843,10 +843,15 @@
   });
 
   if (typeof global.showToast !== 'function') {
-    global.showToast = function (message) {
+    global.showToast = function (message, type) {
       var element = document.getElementById('toast');
       if (!element) return;
+      var normalizedType = typeof type === 'string' ? type.trim().toLowerCase() : '';
+      var assertive = normalizedType === 'error' || normalizedType === 'warning';
       element.textContent = message;
+      element.setAttribute('role', assertive ? 'alert' : 'status');
+      element.setAttribute('aria-live', assertive ? 'assertive' : 'polite');
+      element.setAttribute('aria-atomic', 'true');
       element.className = 'toast show';
       global.setTimeout(function () { element.classList.remove('show'); }, 3500);
     };

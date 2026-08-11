@@ -34,6 +34,10 @@ const SAFE_PROVIDER_KEYS = Object.freeze([
   'key', 'name', 'mark', 'description', 'presentation', 'authority', 'capabilities',
 ]);
 
+const MAP_PROVIDER_DESCRIPTION =
+  'Canonical provider preferences are managed in the Map launch preferences panel below; ' +
+  'provider connection and destination-launch/navigation actions are not included.';
+
 function canonicalStatuses(retell, voice) {
   return {
     authority: 'canonical_integration_ownership',
@@ -132,7 +136,15 @@ describe('Mission 20 Phase 6C provider-neutral integration catalogue', () => {
       }
     }
     for (const key of ['google_maps', 'apple_maps', 'waze']) {
-      expect(byKey(projected, key).authority.basis).toBe('catalogue_only_navigation_deferred');
+      const provider = byKey(projected, key);
+      expect(provider.description).toBe(MAP_PROVIDER_DESCRIPTION);
+      expect(provider.presentation).toEqual({ state: 'coming_soon', label: 'Coming soon' });
+      expect(provider.authority).toEqual({
+        configuration: 'authority_missing',
+        connection: 'authority_missing',
+        basis: 'catalogue_only_navigation_deferred',
+      });
+      expect(provider.description).not.toMatch(/preference(?:s)?(?: and launcher logic)? (?:are )?(?:absent|not included)/i);
     }
     expect(byKey(projected, 'jobber').authority.basis).toBe('source_disabled');
     expect(byKey(projected, 'servicetitan').description).toMatch(/read-only/i);

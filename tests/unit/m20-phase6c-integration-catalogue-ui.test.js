@@ -15,14 +15,29 @@ function settingsIntegrationsSection(html) {
   return html.slice(start, end);
 }
 
+function catalogueScript(html) {
+  const authority = html.indexOf("authority: 'northstar_integration_catalogue_v1'");
+  const start = html.lastIndexOf('<script>', authority);
+  const end = html.indexOf('</script>', authority);
+  expect(authority).toBeGreaterThanOrEqual(0);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(authority);
+  return html.slice(start, end);
+}
+
 describe('Mission 20 Phase 6C integration catalogue presentation contract', () => {
   const integrations = fs.readFileSync(INTEGRATIONS_PATH, 'utf8');
   const settings = fs.readFileSync(SETTINGS_PATH, 'utf8');
 
-  test('uses only the additive server-projected catalogue and exposes no connection action', () => {
+  test('keeps the catalogue read-only while allowing only separate canonical map-preference writes', () => {
+    const catalogue = catalogueScript(integrations);
     expect(integrations).toContain("NorthStarAccountSession.fetch('/api/v1/integrations/catalogue'");
     expect(integrations).not.toMatch(/\/api\/v1\/integrations\/status|\/api\/integrations\/jobber|jobber=connected/);
-    expect(integrations).not.toMatch(/method\s*:\s*['"](?:POST|PUT|PATCH|DELETE)['"]|window\.location\.(?:assign|replace)|window\.open|fetch\([^)]*https?:/i);
+    expect(catalogue).not.toMatch(/method\s*:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i);
+    expect(integrations).not.toMatch(/method\s*:\s*['"](?:POST|PATCH|DELETE)['"]|window\.location\.(?:assign|replace)|window\.open|fetch\([^)]*https?:/i);
+    expect(integrations.match(/method\s*:\s*['"]PUT['"]/g)).toHaveLength(2);
+    expect(integrations.match(/NorthStarAccountSession\.json\('\/api\/account\/map-preferences\/(?:organization|me)'/g))
+      .toHaveLength(2);
     expect(integrations).not.toMatch(/Connect Jobber|Disconnect Jobber|Connect<|>Connect|>Configure</i);
     expect(integrations).toContain("authority: 'northstar_integration_catalogue_v1'");
     expect(integrations).toContain('No connection or provider-management action is available from this read-only catalogue.');

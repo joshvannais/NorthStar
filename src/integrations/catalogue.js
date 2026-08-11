@@ -167,17 +167,17 @@ const CATEGORY_DEFINITIONS = deepFreeze([
     providers: [
       {
         key: 'google_maps', name: 'Google Maps', mark: 'GM',
-        description: 'Catalogue metadata only; navigation preference and launcher logic are not included.',
+        description: 'Canonical provider preferences are managed in the Map launch preferences panel below; provider connection and destination-launch/navigation actions are not included.',
         basis: 'catalogue_only_navigation_deferred',
       },
       {
         key: 'apple_maps', name: 'Apple Maps', mark: 'AM',
-        description: 'Catalogue metadata only; navigation preference and launcher logic are not included.',
+        description: 'Canonical provider preferences are managed in the Map launch preferences panel below; provider connection and destination-launch/navigation actions are not included.',
         basis: 'catalogue_only_navigation_deferred',
       },
       {
         key: 'waze', name: 'Waze', mark: 'WZ',
-        description: 'Catalogue metadata only; navigation preference and launcher logic are not included.',
+        description: 'Canonical provider preferences are managed in the Map launch preferences panel below; provider connection and destination-launch/navigation actions are not included.',
         basis: 'catalogue_only_navigation_deferred',
       },
     ],

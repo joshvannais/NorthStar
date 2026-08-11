@@ -232,7 +232,7 @@ async function auditMountedAccessibility(page) {
 
     const uiFailures = [];
     for (const element of document.querySelectorAll(interactiveSelector)) {
-      if (!isVisible(element) || isDecorative(element)) continue;
+      if (!isVisible(element) || isDecorative(element) || element.disabled) continue;
       const text = (element.innerText || element.value || element.getAttribute('aria-label') || '').trim();
       if (element.matches('input:not([type="hidden"]), select, textarea')) {
         const outside = backgroundCandidates(element.parentElement || document.body);

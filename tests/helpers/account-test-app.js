@@ -13,6 +13,7 @@ function createDisposableAccountApp(options = {}) {
   const { createCanonicalRouter, createCompatibilityRouter } = require('../../src/routes/canonicalPolaris');
   const { createJobberIntegrationRouter } = require('../../src/routes/jobberIntegration');
   const { createIntegrationStatusRouter } = require('../../src/routes/integrationStatus');
+  const { createMapPreferencesRouter } = require('../../src/routes/mapPreferences');
   const { createLegacyAuthorityRetirementRouter } = require('../../src/routes/legacyAuthorityRetirement');
   const capture = options.emailCapture || {
     messages: [],
@@ -50,6 +51,7 @@ function createDisposableAccountApp(options = {}) {
     '/dashboard': 'dashboard/command-center.html',
     '/dashboard/business-profile': 'dashboard/business-profile.html',
     '/dashboard/settings': 'dashboard/settings.html',
+    '/dashboard/integrations': 'dashboard/integrations.html',
   })) {
     app.get(route, (_req, res) => res.sendFile(path.join(publicRoot, file)));
   }
@@ -57,6 +59,7 @@ function createDisposableAccountApp(options = {}) {
     service,
     signup: service.signup.bind(service),
   }));
+  app.use('/api/account/map-preferences', createMapPreferencesRouter());
   app.use('/api/account', require('../../src/routes/account'));
   app.use('/api/v1', require('../../src/routes/simulations'));
   app.use('/api/v1/canonical', createCanonicalRouter());

@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('../../src/server');
 const { projectIntegrationCatalogue } = require('../../src/integrations/catalogue');
+const { projectMapPreferences } = require('../../src/mapPreferences/contract');
 const { navigationFixture } = require('../helpers/navigation-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { auditMountedAccessibility, assertAccessibilityAudit } = require('../helpers/theme-accessibility-audit');
@@ -104,6 +105,25 @@ function profileReadinessFixture() {
   };
 }
 
+function mapPreferencesFixture(role) {
+  return projectMapPreferences({
+    role,
+    organization: {
+      version: 1,
+      google_maps_enabled: true,
+      google_maps_visible: true,
+      apple_maps_enabled: true,
+      apple_maps_visible: true,
+      waze_enabled: true,
+      waze_visible: true,
+      default_provider: 'google_maps',
+      authority_source: 'system_default',
+      updated_at: new Date('2026-08-10T16:00:00.000Z'),
+    },
+    user: null,
+  });
+}
+
 async function installBoundary(context, origin, role, evidence, options = {}) {
   let workforceRequests = 0;
   await context.route('**/*', async route => {
@@ -158,6 +178,11 @@ async function installBoundary(context, origin, role, evidence, options = {}) {
       return route.fulfill(authorityFailure
         ? json({ success: false, error: { code: 'CANONICAL_PERSISTENCE_UNAVAILABLE' } }, 503)
         : json({ success: true, data: catalogue, requestId: 'part2j-browser-fixture' }));
+    }
+    if (url.pathname === '/api/account/map-preferences') {
+      return route.fulfill(authorityFailure
+        ? json({ success: false, error: { code: 'MAP_PREFERENCES_UNAVAILABLE' } }, 503)
+        : json({ success: true, data: mapPreferencesFixture(role) }));
     }
     evidence.unexpectedApi.push({ role, method: request.method(), path: url.pathname });
     return route.fulfill(json({ error: 'unexpected API path' }, 500));

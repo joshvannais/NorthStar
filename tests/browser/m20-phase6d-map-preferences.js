@@ -24,6 +24,12 @@ const PROVIDERS = Object.freeze(['google_maps', 'apple_maps', 'waze']);
 const HOSTILE = '<img src=x onerror="window.__mapPreferenceXss++"><svg onload="window.__mapPreferenceXss++">';
 const CFT_VERSION = '150.0.7871.129';
 const CFT_SHA256 = 'fb14772807d9b4a18d87336fb112fd96fb05b2c80410aab78f74c7030751880e';
+const MAP_CATALOGUE_DESCRIPTION =
+  'Canonical provider preferences are managed in the Map launch preferences panel below; ' +
+  'provider connection and destination-launch/navigation actions are not included.';
+const MAP_CATALOGUE_BASIS =
+  'Connection catalogue only; canonical provider preferences are managed below; ' +
+  'destination-launch/navigation actions are deferred';
 
 async function listen(app) {
   const server = app.listen(0, '127.0.0.1');
@@ -144,6 +150,18 @@ async function assertReadySurface(page, spec) {
         buttons: jobber.querySelectorAll('button,a').length,
         text: jobber.textContent,
       } : null,
+      mapCatalogue: ['google_maps', 'apple_maps', 'waze'].map(function(key) {
+        const card = document.querySelector('[data-provider-key="' + key + '"]');
+        const details = Array.from(card.querySelectorAll('dt,dd')).map(node => node.textContent.trim());
+        const basisIndex = details.indexOf('Status basis');
+        return {
+          key,
+          description: card.querySelector('.integration-card-description').textContent.trim(),
+          status: card.querySelector('.integration-status').textContent.trim(),
+          basis: details[basisIndex + 1],
+          actions: card.querySelectorAll('button,a').length,
+        };
+      }),
       unsafe: root.querySelectorAll('img,svg,script,a[href]').length,
       urls: Array.from(root.querySelectorAll('[href]')).map(node => node.getAttribute('href')),
       xss: window.__mapPreferenceXss,
@@ -167,6 +185,15 @@ async function assertReadySurface(page, spec) {
   assert.strictEqual(result.jobber.status, 'Coming soon');
   assert.strictEqual(result.jobber.buttons, 0);
   assert.match(result.jobber.text, /Source-disabled|source-disabled/i);
+  assert.deepStrictEqual(result.mapCatalogue, PROVIDERS.map(key => ({
+    key,
+    description: MAP_CATALOGUE_DESCRIPTION,
+    status: 'Coming soon',
+    basis: MAP_CATALOGUE_BASIS,
+    actions: 0,
+  })));
+  assert.ok(result.mapCatalogue.every(provider =>
+    !/preference(?:s)?(?: and launcher logic)? (?:are )?(?:absent|not included)/i.test(provider.description)));
   assert.strictEqual(result.unsafe, 0);
   assert.deepStrictEqual(result.urls, []);
   assert.strictEqual(result.xss, 0);

@@ -5,6 +5,9 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const INTEGRATIONS_PATH = path.join(ROOT, 'public', 'dashboard', 'integrations.html');
+const MAP_CATALOGUE_BASIS =
+  'Connection catalogue only; canonical provider preferences are managed below; ' +
+  'destination-launch/navigation actions are deferred';
 
 describe('Mission 20 Phase 6D map preference presentation contract', () => {
   const html = fs.readFileSync(INTEGRATIONS_PATH, 'utf8');
@@ -15,10 +18,15 @@ describe('Mission 20 Phase 6D map preference presentation contract', () => {
     expect(html).toContain('Map launch preferences');
     expect(html).toContain('No map is opened from this page. Navigation launch behavior is not included.');
     expect(html).toContain('No connection or provider-management action is available from this read-only catalogue.');
+    expect(html).toContain(
+      `catalogue_only_navigation_deferred: '${MAP_CATALOGUE_BASIS}'`
+    );
+    expect(html).toContain('Choose which supported map providers should be available');
     expect(html).toContain("NorthStarAccountSession.json('/api/account/map-preferences', { method: 'GET' })");
     expect(html).toContain("NorthStarAccountSession.json('/api/account/map-preferences/organization'");
     expect(html).toContain("NorthStarAccountSession.json('/api/account/map-preferences/me'");
     expect(html).not.toMatch(/https?:\/\/(?:maps|www\.google|maps\.apple|waze)|window\.open|window\.location\.(?:assign|replace)|target=["']_blank/i);
+    expect(html).not.toMatch(/Catalogue metadata only; (?:navigation )?preference(?:s)? and launcher logic (?:are )?(?:absent|not included)/i);
   });
 
   test('uses exact provider names and neutral navigation glyphs without official marks or partnership language', () => {

@@ -175,7 +175,7 @@ async function integrationSnapshot(page) {
     detailCount: document.querySelectorAll('.integration-details').length,
     providerActions: document.querySelectorAll('[data-provider-key] button,[data-provider-key] a[href],form').length,
     modalCount: document.querySelectorAll('.modal-overlay,#connectModal').length,
-    inputCount: document.querySelectorAll('main input').length,
+    inputCount: document.querySelectorAll('#integrationCatalogueRoot input').length,
     injectedNodes: document.querySelectorAll('#integrationCatalogueRoot img,#integrationCatalogueRoot script,#integrationCatalogueRoot svg').length,
     xss: window.__integrationXss,
     poisonVisible: /LEGACY STRIPE MUST NOT CONNECT|legacy-calendar|onerror=/.test(document.body.textContent),

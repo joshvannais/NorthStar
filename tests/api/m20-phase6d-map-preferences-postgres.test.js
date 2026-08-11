@@ -96,6 +96,84 @@ realPostgres('Mission 20 Phase 6D mounted canonical map preferences', () => {
   let app;
   let auth;
 
+  function mountedRepositoryApp(repositoryProvider) {
+    const { createMapPreferencesRouter } = require('../../src/routes/mapPreferences');
+    const mounted = express();
+    mounted.use(express.json());
+    mounted.use('/api/account/map-preferences', createMapPreferencesRouter({ repositoryProvider }));
+    return mounted;
+  }
+
+  function projectionFailureHarness() {
+    const { MapPreferencesRepository } = require('../../src/mapPreferences/repository');
+    const repository = new MapPreferencesRepository(pool, {
+      projector: () => { throw new Error('injected authoritative response projection failure'); },
+    });
+    let separateReadCalls = 0;
+    const mounted = mountedRepositoryApp(() => ({
+      read: async () => {
+        separateReadCalls += 1;
+        throw new Error('post-commit response read must be unreachable');
+      },
+      updateOrganization: input => repository.updateOrganization(input),
+      updateUser: input => repository.updateUser(input),
+    }));
+    return { mounted, separateReadCalls: () => separateReadCalls };
+  }
+
+  function responseRaceHarness(operation) {
+    const { MapPreferencesRepository } = require('../../src/mapPreferences/repository');
+    const repository = new MapPreferencesRepository(pool);
+    let mutationCount = 0;
+    let readCalls = 0;
+    let releaseFirstMutation;
+    let releaseSecondMutation;
+    const firstMutation = new Promise(resolve => { releaseFirstMutation = resolve; });
+    const secondMutation = new Promise(resolve => { releaseSecondMutation = resolve; });
+
+    async function tracked(method, input) {
+      const result = await repository[method](input);
+      mutationCount += 1;
+      if (mutationCount === 1) releaseFirstMutation();
+      if (mutationCount === 2) releaseSecondMutation();
+      return result;
+    }
+
+    const mounted = mountedRepositoryApp(() => ({
+      read: async (...args) => {
+        readCalls += 1;
+        if (readCalls === 1) await secondMutation;
+        return repository.read(...args);
+      },
+      updateOrganization: input => operation === 'organization'
+        ? tracked('updateOrganization', input)
+        : repository.updateOrganization(input),
+      updateUser: input => operation === 'user'
+        ? tracked('updateUser', input)
+        : repository.updateUser(input),
+    }));
+    return { mounted, firstMutation, readCalls: () => readCalls };
+  }
+
+  async function ensureStoredUserPreference(organizationId, userId) {
+    await pool.query(
+      `INSERT INTO user_map_preferences
+         (organization_id, user_id, mode,
+          google_maps_enabled, google_maps_visible,
+          apple_maps_enabled, apple_maps_visible,
+          waze_enabled, waze_visible, default_provider,
+          version, updated_by_user_id)
+       VALUES ($1,$2,'override',TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,'google_maps',1,$2)
+       ON CONFLICT (organization_id, user_id) DO NOTHING`,
+      [organizationId, userId]
+    );
+    return (await pool.query(
+      `SELECT version, default_provider FROM user_map_preferences
+        WHERE organization_id = $1 AND user_id = $2`,
+      [organizationId, userId]
+    )).rows[0];
+  }
+
   beforeAll(async () => {
     suiteDatabase = await createSuiteDatabase('m20-phase6d-map-preferences');
     originalDatabaseUrl = process.env.DATABASE_URL;
@@ -456,5 +534,222 @@ realPostgres('Mission 20 Phase 6D mounted canonical map preferences', () => {
     expect(JSON.stringify(catalogueAfter.body.data)).toBe(JSON.stringify(catalogueBefore.body.data));
     expect(JSON.stringify(statusAfter.body.data)).toBe(JSON.stringify(statusBefore.body.data));
     expect(JSON.stringify(catalogueAfter.body.data)).not.toMatch(/mapPreferences|defaultProvider|enabled|visible/);
+  });
+
+  test('organization projection failure rolls back the mutation before any response read', async () => {
+    const before = (await pool.query(
+      'SELECT * FROM organization_map_preferences WHERE organization_id = $1', [ORG_A]
+    )).rows[0];
+    const document = changedDocument(before.default_provider === 'waze' ? 'apple_maps' : 'waze');
+    const harness = projectionFailureHarness();
+    const response = await request(harness.mounted)
+      .put('/api/account/map-preferences/organization')
+      .set(auth.get(OWNER_A).headers)
+      .send({ expectedVersion: Number(before.version), preferences: document });
+    const after = (await pool.query(
+      'SELECT * FROM organization_map_preferences WHERE organization_id = $1', [ORG_A]
+    )).rows[0];
+    const observed = await request(app).get('/api/account/map-preferences').set(auth.get(OWNER_A).headers);
+    expect({
+      status: response.status,
+      code: response.body.error && response.body.error.code,
+      separateReadCalls: harness.separateReadCalls(),
+      durableBytesUnchanged: stableJson(after) === stableJson(before),
+      observedVersion: observed.body.data.organization.version,
+    }).toEqual({
+      status: 503,
+      code: 'MAP_PREFERENCES_UNAVAILABLE',
+      separateReadCalls: 0,
+      durableBytesUnchanged: true,
+      observedVersion: Number(before.version),
+    });
+  });
+
+  test('self projection failure rolls back first-row insertion before any response read', async () => {
+    await pool.query(
+      'DELETE FROM user_map_preferences WHERE organization_id = $1 AND user_id = $2',
+      [ORG_A, ADMIN_A]
+    );
+    const before = (await pool.query(
+      'SELECT * FROM user_map_preferences WHERE organization_id = $1 AND user_id = $2',
+      [ORG_A, ADMIN_A]
+    )).rows;
+    const harness = projectionFailureHarness();
+    const response = await request(harness.mounted)
+      .put('/api/account/map-preferences/me')
+      .set(auth.get(ADMIN_A).headers)
+      .send({ expectedVersion: 0, mode: 'override', preferences: changedDocument('apple_maps') });
+    const after = (await pool.query(
+      'SELECT * FROM user_map_preferences WHERE organization_id = $1 AND user_id = $2',
+      [ORG_A, ADMIN_A]
+    )).rows;
+    const observed = await request(app).get('/api/account/map-preferences').set(auth.get(ADMIN_A).headers);
+    expect({
+      status: response.status,
+      code: response.body.error && response.body.error.code,
+      separateReadCalls: harness.separateReadCalls(),
+      durableBytesUnchanged: stableJson(after) === stableJson(before),
+      observedUser: observed.body.data.user,
+    }).toEqual({
+      status: 503,
+      code: 'MAP_PREFERENCES_UNAVAILABLE',
+      separateReadCalls: 0,
+      durableBytesUnchanged: true,
+      observedUser: {
+        version: 0, mode: 'inherit', hasStoredAuthority: false,
+        preferences: null, updatedAt: null,
+      },
+    });
+  });
+
+  test('first-row self insertion race has one exact winner and one stale response', async () => {
+    const apple = changedDocument('apple_maps');
+    const waze = changedDocument('waze');
+    const [first, second] = await Promise.all([
+      request(app).put('/api/account/map-preferences/me').set(auth.get(OWNER_B).headers)
+        .send({ expectedVersion: 0, mode: 'override', preferences: apple }),
+      request(app).put('/api/account/map-preferences/me').set(auth.get(OWNER_B).headers)
+        .send({ expectedVersion: 0, mode: 'override', preferences: waze }),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 409]);
+    const winner = first.status === 200 ? first : second;
+    expect(winner.body).toMatchObject({ success: true, changed: true });
+    expect(winner.body.data.user).toMatchObject({ version: 1, mode: 'override' });
+    const stored = (await pool.query(
+      `SELECT version, default_provider FROM user_map_preferences
+        WHERE organization_id = $1 AND user_id = $2`, [ORG_B, OWNER_B]
+    )).rows[0];
+    expect(stored).toEqual({
+      version: '1',
+      default_provider: winner.body.data.user.preferences.defaultProvider,
+    });
+  });
+
+  test('organization responses remain bound to each accepted write under deterministic concurrency', async () => {
+    const before = (await pool.query(
+      'SELECT version, default_provider FROM organization_map_preferences WHERE organization_id = $1', [ORG_A]
+    )).rows[0];
+    const defaults = ['google_maps', 'apple_maps', 'waze'].filter(value => value !== before.default_provider);
+    const firstDocument = changedDocument(defaults[0]);
+    const secondDocument = changedDocument(defaults[1]);
+    const harness = responseRaceHarness('organization');
+    const firstPromise = request(harness.mounted)
+      .put('/api/account/map-preferences/organization')
+      .set(auth.get(OWNER_A).headers)
+      .send({ expectedVersion: Number(before.version), preferences: firstDocument })
+      .then(response => response);
+    await harness.firstMutation;
+    const secondPromise = request(harness.mounted)
+      .put('/api/account/map-preferences/organization')
+      .set(auth.get(ADMIN_A).headers)
+      .send({ expectedVersion: Number(before.version) + 1, preferences: secondDocument })
+      .then(response => response);
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+    const stored = (await pool.query(
+      'SELECT version, default_provider FROM organization_map_preferences WHERE organization_id = $1', [ORG_A]
+    )).rows[0];
+    expect({
+      readCalls: harness.readCalls(),
+      first: {
+        status: first.status, changed: first.body.changed,
+        version: first.body.data.organization.version,
+        defaultProvider: first.body.data.organization.preferences.defaultProvider,
+      },
+      second: {
+        status: second.status, changed: second.body.changed,
+        version: second.body.data.organization.version,
+        defaultProvider: second.body.data.organization.preferences.defaultProvider,
+      },
+      stored,
+    }).toEqual({
+      readCalls: 0,
+      first: {
+        status: 200, changed: true,
+        version: Number(before.version) + 1, defaultProvider: firstDocument.defaultProvider,
+      },
+      second: {
+        status: 200, changed: true,
+        version: Number(before.version) + 2, defaultProvider: secondDocument.defaultProvider,
+      },
+      stored: { version: String(Number(before.version) + 2), default_provider: secondDocument.defaultProvider },
+    });
+  });
+
+  test('self responses remain bound to each accepted write under deterministic concurrency', async () => {
+    const before = await ensureStoredUserPreference(ORG_B, OWNER_B);
+    const defaults = ['google_maps', 'apple_maps', 'waze'].filter(value => value !== before.default_provider);
+    const firstDocument = changedDocument(defaults[0]);
+    const secondDocument = changedDocument(defaults[1]);
+    const harness = responseRaceHarness('user');
+    const firstPromise = request(harness.mounted)
+      .put('/api/account/map-preferences/me')
+      .set(auth.get(OWNER_B).headers)
+      .send({ expectedVersion: Number(before.version), mode: 'override', preferences: firstDocument })
+      .then(response => response);
+    await harness.firstMutation;
+    const secondPromise = request(harness.mounted)
+      .put('/api/account/map-preferences/me')
+      .set(auth.get(OWNER_B).headers)
+      .send({ expectedVersion: Number(before.version) + 1, mode: 'override', preferences: secondDocument })
+      .then(response => response);
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+    const stored = (await pool.query(
+      `SELECT version, default_provider FROM user_map_preferences
+        WHERE organization_id = $1 AND user_id = $2`, [ORG_B, OWNER_B]
+    )).rows[0];
+    expect({
+      readCalls: harness.readCalls(),
+      first: {
+        status: first.status, changed: first.body.changed,
+        version: first.body.data.user.version,
+        defaultProvider: first.body.data.user.preferences.defaultProvider,
+      },
+      second: {
+        status: second.status, changed: second.body.changed,
+        version: second.body.data.user.version,
+        defaultProvider: second.body.data.user.preferences.defaultProvider,
+      },
+      stored,
+    }).toEqual({
+      readCalls: 0,
+      first: {
+        status: 200, changed: true,
+        version: Number(before.version) + 1, defaultProvider: firstDocument.defaultProvider,
+      },
+      second: {
+        status: 200, changed: true,
+        version: Number(before.version) + 2, defaultProvider: secondDocument.defaultProvider,
+      },
+      stored: { version: String(Number(before.version) + 2), default_provider: secondDocument.defaultProvider },
+    });
+  });
+
+  test('organization and self writes preserve lock order and their own projections when concurrent', async () => {
+    const organizationBefore = (await pool.query(
+      'SELECT version, default_provider FROM organization_map_preferences WHERE organization_id = $1', [ORG_A]
+    )).rows[0];
+    const userBefore = await ensureStoredUserPreference(ORG_A, OWNER_A);
+    const organizationDocument = changedDocument(
+      organizationBefore.default_provider === 'waze' ? 'apple_maps' : 'waze'
+    );
+    const userDocument = changedDocument(userBefore.default_provider === 'google_maps' ? 'apple_maps' : 'google_maps');
+    const [organizationResponse, userResponse] = await Promise.all([
+      request(app).put('/api/account/map-preferences/organization').set(auth.get(OWNER_A).headers)
+        .send({ expectedVersion: Number(organizationBefore.version), preferences: organizationDocument }),
+      request(app).put('/api/account/map-preferences/me').set(auth.get(OWNER_A).headers)
+        .send({ expectedVersion: Number(userBefore.version), mode: 'override', preferences: userDocument }),
+    ]);
+    expect(organizationResponse.status).toBe(200);
+    expect(userResponse.status).toBe(200);
+    expect(organizationResponse.body).toMatchObject({ success: true, changed: true });
+    expect(userResponse.body).toMatchObject({ success: true, changed: true });
+    expect(organizationResponse.body.data.organization).toMatchObject({
+      version: Number(organizationBefore.version) + 1,
+      preferences: organizationDocument,
+    });
+    expect(userResponse.body.data.user).toMatchObject({
+      version: Number(userBefore.version) + 1,
+      preferences: userDocument,
+    });
   });
 });

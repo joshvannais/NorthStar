@@ -3871,3 +3871,128 @@ textarea:disabled {
     right: max(10px, env(safe-area-inset-right));
   }
 }
+
+/* Canonical jobsite navigation stays inert until a user activates a button. */
+.navigation-launcher {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.navigation-launcher__controls {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.navigation-launcher__primary,
+.navigation-launcher__chooser,
+.navigation-launcher__provider,
+.navigation-launcher__retry {
+  min-height: 40px;
+  border: 1px solid var(--theme-field-border);
+  border-radius: 8px;
+  background: var(--neutral-50);
+  color: var(--neutral-800);
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.navigation-launcher__primary,
+.navigation-launcher__provider {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.navigation-launcher__primary {
+  padding: 9px 14px;
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: #fff;
+}
+
+.navigation-launcher__chooser,
+.navigation-launcher__retry {
+  padding: 9px 12px;
+}
+
+.navigation-launcher button:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.navigation-launcher button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.navigation-launcher__glyph {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.navigation-launcher__menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% - 24px);
+  left: 0;
+  display: grid;
+  width: min(260px, 100%);
+  padding: 6px;
+  gap: 4px;
+  border: 1px solid var(--theme-field-border);
+  border-radius: 10px;
+  background: var(--neutral-50);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2);
+}
+
+.navigation-launcher__menu[hidden] {
+  display: none;
+}
+
+.navigation-launcher__provider {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 9px 12px;
+  text-align: left;
+}
+
+.navigation-launcher__status {
+  min-height: 18px;
+  margin: 7px 0 0;
+  color: var(--neutral-600);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.navigation-launcher__status[role="alert"] {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.navigation-launcher__retry {
+  margin-top: 4px;
+}
+
+[data-theme="dark"] .navigation-launcher__primary {
+  color: #0b0d17;
+}
+
+@media (max-width: 480px) {
+  .navigation-launcher__controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .navigation-launcher__primary {
+    min-width: 0;
+  }
+}

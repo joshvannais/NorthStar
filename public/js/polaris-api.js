@@ -147,6 +147,7 @@ window.PolarisApi = (function () {
       canonicalGraphId: record.canonical.ids.graph,
       callerName: customer.name,
       phone: customer.phone,
+      address: customer.address,
       service: values.service && values.service.label,
       estimatedPrice: values.customerFacingPrice,
       jobDetail: values.service && values.service.scope,

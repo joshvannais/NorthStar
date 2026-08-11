@@ -35,6 +35,7 @@ const TEST_PATHS = Object.freeze([
   'tests/ratification/m19-part4-final-reachability.test.js',
 ]);
 const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
+  'public/js/navigation-launcher.js',
   'public/js/transcript-renderer.js',
 ]);
 const { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS } = require('../helpers/site-theme-pages');

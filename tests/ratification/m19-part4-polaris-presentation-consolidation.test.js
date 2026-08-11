@@ -11,6 +11,7 @@ const CALENDAR_PATH = path.join(ROOT, 'public', 'js', 'calendar-engine.js');
 const CUSTOMER_DETAIL_PATH = path.join(ROOT, 'public', 'js', 'customer-detail.js');
 const TRANSCRIPT_RENDERER_PATH = path.join(ROOT, 'public', 'js', 'transcript-renderer.js');
 const LEAD_PATH = path.join(ROOT, 'public', 'dashboard', 'lead.html');
+const CANONICAL_ADDRESS = '100 Cedar Lane, Testville, NY 10001';
 const {
   CALCULATION_VERSION,
   calculateCanonicalPolaris,
@@ -366,9 +367,9 @@ function runCalendar(source, includeEvent) {
   };
 }
 
-async function runCustomerDetail(source) {
+async function runCustomerDetail(source, launcherApi) {
   var projections = {
-    'customer-detail': { digest: 'customer-digest', records: [{ id: 'customer-1', name: 'Avery <Cedar>', status: 'active' }], items: [source] },
+    'customer-detail': { digest: 'customer-digest', records: [{ id: 'customer-1', name: 'Avery <Cedar>', address: CANONICAL_ADDRESS, status: 'active' }], items: [source] },
     leads: { digest: 'customer-digest', records: [{ id: 'lead-1', status: 'qualified' }], items: [] },
     estimates: { digest: 'customer-digest', records: [], items: [] },
     communications: { digest: 'customer-digest', records: [], items: [] },
@@ -381,12 +382,18 @@ async function runCustomerDetail(source) {
   runtime.sandbox.window.NorthStarAccountSession = {
     fetch: function () { return Promise.reject(new Error('unexpected account fetch')); },
   };
+  if (launcherApi !== undefined) {
+    runtime.sandbox.NorthStarNavigationLauncher = launcherApi;
+    runtime.sandbox.window.NorthStarNavigationLauncher = launcherApi;
+  }
   vm.runInContext(fs.readFileSync(CUSTOMER_DETAIL_PATH, 'utf8'), runtime.sandbox, { filename: 'customer-detail.js' });
   runtime.sandbox.window.CustomerDetail.open('customer-1');
   await new Promise(function (resolve) { setImmediate(resolve); });
   await Promise.resolve();
   return {
     title: runtime.document.getElementById('cdDrawerTitle'),
+    address: runtime.document.getElementById('cdAddress'),
+    navigation: runtime.document.getElementById('cdNavigationLauncher'),
     description: runtime.document.getElementById('cdDescription'),
     summary: runtime.document.getElementById('cdPolSummary'),
     price: runtime.document.getElementById('cdPolPrice'),
@@ -407,7 +414,7 @@ function leadInlineScript() {
   return scripts[0];
 }
 
-async function runLead(source) {
+async function runLead(source, launcherApi) {
   var runtime = createConsumerRuntime(source);
   var PolarisApi = {
     getOpportunities: function () {
@@ -418,6 +425,7 @@ async function runLead(source) {
         id: 'lead-1',
         callerName: 'Avery Cedar',
         service: 'Zero service',
+        address: CANONICAL_ADDRESS,
         estimatedPrice: 0,
         status: 'qualified',
         canonical: source,
@@ -426,12 +434,18 @@ async function runLead(source) {
   };
   runtime.sandbox.PolarisApi = PolarisApi;
   runtime.sandbox.window.PolarisApi = PolarisApi;
+  if (launcherApi !== undefined) {
+    runtime.sandbox.NorthStarNavigationLauncher = launcherApi;
+    runtime.sandbox.window.NorthStarNavigationLauncher = launcherApi;
+  }
   vm.runInContext(leadInlineScript(), runtime.sandbox, { filename: 'lead.html:inline' });
   await new Promise(function (resolve) { setImmediate(resolve); });
   await Promise.resolve();
   return {
     primary: runtime.document.getElementById('polarisContainer'),
     customer: runtime.document.getElementById('customerIntelligenceContainer'),
+    address: runtime.document.getElementById('leadCanonicalAddress'),
+    navigation: runtime.document.getElementById('leadNavigationLauncher'),
     loading: runtime.document.getElementById('loadingState'),
     selectorCalls: runtime.selectorCalls,
   };
@@ -758,6 +772,21 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(result.action.innerHTML).toBe('Call &lt;owner&gt; &amp; confirm');
   });
 
+  test.each([
+    ['the launcher module is absent', undefined],
+    ['the launcher mount function is absent', Object.freeze({})],
+  ])('real CustomerDetail preserves canonical content and reports navigation unavailable when %s', async (_label, launcherApi) => {
+    const source = canonicalEnvelope(dynamicValues(Object.freeze({ action: 'Call <owner> & confirm' })));
+    const result = await runCustomerDetail(source, launcherApi);
+
+    expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
+    expect(result.title.textContent).toBe('Avery <Cedar>');
+    expect(result.address.textContent).toBe(CANONICAL_ADDRESS);
+    expect(result.navigation.textContent).toBe('Navigation unavailable.');
+    expect(result.summary.textContent).toBe('Zero & <Service>');
+    expect(result.action.textContent).toBe('Call <owner> & confirm');
+  });
+
   test('real CustomerDetail renders authentic calculator scope and labeled recommendation without entering error UI', async () => {
     const values = productionCalculation();
     const result = await runCustomerDetail(canonicalEnvelope(values));
@@ -846,6 +875,21 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(result.primary.textContent).toContain('Dispatch <crew> & confirm');
     expect(result.primary.innerHTML).toContain('Dispatch &lt;crew&gt; &amp; confirm');
     expect(result.primary.innerHTML).not.toContain('Dispatch <crew>');
+    expect(result.customer.textContent).toContain('Canonical Polaris');
+  });
+
+  test.each([
+    ['the launcher module is absent', undefined],
+    ['the launcher mount function is absent', Object.freeze({})],
+  ])('real Lead preserves canonical content and reports navigation unavailable when %s', async (_label, launcherApi) => {
+    const source = canonicalEnvelope(dynamicValues('Dispatch <crew> & confirm'));
+    const result = await runLead(source, launcherApi);
+
+    expect(result.loading.innerHTML).not.toContain('Lead not found');
+    expect(result.address.textContent).toBe(CANONICAL_ADDRESS);
+    expect(result.navigation.textContent).toBe('Navigation unavailable.');
+    expect(result.primary.textContent).toContain('Canonical Polaris');
+    expect(result.primary.textContent).toContain('Dispatch <crew> & confirm');
     expect(result.customer.textContent).toContain('Canonical Polaris');
   });
 

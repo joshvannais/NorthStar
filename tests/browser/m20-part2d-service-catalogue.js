@@ -62,8 +62,11 @@ async function closeServer(server) {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
 
-async function contextFor(browser, origin, session, viewport, externalRequests) {
+async function contextFor(browser, origin, session, viewport, externalRequests, theme) {
   const context = await browser.newContext({ viewport });
+  await context.addInitScript((selectedTheme) => {
+    localStorage.setItem('northstar-theme', selectedTheme);
+  }, theme);
   await context.addCookies([
     { name: 'northstar_access', value: session.accessToken, url: origin, httpOnly: true, sameSite: 'Lax' },
     { name: 'northstar_csrf', value: session.csrfToken, url: origin, httpOnly: false, sameSite: 'Lax' },
@@ -96,6 +99,103 @@ async function serviceSnapshot(page) {
   })));
 }
 
+async function authoritySnapshot(pool, organizationId) {
+  const result = await pool.query(
+    `SELECT
+       id::text AS id,
+       organization_id::text AS organization_id,
+       version_number::text AS version_number,
+       encode(convert_to(version_label, 'UTF8'), 'hex') AS version_label_hex,
+       encode(convert_to(raw_profile::text, 'UTF8'), 'hex') AS raw_profile_hex,
+       encode(convert_to(COALESCE(raw_profile -> 'services', 'null'::jsonb)::text, 'UTF8'), 'hex') AS services_hex,
+       encode(convert_to(normalized_profile::text, 'UTF8'), 'hex') AS normalized_profile_hex,
+       normalized_profile_hash,
+       is_active::text AS is_active,
+       COALESCE(created_by::text, '') AS created_by,
+       to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS created_at_utc,
+       COALESCE(to_char(retired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US'), '') AS retired_at_utc
+     FROM canonical_business_profiles
+     WHERE organization_id = $1
+     ORDER BY version_number, id`,
+    [organizationId]
+  );
+  const bytes = Buffer.from(JSON.stringify(result.rows), 'utf8');
+  return {
+    rows: result.rows,
+    bytesHex: bytes.toString('hex'),
+    sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+  };
+}
+
+async function assertViewerSaveDisabled(page, label) {
+  const state = await page.locator('#saveBtn').evaluate((button) => ({
+    disabled: button.disabled,
+    hasDisabledAttribute: button.hasAttribute('disabled'),
+    activeElementId: document.activeElement && document.activeElement.id,
+    theme: document.documentElement.getAttribute('data-theme'),
+  }));
+  assert.strictEqual(state.disabled, true, label + ': Save is natively disabled');
+  assert.strictEqual(state.hasDisabledAttribute, true, label + ': Save retains its native disabled attribute');
+  return state;
+}
+
+function roleRequestLedger(requests, origin, role) {
+  return requests
+    .filter((entry) => entry.role === role && new URL(entry.url).origin === origin)
+    .map((entry) => ({ method: entry.method, path: new URL(entry.url).pathname }));
+}
+
+async function exerciseViewerSaveGuard({ page, role, theme, requests, origin, pool, organizationId }) {
+  const label = role + '/' + theme;
+  await page.locator('[data-section="services"]').click();
+  await page.locator('.bp-service-card').first().locator('.svc-name').fill('Forbidden viewer edit');
+  const beforeAuthority = await authoritySnapshot(pool, organizationId);
+  const beforeLedger = roleRequestLedger(requests, origin, role);
+  assert.deepStrictEqual(
+    beforeLedger.filter((entry) => entry.method !== 'GET'),
+    [],
+    label + ': automatic viewer requests are GET-only before interaction'
+  );
+  const save = page.locator('#saveBtn');
+  await assertViewerSaveDisabled(page, label + '/before-attempts');
+
+  const box = await save.boundingBox();
+  assert.ok(box && box.width > 0 && box.height > 0, label + ': disabled Save remains visibly present');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await save.press('Enter');
+  await save.press('Space');
+  await page.waitForTimeout(150);
+
+  await assertViewerSaveDisabled(page, label + '/after-attempts');
+  const afterLedger = roleRequestLedger(requests, origin, role);
+  assert.deepStrictEqual(
+    afterLedger.filter((entry) => entry.method !== 'GET'),
+    [],
+    label + ': trusted mouse and keyboard attempts emit zero non-GET requests'
+  );
+  assert.strictEqual(
+    afterLedger.filter((entry) => entry.method === 'PUT').length,
+    0,
+    label + ': trusted mouse and keyboard attempts emit exactly zero PUT requests'
+  );
+  const afterAuthority = await authoritySnapshot(pool, organizationId);
+  assert.deepStrictEqual(afterAuthority, beforeAuthority, label + ': PostgreSQL authority bytes and digest stay exact');
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await assertPersistedCatalogue(page);
+  assert.strictEqual(
+    await page.evaluate(() => document.documentElement.getAttribute('data-theme')),
+    theme,
+    label + ': theme survives the persistence check reload'
+  );
+  assert.deepStrictEqual(
+    roleRequestLedger(requests, origin, role).filter((entry) => entry.method !== 'GET'),
+    [],
+    label + ': reload remains GET-only'
+  );
+  return { authoritySha256: beforeAuthority.sha256, nonGetRequests: 0, putRequests: 0 };
+}
+
 async function assertPersistedCatalogue(page) {
   await waitForServices(page, 2);
   await page.waitForFunction((expectedName) => {
@@ -116,19 +216,28 @@ async function assertPersistedCatalogue(page) {
   assert.strictEqual(services[1].pricing, null);
 }
 
-async function verifyLifecycle(browser, origin, session, viewport, role, ledger, externalRequests) {
-  const context = await contextFor(browser, origin, session, viewport, externalRequests);
+async function verifyLifecycle(browser, origin, session, viewport, role, theme, ledger, externalRequests) {
+  const context = await contextFor(browser, origin, session, viewport, externalRequests, theme);
   const page = await context.newPage();
   ledger.attach(page, role);
   await page.goto(origin + '/dashboard/business-profile', { waitUntil: 'domcontentloaded' });
   await assertPersistedCatalogue(page);
+  assert.strictEqual(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), theme,
+    role + '/initial uses the selected theme');
+  if (role.startsWith('viewer')) await assertViewerSaveDisabled(page, role + '/initial');
   await page.evaluate(() => renderProfile(profileData));
   await assertPersistedCatalogue(page);
+  assert.strictEqual(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), theme,
+    role + '/rerender uses the selected theme');
+  if (role.startsWith('viewer')) await assertViewerSaveDisabled(page, role + '/rerender');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await assertPersistedCatalogue(page);
+  assert.strictEqual(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), theme,
+    role + '/reload uses the selected theme');
+  if (role.startsWith('viewer')) await assertViewerSaveDisabled(page, role + '/reload');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(overflow <= 1, role + ' has no horizontal overflow');
-  return { context, page, overflow };
+  return { context, page, overflow, theme };
 }
 
 async function main() {
@@ -146,7 +255,6 @@ async function main() {
   const externalRequests = [];
   const consoleErrors = [];
   const pageErrors = [];
-  const expectedViewerForbidden = [];
   try {
     process.env.DATABASE_URL = suiteDatabase.connectionString;
     process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
@@ -184,17 +292,15 @@ async function main() {
         }));
         page.on('console', (message) => {
           if (message.type() !== 'error') return;
-          if (role.startsWith('viewer') && /403 \(Forbidden\)/.test(message.text())) {
-            expectedViewerForbidden.push(message.text());
-            return;
-          }
           consoleErrors.push(role + ': ' + message.text());
         });
         page.on('pageerror', (error) => pageErrors.push(role + ': ' + error.message));
       },
     };
 
-    const ownerContext = await contextFor(browser, origin, ownerSession, { width: 1280, height: 900 }, externalRequests);
+    const ownerContext = await contextFor(
+      browser, origin, ownerSession, { width: 1280, height: 900 }, externalRequests, 'light'
+    );
     const ownerPage = await ownerContext.newPage();
     ledger.attach(ownerPage, 'owner-desktop');
     await ownerPage.goto(origin + '/dashboard/business-profile', { waitUntil: 'domcontentloaded' });
@@ -259,25 +365,35 @@ async function main() {
     await ownerContext.close();
 
     const ownerMobile = await verifyLifecycle(
-      browser, origin, ownerSession, { width: 390, height: 844 }, 'owner-mobile', ledger, externalRequests
+      browser, origin, ownerSession, { width: 390, height: 844 }, 'owner-mobile', 'dark', ledger, externalRequests
     );
     await ownerMobile.context.close();
     const viewerDesktop = await verifyLifecycle(
-      browser, origin, viewerSession, { width: 1280, height: 900 }, 'viewer-desktop', ledger, externalRequests
+      browser, origin, viewerSession, { width: 1280, height: 900 }, 'viewer-desktop', 'light', ledger, externalRequests
     );
-    await viewerDesktop.page.locator('[data-section="services"]').click();
-    await viewerDesktop.page.locator('.bp-service-card').first().locator('.svc-name').fill('Forbidden viewer edit');
-    const viewerSave = viewerDesktop.page.waitForResponse((response) =>
-      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT'
-    );
-    await viewerDesktop.page.locator('#saveBtn').click();
-    assert.strictEqual((await viewerSave).status(), 403, 'viewer save must be rejected');
+    const viewerAuthorityBefore = await authoritySnapshot(pool, ORG_A);
+    const viewerDesktopGuard = await exerciseViewerSaveGuard({
+      page: viewerDesktop.page, role: 'viewer-desktop', theme: 'light', requests, origin, pool, organizationId: ORG_A,
+    });
     assert.strictEqual((await getActiveBusinessProfile(pool, ORG_A)).id, stored.id);
     await viewerDesktop.context.close();
     const viewerMobile = await verifyLifecycle(
-      browser, origin, viewerSession, { width: 390, height: 844 }, 'viewer-mobile', ledger, externalRequests
+      browser, origin, viewerSession, { width: 390, height: 844 }, 'viewer-mobile', 'dark', ledger, externalRequests
     );
+    const viewerMobileGuard = await exerciseViewerSaveGuard({
+      page: viewerMobile.page, role: 'viewer-mobile', theme: 'dark', requests, origin, pool, organizationId: ORG_A,
+    });
     await viewerMobile.context.close();
+    assert.deepStrictEqual(
+      await authoritySnapshot(pool, ORG_A),
+      viewerAuthorityBefore,
+      'all viewer viewport/theme attempts preserve the PostgreSQL authority bytes and digest'
+    );
+    const viewerRequestLedger = requests.filter((entry) => entry.role.startsWith('viewer'));
+    assert.strictEqual(viewerRequestLedger.filter((entry) => entry.method === 'PUT').length, 0,
+      'viewer UI request ledger contains exactly zero PUT requests');
+    assert.deepStrictEqual(viewerRequestLedger.filter((entry) => entry.method !== 'GET'), [],
+      'viewer UI request ledger contains exactly zero non-GET requests');
 
     assert.strictEqual((await getActiveBusinessProfile(pool, ORG_B)).id, originalB.id, 'other tenant remains unchanged');
     assert.deepStrictEqual(externalRequests, [], 'all external/provider boundaries are intercepted and unused');
@@ -291,14 +407,17 @@ async function main() {
       database: suiteDatabase.databaseName,
       lifecycle: ['initial', 'rerender', 'reload'],
       viewports: ['desktop', 'mobile'],
+      themes: ['light', 'dark'],
       roles: ['owner', 'viewer'],
       rawAuthority: 'byte_exact',
       ownerSuccessfulMutations: 1,
       viewerSuccessfulMutations: 0,
-      viewerRejectedWrites: requests.filter((entry) => entry.role === 'viewer-desktop' && entry.method === 'PUT').length,
+      viewerPutRequests: viewerRequestLedger.filter((entry) => entry.method === 'PUT').length,
+      viewerNonGetRequests: viewerRequestLedger.filter((entry) => entry.method !== 'GET').length,
+      viewerAuthoritySha256: viewerAuthorityBefore.sha256,
+      viewerGuards: { desktop: viewerDesktopGuard, mobile: viewerMobileGuard },
       providerRequests: externalRequests.length,
       unexpectedConsoleErrors: consoleErrors.length,
-      expectedViewerForbiddenConsole: expectedViewerForbidden.length,
       pageErrors: pageErrors.length,
       overflow: { ownerMobile: ownerMobile.overflow, viewerDesktop: viewerDesktop.overflow, viewerMobile: viewerMobile.overflow },
     }));

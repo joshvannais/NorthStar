@@ -196,7 +196,6 @@ async function main() {
   const requests = [];
   const consoleErrors = [];
   const pageErrors = [];
-  const expectedViewerForbiddenConsole = [];
   let providerBoundaryRequests = 0;
   try {
     process.env.DATABASE_URL = suiteDatabase.connectionString;
@@ -235,10 +234,6 @@ async function main() {
       });
       page.on('console', (message) => {
         if (message.type() !== 'error') return;
-        if (role === 'viewer' && /403 \(Forbidden\)/.test(message.text())) {
-          expectedViewerForbiddenConsole.push(message.text());
-          return;
-        }
         consoleErrors.push(role + ': ' + message.text());
       });
       page.on('pageerror', (error) => pageErrors.push(role + ': ' + error.message));
@@ -376,7 +371,6 @@ async function main() {
       viewerAuthoritySha256: viewerAuthorityBefore.sha256,
       providerBoundaryRequests,
       consoleErrors: consoleErrors.length,
-      expectedViewerForbiddenConsole: expectedViewerForbiddenConsole.length,
       pageErrors: pageErrors.length,
       overflow: { desktop: desktopOverflow, ownerMobile: ownerMobileOverflow, viewerMobile: viewerMobileOverflow },
     }));

@@ -73,12 +73,12 @@ function createMapPreferencesRouter(options = {}) {
           actorUserId: req.tenantContext.userId,
           ...parsed,
         });
-        const stored = await repository.read(
-          req.tenantContext.organizationId,
-          req.tenantContext.userId
-        );
-        const data = projectMapPreferences({ ...stored, role: req.tenantContext.role });
-        return res.json({ success: true, changed: result.changed, data, requestId: requestId(req) });
+        return res.json({
+          success: true,
+          changed: result.changed,
+          data: result.data,
+          requestId: requestId(req),
+        });
       } catch (error) {
         return failure(req, res, error);
       }
@@ -94,12 +94,12 @@ function createMapPreferencesRouter(options = {}) {
         actorUserId: req.tenantContext.userId,
         ...parsed,
       });
-      const stored = await repository.read(
-        req.tenantContext.organizationId,
-        req.tenantContext.userId
-      );
-      const data = projectMapPreferences({ ...stored, role: req.tenantContext.role });
-      return res.json({ success: true, changed: result.changed, data, requestId: requestId(req) });
+      return res.json({
+        success: true,
+        changed: result.changed,
+        data: result.data,
+        requestId: requestId(req),
+      });
     } catch (error) {
       return failure(req, res, error);
     }

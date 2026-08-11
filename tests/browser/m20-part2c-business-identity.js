@@ -140,6 +140,48 @@ async function assertRendered(page, expected) {
   assert.strictEqual(await policyValue(page, 'warranty'), expected.policy);
 }
 
+async function authoritySnapshot(pool, organizationId) {
+  const result = await pool.query(
+    `SELECT
+       id::text AS id,
+       organization_id::text AS organization_id,
+       version_number::text AS version_number,
+       encode(convert_to(version_label, 'UTF8'), 'hex') AS version_label_hex,
+       encode(convert_to(raw_profile::text, 'UTF8'), 'hex') AS raw_profile_hex,
+       encode(convert_to(normalized_profile::text, 'UTF8'), 'hex') AS normalized_profile_hex,
+       normalized_profile_hash,
+       is_active::text AS is_active,
+       COALESCE(created_by::text, '') AS created_by,
+       to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS created_at_utc,
+       COALESCE(to_char(retired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US'), '') AS retired_at_utc
+     FROM canonical_business_profiles
+     WHERE organization_id = $1
+     ORDER BY version_number, id`,
+    [organizationId]
+  );
+  const bytes = Buffer.from(JSON.stringify(result.rows), 'utf8');
+  return {
+    rows: result.rows,
+    bytesHex: bytes.toString('hex'),
+    sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+  };
+}
+
+async function assertViewerSaveDisabled(page, label) {
+  const state = await page.locator('#saveBtn').evaluate((button) => ({
+    disabled: button.disabled,
+    hasDisabledAttribute: button.hasAttribute('disabled'),
+  }));
+  assert.strictEqual(state.disabled, true, label + ': Save is natively disabled');
+  assert.strictEqual(state.hasDisabledAttribute, true, label + ': Save retains its native disabled attribute');
+}
+
+function viewerRequestLedger(requests, origin) {
+  return requests
+    .filter((entry) => entry.role === 'viewer' && new URL(entry.url).origin === origin)
+    .map((entry) => ({ method: entry.method, path: new URL(entry.url).pathname }));
+}
+
 async function main() {
   const selected = (process.argv.find((value) => value.startsWith('--browser=')) || '--browser=chrome').split('=')[1];
   assert.ok(selected === 'chrome' || selected === 'webkit', 'browser must be chrome or webkit');
@@ -275,18 +317,43 @@ async function main() {
     await viewerPage.goto(origin + '/dashboard/business-profile', { waitUntil: 'domcontentloaded' });
     await waitForCompany(viewerPage, EDITED.company);
     await assertRendered(viewerPage, EDITED);
+    await assertViewerSaveDisabled(viewerPage, 'viewer/initial');
     await viewerPage.evaluate(() => renderProfile(profileData));
     await assertRendered(viewerPage, EDITED);
+    await assertViewerSaveDisabled(viewerPage, 'viewer/rerender');
     await viewerPage.locator('#company-name').fill('Forbidden viewer mutation');
-    const viewerSave = viewerPage.waitForResponse((response) =>
-      response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT'
+    const viewerAuthorityBefore = await authoritySnapshot(pool, ORG_A);
+    assert.deepStrictEqual(
+      viewerRequestLedger(requests, origin).filter((entry) => entry.method !== 'GET'),
+      [],
+      'automatic viewer requests are GET-only before interaction'
     );
-    await viewerPage.locator('#saveBtn').click();
-    assert.strictEqual((await viewerSave).status(), 403, 'viewer save must be rejected');
+    const viewerSave = viewerPage.locator('#saveBtn');
+    const viewerSaveBox = await viewerSave.boundingBox();
+    assert.ok(viewerSaveBox && viewerSaveBox.width > 0 && viewerSaveBox.height > 0,
+      'disabled viewer Save remains visibly present');
+    await viewerPage.mouse.click(
+      viewerSaveBox.x + viewerSaveBox.width / 2,
+      viewerSaveBox.y + viewerSaveBox.height / 2
+    );
+    await viewerSave.press('Enter');
+    await viewerSave.press('Space');
+    await viewerPage.waitForTimeout(150);
+    await assertViewerSaveDisabled(viewerPage, 'viewer/after-attempts');
+    const viewerMethods = viewerRequestLedger(requests, origin);
+    assert.deepStrictEqual(viewerMethods.filter((entry) => entry.method !== 'GET'), [],
+      'trusted viewer mouse and keyboard attempts emit zero non-GET requests');
+    assert.strictEqual(viewerMethods.filter((entry) => entry.method === 'PUT').length, 0,
+      'trusted viewer mouse and keyboard attempts emit exactly zero PUT requests');
+    assert.deepStrictEqual(await authoritySnapshot(pool, ORG_A), viewerAuthorityBefore,
+      'viewer attempts preserve PostgreSQL authority bytes and protected digest');
     assert.strictEqual((await getActiveBusinessProfile(pool, ORG_A)).id, stored.id, 'viewer must not advance authority');
     await viewerPage.reload({ waitUntil: 'domcontentloaded' });
     await waitForCompany(viewerPage, EDITED.company);
     await assertRendered(viewerPage, EDITED);
+    await assertViewerSaveDisabled(viewerPage, 'viewer/reload');
+    assert.deepStrictEqual(await authoritySnapshot(pool, ORG_A), viewerAuthorityBefore,
+      'viewer reload confirms unchanged PostgreSQL authority bytes and protected digest');
     await viewerPage.setViewportSize({ width: 390, height: 844 });
     const viewerMobileOverflow = await viewerPage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     assert.ok(viewerMobileOverflow <= 1, 'viewer mobile has no horizontal overflow');
@@ -304,7 +371,9 @@ async function main() {
       rawAuthority: 'byte_exact',
       ownerMutations: requests.filter((entry) => entry.role === 'owner' && entry.method === 'PUT').length,
       viewerMutations: 0,
-      viewerRejectedWrites: requests.filter((entry) => entry.role === 'viewer' && entry.method === 'PUT').length,
+      viewerPutRequests: viewerMethods.filter((entry) => entry.method === 'PUT').length,
+      viewerNonGetRequests: viewerMethods.filter((entry) => entry.method !== 'GET').length,
+      viewerAuthoritySha256: viewerAuthorityBefore.sha256,
       providerBoundaryRequests,
       consoleErrors: consoleErrors.length,
       expectedViewerForbiddenConsole: expectedViewerForbiddenConsole.length,

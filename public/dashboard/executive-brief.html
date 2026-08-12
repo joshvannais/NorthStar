@@ -660,24 +660,38 @@
 
             // ── 5. Customer Highlights ──
             var custEl = document.getElementById('ebCustomers');
+            custEl.replaceChildren();
             if (Array.isArray(customers) && customers.length > 0) {
               var customerList = customers.slice(0, 5);
-              var customerHtml = '<div class="eb-customer-list">' +
-                customerList.map(function(c) {
-                  var tag = c.status === 'active' && c.totalJobs > 0 ? 'returning' : 'new';
-                  var tagLabel = tag === 'returning' ? 'Returning' : 'New';
-                  return '<div class="eb-customer-item">' +
-                    '<span class="eb-customer-name">' + (c.name || 'Unknown') + '</span>' +
-                    '<span class="eb-customer-tag ' + tag + '">' + tagLabel + '</span>' +
-                    '</div>';
-                }).join('') +
-                '</div>';
+              var customerListElement = document.createElement('div');
+              customerListElement.className = 'eb-customer-list';
+              customerList.forEach(function(c) {
+                var tag = c.status === 'active' && c.totalJobs > 0 ? 'returning' : 'new';
+                var tagLabel = tag === 'returning' ? 'Returning' : 'New';
+                var item = document.createElement('div');
+                item.className = 'eb-customer-item';
+                var name = document.createElement('span');
+                name.className = 'eb-customer-name';
+                name.textContent = c.name || 'Unknown';
+                var badge = document.createElement('span');
+                badge.className = 'eb-customer-tag ' + tag;
+                badge.textContent = tagLabel;
+                item.append(name, badge);
+                customerListElement.appendChild(item);
+              });
+              custEl.appendChild(customerListElement);
               if (customers.length > 5) {
-                customerHtml += '<div class="eb-empty" style="padding:8px;font-size:12px;">+' + (customers.length - 5) + ' more customers</div>';
+                var moreCustomers = document.createElement('div');
+                moreCustomers.className = 'eb-empty';
+                moreCustomers.style.cssText = 'padding:8px;font-size:12px;';
+                moreCustomers.textContent = '+' + (customers.length - 5) + ' more customers';
+                custEl.appendChild(moreCustomers);
               }
-              custEl.innerHTML = customerHtml;
             } else {
-              custEl.innerHTML = '<div class="eb-empty">Customer profiles will appear as Polaris™ processes incoming calls and interactions.</div>';
+              var emptyCustomers = document.createElement('div');
+              emptyCustomers.className = 'eb-empty';
+              emptyCustomers.textContent = 'Customer profiles will appear as Polaris\u2122 processes incoming calls and interactions.';
+              custEl.appendChild(emptyCustomers);
             }
 
             // ── 6. Polaris Insight ──

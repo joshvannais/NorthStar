@@ -5,6 +5,16 @@
  */
 "use strict";
 
+function escapeCalendarMarkup(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function(character) {
+    return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character];
+  });
+}
+
+function safeCalendarColor(value) {
+  return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '#6395ff';
+}
+
 // ================================================================
 // CalendarState
 // ================================================================
@@ -120,6 +130,17 @@ class CalendarRenderer {
     this.eventList = document.getElementById('calendarEventList');
     this.newEventArea = document.getElementById('calendarNewEventArea');
     this.polarisSection = document.getElementById('calendarPolaris');
+    var selectEvent = event => {
+      var trigger = event.target.closest('[data-calendar-event-id]');
+      if (!trigger) return;
+      event.preventDefault();
+      event.stopPropagation();
+      var id = trigger.getAttribute('data-calendar-event-id');
+      var selected = this.state.events.find(function(candidate) { return String(candidate.id) === id; });
+      if (selected) this.state.selectEvent(selected);
+    };
+    if (this.container) this.container.addEventListener('click', selectEvent);
+    if (this.eventList) this.eventList.addEventListener('click', selectEvent);
   }
 
   setLoading(loading) {
@@ -230,7 +251,7 @@ class CalendarRenderer {
       if (dayEvents.length > 0) {
         html += '<div class="cal-month-cell-events">';
         dayEvents.slice(0, maxDots).forEach(e => {
-          html += `<div class="cal-month-event-dot" style="background:${e.color || '#6395ff'}" title="${e.title || ''}"></div>`;
+          html += `<div class="cal-month-event-dot" style="background:${safeCalendarColor(e.color)}" title="${escapeCalendarMarkup(e.title || '')}"></div>`;
         });
         if (dayEvents.length > maxDots) html += `<div class="cal-month-event-more">+${dayEvents.length - maxDots} more</div>`;
         html += '</div>';
@@ -285,7 +306,7 @@ class CalendarRenderer {
           if (e.time.indexOf('PM') > -1 && eHour !== 12) eHour += 12;
           if (e.time.indexOf('AM') > -1 && eHour === 12) eHour = 0;
           if (eHour === hour24) {
-            html += '<div class="cal-week-event" style="background:' + (e.color || '#6395ff') + '" onclick="event.stopPropagation();window.calState.selectEvent(window.calState.events.find(function(ev){return ev.id===\'' + e.id + '\'}))">' + (e.title || '') + '</div>';
+            html += '<div class="cal-week-event" style="background:' + safeCalendarColor(e.color) + '" data-calendar-event-id="' + escapeCalendarMarkup(e.id) + '">' + escapeCalendarMarkup(e.title || '') + '</div>';
           }
         });
         html += '</div>';
@@ -326,10 +347,10 @@ class CalendarRenderer {
         if (e.time.indexOf('PM') > -1 && eHour !== 12) eHour += 12;
         if (e.time.indexOf('AM') > -1 && eHour === 12) eHour = 0;
         if (eHour === hour24) {
-          html += '<div class="cal-day-event-card" onclick="window.calState.selectEvent(window.calState.events.find(function(ev){return ev.id===\'' + e.id + '\'}))">';
-          html += '<div class="cal-day-event-time">' + (e.time || '') + '</div>';
-          html += '<div class="cal-day-event-title">' + (e.title || 'Event') + '</div>';
-          if (e.serviceType) html += '<div class="cal-day-event-desc">' + e.serviceType + '</div>';
+          html += '<div class="cal-day-event-card" data-calendar-event-id="' + escapeCalendarMarkup(e.id) + '">';
+          html += '<div class="cal-day-event-time">' + escapeCalendarMarkup(e.time || '') + '</div>';
+          html += '<div class="cal-day-event-title">' + escapeCalendarMarkup(e.title || 'Event') + '</div>';
+          if (e.serviceType) html += '<div class="cal-day-event-desc">' + escapeCalendarMarkup(e.serviceType) + '</div>';
           else if (e.estimatedPrice) html += '<div class="cal-day-event-desc">\$' + parseFloat(e.estimatedPrice).toLocaleString() + '</div>';
           html += '</div>';
         }
@@ -359,12 +380,12 @@ class CalendarRenderer {
           html += `<div class="cal-agenda-date ${isToday ? 'cal-agenda-date-today' : ''}">${dateLabel}${isToday ? ' — Today' : ''}</div>`;
           html += '<div class="cal-agenda-events">';
         }
-        html += `<div class="cal-agenda-event" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id === '${e.id}'))">`;
-        html += `<div class="cal-agenda-event-color" style="background:${e.color || '#6395ff'}"></div>`;
+        html += `<div class="cal-agenda-event" data-calendar-event-id="${escapeCalendarMarkup(e.id)}">`;
+        html += `<div class="cal-agenda-event-color" style="background:${safeCalendarColor(e.color)}"></div>`;
         html += '<div class="cal-agenda-event-info">';
-        html += `<div class="cal-agenda-event-title">${e.title || 'Event'}</div>`;
-        if (e.time) html += `<div class="cal-agenda-event-time">${e.time}</div>`;
-        if (e.description) html += `<div class="cal-agenda-event-desc">${e.description}</div>`;
+        html += `<div class="cal-agenda-event-title">${escapeCalendarMarkup(e.title || 'Event')}</div>`;
+        if (e.time) html += `<div class="cal-agenda-event-time">${escapeCalendarMarkup(e.time)}</div>`;
+        if (e.description) html += `<div class="cal-agenda-event-desc">${escapeCalendarMarkup(e.description)}</div>`;
         html += '</div></div>';
         // Close date group on next date
         const nextDate = sorted[sorted.indexOf(e) + 1];
@@ -391,11 +412,11 @@ class CalendarRenderer {
       html += `<div class="cal-event-list-empty">No events scheduled for today</div>`;
     } else {
       todayEvents.forEach(e => {
-        html += `<div class="cal-event-list-item" onclick="window.calState.selectEvent(window.calState.events.find(ev => ev.id==='${e.id}'))">`;
-        html += `<div class="cal-event-list-dot" style="background:${e.color || '#6395ff'}"></div>`;
+        html += `<div class="cal-event-list-item" data-calendar-event-id="${escapeCalendarMarkup(e.id)}">`;
+        html += `<div class="cal-event-list-dot" style="background:${safeCalendarColor(e.color)}"></div>`;
         html += '<div class="cal-event-list-info">';
-        html += `<div class="cal-event-list-title">${e.title || 'Event'}</div>`;
-        if (e.time) html += `<div class="cal-event-list-time">${e.time}</div>`;
+        html += `<div class="cal-event-list-title">${escapeCalendarMarkup(e.title || 'Event')}</div>`;
+        if (e.time) html += `<div class="cal-event-list-time">${escapeCalendarMarkup(e.time)}</div>`;
         html += '</div>';
         if (e.estimatedPrice) html += `<div class="cal-event-list-value">$${parseFloat(e.estimatedPrice).toLocaleString()}</div>`;
         html += '</div>';

@@ -85,6 +85,12 @@
         NavComponent.init("leads");
       }
 
+      function escapeLeadMarkup(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function(character) {
+          return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character];
+        });
+      }
+
       function getQueryParam(name) {
         var url = new URL(window.location.href);
         return url.searchParams.get(name);
@@ -120,7 +126,8 @@
         var price = lead.avgPrice === null || lead.avgPrice === undefined ? '—' : '$' + String(lead.avgPrice);
         var phone = lead.phone || lead.phoneNumber || '—';
         var status = lead.status || 'new';
-        var statusBadge = (typeof CustomerCard !== 'undefined') ? CustomerCard.getStatusBadge(status) : '<span class="call-status-badge answered">' + status + '</span>';
+        var safeStatus = escapeLeadMarkup(status);
+        var statusBadge = (typeof CustomerCard !== 'undefined') ? CustomerCard.getStatusBadge(safeStatus) : '<span class="call-status-badge answered">' + safeStatus + '</span>';
         var receivedAt = lead.receivedAt ? new Date(lead.receivedAt).toLocaleString() : '—';
         var updatedAt = lead.updatedAt ? new Date(lead.updatedAt).toLocaleString() : '—';
         var address = lead.address || lead.jobAddress || null;
@@ -128,6 +135,16 @@
         var outcome = lead.outcome || '—';
         var transcript = lead.transcript || '';
         var summary = lead.summary || '';
+        var serviceMarkup = escapeLeadMarkup(service);
+        var priceMarkup = escapeLeadMarkup(price);
+        var phoneMarkup = escapeLeadMarkup(phone);
+        var jobDetailMarkup = escapeLeadMarkup(lead.jobDetail || '');
+        var outcomeMarkup = escapeLeadMarkup(outcome);
+        var durationMarkup = escapeLeadMarkup(duration);
+        var leadIdMarkup = escapeLeadMarkup(lead.id || '—');
+        var receivedAtMarkup = escapeLeadMarkup(receivedAt);
+        var updatedAtMarkup = escapeLeadMarkup(updatedAt);
+        var summaryMarkup = escapeLeadMarkup(summary);
 
         // Canonical Polaris data is projected from PostgreSQL by AppStore.
         var polarisData = lead.canonical || null;
@@ -136,7 +153,7 @@
           '<div class="lead-detail-header">' +
             '<div>' +
               '<div class="lead-detail-title"><span id="leadCustomerName"></span> ' + statusBadge + '</div>' +
-              '<div class="lead-detail-subtitle">' + service + ' · ' + price + ' · ' + phone + '</div>' +
+              '<div class="lead-detail-subtitle">' + serviceMarkup + ' · ' + priceMarkup + ' · ' + phoneMarkup + '</div>' +
             '</div>' +
             '<div class="lead-actions">' +
               '<a href="/dashboard/leads" class="btn btn-secondary btn-sm">← Back to Leads</a>' +
@@ -146,21 +163,21 @@
 
           '<div class="lead-detail-grid">' +
             '<div class="lead-detail-card"><h3>Status</h3><div class="value">' + statusBadge + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Service</h3><div class="value">' + service + '</div><div class="value-secondary">' + (lead.jobDetail || '') + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Estimated Value</h3><div class="value" style="color:var(--brand-600);">' + price + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Outcome</h3><div class="value" style="text-transform:capitalize;">' + outcome + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Phone</h3><div class="value">' + phone + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Service</h3><div class="value">' + serviceMarkup + '</div><div class="value-secondary">' + jobDetailMarkup + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Estimated Value</h3><div class="value" style="color:var(--brand-600);">' + priceMarkup + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Outcome</h3><div class="value" style="text-transform:capitalize;">' + outcomeMarkup + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Phone</h3><div class="value">' + phoneMarkup + '</div></div>' +
             '<div class="lead-detail-card"><h3>Address</h3><div class="value" id="leadCanonicalAddress">Address unavailable</div><div id="leadNavigationLauncher"></div></div>' +
-            '<div class="lead-detail-card"><h3>Duration</h3><div class="value">' + duration + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Lead ID</h3><div class="value" style="font-size:13px;font-family:monospace;">' + (lead.id || '—') + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Received</h3><div class="value">' + receivedAt + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Last Updated</h3><div class="value">' + updatedAt + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Duration</h3><div class="value">' + durationMarkup + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Lead ID</h3><div class="value" style="font-size:13px;font-family:monospace;">' + leadIdMarkup + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Received</h3><div class="value">' + receivedAtMarkup + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Last Updated</h3><div class="value">' + updatedAtMarkup + '</div></div>' +
           '</div>' +
 
           '<div class="lead-detail-section">' +
             '<div id="polarisContainer"></div>' +
           '</div>' +
-          (summary ? '<div class="lead-detail-section"><h2>Summary</h2><div class="lead-detail-card"><div class="value-secondary">' + summary + '</div></div></div>' : '') +
+          (summary ? '<div class="lead-detail-section"><h2>Summary</h2><div class="lead-detail-card"><div class="value-secondary">' + summaryMarkup + '</div></div></div>' : '') +
 
           (transcript ? '<div class="lead-detail-section"><h2>Transcript</h2><div class="lead-detail-card"><div id="leadTranscriptBody" class="value-secondary" style="white-space:pre-wrap;max-height:300px;overflow-y:auto;font-size:13px;line-height:1.6;"></div></div></div>' : '') +
 
@@ -221,8 +238,8 @@
             '<h2>Activity</h2>' +
             '<div class="lead-detail-card">' +
               '<ul class="lead-timeline">' +
-                '<li><span class="time">' + receivedAt + '</span><span class="event">Lead created</span></li>' +
-                (lead.updatedAt ? '<li><span class="time">' + updatedAt + '</span><span class="event">Lead updated</span></li>' : '') +
+                '<li><span class="time">' + receivedAtMarkup + '</span><span class="event">Lead created</span></li>' +
+                (lead.updatedAt ? '<li><span class="time">' + updatedAtMarkup + '</span><span class="event">Lead updated</span></li>' : '') +
               '</ul>' +
             '</div>' +
           '</div>' +

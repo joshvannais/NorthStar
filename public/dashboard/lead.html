@@ -78,6 +78,7 @@
   <script src="/js/analytics-engine.js"></script>
   <script src="/js/app-store.js"></script>
   <script src="/js/nav-component.js"></script>
+  <script src="/js/navigation-launcher.js"></script>
   <script>
     (function() {
       if (window.NavComponent && typeof window.NavComponent.init === 'function') {
@@ -122,7 +123,7 @@
         var statusBadge = (typeof CustomerCard !== 'undefined') ? CustomerCard.getStatusBadge(status) : '<span class="call-status-badge answered">' + status + '</span>';
         var receivedAt = lead.receivedAt ? new Date(lead.receivedAt).toLocaleString() : '—';
         var updatedAt = lead.updatedAt ? new Date(lead.updatedAt).toLocaleString() : '—';
-        var address = lead.address || lead.jobAddress || '—';
+        var address = lead.address || lead.jobAddress || null;
         var duration = lead.duration || '—';
         var outcome = lead.outcome || '—';
         var transcript = lead.transcript || '';
@@ -149,7 +150,7 @@
             '<div class="lead-detail-card"><h3>Estimated Value</h3><div class="value" style="color:var(--brand-600);">' + price + '</div></div>' +
             '<div class="lead-detail-card"><h3>Outcome</h3><div class="value" style="text-transform:capitalize;">' + outcome + '</div></div>' +
             '<div class="lead-detail-card"><h3>Phone</h3><div class="value">' + phone + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Address</h3><div class="value">' + address + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Address</h3><div class="value" id="leadCanonicalAddress">Address unavailable</div><div id="leadNavigationLauncher"></div></div>' +
             '<div class="lead-detail-card"><h3>Duration</h3><div class="value">' + duration + '</div></div>' +
             '<div class="lead-detail-card"><h3>Lead ID</h3><div class="value" style="font-size:13px;font-family:monospace;">' + (lead.id || '—') + '</div></div>' +
             '<div class="lead-detail-card"><h3>Received</h3><div class="value">' + receivedAt + '</div></div>' +
@@ -245,6 +246,31 @@
 
         var leadCustomerName = document.getElementById('leadCustomerName');
         if (leadCustomerName) leadCustomerName.textContent = name;
+        var canonicalAddress = typeof address === 'string' && address.trim()
+          ? address
+          : null;
+        var navigationRoot = document.getElementById('leadNavigationLauncher');
+        var navigationLauncher = typeof NorthStarNavigationLauncher === 'undefined'
+          ? null
+          : NorthStarNavigationLauncher;
+        document.getElementById('leadCanonicalAddress').textContent = canonicalAddress || 'Address unavailable';
+        if (!navigationLauncher || typeof navigationLauncher.mount !== 'function') {
+          navigationRoot.className = 'navigation-launcher';
+          var navigationStatus = document.createElement('p');
+          navigationStatus.className = 'navigation-launcher__status';
+          navigationStatus.setAttribute('role', 'status');
+          navigationStatus.setAttribute('aria-live', 'polite');
+          navigationStatus.textContent = 'Navigation unavailable.';
+          navigationRoot.replaceChildren(navigationStatus);
+        } else {
+          var navigationMount = NorthStarNavigationLauncher.mount(
+            navigationRoot,
+            { address: address, label: 'lead jobsite' }
+          );
+          document.getElementById('leadCanonicalAddress').textContent = navigationMount.destination
+            ? navigationMount.destination.address
+            : 'Address unavailable';
+        }
         var transcriptBody = document.getElementById('leadTranscriptBody');
         if (transcriptBody) {
           window.NorthStarTranscriptRenderer.render(transcriptBody, transcript, {

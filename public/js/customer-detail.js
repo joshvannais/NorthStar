@@ -119,6 +119,7 @@ window.CustomerDetail = (function() {
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="cdPhone">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Email</span><span class="drawer-detail-value" id="cdEmail">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="cdAddress">\u2014</span></div>';
+    html += '        <div id="cdNavigationLauncher"></div>';
     html += '      </div>';
 
     // Customer Profile
@@ -416,7 +417,31 @@ window.CustomerDetail = (function() {
     $('cdName').textContent = data.name || '\u2014';
     $('cdPhone').textContent = data.phone || '\u2014';
     $('cdEmail').textContent = data.email || '\u2014';
-    $('cdAddress').textContent = data.address || '\u2014';
+    var canonicalAddress = typeof data.address === 'string' && data.address.trim()
+      ? data.address
+      : null;
+    var navigationRoot = $('cdNavigationLauncher');
+    var navigationLauncher = typeof NorthStarNavigationLauncher === 'undefined'
+      ? null
+      : NorthStarNavigationLauncher;
+    $('cdAddress').textContent = canonicalAddress || 'Address unavailable';
+    if (!navigationLauncher || typeof navigationLauncher.mount !== 'function') {
+      navigationRoot.className = 'navigation-launcher';
+      var navigationStatus = document.createElement('p');
+      navigationStatus.className = 'navigation-launcher__status';
+      navigationStatus.setAttribute('role', 'status');
+      navigationStatus.setAttribute('aria-live', 'polite');
+      navigationStatus.textContent = 'Navigation unavailable.';
+      navigationRoot.replaceChildren(navigationStatus);
+    } else {
+      var navigationMount = NorthStarNavigationLauncher.mount(
+        navigationRoot,
+        { address: data.address, label: 'customer jobsite' }
+      );
+      $('cdAddress').textContent = navigationMount.destination
+        ? navigationMount.destination.address
+        : 'Address unavailable';
+    }
 
     // Customer Profile
     $('cdProfileStatus').innerHTML = getStatusBadge(data.status || 'active');

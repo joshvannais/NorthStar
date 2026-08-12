@@ -392,6 +392,9 @@ async function runJourney(spec, viewport, state) {
     assert.strictEqual((await signupResponse).status(), 202);
     await page.waitForFunction(() => document.getElementById('toast').textContent.includes('verification'));
     assert.strictEqual((await context.cookies()).filter(cookie => /^northstar_/.test(cookie.name)).length, 0);
+    assert.deepStrictEqual(await state.drainAccountEmailOutbox(), {
+      claimed: 1, delivered: 1, configurationUnavailable: false,
+    });
     assert.strictEqual(state.capture.messages.length, firstMessage + 1);
 
     await login(page, state.baseUrl, email, oldPassword);
@@ -438,6 +441,9 @@ async function runJourney(spec, viewport, state) {
     await page.click('#forgotForm button[type="submit"]');
     assert.strictEqual((await forgotResponse).status(), 202);
     await page.waitForFunction(() => document.getElementById('forgotStatus').textContent.includes('eligible'));
+    assert.deepStrictEqual(await state.drainAccountEmailOutbox(), {
+      claimed: 1, delivered: 1, configurationUnavailable: false,
+    });
     assert.strictEqual(state.capture.messages.length, firstMessage + 2);
     const resetUrl = tokenFrom(state.capture.messages.at(-1), '/reset-password');
     const resetRequestStart = trace.requests.length;
@@ -623,7 +629,13 @@ async function main() {
       server.once('listening', resolve);
       server.once('error', reject);
     });
-    const state = { baseUrl, capture, controlledNow, pool: db.getPool() };
+    const state = {
+      baseUrl,
+      capture,
+      controlledNow,
+      pool: db.getPool(),
+      drainAccountEmailOutbox: app.drainAccountEmailOutbox,
+    };
     const results = [];
     for (const engine of engines) {
       const runtime = resolveBrowserRuntime(engine);

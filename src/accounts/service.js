@@ -129,6 +129,14 @@ function logDeliveryFailure(error, context) {
   console.warn('[Auth] Transactional delivery failed:', safe);
 }
 
+function loginFailureDelay(attemptCount) {
+  if (attemptCount <= 2) return 0;
+  if (attemptCount === 3) return 250;
+  if (attemptCount === 4) return 500;
+  if (attemptCount === 5) return 1000;
+  return 2000;
+}
+
 function accountView(authority) {
   const effectiveOnboarding = authority.active_business_profile_id || authority.activeBusinessProfileId
     ? 'complete'
@@ -168,6 +176,9 @@ class AccountService {
   constructor(repository, options = {}) {
     this.repository = repository || new AccountRepository();
     this.transactionalEmail = options.transactionalEmail || null;
+    this.sleep = typeof options.sleep === 'function'
+      ? options.sleep
+      : milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
   }
 
   async consumeLimit(eventType, value, options) {
@@ -178,9 +189,6 @@ class AccountService {
   }
 
   async signup(input, requestIp, context = {}) {
-    if (!this.transactionalEmail || typeof this.transactionalEmail.verification !== 'function') {
-      throw new AccountError(503, 'signup_disabled', 'Account signup is not currently available');
-    }
     const email = normalizeEmail(input.email);
     const name = boundedText(input.name, 120, 'invalid_signup', 'Enter a valid name of at most 120 characters');
     const businessName = boundedText(
@@ -206,26 +214,13 @@ class AccountService {
         ...ids,
         verificationTokenId: verification.id,
         verificationTokenHash: verification.tokenHash,
+        verificationRawToken: verification.rawToken,
         name,
         businessName,
         email,
         phone,
         passwordHash,
       });
-      try {
-        await this.transactionalEmail.verification(
-          email,
-          verification.rawToken,
-          deliveryContext(context, verification.id)
-        );
-      } catch (error) {
-        logDeliveryFailure(error, context);
-        throw new AccountError(
-          503,
-          'verification_delivery_failed',
-          'Account created, but verification delivery failed. Sign in and request a new link.'
-        );
-      }
       return {
         authority,
         account: accountView({ ...authority, name, email, phone, organization_name: businessName }),
@@ -287,8 +282,7 @@ class AccountService {
     let email;
     try { email = normalizeEmail(input && input.email); } catch (_error) { return { accepted: true }; }
     const authority = await this.repository.findRecoveryAuthority(email);
-    if (!authority || authority.user_status !== 'active' || authority.membership_status !== 'active' ||
-        !this.transactionalEmail || typeof this.transactionalEmail.passwordReset !== 'function') {
+    if (!authority || authority.user_status !== 'active' || authority.membership_status !== 'active') {
       return { accepted: true };
     }
     const token = actionToken();
@@ -297,17 +291,9 @@ class AccountService {
       organizationId: authority.organization_id,
       tokenId: token.id,
       tokenHash: token.tokenHash,
+      rawToken: token.rawToken,
     });
     if (!current) return { accepted: true };
-    try {
-      await this.transactionalEmail.passwordReset(
-        current.email,
-        token.rawToken,
-        deliveryContext(context, token.id)
-      );
-    } catch (error) {
-      logDeliveryFailure(error, context);
-    }
     return { accepted: true };
   }
 
@@ -334,14 +320,17 @@ class AccountService {
     const ipKey = await this.consumeLimit('login_ip', requestIp, {
       limit: 10, windowSeconds: 900, blockSeconds: 900,
     });
-    const emailKey = await this.consumeLimit('login_email', email, {
-      limit: 5, windowSeconds: 900, blockSeconds: 900,
-    });
+    const sourceEmailKey = credentials.rateLimitKey(
+      'login_source_email',
+      `${String(requestIp || 'unknown')}\0${email}`
+    );
     const authority = await this.repository.findLoginAuthority(email);
     const verification = authority
       ? await verifyPassword(submittedPassword, authority.password_hash)
       : { valid: false, needsUpgrade: false };
     if (!authority || !verification.valid) {
+      const failure = await this.repository.recordLoginSourceFailure(sourceEmailKey, 900);
+      await this.sleep(loginFailureDelay(failure.attemptCount));
       throw new AccountError(401, 'invalid_credentials', 'Invalid email or password');
     }
     if (!['pending_verification', 'active'].includes(authority.user_status) || authority.membership_status !== 'active') {
@@ -359,7 +348,7 @@ class AccountService {
     material.accessToken = credentials.signAccess(current.user_id, material.sessionId);
     await Promise.all([
       this.repository.clearRateLimit('login_ip', ipKey),
-      this.repository.clearRateLimit('login_email', emailKey),
+      this.repository.clearRateLimit('login_source_email', sourceEmailKey),
     ]);
     return { authority: current, account: accountView(current), material };
   }
@@ -430,4 +419,5 @@ module.exports = {
   actionToken,
   boundedText,
   tokenHash,
+  loginFailureDelay,
 };

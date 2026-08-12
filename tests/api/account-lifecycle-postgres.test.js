@@ -284,18 +284,20 @@ realPostgres('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     expect(suspended.body.code).toBe('organization_membership_required');
   });
 
-  test('login abuse limits persist in PostgreSQL without recording raw email or IP keys', async () => {
+  test('login source throttles persist without raw keys and the source IP hard bound remains', async () => {
     await signup('rate-limit@example.test');
-    await pool.query("DELETE FROM auth_rate_limits WHERE event_type IN ('login_ip', 'login_email')");
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    await pool.query("DELETE FROM auth_rate_limits WHERE event_type IN ('login_ip', 'login_email', 'login_source_email')");
+    for (let attempt = 0; attempt < 10; attempt += 1) {
       const response = await request(app).post('/api/auth/login').send({ email: 'RATE-LIMIT@example.test', password: 'wrong password value' });
       expect(response.status).toBe(401);
     }
     const blocked = await request(app).post('/api/auth/login').send({ email: 'rate-limit@example.test', password: 'wrong password value' });
     expect(blocked.status).toBe(429);
     expect(blocked.body.code).toBe('rate_limited');
-    const limits = await pool.query("SELECT event_type, key_hash FROM auth_rate_limits WHERE event_type IN ('login_ip', 'login_email')");
-    expect(limits.rows.length).toBeGreaterThanOrEqual(2);
+    const limits = await pool.query(
+      "SELECT event_type, key_hash FROM auth_rate_limits WHERE event_type IN ('login_ip', 'login_email', 'login_source_email')"
+    );
+    expect(limits.rows.map(row => row.event_type).sort()).toEqual(['login_ip', 'login_source_email']);
     expect(limits.rows.every(row => /^[0-9a-f]{64}$/.test(row.key_hash))).toBe(true);
     expect(JSON.stringify(limits.rows)).not.toContain('rate-limit@example.test');
   });

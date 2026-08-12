@@ -87,6 +87,8 @@ describe('mounted Account Lifecycle B1 delivery through the production Resend ad
     });
     expect(signup.status).toBe(202);
     expect(signup.headers['set-cookie']).toBeUndefined();
+    expect(providerCalls.length).toBe(before);
+    await app.drainAccountEmailOutbox();
     expect(providerCalls.length - before).toBe(1);
     const firstVerification = tokenFrom(providerCalls.at(-1), '/verify-email');
     const pending = (await pool.query(
@@ -135,6 +137,8 @@ describe('mounted Account Lifecycle B1 delivery through the production Resend ad
     const forgotAccepted = await request(app).post('/api/auth/forgot-password').send({ email: email.toUpperCase() });
     expect(forgotAccepted.status).toBe(202);
     expect(forgotAccepted.body.code).toBe('recovery_requested');
+    expect(providerCalls.length).toBe(before);
+    await app.drainAccountEmailOutbox();
     expect(providerCalls.length - before).toBe(1);
 
     providerStatus = 422;
@@ -143,12 +147,16 @@ describe('mounted Account Lifecycle B1 delivery through the production Resend ad
     expect(forgotRejected.status).toBe(forgotAccepted.status);
     expect(forgotRejected.body.code).toBe(forgotAccepted.body.code);
     expect(forgotRejected.body.message).toBe(forgotAccepted.body.message);
+    expect(providerCalls.length).toBe(before);
+    await app.drainAccountEmailOutbox();
     expect(providerCalls.length - before).toBe(1);
 
     providerStatus = 200;
     before = providerCalls.length;
     const forgotCurrent = await request(app).post('/api/auth/forgot-password').send({ email });
     expect(forgotCurrent.status).toBe(202);
+    expect(providerCalls.length).toBe(before);
+    await app.drainAccountEmailOutbox();
     expect(providerCalls.length - before).toBe(1);
     const resetToken = tokenFrom(providerCalls.at(-1), '/reset-password');
     const reset = await request(app).post('/api/auth/reset-password').send({
@@ -180,7 +188,7 @@ describe('mounted Account Lifecycle B1 delivery through the production Resend ad
     expect(authority.active_sessions).toBe(1);
   }, 60000);
 
-  test('provider rejection after signup commits one recoverable graph and emits only bounded diagnostics', async () => {
+  test('provider rejection after accepted signup stays off the public path and leaves bounded retry authority', async () => {
     await pool.query('DELETE FROM auth_rate_limits');
     providerStatus = 403;
     const email = 'resend.rejected@example.test';
@@ -189,21 +197,28 @@ describe('mounted Account Lifecycle B1 delivery through the production Resend ad
       name: 'Rejected Owner', businessName: 'Rejected Company', email,
       password: 'Resend-rejected-password-123!', phone: '',
     });
-    expect(response.status).toBe(503);
-    expect(response.body.code).toBe('verification_delivery_failed');
+    expect(response.status).toBe(202);
+    expect(response.body.code).toBe('verification_required');
     expect(response.headers['set-cookie']).toBeUndefined();
+    expect(providerCalls.length).toBe(before);
+    await expect(app.drainAccountEmailOutbox()).resolves.toEqual({
+      claimed: 1, delivered: 0, configurationUnavailable: false,
+    });
     expect(providerCalls.length - before).toBe(1);
     const durable = (await pool.query(
       `SELECT u.status AS user_status, s.status AS subscription_status,
               s.trial_started_at, s.trial_ends_at,
               (SELECT count(*)::int FROM account_action_tokens t WHERE t.user_id = u.id) AS tokens,
+              (SELECT state FROM account_email_outbox outbox WHERE outbox.user_id = u.id) AS delivery_state,
+              (SELECT attempt_count FROM account_email_outbox outbox WHERE outbox.user_id = u.id) AS delivery_attempts,
               (SELECT count(*)::int FROM auth_sessions a WHERE a.user_id = u.id) AS sessions
          FROM users u JOIN subscriptions s ON s.organization_id = u.organization_id
         WHERE u.email_normalized = $1`, [email]
     )).rows;
     expect(durable).toEqual([{
       user_status: 'pending_verification', subscription_status: 'pending_verification',
-      trial_started_at: null, trial_ends_at: null, tokens: 1, sessions: 0,
+      trial_started_at: null, trial_ends_at: null, tokens: 1,
+      delivery_state: 'retry', delivery_attempts: 1, sessions: 0,
     }]);
     const diagnostics = JSON.stringify(warningSpy.mock.calls);
     expect(diagnostics).toContain('provider_access_rejected');

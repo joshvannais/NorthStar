@@ -204,7 +204,7 @@ describe('mounted signup transaction ratification on physical PostgreSQL', () =>
     expect(results.every(result => (
       result.status === 202 && result.code === 'verification_required' && result.cookieCount === 0
     ))).toBe(true);
-    expect(first.deliveryCount + second.deliveryCount).toBe(1);
+    expect(first.deliveryCount + second.deliveryCount).toBe(0);
 
     const graph = await pool.query(
       `SELECT account.id AS user_id,
@@ -217,6 +217,9 @@ describe('mounted signup transaction ratification on physical PostgreSQL', () =>
               (SELECT count(*)::int FROM organization_account_preferences WHERE organization_id = account.organization_id) AS account_preferences,
               (SELECT count(*)::int FROM organization_onboarding WHERE organization_id = account.organization_id) AS onboarding,
               (SELECT count(*)::int FROM account_action_tokens WHERE user_id = account.id AND purpose = 'email_verification') AS verification_tokens,
+              (SELECT count(*)::int FROM account_email_outbox
+                WHERE user_id = account.id AND purpose = 'email_verification'
+                  AND state = 'pending' AND attempt_count = 0) AS queued_verification_deliveries,
               (SELECT count(*)::int FROM auth_sessions WHERE user_id = account.id) AS sessions,
               (SELECT count(*)::int
                  FROM auth_refresh_tokens token
@@ -236,6 +239,7 @@ describe('mounted signup transaction ratification on physical PostgreSQL', () =>
       account_preferences: 1,
       onboarding: 1,
       verification_tokens: 1,
+      queued_verification_deliveries: 1,
       sessions: 0,
       refresh_tokens: 0,
     });

@@ -57,6 +57,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
   let pool;
   let app;
   let capture;
+  let emailOutboxWorker;
   let priorDatabaseUrl;
   let controlledNow = null;
 
@@ -92,6 +93,11 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
         production: false,
       }),
     });
+    const { AccountEmailOutboxWorker } = require('../../src/email/outbox');
+    emailOutboxWorker = new AccountEmailOutboxWorker({
+      repository,
+      transactionalEmail: service.transactionalEmail,
+    });
     app = express();
     app.locals.accountRepository = repository;
     app.use(express.json({ limit: '1mb' }));
@@ -123,6 +129,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     if (response.status !== 202) {
       throw new Error(`Unexpected signup response: ${response.status} ${JSON.stringify(response.body)}`);
     }
+    await emailOutboxWorker.drainOnce();
     expect(response.body).toEqual(expect.objectContaining({
       success: true,
       code: 'verification_required',
@@ -196,6 +203,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       email: 'verify.b1@example.test', password: 'Verification-password-123!', phone: '',
     });
     expect(signup.status).toBe(202);
+    await emailOutboxWorker.drainOnce();
     const originalToken = linkToken(capture.messages.at(-1), '/verify-email');
     expectSourceOwnedSender(capture.messages.at(-1));
 
@@ -246,6 +254,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       name: 'Race Verify', businessName: 'Race Verify Company',
       email: 'verify-race.b1@example.test', password: 'Verify-race-password-123!', phone: '',
     });
+    await emailOutboxWorker.drainOnce();
     const rawToken = linkToken(capture.messages.at(-1), '/verify-email');
     expect((await request(app).post('/api/auth/verify-email').send({})).body.code).toBe('invalid_token');
     expect((await request(app).post('/api/auth/verify-email').send({ token: 'not-a-token' })).body.code).toBe('invalid_token');
@@ -284,6 +293,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       name: 'Expired Verify', businessName: 'Expired Verify Company',
       email: 'verify-expired.b1@example.test', password: 'Verify-expired-password-123!', phone: '',
     });
+    await emailOutboxWorker.drainOnce();
     const expiredToken = linkToken(capture.messages.at(-1), '/verify-email');
     await pool.query(
       `UPDATE account_action_tokens SET expires_at = created_at + INTERVAL '1 millisecond'
@@ -294,7 +304,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       .toBe('verification_invalid');
   }, 60000);
 
-  test('a failed delivery preserves recoverable pending authority and resend reports recovery truthfully', async () => {
+  test('a failed asynchronous delivery preserves the public response and authenticated resend recovers', async () => {
     const { AccountRepository } = require('../../src/accounts/repository');
     const { AccountService } = require('../../src/accounts/service');
     const { TransactionalEmail } = require('../../src/email/transactional');
@@ -306,7 +316,8 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       this.messages.push(message);
       return { accepted: true };
     } };
-    const service = new AccountService(new AccountRepository(pool), {
+    const recoveryRepository = new AccountRepository(pool);
+    const service = new AccountService(recoveryRepository, {
       transactionalEmail: new TransactionalEmail({
         adapter: recoveryCapture, publicOrigin: 'http://127.0.0.1',
         from: 'security@northstar.example.test', production: false,
@@ -315,14 +326,29 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     const recoveryApp = express();
     recoveryApp.use(express.json());
     recoveryApp.use('/api/auth', createAuthRouter({ service, signup: service.signup.bind(service) }));
+    const { AccountEmailOutboxWorker } = require('../../src/email/outbox');
+    const recoveryWorker = new AccountEmailOutboxWorker({
+      repository: recoveryRepository,
+      transactionalEmail: service.transactionalEmail,
+    });
     await pool.query('DELETE FROM auth_rate_limits');
     const failed = await request(recoveryApp).post('/api/auth/signup').send({
       name: 'Recovery Owner', businessName: 'Recovery Company',
       email: 'delivery-recovery.b1@example.test', password: 'Delivery-recovery-password-123!', phone: '',
     });
-    expect(failed.status).toBe(503);
-    expect(failed.body.code).toBe('verification_delivery_failed');
+    expect(failed.status).toBe(202);
+    expect(failed.body.code).toBe('verification_required');
     expect(failed.headers['set-cookie']).toBeUndefined();
+    expect(attempts).toBe(0);
+    await expect(recoveryWorker.drainOnce()).resolves.toEqual({
+      claimed: 1, delivered: 0, configurationUnavailable: false,
+    });
+    expect((await pool.query(
+      `SELECT state, attempt_count, last_error_category
+         FROM account_email_outbox WHERE recipient = 'delivery-recovery.b1@example.test'`
+    )).rows).toEqual([{
+      state: 'retry', attempt_count: 1, last_error_category: 'delivery_failed',
+    }]);
     const login = await request(recoveryApp).post('/api/auth/login').send({
       email: 'delivery-recovery.b1@example.test', password: 'Delivery-recovery-password-123!',
     });
@@ -342,6 +368,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       name: 'Verify Rollback', businessName: 'Verify Rollback Company',
       email: 'verify-rollback.b1@example.test', password: 'Verify-rollback-password-123!', phone: '',
     });
+    await emailOutboxWorker.drainOnce();
     const token = linkToken(capture.messages.at(-1), '/verify-email');
     await pool.query(`
       CREATE FUNCTION b1_reject_trial_start() RETURNS trigger AS $$
@@ -378,6 +405,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       name: 'Reset Owner', businessName: 'Reset Company', email: 'reset.b1@example.test',
       password: 'Original-password-123!', phone: '',
     });
+    await emailOutboxWorker.drainOnce();
     const verificationToken = linkToken(capture.messages.at(-1), '/verify-email');
     expect((await request(app).post('/api/auth/verify-email').send({ token: verificationToken })).status).toBe(200);
 
@@ -392,6 +420,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
 
     const forgot = await request(app).post('/api/auth/forgot-password').send({ email: 'RESET.B1@example.test' });
     expect(forgot.status).toBe(202);
+    await emailOutboxWorker.drainOnce();
     const resetToken = linkToken(capture.messages.at(-1), '/reset-password');
     expectSourceOwnedSender(capture.messages.at(-1));
     const reset = await request(app).post('/api/auth/reset-password').send({
@@ -430,12 +459,14 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       name: 'Reset Rollback', businessName: 'Reset Rollback Company', email: 'reset-rollback.b1@example.test',
       password: 'Reset-rollback-original-123!', phone: '',
     });
+    await emailOutboxWorker.drainOnce();
     await request(app).post('/api/auth/verify-email')
       .send({ token: linkToken(capture.messages.at(-1), '/verify-email') });
     const login = await request(app).post('/api/auth/login').send({
       email: 'reset-rollback.b1@example.test', password: 'Reset-rollback-original-123!',
     });
     await request(app).post('/api/auth/forgot-password').send({ email: 'reset-rollback.b1@example.test' });
+    await emailOutboxWorker.drainOnce();
     const token = linkToken(capture.messages.at(-1), '/reset-password');
     const before = (await pool.query(
       "SELECT password_hash FROM users WHERE email_normalized = 'reset-rollback.b1@example.test'"
@@ -483,6 +514,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       name: 'Reset Race', businessName: 'Reset Race Company', email: 'reset-race.b1@example.test',
       password: 'Reset-race-original-123!', phone: '',
     });
+    await emailOutboxWorker.drainOnce();
     const verifyToken = linkToken(capture.messages.at(-1), '/verify-email');
     await request(app).post('/api/auth/verify-email').send({ token: verifyToken });
     const before = (await pool.query(
@@ -494,6 +526,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       email: 'reset-race.b1@example.test', password: 'Reset-race-original-123!',
     });
     await request(app).post('/api/auth/forgot-password').send({ email: 'reset-race.b1@example.test' });
+    await emailOutboxWorker.drainOnce();
     const firstReset = linkToken(capture.messages.at(-1), '/reset-password');
     const sevenCharacterReset = await request(app).post('/api/auth/reset-password')
       .send({ token: firstReset, password: 'short7!' });
@@ -506,8 +539,10 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       email: 'reset-race.b1@example.test', password: 'Exact8!!',
     })).status).toBe(200);
     await request(app).post('/api/auth/forgot-password').send({ email: 'reset-race.b1@example.test' });
+    await emailOutboxWorker.drainOnce();
     const supersededReset = linkToken(capture.messages.at(-1), '/reset-password');
     await request(app).post('/api/auth/forgot-password').send({ email: ' RESET-RACE.B1@EXAMPLE.TEST ' });
+    await emailOutboxWorker.drainOnce();
     const currentReset = linkToken(capture.messages.at(-1), '/reset-password');
     expect(currentReset).not.toBe(supersededReset);
     expect((await request(app).post('/api/auth/reset-password').send({
@@ -542,6 +577,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       name: 'Shared Trial Owner', businessName: 'Shared Trial Company', email: 'shared-owner.b1@example.test',
       password: 'Shared-owner-password-123!', phone: '',
     });
+    await emailOutboxWorker.drainOnce();
     const verificationToken = linkToken(capture.messages.at(-1), '/verify-email');
     await request(app).post('/api/auth/verify-email').send({ token: verificationToken });
     const owner = (await pool.query(
@@ -598,6 +634,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       name: 'Trial Owner', businessName: 'Trial Company', email: 'trial.b1@example.test',
       password: 'Trial-password-123!', phone: '',
     });
+    await emailOutboxWorker.drainOnce();
     const verificationToken = linkToken(capture.messages.at(-1), '/verify-email');
     await request(app).post('/api/auth/verify-email').send({ token: verificationToken });
     const login = await request(app).post('/api/auth/login').send({

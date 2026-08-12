@@ -1,7 +1,12 @@
 'use strict';
 
 const express = require('express');
-const { requireAccountMutation, requireRole, requireTenantAccess } = require('../auth/middleware');
+const {
+  requireAccountMutation,
+  requireRole,
+  requireTenantAccess,
+  requireVerifiedAccount,
+} = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const {
   WorkforceError,
@@ -87,7 +92,8 @@ function createWorkforceRouter() {
     }
   });
 
-  router.post('/invitations', requireAccountMutation, requirePermission('team', 'create'), requireRole('owner'), async (req, res) => {
+  router.post('/invitations', requireVerifiedAccount, requireAccountMutation,
+    requirePermission('team', 'create'), requireRole('owner'), async (req, res) => {
     try {
       const invited = await service(req).invite(req.body || {}, context(req));
       return res.status(202).json({ success: true, data: invited, requestId: requestId(req) });
@@ -96,7 +102,7 @@ function createWorkforceRouter() {
     }
   });
 
-  router.post('/invitations/:invitationId/resend', requireAccountMutation,
+  router.post('/invitations/:invitationId/resend', requireVerifiedAccount, requireAccountMutation,
     requirePermission('team', 'create'), requireRole('owner'), async (req, res) => {
       try {
         const invited = await service(req).resendInvitation(req.params.invitationId, context(req));

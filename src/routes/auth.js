@@ -29,15 +29,11 @@ function handleError(req, res, error, event) {
 function createAuthRouter(options = {}) {
   const router = express.Router();
   const service = options.service || new AccountService();
-  // B1 production supplies signup only through a source-constructed validated
-  // transactional-email capability. Tests may inject a disposable capture
-  // adapter; a boolean or request value cannot create this capability.
-  const signup = typeof options.signup === 'function' ? options.signup : null;
+  const signup = typeof options.signup === 'function'
+    ? options.signup
+    : service.signup.bind(service);
 
   router.post('/signup', async (req, res) => {
-    if (!signup) {
-      return failure(req, res, 503, 'signup_disabled', 'Account signup is not currently available');
-    }
     try {
       await signup(req.body || {}, req.ip || 'unknown', { requestId: requestId(req) });
       return res.status(202).json({

@@ -29,10 +29,15 @@ function createDisposableAccountApp(options = {}) {
     production: false,
   });
   const { AccountRepository } = require('../../src/accounts/repository');
+  const { AccountEmailOutboxWorker } = require('../../src/email/outbox');
   const repository = options.repository || new AccountRepository(undefined, {
     testClock: options.testClock,
   });
-  const service = new AccountService(repository, { transactionalEmail });
+  const service = new AccountService(repository, {
+    transactionalEmail,
+    sleep: options.sleep || (async () => {}),
+  });
+  const emailOutboxWorker = new AccountEmailOutboxWorker({ repository, transactionalEmail });
   const app = express();
   app.locals.accountRepository = repository;
 
@@ -78,6 +83,7 @@ function createDisposableAccountApp(options = {}) {
   }
   app.use('/api', require('../../src/routes/api'));
   app.accountEmailCapture = capture;
+  app.drainAccountEmailOutbox = () => emailOutboxWorker.drainOnce();
   return app;
 }
 

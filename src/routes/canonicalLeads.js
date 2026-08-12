@@ -17,6 +17,29 @@ function idempotencyKey(req) {
   return req.get('Idempotency-Key') || req.get('X-Idempotency-Key') || '';
 }
 
+const CSV_TEXT_FIELDS = new Set([
+  'id', 'customerId', 'customerName', 'phone', 'email', 'service', 'status',
+]);
+
+/**
+ * Keep exported authority unchanged while preventing supported spreadsheet
+ * clients from interpreting text cells as formulas. A leading apostrophe is
+ * deterministic and remains part of the exported presentation value only.
+ */
+function spreadsheetSafeText(value) {
+  const text = value === undefined || value === null ? '' : String(value);
+  const beginsWithControl = /^[\u0000-\u001f\u007f-\u009f]/u.test(text);
+  const formulaAfterLeadingWhitespaceOrControl = /^[\s\u0000-\u001f\u007f-\u009f]*[=+\-@]/u.test(text);
+  return beginsWithControl || formulaAfterLeadingWhitespaceOrControl ? "'" + text : text;
+}
+
+function csvCell(value, textCell) {
+  const normalized = textCell
+    ? spreadsheetSafeText(value)
+    : (value === undefined || value === null ? '' : String(value));
+  return /[",\r\n]/u.test(normalized) ? '"' + normalized.replace(/"/g, '""') + '"' : normalized;
+}
+
 function blocked(_req, res) {
   return res.status(409).json({
     success: false,
@@ -90,12 +113,8 @@ router.get('/leads/export', requireVerifiedExternalAction, requirePermission('le
         estimatedPrice: item.estimate.customerPrice,
       };
     });
-    function csv(value) {
-      const normalized = value === undefined || value === null ? '' : String(value);
-      return /[",\n]/.test(normalized) ? '"' + normalized.replace(/"/g, '""') + '"' : normalized;
-    }
-    const output = '\ufeff' + fields.join(',') + '\n' + records.map(function (record) {
-      return fields.map(function (field) { return csv(record[field]); }).join(',');
+    const output = '\ufeff' + fields.map(function (field) { return csvCell(field, true); }).join(',') + '\n' + records.map(function (record) {
+      return fields.map(function (field) { return csvCell(record[field], CSV_TEXT_FIELDS.has(field)); }).join(',');
     }).join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename=leads-export-' + new Date().toISOString().slice(0, 10) + '.csv');

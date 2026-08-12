@@ -18,6 +18,58 @@
  *   CustomerCard.getStatusBadge(status)
  */
 window.CustomerCard = (function() {
+  var callbackSequence = 0;
+  var callbacks = Object.create(null);
+
+  function escapeMarkup(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function(character) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character];
+    });
+  }
+
+  function normalizedIndex(value) {
+    var parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+  }
+
+  function installDelegatedActions() {
+    document.addEventListener('click', function(event) {
+      var trigger = event.target.closest('[data-customer-card-action]');
+      if (!trigger) return;
+      var action = trigger.getAttribute('data-customer-card-action');
+      var index = normalizedIndex(trigger.getAttribute('data-lead-index'));
+      if (action === 'open-call' && typeof window.openCallCard === 'function') {
+        window.openCallCard(trigger);
+      } else if (action === 'open-lead' && typeof window.openLeadDrawer === 'function') {
+        window.openLeadDrawer(trigger);
+      } else if (action === 'toggle-more' && typeof window.toggleMoreMenu === 'function') {
+        event.preventDefault();
+        event.stopPropagation();
+        window.toggleMoreMenu(trigger);
+      } else if (action === 'view-details' && typeof window.openLeadDrawer === 'function') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.closeAllMenus === 'function') window.closeAllMenus();
+        window.openLeadDrawer(trigger.closest('tr'));
+      } else if (action === 'update-status' && typeof window.updateLeadStatus === 'function') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.closeAllMenus === 'function') window.closeAllMenus();
+        window.updateLeadStatus(index, trigger.getAttribute('data-lead-status'));
+      } else if (action === 'remove-lead' && typeof window.removeLead === 'function') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.closeAllMenus === 'function') window.closeAllMenus();
+        window.removeLead(index);
+      } else if (action === 'callback') {
+        var callback = callbacks[trigger.getAttribute('data-customer-card-callback')];
+        if (typeof callback === 'function') callback.call(trigger, event);
+      }
+    });
+  }
+
+  installDelegatedActions();
+
   // ─── Common Formatting Helpers ─────────────────────────────────
   function fmtTime(dateVal) {
     if (!dateVal) return '—';
@@ -96,14 +148,21 @@ window.CustomerCard = (function() {
     var svc = formatService(lead);
     var time = formatTime(lead);
     var statusHtml = getStatusBadge(lead.status || 'new');
-    var clickAttr = options.onclick ? ' onclick="' + options.onclick + '"' : '';
-    var clickStyle = options.onclick ? 'cursor:pointer;' : '';
+    var clickAttr = '';
+    var clickStyle = '';
+    if (typeof options.onclick === 'function') {
+      callbackSequence += 1;
+      var callbackId = 'customer-card-' + callbackSequence;
+      callbacks[callbackId] = options.onclick;
+      clickAttr = ' data-customer-card-action="callback" data-customer-card-callback="' + callbackId + '"';
+      clickStyle = 'cursor:pointer;';
+    }
 
     return '<div class="ds-list-item" style="' + clickStyle + '"' + clickAttr + '>' +
-      '<div class="ds-list-item-icon">' + icon + '</div>' +
+      '<div class="ds-list-item-icon">' + escapeMarkup(icon) + '</div>' +
       '<div class="ds-list-item-content">' +
-        '<div class="ds-list-item-title">' + name + '</div>' +
-        '<div class="ds-list-item-sub">' + svc + ' · ' + time + '</div>' +
+        '<div class="ds-list-item-title">' + escapeMarkup(name) + '</div>' +
+        '<div class="ds-list-item-sub">' + escapeMarkup(svc) + ' · ' + escapeMarkup(time) + '</div>' +
       '</div>' +
       '<div>' + statusHtml + '</div>' +
     '</div>';
@@ -123,7 +182,7 @@ window.CustomerCard = (function() {
     var statusVal = options.outcome || lead.status || 'new';
     var statusOpts = {type: 'outcome', leadStatus: lead.status};
     var statusHtml = getStatusBadge(statusVal, statusOpts);
-    var index = options.index !== undefined ? options.index : 0;
+    var index = normalizedIndex(options.index);
 
     var pbHtml = '';
     if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
@@ -131,7 +190,7 @@ window.CustomerCard = (function() {
         '<div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">Pricing Breakdown</div>';
       lead.pricingBreakdown.forEach(function(pb) {
         pbHtml += '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);">' +
-          '<span>' + pb.l + '</span>' +
+          '<span>' + escapeMarkup(pb.l) + '</span>' +
           '<span style="font-weight:' + (pb.l === 'Total' ? '700' : '400') + ';color:var(--neutral-700);">$' + Math.abs(pb.a).toLocaleString() + '</span>' +
         '</div>';
       });
@@ -139,12 +198,12 @@ window.CustomerCard = (function() {
     }
 
     return '<div class="call-card" id="call-' + index + '">' +
-      '<div class="call-card-header" data-lead-index="' + index + '" onclick="openCallCard(this)">' +
+      '<div class="call-card-header" data-customer-card-action="open-call" data-lead-index="' + index + '">' +
         '<div class="call-caller">' +
-          '<div class="call-avatar">' + inits + '</div>' +
+          '<div class="call-avatar">' + escapeMarkup(inits) + '</div>' +
           '<div class="call-info">' +
-            '<div class="call-name">' + name + '</div>' +
-            '<div class="call-meta">' + time + ' <span class="meta-sep">|</span> ' + duration + ' <span class="meta-sep">|</span> ' + svc + '</div>' +
+            '<div class="call-name">' + escapeMarkup(name) + '</div>' +
+            '<div class="call-meta">' + escapeMarkup(time) + ' <span class="meta-sep">|</span> ' + escapeMarkup(duration) + ' <span class="meta-sep">|</span> ' + escapeMarkup(svc) + '</div>' +
           '</div>' +
         '</div>' +
         statusHtml +
@@ -167,26 +226,26 @@ window.CustomerCard = (function() {
     var val = formatValue(lead);
     var phone = safe(lead.phone || lead.phoneNumber, '-');
     var statusHtml = getStatusBadge(lead.status || 'new');
-    var index = options.index !== undefined ? options.index : 0;
+    var index = normalizedIndex(options.index);
 
-    return '<tr style="cursor:pointer;" data-lead-index="' + index + '" onclick="openLeadDrawer(this)">' +
-      '<td><strong>' + name + '</strong></td>' +
-      '<td>' + phone + '</td>' +
-      '<td style="text-align:center"><span class="lead-service-badge">' + svc + '</span></td>' +
-      '<td><strong>' + val + '</strong></td>' +
-      '<td>' + time + '</td>' +
+    return '<tr style="cursor:pointer;" data-customer-card-action="open-lead" data-lead-index="' + index + '">' +
+      '<td><strong>' + escapeMarkup(name) + '</strong></td>' +
+      '<td>' + escapeMarkup(phone) + '</td>' +
+      '<td style="text-align:center"><span class="lead-service-badge">' + escapeMarkup(svc) + '</span></td>' +
+      '<td><strong>' + escapeMarkup(val) + '</strong></td>' +
+      '<td>' + escapeMarkup(time) + '</td>' +
       '<td>' + statusHtml + '</td>' +
       '<td class="lead-actions-cell">' +
         '<div class="more-menu-container">' +
-          '<button class="more-btn" onclick="event.stopPropagation(); toggleMoreMenu(this)" title="Actions">•••</button>' +
+          '<button class="more-btn" data-customer-card-action="toggle-more" title="Actions">•••</button>' +
           '<div class="more-dropdown">' +
-            '<button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); openLeadDrawer(this.closest(\'tr\'))">👁️ View Details</button>' +
-            '<button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(' + index + ', \'contacted\')">📞 Mark Contacted</button>' +
-            '<button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(' + index + ', \'scheduled\')">📅 Schedule</button>' +
-            '<button class="more-dropdown-item" onclick="event.stopPropagation(); closeAllMenus(); updateLeadStatus(' + index + ', \'completed\')">✅ Mark Completed</button>' +
-            '<button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;" onclick="event.stopPropagation()">🔧 Assign Technician</button>' +
-            '<button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;" onclick="event.stopPropagation()">📁 Archive</button>' +
-            '<button class="more-dropdown-item danger" onclick="event.stopPropagation(); closeAllMenus(); removeLead(' + index + ')">🗑️ Delete</button>' +
+            '<button class="more-dropdown-item" data-customer-card-action="view-details">👁️ View Details</button>' +
+            '<button class="more-dropdown-item" data-customer-card-action="update-status" data-lead-index="' + index + '" data-lead-status="contacted">📞 Mark Contacted</button>' +
+            '<button class="more-dropdown-item" data-customer-card-action="update-status" data-lead-index="' + index + '" data-lead-status="scheduled">📅 Schedule</button>' +
+            '<button class="more-dropdown-item" data-customer-card-action="update-status" data-lead-index="' + index + '" data-lead-status="completed">✅ Mark Completed</button>' +
+            '<button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;">🔧 Assign Technician</button>' +
+            '<button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;">📁 Archive</button>' +
+            '<button class="more-dropdown-item danger" data-customer-card-action="remove-lead" data-lead-index="' + index + '">🗑️ Delete</button>' +
           '</div>' +
         '</div>' +
       '</td>' +

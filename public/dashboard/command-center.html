@@ -597,9 +597,46 @@
           customers = Array.isArray(customers) ? customers : [];
           var el = document.getElementById('ccCustomers');
           if (!el) return;
-          el.innerHTML = customers.length > 0 ?
-            '<div class="cc-cust-list">'+customers.slice(0,6).map(function(c){var t='new',tl='New';if(c.totalJobs>0){t='returning';tl='Returning';}if(c.health!==undefined&&c.health<40){t='attention';tl='Attention';}return '<button class="cc-cust-item" data-customer-id="'+c.id+'" style="cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;"><span class="cc-cust-name" onclick="CustomerDetail.open(\''+c.id+'\')">'+(c.name||'Unknown')+'</span><span class="cc-cust-tag '+t+'">'+tl+'</span></button>';}).join('')+'</div>'+(customers.length>6?'<div class="cc-empty" style="padding:4px;font-size:10px;">+'+(customers.length-6)+' more</div>':'') :
-            '<div class="cc-empty">Customer profiles appear as Polaris™ processes calls. Start a simulation above.</div>';
+          el.replaceChildren();
+          if (customers.length > 0) {
+            var list = document.createElement('div');
+            list.className = 'cc-cust-list';
+            customers.slice(0, 6).forEach(function(c) {
+              var tag = 'new', tagLabel = 'New';
+              if (c.totalJobs > 0) { tag = 'returning'; tagLabel = 'Returning'; }
+              if (c.health !== undefined && c.health < 40) { tag = 'attention'; tagLabel = 'Attention'; }
+              var button = document.createElement('button');
+              button.className = 'cc-cust-item';
+              button.dataset.customerId = String(c.id || '');
+              button.style.cssText = 'cursor:pointer;width:100%;text-align:left;border:none;background:var(--neutral-50);font:inherit;padding:7px 10px;border-radius:6px;';
+              var name = document.createElement('span');
+              name.className = 'cc-cust-name';
+              name.textContent = c.name || 'Unknown';
+              name.addEventListener('click', function() {
+                if (window.CustomerDetail && typeof window.CustomerDetail.open === 'function') {
+                  window.CustomerDetail.open(c.id);
+                }
+              });
+              var badge = document.createElement('span');
+              badge.className = 'cc-cust-tag ' + tag;
+              badge.textContent = tagLabel;
+              button.append(name, badge);
+              list.appendChild(button);
+            });
+            el.appendChild(list);
+            if (customers.length > 6) {
+              var more = document.createElement('div');
+              more.className = 'cc-empty';
+              more.style.cssText = 'padding:4px;font-size:10px;';
+              more.textContent = '+' + (customers.length - 6) + ' more';
+              el.appendChild(more);
+            }
+          } else {
+            var empty = document.createElement('div');
+            empty.className = 'cc-empty';
+            empty.textContent = 'Customer profiles appear as Polaris\u2122 processes calls. Start a simulation above.';
+            el.appendChild(empty);
+          }
         }
 
         function renderHealth(kpisData, dash, exec, customers) {

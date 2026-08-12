@@ -26,6 +26,13 @@ const EXPECTED_URLS = Object.freeze({
   apple_maps: `https://maps.apple.com/?daddr=${ENCODED_ADDRESS}&dirflg=d`,
   waze: `https://waze.com/ul?q=${ENCODED_ADDRESS}&navigate=yes`,
 });
+const VERIFIED_COORDINATES = Object.freeze({ verified: true, latitude: 41.7658, longitude: -72.6734 });
+const ENCODED_COORDINATES = '41.7658%2C-72.6734';
+const EXPECTED_COORDINATE_URLS = Object.freeze({
+  google_maps: `https://www.google.com/maps/dir/?api=1&destination=${ENCODED_COORDINATES}`,
+  apple_maps: `https://maps.apple.com/?daddr=${ENCODED_COORDINATES}&dirflg=d`,
+  waze: `https://waze.com/ul?q=${ENCODED_COORDINATES}&navigate=yes`,
+});
 const CFT_VERSION = '150.0.7871.129';
 const CFT_SHA256 = 'fb14772807d9b4a18d87336fb112fd96fb05b2c80410aab78f74c7030751880e';
 const WEBKIT_VERSION = '26.5';
@@ -194,6 +201,102 @@ async function assertNoOverflow(page, rootId, label) {
   assert.ok(values.root <= 1, `${label} launcher overflow ${values.root}`);
 }
 
+async function assertVerifiedCoordinateRuntime(page) {
+  const result = await page.evaluate(({ address, coordinates }) => {
+    const contract = window.NorthStarNavigationLauncher;
+    const destination = contract.normalizeDestination({ address, verifiedCoordinates: coordinates });
+    const rejection = candidate => {
+      try {
+        contract.validateNavigationUrl('waze', candidate);
+        return false;
+      } catch (_error) {
+        return true;
+      }
+    };
+    return {
+      retainedAddress: destination.address,
+      google_maps: contract.buildNavigationUrl('google_maps', destination),
+      apple_maps: contract.buildNavigationUrl('apple_maps', destination),
+      waze: contract.buildNavigationUrl('waze', destination),
+      rejectsLl: rejection('https://waze.com/ul?ll=41.7658%2C-72.6734&navigate=yes'),
+      rejectsMixedKeys: rejection('https://waze.com/ul?q=41.7658%2C-72.6734&ll=41.7658%2C-72.6734&navigate=yes'),
+    };
+  }, { address: DISPLAY_ADDRESS, coordinates: VERIFIED_COORDINATES });
+  assert.deepStrictEqual(result, {
+    retainedAddress: DISPLAY_ADDRESS,
+    ...EXPECTED_COORDINATE_URLS,
+    rejectsLl: true,
+    rejectsMixedKeys: true,
+  });
+  return result;
+}
+
+async function assertPrimaryContrastStates(page, rootId, label) {
+  const primary = page.locator(`#${rootId} [data-navigation-primary]`);
+  const states = [];
+  for (const state of ['normal', 'hover', 'focus', 'disabled']) {
+    await page.mouse.move(0, 0);
+    await page.evaluate(id => {
+      const button = document.querySelector(`#${id} [data-navigation-primary]`);
+      button.disabled = false;
+      button.blur();
+    }, rootId);
+    if (state === 'hover') await primary.hover();
+    if (state === 'focus') await primary.focus();
+    if (state === 'disabled') {
+      await page.evaluate(id => {
+        document.querySelector(`#${id} [data-navigation-primary]`).disabled = true;
+      }, rootId);
+    }
+    const sample = await page.evaluate(({ id, stateName }) => {
+      const button = document.querySelector(`#${id} [data-navigation-primary]`);
+      const style = getComputedStyle(button);
+      const channels = value => {
+        const match = String(value).match(/^rgba?\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)/);
+        if (!match) throw new Error(`Unsupported computed color: ${value}`);
+        return match.slice(1).map(Number);
+      };
+      const component = value => {
+        const normalized = value / 255;
+        return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      };
+      const luminance = rgb => 0.2126 * component(rgb[0]) + 0.7152 * component(rgb[1]) + 0.0722 * component(rgb[2]);
+      const filterMatch = style.filter.match(/^brightness\((\d+(?:\.\d+)?)\)$/);
+      const brightness = filterMatch ? Number(filterMatch[1]) : 1;
+      const filtered = value => channels(value).map(channel => Math.min(255, channel * brightness));
+      const foreground = filtered(style.color);
+      const background = filtered(style.backgroundColor);
+      const first = luminance(foreground);
+      const second = luminance(background);
+      return {
+        state: stateName,
+        color: style.color,
+        backgroundColor: style.backgroundColor,
+        filter: style.filter,
+        opacity: Number(style.opacity),
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        ratio: (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05),
+        hovered: button.matches(':hover'),
+        focused: document.activeElement === button,
+        disabled: button.disabled,
+      };
+    }, { id: rootId, stateName: state });
+    assert.ok(sample.ratio >= 4.5, `${label} ${state} contrast ${sample.ratio}`);
+    if (state === 'hover') assert.strictEqual(sample.hovered, true, `${label} hover state`);
+    if (state === 'focus') assert.strictEqual(sample.focused, true, `${label} focus state`);
+    if (state === 'disabled') {
+      assert.strictEqual(sample.disabled, true, `${label} disabled state`);
+      assert.strictEqual(sample.opacity, 1, `${label} disabled text must remain fully opaque`);
+    }
+    states.push(sample);
+  }
+  await page.evaluate(id => {
+    document.querySelector(`#${id} [data-navigation-primary]`).disabled = false;
+  }, rootId);
+  return states;
+}
+
 async function openLead(page, origin, opportunityId) {
   const response = await page.goto(`${origin}/dashboard/lead?id=${encodeURIComponent(opportunityId)}`, {
     waitUntil: 'domcontentloaded', timeout: 15000,
@@ -345,7 +448,8 @@ async function main() {
     if (selected === 'chrome') assert.strictEqual(browser.version(), CFT_VERSION);
     if (selected === 'webkit') assert.strictEqual(browser.version(), WEBKIT_VERSION);
 
-    const ledger = { requests: [], externalRequests: [], pageErrors: [], consoleErrors: [] };
+    const ledger = { requests: [], externalRequests: [], pageErrors: [], consoleErrors: [], contrast: [] };
+    let verifiedCoordinateEvidence = null;
     const matrix = [
       { role: 'owner', viewport: { width: 1440, height: 900 }, theme: 'light' },
       { role: 'admin', viewport: { width: 390, height: 844 }, theme: 'dark' },
@@ -371,7 +475,13 @@ async function main() {
       assert.strictEqual(state.chooserHidden, false);
       assert.strictEqual(state.scripts, 0);
       await assertNoOverflow(page, 'leadNavigationLauncher', spec.label);
-      if (spec.role === 'owner') await exerciseDirectAndChooser(page, 'leadNavigationLauncher');
+      if (spec.role === 'owner') {
+        verifiedCoordinateEvidence = await assertVerifiedCoordinateRuntime(page);
+        await exerciseDirectAndChooser(page, 'leadNavigationLauncher');
+      }
+      if (spec.theme === 'dark') {
+        ledger.contrast.push(...await assertPrimaryContrastStates(page, 'leadNavigationLauncher', spec.label));
+      }
       await page.reload({ waitUntil: 'domcontentloaded' });
       await waitLauncher(page, 'leadNavigationLauncher');
       assert.strictEqual(await page.locator('#leadNavigationLauncher [data-navigation-primary]').count(), 1);
@@ -389,6 +499,9 @@ async function main() {
       assert.strictEqual(state.address, DISPLAY_ADDRESS);
       assert.strictEqual(state.scripts, 0);
       await assertNoOverflow(page, 'cdNavigationLauncher', spec.label);
+      if (spec.theme === 'dark') {
+        ledger.contrast.push(...await assertPrimaryContrastStates(page, 'cdNavigationLauncher', spec.label));
+      }
       if (index === 0) {
         await page.locator('#cdNavigationLauncher [data-navigation-chooser]').focus();
         await page.keyboard.press('Enter');
@@ -557,6 +670,8 @@ async function main() {
       roles: 4, tenants: 2, sharedDrawerHosts: 3, canonicalLocationSurfaces: 2,
       viewports: ['1440x900', '1280x800', '412x915', '390x844'], themes: ['light', 'dark'],
       urlContracts: EXPECTED_URLS,
+      verifiedCoordinateUrls: verifiedCoordinateEvidence,
+      contrastStates: ledger.contrast,
       states: ['loading', 'ready', 'hidden-default chooser', 'no-visible-provider', 'invalid destination', 'preference poison', 'retry', 'stale reload', 'popup blocked'],
       accessibility: ['trusted keyboard Enter', 'synthetic click rejected', 'Escape', 'outside dismiss', 'chooser focus', 'retry focus', 'live status', 'assertive error'],
       externalRequests: 0, providerRequests: 0, productionWrites: 0, databaseMutations: 0,

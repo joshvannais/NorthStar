@@ -3933,6 +3933,13 @@ textarea:disabled {
   opacity: 0.62;
 }
 
+.navigation-launcher .navigation-launcher__primary:disabled {
+  border-color: var(--neutral-300);
+  background: var(--neutral-200);
+  color: var(--neutral-700);
+  opacity: 1;
+}
+
 .navigation-launcher__glyph {
   font-size: 15px;
   line-height: 1;
@@ -3983,7 +3990,7 @@ textarea:disabled {
 }
 
 [data-theme="dark"] .navigation-launcher__primary {
-  color: #0b0d17;
+  color: #fff;
 }
 
 @media (max-width: 480px) {

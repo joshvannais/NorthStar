@@ -45,6 +45,38 @@ function json(body, status = 200) {
   return { status, contentType: 'application/json; charset=utf-8', body: JSON.stringify(body) };
 }
 
+function responseGate(label) {
+  let announcePending;
+  let releaseResponse;
+  let released = false;
+  const pending = new Promise(resolve => { announcePending = resolve; });
+  const response = new Promise(resolve => { releaseResponse = resolve; });
+  return {
+    async wait() {
+      announcePending();
+      await response;
+    },
+    async waitUntilPending() {
+      let timer;
+      try {
+        await Promise.race([
+          pending,
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(label + ' did not reach its response gate')), 5000);
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    release() {
+      if (released) return;
+      released = true;
+      releaseResponse();
+    },
+  };
+}
+
 function account(role) {
   return {
     user: { id: '99000000-0000-4000-8000-000000000001', status: 'active', email: 'm20-part2j@example.test' },
@@ -159,6 +191,9 @@ async function installBoundary(context, origin, role, evidence, options = {}) {
       }));
     }
     if (url.pathname === '/api/account/preferences') {
+      if (authorityFailure && options.notificationFailureGate) {
+        await options.notificationFailureGate.wait();
+      }
       return route.fulfill(authorityFailure ? json({ error: 'unavailable' }, 503) : json({ preferences: {
         companyName: 'M20 Part 2J Fixture', companyInfo: 'Exact company bytes', smartRouting: true, contacts: [],
         emailEnabled: true, emailCallSummary: false, emailAppointment: true,
@@ -454,8 +489,13 @@ async function runWorkforceReloadFailure(browser, engine, origin, evidence) {
 
 async function runErrorStates(browser, engine, origin, evidence) {
   const context = await browser.newContext({ viewport: VIEWPORTS[1] });
+  const notificationFailureGate = responseGate(engine + ' notification failure');
   await context.addInitScript(() => localStorage.setItem('northstar-theme', 'light'));
-  await installBoundary(context, origin, 'owner', evidence, { failAuthority: true, delayMs: 80 });
+  await installBoundary(context, origin, 'owner', evidence, {
+    failAuthority: true,
+    delayMs: 80,
+    notificationFailureGate,
+  });
   const page = await context.newPage();
   attachPage(page, evidence, engine + ' error states');
   try {
@@ -467,8 +507,27 @@ async function runErrorStates(browser, engine, origin, evidence) {
         assert.strictEqual(await page.locator('.bp-section input:not(:disabled),.bp-section select:not(:disabled),.bp-section textarea:not(:disabled)').count(), 0);
       } else if (route === '/dashboard/settings') {
         assert.strictEqual(await page.getAttribute('#notificationPreferencesAuthority', 'data-state'), 'loading');
+        assert.strictEqual(await page.getAttribute('#settingsAccessStatus', 'role'), 'status');
+        assert.strictEqual(await page.getAttribute('#settingsAccessStatus', 'aria-live'), 'polite');
+        assert.match(await page.textContent('#settingsAccessStatus'), /Loading.*Editing remains disabled/i);
+        assert.ok(await page.locator('[data-settings-mutable]').count() > 0);
+        assert.strictEqual(await page.locator('[data-settings-mutable]:not(:disabled)').count(), 0);
+        assert.strictEqual(await page.getAttribute('#saveSettingsBtn', 'aria-describedby'), 'settingsAccessStatus');
+        await notificationFailureGate.waitUntilPending();
+        notificationFailureGate.release();
         await page.waitForFunction(() => document.getElementById('notificationPreferencesAuthority')?.dataset.state === 'error');
         assert.strictEqual(await page.locator('[data-settings-mutable]:not(:disabled)').count(), 0);
+        assert.strictEqual(
+          await page.textContent('#settingsAccessStatus'),
+          'Settings access is unavailable. Editing remains disabled.'
+        );
+        await page.waitForFunction(() => {
+          const toast = document.getElementById('toast');
+          return toast && toast.classList.contains('show') && toast.getAttribute('role') === 'alert';
+        });
+        assert.strictEqual(await page.getAttribute('#toast', 'aria-live'), 'assertive');
+        assert.strictEqual(await page.getAttribute('#toast', 'aria-atomic'), 'true');
+        assert.match(await page.textContent('#toast'), /unavailable/i);
       } else if (route === '/dashboard/team') {
         assert.strictEqual(await page.getAttribute('#workforceShell', 'aria-busy'), 'true');
         await page.waitForFunction(() => document.documentElement.dataset.workforceState === 'error');
@@ -483,6 +542,7 @@ async function runErrorStates(browser, engine, origin, evidence) {
       }
     }
   } finally {
+    notificationFailureGate.release();
     await context.close();
   }
 }

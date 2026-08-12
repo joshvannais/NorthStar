@@ -213,10 +213,10 @@
         encodeURIComponent(parsed.searchParams.get('destination'));
     } else {
       if (parsed.hostname !== 'waze.com' || parsed.pathname !== '/ul' || keys.length !== 2 ||
-          keys[1] !== 'navigate' || parsed.searchParams.get('navigate') !== 'yes' ||
-          (keys[0] !== 'q' && keys[0] !== 'll') || !parsed.searchParams.get(keys[0])) urlFailure();
-      expected = 'https://waze.com/ul?' + keys[0] + '=' +
-        encodeURIComponent(parsed.searchParams.get(keys[0])) + '&navigate=yes';
+          keys[0] !== 'q' || keys[1] !== 'navigate' ||
+          !parsed.searchParams.get('q') || parsed.searchParams.get('navigate') !== 'yes') urlFailure();
+      expected = 'https://waze.com/ul?q=' +
+        encodeURIComponent(parsed.searchParams.get('q')) + '&navigate=yes';
     }
     if (candidate !== expected || expected.length > MAX_URL_LENGTH) urlFailure();
     return candidate;
@@ -235,8 +235,6 @@
       url = 'https://maps.apple.com/?daddr=' + encoded + '&dirflg=d';
     } else if (provider === 'google_maps') {
       url = 'https://www.google.com/maps/dir/?api=1&destination=' + encoded;
-    } else if (coordinates) {
-      url = 'https://waze.com/ul?ll=' + encoded + '&navigate=yes';
     } else {
       url = 'https://waze.com/ul?q=' + encoded + '&navigate=yes';
     }

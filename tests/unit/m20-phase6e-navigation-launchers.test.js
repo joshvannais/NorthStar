@@ -109,7 +109,7 @@ describe('Mission 20 Phase 6E navigation URL and authority contract', () => {
     expect(contract.buildNavigationUrl('google_maps', destination))
       .toBe('https://www.google.com/maps/dir/?api=1&destination=41.7658%2C-72.6734');
     expect(contract.buildNavigationUrl('waze', destination))
-      .toBe('https://waze.com/ul?ll=41.7658%2C-72.6734&navigate=yes');
+      .toBe('https://waze.com/ul?q=41.7658%2C-72.6734&navigate=yes');
 
     for (const coordinates of [
       { verified: false, latitude: 41, longitude: -72 },
@@ -217,6 +217,14 @@ describe('Mission 20 Phase 6E navigation URL and authority contract', () => {
       `https://www.google.com/maps/dir/?api=1&destination=${'x'.repeat(2050)}`,
     ]) {
       expect(() => contract.validateNavigationUrl('google_maps', candidate)).toThrow(/navigation URL/i);
+    }
+    const coordinateQuery = 'https://waze.com/ul?q=41.7658%2C-72.6734&navigate=yes';
+    expect(contract.validateNavigationUrl('waze', coordinateQuery)).toBe(coordinateQuery);
+    for (const candidate of [
+      'https://waze.com/ul?ll=41.7658%2C-72.6734&navigate=yes',
+      'https://waze.com/ul?q=41.7658%2C-72.6734&ll=41.7658%2C-72.6734&navigate=yes',
+    ]) {
+      expect(() => contract.validateNavigationUrl('waze', candidate)).toThrow(/navigation URL/i);
     }
     expect(() => contract.buildNavigationUrl('unknown_provider', destination)).toThrow(/provider/i);
   });

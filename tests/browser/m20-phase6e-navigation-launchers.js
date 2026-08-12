@@ -155,13 +155,16 @@ async function createContext(browser, origin, session, spec, ledger) {
   const context = await browser.newContext({ viewport: spec.viewport, colorScheme: spec.theme });
   await context.addInitScript(theme => {
     localStorage.setItem('northstar-theme', theme);
-    window.__phase6eOpenMode = 'success';
+    window.__phase6eOpenMode = 'success-null';
     window.__phase6eOpenCalls = [];
     window.__phase6eXss = 0;
     window.open = function(url, target, features) {
       window.__phase6eOpenCalls.push({ url, target, features });
-      if (window.__phase6eOpenMode === 'blocked') return null;
-      return { opener: window };
+      if (window.__phase6eOpenMode === 'throw') throw new Error('synchronous open failure');
+      if (window.__phase6eOpenMode === 'success-proxy') {
+        return new Proxy({}, { get() { throw new Error('opener access forbidden'); }, set() { throw new Error('opener access forbidden'); } });
+      }
+      return null;
     };
   }, spec.theme);
   await context.addCookies([
@@ -336,6 +339,15 @@ async function launcherState(page, rootId) {
   }, rootId);
 }
 
+async function observeActionTimePreferenceRequest(page, action) {
+  const request = page.waitForRequest(candidate => {
+    const url = new URL(candidate.url());
+    return candidate.method() === 'GET' && url.pathname === '/api/account/map-preferences';
+  }, { timeout: 1500 }).then(() => true, () => false);
+  await action();
+  return request;
+}
+
 async function exerciseDirectAndChooser(page, rootId) {
   const root = page.locator('#' + rootId);
   const primary = root.locator('[data-navigation-primary]');
@@ -347,8 +359,13 @@ async function exerciseDirectAndChooser(page, rootId) {
     'an untrusted synthetic click cannot navigate');
   await primary.focus();
   await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.__phase6eOpenCalls.length === 1);
   let calls = await page.evaluate(() => window.__phase6eOpenCalls.slice());
   assert.deepStrictEqual(calls, [{ url: EXPECTED_URLS.google_maps, target: '_blank', features: 'noopener,noreferrer' }]);
+  let status = root.locator('[data-navigation-status]');
+  assert.strictEqual(await status.getAttribute('role'), 'status');
+  assert.match(await status.textContent(), /opened Google Maps/i,
+    'a nonthrowing noopener null result is an attempted launch, not proof of blocking');
 
   const chooser = root.locator('[data-navigation-chooser]');
   await chooser.focus();
@@ -365,16 +382,24 @@ async function exerciseDirectAndChooser(page, rootId) {
   assert.strictEqual(await page.evaluate(id => document.activeElement === document.querySelector(`#${id} [data-navigation-chooser]`), rootId), true);
   await chooser.click();
   await root.locator('[data-navigation-provider="waze"]').click();
+  await page.waitForFunction(() => window.__phase6eOpenCalls.length === 2);
   calls = await page.evaluate(() => window.__phase6eOpenCalls.slice());
   assert.deepStrictEqual(calls[1], { url: EXPECTED_URLS.waze, target: '_blank', features: 'noopener,noreferrer' });
   assert.strictEqual(calls.length, 2);
 
-  await page.evaluate(() => { window.__phase6eOpenMode = 'blocked'; });
+  await page.evaluate(() => { window.__phase6eOpenMode = 'success-proxy'; });
   await primary.click();
-  const status = root.locator('[data-navigation-status]');
+  await page.waitForFunction(() => window.__phase6eOpenCalls.length === 3);
+  status = root.locator('[data-navigation-status]');
+  assert.strictEqual(await status.getAttribute('role'), 'status');
+  assert.match(await status.textContent(), /opened Google Maps/i,
+    'the launcher must not access an opener retained only by a test proxy');
+
+  await page.evaluate(() => { window.__phase6eOpenMode = 'throw'; });
+  await primary.click();
+  await page.waitForFunction(() => window.__phase6eOpenCalls.length === 4);
   assert.strictEqual(await status.getAttribute('role'), 'alert');
-  assert.match(await status.textContent(), /blocked|could not be opened/i);
-  assert.strictEqual((await page.evaluate(() => window.__phase6eOpenCalls.length)), 3);
+  assert.match(await status.textContent(), /could not be opened/i);
 }
 
 async function main() {
@@ -450,6 +475,81 @@ async function main() {
 
     const ledger = { requests: [], externalRequests: [], pageErrors: [], consoleErrors: [], contrast: [] };
     let verifiedCoordinateEvidence = null;
+    const staleAuthorityEvidence = {};
+
+    const staleDirectSpec = { label: 'stale-authority-primary', viewport: { width: 1280, height: 800 }, theme: 'light' };
+    const staleDirectContext = await createContext(browser, origin, sessions.owner, staleDirectSpec, ledger);
+    let staleDirectDocument = preferenceDocument('google_maps');
+    let staleDirectReads = 0;
+    await staleDirectContext.route('**/api/account/map-preferences', route => {
+      staleDirectReads += 1;
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(preferenceBody(staleDirectDocument, `stale-primary-${staleDirectReads}`)),
+      });
+    });
+    const staleDirectPage = await staleDirectContext.newPage();
+    attachPage(staleDirectPage, ledger, staleDirectSpec.label);
+    await openLead(staleDirectPage, origin, ids.opportunity);
+    staleDirectDocument = preferenceDocument('apple_maps', {
+      google_maps: { enabled: false, visible: true },
+    });
+    const staleDirectRefresh = await observeActionTimePreferenceRequest(staleDirectPage, () =>
+      staleDirectPage.locator('#leadNavigationLauncher [data-navigation-primary]').click());
+    if (staleDirectRefresh) {
+      await waitLauncher(staleDirectPage, 'leadNavigationLauncher');
+      await staleDirectPage.waitForFunction(() => /changed|no longer available/i.test(
+        document.querySelector('#leadNavigationLauncher [data-navigation-status]').textContent
+      ));
+    }
+    const staleDirectState = await launcherState(staleDirectPage, 'leadNavigationLauncher');
+    staleAuthorityEvidence.primary = {
+      refreshObserved: staleDirectRefresh,
+      reads: staleDirectReads,
+      launches: await staleDirectPage.evaluate(() => window.__phase6eOpenCalls.slice()),
+      primaryLabel: staleDirectState.primaryLabel,
+      providerKeys: staleDirectState.providers.map(provider => provider.key),
+      status: await staleDirectPage.locator('#leadNavigationLauncher [data-navigation-status]').textContent(),
+    };
+    await staleDirectContext.close();
+
+    const staleChooserSpec = { label: 'stale-authority-chooser', viewport: { width: 390, height: 844 }, theme: 'dark' };
+    const staleChooserContext = await createContext(browser, origin, sessions.admin, staleChooserSpec, ledger);
+    let staleChooserDocument = preferenceDocument('google_maps');
+    let staleChooserReads = 0;
+    await staleChooserContext.route('**/api/account/map-preferences', route => {
+      staleChooserReads += 1;
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(preferenceBody(staleChooserDocument, `stale-chooser-${staleChooserReads}`)),
+      });
+    });
+    const staleChooserPage = await staleChooserContext.newPage();
+    attachPage(staleChooserPage, ledger, staleChooserSpec.label);
+    await openLead(staleChooserPage, origin, ids.opportunity);
+    await staleChooserPage.locator('#leadNavigationLauncher [data-navigation-chooser]').click();
+    staleChooserDocument = preferenceDocument('google_maps', {
+      apple_maps: { enabled: true, visible: false },
+    });
+    const staleChooserRefresh = await observeActionTimePreferenceRequest(staleChooserPage, () =>
+      staleChooserPage.locator('#leadNavigationLauncher [data-navigation-provider="apple_maps"]').click());
+    if (staleChooserRefresh) {
+      await waitLauncher(staleChooserPage, 'leadNavigationLauncher');
+      await staleChooserPage.waitForFunction(() => /changed|no longer available/i.test(
+        document.querySelector('#leadNavigationLauncher [data-navigation-status]').textContent
+      ));
+    }
+    const staleChooserState = await launcherState(staleChooserPage, 'leadNavigationLauncher');
+    staleAuthorityEvidence.chooser = {
+      refreshObserved: staleChooserRefresh,
+      reads: staleChooserReads,
+      launches: await staleChooserPage.evaluate(() => window.__phase6eOpenCalls.slice()),
+      primaryLabel: staleChooserState.primaryLabel,
+      providerKeys: staleChooserState.providers.map(provider => provider.key),
+      status: await staleChooserPage.locator('#leadNavigationLauncher [data-navigation-status]').textContent(),
+    };
+    await staleChooserContext.close();
+
     const matrix = [
       { role: 'owner', viewport: { width: 1440, height: 900 }, theme: 'light' },
       { role: 'admin', viewport: { width: 390, height: 844 }, theme: 'dark' },
@@ -506,6 +606,7 @@ async function main() {
         await page.locator('#cdNavigationLauncher [data-navigation-chooser]').focus();
         await page.keyboard.press('Enter');
         await page.locator('#cdNavigationLauncher [data-navigation-provider="apple_maps"]').click();
+        await page.waitForFunction(() => window.__phase6eOpenCalls.length === 1);
         assert.deepStrictEqual(await page.evaluate(() => window.__phase6eOpenCalls), [
           { url: EXPECTED_URLS.apple_maps, target: '_blank', features: 'noopener,noreferrer' },
         ]);
@@ -537,6 +638,7 @@ async function main() {
     assert.strictEqual(await hiddenPage.locator('#leadNavigationLauncher [data-navigation-chooser]').getAttribute('aria-expanded'), 'true');
     assert.deepStrictEqual(await hiddenPage.evaluate(() => window.__phase6eOpenCalls), []);
     await hiddenPage.locator('#leadNavigationLauncher [data-navigation-provider="waze"]').click();
+    await hiddenPage.waitForFunction(() => window.__phase6eOpenCalls.length === 1);
     assert.strictEqual((await hiddenPage.evaluate(() => window.__phase6eOpenCalls[0].url)), EXPECTED_URLS.waze);
     await hiddenContext.close();
 
@@ -642,6 +744,7 @@ async function main() {
     await firstReload.catch(() => null);
     await stalePage.waitForFunction(() => /Waze/.test(document.querySelector('#leadNavigationLauncher [data-navigation-primary]').getAttribute('aria-label')));
     await stalePage.locator('#leadNavigationLauncher [data-navigation-primary]').click();
+    await stalePage.waitForFunction(() => window.__phase6eOpenCalls.length === 1);
     assert.strictEqual((await stalePage.evaluate(() => window.__phase6eOpenCalls[0].url)), EXPECTED_URLS.waze);
     await staleContext.close();
 
@@ -653,6 +756,23 @@ async function main() {
     assert.match(await tenantBPage.locator('#leadCanonicalAddress').textContent(), /900 Other Tenant Way/);
     assert.doesNotMatch(await tenantBPage.locator('body').textContent(), /100 Cedar Lane/);
     await tenantBContext.close();
+
+    assert.deepStrictEqual(staleAuthorityEvidence.primary, {
+      refreshObserved: true,
+      reads: 2,
+      launches: [],
+      primaryLabel: `Navigate with Apple Maps to ${DISPLAY_ADDRESS}`,
+      providerKeys: ['waze'],
+      status: 'Navigation preferences changed. Review the refreshed options and try again.',
+    }, 'primary activation must not launch a provider disabled after mount');
+    assert.deepStrictEqual(staleAuthorityEvidence.chooser, {
+      refreshObserved: true,
+      reads: 2,
+      launches: [],
+      primaryLabel: `Navigate with Google Maps to ${DISPLAY_ADDRESS}`,
+      providerKeys: ['waze'],
+      status: 'That navigation provider is no longer available.',
+    }, 'chooser selection must not launch a provider hidden after the chooser opens');
 
     assert.deepStrictEqual(await databaseDigest(pool), before, 'browser launch intents never mutate PostgreSQL');
     assert.deepStrictEqual(ledger.externalRequests, [], 'no provider or other external request occurs');
@@ -672,7 +792,7 @@ async function main() {
       urlContracts: EXPECTED_URLS,
       verifiedCoordinateUrls: verifiedCoordinateEvidence,
       contrastStates: ledger.contrast,
-      states: ['loading', 'ready', 'hidden-default chooser', 'no-visible-provider', 'invalid destination', 'preference poison', 'retry', 'stale reload', 'popup blocked'],
+      states: ['loading', 'ready', 'hidden-default chooser', 'no-visible-provider', 'invalid destination', 'preference poison', 'retry', 'stale reload', 'action-time authority change', 'nonthrowing noopener null', 'synchronous open failure'],
       accessibility: ['trusted keyboard Enter', 'synthetic click rejected', 'Escape', 'outside dismiss', 'chooser focus', 'retry focus', 'live status', 'assertive error'],
       externalRequests: 0, providerRequests: 0, productionWrites: 0, databaseMutations: 0,
       xssExecutions: 0, pageErrors: 0, consoleErrors: 0, overflow: 0,

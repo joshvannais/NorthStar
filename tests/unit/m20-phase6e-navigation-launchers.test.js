@@ -228,6 +228,31 @@ describe('Mission 20 Phase 6E navigation URL and authority contract', () => {
     }
     expect(() => contract.buildNavigationUrl('unknown_provider', destination)).toThrow(/provider/i);
   });
+
+  test('revalidates the same-user map-preference authority before every provider launch decision', () => {
+    const source = fs.readFileSync(MODULE_PATH, 'utf8');
+    const launchSource = source.slice(
+      source.indexOf('function launchProvider'),
+      source.indexOf('function mount')
+    );
+
+    expect(launchSource).toContain('loadPreferences(true).then(function (preferences)');
+    expect(launchSource.indexOf('loadPreferences(true)'))
+      .toBeLessThan(launchSource.indexOf("global.open(url, '_blank', 'noopener,noreferrer')"));
+    expect(launchSource).toContain('policy.usableProviders.indexOf(provider)');
+  });
+
+  test('does not mislabel a nonthrowing noopener null result as blocked or access an opener', () => {
+    const source = fs.readFileSync(MODULE_PATH, 'utf8');
+    const launchSource = source.slice(
+      source.indexOf('function launchProvider'),
+      source.indexOf('function mount')
+    );
+
+    expect(launchSource).not.toMatch(/if\s*\(\s*!opened\s*\)/);
+    expect(launchSource).not.toMatch(/opened\.opener/);
+    expect(launchSource).toMatch(/try\s*\{[\s\S]*global\.open\([\s\S]*catch\s*\(_error\)/);
+  });
 });
 
 describe('Mission 20 Phase 6E mounted source ownership', () => {
@@ -267,7 +292,7 @@ describe('Mission 20 Phase 6E mounted source ownership', () => {
 
     expect(source).toContain('event.isTrusted');
     expect(source).toContain("global.open(url, '_blank', 'noopener,noreferrer')");
-    expect(source).toContain('opened.opener = null');
+    expect(source).not.toMatch(/opened\.opener/);
     expect(source).toContain('textContent');
     expect(source).not.toMatch(/createElement\(['"]a['"]\)|\.href\s*=|preload|prefetch/i);
     expect(hosts).not.toMatch(/https?:\/\/(?:maps\.apple\.com|www\.google\.com\/maps|(?:www\.)?waze\.com)/i);

@@ -593,7 +593,7 @@
       button.addEventListener('click', function (event) {
         if (!event.isTrusted) return;
         closeMenu(true);
-        launchProvider(instance, key);
+        launchProvider(instance, key, false);
       });
       menu.appendChild(button);
     });
@@ -632,7 +632,7 @@
     instance.cleanup = function () { closeMenu(false); };
     primary.addEventListener('click', function (event) {
       if (!event.isTrusted) return;
-      if (policy.defaultProvider) launchProvider(instance, policy.defaultProvider);
+      if (policy.defaultProvider) launchProvider(instance, policy.defaultProvider, true);
       else openMenu(primary);
     });
     chooser.addEventListener('click', function (event) {
@@ -643,46 +643,73 @@
     setStatus(instance, 'Navigation is ready for ' + destinationLabel + '.', false);
   }
 
-  function launchProvider(instance, provider) {
-    if (!instance.destination || preferenceState.kind !== 'ready' ||
-        preferenceState.authorityKey !== currentAuthorityKey()) {
-      setStatus(instance, 'Navigation preferences changed. Reloading before navigation.', true);
-      loadPreferences(true).catch(function () {});
-      return;
-    }
-    var policy;
-    try { policy = selectLaunchPolicy(preferenceState.preferences); } catch (_error) { return; }
-    if (policy.usableProviders.indexOf(provider) < 0) {
-      setStatus(instance, 'That navigation provider is no longer available.', true);
-      return;
-    }
-    var url;
-    try {
-      url = buildNavigationUrl(provider, instance.destination);
-      validateNavigationUrl(provider, url);
-    } catch (_error) {
-      setStatus(instance, 'The destination could not be opened safely.', true);
-      return;
-    }
-    var opened = null;
-    try {
-      opened = global.open(url, '_blank', 'noopener,noreferrer');
-      if (opened) opened.opener = null;
-    } catch (_error) {
-      opened = null;
-    }
-    if (!opened) {
-      setStatus(instance, PROVIDER_NAMES[provider] + ' was blocked or could not be opened. Allow pop-ups and try again.', true);
-      return;
-    }
-    setStatus(instance, 'Opened ' + PROVIDER_NAMES[provider] + ' for ' + instance.destination.address + '.', false);
+  function focusRefreshedControl(instance, preferChooser) {
+    var target = preferChooser && instance.chooser && !instance.chooser.hidden
+      ? instance.chooser
+      : instance.primary;
+    if (target && !target.disabled && target.isConnected) target.focus();
+  }
+
+  function launchProvider(instance, provider, requireDefault) {
+    if (!instance.destination || instance.destroyed || !instance.root.isConnected) return;
+    var launchGeneration = (instance.launchGeneration || 0) + 1;
+    instance.launchGeneration = launchGeneration;
+    setStatus(instance, 'Checking current navigation preferences…', false);
+
+    return loadPreferences(true).then(function (preferences) {
+      if (!preferences || instance.destroyed || !instance.root.isConnected ||
+          instance.launchGeneration !== launchGeneration || preferenceState.kind !== 'ready' ||
+          preferenceState.authorityKey !== currentAuthorityKey()) return;
+      var policy;
+      try {
+        policy = selectLaunchPolicy(preferences);
+      } catch (_error) {
+        setStatus(instance, 'Navigation preferences are invalid. Try again.', true);
+        focusRefreshedControl(instance, requireDefault !== true);
+        return;
+      }
+      if (requireDefault === true && policy.defaultProvider !== provider) {
+        setStatus(instance, 'Navigation preferences changed. Review the refreshed options and try again.', true);
+        focusRefreshedControl(instance, false);
+        return;
+      }
+      if (policy.usableProviders.indexOf(provider) < 0) {
+        setStatus(instance, 'That navigation provider is no longer available.', true);
+        focusRefreshedControl(instance, true);
+        return;
+      }
+      var url;
+      try {
+        url = buildNavigationUrl(provider, instance.destination);
+        validateNavigationUrl(provider, url);
+      } catch (_error) {
+        setStatus(instance, 'The destination could not be opened safely.', true);
+        focusRefreshedControl(instance, requireDefault !== true);
+        return;
+      }
+      try {
+        global.open(url, '_blank', 'noopener,noreferrer');
+      } catch (_error) {
+        setStatus(instance, PROVIDER_NAMES[provider] + ' could not be opened. Try again.', true);
+        focusRefreshedControl(instance, requireDefault !== true);
+        return;
+      }
+      setStatus(instance, 'Opened ' + PROVIDER_NAMES[provider] + ' for ' + instance.destination.address + '.', false);
+    }).catch(function () {
+      if (instance.destroyed || !instance.root.isConnected || instance.launchGeneration !== launchGeneration) return;
+      setStatus(instance, 'Navigation preferences could not be revalidated. Try again.', true);
+      var retry = instance.root.querySelector('[data-navigation-retry]');
+      if (retry) retry.focus();
+    });
   }
 
   function mount(root, options) {
     if (!global.document || !root || typeof root.replaceChildren !== 'function') {
       throw new Error('Navigation launcher mount is invalid.');
     }
-    var instance = { root: root, destination: null, label: 'jobsite', cleanup: null, destroyed: false };
+    var instance = {
+      root: root, destination: null, label: 'jobsite', cleanup: null, destroyed: false, launchGeneration: 0,
+    };
     try {
       var record = dataRecord(options, ['address', 'verifiedCoordinates', 'label'], ['address'], destinationFailure);
       var input = { address: record.address };

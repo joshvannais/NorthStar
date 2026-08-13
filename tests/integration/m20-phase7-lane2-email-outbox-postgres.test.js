@@ -101,6 +101,91 @@ describe('Mission 20 Phase 7 Lane 2 durable account email outbox', () => {
     return { id, userId, organizationId, recipient, rawToken };
   }
 
+  async function insertExpiredBacklog(count) {
+    if (!Number.isInteger(count) || count < 1) throw new Error('Expired backlog count is required');
+    const anchor = await insertJob();
+    const prefix = crypto.randomUUID();
+    if (count > 1) {
+      await pool.query(
+        `WITH generated AS (
+           SELECT item,
+                  md5($3 || '-user-' || item)::uuid AS user_id,
+                  md5($3 || '-token-' || item)::uuid AS token_id,
+                  CASE WHEN item % 2 = 0 THEN 'email_verification' ELSE 'password_reset' END AS purpose
+             FROM generate_series(1, $1) item
+         ),
+         inserted_users AS (
+           INSERT INTO users
+             (id, organization_id, name, email, email_normalized, password_hash, role, status)
+           SELECT user_id, $2, 'Providerless Backlog User',
+                  'providerless-' || $3 || '-' || item || '@example.test',
+                  'providerless-' || $3 || '-' || item || '@example.test',
+                  'not-used', 'owner', 'active'
+             FROM generated
+           RETURNING id
+         ),
+         inserted_memberships AS (
+           INSERT INTO organization_memberships (id, organization_id, user_id, role, status)
+           SELECT id, $2, id, 'owner', 'active'
+             FROM inserted_users
+           RETURNING user_id
+         ),
+         inserted_tokens AS (
+           INSERT INTO account_action_tokens
+             (id, user_id, organization_id, purpose, token_hash,
+              created_at, expires_at)
+           SELECT generated.token_id, generated.user_id, $2, generated.purpose,
+                  md5($3 || '-hash-a-' || item) || md5($3 || '-hash-b-' || item),
+                  NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour'
+             FROM generated
+             JOIN inserted_memberships ON inserted_memberships.user_id = generated.user_id
+           RETURNING id, user_id, purpose
+         )
+         INSERT INTO account_email_outbox
+           (id, user_id, organization_id, purpose, recipient, raw_token)
+         SELECT id, user_id, $2, purpose, 'providerless-backlog@example.test', repeat('A', 43)
+           FROM inserted_tokens`,
+        [count - 1, anchor.organizationId, prefix]
+      );
+    }
+    await pool.query(
+      `UPDATE account_action_tokens
+          SET created_at = NOW() - INTERVAL '2 hours',
+              expires_at = NOW() - INTERVAL '1 hour'
+        WHERE id = $1`,
+      [anchor.id]
+    );
+    return anchor;
+  }
+
+  async function insertTerminalHistory(anchor, count) {
+    const prefix = crypto.randomUUID();
+    await pool.query(
+      `WITH generated AS (
+         SELECT item, md5($4 || '-terminal-' || item)::uuid AS id
+           FROM generate_series(1, $1) item
+       ),
+       inserted_tokens AS (
+         INSERT INTO account_action_tokens
+           (id, user_id, organization_id, purpose, token_hash,
+            created_at, expires_at, consumed_at)
+         SELECT id, $2, $3, 'password_reset',
+                md5($4 || '-terminal-a-' || item) || md5($4 || '-terminal-b-' || item),
+                NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day', NOW() - INTERVAL '12 hours'
+           FROM generated
+         RETURNING id, purpose
+       )
+       INSERT INTO account_email_outbox
+         (id, user_id, organization_id, purpose, recipient, raw_token,
+          state, attempt_count, delivered_at, created_at, updated_at)
+       SELECT id, $2, $3, purpose, 'providerless-terminal@example.test', NULL,
+              'delivered', 1, NOW() - INTERVAL '12 hours',
+              NOW() - INTERVAL '2 days', NOW() - INTERVAL '12 hours'
+         FROM inserted_tokens`,
+      [count, anchor.userId, anchor.organizationId, prefix]
+    );
+  }
+
   beforeAll(async () => {
     if (!process.env.M19_PG_ADMIN_URL) {
       throw new Error('Disposable PostgreSQL 18 identity is required for Phase 7 Lane 2 outbox tests');
@@ -163,6 +248,7 @@ describe('Mission 20 Phase 7 Lane 2 durable account email outbox', () => {
       repository,
       batchSize: 2,
       intervalMs: 60000,
+      housekeepingMaxBatches: 1,
     });
     await expect(worker.drainOnce()).resolves.toEqual({
       claimed: 0, delivered: 0, configurationUnavailable: true,
@@ -265,6 +351,140 @@ describe('Mission 20 Phase 7 Lane 2 durable account email outbox', () => {
       [validJob.id]
     )).rows).toEqual([{
       state: 'pending', attempt_count: 0, claim_token: null, raw_token: validJob.rawToken,
+    }]);
+  }, 60000);
+
+  test('providerless start caps each drain, catches up a realistic backlog, then returns to idle cadence', async () => {
+    const expired = await insertExpiredBacklog(120);
+    await insertTerminalHistory(expired, 250);
+    const validJob = await insertJob('password_reset');
+    const cleanupCalls = [];
+    const providerCalls = [];
+    const countedRepository = {
+      async expireAccountEmailJobs(options) {
+        const count = await repository.expireAccountEmailJobs(options);
+        cleanupCalls.push({ options, count });
+        return count;
+      },
+    };
+    const {
+      AccountEmailOutboxWorker,
+      DEFAULT_HOUSEKEEPING_CATCH_UP_INTERVAL_MS,
+      DEFAULT_HOUSEKEEPING_MAX_BATCHES,
+    } = require('../../src/email/outbox');
+    const worker = new AccountEmailOutboxWorker({
+      repository: countedRepository,
+      transactionalEmail: {
+        async verification() { providerCalls.push('verification'); },
+      },
+      housekeepingCatchUpIntervalMs: 1000,
+    });
+
+    expect(worker.start()).toBe(true);
+    while (worker.running) await new Promise(resolve => setTimeout(resolve, 5));
+
+    expect(cleanupCalls).toHaveLength(10);
+    expect(cleanupCalls.every(call => call.options.batchSize === 10 && call.count === 10)).toBe(true);
+    expect((await pool.query(
+      `SELECT state, count(*)::int AS count, count(raw_token)::int AS retained_tokens
+         FROM account_email_outbox
+        WHERE organization_id = $1 AND state IN ('pending', 'dead')
+        GROUP BY state
+        ORDER BY state`,
+      [expired.organizationId]
+    )).rows).toEqual([
+      { state: 'dead', count: 100, retained_tokens: 0 },
+      { state: 'pending', count: 20, retained_tokens: 20 },
+    ]);
+    expect(DEFAULT_HOUSEKEEPING_MAX_BATCHES).toBe(10);
+    expect(worker.housekeepingMaxBatches).toBe(DEFAULT_HOUSEKEEPING_MAX_BATCHES);
+    expect(DEFAULT_HOUSEKEEPING_CATCH_UP_INTERVAL_MS).toBe(10000);
+    expect(worker.housekeepingCatchUpIntervalMs).toBe(1000);
+
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      const remaining = (await pool.query(
+        "SELECT count(*)::int AS count FROM account_email_outbox WHERE organization_id = $1 AND state = 'pending'",
+        [expired.organizationId]
+      )).rows[0].count;
+      if (remaining === 0 && !worker.running) break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(cleanupCalls).toHaveLength(13);
+    const callsAfterCatchUp = cleanupCalls.length;
+    await new Promise(resolve => setTimeout(resolve, 1300));
+    expect(cleanupCalls).toHaveLength(callsAfterCatchUp);
+    worker.stop();
+    while (worker.running) await new Promise(resolve => setTimeout(resolve, 5));
+
+    expect((await pool.query(
+      `SELECT purpose, state, count(*)::int AS count,
+              count(raw_token)::int AS retained_tokens,
+              max(attempt_count)::int AS max_attempts,
+              count(claim_token)::int AS claims
+         FROM account_email_outbox
+        WHERE organization_id = $1 AND state = 'dead'
+        GROUP BY purpose, state
+        ORDER BY purpose`,
+      [expired.organizationId]
+    )).rows).toEqual([
+      { purpose: 'email_verification', state: 'dead', count: 60, retained_tokens: 0, max_attempts: 0, claims: 0 },
+      { purpose: 'password_reset', state: 'dead', count: 60, retained_tokens: 0, max_attempts: 0, claims: 0 },
+    ]);
+    expect((await pool.query(
+      "SELECT count(*)::int AS count FROM account_email_outbox WHERE organization_id = $1 AND state = 'delivered'",
+      [expired.organizationId]
+    )).rows).toEqual([{ count: 250 }]);
+    expect((await pool.query(
+      `SELECT state, attempt_count, claim_token, raw_token
+         FROM account_email_outbox WHERE id = $1`,
+      [validJob.id]
+    )).rows).toEqual([{
+      state: 'pending', attempt_count: 0, claim_token: null, raw_token: validJob.rawToken,
+    }]);
+    expect(providerCalls).toEqual([]);
+  }, 60000);
+
+  test('independent providerless workers respect per-invocation caps while expiring disjoint rows', async () => {
+    const expired = await insertExpiredBacklog(200);
+    const { AccountEmailOutboxWorker } = require('../../src/email/outbox');
+    const observations = [[], []];
+    const workers = observations.map(counts => new AccountEmailOutboxWorker({
+      repository: {
+        async expireAccountEmailJobs(options) {
+          const count = await repository.expireAccountEmailJobs(options);
+          counts.push(count);
+          return count;
+        },
+      },
+      batchSize: 10,
+      housekeepingMaxBatches: 5,
+    }));
+
+    await Promise.all(workers.map(worker => worker.drainOnce()));
+    expect(observations.map(counts => counts.length)).toEqual([5, 5]);
+    expect(observations.flat().reduce((sum, count) => sum + count, 0)).toBe(100);
+    expect((await pool.query(
+      `SELECT state, count(*)::int AS count
+         FROM account_email_outbox WHERE organization_id = $1
+        GROUP BY state ORDER BY state`,
+      [expired.organizationId]
+    )).rows).toEqual([
+      { state: 'dead', count: 100 },
+      { state: 'pending', count: 100 },
+    ]);
+
+    await Promise.all(workers.map(worker => worker.drainOnce()));
+    expect(observations.map(counts => counts.length)).toEqual([10, 10]);
+    expect(observations.flat().reduce((sum, count) => sum + count, 0)).toBe(200);
+    expect((await pool.query(
+      `SELECT state, count(*)::int AS count, count(raw_token)::int AS retained_tokens,
+              max(attempt_count)::int AS max_attempts, count(claim_token)::int AS claims
+         FROM account_email_outbox WHERE organization_id = $1
+        GROUP BY state`,
+      [expired.organizationId]
+    )).rows).toEqual([{
+      state: 'dead', count: 200, retained_tokens: 0, max_attempts: 0, claims: 0,
     }]);
   }, 60000);
 

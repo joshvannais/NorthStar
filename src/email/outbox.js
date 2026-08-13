@@ -4,6 +4,8 @@ const { AccountRepository } = require('../accounts/repository');
 
 const DEFAULT_INTERVAL_MS = 1000;
 const DEFAULT_HOUSEKEEPING_INTERVAL_MS = 60000;
+const DEFAULT_HOUSEKEEPING_CATCH_UP_INTERVAL_MS = 10000;
+const DEFAULT_HOUSEKEEPING_MAX_BATCHES = 10;
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_LEASE_SECONDS = 30;
 
@@ -36,13 +38,21 @@ class AccountEmailOutboxWorker {
     this.housekeepingIntervalMs = Number.isInteger(options.housekeepingIntervalMs) &&
       options.housekeepingIntervalMs >= 10000 && options.housekeepingIntervalMs <= 3600000
       ? options.housekeepingIntervalMs : DEFAULT_HOUSEKEEPING_INTERVAL_MS;
+    this.housekeepingCatchUpIntervalMs = Number.isInteger(options.housekeepingCatchUpIntervalMs) &&
+      options.housekeepingCatchUpIntervalMs >= 1000 && options.housekeepingCatchUpIntervalMs <= 60000
+      ? options.housekeepingCatchUpIntervalMs : DEFAULT_HOUSEKEEPING_CATCH_UP_INTERVAL_MS;
+    this.housekeepingMaxBatches = Number.isInteger(options.housekeepingMaxBatches) &&
+      options.housekeepingMaxBatches >= 1 && options.housekeepingMaxBatches <= 25
+      ? options.housekeepingMaxBatches : DEFAULT_HOUSEKEEPING_MAX_BATCHES;
     this.batchSize = Number.isInteger(options.batchSize) && options.batchSize >= 1 && options.batchSize <= 25
       ? options.batchSize : DEFAULT_BATCH_SIZE;
     this.leaseSeconds = Number.isInteger(options.leaseSeconds) && options.leaseSeconds >= 5 && options.leaseSeconds <= 300
       ? options.leaseSeconds : DEFAULT_LEASE_SECONDS;
     this.timer = null;
+    this.catchUpTimer = null;
     this.running = false;
     this.stopped = false;
+    this.housekeepingSaturated = false;
   }
 
   deliveryMethod(purpose) {
@@ -94,8 +104,18 @@ class AccountEmailOutboxWorker {
   }
 
   async drainOnce() {
+    this.housekeepingSaturated = false;
     if (!this.hasDeliveryCapability()) {
-      await this.repository.expireAccountEmailJobs({ batchSize: this.batchSize });
+      let batches = 0;
+      let expired = 0;
+      do {
+        expired = await this.repository.expireAccountEmailJobs({ batchSize: this.batchSize });
+        if (!Number.isInteger(expired) || expired < 0 || expired > this.batchSize) {
+          throw new Error('Account email housekeeping returned an invalid batch count');
+        }
+        batches += 1;
+      } while (expired === this.batchSize && batches < this.housekeepingMaxBatches);
+      this.housekeepingSaturated = batches === this.housekeepingMaxBatches && expired === this.batchSize;
       return { claimed: 0, delivered: 0, configurationUnavailable: true };
     }
     let claimed = 0;
@@ -113,8 +133,21 @@ class AccountEmailOutboxWorker {
     return { claimed, delivered, configurationUnavailable: false };
   }
 
+  scheduleHousekeepingCatchUp() {
+    if (this.catchUpTimer || this.stopped || this.hasDeliveryCapability()) return false;
+    this.catchUpTimer = setTimeout(async () => {
+      this.catchUpTimer = null;
+      const ran = await this.tick();
+      if (!ran && !this.stopped && !this.hasDeliveryCapability()) {
+        this.scheduleHousekeepingCatchUp();
+      }
+    }, this.housekeepingCatchUpIntervalMs);
+    if (typeof this.catchUpTimer.unref === 'function') this.catchUpTimer.unref();
+    return true;
+  }
+
   async tick() {
-    if (this.running || this.stopped) return;
+    if (this.running || this.stopped) return false;
     this.running = true;
     try {
       await this.drainOnce();
@@ -122,7 +155,9 @@ class AccountEmailOutboxWorker {
       console.warn('[Auth] Account email outbox unavailable:', { event: 'outbox_tick_failed' });
     } finally {
       this.running = false;
+      if (this.housekeepingSaturated) this.scheduleHousekeepingCatchUp();
     }
+    return true;
   }
 
   start() {
@@ -137,14 +172,18 @@ class AccountEmailOutboxWorker {
   stop() {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
+    if (this.catchUpTimer) clearTimeout(this.catchUpTimer);
     this.timer = null;
+    this.catchUpTimer = null;
   }
 }
 
 module.exports = {
   AccountEmailOutboxWorker,
   DEFAULT_BATCH_SIZE,
+  DEFAULT_HOUSEKEEPING_CATCH_UP_INTERVAL_MS,
   DEFAULT_HOUSEKEEPING_INTERVAL_MS,
+  DEFAULT_HOUSEKEEPING_MAX_BATCHES,
   DEFAULT_INTERVAL_MS,
   DEFAULT_LEASE_SECONDS,
   safeCategory,

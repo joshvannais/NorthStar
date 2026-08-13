@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const credentials = require('../auth/credentials');
 const { navigationForRole } = require('../auth/permissions');
+const { emailAddress } = require('../email/transactional');
 const { AccountPersistenceError, AccountRepository } = require('./repository');
 const { projectSubscription } = require('./subscriptionPolicy');
 
@@ -22,6 +23,15 @@ function normalizeEmail(value) {
     throw new AccountError(400, 'invalid_email', 'Enter a valid email address of at most 254 characters');
   }
   return normalized;
+}
+
+function normalizeSignupEmail(value) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  try {
+    return emailAddress(normalized, 'recipient');
+  } catch (_error) {
+    throw new AccountError(400, 'invalid_email', 'Enter a valid email address of at most 254 characters');
+  }
 }
 
 function validatePassword(value) {
@@ -189,7 +199,7 @@ class AccountService {
   }
 
   async signup(input, requestIp, context = {}) {
-    const email = normalizeEmail(input.email);
+    const email = normalizeSignupEmail(input.email);
     const name = boundedText(input.name, 120, 'invalid_signup', 'Enter a valid name of at most 120 characters');
     const businessName = boundedText(
       input.businessName, 160, 'invalid_signup', 'Enter a valid business name of at most 160 characters'

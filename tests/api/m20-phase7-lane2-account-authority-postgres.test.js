@@ -240,4 +240,78 @@ describe('Mission 20 Phase 7 Lane 2 mounted account-authority safety', () => {
     ]);
     expect(jobs.rows.every(row => row.recipient_bytes <= 254 && row.token_bytes === 43)).toBe(true);
   });
+
+  test('signup rejects adapter-undeliverable addresses before commit and preserves canonical normalization', async () => {
+    const invalidAddresses = [
+      `ü-${crypto.randomUUID()}@example.test`,
+      `u\u0308-${crypto.randomUUID()}@example.test`,
+      `comma-${crypto.randomUUID()},alias@example.test`,
+      `semicolon-${crypto.randomUUID()};alias@example.test`,
+      `.leading-${crypto.randomUUID()}@example.test`,
+      `double..dot-${crypto.randomUUID()}@example.test`,
+      `${'a'.repeat(65)}@example.test`,
+      `user@${'b'.repeat(64)}.test`,
+    ];
+    const before = (await pool.query(
+      `SELECT (SELECT count(*)::int FROM organizations) AS organizations,
+              (SELECT count(*)::int FROM users) AS users,
+              (SELECT count(*)::int FROM account_action_tokens) AS tokens,
+              (SELECT count(*)::int FROM account_email_outbox) AS outbox`
+    )).rows[0];
+
+    for (const email of invalidAddresses) {
+      const response = await request(app).post('/api/auth/signup').send({
+        name: 'Undeliverable Owner',
+        businessName: 'Undeliverable Company',
+        email,
+        password: 'Undeliverable-password-123!',
+        phone: '',
+      });
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        code: 'invalid_email',
+        error: 'Enter a valid email address of at most 254 characters',
+      });
+    }
+    const afterInvalid = (await pool.query(
+      `SELECT (SELECT count(*)::int FROM organizations) AS organizations,
+              (SELECT count(*)::int FROM users) AS users,
+              (SELECT count(*)::int FROM account_action_tokens) AS tokens,
+              (SELECT count(*)::int FROM account_email_outbox) AS outbox`
+    )).rows[0];
+    expect(afterInvalid).toEqual(before);
+    expect((await pool.query(
+      "SELECT count(*)::int AS count FROM auth_rate_limits WHERE event_type = 'signup_ip'"
+    )).rows).toEqual([{ count: 0 }]);
+
+    const suffix = crypto.randomUUID().replace(/-/g, '');
+    const submitted = `  First.Last+${suffix}@Example.Test  `;
+    const normalized = `first.last+${suffix}@example.test`;
+    const accepted = await request(app).post('/api/auth/signup').send({
+      name: 'Normalized Owner',
+      businessName: 'Normalized Company',
+      email: submitted,
+      password: 'Normalized-password-123!',
+      phone: '',
+    });
+    expect(accepted.status).toBe(202);
+    expect(publicBody(accepted)).toEqual({
+      success: true,
+      code: 'verification_required',
+      message: 'If signup was accepted, check your email for a verification link.',
+    });
+    expect((await pool.query(
+      `SELECT u.email, u.email_normalized, outbox.recipient, outbox.state, outbox.attempt_count
+         FROM users u
+         JOIN account_email_outbox outbox ON outbox.user_id = u.id
+        WHERE u.email_normalized = $1`,
+      [normalized]
+    )).rows).toEqual([{
+      email: normalized,
+      email_normalized: normalized,
+      recipient: normalized,
+      state: 'pending',
+      attempt_count: 0,
+    }]);
+  });
 });

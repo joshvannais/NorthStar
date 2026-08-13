@@ -421,6 +421,7 @@ module.exports = {
   canonicalOrigin,
   createProductionTransactionalEmail,
   createResendAdapter,
+  emailAddress,
   validatedProductionConfiguration,
   workforceInvitationEnvelope,
 };

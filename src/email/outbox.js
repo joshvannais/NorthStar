@@ -59,6 +59,12 @@ class AccountEmailOutboxWorker {
   async deliver(job) {
     const method = this.deliveryMethod(job.purpose);
     if (!method) return { configurationUnavailable: true };
+    const renewed = await this.repository.renewAccountEmailJobLease({
+      id: job.id,
+      claimToken: job.claim_token,
+      leaseSeconds: Math.max(this.leaseSeconds, DEFAULT_LEASE_SECONDS),
+    });
+    if (!renewed) return { delivered: false, ownershipLost: true };
     try {
       await method(job.recipient, job.raw_token, {
         deliveryId: job.id,
@@ -85,18 +91,22 @@ class AccountEmailOutboxWorker {
 
   async drainOnce() {
     if (!this.hasDeliveryCapability()) {
+      await this.repository.expireAccountEmailJobs({ batchSize: this.batchSize });
       return { claimed: 0, delivered: 0, configurationUnavailable: true };
     }
-    const jobs = await this.repository.claimAccountEmailJobs({
-      batchSize: this.batchSize,
-      leaseSeconds: this.leaseSeconds,
-    });
+    let claimed = 0;
     let delivered = 0;
-    for (const job of jobs) {
+    for (let index = 0; index < this.batchSize; index += 1) {
+      const job = (await this.repository.claimAccountEmailJobs({
+        batchSize: 1,
+        leaseSeconds: this.leaseSeconds,
+      }))[0];
+      if (!job) break;
+      claimed += 1;
       const result = await this.deliver(job);
       if (result.delivered) delivered += 1;
     }
-    return { claimed: jobs.length, delivered, configurationUnavailable: false };
+    return { claimed, delivered, configurationUnavailable: false };
   }
 
   async tick() {
@@ -112,7 +122,7 @@ class AccountEmailOutboxWorker {
   }
 
   start() {
-    if (this.timer || this.stopped || !this.hasDeliveryCapability()) return false;
+    if (this.timer || this.stopped) return false;
     this.timer = setInterval(() => { void this.tick(); }, this.intervalMs);
     if (typeof this.timer.unref === 'function') this.timer.unref();
     void this.tick();

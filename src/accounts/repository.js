@@ -14,6 +14,40 @@ function rows(result) {
   return result && Array.isArray(result.rows) ? result.rows : [];
 }
 
+async function expireAccountEmailJobs(client, batchSize) {
+  const result = await client.query(
+    `WITH active AS MATERIALIZED (
+       SELECT id
+         FROM account_email_outbox
+        WHERE state IN ('pending', 'retry')
+       UNION ALL
+       SELECT id
+         FROM account_email_outbox
+        WHERE state = 'claimed'
+     ),
+     expiring AS (
+       SELECT outbox.id
+         FROM active
+         JOIN account_email_outbox outbox ON outbox.id = active.id
+         JOIN account_action_tokens token ON token.id = outbox.id
+        WHERE outbox.state IN ('pending', 'claimed', 'retry')
+          AND (token.consumed_at IS NOT NULL OR token.revoked_at IS NOT NULL OR token.expires_at <= NOW())
+        ORDER BY token.expires_at, outbox.created_at, outbox.id
+        FOR UPDATE OF outbox SKIP LOCKED
+        LIMIT $1
+     )
+     UPDATE account_email_outbox outbox
+        SET state = 'dead', raw_token = NULL,
+            claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+            dead_at = NOW(), last_error_category = 'token_unavailable', updated_at = NOW()
+       FROM expiring
+      WHERE outbox.id = expiring.id
+     RETURNING outbox.id`,
+    [batchSize]
+  );
+  return result.rowCount;
+}
+
 class AccountRepository {
   constructor(pool, options = {}) {
     this.explicitPool = Boolean(pool);
@@ -887,22 +921,19 @@ class AccountRepository {
     return { attemptCount: state ? state.attempt_count : 1 };
   }
 
+  async expireAccountEmailJobs(options = {}) {
+    const batchSize = Number.isInteger(options.batchSize) && options.batchSize >= 1 && options.batchSize <= 25
+      ? options.batchSize : 10;
+    return this.transaction(client => expireAccountEmailJobs(client, batchSize));
+  }
+
   async claimAccountEmailJobs(options = {}) {
     const batchSize = Number.isInteger(options.batchSize) && options.batchSize >= 1 && options.batchSize <= 25
       ? options.batchSize : 10;
     const leaseSeconds = Number.isInteger(options.leaseSeconds) && options.leaseSeconds >= 5 && options.leaseSeconds <= 300
       ? options.leaseSeconds : 30;
     return this.transaction(async client => {
-      await client.query(
-        `UPDATE account_email_outbox outbox
-            SET state = 'dead', raw_token = NULL,
-                claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
-                dead_at = NOW(), last_error_category = 'token_unavailable', updated_at = NOW()
-           FROM account_action_tokens token
-          WHERE token.id = outbox.id
-            AND outbox.state IN ('pending', 'claimed', 'retry')
-            AND (token.consumed_at IS NOT NULL OR token.revoked_at IS NOT NULL OR token.expires_at <= NOW())`
-      );
+      await expireAccountEmailJobs(client, batchSize);
       await client.query(
         `UPDATE account_email_outbox
             SET state = 'dead', raw_token = NULL,
@@ -950,6 +981,22 @@ class AccountRepository {
       );
       return claimed.rows;
     });
+  }
+
+  async renewAccountEmailJobLease(input) {
+    if (!input || typeof input.id !== 'string' || typeof input.claimToken !== 'string') {
+      throw new TypeError('Account email claim identity is required');
+    }
+    const leaseSeconds = Number.isInteger(input.leaseSeconds) && input.leaseSeconds >= 5 && input.leaseSeconds <= 300
+      ? input.leaseSeconds : 30;
+    const result = await this.requirePool().query(
+      `UPDATE account_email_outbox
+          SET lease_expires_at = NOW() + ($3 * INTERVAL '1 second'), updated_at = NOW()
+        WHERE id = $1 AND state = 'claimed' AND claim_token = $2 AND lease_expires_at > NOW()
+       RETURNING state, attempt_count, lease_expires_at`,
+      [input.id, input.claimToken, leaseSeconds]
+    );
+    return rows(result)[0] || null;
   }
 
   async finalizeAccountEmailJob(input) {

@@ -15,7 +15,7 @@ const { WorkforcePersistenceError, WorkforceRepository } = require('./repository
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STABLE_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const INVITATION_ACCESS_ROLES = new Set(['admin', 'member', 'viewer']);
-const MUTABLE_ACCESS_ROLES = new Set(['admin', 'dispatcher', 'tech', 'member', 'viewer']);
+const MUTABLE_ACCESS_ROLES = new Set(['admin', 'member', 'viewer']);
 const OPERATIONAL_ROLES = new Set([
   'owner', 'administrator', 'dispatcher', 'estimator', 'crew_lead',
   'technician', 'accounting', 'employee', 'other',

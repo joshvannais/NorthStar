@@ -285,8 +285,12 @@
           var access = document.createElement('select');
           access.setAttribute('aria-label', 'Access role for ' + member.name);
           var roles = [['admin','Admin'],['member','Member'],['viewer','Viewer']];
-          if (!roles.some(function (item) { return item[0] === member.accessRole; })) roles.unshift([member.accessRole, member.accessRole + ' (legacy)']);
-          fillSelect(access, roles, member.accessRole);
+          var accessKnown = roles.some(function (item) { return item[0] === member.accessRole; });
+          if (accessKnown) fillSelect(access, roles, member.accessRole);
+          else {
+            access.appendChild(option(null, 'Unavailable', null));
+            access.disabled = true;
+          }
           var accessStatus = document.createElement('select');
           accessStatus.setAttribute('aria-label', 'Membership status for ' + member.name);
           var statuses = member.membershipStatus === 'suspended'
@@ -301,6 +305,7 @@
               membershipStatus: accessStatus.value
             }), 'Workforce access saved. Changed access revokes prior sessions.');
           });
+          saveAccess.disabled = !accessKnown;
           actions.append(access, accessStatus, saveAccess);
         }
         if (actions.childNodes.length) card.appendChild(actions);

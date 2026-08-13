@@ -19,7 +19,8 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
     suiteDatabase = await createSuiteDatabase('m20-part2e-migration');
     pool = new Pool({ connectionString: suiteDatabase.connectionString });
     preWorkforceDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m20-p2e-pre-'));
-    for (const filename of fs.readdirSync(MIGRATIONS).filter(name => /^\d+.*\.sql$/.test(name) && name !== '015_workforce_authority.sql')) {
+    const deferred = new Set(['015_workforce_authority.sql', '020_canonical_workforce_access_roles.sql']);
+    for (const filename of fs.readdirSync(MIGRATIONS).filter(name => /^\d+.*\.sql$/.test(name) && !deferred.has(name))) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(preWorkforceDirectory, filename));
     }
   });
@@ -103,6 +104,32 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
       created_by_user_id: null,
       updated_by_user_id: null,
     })));
+
+    const accessAuthority = await pool.query(
+      `SELECT account.id, account.role AS user_role, membership.role AS access_role
+         FROM users account
+         JOIN organization_memberships membership ON membership.user_id = account.id
+        WHERE account.organization_id = $1
+        ORDER BY account.id`,
+      [organization]
+    );
+    expect(accessAuthority.rows).toEqual([
+      ['62000000-0000-4000-8000-000000000001', 'owner'],
+      ['62000000-0000-4000-8000-000000000002', 'admin'],
+      ['62000000-0000-4000-8000-000000000003', 'member'],
+      ['62000000-0000-4000-8000-000000000004', 'member'],
+      ['62000000-0000-4000-8000-000000000005', 'member'],
+      ['62000000-0000-4000-8000-000000000006', 'viewer'],
+    ].map(([id, role]) => ({ id, user_role: role, access_role: role })));
+
+    await expect(pool.query(
+      `UPDATE organization_memberships SET role = 'dispatcher' WHERE user_id = $1`,
+      [users[4][0]]
+    )).rejects.toMatchObject({ code: '23514', constraint: 'organization_memberships_role_check' });
+    await expect(pool.query(
+      `UPDATE users SET role = 'tech' WHERE id = $1`,
+      [users[4][0]]
+    )).rejects.toMatchObject({ code: '23514', constraint: 'account_users_role_check' });
 
     const pendingInvitation = '63000000-0000-4000-8000-000000000008';
     await pool.query(
@@ -190,9 +217,13 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
               (SELECT count(*)::int FROM workforce_audit_events) AS audit_count
          FROM workforce_profiles`
     )).rows).toEqual(beforeRerun.rows);
-    const migration = db.loadMigrations(MIGRATIONS).find(item => item.file === '015_workforce_authority.sql');
-    expect((await pool.query(
-      `SELECT trim(checksum) AS checksum FROM _migrations WHERE filename = '015_workforce_authority.sql'`
-    )).rows).toEqual([{ checksum: migration.digest }]);
+    for (const filename of ['015_workforce_authority.sql', '020_canonical_workforce_access_roles.sql']) {
+      const migration = db.loadMigrations(MIGRATIONS).find(item => item.file === filename);
+      expect(migration).toBeDefined();
+      expect((await pool.query(
+        `SELECT trim(checksum) AS checksum FROM _migrations WHERE filename = $1`,
+        [filename]
+      )).rows).toEqual([{ checksum: migration.digest }]);
+    }
   }, 60000);
 });

@@ -4,6 +4,13 @@
  * Data isolation enforced via organization_id
  */
 
+const CANONICAL_ACCESS_ROLES = Object.freeze(['owner', 'admin', 'member', 'viewer']);
+const canonicalAccessRoleSet = new Set(CANONICAL_ACCESS_ROLES);
+
+function isCanonicalAccessRole(role) {
+  return typeof role === 'string' && canonicalAccessRoleSet.has(role);
+}
+
 // Permission matrix: role -> [resource:action]
 const PERMISSIONS = {
   owner: {
@@ -132,7 +139,9 @@ async function requireOrgMembership(req, res, next) {
 }
 
 module.exports = {
+  CANONICAL_ACCESS_ROLES,
   hasPermission,
+  isCanonicalAccessRole,
   navigationForRole,
   requirePermission,
   requireOrgMembership,

@@ -62,7 +62,8 @@ function isAnonymousNotFound(req, status) {
  */
 function auditLogger(req, res, next) {
   // Skip logging for non-API routes
-  if (!req.path.toLowerCase().startsWith('/api/')) return next();
+  const lowerPath = req.path.toLowerCase();
+  if (!(lowerPath === '/api' || lowerPath.startsWith('/api/'))) return next();
 
   const start = Date.now();
 

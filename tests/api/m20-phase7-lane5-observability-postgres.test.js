@@ -199,6 +199,57 @@ realPostgres('Mission 20 Phase 7 Lane 5 mounted bounded observability', () => {
     expect(error).not.toHaveBeenCalled();
   }, 120000);
 
+  test('mounted API root and neighboring anonymous 404 controls each aggregate exactly once', async () => {
+    const probes = [
+      '/api',
+      '/API',
+      '/api?lane5=query-normalization',
+      '/api/',
+      '/api/lane5-audit-root-probe',
+      '/api/retell/webhook/',
+    ];
+    const beforeAudit = await pool.query('SELECT count(*)::int AS count FROM audit_logs');
+    const completionBefore = info.mock.calls.filter(call =>
+      call[0] && call[0].event === 'request_completed'
+    ).length;
+    const aggregateCount = async () => {
+      const result = await pool.query(
+        `SELECT coalesce(sum(request_count), 0)::int AS count
+           FROM api_observability_hourly
+          WHERE event_key = $1 AND method_class = 'GET'`,
+        [EVENT_KEY]
+      );
+      return result.rows[0].count;
+    };
+    let expectedCount = await aggregateCount();
+
+    for (const probe of probes) {
+      const result = await request(app).get(probe);
+      expect(result.status).toBe(404);
+      expect(result.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
+      expect(result.headers['x-correlation-id']).toBe(result.headers['x-request-id']);
+      expect(result.body.error).toEqual(expect.objectContaining({
+        code: 'not_found',
+        requestId: result.headers['x-request-id'],
+      }));
+
+      let currentCount = await aggregateCount();
+      for (let attempt = 0; attempt < 20 && currentCount < expectedCount + 1; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 25));
+        currentCount = await aggregateCount();
+      }
+      expect(currentCount).toBe(expectedCount + 1);
+      expectedCount = currentCount;
+    }
+
+    const afterAudit = await pool.query('SELECT count(*)::int AS count FROM audit_logs');
+    expect(afterAudit.rows[0].count).toBe(beforeAudit.rows[0].count);
+    expect(info.mock.calls.filter(call =>
+      call[0] && call[0].event === 'request_completed'
+    )).toHaveLength(completionBefore + probes.length);
+    expect(global.fetch).not.toHaveBeenCalled();
+  }, 120000);
+
   test('UTC ring, method normalization, concurrent increments, saturation, and storage stay bounded', async () => {
     const observations = [];
     for (const method of METHODS) {

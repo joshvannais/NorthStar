@@ -16,9 +16,19 @@ function rows(result) {
 
 async function expireAccountEmailJobs(client, batchSize) {
   const result = await client.query(
-    `WITH expiring AS (
+    `WITH active AS MATERIALIZED (
+       SELECT id
+         FROM account_email_outbox
+        WHERE state IN ('pending', 'retry')
+       UNION ALL
+       SELECT id
+         FROM account_email_outbox
+        WHERE state = 'claimed'
+     ),
+     expiring AS (
        SELECT outbox.id
-         FROM account_email_outbox outbox
+         FROM active
+         JOIN account_email_outbox outbox ON outbox.id = active.id
          JOIN account_action_tokens token ON token.id = outbox.id
         WHERE outbox.state IN ('pending', 'claimed', 'retry')
           AND (token.consumed_at IS NOT NULL OR token.revoked_at IS NOT NULL OR token.expires_at <= NOW())

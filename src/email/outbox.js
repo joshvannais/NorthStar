@@ -3,6 +3,7 @@
 const { AccountRepository } = require('../accounts/repository');
 
 const DEFAULT_INTERVAL_MS = 1000;
+const DEFAULT_HOUSEKEEPING_INTERVAL_MS = 60000;
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_LEASE_SECONDS = 30;
 
@@ -32,6 +33,9 @@ class AccountEmailOutboxWorker {
     this.transactionalEmail = options.transactionalEmail || null;
     this.intervalMs = Number.isInteger(options.intervalMs) && options.intervalMs >= 100 && options.intervalMs <= 60000
       ? options.intervalMs : DEFAULT_INTERVAL_MS;
+    this.housekeepingIntervalMs = Number.isInteger(options.housekeepingIntervalMs) &&
+      options.housekeepingIntervalMs >= 10000 && options.housekeepingIntervalMs <= 3600000
+      ? options.housekeepingIntervalMs : DEFAULT_HOUSEKEEPING_INTERVAL_MS;
     this.batchSize = Number.isInteger(options.batchSize) && options.batchSize >= 1 && options.batchSize <= 25
       ? options.batchSize : DEFAULT_BATCH_SIZE;
     this.leaseSeconds = Number.isInteger(options.leaseSeconds) && options.leaseSeconds >= 5 && options.leaseSeconds <= 300
@@ -123,7 +127,8 @@ class AccountEmailOutboxWorker {
 
   start() {
     if (this.timer || this.stopped) return false;
-    this.timer = setInterval(() => { void this.tick(); }, this.intervalMs);
+    const timerIntervalMs = this.hasDeliveryCapability() ? this.intervalMs : this.housekeepingIntervalMs;
+    this.timer = setInterval(() => { void this.tick(); }, timerIntervalMs);
     if (typeof this.timer.unref === 'function') this.timer.unref();
     void this.tick();
     return true;
@@ -139,6 +144,7 @@ class AccountEmailOutboxWorker {
 module.exports = {
   AccountEmailOutboxWorker,
   DEFAULT_BATCH_SIZE,
+  DEFAULT_HOUSEKEEPING_INTERVAL_MS,
   DEFAULT_INTERVAL_MS,
   DEFAULT_LEASE_SECONDS,
   safeCategory,

@@ -33,6 +33,37 @@ describe('Mission 20 Phase 7 Lane 2 durable account email outbox', () => {
   let repository;
   let service;
 
+  async function captureExpirationQuery(batchSize) {
+    let captured = null;
+    const capturingPool = {
+      async connect() {
+        const client = await pool.connect();
+        return {
+          async query(text, parameters) {
+            if (typeof text === 'string' && text.includes('token_unavailable') &&
+                text.includes('UPDATE account_email_outbox outbox')) {
+              captured = { text, parameters };
+              return { rows: [], rowCount: 0 };
+            }
+            return client.query(text, parameters);
+          },
+          release() { client.release(); },
+        };
+      },
+    };
+    const { AccountRepository } = require('../../src/accounts/repository');
+    await new AccountRepository(capturingPool).expireAccountEmailJobs({ batchSize });
+    expect(captured).not.toBeNull();
+    return captured;
+  }
+
+  function flattenPlan(node, output = []) {
+    if (!node) return output;
+    output.push(node);
+    for (const child of node.Plans || []) flattenPlan(child, output);
+    return output;
+  }
+
   async function insertJob(purpose = 'email_verification') {
     const organizationId = crypto.randomUUID();
     const userId = crypto.randomUUID();
@@ -97,7 +128,7 @@ describe('Mission 20 Phase 7 Lane 2 durable account email outbox', () => {
   beforeEach(async () => {
     await pool.query('DELETE FROM account_email_outbox');
     await pool.query('DELETE FROM account_action_tokens');
-  });
+  }, 60000);
 
   test('provider absence leaves durable work unclaimed and unattempted', async () => {
     const job = await insertJob();
@@ -178,6 +209,177 @@ describe('Mission 20 Phase 7 Lane 2 durable account email outbox', () => {
       state: 'pending', attempt_count: 0, raw_token: validJob.rawToken,
     }]);
   });
+
+  test('providerless start cleans once immediately without reusing the one-second delivery cadence', async () => {
+    const expiredJobs = [await insertJob(), await insertJob('password_reset')];
+    const validJob = await insertJob('password_reset');
+    await pool.query(
+      `UPDATE account_action_tokens
+          SET created_at = NOW() - INTERVAL '2 hours',
+              expires_at = NOW() - INTERVAL '1 hour'
+        WHERE id = ANY($1::uuid[])`,
+      [expiredJobs.map(job => job.id)]
+    );
+    const cleanupCalls = [];
+    const providerCalls = [];
+    const countedRepository = {
+      async expireAccountEmailJobs(options) {
+        cleanupCalls.push(options);
+        return repository.expireAccountEmailJobs(options);
+      },
+    };
+    const {
+      AccountEmailOutboxWorker,
+      DEFAULT_HOUSEKEEPING_INTERVAL_MS,
+    } = require('../../src/email/outbox');
+    const worker = new AccountEmailOutboxWorker({
+      repository: countedRepository,
+      transactionalEmail: {
+        async verification() { providerCalls.push('verification'); },
+      },
+    });
+    expect(worker.hasDeliveryCapability()).toBe(false);
+    expect(worker.start()).toBe(true);
+    while (worker.running) await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise(resolve => setTimeout(resolve, 1300));
+    worker.stop();
+    while (worker.running) await new Promise(resolve => setTimeout(resolve, 5));
+
+    expect(cleanupCalls).toEqual([{ batchSize: 10 }]);
+    expect(DEFAULT_HOUSEKEEPING_INTERVAL_MS).toBe(60000);
+    expect(worker.housekeepingIntervalMs).toBe(DEFAULT_HOUSEKEEPING_INTERVAL_MS);
+    expect(providerCalls).toEqual([]);
+    expect((await pool.query(
+      `SELECT purpose, state, attempt_count, raw_token
+         FROM account_email_outbox
+        WHERE id = ANY($1::uuid[])
+        ORDER BY purpose`,
+      [expiredJobs.map(job => job.id)]
+    )).rows).toEqual([
+      { purpose: 'email_verification', state: 'dead', attempt_count: 0, raw_token: null },
+      { purpose: 'password_reset', state: 'dead', attempt_count: 0, raw_token: null },
+    ]);
+    expect((await pool.query(
+      `SELECT state, attempt_count, claim_token, raw_token
+         FROM account_email_outbox WHERE id = $1`,
+      [validJob.id]
+    )).rows).toEqual([{
+      state: 'pending', attempt_count: 0, claim_token: null, raw_token: validJob.rawToken,
+    }]);
+  }, 60000);
+
+  test('expiration cleanup excludes realistic terminal history through existing partial indexes', async () => {
+    const validJob = await insertJob('password_reset');
+    const expiredJobs = [await insertJob(), await insertJob('password_reset')];
+    await pool.query(
+      `UPDATE account_action_tokens
+          SET created_at = NOW() - INTERVAL '2 hours',
+              expires_at = NOW() - INTERVAL '1 hour'
+        WHERE id = ANY($1::uuid[])`,
+      [expiredJobs.map(job => job.id)]
+    );
+    await pool.query(
+      `INSERT INTO account_action_tokens
+         (id, user_id, organization_id, purpose, token_hash,
+          created_at, expires_at, consumed_at)
+       SELECT md5('lane2-terminal-token-' || item)::uuid, $1, $2,
+              'password_reset',
+              md5('lane2-terminal-token-a-' || item) || md5('lane2-terminal-token-b-' || item),
+              NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day', NOW() - INTERVAL '12 hours'
+         FROM generate_series(1, 50000) item`,
+      [validJob.userId, validJob.organizationId]
+    );
+    await pool.query(
+      `INSERT INTO account_email_outbox
+         (id, user_id, organization_id, purpose, recipient, raw_token,
+          state, attempt_count, delivered_at, created_at, updated_at)
+       SELECT id, user_id, organization_id, purpose, 'terminal-history@example.test', NULL,
+              'delivered', 1, NOW() - INTERVAL '12 hours', created_at, NOW() - INTERVAL '12 hours'
+         FROM account_action_tokens
+        WHERE user_id = $1 AND consumed_at IS NOT NULL`,
+      [validJob.userId]
+    );
+    await pool.query('ANALYZE account_action_tokens');
+    await pool.query('ANALYZE account_email_outbox');
+
+    const captured = await captureExpirationQuery(10);
+    const explained = await pool.query(
+      `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${captured.text}`,
+      captured.parameters
+    );
+    const report = explained.rows[0]['QUERY PLAN'][0];
+    const nodes = flattenPlan(report.Plan);
+    expect(nodes.some(node => node['Node Type'] === 'Seq Scan' &&
+      node['Relation Name'] === 'account_email_outbox')).toBe(false);
+    const indexes = new Set(nodes.map(node => node['Index Name']).filter(Boolean));
+    expect(indexes.has('account_email_outbox_available')).toBe(true);
+    expect(indexes.has('account_email_outbox_expired_claims')).toBe(true);
+    const activeIndexRows = nodes
+      .filter(node => ['account_email_outbox_available', 'account_email_outbox_expired_claims']
+        .includes(node['Index Name']))
+      .reduce((total, node) => total + Number(node['Actual Rows'] || 0), 0);
+    expect(activeIndexRows).toBeLessThan(20);
+    expect((await pool.query(
+      "SELECT count(*)::int AS count FROM account_email_outbox WHERE state = 'delivered'"
+    )).rows).toEqual([{ count: 50000 }]);
+    expect((await pool.query(
+      `SELECT purpose, state, raw_token
+         FROM account_email_outbox
+        WHERE id = ANY($1::uuid[])
+        ORDER BY purpose`,
+      [expiredJobs.map(job => job.id)]
+    )).rows).toEqual([
+      { purpose: 'email_verification', state: 'dead', raw_token: null },
+      { purpose: 'password_reset', state: 'dead', raw_token: null },
+    ]);
+    expect((await pool.query(
+      `SELECT state, attempt_count, claim_token, raw_token
+         FROM account_email_outbox WHERE id = $1`,
+      [validJob.id]
+    )).rows).toEqual([{
+      state: 'pending', attempt_count: 0, claim_token: null, raw_token: validJob.rawToken,
+    }]);
+  }, 60000);
+
+  test('configured start retains the delivery polling interval and intercepted delivery', async () => {
+    const job = await insertJob();
+    let claimCalls = 0;
+    const providerCalls = [];
+    const countedRepository = new Proxy(repository, {
+      get(target, property) {
+        const value = target[property];
+        if (property === 'claimAccountEmailJobs') {
+          return async options => {
+            claimCalls += 1;
+            return value.call(target, options);
+          };
+        }
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const { AccountEmailOutboxWorker } = require('../../src/email/outbox');
+    const worker = new AccountEmailOutboxWorker({
+      repository: countedRepository,
+      transactionalEmail: {
+        async verification(recipient) { providerCalls.push(recipient); },
+        async passwordReset() { throw new Error('unexpected password-reset delivery'); },
+      },
+      batchSize: 1,
+      intervalMs: 100,
+    });
+    expect(worker.start()).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 350));
+    worker.stop();
+    while (worker.running) await new Promise(resolve => setTimeout(resolve, 5));
+
+    expect(worker.intervalMs).toBe(100);
+    expect(claimCalls).toBeGreaterThanOrEqual(3);
+    expect(providerCalls).toEqual([job.recipient]);
+    expect((await pool.query(
+      'SELECT state, attempt_count, raw_token FROM account_email_outbox WHERE id = $1',
+      [job.id]
+    )).rows).toEqual([{ state: 'delivered', attempt_count: 1, raw_token: null }]);
+  }, 60000);
 
   test('two independent processes claim each job once with disjoint lease ownership', async () => {
     const jobs = await Promise.all(Array.from({ length: 8 }, () => insertJob()));

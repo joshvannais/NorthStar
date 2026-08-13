@@ -192,28 +192,61 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     for (const spy of Object.values(providerSpies)) expect(spy).not.toHaveBeenCalled();
   }
 
-  test('production mount rejects signup despite every environment boolean and performs zero writes/cookies', async () => {
+  test('production mount accepts signup into PostgreSQL without provider calls or cookies', async () => {
+    clearProviderSpies();
     const before = await pool.query('SELECT count(*)::int AS count FROM organizations');
     const productionApp = require('../../src/server').app;
-    const querySpy = jest.spyOn(pool, 'query');
     const response = await request(productionApp).post('/api/auth/signup').send({
       name: 'No Write', businessName: 'No Write', phone: '8605550102',
       email: 'production-disabled@example.test', password: 'durable gate password',
     });
-    expect(response.status).toBe(503);
-    expect(response.body.code).toBe('signup_disabled');
+    expect(response.status).toBe(202);
+    expect(response.body.code).toBe('verification_required');
     expect(response.headers['set-cookie']).toBeUndefined();
-    await new Promise(resolve => setImmediate(resolve));
-    const writes = querySpy.mock.calls.filter(([statement]) => (
-      /^(?:\s|\/\*[\s\S]*?\*\/)*(?:INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP|TRUNCATE)\b/i.test(String(statement))
-    ));
-    querySpy.mockRestore();
-    expect(writes).toEqual([]);
+    expectNoProviderCalls();
     const after = await pool.query('SELECT count(*)::int AS count FROM organizations');
-    expect(after.rows[0].count).toBe(before.rows[0].count);
+    expect(after.rows[0].count).toBe(before.rows[0].count + 1);
+    expect((await pool.query(
+      `SELECT outbox.state, outbox.attempt_count, outbox.raw_token IS NOT NULL AS token_present
+         FROM account_email_outbox outbox
+         JOIN users account ON account.id = outbox.user_id
+        WHERE account.email_normalized = 'production-disabled@example.test'`
+    )).rows).toEqual([{ state: 'pending', attempt_count: 0, token_present: true }]);
+    const proxyTrust = productionApp.get('trust proxy fn');
+    expect(proxyTrust('127.0.0.1', 0)).toBe(true);
+    expect(proxyTrust('10.23.45.67', 0)).toBe(true);
+    expect(proxyTrust('203.0.113.250', 0)).toBe(false);
+    const wrong = await request(productionApp).post('/api/auth/login')
+      .set('X-Forwarded-For', '198.51.100.210')
+      .send({ email: 'production-disabled@example.test', password: 'wrong password' });
+    expect(wrong.status).toBe(401);
+    const { rateLimitKey } = require('../../src/auth/credentials');
+    expect((await pool.query(
+      `SELECT event_type, key_hash, attempt_count FROM auth_rate_limits
+        WHERE event_type = 'login_source_email'`
+    )).rows).toEqual([{
+      event_type: 'login_source_email',
+      key_hash: rateLimitKey(
+        'login_source_email',
+        '198.51.100.210\0production-disabled@example.test'
+      ),
+      attempt_count: 1,
+    }]);
+    expect((await request(productionApp).post('/api/auth/login')
+      .set('X-Forwarded-For', '198.51.100.211')
+      .send({
+        email: 'production-disabled@example.test', password: 'durable gate password',
+      })).status).toBe(200);
+    await pool.query(
+      `UPDATE account_action_tokens token
+          SET consumed_at = NOW()
+         FROM users account
+        WHERE account.id = token.user_id
+          AND account.email_normalized = 'production-disabled@example.test'`,
+    );
   });
 
-  test('fresh production construction requires valid Resend authority and never falls back to SMTP', async () => {
+  test('fresh production construction decouples signup from Resend and never falls back to SMTP', async () => {
     const valid = {
       PUBLIC_ORIGIN: 'https://www.northstar-os.ai', RESEND_API_KEY: 're_local_capture_only',
       TRANSACTIONAL_EMAIL_FROM: 'notifications@northstar-os.ai',
@@ -228,7 +261,8 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       ['key-tab', { RESEND_API_KEY: 're_local\tcapture' }],
       ['key-cr', { RESEND_API_KEY: 're_local\rcapture' }],
       ['key-lf', { RESEND_API_KEY: 're_local\ncapture' }],
-      ['key-nul', { RESEND_API_KEY: `re_local${String.fromCharCode(0)}capture` }],
+      // Direct NUL rejection is covered before process.env in resend-transactional.test.js;
+      // Windows truncates environment assignments at NUL and cannot preserve this byte boundary.
       ['key-del', { RESEND_API_KEY: `re_local${String.fromCharCode(127)}capture` }],
       ['key-oversized', { RESEND_API_KEY: 'a'.repeat(4097) }],
       ['key-non-ascii', { RESEND_API_KEY: 'opaque-é' }],
@@ -249,11 +283,26 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       const result = await runProductionCapabilityWorker(
         allocation.connectionString, { ...valid, ...mutation }, `invalid-${label}`
       );
-      expect(result.status).toBe(503);
+      expect(result.status).toBe(202);
       expect(result.cookies).toEqual([]);
-      expect(result.after).toEqual(result.before);
+      for (const relation of Object.keys(result.before)) {
+        expect(result.after[relation] - result.before[relation]).toBe(1);
+      }
       expect(result.transportConstructions).toBe(0);
-      expect(result.providerRequests).toBe(0);
+      if (result.providerRequests !== 0) {
+        throw new Error(`Invalid configuration ${label} unexpectedly delivered: ${JSON.stringify({
+          configurationAvailable: result.configurationAvailable,
+          publicProviderRequests: result.publicProviderRequests,
+          drain: result.drain,
+          outbox: result.outbox,
+        })}`);
+      }
+      expect(result.publicProviderRequests).toBe(0);
+      expect(result.drain).toEqual({ claimed: 0, delivered: 0, configurationUnavailable: true });
+      expect(result.outbox).toEqual({ state: 'pending', attempt_count: 0, token_erased: false });
+      expect(result.authority).toEqual({
+        state: 'pending_verification', trialStarted: false, trialEnds: false, sessionCount: 0,
+      });
       expect(result.dnsCalls + result.netCalls + result.tlsCalls).toBe(0);
       const rejectedValue = String(Object.values(mutation)[0]);
       if (rejectedValue.length >= 8) expect(result.disclosure).not.toContain(rejectedValue);
@@ -264,9 +313,14 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       { ...valid, RESEND_API_KEY: undefined },
       'smtp-only-disabled'
     );
-    expect(smtpOnly.status).toBe(503);
-    expect(smtpOnly.after).toEqual(smtpOnly.before);
+    expect(smtpOnly.status).toBe(202);
+    for (const relation of Object.keys(smtpOnly.before)) {
+      expect(smtpOnly.after[relation] - smtpOnly.before[relation]).toBe(1);
+    }
     expect(smtpOnly.providerRequests).toBe(0);
+    expect(smtpOnly.publicProviderRequests).toBe(0);
+    expect(smtpOnly.drain).toEqual({ claimed: 0, delivered: 0, configurationUnavailable: true });
+    expect(smtpOnly.outbox).toEqual({ state: 'pending', attempt_count: 0, token_erased: false });
     expect(smtpOnly.transportConstructions).toBe(0);
 
     const positive = await runProductionCapabilityWorker(
@@ -275,7 +329,10 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(positive.status).toBe(202);
     expect(positive.cookies).toEqual([]);
     expect(positive.transportConstructions).toBe(0);
+    expect(positive.publicProviderRequests).toBe(0);
     expect(positive.providerRequests).toBe(1);
+    expect(positive.drain).toEqual({ claimed: 1, delivered: 1, configurationUnavailable: false });
+    expect(positive.outbox).toEqual({ state: 'delivered', attempt_count: 1, token_erased: true });
     expect(positive.dnsCalls + positive.netCalls + positive.tlsCalls).toBe(0);
     expect(positive.requestEvidence).toEqual([{
       url: 'https://api.resend.com/emails', method: 'POST', redirect: 'manual',
@@ -297,17 +354,21 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     const rejected = await runProductionCapabilityWorker(
       allocation.connectionString, valid, 'rejected-local-capture', true, 422
     );
-    expect(rejected.status).toBe(503);
+    expect(rejected.status).toBe(202);
     expect(rejected.cookies).toEqual([]);
     expect(rejected.transportConstructions).toBe(0);
+    expect(rejected.publicProviderRequests).toBe(0);
     expect(rejected.providerRequests).toBe(1);
+    expect(rejected.drain).toEqual({ claimed: 1, delivered: 0, configurationUnavailable: false });
+    expect(rejected.outbox).toEqual({ state: 'retry', attempt_count: 1, token_erased: false });
     for (const relation of Object.keys(rejected.before)) {
       expect(rejected.after[relation] - rejected.before[relation]).toBe(1);
     }
     expect(rejected.authority).toEqual({
       state: 'pending_verification', trialStarted: false, trialEnds: false, sessionCount: 0,
     });
-    expect(rejected.disclosure).toContain('verification_delivery_failed');
+    expect(rejected.disclosure).toContain('verification_required');
+    expect(rejected.disclosure).not.toContain('verification_delivery_failed');
     expect(rejected.disclosure).not.toContain(valid.RESEND_API_KEY);
   }, 180000);
 

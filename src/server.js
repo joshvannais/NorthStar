@@ -24,6 +24,7 @@ const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const { createAuthRouter } = require('./routes/auth');
 const { AccountService } = require('./accounts/service');
 const { createProductionTransactionalEmail } = require('./email/transactional');
+const { AccountEmailOutboxWorker } = require('./email/outbox');
 const accountRoutes = require('./routes/account');
 const { createMapPreferencesRouter } = require('./routes/mapPreferences');
 const { WorkforceService } = require('./workforce/service');
@@ -40,6 +41,11 @@ const { correlationId, auditLogger } = require('./middleware/auditLog');
 
 const app = express();
 const PORT = config.port || 3000;
+
+// Trust only loopback/link-local/private proxy peers so req.ip resolves the
+// nearest untrusted client address without accepting spoofed forwarding from a
+// direct public peer.
+app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal']);
 
 // Middleware
 app.use(cors(corsOptions));
@@ -108,9 +114,8 @@ Object.entries(pages).forEach(([route, file]) => {
 });
 
 // --- PostgreSQL Account and Session Authority ---
-// Signup capability exists only when the source-owned production constructor
-// validates complete Resend delivery configuration and the canonical HTTPS origin.
-// No boolean or request field can enable this boundary.
+// Public signup and recovery commit their bounded email work to PostgreSQL.
+// Provider configuration controls only the independent outbox worker.
 const productionTransactionalEmail = createProductionTransactionalEmail(process.env);
 const productionAccountService = new AccountService(undefined, {
   transactionalEmail: productionTransactionalEmail,
@@ -118,13 +123,13 @@ const productionAccountService = new AccountService(undefined, {
 const productionWorkforceService = new WorkforceService(undefined, {
   transactionalEmail: productionTransactionalEmail,
 });
+const productionEmailOutboxWorker = new AccountEmailOutboxWorker({
+  transactionalEmail: productionTransactionalEmail,
+});
 app.locals.workforceService = productionWorkforceService;
 app.locals.assetCatalogueService = new AssetCatalogueService();
 app.use('/api/auth', createAuthRouter({
   service: productionAccountService,
-  signup: productionTransactionalEmail
-    ? productionAccountService.signup.bind(productionAccountService)
-    : null,
 }));
 app.use('/api/account/map-preferences', createMapPreferencesRouter());
 app.use('/api/account', accountRoutes);
@@ -184,10 +189,10 @@ async function start(options) {
   if (!databaseReady) {
     throw new Error('PostgreSQL startup authority is unavailable');
   }
-
   voiceWebhook.start();
   await cache.init();
   await audit.ensureTable();
+  productionEmailOutboxWorker.start();
 
 
   const onListening = () => {
@@ -213,7 +218,7 @@ async function start(options) {
     console.log(`  ${baseUrl}/admin           → Admin panel`);
     console.log('');
     console.log('📍 Auth API:');
-    console.log(`  POST ${baseUrl}/api/auth/signup          → Requires validated transactional email delivery`);
+    console.log(`  POST ${baseUrl}/api/auth/signup          → Queues durable verification delivery`);
     console.log(`  POST ${baseUrl}/api/auth/login           → Sign in`);
     console.log(`  POST ${baseUrl}/api/auth/refresh         → Refresh token`);
     console.log(`  POST ${baseUrl}/api/auth/logout          → Revoke session`);
@@ -225,6 +230,7 @@ async function start(options) {
     : app.listen(PORT, onListening);
 
   server.once('close', () => {
+    productionEmailOutboxWorker.stop();
     voiceWebhook.shutdown();
   });
 

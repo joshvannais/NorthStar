@@ -106,6 +106,18 @@ class AccountRepository {
           input.verificationTokenHash,
         ]
       );
+      await client.query(
+        `INSERT INTO account_email_outbox (
+           id, user_id, organization_id, purpose, recipient, raw_token
+         ) VALUES ($1, $2, $3, 'email_verification', $4, $5)`,
+        [
+          input.verificationTokenId,
+          input.userId,
+          input.organizationId,
+          input.email,
+          input.verificationRawToken,
+        ]
+      );
       return {
         userId: input.userId,
         organizationId: input.organizationId,
@@ -289,6 +301,14 @@ class AccountRepository {
             WHERE id = $1`,
           [prior.rows[0].id, input.tokenId]
         );
+        await client.query(
+          `UPDATE account_email_outbox
+              SET state = 'dead', raw_token = NULL,
+                  claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+                  dead_at = NOW(), last_error_category = 'token_superseded', updated_at = NOW()
+            WHERE id = $1 AND state IN ('pending', 'claimed', 'retry')`,
+          [prior.rows[0].id]
+        );
       }
       await client.query(
         `INSERT INTO account_action_tokens (
@@ -355,6 +375,15 @@ class AccountRepository {
           WHERE id = $1 AND consumed_at IS NULL AND revoked_at IS NULL`,
         [authority.token_id]
       );
+      await client.query(
+        `UPDATE account_email_outbox
+            SET state = 'dead', raw_token = NULL,
+                claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+                dead_at = clock_timestamp(), last_error_category = 'token_consumed',
+                updated_at = clock_timestamp()
+          WHERE id = $1 AND state IN ('pending', 'claimed', 'retry')`,
+        [authority.token_id]
+      );
       return {
         userId: authority.user_id,
         organizationId: authority.organization_id,
@@ -404,12 +433,26 @@ class AccountRepository {
             WHERE id = $1`,
           [prior.rows[0].id, input.tokenId]
         );
+        await client.query(
+          `UPDATE account_email_outbox
+              SET state = 'dead', raw_token = NULL,
+                  claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+                  dead_at = NOW(), last_error_category = 'token_superseded', updated_at = NOW()
+            WHERE id = $1 AND state IN ('pending', 'claimed', 'retry')`,
+          [prior.rows[0].id]
+        );
       }
       await client.query(
         `INSERT INTO account_action_tokens (
            id, user_id, organization_id, purpose, token_hash, expires_at
          ) VALUES ($1, $2, $3, 'password_reset', $4, NOW() + INTERVAL '30 minutes')`,
         [input.tokenId, input.userId, input.organizationId, input.tokenHash]
+      );
+      await client.query(
+        `INSERT INTO account_email_outbox (
+           id, user_id, organization_id, purpose, recipient, raw_token
+         ) VALUES ($1, $2, $3, 'password_reset', $4, $5)`,
+        [input.tokenId, input.userId, input.organizationId, authority.email, input.rawToken]
       );
       return authority;
     });
@@ -452,6 +495,15 @@ class AccountRepository {
       await client.query(
         `UPDATE account_action_tokens SET consumed_at = clock_timestamp()
           WHERE id = $1 AND consumed_at IS NULL AND revoked_at IS NULL`,
+        [token.token_id]
+      );
+      await client.query(
+        `UPDATE account_email_outbox
+            SET state = 'dead', raw_token = NULL,
+                claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+                dead_at = clock_timestamp(), last_error_category = 'token_consumed',
+                updated_at = clock_timestamp()
+          WHERE id = $1 AND state IN ('pending', 'claimed', 'retry')`,
         [token.token_id]
       );
       const remaining = await client.query(
@@ -810,6 +862,150 @@ class AccountRepository {
     );
     const state = rows(result)[0];
     return { allowed: Boolean(state && state.allowed), blockedUntil: state && state.blocked_until };
+  }
+
+  async recordLoginSourceFailure(keyHash, windowSeconds = 900) {
+    const result = await this.requirePool().query(
+      `INSERT INTO auth_rate_limits (
+         event_type, key_hash, window_started_at, attempt_count, blocked_until
+       ) VALUES ('login_source_email', $1, NOW(), 1, NULL)
+       ON CONFLICT (event_type, key_hash) DO UPDATE SET
+         window_started_at = CASE
+           WHEN auth_rate_limits.window_started_at <= NOW() - ($2 * INTERVAL '1 second') THEN NOW()
+           ELSE auth_rate_limits.window_started_at
+         END,
+         attempt_count = CASE
+           WHEN auth_rate_limits.window_started_at <= NOW() - ($2 * INTERVAL '1 second') THEN 1
+           ELSE auth_rate_limits.attempt_count + 1
+         END,
+         blocked_until = NULL,
+         updated_at = NOW()
+       RETURNING attempt_count`,
+      [keyHash, windowSeconds]
+    );
+    const state = rows(result)[0];
+    return { attemptCount: state ? state.attempt_count : 1 };
+  }
+
+  async claimAccountEmailJobs(options = {}) {
+    const batchSize = Number.isInteger(options.batchSize) && options.batchSize >= 1 && options.batchSize <= 25
+      ? options.batchSize : 10;
+    const leaseSeconds = Number.isInteger(options.leaseSeconds) && options.leaseSeconds >= 5 && options.leaseSeconds <= 300
+      ? options.leaseSeconds : 30;
+    return this.transaction(async client => {
+      await client.query(
+        `UPDATE account_email_outbox outbox
+            SET state = 'dead', raw_token = NULL,
+                claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+                dead_at = NOW(), last_error_category = 'token_unavailable', updated_at = NOW()
+           FROM account_action_tokens token
+          WHERE token.id = outbox.id
+            AND outbox.state IN ('pending', 'claimed', 'retry')
+            AND (token.consumed_at IS NOT NULL OR token.revoked_at IS NOT NULL OR token.expires_at <= NOW())`
+      );
+      await client.query(
+        `UPDATE account_email_outbox
+            SET state = 'dead', raw_token = NULL,
+                claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+                dead_at = NOW(), last_error_category = 'attempts_exhausted', updated_at = NOW()
+          WHERE state = 'claimed' AND lease_expires_at <= NOW() AND attempt_count >= 5`
+      );
+      await client.query(
+        `UPDATE account_email_outbox
+            SET state = 'retry', claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+                available_at = NOW() + (CASE
+                  WHEN attempt_count <= 1 THEN 15
+                  WHEN attempt_count = 2 THEN 60
+                  WHEN attempt_count = 3 THEN 300
+                  ELSE 900
+                END * INTERVAL '1 second'),
+                last_error_category = 'claim_expired', updated_at = NOW()
+          WHERE state = 'claimed' AND lease_expires_at <= NOW() AND attempt_count < 5`
+      );
+      const claimed = await client.query(
+        `WITH candidates AS (
+           SELECT outbox.id
+             FROM account_email_outbox outbox
+             JOIN account_action_tokens token ON token.id = outbox.id
+            WHERE outbox.state IN ('pending', 'retry')
+              AND outbox.available_at <= NOW()
+              AND outbox.attempt_count < 5
+              AND token.consumed_at IS NULL AND token.revoked_at IS NULL
+              AND token.expires_at > NOW()
+            ORDER BY outbox.available_at, outbox.created_at, outbox.id
+            FOR UPDATE OF outbox SKIP LOCKED
+            LIMIT $1
+         )
+         UPDATE account_email_outbox outbox
+            SET state = 'claimed', attempt_count = outbox.attempt_count + 1,
+                claimed_at = NOW(), claim_token = gen_random_uuid(),
+                lease_expires_at = NOW() + ($2 * INTERVAL '1 second'),
+                last_error_category = NULL, updated_at = NOW()
+           FROM candidates
+          WHERE outbox.id = candidates.id
+         RETURNING outbox.id, outbox.user_id, outbox.organization_id, outbox.purpose,
+                   outbox.recipient, outbox.raw_token, outbox.attempt_count,
+                   outbox.claim_token, outbox.lease_expires_at`,
+        [batchSize, leaseSeconds]
+      );
+      return claimed.rows;
+    });
+  }
+
+  async finalizeAccountEmailJob(input) {
+    if (!input || typeof input.id !== 'string' || typeof input.claimToken !== 'string') {
+      throw new TypeError('Account email claim identity is required');
+    }
+    if (input.delivered === true) {
+      const result = await this.requirePool().query(
+        `UPDATE account_email_outbox
+            SET state = 'delivered', raw_token = NULL,
+                claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+                delivered_at = NOW(), last_error_category = NULL, updated_at = NOW()
+          WHERE id = $1 AND state = 'claimed' AND claim_token = $2
+          RETURNING state, attempt_count`,
+        [input.id, input.claimToken]
+      );
+      return rows(result)[0] || null;
+    }
+    const category = typeof input.errorCategory === 'string' && /^[a-z0-9_]{1,64}$/.test(input.errorCategory)
+      ? input.errorCategory : 'delivery_failed';
+    const result = await this.requirePool().query(
+      `UPDATE account_email_outbox outbox
+          SET state = CASE
+                WHEN outbox.attempt_count >= 5 OR token.consumed_at IS NOT NULL
+                  OR token.revoked_at IS NOT NULL OR token.expires_at <= NOW() THEN 'dead'
+                ELSE 'retry'
+              END,
+              raw_token = CASE
+                WHEN outbox.attempt_count >= 5 OR token.consumed_at IS NOT NULL
+                  OR token.revoked_at IS NOT NULL OR token.expires_at <= NOW() THEN NULL
+                ELSE outbox.raw_token
+              END,
+              available_at = CASE
+                WHEN outbox.attempt_count >= 5 OR token.consumed_at IS NOT NULL
+                  OR token.revoked_at IS NOT NULL OR token.expires_at <= NOW() THEN outbox.available_at
+                ELSE NOW() + (CASE
+                  WHEN outbox.attempt_count <= 1 THEN 15
+                  WHEN outbox.attempt_count = 2 THEN 60
+                  WHEN outbox.attempt_count = 3 THEN 300
+                  ELSE 900
+                END * INTERVAL '1 second')
+              END,
+              claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL,
+              dead_at = CASE
+                WHEN outbox.attempt_count >= 5 OR token.consumed_at IS NOT NULL
+                  OR token.revoked_at IS NOT NULL OR token.expires_at <= NOW() THEN NOW()
+                ELSE NULL
+              END,
+              last_error_category = $3, updated_at = NOW()
+         FROM account_action_tokens token
+        WHERE outbox.id = $1 AND outbox.state = 'claimed' AND outbox.claim_token = $2
+          AND token.id = outbox.id
+        RETURNING outbox.state, outbox.attempt_count, outbox.available_at`,
+      [input.id, input.claimToken, category]
+    );
+    return rows(result)[0] || null;
   }
 
   async clearRateLimit(eventType, keyHash) {

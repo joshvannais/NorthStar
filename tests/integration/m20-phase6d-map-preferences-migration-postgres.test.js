@@ -30,7 +30,7 @@ realPostgres('Mission 20 Phase 6D canonical map preference migration', () => {
     suiteDatabase = await createSuiteDatabase('m20-phase6d-map-migration');
     pool = new Pool({ connectionString: suiteDatabase.connectionString });
     preMapDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m20-phase6d-pre-'));
-    for (const filename of migrationFiles(MIGRATIONS).filter(name => name !== MAP_MIGRATION)) {
+    for (const filename of migrationFiles(MIGRATIONS).filter(name => name < MAP_MIGRATION)) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(preMapDirectory, filename));
     }
   });
@@ -67,6 +67,7 @@ realPostgres('Mission 20 Phase 6D canonical map preference migration', () => {
       '016_tenant_asset_catalogue.sql',
       '017_retell_webhook_replay_authority.sql',
       MAP_MIGRATION,
+      '019_account_email_outbox.sql',
     ]);
     for (const filename of corpus) {
       const bytes = fs.readFileSync(path.join(MIGRATIONS, filename));

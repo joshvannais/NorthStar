@@ -15,7 +15,7 @@ const CONFIGURATION_KEYS = [
 const RELATIONS = [
   'organizations', 'users', 'organization_memberships', 'notification_preferences',
   'organization_account_preferences', 'organization_onboarding', 'subscriptions',
-  'account_action_tokens',
+  'account_action_tokens', 'account_email_outbox',
 ];
 
 async function counts(pool) {
@@ -28,7 +28,6 @@ async function counts(pool) {
 
 process.once('message', async message => {
   let db;
-  let rawPool;
   let realFetch;
   const originals = Object.fromEntries(CONFIGURATION_KEYS.map(key => [key, process.env[key]]));
   try {
@@ -38,16 +37,9 @@ process.once('message', async message => {
     }
     process.env.AUTH_ACCESS_SECRET ||= crypto.randomBytes(48).toString('hex');
 
-    let pool;
-    if (message.expectEnabled) {
-      db = require('../../src/db');
-      if (await db.initDatabase() !== true) throw new Error('worker PostgreSQL initialization failed');
-      pool = db.getPool();
-    } else {
-      const { Pool } = require('pg');
-      rawPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-      pool = rawPool;
-    }
+    db = require('../../src/db');
+    if (await db.initDatabase() !== true) throw new Error('worker PostgreSQL initialization failed');
+    const pool = db.getPool();
     const before = await counts(pool);
 
     let transportConstructions = 0;
@@ -110,6 +102,17 @@ process.once('message', async message => {
         email, password: 'Capability-worker-password-123!',
         RESEND_API_KEY: 'attacker', paid: true, upgradeAvailable: true,
       });
+    const publicProviderRequests = providerRequests;
+    const { AccountRepository } = require('../../src/accounts/repository');
+    const { AccountEmailOutboxWorker } = require('../../src/email/outbox');
+    const { createProductionTransactionalEmail } = require('../../src/email/transactional');
+    const outboxTransactionalEmail = createProductionTransactionalEmail(process.env);
+    const outboxWorker = new AccountEmailOutboxWorker({
+      repository: new AccountRepository(pool),
+      transactionalEmail: outboxTransactionalEmail,
+      batchSize: 1,
+    });
+    const drain = await outboxWorker.drainOnce();
     const after = await counts(pool);
     const authorityResult = await pool.query(
       `SELECT s.status, s.trial_started_at, s.trial_ends_at,
@@ -126,7 +129,23 @@ process.once('message', async message => {
       trialEnds: authorityResult.rows[0].trial_ends_at !== null,
       sessionCount: Number(authorityResult.rows[0].session_count),
     } : null;
+    const outbox = (await pool.query(
+      `SELECT outbox.state, outbox.attempt_count, outbox.raw_token IS NULL AS token_erased
+         FROM account_email_outbox outbox
+         JOIN users account ON account.id = outbox.user_id
+        WHERE account.email_normalized = lower(trim($1))`,
+      [email]
+    )).rows[0] || null;
     const disclosure = JSON.stringify({ body: response.body, headers: response.headers });
+    if (!message.expectEnabled) {
+      await pool.query(
+        `UPDATE account_action_tokens token
+            SET consumed_at = NOW()
+           FROM users account
+          WHERE account.id = token.user_id AND account.email_normalized = lower(trim($1))`,
+        [email]
+      );
+    }
 
     dns.lookup = realLookup;
     net.connect = realConnect;
@@ -136,13 +155,13 @@ process.once('message', async message => {
     process.send({
       type: 'result', status: response.status, cookies: response.headers['set-cookie'] || [],
       before, after, transportConstructions, providerRequests, dnsCalls, netCalls, tlsCalls,
-      disclosure, requestEvidence, authority,
+      publicProviderRequests, disclosure, requestEvidence, authority, outbox, drain,
+      configurationAvailable: Boolean(outboxTransactionalEmail),
     });
   } catch (error) {
     process.send({ type: 'error', message: error && error.stack || String(error) });
   } finally {
     if (db) await db.close().catch(() => {});
-    if (rawPool) await rawPool.end().catch(() => {});
     if (typeof realFetch === 'function') global.fetch = realFetch;
     for (const [key, value] of Object.entries(originals)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;

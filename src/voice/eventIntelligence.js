@@ -19,6 +19,7 @@
 
 const { EVENT_TYPES, on } = require('./businessEvents');
 const { detectEmergencyEvidence } = require('../services/emergencyEvidence');
+const safeLogger = require('../observability/safeLogger');
 
 // ── Cached Executive Context ───────────────────────────────────
 
@@ -39,7 +40,7 @@ const _sessionGuidance = new Map();
 function updateContext(context) {
   if (context) {
     frozenContext = Object.freeze ? Object.freeze(JSON.parse(JSON.stringify(context))) : context;
-    console.log('[EventIntel] Executive context updated');
+    safeLogger.info('voice', 'intelligence_context_updated');
   }
 }
 
@@ -62,7 +63,7 @@ function getContext() {
  */
 function handleEstimateRequested(event) {
   if (!frozenContext) {
-    console.log('[EventIntel] No context available for estimate_requested');
+    safeLogger.warn('voice', 'intelligence_context_unavailable', { voiceEvent: 'estimate_requested' });
     return null;
   }
 
@@ -93,7 +94,7 @@ function handleEstimateRequested(event) {
  */
 function handlePricingQuestion(event) {
   if (!frozenContext) {
-    console.log('[EventIntel] No context available for pricing_question');
+    safeLogger.warn('voice', 'intelligence_context_unavailable', { voiceEvent: 'pricing_question' });
     return null;
   }
 
@@ -161,7 +162,7 @@ function handleObjectionDetected(event) {
  */
 function handleCallCompleted(event) {
   if (!frozenContext) {
-    console.log('[EventIntel] No context available for call_completed');
+    safeLogger.warn('voice', 'intelligence_context_unavailable', { voiceEvent: 'call_completed' });
     return null;
   }
 
@@ -459,7 +460,7 @@ function handleTranscriptSegment(event) {
 
     // Emit each detection as an internal_guidance event
     for (const detection of detections) {
-      console.log(`[EventIntel] Guidance for session ${sessionId}: ${detection.type} (${detection.severity || detection.level || 'info'})`);
+      safeLogger.info('voice', 'intelligence_guidance_generated', { voiceEvent: detection.type });
     }
   }
 }
@@ -487,7 +488,7 @@ function clearSessionGuidance(sessionId) {
 
 function registerIntelligenceHandlers() {
   on(EVENT_TYPES.ESTIMATE_REQUESTED, (event) => {
-    console.log(`[EventIntel] Processing estimate_requested for session ${event.sessionId}`);
+    safeLogger.info('voice', 'intelligence_event_processing', { voiceEvent: 'estimate_requested' });
     const result = handleEstimateRequested(event);
     if (result) {
       event.data._intelligence = result;
@@ -495,7 +496,7 @@ function registerIntelligenceHandlers() {
   });
 
   on(EVENT_TYPES.PRICING_QUESTION, (event) => {
-    console.log(`[EventIntel] Processing pricing_question for session ${event.sessionId}`);
+    safeLogger.info('voice', 'intelligence_event_processing', { voiceEvent: 'pricing_question' });
     const result = handlePricingQuestion(event);
     if (result) {
       event.data._intelligence = result;
@@ -503,7 +504,7 @@ function registerIntelligenceHandlers() {
   });
 
   on(EVENT_TYPES.OBJECTION_DETECTED, (event) => {
-    console.log(`[EventIntel] Processing objection_detected for session ${event.sessionId}`);
+    safeLogger.info('voice', 'intelligence_event_processing', { voiceEvent: 'objection_detected' });
     const result = handleObjectionDetected(event);
     if (result) {
       event.data._intelligence = result;
@@ -511,7 +512,7 @@ function registerIntelligenceHandlers() {
   });
 
   on(EVENT_TYPES.CALL_COMPLETED, (event) => {
-    console.log(`[EventIntel] Processing call_completed for session ${event.sessionId}`);
+    safeLogger.info('voice', 'intelligence_event_processing', { voiceEvent: 'call_completed' });
     const result = handleCallCompleted(event);
     if (result) {
       event.data._intelligence = result;
@@ -526,7 +527,7 @@ function registerIntelligenceHandlers() {
     handleTranscriptSegment(event);
   });
 
-  console.log('[EventIntel] Intelligence handlers registered');
+  safeLogger.info('voice', 'intelligence_handlers_registered');
 }
 
 // ── Export ─────────────────────────────────────────────────────

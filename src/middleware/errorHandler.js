@@ -5,6 +5,8 @@
  * Format: { "error": { "code": "...", "message": "...", "details": {} } }
  */
 
+const safeLogger = require('../observability/safeLogger');
+
 /**
  * Create a standardized error response object.
  */
@@ -17,11 +19,10 @@ function createError(code, message, details = {}, statusCode = 400) {
  */
 function errorHandler(err, req, res, _next) {
   const requestId = req.requestId || req.correlationId || 'unavailable';
-  console.error('[Error] Request failed:', {
+  safeLogger.error('http', 'request_failed', {
     requestId,
-    method: req.method,
-    path: req.path,
-    code: err.code || 'internal_error',
+    methodClass: req.method,
+    statusCode: Number.isInteger(err.statusCode) ? err.statusCode : 500,
   });
 
   // Handle known error types

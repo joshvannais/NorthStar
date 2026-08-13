@@ -8,10 +8,13 @@
 
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
+const safeLogger = require('../observability/safeLogger');
 
 // In-memory log store
 const auditLog = [];
 const MAX_MEMORY_LOGS = 10000;
+const ANONYMOUS_NOT_FOUND_EVENT = 'anonymous_api_not_found';
+const ANONYMOUS_NOT_FOUND_COUNT_CAP = 1000;
 
 /**
  * Record an audit log entry.
@@ -81,15 +84,80 @@ async function record(entry) {
     try {
       await persistWith({ query: db.query }, logEntry);
     } catch (_err) {
-      console.warn('[Audit] Persistence warning:', {
+      safeLogger.warn('audit', 'audit_persistence_failed', {
         requestId: logEntry.correlationId || 'unavailable',
-        event: 'audit_persistence_failed',
       });
     }
   }
 
   // Also keep in memory for fast access
   remember(logEntry);
+}
+
+function anonymousNotFoundWindow(observedAt) {
+  const value = observedAt instanceof Date ? new Date(observedAt.getTime()) : new Date();
+  if (!Number.isFinite(value.getTime())) throw new TypeError('anonymous not-found observation time is invalid');
+  const bucketStartedAt = new Date(value.getTime());
+  bucketStartedAt.setUTCMinutes(0, 0, 0);
+  return {
+    bucketSlot: bucketStartedAt.getUTCHours(),
+    bucketStartedAt: bucketStartedAt.toISOString(),
+    lastSeenAt: value.toISOString(),
+  };
+}
+
+/**
+ * Aggregate an unauthenticated API 404 into a fixed 8-method x 24-hour ring.
+ * No path, address, user agent, correlation, tenant, or customer value crosses
+ * this persistence boundary. Each window saturates at 1,000 observations with
+ * a no-update fast path, and this signal never enters the audit memory log.
+ */
+async function recordAnonymousNotFound(options = {}) {
+  if (!db.isAvailable()) {
+    safeLogger.warn('audit', 'anonymous_not_found_aggregation_unavailable', {
+      requestId: 'unavailable',
+    });
+    return false;
+  }
+
+  const method = safeLogger.methodClass(options.method);
+  const window = anonymousNotFoundWindow(options.observedAt);
+  try {
+    const result = await db.query(
+      `INSERT INTO api_observability_hourly AS aggregate
+        (event_key, method_class, bucket_slot, bucket_started_at, request_count, last_seen_at)
+       VALUES ($1, $2, $3, $4::timestamptz, 1, $5::timestamptz)
+       ON CONFLICT (event_key, method_class, bucket_slot) DO UPDATE
+         SET bucket_started_at = GREATEST(aggregate.bucket_started_at, EXCLUDED.bucket_started_at),
+             request_count = CASE
+               WHEN EXCLUDED.bucket_started_at > aggregate.bucket_started_at THEN 1
+               WHEN EXCLUDED.bucket_started_at = aggregate.bucket_started_at
+                 THEN aggregate.request_count + 1
+               ELSE aggregate.request_count
+             END,
+             last_seen_at = CASE
+               WHEN EXCLUDED.bucket_started_at > aggregate.bucket_started_at THEN EXCLUDED.last_seen_at
+               WHEN EXCLUDED.bucket_started_at = aggregate.bucket_started_at
+                 THEN GREATEST(aggregate.last_seen_at, EXCLUDED.last_seen_at)
+               ELSE aggregate.last_seen_at
+             END
+       WHERE EXCLUDED.bucket_started_at > aggregate.bucket_started_at
+          OR (
+            EXCLUDED.bucket_started_at = aggregate.bucket_started_at
+            AND aggregate.request_count < ${ANONYMOUS_NOT_FOUND_COUNT_CAP}
+          )`,
+      [ANONYMOUS_NOT_FOUND_EVENT, method, window.bucketSlot, window.bucketStartedAt, window.lastSeenAt]
+    );
+    if (!result || ![0, 1].includes(result.rowCount)) {
+      throw new Error('anonymous_not_found_aggregate_not_written');
+    }
+    return true;
+  } catch (_error) {
+    safeLogger.warn('audit', 'anonymous_not_found_aggregation_failed', {
+      requestId: 'unavailable',
+    });
+    return false;
+  }
 }
 
 /**
@@ -130,19 +198,22 @@ async function ensureTable() {
     const required = ['organization_id', 'user_id', 'action', 'entity_type', 'entity_id', 'details', 'ip_address', 'created_at'];
     const missing = required.filter(column => !actual.has(column));
     if (missing.length) {
-      console.warn('[Audit] Schema verification warning:', {
-        event: 'audit_schema_incompatible',
-        missingColumns: missing,
-      });
+      safeLogger.warn('audit', 'audit_schema_incompatible');
       return false;
     }
     return true;
   } catch (_err) {
-    console.warn('[Audit] Schema verification warning:', {
-      event: 'audit_schema_unavailable',
-    });
+    safeLogger.warn('audit', 'audit_schema_unavailable');
     return false;
   }
 }
 
-module.exports = { createEntry, ensureTable, query, record, recordInTransaction, remember };
+module.exports = {
+  createEntry,
+  ensureTable,
+  query,
+  record,
+  recordAnonymousNotFound,
+  recordInTransaction,
+  remember,
+};

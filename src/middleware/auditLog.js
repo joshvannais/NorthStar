@@ -1,12 +1,14 @@
 /**
  * Audit Logging Middleware
  * 
- * Logs all API requests with correlation IDs. Captures actor, action, entity,
- * IP, user agent for every request. Generates correlation IDs for tracing.
+ * Emits structured request telemetry with correlation IDs. Security-relevant
+ * writes and authenticated errors retain the existing audit detail; anonymous
+ * API 404s use a fixed-cardinality aggregate with no request identifiers.
  */
 
 const { v4: uuidv4 } = require('uuid');
 const audit = require('../audit/client');
+const safeLogger = require('../observability/safeLogger');
 
 /**
  * Middleware: attach a correlation ID to every request.
@@ -51,23 +53,27 @@ function requestAuditEntry(req, status, duration) {
   };
 }
 
+function isAnonymousNotFound(req, status) {
+  return status === 404 && !req.admin && !req.user && !req.tenantContext?.userId;
+}
+
 /**
  * Middleware: log API requests for audit trail.
  */
 function auditLogger(req, res, next) {
   // Skip logging for non-API routes
-  if (!req.path.toLowerCase().startsWith('/api/')) return next();
+  const lowerPath = req.path.toLowerCase();
+  if (!(lowerPath === '/api' || lowerPath.startsWith('/api/'))) return next();
 
   const start = Date.now();
 
   // Log on response finish
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.info('[Request]', {
+    safeLogger.info('http', 'request_completed', {
       requestId: req.requestId,
-      method: req.method,
-      path: req.path,
-      status: res.statusCode,
+      methodClass: req.method,
+      statusCode: res.statusCode,
       durationMs: duration,
     });
 
@@ -81,19 +87,30 @@ function auditLogger(req, res, next) {
       String(req.originalUrl || req.url || '').split('?')[0] === '/api/auth/signup' &&
       res.statusCode === 503;
     const signedWebhookPost = isSignedWebhookPost(req);
+    const anonymousNotFound = !signedWebhookPost && isAnonymousNotFound(req, res.statusCode);
+
+    if (anonymousNotFound) {
+      audit.recordAnonymousNotFound({ method: req.method }).catch(() => {
+        safeLogger.warn('audit', 'anonymous_not_found_aggregation_failed', {
+          requestId: 'unavailable',
+        });
+      });
+      return;
+    }
 
     // Both exact signed webhook POSTs own their accepted audit row inside the
     // canonical/replay transaction. Generic finish-time logging would be a
     // second, non-atomic write; rejected deliveries remain zero-write.
     if ((isModifying || isError) && !sourceDisabledSignup && !signedWebhookPost) {
-      audit.record(requestAuditEntry(req, res.statusCode, duration)).catch(() => console.warn('[Audit] Persistence warning:', {
-        requestId: req.requestId,
-        event: 'audit_persistence_failed',
-      }));
+      audit.record(requestAuditEntry(req, res.statusCode, duration)).catch(() => {
+        safeLogger.warn('audit', 'audit_persistence_failed', {
+          requestId: req.requestId,
+        });
+      });
     }
   });
 
   next();
 }
 
-module.exports = { auditLogger, correlationId, isSignedWebhookPost, requestAuditEntry };
+module.exports = { auditLogger, correlationId, isAnonymousNotFound, isSignedWebhookPost, requestAuditEntry };

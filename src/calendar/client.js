@@ -5,6 +5,7 @@
 
 const config = require('../config');
 const { google } = require('googleapis');
+const safeLogger = require('../observability/safeLogger');
 
 let calendarClient = null;
 
@@ -12,7 +13,7 @@ function getClient() {
   if (calendarClient) return calendarClient;
 
   if (!config.sheets.clientEmail || !config.sheets.privateKey) {
-    console.log('[Calendar] Not configured — skipping.');
+    safeLogger.warn('google_calendar', 'provider_unconfigured', { configured: false });
     return null;
   }
 
@@ -27,7 +28,7 @@ function getClient() {
     calendarClient = google.calendar({ version: 'v3', auth });
     return calendarClient;
   } catch (err) {
-    console.error('[Calendar] Auth error:', err.message);
+    safeLogger.error('google_calendar', 'client_initialization_failed');
     return null;
   }
 }
@@ -38,7 +39,7 @@ function getClient() {
 async function scheduleEstimate(lead, calendarId = 'primary') {
   const client = getClient();
   if (!client) {
-    console.log('[Calendar] No client — returning mock event.');
+    safeLogger.warn('google_calendar', 'client_unavailable');
     return { mock: true, message: `Estimate scheduled for ${lead.customerName}` };
   }
 
@@ -66,10 +67,10 @@ async function scheduleEstimate(lead, calendarId = 'primary') {
       },
     });
 
-    console.log(`[Calendar] Event created: ${event.data.htmlLink}`);
+    safeLogger.info('google_calendar', 'event_created');
     return { success: true, eventLink: event.data.htmlLink, eventId: event.data.id };
   } catch (err) {
-    console.error('[Calendar] Create event error:', err.message);
+    safeLogger.error('google_calendar', 'event_create_failed');
     return { success: false, error: err.message };
   }
 }

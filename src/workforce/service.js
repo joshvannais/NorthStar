@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const credentials = require('../auth/credentials');
 const { AccountRepository } = require('../accounts/repository');
 const { workforceInvitationEnvelope } = require('../email/transactional');
+const safeLogger = require('../observability/safeLogger');
 const {
   actionToken,
   hashPassword,
@@ -107,14 +108,11 @@ function accessRole(value, allowedRoles = MUTABLE_ACCESS_ROLES) {
 }
 
 function safeDeliveryFailure(error, requestId) {
-  const safe = {
-    provider: error && error.provider === 'resend' ? 'resend' : 'transactional',
-    code: error && typeof error.code === 'string' && /^[a-z0-9_]{1,64}$/.test(error.code)
-      ? error.code : 'transactional_delivery_failed',
-    requestId: typeof requestId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(requestId)
-      ? requestId : 'unavailable',
-  };
-  console.warn('[Workforce] Invitation delivery failed:', safe);
+  safeLogger.warn('email', 'notification_send_failed', {
+    category: error && error.provider === 'resend' ? error.category : 'delivery_failed',
+    requestId,
+    statusCode: error && error.provider === 'resend' ? error.httpStatus : undefined,
+  });
 }
 
 class WorkforceService {

@@ -326,10 +326,11 @@ describe('Voice Webhook Framework', () => {
         eventId: 'evt_lifecycle_rejection',
       });
       expect(errorLog).toHaveBeenCalledTimes(1);
-      expect(errorLog).toHaveBeenCalledWith(
-        '[Voice:Webhook] Event handler error for call_started:',
-        'emit failed'
-      );
+      expect(errorLog).toHaveBeenCalledWith({
+        component: 'voice',
+        event: 'event_handler_failed',
+      });
+      expect(JSON.stringify(errorLog.mock.calls)).not.toContain('emit failed');
       expect(jest.getTimerCount()).toBe(0);
       errorLog.mockRestore();
     });
@@ -454,10 +455,11 @@ describe('Voice Webhook Framework', () => {
         eventId: 'evt_lifecycle_timeout',
       });
       expect(errorLog).toHaveBeenCalledTimes(1);
-      expect(errorLog).toHaveBeenCalledWith(
-        '[Voice:Webhook] Event handler error for call_started:',
-        'Handler timeout'
-      );
+      expect(errorLog).toHaveBeenCalledWith({
+        component: 'voice',
+        event: 'event_handler_failed',
+      });
+      expect(JSON.stringify(errorLog.mock.calls)).not.toContain('Handler timeout');
       expect(jest.getTimerCount()).toBe(0);
 
       emit.resolve({ emitted: true, handlerCount: 0, errors: 0 });

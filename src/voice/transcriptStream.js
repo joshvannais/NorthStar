@@ -11,6 +11,7 @@
 'use strict';
 
 const { eventBus, EVENT_TYPES, createEvent } = require('./businessEvents');
+const safeLogger = require('../observability/safeLogger');
 
 // ── In-memory transcript store ──────────────────────────────────
 
@@ -80,10 +81,10 @@ function addSegment(sessionId, segment) {
       source: 'voice',
     };
     eventBus.emit(event).catch(err => {
-      console.error(`[TranscriptStream] EventBus emit error for session ${sessionId}:`, err.message);
+      safeLogger.error('voice', 'transcript_event_emit_failed');
     });
   } catch (err) {
-    console.error(`[TranscriptStream] Failed to emit transcript_segment for session ${sessionId}:`, err.message);
+    safeLogger.error('voice', 'transcript_event_emit_failed');
   }
 
   return stored;

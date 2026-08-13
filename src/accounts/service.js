@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const credentials = require('../auth/credentials');
 const { isCanonicalAccessRole, navigationForRole } = require('../auth/permissions');
 const { emailAddress } = require('../email/transactional');
+const safeLogger = require('../observability/safeLogger');
 const { AccountPersistenceError, AccountRepository } = require('./repository');
 const { projectSubscription } = require('./subscriptionPolicy');
 
@@ -111,32 +112,14 @@ function deliveryContext(context, deliveryId) {
   };
 }
 
-function safeDiagnostic(value, fallback) {
-  return typeof value === 'string' && value.length <= 64 && /^[a-z0-9_]+$/.test(value)
-    ? value
-    : fallback;
-}
-
 function logDeliveryFailure(error, context) {
   const resend = error && error.provider === 'resend';
   const requestId = resend ? error.requestId : context && context.requestId;
-  const safe = {
-    provider: resend ? 'resend' : 'transactional',
-    accepted: false,
-    category: resend ? safeDiagnostic(error.category, 'unknown') : 'unknown',
-    code: resend ? safeDiagnostic(error.code, 'transactional_delivery_failed') : 'transactional_delivery_failed',
-    httpStatus: resend && Number.isInteger(error.httpStatus) && error.httpStatus >= 100 && error.httpStatus <= 599
-      ? error.httpStatus
-      : null,
-    providerMessageIdPresent: false,
-    attemptedAt: resend && typeof error.attemptedAt === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(error.attemptedAt)
-      ? error.attemptedAt
-      : null,
-    requestId: typeof requestId === 'string' && requestId.length <= 128 && /^[A-Za-z0-9._:-]+$/.test(requestId)
-      ? requestId
-      : 'unavailable',
-  };
-  console.warn('[Auth] Transactional delivery failed:', safe);
+  safeLogger.warn('email', 'notification_send_failed', {
+    category: resend ? error.category : 'delivery_failed',
+    requestId,
+    statusCode: resend ? error.httpStatus : undefined,
+  });
 }
 
 function loginFailureDelay(attemptCount) {

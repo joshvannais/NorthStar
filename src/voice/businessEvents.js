@@ -13,6 +13,8 @@
 
 'use strict';
 
+const safeLogger = require('../observability/safeLogger');
+
 // ── Event Type Constants ───────────────────────────────────────
 
 const EVENT_TYPES = {
@@ -130,7 +132,7 @@ class EventBus {
       this._history.shift();
     }
 
-    console.log(`[EventBus] Emitting: ${event.type} (session: ${event.sessionId})`);
+    safeLogger.info('voice', 'business_event_emitting');
 
     // Collect all matching handlers: specific + wildcard
     const handlers = new Set();
@@ -145,7 +147,7 @@ class EventBus {
     }
 
     if (handlers.size === 0) {
-      console.log(`[EventBus] No handlers for ${event.type}`);
+      safeLogger.info('voice', 'business_event_unhandled', { handlerCount: 0 });
       return { emitted: true, handlerCount: 0, errors: 0 };
     }
 
@@ -156,7 +158,7 @@ class EventBus {
         await handler(event);
       } catch (err) {
         errors++;
-        console.error(`[EventBus] Handler error for ${event.type}:`, err.message);
+        safeLogger.error('voice', 'business_event_handler_failed');
       }
     });
 

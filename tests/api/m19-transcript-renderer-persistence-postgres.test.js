@@ -154,6 +154,7 @@ realPostgres('Mission 19 transcript raw PostgreSQL authority', () => {
     await putBusinessProfile(pool, {
       organizationId: ORGANIZATION_ID,
       userId: USER_ID,
+      expectedVersion: null,
       profile: profile,
     });
     const input = graphInput(profile);

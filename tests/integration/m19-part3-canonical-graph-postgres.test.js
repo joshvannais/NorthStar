@@ -9,7 +9,7 @@ const { stableStringify } = require('../../src/services/businessProfileAdapter')
 const simulationPipeline = require('../../src/routes/simulation/pipeline');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { EXTREME_FENCE_SUBTOTAL, canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
-const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+const { getActiveBusinessProfile, putBusinessProfile } = require('../../src/services/organizationAuthority');
 const {
   GRAPH_STAGES,
   executeCanonicalGraph,
@@ -49,8 +49,8 @@ async function applyMigrations(pool) {
      ON CONFLICT (id) DO NOTHING`,
     [ORG_B]
   );
-  await putBusinessProfile(pool, { organizationId: ORG_A, profile: graphInput('profile-a').businessProfile });
-  await putBusinessProfile(pool, { organizationId: ORG_B, profile: graphInput('profile-b').businessProfile });
+  await putBusinessProfile(pool, { organizationId: ORG_A, expectedVersion: null, profile: graphInput('profile-a').businessProfile });
+  await putBusinessProfile(pool, { organizationId: ORG_B, expectedVersion: null, profile: graphInput('profile-b').businessProfile });
 }
 
 function graphInput(key, overrides) {
@@ -341,8 +341,10 @@ realPostgres('Mission 19 Part 3 transactional canonical graph on disposable Post
   });
 
   test('configured tax is persisted explicitly and unavailable tax remains explicit', async () => {
+    const activeProfile = await getActiveBusinessProfile(pool, ORG_A);
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
+      expectedVersion: activeProfile.versionLabel,
       profile: {
         ...graphInput('tax-profile').businessProfile,
         canonicalPricing: { taxRatePercent: 8.25 },

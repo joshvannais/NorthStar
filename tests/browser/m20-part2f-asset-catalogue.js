@@ -225,11 +225,11 @@ async function main() {
     }
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A,
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
       profile: profileFor('Asset A', 'Office-North', 'Fence-Repair'),
     });
     const otherProfile = await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: OWNER_B,
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
       profile: profileFor('Asset B', 'Office-Other', 'Other-Service'),
     });
     const profileBefore = (await pool.query(

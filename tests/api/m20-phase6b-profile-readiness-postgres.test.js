@@ -118,12 +118,19 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
       .set(sessions[role].headers).send({ expectedVersion, changes });
   }
 
+  async function saveSection(role, section, value, expectedVersion) {
+    const version = expectedVersion === undefined ? (await activeRow()).version_label : expectedVersion;
+    return request(app).put('/api/v1/business-profile/' + section)
+      .set(sessions[role].headers).send({ expectedVersion: version, value });
+  }
+
   async function resetOrganizationA() {
     await pool.query('DELETE FROM organization_onboarding WHERE organization_id = $1', [ORG_A]);
     await pool.query('DELETE FROM canonical_business_profiles WHERE organization_id = $1', [ORG_A]);
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: OWNER_A,
+      expectedVersion: null,
       profile: configuredProfile('Phase 6B Organization A'),
     });
   }
@@ -147,6 +154,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: OWNER_A,
+      expectedVersion: null,
       profile,
       preserveProfileReadiness: false,
     });
@@ -197,12 +205,15 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     ({ adaptBusinessProfile } = require('../../src/services/businessProfileAdapter'));
     ({ stableHash } = require('../../src/services/profileReadiness'));
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A, profile: configuredProfile('Phase 6B Organization A'),
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: configuredProfile('Phase 6B Organization A'),
     });
     const other = configuredProfile('Other Tenant');
     other.company.email = '';
     other.company.phone = '';
-    await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, profile: other });
+    await putBusinessProfile(pool, {
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null, profile: other,
+    });
     sessions = {};
     for (const [name, userId, organizationId, role] of [
       ['owner', OWNER_A, ORG_A, 'owner'], ['admin', ADMIN_A, ORG_A, 'admin'],
@@ -336,8 +347,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
       reviewedValueHash: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
 
-    const removed = await request(app).put('/api/v1/business-profile/serviceArea')
-      .set(sessions.owner.headers).send({
+    const removed = await saveSection('owner', 'serviceArea', {
         maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
       });
     expect(removed.status).toBe(200);
@@ -363,8 +373,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     const markedVersion = row.version_label;
     const markedReadinessHex = row.readiness_hex;
 
-    const unrelatedAdvance = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...row.raw_profile.company, dba: 'Historical provenance stale control' });
+    const unrelatedAdvance = await saveSection('owner', 'company', {
+      ...row.raw_profile.company, dba: 'Historical provenance stale control',
+    });
     expect(unrelatedAdvance.status).toBe(200);
     const beforeStale = await activeRow();
     expect(beforeStale.readiness_hex).toBe(markedReadinessHex);
@@ -387,8 +398,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     const clearedReadinessHex = row.readiness_hex;
     expect(row.raw_profile.company.dba).toBe('Historical provenance stale control');
 
-    const restored = await request(app).put('/api/v1/business-profile/serviceArea')
-      .set(sessions.owner.headers).send({
+    const restored = await saveSection('owner', 'serviceArea', {
         maxRadiusMiles: 50, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
       });
     expect(restored.status).toBe(200);
@@ -424,8 +434,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
   });
 
   test('mark_applicable is state-guarded, stale-safe, and clears Not applicable without review provenance', async () => {
-    let cleared = await request(app).put('/api/v1/business-profile/serviceArea')
-      .set(sessions.owner.headers).send({
+    let cleared = await saveSection('owner', 'serviceArea', {
         maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
       });
     expect(cleared.status).toBe(200);
@@ -441,8 +450,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     });
     const markedReadinessHex = row.readiness_hex;
 
-    const configured = await request(app).put('/api/v1/business-profile/serviceArea')
-      .set(sessions.owner.headers).send({
+    const configured = await saveSection('owner', 'serviceArea', {
         maxRadiusMiles: 25, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
       });
     expect(configured.status).toBe(200);
@@ -459,8 +467,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     expect(rejected.body.error.code).toBe('PROFILE_READINESS_MARK_APPLICABLE_UNAVAILABLE');
     expect(await activeRow()).toEqual(beforeRejectedAction);
 
-    cleared = await request(app).put('/api/v1/business-profile/serviceArea')
-      .set(sessions.owner.headers).send({
+    cleared = await saveSection('owner', 'serviceArea', {
         maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
       });
     expect(cleared.status).toBe(200);
@@ -471,8 +478,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     }));
     const applicableVersion = row.version_label;
 
-    const unrelatedAdvance = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...row.raw_profile.company, dba: 'Stale action control' });
+    const unrelatedAdvance = await saveSection('owner', 'company', {
+      ...row.raw_profile.company, dba: 'Stale action control',
+    });
     expect(unrelatedAdvance.status).toBe(200);
     const beforeStaleAction = await activeRow();
     expect(beforeStaleAction.readiness_hex).toBe(markedReadinessHex);
@@ -531,8 +539,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     expect(readinessHex).toMatch(/^[0-9a-f]+$/);
     expect(Buffer.from(emergencyHex, 'hex').toString('utf8')).toBe(HOSTILE);
 
-    const generic = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...before.raw_profile.company, dba: 'Generic writer' });
+    const generic = await saveSection('owner', 'company', {
+      ...before.raw_profile.company, dba: 'Generic writer',
+    });
     expect(generic.status).toBe(200);
     before = await activeRow();
     expect(before.readiness_hex).toBe(readinessHex);
@@ -585,8 +594,10 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
   });
 
   test('alternate writer orders and a simultaneous generic race preserve readiness presence and raw value', async () => {
-    const genericFirst = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...(await activeRow()).raw_profile.company, dba: 'Generic first' });
+    const genericFirstRow = await activeRow();
+    const genericFirst = await saveSection('owner', 'company', {
+      ...genericFirstRow.raw_profile.company, dba: 'Generic first',
+    }, genericFirstRow.version_label);
     expect(genericFirst.status).toBe(200);
     let current = await activeRow();
     expect(current.has_readiness).toBe(false);
@@ -609,20 +620,24 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     const baseline = await activeRow();
     const raced = await Promise.all([
       request(app).put('/api/v1/business-profile/company').set(sessions.owner.headers)
-        .send({ ...baseline.raw_profile.company, dba: 'Concurrent generic' }),
+        .send({
+          expectedVersion: baseline.version_label,
+          value: { ...baseline.raw_profile.company, dba: 'Concurrent generic' },
+        }),
       save('admin', baseline.version_label, [change('company_identity')]),
     ]);
-    expect(raced[0].status).toBe(200);
-    expect([200, 409]).toContain(raced[1].status);
+    expect(raced.map(function (response) { return response.status; }).sort()).toEqual([200, 409]);
     const racedAfter = await activeRow();
     if (raced[1].status === 200) {
       expect(racedAfter.has_readiness).toBe(true);
       expect(racedAfter.raw_profile.profileReadiness.items.company_identity).toBeDefined();
+      expect(raced[0].body.error.code).toBe('BUSINESS_PROFILE_VERSION_CONFLICT');
+      expect(racedAfter.raw_profile.company.dba).toBe(baseline.raw_profile.company.dba);
     } else {
       expect(raced[1].body.error.code).toBe('BUSINESS_PROFILE_VERSION_CONFLICT');
       expect(racedAfter.has_readiness).toBe(false);
+      expect(racedAfter.raw_profile.company.dba).toBe('Concurrent generic');
     }
-    expect(racedAfter.raw_profile.company.dba).toBe('Concurrent generic');
   });
 
   test('recognized source changes alone invalidate review while integration state and elapsed time do not', async () => {
@@ -634,8 +649,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     const reviewedAt = allReviewed.body.data.items.company_identity.lastReviewedAt;
 
     let row = await activeRow();
-    const changedName = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...row.raw_profile.company, name: 'Changed recognized name' });
+    const changedName = await saveSection('owner', 'company', {
+      ...row.raw_profile.company, name: 'Changed recognized name',
+    });
     expect(changedName.status).toBe(200);
     let projected = await readiness('owner');
     expect(projected.body.data.overallState).toBe('review_needed');
@@ -646,8 +662,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     row = await activeRow();
     expect((await save('owner', row.version_label, [change('company_identity')])).status).toBe(200);
     row = await activeRow();
-    const integrationOnly = await request(app).put('/api/v1/business-profile/integrations')
-      .set(sessions.owner.headers).send({ retell: { enabled: false, status: 'disconnected', opaque: HOSTILE } });
+    const integrationOnly = await saveSection('owner', 'integrations', {
+      retell: { enabled: false, status: 'disconnected', opaque: HOSTILE },
+    });
     expect(integrationOnly.status).toBe(200);
     projected = await readiness('owner');
     expect(projected.body.data.overallState).toBe('ready_for_configured_uses');
@@ -688,8 +705,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     const storedContact = row.raw_profile.profileReadiness.items.business_contact;
     const storedContext = row.raw_profile.profileReadiness.items.business_context;
     const phoneWhitespace = ' \t\r\n ';
-    const phoneSaved = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...row.raw_profile.company, phone: phoneWhitespace });
+    const phoneSaved = await saveSection('owner', 'company', {
+      ...row.raw_profile.company, phone: phoneWhitespace,
+    });
     expect(phoneSaved.status).toBe(200);
     row = await activeRow();
     expect(row.raw_profile.company.phone).toBe(phoneWhitespace);
@@ -717,8 +735,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
       }));
     }
 
-    const emailSaved = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({
+    const emailSaved = await saveSection('owner', 'company', {
         ...row.raw_profile.company,
         email: 'dispatch@example.test',
       });
@@ -767,16 +784,16 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     expect(row.readiness_hex).toBe(originalReadinessHex);
     expect(row.version_count).toBe(originalVersionCount);
 
-    const noOp = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send(row.raw_profile.company);
+    const noOp = await saveSection('owner', 'company', row.raw_profile.company);
     expect(noOp.status).toBe(200);
     row = await activeRow();
     expect(row.readiness_hex).toBe(originalReadinessHex);
     expect(row.raw_profile.profileReadiness).toEqual(originalReadiness);
 
     const phoneWhitespace = ' \t\r\n ';
-    const contactTransition = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...row.raw_profile.company, phone: phoneWhitespace });
+    const contactTransition = await saveSection('owner', 'company', {
+      ...row.raw_profile.company, phone: phoneWhitespace,
+    });
     expect(contactTransition.status).toBe(200);
     row = await activeRow();
     expect(row.raw_profile.company.phone).toBe(phoneWhitespace);
@@ -817,8 +834,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     expect((await readiness('owner')).body.data.items.business_context.state).toBe('reviewed');
 
     const canonicalHex = row.readiness_hex;
-    const repeated = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send(row.raw_profile.company);
+    const repeated = await saveSection('owner', 'company', row.raw_profile.company);
     expect(repeated.status).toBe(200);
     row = await activeRow();
     expect(row.readiness_hex).toBe(canonicalHex);
@@ -832,8 +848,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
       business_contact: { email: 'office@example.test', phone: '' },
     });
     let before = JSON.parse(JSON.stringify(row.raw_profile.profileReadiness));
-    const missingToBlank = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...row.raw_profile.company, phone: '' });
+    const missingToBlank = await saveSection('owner', 'company', {
+      ...row.raw_profile.company, phone: '',
+    });
     expect(missingToBlank.status).toBe(200);
     row = await activeRow();
     expect(row.raw_profile.company.phone).toBe('');
@@ -849,8 +866,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     before = JSON.parse(JSON.stringify(row.raw_profile.profileReadiness));
     const invalidRawHex = row.raw_hex;
     const invalidVersionCount = row.version_count;
-    const rejectedInvalidSibling = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({
+    const rejectedInvalidSibling = await saveSection('owner', 'company', {
         ...row.raw_profile.company,
         email: 'still-not-an-email',
       });
@@ -860,8 +876,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     expect(row.version_count).toBe(invalidVersionCount);
     expect(row.raw_profile.profileReadiness).toEqual(before);
 
-    const invalidSibling = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({
+    const invalidSibling = await saveSection('owner', 'company', {
         ...row.raw_profile.company,
         email: '',
         phone: '+1 828 555 0100',
@@ -883,8 +898,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
       business_contact: { email: 'not-an-email', phone: '+1 828 555 0100' },
     });
     before = JSON.parse(JSON.stringify(row.raw_profile.profileReadiness));
-    const invalidToValid = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({
+    const invalidToValid = await saveSection('owner', 'company', {
         ...row.raw_profile.company,
         email: 'dispatch@example.test',
       });
@@ -960,8 +974,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
 
   test('Not applicable cannot hide later configuration and readiness metadata is calculation-neutral', async () => {
     let row = await activeRow();
-    const cleared = await request(app).put('/api/v1/business-profile/serviceArea')
-      .set(sessions.owner.headers).send({ maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [] });
+    const cleared = await saveSection('owner', 'serviceArea', {
+      maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+    });
     expect(cleared.status).toBe(200);
     row = await activeRow();
     const beforeNormalized = adaptBusinessProfile(row.raw_profile, 'fixed-readiness-neutral-version');
@@ -973,8 +988,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     expect(afterNormalized).toEqual(beforeNormalized);
     expect(afterNormalized.hash).toBe(beforeNormalized.hash);
 
-    const configured = await request(app).put('/api/v1/business-profile/serviceArea')
-      .set(sessions.owner.headers).send({ maxRadiusMiles: 25, maxTravelMinutes: null, primaryTerritory: '', polygon: [] });
+    const configured = await saveSection('owner', 'serviceArea', {
+      maxRadiusMiles: 25, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+    });
     expect(configured.status).toBe(200);
     const projected = await readiness('owner');
     expect(projected.body.data.items.service_area.applicability).toBe('applicable');
@@ -994,8 +1010,7 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     expect(marked.status).toBe(200);
     expect(marked.body.data.items.operating_origin.state).toBe('not_applicable');
 
-    const clearedHeadquarters = await request(app).put('/api/v1/business-profile/headquarters')
-      .set(sessions.owner.headers).send({
+    const clearedHeadquarters = await saveSection('owner', 'headquarters', {
         street: '', city: '', state: '', zip: '', country: 'US',
         latitude: null, longitude: null, additionalOffices: [],
       });
@@ -1026,8 +1041,9 @@ realPostgres('Mission 20 Phase 6B mounted Profile Readiness authority', () => {
     const before = await activeRow(ORG_B);
     expect((await save('owner', 'org-profile-v1', [change('company_identity')])).status).toBe(200);
     const row = await activeRow();
-    expect((await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...row.raw_profile.company, dba: HOSTILE })).status).toBe(200);
+    expect((await saveSection('owner', 'company', {
+      ...row.raw_profile.company, dba: HOSTILE,
+    })).status).toBe(200);
     const after = await activeRow(ORG_B);
     expect(after.id).toBe(before.id);
     expect(after.version_label).toBe(before.version_label);

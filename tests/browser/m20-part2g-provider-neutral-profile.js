@@ -295,10 +295,12 @@ async function main() {
     }
     const { putBusinessProfile, getActiveBusinessProfile } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A, profile: profileFor('Provider Neutral Company', INITIAL),
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: profileFor('Provider Neutral Company', INITIAL),
     });
     const otherAuthority = await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: OWNER_B, profile: profileFor('Other Tenant Company', INITIAL),
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
+      profile: profileFor('Other Tenant Company', INITIAL),
     });
     const sessions = {};
     for (const [role, userId] of [

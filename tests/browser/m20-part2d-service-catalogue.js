@@ -276,8 +276,8 @@ async function main() {
       );
     }
     const { putBusinessProfile, getActiveBusinessProfile } = require('../../src/services/organizationAuthority');
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: profileFor('Service Editor A') });
-    const originalB = await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, profile: profileFor('Other Tenant') });
+    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, expectedVersion: null, profile: profileFor('Service Editor A') });
+    const originalB = await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, expectedVersion: null, profile: profileFor('Other Tenant') });
     const ownerSession = await provisionDurableSession(pool, { userId: OWNER_A, organizationId: ORG_A, role: 'owner' });
     const viewerSession = await provisionDurableSession(pool, { userId: VIEWER_A, organizationId: ORG_A, role: 'viewer' });
     const { app } = require('../../src/server');

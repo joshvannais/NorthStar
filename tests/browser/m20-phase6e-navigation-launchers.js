@@ -451,8 +451,8 @@ async function main() {
       );
     }
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: ROLE_USERS[0].id, profile: canonicalFenceProfile({ version: 'phase6e-browser-a' }) });
-    await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, profile: canonicalFenceProfile({ version: 'phase6e-browser-b' }) });
+    await putBusinessProfile(pool, { organizationId: ORG_A, userId: ROLE_USERS[0].id, expectedVersion: null, profile: canonicalFenceProfile({ version: 'phase6e-browser-a' }) });
+    await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, expectedVersion: null, profile: canonicalFenceProfile({ version: 'phase6e-browser-b' }) });
     const { ingestLead } = require('../../src/services/canonicalGraphService');
     const graphA = await ingestLead(pool, graphInput(ORG_A, 'a', ADDRESS));
     const graphB = await ingestLead(pool, graphInput(ORG_B, 'b', '900 Other Tenant Way, Elsewhere, WA 98000'));

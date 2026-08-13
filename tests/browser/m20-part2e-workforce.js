@@ -86,7 +86,12 @@ async function contextFor(browser, origin, session, viewport, theme, ledger, rol
 function attachPage(page, ledger, role) {
   page.on('pageerror', error => ledger.pageErrors.push(role + ': ' + (error.stack || error.message)));
   page.on('console', message => {
-    if (message.type() === 'error') ledger.consoleErrors.push(role + ': ' + message.text());
+    if (message.type() !== 'error') return;
+    if (/status of 409 \(Conflict\)/.test(message.text())) {
+      ledger.expectedConsole.push(role + ': ' + message.text());
+      return;
+    }
+    ledger.consoleErrors.push(role + ': ' + message.text());
   });
 }
 
@@ -213,7 +218,7 @@ async function main() {
   let db;
   let server;
   let browser;
-  const ledger = { requests: [], external: [], consoleErrors: [], pageErrors: [] };
+  const ledger = { requests: [], external: [], consoleErrors: [], expectedConsole: [], pageErrors: [] };
   const capture = { messages: [] };
   try {
     process.env.DATABASE_URL = suiteDatabase.connectionString;
@@ -247,10 +252,12 @@ async function main() {
     }
     const { putBusinessProfile, getActiveBusinessProfile } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A, profile: profileFor('Workforce A', 'office-north'),
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: profileFor('Workforce A', 'office-north'),
     });
     const otherProfile = await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: OWNER_B, profile: profileFor('Workforce B', 'office-other'),
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
+      profile: profileFor('Workforce B', 'office-other'),
     });
     const ownerSession = await provisionDurableSession(pool, { userId: OWNER_A, organizationId: ORG_A, role: 'owner' });
     const adminSession = await provisionDurableSession(pool, { userId: ADMIN_A, organizationId: ORG_A, role: 'admin' });
@@ -331,7 +338,61 @@ async function main() {
       response.url() === origin + '/api/v1/business-profile/workforce' && response.request().method() === 'PUT'
     );
     await ownerPage.click('#savePolicies');
-    assert.strictEqual((await policySave).status(), 200, 'owner saves versioned workforce policy');
+    const policySaveResponse = await policySave;
+    assert.strictEqual(policySaveResponse.status(), 200, 'owner saves versioned workforce policy');
+    const policyWrite = policySaveResponse.request().postDataJSON();
+    const policyId = await policyCard.getAttribute('data-policy-id');
+    assert.deepStrictEqual(Object.keys(policyWrite).sort(), ['expectedVersion', 'value'],
+      'workforce policy browser emits the exact versioned section envelope');
+    assert.strictEqual(typeof policyWrite.expectedVersion, 'string', 'workforce policy browser pins a version');
+    assert.deepStrictEqual(policyWrite.value, { policies: [{
+      id: policyId,
+      name: RAW_POLICY,
+      description: RAW_POLICY_DESCRIPTION,
+      enabled: true,
+    }] }, 'workforce policy browser sends policy value inside the version envelope');
+
+    await ownerPage.evaluate(() => window.NorthStarWorkforce.reload());
+    await waitReady(ownerPage);
+    const concurrentBase = await getActiveBusinessProfile(pool, ORG_A);
+    const concurrentProfile = JSON.parse(JSON.stringify(concurrentBase.rawProfile));
+    concurrentProfile.company.dba = 'Concurrent browser writer';
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      userId: ADMIN_A,
+      expectedVersion: concurrentBase.versionLabel,
+      profile: concurrentProfile,
+    });
+    const versionsBeforeStale = Number((await pool.query(
+      'SELECT count(*)::int AS count FROM canonical_business_profiles WHERE organization_id = $1',
+      [ORG_A]
+    )).rows[0].count);
+    await policyCard.locator('.policy-description').fill('Stale browser policy must not persist');
+    const stalePolicySave = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/v1/business-profile/workforce' && response.request().method() === 'PUT'
+    );
+    const stalePolicyReload = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/workforce' && response.request().method() === 'GET'
+    );
+    await ownerPage.click('#savePolicies');
+    assert.strictEqual((await stalePolicySave).status(), 409, 'stale workforce policy browser write is rejected');
+    assert.strictEqual((await stalePolicyReload).status(), 200, 'stale workforce policy browser reloads authority');
+    await ownerPage.waitForFunction(() =>
+      document.querySelector('#workforceStatus').getAttribute('data-state') === 'error');
+    await ownerPage.waitForFunction(description =>
+      document.querySelector('#policiesList .policy-description').value === description,
+    RAW_POLICY_DESCRIPTION);
+    assert.strictEqual(await ownerPage.locator('#workforceStatus').getAttribute('data-state'), 'error',
+      'stale workforce policy browser surfaces an error state');
+    assert.ok((await ownerPage.locator('#workforceStatus').textContent()).trim(),
+      'stale workforce policy browser retains an accessible error message');
+    const afterStale = await getActiveBusinessProfile(pool, ORG_A);
+    assert.strictEqual(afterStale.rawProfile.company.dba, 'Concurrent browser writer');
+    assert.strictEqual(afterStale.rawProfile.workforce.policies[0].description, RAW_POLICY_DESCRIPTION);
+    assert.strictEqual(Number((await pool.query(
+      'SELECT count(*)::int AS count FROM canonical_business_profiles WHERE organization_id = $1',
+      [ORG_A]
+    )).rows[0].count), versionsBeforeStale, 'stale browser write creates no profile version');
 
     await ownerPage.fill('#inviteName', RAW_INVITEE);
     await ownerPage.fill('#inviteEmail', 'browser-tech@example.test');
@@ -491,6 +552,7 @@ async function main() {
     assert.strictEqual((await getActiveBusinessProfile(pool, ORG_B)).id, otherProfile.id, 'other tenant unchanged');
     assert.deepStrictEqual(ledger.external, [], 'external/provider requests are intercepted and unused');
     assert.deepStrictEqual(ledger.consoleErrors, [], 'no unexpected console errors');
+    assert.strictEqual(ledger.expectedConsole.length, 1, 'one intentional stale 409 is recorded');
     assert.deepStrictEqual(ledger.pageErrors, [], 'no page errors');
     assert.ok(ledger.requests.every(entry => entry.authorization === null), 'browser sends no Authorization headers');
     const providerPattern = /retell|stripe|twilio|resend|googleapis|maps\.google|api\.openai/i;

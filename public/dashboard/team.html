@@ -473,7 +473,10 @@
       var policies = Array.from(document.querySelectorAll('#policiesList .wf-card[data-policy-id]')).map(function (card) {
         return { id: card.dataset.policyId, name: card.querySelector('.policy-name').value, description: card.querySelector('.policy-description').value, enabled: card.querySelector('.policy-enabled').checked };
       });
-      mutate('/api/v1/business-profile/workforce', body('PUT', { policies: policies }), 'Workforce policies saved to the Business Profile.');
+      mutate('/api/v1/business-profile/workforce', body('PUT', {
+        expectedVersion: state.data.businessProfile.version,
+        value: { policies: policies }
+      }), 'Workforce policies saved to the Business Profile.');
     });
     window.NorthStarWorkforce = Object.freeze({ reload: function () { return loadData(false); } });
     loadData(true);

@@ -134,11 +134,11 @@ realPostgres('Mission 20 Phase 6E mounted canonical navigation authority', () =>
     }
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: USERS[0].id,
+      organizationId: ORG_A, userId: USERS[0].id, expectedVersion: null,
       profile: canonicalFenceProfile({ version: 'phase6e-profile-a' }),
     });
     await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: USERS[4].id,
+      organizationId: ORG_B, userId: USERS[4].id, expectedVersion: null,
       profile: canonicalFenceProfile({ version: 'phase6e-profile-b' }),
     });
     const { ingestLead } = require('../../src/services/canonicalGraphService');

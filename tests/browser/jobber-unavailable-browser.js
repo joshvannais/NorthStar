@@ -194,6 +194,7 @@ async function main() {
     await putBusinessProfile(pool, {
       organizationId: ORG_ID,
       userId: OWNER_ID,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: 'Jobber Catalogue Tenant' }),
     });
     const session = await provisionDurableSession(pool, { userId: OWNER_ID, organizationId: ORG_ID, role: 'owner' });

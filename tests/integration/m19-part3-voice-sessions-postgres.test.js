@@ -62,8 +62,8 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
          ($2, 'Trial', 'trialing', transaction_timestamp(), transaction_timestamp() + INTERVAL '14 days')`,
       [ORG_A, ORG_B]
     );
-    profileA = await putBusinessProfile(pool, { organizationId: ORG_A, userId: USER_A, profile: PROFILE });
-    profileB = await putBusinessProfile(pool, { organizationId: ORG_B, userId: USER_B, profile: { ...PROFILE, company: { name: 'Voice B', currency: 'USD' } } });
+    profileA = await putBusinessProfile(pool, { organizationId: ORG_A, userId: USER_A, expectedVersion: null, profile: PROFILE });
+    profileB = await putBusinessProfile(pool, { organizationId: ORG_B, userId: USER_B, expectedVersion: null, profile: { ...PROFILE, company: { name: 'Voice B', currency: 'USD' } } });
     integrationA = await bindIntegrationOwner(pool, { organizationId: ORG_A, userId: USER_A, provider: 'retell', externalIntegrationId: 'voice-agent-a' });
     integrationB = await bindIntegrationOwner(pool, { organizationId: ORG_B, userId: USER_B, provider: 'retell', externalIntegrationId: 'voice-agent-b' });
   }, 60000);
@@ -176,6 +176,7 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     const pinnedAuthority = await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: USER_A,
+      expectedVersion: profileA.versionLabel,
       profile: {
         ...PROFILE,
         financial: { minimumJobPrice: 999, emergencyMarkup: 1.4, travelCharge: 1.1 },
@@ -197,6 +198,7 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     const newer = await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: USER_A,
+      expectedVersion: pinnedAuthority.versionLabel,
       profile: {
         ...PROFILE,
         company: { name: 'Newer Voice Profile', currency: 'USD' },
@@ -235,6 +237,7 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     const organizationBProfile = await putBusinessProfile(pool, {
       organizationId: ORG_B,
       userId: USER_B,
+      expectedVersion: profileB.versionLabel,
       profile: {
         ...PROFILE,
         company: { name: 'Voice B Canonical Tools', currency: 'USD' },
@@ -257,9 +260,10 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     expect(organizationBCall.session.profile.id).toBe(organizationBProfile.id);
     expect(organizationBCall).not.toHaveProperty('tools');
 
-    await putBusinessProfile(pool, {
+    const missingAuthority = await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: USER_A,
+      expectedVersion: newer.versionLabel,
       profile: { ...PROFILE, financial: { minimumJobPrice: 650 }, canonicalPricing: {} },
     });
     let missingVariables;
@@ -278,6 +282,7 @@ realPostgres('canonical PostgreSQL voice session authority', () => {
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: USER_A,
+      expectedVersion: missingAuthority.versionLabel,
       profile: { ...PROFILE, financial: { minimumJobPrice: 650 }, canonicalPricing: { minimumJobPrice: '150' } },
     });
     let malformedVariables;

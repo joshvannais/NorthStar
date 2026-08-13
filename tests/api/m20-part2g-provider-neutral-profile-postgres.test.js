@@ -106,10 +106,12 @@ realPostgres('Mission 20 Part 2G mounted provider-neutral Business Profile autho
 
     const { putBusinessProfile, bindIntegrationOwner } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A, profile: baseProfile('Mounted Neutral Company'),
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: baseProfile('Mounted Neutral Company'),
     });
     otherAuthority = await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: OWNER_B, profile: baseProfile('Other Tenant Company'),
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
+      profile: baseProfile('Other Tenant Company'),
     });
     await bindIntegrationOwner(pool, {
       organizationId: ORG_A,
@@ -151,7 +153,10 @@ realPostgres('Mission 20 Part 2G mounted provider-neutral Business Profile autho
     const saved = await request(app)
       .put('/api/v1/business-profile')
       .set(auth.get(OWNER_A))
-      .send(neutralProfile(voiceSaved.body.data));
+      .send({
+        expectedVersion: voiceSaved.body.data.canonicalAuthority.version,
+        value: neutralProfile(voiceSaved.body.data),
+      });
     expect(saved.status).toBe(200);
     expect(saved.body.data).toMatchObject(RAW);
     expect(saved.body.data.retell).toEqual(LEGACY);
@@ -207,7 +212,10 @@ realPostgres('Mission 20 Part 2G mounted provider-neutral Business Profile autho
     ]) {
       const body = JSON.parse(JSON.stringify(saved.body.data));
       mutate(body);
-      const rejected = await request(app).put('/api/v1/business-profile').set(auth.get(OWNER_A)).send(body);
+      const rejected = await request(app).put('/api/v1/business-profile').set(auth.get(OWNER_A)).send({
+        expectedVersion: saved.body.data.canonicalAuthority.version,
+        value: body,
+      });
       expect(rejected.status).toBe(400);
       expect(rejected.body.error.code).toBe('INVALID_BUSINESS_PROFILE');
       expect(rejected.body.errors.join('\n')).toContain(expected);

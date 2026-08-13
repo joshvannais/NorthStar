@@ -84,8 +84,8 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
       }],
     };
     profileB.workforce = { policies: [] };
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: profileA });
-    await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, profile: profileB });
+    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, expectedVersion: null, profile: profileA });
+    await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, expectedVersion: null, profile: profileB });
 
     auth = new Map();
     for (const [userId, organizationId, role] of [
@@ -315,7 +315,10 @@ realPostgres('Mission 20 Part 2E mounted workforce PostgreSQL authority', () => 
     const rawPolicyName = '  Safety <Policy> ☃  ';
     const rawPolicyDescription = '\n  Preserve <b>data</b> é exactly.  \n';
     const policy = await request(app).put('/api/v1/business-profile/workforce').set(auth.get(OWNER_A)).send({
-      policies: [{ id: 'safety-v1', name: rawPolicyName, description: rawPolicyDescription, enabled: true }],
+      expectedVersion: canonicalReferenceSnapshot.body.data.businessProfile.version,
+      value: {
+        policies: [{ id: 'safety-v1', name: rawPolicyName, description: rawPolicyDescription, enabled: true }],
+      },
     });
     expect(policy.status).toBe(200);
     expect(policy.body.data.workforce.policies[0]).toEqual({

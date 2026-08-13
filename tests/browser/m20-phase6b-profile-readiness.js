@@ -271,9 +271,15 @@ async function main() {
     }
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
     const { stableHash } = require('../../src/services/profileReadiness');
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: profileFor('Phase 6B Browser Company') });
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A,
+      userId: OWNER_A,
+      profile: profileFor('Phase 6B Browser Company'),
+      expectedVersion: null,
+    });
     const otherAuthority = await putBusinessProfile(pool, {
       organizationId: ORG_B, userId: OWNER_B, profile: profileFor('Other Tenant'),
+      expectedVersion: null,
     });
     const sessions = {};
     for (const [role, userId, organizationId] of [
@@ -352,7 +358,10 @@ async function main() {
 
     const removed = await request(app).put('/api/v1/business-profile/serviceArea')
       .set(sessions.owner.headers).send({
-        maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+        expectedVersion: storedAfterReview.version,
+        value: {
+          maxRadiusMiles: null, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+        },
       });
     assert.strictEqual(removed.status, 200);
     const storedAfterRemoval = await active(pool);
@@ -425,7 +434,10 @@ async function main() {
 
     const restored = await request(app).put('/api/v1/business-profile/serviceArea')
       .set(sessions.owner.headers).send({
-        maxRadiusMiles: 25, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+        expectedVersion: storedAfterApplicable.version,
+        value: {
+          maxRadiusMiles: 25, maxTravelMinutes: null, primaryTerritory: '', polygon: [],
+        },
       });
     assert.strictEqual(restored.status, 200);
     const storedAfterRestore = await active(pool);
@@ -534,9 +546,12 @@ async function main() {
     let regressionRow = await active(pool);
     const contactBaseline = await request(app).put('/api/v1/business-profile/company')
       .set(sessions.owner.headers).send({
-        ...regressionRow.raw_profile.company,
-        email: 'office@example.test',
-        phone: '',
+        expectedVersion: regressionRow.version,
+        value: {
+          ...regressionRow.raw_profile.company,
+          email: 'office@example.test',
+          phone: '',
+        },
       });
     assert.strictEqual(contactBaseline.status, 200);
     regressionRow = await active(pool);
@@ -578,8 +593,11 @@ async function main() {
     const phoneWhitespace = ' \t\r\n ';
     const phoneSiblingSaved = await request(app).put('/api/v1/business-profile/company')
       .set(sessions.owner.headers).send({
-        ...regressionRow.raw_profile.company,
-        phone: phoneWhitespace,
+        expectedVersion: regressionRow.version,
+        value: {
+          ...regressionRow.raw_profile.company,
+          phone: phoneWhitespace,
+        },
       });
     assert.strictEqual(phoneSiblingSaved.status, 200);
     regressionRow = await active(pool);
@@ -614,8 +632,11 @@ async function main() {
 
     const qualifyingContactSaved = await request(app).put('/api/v1/business-profile/company')
       .set(sessions.owner.headers).send({
-        ...regressionRow.raw_profile.company,
-        email: 'dispatch@example.test',
+        expectedVersion: regressionRow.version,
+        value: {
+          ...regressionRow.raw_profile.company,
+          email: 'dispatch@example.test',
+        },
       });
     assert.strictEqual(qualifyingContactSaved.status, 200);
     regressionRow = await active(pool);
@@ -667,6 +688,7 @@ async function main() {
       userId: OWNER_A,
       profile: legacyProfile,
       preserveProfileReadiness: false,
+      expectedVersion: regressionRow.version,
     });
     regressionRow = await active(pool);
     const legacyVersionCount = regressionRow.version_count;
@@ -687,8 +709,11 @@ async function main() {
     const legacyPhoneWhitespace = ' \t\r\n ';
     const legacyPhoneSaved = await request(app).put('/api/v1/business-profile/company')
       .set(sessions.owner.headers).send({
-        ...regressionRow.raw_profile.company,
-        phone: legacyPhoneWhitespace,
+        expectedVersion: regressionRow.version,
+        value: {
+          ...regressionRow.raw_profile.company,
+          phone: legacyPhoneWhitespace,
+        },
       });
     assert.strictEqual(legacyPhoneSaved.status, 200);
     regressionRow = await active(pool);
@@ -733,8 +758,11 @@ async function main() {
     const transitionedHex = regressionRow.readiness_hex;
     const legacyQualifyingContact = await request(app).put('/api/v1/business-profile/company')
       .set(sessions.owner.headers).send({
-        ...regressionRow.raw_profile.company,
-        email: 'dispatch@example.test',
+        expectedVersion: regressionRow.version,
+        value: {
+          ...regressionRow.raw_profile.company,
+          email: 'dispatch@example.test',
+        },
       });
     assert.strictEqual(legacyQualifyingContact.status, 200);
     regressionRow = await active(pool);

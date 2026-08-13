@@ -246,7 +246,10 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
     expect(pending.body.account.user.status).toBe('pending_verification');
     expect(pending.body.account.onboarding.status).toBe('pending_verification');
     const profile = await request(app).put('/api/v1/business-profile').set(headers)
-      .send(canonicalFenceProfile({ companyName: `Jobber ${label} Company` }));
+      .send({
+        expectedVersion: null,
+        value: canonicalFenceProfile({ companyName: `Jobber ${label} Company` }),
+      });
     expect(profile.status).toBe(200);
     const onboarded = await request(app).get('/api/auth/me').set('Cookie', cookie);
     expect(onboarded.status).toBe(200);

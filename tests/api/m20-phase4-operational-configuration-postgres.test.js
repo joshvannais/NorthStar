@@ -99,8 +99,14 @@ realPostgres('Mission 20 Phase 4 mounted Operational Configuration authority', (
     }
 
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: rawProfile('Phase 4 Company') });
-    otherAuthority = await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, profile: rawProfile('Other Tenant') });
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: rawProfile('Phase 4 Company'),
+    });
+    otherAuthority = await putBusinessProfile(pool, {
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
+      profile: rawProfile('Other Tenant'),
+    });
 
     sessions = {};
     for (const [role, userId, organizationId] of [
@@ -301,17 +307,29 @@ realPostgres('Mission 20 Phase 4 mounted Operational Configuration authority', (
     expect((await pool.query('SELECT id FROM canonical_business_profiles WHERE organization_id = $1 AND is_active = TRUE', [ORG_B])).rows[0].id).toBe(otherAuthority.id);
   }, 30000);
 
-  test('legacy full/section APIs remain compatible and exact whole-profile envelopes enforce versions', async () => {
+  test('whole and section APIs require exact envelopes and enforce versions', async () => {
     const loaded = await request(app).get('/api/v1/business-profile').set(sessions.owner.headers);
     const legacyRaw = JSON.parse(JSON.stringify(loaded.body.data));
     delete legacyRaw.canonicalAuthority;
     legacyRaw.company.dba = 'Legacy raw body';
-    const legacySaved = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers).send(legacyRaw);
+    const bareWhole = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers).send(legacyRaw);
+    expect(bareWhole.status).toBe(400);
+    expect(bareWhole.body.error.code).toBe('INVALID_BUSINESS_PROFILE_WRITE');
+    const legacySaved = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers).send({
+      expectedVersion: loaded.body.data.canonicalAuthority.version,
+      value: legacyRaw,
+    });
     expect(legacySaved.status).toBe(200);
     expect(legacySaved.body.data.company.dba).toBe('Legacy raw body');
 
+    const sectionValue = { ...legacySaved.body.data.company, dba: 'Legacy section body' };
+    const bareSection = await request(app).put('/api/v1/business-profile/company')
+      .set(sessions.owner.headers).send(sectionValue);
+    expect(bareSection.status).toBe(400);
+    expect(bareSection.body.error.code).toBe('INVALID_BUSINESS_PROFILE_SECTION_WRITE');
     const sectionSaved = await request(app).put('/api/v1/business-profile/company').set(sessions.owner.headers).send({
-      ...legacySaved.body.data.company, dba: 'Legacy section body',
+      expectedVersion: legacySaved.body.data.canonicalAuthority.version,
+      value: sectionValue,
     });
     expect(sectionSaved.status).toBe(200);
     expect(sectionSaved.body.data.company.dba).toBe('Legacy section body');

@@ -270,6 +270,7 @@ realPostgres('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     await putBusinessProfile(pool, {
       organizationId: user.rows[0].organization_id,
       userId: user.rows[0].id,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: 'Active Profile Company' }),
     });
 

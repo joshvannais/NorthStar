@@ -740,6 +740,7 @@ async function main() {
       await putBusinessProfile(pool, {
         organizationId: identity.organization_id,
         userId: identity.id,
+        expectedVersion: null,
         profile: canonicalFenceProfile({ companyName: `Verified ${email}` }),
       });
       return identity;

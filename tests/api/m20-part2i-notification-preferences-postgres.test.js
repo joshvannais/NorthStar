@@ -110,11 +110,11 @@ realPostgres('Mission 20 Part 2I mounted canonical notification preferences', ()
 
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A,
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
       profile: profileFor('Notification Authority A', LEGACY_NOTIFICATIONS),
     });
     await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: OWNER_B,
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
       profile: profileFor('Notification Authority B', { email: true, otherTenant: 'do-not-touch' }),
     });
 
@@ -256,7 +256,10 @@ realPostgres('Mission 20 Part 2I mounted canonical notification preferences', ()
     const saved = await request(app)
       .put('/api/v1/business-profile')
       .set(sessions.owner.headers)
-      .send(loaded.body.data);
+      .send({
+        expectedVersion: loaded.body.data.canonicalAuthority.version,
+        value: loaded.body.data,
+      });
     expect(saved.status).toBe(200);
     expect(saved.body.data.notifications).toEqual(LEGACY_NOTIFICATIONS);
 

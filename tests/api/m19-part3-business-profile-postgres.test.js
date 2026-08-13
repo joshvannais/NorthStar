@@ -44,6 +44,14 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     return authHeaders.get(userId);
   }
 
+  async function activeVersion(organizationId) {
+    const result = await db.getPool().query(
+      'SELECT version_label FROM canonical_business_profiles WHERE organization_id = $1 AND is_active = TRUE',
+      [organizationId]
+    );
+    return result.rows.length === 1 ? result.rows[0].version_label : null;
+  }
+
   beforeAll(async () => {
     suiteDatabase = await createSuiteDatabase('business-profile');
     originalDatabaseUrl = process.env.DATABASE_URL;
@@ -79,11 +87,13 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     baselineA = await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: OWNER_A,
+      expectedVersion: await activeVersion(ORG_A),
       profile: profileFor('Canonical Editor A'),
     });
     await putBusinessProfile(pool, {
       organizationId: ORG_B,
       userId: OWNER_B,
+      expectedVersion: await activeVersion(ORG_B),
       profile: profileFor('Canonical Editor B', { taxRatePercent: 4, emergencyMultiplier: 2, travelCustomerChargePerMile: 3 }),
     });
     authHeaders = new Map();
@@ -146,7 +156,7 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     whole.body.data.company.dba = 'Nonfinancial root authority proof';
     whole.body.data.canonicalPricing.taxRatePercent = 77;
     const rootSaved = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A))
-      .send(whole.body.data);
+      .send({ expectedVersion: whole.body.data.canonicalAuthority.version, value: whole.body.data });
     expect(rootSaved.status).toBe(200);
     expect(rootSaved.body.data.company.dba).toBe('Nonfinancial root authority proof');
     expect(rootSaved.body.data.canonicalPricing.taxRatePercent).toBe(9);
@@ -252,7 +262,7 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     }
     const dangerous = JSON.parse('{"company":{"name":"still data","__proto__":{"role":"owner"}}}');
     const cases = [
-      { body: [], expected: 'must be an object' },
+      { body: [], expected: 'value must be an object', code: 'INVALID_BUSINESS_PROFILE_WRITE' },
       { body: { ...loaded.body.data, organizationId: ORG_B }, expected: 'organizationId is not a writable Business Profile field' },
       { body: { ...loaded.body.data, unexpectedSection: {} }, expected: 'unexpectedSection is not a writable Business Profile field' },
       { body: { ...loaded.body.data, toString: 'inherited-name-bypass' }, expected: 'toString is not a writable Business Profile field' },
@@ -272,11 +282,14 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     ];
 
     for (const invalid of cases) {
-      const rejected = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send(invalid.body);
+      const rejected = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send({
+        expectedVersion: baseline.versionLabel,
+        value: invalid.body,
+      });
       expect(rejected.status).toBe(400);
       expect(rejected.body).toMatchObject({
         success: false,
-        error: { code: 'INVALID_BUSINESS_PROFILE' },
+        error: { code: invalid.code || 'INVALID_BUSINESS_PROFILE' },
       });
       expect(rejected.body.errors.join('\n')).toContain(invalid.expected);
       expect((await getActiveBusinessProfile(db.getPool(), ORG_A)).id).toBe(baseline.id);
@@ -290,7 +303,7 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       const rejected = await request(app)
         .put('/api/v1/business-profile/' + section)
         .set(auth(OWNER_A))
-        .send(body);
+        .send({ expectedVersion: baseline.versionLabel, value: body });
       expect(rejected.status).toBe(400);
       expect(rejected.body.error.code).toBe('INVALID_BUSINESS_PROFILE');
       expect(rejected.body.errors.join('\n')).toContain(expected);
@@ -327,7 +340,10 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       customPrompt: rawPrompt,
     };
 
-    const saved = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send(body);
+    const saved = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send({
+      expectedVersion: loadedA.body.data.canonicalAuthority.version,
+      value: body,
+    });
     expect(saved.status).toBe(200);
     expect(saved.body.data.company.name).toBe(rawName);
     expect(saved.body.data.services[0].equipment).toBe(rawEquipment);
@@ -383,7 +399,10 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     const section = await request(app)
       .put('/api/v1/business-profile/company')
       .set(auth(OWNER_A))
-      .send({ ...reloaded.body.data.company, name: sectionName });
+      .send({
+        expectedVersion: reloaded.body.data.canonicalAuthority.version,
+        value: { ...reloaded.body.data.company, name: sectionName },
+      });
     expect(section.status).toBe(200);
     expect(section.body.data.company.name).toBe(sectionName);
     expect((await request(app).get('/api/v1/business-profile/company').set(auth(OWNER_A))).body.data.name)
@@ -436,7 +455,10 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       policies: { warranty: rawPolicy },
     };
 
-    const saved = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send(body);
+    const saved = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send({
+      expectedVersion: loadedA.body.data.canonicalAuthority.version,
+      value: body,
+    });
     expect(saved.status).toBe(200);
     expect(saved.body.data.headquarters.additionalOffices[0].name).toBe(rawOffice);
     expect(saved.body.data.serviceArea.primaryTerritory).toBe(rawTerritory);
@@ -489,7 +511,10 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     for (const invalid of invalidCases) {
       const profile = JSON.parse(JSON.stringify(saved.body.data));
       invalid.mutate(profile);
-      const rejected = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send(profile);
+      const rejected = await request(app).put('/api/v1/business-profile').set(auth(OWNER_A)).send({
+        expectedVersion: activeBeforeInvalid.versionLabel,
+        value: profile,
+      });
       expect(rejected.status).toBe(400);
       expect(rejected.body.errors.join('\n')).toContain(invalid.expected);
       expect((await getActiveBusinessProfile(db.getPool(), ORG_A)).id).toBe(activeBeforeInvalid.id);
@@ -511,7 +536,10 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     const section = await request(app)
       .put('/api/v1/business-profile/policies')
       .set(auth(OWNER_A))
-      .send({ warranty: sectionPolicy });
+      .send({
+        expectedVersion: activeBeforeInvalid.versionLabel,
+        value: { warranty: sectionPolicy },
+      });
     expect(section.status).toBe(200);
     expect(section.body.data.policies.warranty).toBe(sectionPolicy);
     expect((await request(app).get('/api/v1/business-profile/policies').set(auth(OWNER_A))).body.data.warranty)
@@ -552,7 +580,7 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
     const saved = await request(app)
       .put('/api/v1/business-profile/services')
       .set(auth(OWNER_A))
-      .send(services);
+      .send({ expectedVersion: loadedA.body.data.canonicalAuthority.version, value: services });
     expect(saved.status).toBe(200);
     expect(saved.body.data.services[0]).toEqual(services[0]);
     expect(saved.body.data.services[1]).toEqual({
@@ -612,7 +640,7 @@ realPostgres('Mission 19 Part 3 canonical Business Profile mounted authority', (
       const rejected = await request(app)
         .put('/api/v1/business-profile/services')
         .set(auth(OWNER_A))
-        .send([invalidService]);
+        .send({ expectedVersion: activeBeforeRejects.versionLabel, value: [invalidService] });
       expect(rejected.status).toBe(400);
       expect(rejected.body.errors.join('\n')).toContain(expected);
       expect((await getActiveBusinessProfile(db.getPool(), ORG_A)).id).toBe(activeBeforeRejects.id);

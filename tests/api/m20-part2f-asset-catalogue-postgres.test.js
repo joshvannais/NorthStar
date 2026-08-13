@@ -110,11 +110,11 @@ realPostgres('Mission 20 Part 2F mounted tenant asset catalogue PostgreSQL autho
     }
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A,
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
       profile: profileFor('Asset A', 'Office-North', 'Fence-Repair'),
     });
     await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: OWNER_B,
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
       profile: profileFor('Asset B', 'Office-Other', 'Other-Service'),
     });
     profileBefore = (await pool.query(
@@ -334,7 +334,8 @@ realPostgres('Mission 20 Part 2F mounted tenant asset catalogue PostgreSQL autho
     replacementProfile.headquarters.additionalOffices = [];
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A, profile: replacementProfile,
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: profileBefore.version_label,
+      profile: replacementProfile,
     });
     const replacementProfileBefore = (await pool.query(
       `SELECT id, version_label, normalized_profile_hash, raw_profile

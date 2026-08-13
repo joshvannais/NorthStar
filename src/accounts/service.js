@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const credentials = require('../auth/credentials');
-const { navigationForRole } = require('../auth/permissions');
+const { isCanonicalAccessRole, navigationForRole } = require('../auth/permissions');
 const { emailAddress } = require('../email/transactional');
 const { AccountPersistenceError, AccountRepository } = require('./repository');
 const { projectSubscription } = require('./subscriptionPolicy');
@@ -343,7 +343,8 @@ class AccountService {
       await this.sleep(loginFailureDelay(failure.attemptCount));
       throw new AccountError(401, 'invalid_credentials', 'Invalid email or password');
     }
-    if (!['pending_verification', 'active'].includes(authority.user_status) || authority.membership_status !== 'active') {
+    if (!['pending_verification', 'active'].includes(authority.user_status) ||
+        authority.membership_status !== 'active' || !isCanonicalAccessRole(authority.role)) {
       throw new AccountError(403, 'account_inactive', 'This account is not available');
     }
     if (verification.needsUpgrade) {

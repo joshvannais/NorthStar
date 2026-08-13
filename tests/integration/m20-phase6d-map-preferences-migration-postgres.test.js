@@ -68,6 +68,7 @@ realPostgres('Mission 20 Phase 6D canonical map preference migration', () => {
       '017_retell_webhook_replay_authority.sql',
       MAP_MIGRATION,
       '019_account_email_outbox.sql',
+      '020_canonical_workforce_access_roles.sql',
     ]);
     for (const filename of corpus) {
       const bytes = fs.readFileSync(path.join(MIGRATIONS, filename));

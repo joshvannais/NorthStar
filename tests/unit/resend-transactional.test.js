@@ -331,20 +331,28 @@ describe('production Resend transactional delivery', () => {
   });
 
   test('accepts an immediate pre-deadline body and clears response resources once', async () => {
-    const evidence = {};
-    const adapter = createResendAdapter(validatedProductionConfiguration(validEnvironment()), {
-      fetchImpl: scriptedBodyFetch([
-        { delayMs: 5, value: '{"id":"just-in-time"}' },
-        { done: true },
-      ], evidence),
-      timeoutMs: 50,
-    });
-    const outcome = await adapter.send(validMessage(), validContext());
-    expect(outcome.accepted).toBe(true);
-    await new Promise(resolve => setTimeout(resolve, 60));
-    expect(evidence).toEqual(expect.objectContaining({
-      calls: 1, aborts: 0, cancels: 0, releases: 1,
-    }));
+    jest.useFakeTimers();
+    try {
+      const evidence = {};
+      const adapter = createResendAdapter(validatedProductionConfiguration(validEnvironment()), {
+        fetchImpl: scriptedBodyFetch([
+          { delayMs: 5, value: '{"id":"just-in-time"}' },
+          { done: true },
+        ], evidence),
+        timeoutMs: 50,
+      });
+      const delivery = adapter.send(validMessage(), validContext());
+      await jest.advanceTimersByTimeAsync(5);
+      await jest.advanceTimersToNextTimerAsync();
+      const outcome = await delivery;
+      expect(outcome.accepted).toBe(true);
+      await jest.advanceTimersByTimeAsync(60);
+      expect(evidence).toEqual(expect.objectContaining({
+        calls: 1, aborts: 0, cancels: 0, releases: 1,
+      }));
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('preserves the incremental response limit for chunked bodies', async () => {

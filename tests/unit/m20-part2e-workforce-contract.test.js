@@ -39,7 +39,7 @@ describe('Mission 20 Part 2E workforce contract', () => {
       skillIds: ['10000000-0000-4000-8000-000000000001'],
     });
     expect(Array.from(ACCESS_ROLES).sort()).toEqual(['admin', 'member', 'viewer']);
-    expect(Array.from(MUTABLE_ACCESS_ROLES).sort()).toEqual(['admin', 'dispatcher', 'member', 'tech', 'viewer']);
+    expect(Array.from(MUTABLE_ACCESS_ROLES).sort()).toEqual(['admin', 'member', 'viewer']);
   });
 
   test.each(['owner', 'dispatcher', 'tech'])('new invitations reject the security role %s', role => {
@@ -49,15 +49,14 @@ describe('Mission 20 Part 2E workforce contract', () => {
     })).toThrow(expect.objectContaining({ code: 'invalid_access_role', status: 400 }));
   });
 
-  test('existing legacy membership roles remain mutable without becoming invitation roles', async () => {
+  test.each(['dispatcher', 'tech'])('legacy access role %s cannot be written after additive migration', async role => {
     const repository = { updateMemberAccess: jest.fn(async input => input) };
-    const result = await service(repository).updateAccess(
+    await expect(service(repository).updateAccess(
       '10000000-0000-4000-8000-000000000002',
-      { accessRole: 'dispatcher', membershipStatus: 'active' },
+      { accessRole: role, membershipStatus: 'active' },
       { organizationId: 'org', actorUserId: 'owner' }
-    );
-    expect(result.accessRole).toBe('dispatcher');
-    expect(repository.updateMemberAccess).toHaveBeenCalledTimes(1);
+    )).rejects.toMatchObject({ code: 'invalid_access_role', status: 400 });
+    expect(repository.updateMemberAccess).not.toHaveBeenCalled();
   });
 
   test('names enforce both exact UTF-8 bytes and 120 Unicode characters without trimming', () => {

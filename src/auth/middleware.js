@@ -15,6 +15,7 @@ const {
   canPerformExternal,
   projectSubscription,
 } = require('../accounts/subscriptionPolicy');
+const { isCanonicalAccessRole } = require('./permissions');
 
 const trustedTenantRequests = new WeakSet();
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -97,7 +98,7 @@ async function cookieSession(req, res, token) {
     if (new Date(authority.access_expires_at).getTime() <= Date.now()) {
       return sendAuthError(req, res, 401, 'Access credential expired', 'access_expired');
     }
-    if (!authority.user_id || !authority.organization_id || !authority.role ||
+    if (!authority.user_id || !authority.organization_id || !isCanonicalAccessRole(authority.role) ||
         authority.membership_status !== 'active' ||
         !['pending_verification', 'active'].includes(authority.user_status)) {
       return sendAuthError(req, res, 403, 'Active organization membership required', 'organization_membership_required');

@@ -175,6 +175,7 @@ async function main() {
     await putBusinessProfile(bootstrapPool, {
       organizationId: ORG,
       userId: OWNER,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: 'Lane 3 Browser Tenant' }),
     });
     const sessions = new Map();

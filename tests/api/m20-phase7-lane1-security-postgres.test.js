@@ -185,6 +185,7 @@ realPostgres('Mission 20 Phase 7 Lane 1 customer and CSV security boundary', () 
     await putBusinessProfile(pool, {
       organizationId: ORGANIZATION_ID,
       userId: OWNER_ID,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ version: 'm20-phase7-lane1-api-v1' }),
     });
     ownerSession = await provisionDurableSession(pool, {

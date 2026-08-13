@@ -65,7 +65,9 @@ realPostgres('Mission 20 Part 2F tenant asset catalogue migration', () => {
       hourlyVehicleCost: 21, maintenanceReserve: 0.08, equipmentTransportCapacity: 4,
     };
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-    const storedProfile = await putBusinessProfile(pool, { organizationId: organization, userId: actor, profile });
+    const storedProfile = await putBusinessProfile(pool, {
+      organizationId: organization, userId: actor, expectedVersion: null, profile,
+    });
 
     expect((await pool.query("SELECT to_regclass('public.tenant_assets') AS authority")).rows[0].authority)
       .toBeNull();

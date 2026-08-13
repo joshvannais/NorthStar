@@ -863,11 +863,13 @@ async function main() {
     const profileA = await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: USER_A,
+      expectedVersion: null,
       profile: profile('Ratification Fence A', 'm19-part3-controlled-profile-v1'),
     });
     await putBusinessProfile(pool, {
       organizationId: ORG_B,
       userId: USER_B,
+      expectedVersion: null,
       profile: profile('Ratification Fence B', 'm19-part3-controlled-profile-b-v1', {
         customerMarkupPercent: 5,
         travelCustomerChargePerMile: 3,

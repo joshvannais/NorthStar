@@ -72,10 +72,12 @@ realPostgres('Mission 20 Part 2H mounted canonical integration status', () => {
 
     const { putBusinessProfile, bindIntegrationOwner } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A, profile: profileFor('Integration Status A'),
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: profileFor('Integration Status A'),
     });
     await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: OWNER_B, profile: profileFor('Integration Status B'),
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
+      profile: profileFor('Integration Status B'),
     });
     await bindIntegrationOwner(pool, {
       organizationId: ORG_A, userId: OWNER_A, provider: 'retell',
@@ -186,7 +188,10 @@ realPostgres('Mission 20 Part 2H mounted canonical integration status', () => {
       const saved = await request(app)
         .put('/api/v1/business-profile')
         .set(auth.get(OWNER_A))
-        .send(loaded.body.data);
+        .send({
+          expectedVersion: loaded.body.data.canonicalAuthority.version,
+          value: loaded.body.data,
+        });
       expect(saved.status).toBe(200);
       expect(saved.body.data.integrations).toEqual(LEGACY_INTEGRATIONS);
 

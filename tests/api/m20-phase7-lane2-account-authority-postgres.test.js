@@ -40,6 +40,7 @@ describe('Mission 20 Phase 7 Lane 2 mounted account-authority safety', () => {
     await putBusinessProfile(pool, {
       organizationId,
       userId,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: `Organization ${email}` }),
     });
     const session = await provisionDurableSession(pool, {

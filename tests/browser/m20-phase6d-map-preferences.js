@@ -367,11 +367,13 @@ async function main() {
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: OWNER_A,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: 'Phase 6D Map Browser A' }),
     });
     await putBusinessProfile(pool, {
       organizationId: ORG_B,
       userId: OWNER_B,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: 'Phase 6D Map Browser B' }),
     });
     const sessions = {};

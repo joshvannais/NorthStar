@@ -16,6 +16,7 @@ const LEGACY_FINANCIAL_AUTHORITY_FIELDS = Object.freeze([
   'markup', 'taxRate', 'emergencyMarkup', 'travelCharge', 'minimumJobPrice',
   'desiredGrossMargin', 'desiredNetMargin', 'maximumDiscount',
 ]);
+const BUSINESS_PROFILE_VERSION_PATTERN = /^org-profile-v[1-9][0-9]*$/;
 
 function authorityError(code, message, status) {
   const error = new Error(message);
@@ -114,6 +115,26 @@ function profilesEqual(left, right) {
   return JSON.stringify(stableValue(left)) === JSON.stringify(stableValue(right));
 }
 
+function expectedBusinessProfileVersion(input) {
+  if (!hasOwn(input, 'expectedVersion')) {
+    throw authorityError(
+      'INVALID_BUSINESS_PROFILE_VERSION',
+      'The expected Business Profile version is required.',
+      400
+    );
+  }
+  const value = input.expectedVersion;
+  if (value === null) return null;
+  if (typeof value !== 'string' || !BUSINESS_PROFILE_VERSION_PATTERN.test(value)) {
+    throw authorityError(
+      'INVALID_BUSINESS_PROFILE_VERSION',
+      'The expected Business Profile version is invalid.',
+      400
+    );
+  }
+  return value;
+}
+
 function projectProfile(row) {
   if (!row) return null;
   return Object.freeze({
@@ -167,6 +188,7 @@ async function getBusinessProfileById(pool, organizationId, profileId) {
 
 async function putBusinessProfile(pool, input) {
   const source = requirePool(pool);
+  const expectedVersion = expectedBusinessProfileVersion(input);
   let rawProfile = validatedRawProfile(input.profile || {});
   return repository.withTransaction(source, async function (client) {
     const organization = await client.query(
@@ -176,33 +198,27 @@ async function putBusinessProfile(pool, input) {
     if (organization.rows.length !== 1) {
       throw authorityError('ORGANIZATION_NOT_FOUND', 'Organization not found.', 404);
     }
-    let active = null;
     const writesProfileReadiness = Array.isArray(input.profileReadinessChanges);
     const preserveProfileReadiness = !writesProfileReadiness && input.preserveProfileReadiness !== false;
-    if (hasOwn(input, 'expectedVersion') || input.preserveVoiceAssistant === true ||
-        input.preserveFinancialConfiguration === true || preserveProfileReadiness || writesProfileReadiness) {
-      active = await client.query(
-        `SELECT version_label, raw_profile
-           FROM canonical_business_profiles
-          WHERE organization_id = $1 AND is_active = TRUE`,
-        [input.organizationId]
-      );
-      if (active.rows.length > 1) {
-        throw authorityError('CANONICAL_PROFILE_CONFLICT', 'Multiple active Business Profiles were found.', 409);
-      }
+    const active = await client.query(
+      `SELECT id, organization_id, version_number, version_label, raw_profile,
+              normalized_profile, normalized_profile_hash, created_by, created_at
+         FROM canonical_business_profiles
+        WHERE organization_id = $1 AND is_active = TRUE`,
+      [input.organizationId]
+    );
+    if (active.rows.length > 1) {
+      throw authorityError('CANONICAL_PROFILE_CONFLICT', 'Multiple active Business Profiles were found.', 409);
     }
-    const activeRawProfile = active && active.rows.length === 1 && isPlainObject(active.rows[0].raw_profile)
+    const activeRawProfile = active.rows.length === 1 && isPlainObject(active.rows[0].raw_profile)
       ? active.rows[0].raw_profile : {};
-    if (hasOwn(input, 'expectedVersion')) {
-      const actualVersion = active.rows.length === 1 ? active.rows[0].version_label : null;
-      const expectedVersion = input.expectedVersion === null ? null : String(input.expectedVersion);
-      if (actualVersion !== expectedVersion) {
-        throw authorityError(
-          'BUSINESS_PROFILE_VERSION_CONFLICT',
-          'Business Profile changed; reload and try again.',
-          409
-        );
-      }
+    const actualVersion = active.rows.length === 1 ? active.rows[0].version_label : null;
+    if (actualVersion !== expectedVersion) {
+      throw authorityError(
+        'BUSINESS_PROFILE_VERSION_CONFLICT',
+        'Business Profile changed; reload and try again.',
+        409
+      );
     }
     if (writesProfileReadiness) {
       const readinessBase = active.rows.length === 1 ? activeRawProfile : rawProfile;
@@ -249,6 +265,9 @@ async function putBusinessProfile(pool, input) {
       rawProfile = transitionCompatibleProfileReadiness(activeRawProfile, containedCandidate);
     }
     rawProfile = validatedRawProfile(rawProfile);
+    if (active.rows.length === 1 && profilesEqual(rawProfile, activeRawProfile)) {
+      return projectProfile(active.rows[0]);
+    }
     const sequence = await client.query(
       `SELECT COALESCE(MAX(version_number), 0)::bigint + 1 AS next_version
          FROM canonical_business_profiles
@@ -258,12 +277,19 @@ async function putBusinessProfile(pool, input) {
     const versionNumber = Number(sequence.rows[0].next_version);
     const versionLabel = 'org-profile-v' + versionNumber;
     const normalized = adaptBusinessProfile(rawProfile, versionLabel);
-    await client.query(
+    const retired = await client.query(
       `UPDATE canonical_business_profiles
           SET is_active = FALSE, retired_at = NOW()
-        WHERE organization_id = $1 AND is_active = TRUE`,
-      [input.organizationId]
+        WHERE organization_id = $1 AND is_active = TRUE AND version_label = $2`,
+      [input.organizationId, expectedVersion]
     );
+    if (active.rows.length === 1 && retired.rowCount !== 1) {
+      throw authorityError(
+        'BUSINESS_PROFILE_VERSION_CONFLICT',
+        'Business Profile changed; reload and try again.',
+        409
+      );
+    }
     const inserted = await client.query(
       `INSERT INTO canonical_business_profiles
         (organization_id, version_number, version_label, raw_profile,

@@ -451,11 +451,11 @@ async function main() {
     );
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A,
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
       profile: profileFor('Notification Presentation A', LEGACY_NOTIFICATIONS),
     });
     const otherProfile = await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: OWNER_B,
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
       profile: profileFor('Notification Presentation B', { email: true, otherTenant: 'unchanged' }),
     });
 

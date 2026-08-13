@@ -72,8 +72,8 @@ async function applyMigrations(pool) {
      ON CONFLICT (id) DO NOTHING`,
     [USER_B, ORG_B]
   );
-  await putBusinessProfile(pool, { organizationId: ORG_A, userId: USER_A, profile: graphInput(ORG_A, 'profile-a', 'profile-a', 'Profile A').businessProfile });
-  await putBusinessProfile(pool, { organizationId: ORG_B, userId: USER_B, profile: graphInput(ORG_B, 'profile-b', 'profile-b', 'Profile B').businessProfile });
+  await putBusinessProfile(pool, { organizationId: ORG_A, userId: USER_A, expectedVersion: null, profile: graphInput(ORG_A, 'profile-a', 'profile-a', 'Profile A').businessProfile });
+  await putBusinessProfile(pool, { organizationId: ORG_B, userId: USER_B, expectedVersion: null, profile: graphInput(ORG_B, 'profile-b', 'profile-b', 'Profile B').businessProfile });
 }
 
 function graphInput(organizationId, sessionId, key, customerName) {

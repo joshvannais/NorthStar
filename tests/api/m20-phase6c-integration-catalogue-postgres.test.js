@@ -122,10 +122,12 @@ realPostgres('Mission 20 Phase 6C mounted integration catalogue', () => {
 
     const { putBusinessProfile, bindIntegrationOwner } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
-      organizationId: ORG_A, userId: OWNER_A, profile: profileFor('Catalogue Organization A'),
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: profileFor('Catalogue Organization A'),
     });
     await putBusinessProfile(pool, {
-      organizationId: ORG_B, userId: OWNER_B, profile: profileFor('Catalogue Organization B'),
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
+      profile: profileFor('Catalogue Organization B'),
     });
     await bindIntegrationOwner(pool, {
       organizationId: ORG_A, userId: OWNER_A, provider: 'retell',

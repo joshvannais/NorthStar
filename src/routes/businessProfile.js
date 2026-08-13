@@ -216,19 +216,7 @@ function invalidWrite(code, message, details) {
 }
 
 function parseWholeProfileWrite(body) {
-  const isEnvelope = isPlainObject(body) && (hasOwn(body, 'expectedVersion') || hasOwn(body, 'value'));
-  if (!isEnvelope) {
-    const authority = isPlainObject(body) && isPlainObject(body.canonicalAuthority)
-      ? body.canonicalAuthority : null;
-    const expectedVersion = authority && typeof authority.version === 'string' &&
-      BUSINESS_PROFILE_VERSION_PATTERN.test(authority.version) ? authority.version : undefined;
-    return {
-      expectedVersion,
-      value: body,
-      versioned: expectedVersion !== undefined,
-    };
-  }
-  if (!hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
+  if (!isPlainObject(body) || !hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
       Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
       (body.expectedVersion !== null &&
        (typeof body.expectedVersion !== 'string' || !BUSINESS_PROFILE_VERSION_PATTERN.test(body.expectedVersion))) ||
@@ -239,7 +227,21 @@ function parseWholeProfileWrite(body) {
       ['Body must contain exactly expectedVersion and value; expectedVersion must be a canonical version label or null, and value must be an object.']
     );
   }
-  return { expectedVersion: body.expectedVersion, value: body.value, versioned: true };
+  return { expectedVersion: body.expectedVersion, value: body.value };
+}
+
+function parseSectionWrite(body) {
+  if (!isPlainObject(body) || !hasOwn(body, 'expectedVersion') || !hasOwn(body, 'value') ||
+      Object.keys(body).some(function (key) { return key !== 'expectedVersion' && key !== 'value'; }) ||
+      (body.expectedVersion !== null &&
+       (typeof body.expectedVersion !== 'string' || !BUSINESS_PROFILE_VERSION_PATTERN.test(body.expectedVersion)))) {
+    throw invalidWrite(
+      'INVALID_BUSINESS_PROFILE_SECTION_WRITE',
+      'Business Profile section writes require a value and the expected canonical profile version.',
+      ['Body must contain exactly expectedVersion and value; expectedVersion must be a canonical version label or null.']
+    );
+  }
+  return { expectedVersion: body.expectedVersion, value: body.value };
 }
 
 function parseOperationalConfigurationWrite(body) {
@@ -417,10 +419,10 @@ router.get('/', requireTenantAccess, async function (req, res) {
 router.put('/', requireAccountMutation, requirePermission('settings', 'update'), async function (req, res) {
   try {
     const write = parseWholeProfileWrite(req.body);
-    const options = write.versioned ? {
-      expectedVersion: write.expectedVersion,
-    } : null;
-    return res.json({ success: true, data: response(await persist(req, write.value, options)) });
+    return res.json({
+      success: true,
+      data: response(await persist(req, write.value, { expectedVersion: write.expectedVersion })),
+    });
   } catch (error) {
     if (error.details) return res.status(400).json({
       success: false,
@@ -570,7 +572,8 @@ router.put('/:section', requireAccountMutation, requirePermission('settings', 'u
     return res.status(400).json({ success: false, error: { code: 'INVALID_PROFILE_SECTION', message: 'Business Profile section is invalid.' } });
   }
   try {
-    rejectFinancialOnlySectionWrite(section, req.body);
+    const write = parseSectionWrite(req.body);
+    rejectFinancialOnlySectionWrite(section, write.value);
     let current;
     try {
       current = (await active(req)).rawProfile;
@@ -580,8 +583,11 @@ router.put('/:section', requireAccountMutation, requirePermission('settings', 'u
       delete current.canonicalAuthority;
       delete current.onboardingDraft;
     }
-    const updated = { ...current, [section]: req.body };
-    return res.json({ success: true, data: response(await persist(req, updated)) });
+    const updated = { ...current, [section]: write.value };
+    return res.json({
+      success: true,
+      data: response(await persist(req, updated, { expectedVersion: write.expectedVersion })),
+    });
   } catch (error) {
     if (error.details) return res.status(400).json({
       success: false,

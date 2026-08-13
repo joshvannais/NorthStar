@@ -664,10 +664,12 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     const { putBusinessProfile, bindIntegrationOwner } = require('../../src/services/organizationAuthority');
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: 'Phase 6A Company A' }),
     });
     await putBusinessProfile(pool, {
       organizationId: ORG_B,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: 'Phase 6A Company B' }),
     });
     await bindIntegrationOwner(pool, {

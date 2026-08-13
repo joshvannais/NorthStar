@@ -473,8 +473,8 @@ async function main() {
       );
     }
     const { putBusinessProfile, bindIntegrationOwner } = require('../../src/services/organizationAuthority');
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: profileFor('Integration Presentation A') });
-    const otherProfile = await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, profile: profileFor('Integration Presentation B') });
+    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, expectedVersion: null, profile: profileFor('Integration Presentation A') });
+    const otherProfile = await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, expectedVersion: null, profile: profileFor('Integration Presentation B') });
     await bindIntegrationOwner(pool, {
       organizationId: ORG_A, userId: OWNER_A, provider: 'retell',
       externalIntegrationId: 'browser-private-retell-a', metadata: { privateMarker: 'BROWSER PRIVATE A' },

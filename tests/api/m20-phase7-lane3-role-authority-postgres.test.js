@@ -83,11 +83,13 @@ realPostgres('Mission 20 Phase 7 Lane 3 mounted canonical role authority', () =>
     await putBusinessProfile(bootstrapPool, {
       organizationId: ORG_A,
       userId: OWNER_A,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: 'Lane 3 Tenant A' }),
     });
     await putBusinessProfile(bootstrapPool, {
       organizationId: ORG_B,
       userId: OWNER_B,
+      expectedVersion: null,
       profile: canonicalFenceProfile({ companyName: 'Lane 3 Tenant B' }),
     });
 

@@ -250,8 +250,8 @@ async function main() {
       );
     }
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: baseProfile(COMPANY) });
-    const otherAuthority = await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, profile: baseProfile('Other Tenant') });
+    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, expectedVersion: null, profile: baseProfile(COMPANY) });
+    const otherAuthority = await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, expectedVersion: null, profile: baseProfile('Other Tenant') });
     const sessions = {};
     for (const [role, userId, organizationId] of [
       ['owner', OWNER_A, ORG_A], ['admin', ADMIN_A, ORG_A], ['member', MEMBER_A, ORG_A],

@@ -101,11 +101,13 @@ async function main() {
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
       userId: OWNER_A,
+      expectedVersion: null,
       profile: completeProfile('Canonical Browser A'),
     });
     const originalB = await putBusinessProfile(pool, {
       organizationId: ORG_B,
       userId: OWNER_B,
+      expectedVersion: null,
       profile: completeProfile('Canonical Browser B', {
         taxRatePercent: 4,
         emergencyMultiplier: 2,

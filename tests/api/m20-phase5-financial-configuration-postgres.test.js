@@ -230,8 +230,14 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
       );
     }
     ({ putBusinessProfile } = require('../../src/services/organizationAuthority'));
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: rawProfile('Phase 5 Company') });
-    otherAuthority = await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, profile: rawProfile('Other Tenant') });
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: rawProfile('Phase 5 Company'),
+    });
+    otherAuthority = await putBusinessProfile(pool, {
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
+      profile: rawProfile('Other Tenant'),
+    });
     sessions = {};
     for (const [role, userId, organizationId] of [
       ['owner', OWNER_A, ORG_A], ['admin', ADMIN_A, ORG_A], ['member', MEMBER_A, ORG_A],
@@ -250,7 +256,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
   beforeEach(async () => {
     await pool.query('DELETE FROM organization_onboarding WHERE organization_id = $1', [ORG_A]);
     await pool.query('DELETE FROM canonical_business_profiles WHERE organization_id = $1', [ORG_A]);
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: rawProfile('Phase 5 Company') });
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: rawProfile('Phase 5 Company'),
+    });
   });
 
   afterEach(() => {
@@ -470,13 +479,16 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     )).rows[0].id).toBe(otherAuthority.id);
   }, 30000);
 
-  test('current implicit, explicit, and unversioned whole writes preserve Financial authority and fail closed when Financial-only', async () => {
+  test('current exact whole writes preserve Financial authority and fail closed when Financial-only', async () => {
     let before = await activeRow();
     const implicitLoaded = await request(app).get('/api/v1/business-profile').set(sessions.owner.headers);
     const implicitBody = attemptFinancialChanges(implicitLoaded.body.data, 71);
     implicitBody.company.dba = 'Implicit current nonfinancial change';
     const implicit = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers)
-      .send(implicitBody);
+      .send({
+        expectedVersion: implicitLoaded.body.data.canonicalAuthority.version,
+        value: implicitBody,
+      });
     expect(implicit.status).toBe(200);
     expect(implicit.body.data.company.dba).toBe('Implicit current nonfinancial change');
     let after = await expectOwnedState(before, implicit);
@@ -500,7 +512,7 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     const unversionedBody = attemptFinancialChanges(before.raw_profile, 73);
     unversionedBody.company.dba = 'Unversioned current nonfinancial change';
     const unversioned = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers)
-      .send(unversionedBody);
+      .send({ expectedVersion: before.version_label, value: unversionedBody });
     expect(unversioned.status).toBe(200);
     expect(unversioned.body.data.company.dba).toBe('Unversioned current nonfinancial change');
     after = await expectOwnedState(before, unversioned);
@@ -510,7 +522,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     const currentFull = await request(app).get('/api/v1/business-profile').set(sessions.owner.headers);
     const implicitOnly = attemptFinancialChanges(currentFull.body.data, 74);
     const deniedImplicit = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers)
-      .send(implicitOnly);
+      .send({
+        expectedVersion: currentFull.body.data.canonicalAuthority.version,
+        value: implicitOnly,
+      });
     expect(deniedImplicit.status).toBe(409);
     expect(deniedImplicit.body.error.code).toBe('FINANCIAL_CONFIGURATION_ROUTE_REQUIRED');
 
@@ -524,19 +539,22 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     expect(deniedExplicit.body.error.code).toBe('FINANCIAL_CONFIGURATION_ROUTE_REQUIRED');
 
     const deniedUnversioned = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers)
-      .send(attemptFinancialChanges(denyBefore.raw_profile, 76));
+      .send({
+        expectedVersion: denyBefore.version_label,
+        value: attemptFinancialChanges(denyBefore.raw_profile, 76),
+      });
     expect(deniedUnversioned.status).toBe(409);
     expect(deniedUnversioned.body.error.code).toBe('FINANCIAL_CONFIGURATION_ROUTE_REQUIRED');
     expect(await activeRow()).toEqual(denyBefore);
 
     const ordinaryNoOp = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers)
-      .send(denyBefore.raw_profile);
+      .send({ expectedVersion: denyBefore.version_label, value: denyBefore.raw_profile });
     expect(ordinaryNoOp.status).toBe(200);
     const noOpAfter = await activeRow();
     expect(ownedFinancialState(noOpAfter.raw_profile)).toEqual(ownedFinancialState(denyBefore.raw_profile));
     expect(noOpAfter.raw_profile).toEqual(denyBefore.raw_profile);
-    expect(noOpAfter.version_count).toBe(denyBefore.version_count + 1);
-    expect(ordinaryNoOp.body.data.canonicalAuthority.version).toBe(noOpAfter.version_label);
+    expect(noOpAfter.version_count).toBe(denyBefore.version_count);
+    expect(ordinaryNoOp.body.data.canonicalAuthority.version).toBe(denyBefore.version_label);
   }, 30000);
 
   test('Voice, Operational, general, and every Financial-adjacent generic section preserve all eight legacy keys and canonical state', async () => {
@@ -565,7 +583,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
 
     before = after;
     result = await request(app).put('/api/v1/business-profile/company').set(sessions.owner.headers)
-      .send({ ...before.raw_profile.company, dba: 'Generic company proof' });
+      .send({
+        expectedVersion: before.version_label,
+        value: { ...before.raw_profile.company, dba: 'Generic company proof' },
+      });
     expect(result.status).toBe(200);
     expect(result.body.data.company.dba).toBe('Generic company proof');
     after = await expectOwnedState(before, result);
@@ -573,14 +594,14 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     before = after;
     const financialOnly = attemptFinancialChanges(before.raw_profile, 81).financial;
     const deniedFinancial = await request(app).put('/api/v1/business-profile/financial')
-      .set(sessions.owner.headers).send(financialOnly);
+      .set(sessions.owner.headers).send({ expectedVersion: before.version_label, value: financialOnly });
     expect(deniedFinancial.status).toBe(409);
     expect(deniedFinancial.body.error.code).toBe('FINANCIAL_CONFIGURATION_ROUTE_REQUIRED');
     expect(await activeRow()).toEqual(before);
 
     const mixedFinancial = { ...financialOnly, unknownLegacy: '  changed unknown financial sibling  ' };
     result = await request(app).put('/api/v1/business-profile/financial')
-      .set(sessions.owner.headers).send(mixedFinancial);
+      .set(sessions.owner.headers).send({ expectedVersion: before.version_label, value: mixedFinancial });
     expect(result.status).toBe(200);
     after = await expectOwnedState(before, result);
     expect(after.raw_profile.financial.unknownLegacy).toBe('  changed unknown financial sibling  ');
@@ -609,7 +630,7 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     ]) {
       before = after;
       result = await request(app).put('/api/v1/business-profile/' + item.section)
-        .set(sessions.owner.headers).send(item.body);
+        .set(sessions.owner.headers).send({ expectedVersion: before.version_label, value: item.body });
       expect(result.status).toBe(200);
       after = await expectOwnedState(before, result);
       expect(after.raw_profile[item.section][item.sibling]).toBe(item.body[item.sibling]);
@@ -631,7 +652,7 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     alternateFirstBody.financial.desiredGrossMargin = 91;
     const startingCount = await count();
     const alternateFirst = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers)
-      .send(alternateFirstBody);
+      .send({ expectedVersion: initialVersion, value: alternateFirstBody });
     expect(alternateFirst.status).toBe(200);
     expect(alternateFirst.body.data.company.dba).toBe('Current implicit alternate wins first');
     expect(alternateFirst.body.data.canonicalPricing.defaultRangePercent).toBe(0);
@@ -667,7 +688,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     staleBeforeDeletion.financial.maximumDiscount = 91;
     const countAfterDedicated = await count();
     const dedicatedContained = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers)
-      .send(staleBeforeDeletion);
+      .send({
+        expectedVersion: dedicatedFirst.body.data.canonicalAuthority.version,
+        value: staleBeforeDeletion,
+      });
     expect(dedicatedContained.status).toBe(200);
     expect(dedicatedContained.body.data.company.dba).toBe('Dedicated authority survives stale whole save');
     expect(dedicatedContained.body.data.canonicalPricing.defaultRangePercent).toBe(7);
@@ -690,7 +714,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     staleImplicit.canonicalPricing.desiredGrossMarginPercent = 15;
     const beforeImplicitCount = await count();
     const implicitConflict = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers)
-      .send(staleImplicit);
+      .send({
+        expectedVersion: beforeDedicated.body.data.canonicalAuthority.version,
+        value: staleImplicit,
+      });
     expect(implicitConflict.status).toBe(409);
     expect(implicitConflict.body.error.code).toBe('BUSINESS_PROFILE_VERSION_CONFLICT');
     expect(await count()).toBe(beforeImplicitCount);
@@ -718,7 +745,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
       ['vehicles', { averageFuelCost: 99 }],
     ]) {
       const denied = await request(app).put('/api/v1/business-profile/' + section)
-        .set(sessions.owner.headers).send(body);
+        .set(sessions.owner.headers).send({
+          expectedVersion: beforeFinancialOnly.version_label,
+          value: body,
+        });
       expect(denied.status).toBe(409);
       expect(denied.body.error.code).toBe('FINANCIAL_CONFIGURATION_ROUTE_REQUIRED');
     }
@@ -729,9 +759,12 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     expect(await count()).toBe(beforeImplicitCount);
 
     const mixedCrew = await request(app).put('/api/v1/business-profile/crew').set(sessions.owner.headers).send({
-      defaultCrewSize: 4,
-      averageHourlyRate: 99,
-      futureCrew: UNKNOWN,
+      expectedVersion: beforeFinancialOnly.version_label,
+      value: {
+        defaultCrewSize: 4,
+        averageHourlyRate: 99,
+        futureCrew: UNKNOWN,
+      },
     });
     expect(mixedCrew.status).toBe(200);
     expect(mixedCrew.body.data.crew.defaultCrewSize).toBe(4);
@@ -739,9 +772,12 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     expect(mixedCrew.body.data.crew.futureCrew).toBe(UNKNOWN);
 
     const mixedVehicles = await request(app).put('/api/v1/business-profile/vehicles').set(sessions.owner.headers).send({
-      truckCount: 3,
-      averageFuelCost: 99,
-      futureVehicle: UNKNOWN,
+      expectedVersion: mixedCrew.body.data.canonicalAuthority.version,
+      value: {
+        truckCount: 3,
+        averageFuelCost: 99,
+        futureVehicle: UNKNOWN,
+      },
     });
     expect(mixedVehicles.status).toBe(200);
     expect(mixedVehicles.body.data.vehicles.truckCount).toBe(3);
@@ -750,41 +786,47 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
 
     const mixedPricing = await request(app).put('/api/v1/business-profile/canonicalPricing')
       .set(sessions.owner.headers).send({
-        defaultRangePercent: 99,
-        futurePricing: '  changed unowned pricing byte  ',
+        expectedVersion: mixedVehicles.body.data.canonicalAuthority.version,
+        value: {
+          defaultRangePercent: 99,
+          futurePricing: '  changed unowned pricing byte  ',
+        },
       });
     expect(mixedPricing.status).toBe(200);
     expect(mixedPricing.body.data.canonicalPricing.defaultRangePercent).toBe(7);
     expect(mixedPricing.body.data.canonicalPricing.futurePricing).toBe('  changed unowned pricing byte  ');
 
     const firstSection = await request(app).put('/api/v1/business-profile/canonicalPricing')
-      .set(sessions.unversionedOwner.headers).send({ defaultRangePercent: 55 });
+      .set(sessions.unversionedOwner.headers).send({
+        expectedVersion: null,
+        value: { defaultRangePercent: 55 },
+      });
     expect(firstSection.status).toBe(409);
     expect(await count(ORG_UNVERSIONED)).toBe(0);
-    for (const body of [
-      {
+    for (const [body, status, code] of [
+      [{
         canonicalPricing: { defaultRangePercent: 55 },
         financial: { markup: 2, desiredGrossMargin: 55 },
-      },
-      {
+      }, 400, 'INVALID_BUSINESS_PROFILE_WRITE'],
+      [{
         expectedVersion: null,
         value: {
           canonicalPricing: { defaultRangePercent: 55 },
           financial: { markup: 2, desiredGrossMargin: 55 },
         },
-      },
+      }, 409, 'FINANCIAL_CONFIGURATION_ROUTE_REQUIRED'],
     ]) {
       const deniedFirstWhole = await request(app).put('/api/v1/business-profile')
         .set(sessions.unversionedOwner.headers).send(body);
-      expect(deniedFirstWhole.status).toBe(409);
-      expect(deniedFirstWhole.body.error.code).toBe('FINANCIAL_CONFIGURATION_ROUTE_REQUIRED');
+      expect(deniedFirstWhole.status).toBe(status);
+      expect(deniedFirstWhole.body.error.code).toBe(code);
       expect(await count(ORG_UNVERSIONED)).toBe(0);
     }
     const firstBody = rawProfile('Unversioned First Profile');
     firstBody.company.dba = 'Accepted non-financial first write';
     firstBody.canonicalPricing.desiredGrossMarginPercent = 15;
     const firstWhole = await request(app).put('/api/v1/business-profile')
-      .set(sessions.unversionedOwner.headers).send(firstBody);
+      .set(sessions.unversionedOwner.headers).send({ expectedVersion: null, value: firstBody });
     expect(firstWhole.status).toBe(200);
     const firstRaw = (await pool.query(
       'SELECT version_label, raw_profile FROM canonical_business_profiles WHERE organization_id = $1 AND is_active = TRUE',
@@ -823,7 +865,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     const legacyBefore = ownedFinancialState(initial.raw_profile).financial;
 
     const unrelated = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...initial.raw_profile.company, dba: 'Migration remains pending' });
+      .set(sessions.owner.headers).send({
+        expectedVersion: initial.version_label,
+        value: { ...initial.raw_profile.company, dba: 'Migration remains pending' },
+      });
     expect(unrelated.status).toBe(200);
     let raw = (await activeRow()).raw_profile;
     expect(raw.canonicalPricing.desiredGrossMarginPercent).toBe(0);
@@ -860,7 +905,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     expect(ownedFinancialState(raw).financial).toEqual(legacyBefore);
 
     const afterMaterializedGeneral = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...raw.company, dba: 'Materialized values remain' });
+      .set(sessions.owner.headers).send({
+        expectedVersion: materialized.body.data.canonicalAuthority.version,
+        value: { ...raw.company, dba: 'Materialized values remain' },
+      });
     expect(afterMaterializedGeneral.status).toBe(200);
     raw = (await activeRow()).raw_profile;
     expect(raw.canonicalPricing.desiredNetMarginPercent).toBe(0);
@@ -884,7 +932,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     }
 
     const afterBlank = await request(app).put('/api/v1/business-profile/company')
-      .set(sessions.owner.headers).send({ ...raw.company, dba: 'Blank remains authoritative' });
+      .set(sessions.owner.headers).send({
+        expectedVersion: cleared.body.data.canonicalAuthority.version,
+        value: { ...raw.company, dba: 'Blank remains authoritative' },
+      });
     expect(afterBlank.status).toBe(200);
     raw = (await activeRow()).raw_profile;
     for (const field of ['desiredGrossMarginPercent', 'desiredNetMarginPercent', 'maximumDiscountPercent']) {
@@ -914,7 +965,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     }).unitRates.vinyl = 83;
     delete services[0].canonicalPricing.rangePercent;
     let serviceSaved = await request(app).put('/api/v1/business-profile/services')
-      .set(sessions.owner.headers).send(services);
+      .set(sessions.owner.headers).send({
+        expectedVersion: saved.body.data.canonicalAuthority.version,
+        value: services,
+      });
     expect(serviceSaved.status).toBe(200);
 
     const simulationBody = {
@@ -967,7 +1021,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     services = JSON.parse(JSON.stringify(raw.services));
     services[0].canonicalPricing.rangePercent = 0;
     serviceSaved = await request(app).put('/api/v1/business-profile/services')
-      .set(sessions.owner.headers).send(services);
+      .set(sessions.owner.headers).send({
+        expectedVersion: saved.body.data.canonicalAuthority.version,
+        value: services,
+      });
     expect(serviceSaved.status).toBe(200);
     const serviceZero = await calculate();
     expect(serviceZero.customerFacingPrice).toBe(baseline.customerFacingPrice);
@@ -984,7 +1041,10 @@ realPostgres('Mission 20 Phase 5 mounted Financial Configuration authority', () 
     services = JSON.parse(JSON.stringify(raw.services));
     delete services[0].canonicalPricing.rangePercent;
     serviceSaved = await request(app).put('/api/v1/business-profile/services')
-      .set(sessions.owner.headers).send(services);
+      .set(sessions.owner.headers).send({
+        expectedVersion: (await activeRow()).version_label,
+        value: services,
+      });
     expect(serviceSaved.status).toBe(200);
     financial = await request(app).get('/api/v1/business-profile/financialConfiguration')
       .set(sessions.owner.headers);

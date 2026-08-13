@@ -122,10 +122,17 @@ async function assertPersistentAuthority(app, pool, ownerSession, viewerSession)
   const profile = completeProfile();
   const writableProfile = JSON.parse(JSON.stringify(profile));
   writableProfile.hours.tuesday = { open: '09:00', close: '18:00', emergency: false };
+  const profileBeforeWrite = await request(app)
+    .get('/api/v1/business-profile')
+    .set(ownerSession.headers);
+  assert.strictEqual(profileBeforeWrite.status, 200);
   const profileWrite = await request(app)
     .put('/api/v1/business-profile')
     .set(ownerSession.headers)
-    .send(writableProfile);
+    .send({
+      expectedVersion: profileBeforeWrite.body.data.canonicalAuthority.version,
+      value: writableProfile,
+    });
   assert.strictEqual(profileWrite.status, 200, 'owner writes through mounted Business Profile route');
   assert.strictEqual(profileWrite.body.data.hours.tuesday.open, '09:00');
   assert.strictEqual(profileWrite.body.data.hours.tuesday.close, '18:00');
@@ -137,10 +144,11 @@ async function assertPersistentAuthority(app, pool, ownerSession, viewerSession)
   // raw bytes through the canonical authority, then mounting the real GET/UI
   // consumers below. This does not weaken or copy the production validator.
   const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-  await putBusinessProfile(pool, {
+  const legacyAuthority = await putBusinessProfile(pool, {
     organizationId: ORGANIZATION_ID,
     userId: OWNER_ID,
     profile,
+    expectedVersion: profileWrite.body.data.canonicalAuthority.version,
   });
 
   const preferenceWrite = await request(app)
@@ -153,7 +161,7 @@ async function assertPersistentAuthority(app, pool, ownerSession, viewerSession)
   const viewerProfileWrite = await request(app)
     .put('/api/v1/business-profile')
     .set(viewerSession.headers)
-    .send(profile);
+    .send({ expectedVersion: legacyAuthority.versionLabel, value: profile });
   assert.strictEqual(viewerProfileWrite.status, 403, 'viewer cannot mutate Business Profile authority');
   const viewerPreferenceWrite = await request(app)
     .put('/api/account/preferences')
@@ -379,6 +387,7 @@ async function main() {
       organizationId: ORGANIZATION_ID,
       userId: OWNER_ID,
       profile: completeProfile(),
+      expectedVersion: null,
     });
     const ownerSession = await provisionDurableSession(pool, {
       userId: OWNER_ID,

@@ -108,8 +108,14 @@ realPostgres('Mission 20 Phase 3A mounted AI configuration authority', () => {
     );
 
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-    await putBusinessProfile(pool, { organizationId: ORG_A, userId: OWNER_A, profile: profile('Phase 3A Company') });
-    otherAuthority = await putBusinessProfile(pool, { organizationId: ORG_B, userId: OWNER_B, profile: profile('Other Tenant') });
+    await putBusinessProfile(pool, {
+      organizationId: ORG_A, userId: OWNER_A, expectedVersion: null,
+      profile: profile('Phase 3A Company'),
+    });
+    otherAuthority = await putBusinessProfile(pool, {
+      organizationId: ORG_B, userId: OWNER_B, expectedVersion: null,
+      profile: profile('Other Tenant'),
+    });
 
     sessions = {};
     for (const [role, userId, organizationId] of [
@@ -143,13 +149,17 @@ realPostgres('Mission 20 Phase 3A mounted AI configuration authority', () => {
     const unrelatedWhole = JSON.parse(JSON.stringify(initial.body.data));
     unrelatedWhole.company.dba = 'Unrelated whole-profile save';
     unrelatedWhole.voiceAssistant = voice('Bypass');
-    const wholeSaved = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers).send(unrelatedWhole);
+    const wholeSaved = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers).send({
+      expectedVersion: initial.body.data.canonicalAuthority.version,
+      value: unrelatedWhole,
+    });
     expect(wholeSaved.status).toBe(200);
     expect(Object.prototype.hasOwnProperty.call(wholeSaved.body.data, 'voiceAssistant')).toBe(false);
     expect(wholeSaved.body.data.retell).toEqual(LEGACY_RETELL);
 
     const companySaved = await request(app).put('/api/v1/business-profile/company').set(sessions.owner.headers).send({
-      ...wholeSaved.body.data.company, dba: 'Unrelated section save',
+      expectedVersion: wholeSaved.body.data.canonicalAuthority.version,
+      value: { ...wholeSaved.body.data.company, dba: 'Unrelated section save' },
     });
     expect(companySaved.status).toBe(200);
     expect(Object.prototype.hasOwnProperty.call(companySaved.body.data, 'voiceAssistant')).toBe(false);
@@ -193,7 +203,10 @@ realPostgres('Mission 20 Phase 3A mounted AI configuration authority', () => {
     delete staleWhole.canonicalAuthority;
     staleWhole.company.dba = 'Stale non-voice client';
     staleWhole.voiceAssistant = voice('WholeBypass');
-    const contained = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers).send(staleWhole);
+    const contained = await request(app).put('/api/v1/business-profile').set(sessions.owner.headers).send({
+      expectedVersion: afterRace.body.data.canonicalAuthority.version,
+      value: staleWhole,
+    });
     expect(contained.status).toBe(200);
     expect(contained.body.data.voiceAssistant).toEqual(winner);
     expect(contained.body.data.canonicalPricing).toEqual(initialPricing);

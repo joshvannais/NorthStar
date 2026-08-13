@@ -86,6 +86,7 @@ realPostgres('Persistence V2 checked-out client termination containment', () => 
     }
     await putBusinessProfile(pool, {
       organizationId: ORG_A,
+      expectedVersion: null,
       profile: {
         company: { currency: 'USD' }, headquarters: {}, scheduling: {}, services: [],
         crew: { defaultCrewSize: 2, averageHourlyRate: 42, overtimeMultiplier: 1.5 },

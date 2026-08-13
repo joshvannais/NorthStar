@@ -88,8 +88,8 @@ realPostgres('Mission 19 Part 3 canonical customer strong identity', () => {
        ON CONFLICT (id) DO NOTHING`,
       [ORG_B]
     );
-    await putBusinessProfile(pool, { organizationId: ORG_A, profile });
-    await putBusinessProfile(pool, { organizationId: ORG_B, profile });
+    await putBusinessProfile(pool, { organizationId: ORG_A, expectedVersion: null, profile });
+    await putBusinessProfile(pool, { organizationId: ORG_B, expectedVersion: null, profile });
   }, 30000);
 
   afterAll(async () => {
@@ -223,7 +223,7 @@ realPostgres('Mission 19 Part 3 canonical customer strong identity', () => {
       [ORG_C]
     );
     expect(failed.rows).toEqual([{ state: 'retryable_failed', safe_error_code: 'canonical_business_profile_required' }]);
-    await putBusinessProfile(pool, { organizationId: ORG_C, profile });
+    await putBusinessProfile(pool, { organizationId: ORG_C, expectedVersion: null, profile });
     const retry = await ingestLead(pool, request);
     expect(retry.status).toBe(201);
   });
@@ -243,6 +243,7 @@ realPostgres('Mission 19 Part 3 canonical customer strong identity', () => {
     });
     const replacement = await putBusinessProfile(pool, {
       organizationId: ORG_A,
+      expectedVersion: originalAuthority.versionLabel,
       profile: { ...profile, company: { currency: 'EUR' } },
     });
     expect(replacement.id).not.toBe(originalAuthority.id);

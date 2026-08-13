@@ -386,7 +386,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(initial.body.data.company.email).toBe('pending-gates@example.test');
 
     const saved = await request(app).put('/api/v1/business-profile').set(headers)
-      .send(canonicalFenceProfile({ companyName: 'Pending Gate Company' }));
+      .send({ expectedVersion: null, value: canonicalFenceProfile({ companyName: 'Pending Gate Company' }) });
     expect(saved.status).toBe(200);
     const me = await request(app).get('/api/auth/me').set(headers);
     expect(me.status).toBe(200);
@@ -423,7 +423,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     const createdJar = cookies(created);
     const saved = await request(app).put('/api/v1/business-profile')
       .set({ Cookie: cookieHeader(createdJar), 'X-CSRF-Token': createdJar.northstar_csrf })
-      .send(canonicalFenceProfile({ companyName: 'Verified Complete Gate Company' }));
+      .send({ expectedVersion: null, value: canonicalFenceProfile({ companyName: 'Verified Complete Gate Company' }) });
     expect(saved.status).toBe(200);
     const user = await pool.query("SELECT id, organization_id FROM users WHERE email_normalized = 'verified-complete-gates@example.test'");
     expect(user.rows).toHaveLength(1);
@@ -459,7 +459,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       'X-User-Role': 'owner',
     };
     const saved = await request(app).put('/api/v1/business-profile').set(headers)
-      .send(canonicalFenceProfile({ companyName: tenantPrivateMarker }));
+      .send({ expectedVersion: null, value: canonicalFenceProfile({ companyName: tenantPrivateMarker }) });
     expect(saved.status).toBe(200);
     const authority = await pool.query(
       "SELECT id, organization_id FROM users WHERE email_normalized = 'pending-external-families@example.test'"
@@ -562,7 +562,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     const jar = cookies(created);
     const headers = { Cookie: cookieHeader(jar), 'X-CSRF-Token': jar.northstar_csrf };
     expect((await request(app).put('/api/v1/business-profile').set(headers)
-      .send(canonicalFenceProfile({ companyName: 'Expired Mutation Company' }))).status).toBe(200);
+      .send({ expectedVersion: null, value: canonicalFenceProfile({ companyName: 'Expired Mutation Company' }) })).status).toBe(200);
     await activateTrialForEmail('expired-mutation-families@example.test');
     const authority = (await pool.query(
       "SELECT id, organization_id FROM users WHERE email_normalized = 'expired-mutation-families@example.test'"
@@ -635,7 +635,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       'X-CSRF-Token': createdJar.northstar_csrf,
     };
     const saved = await request(app).put('/api/v1/business-profile').set(createdHeaders)
-      .send(canonicalFenceProfile({ companyName: 'PostgreSQL External Authority Company' }));
+      .send({ expectedVersion: null, value: canonicalFenceProfile({ companyName: 'PostgreSQL External Authority Company' }) });
     expect(saved.status).toBe(200);
     await activateTrialForEmail('verified-external-families@example.test');
     const ownExportMarker = `Own Tenant ${crypto.randomUUID()}`;
@@ -652,7 +652,7 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
       'X-CSRF-Token': foreignJar.northstar_csrf,
     };
     expect((await request(app).put('/api/v1/business-profile').set(foreignHeaders)
-      .send(canonicalFenceProfile({ companyName: 'Foreign Export Scope Company' }))).status).toBe(200);
+      .send({ expectedVersion: null, value: canonicalFenceProfile({ companyName: 'Foreign Export Scope Company' }) })).status).toBe(200);
     await activateTrialForEmail('foreign-export-scope@example.test');
     const foreignExportMarker = `Foreign Tenant ${crypto.randomUUID()}`;
     const foreignLead = await request(app).post('/api/leads').set(foreignHeaders)

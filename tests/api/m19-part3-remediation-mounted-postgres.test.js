@@ -178,10 +178,13 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       );
     }
     ({ putBusinessProfile, bindIntegrationOwner } = require('../../src/services/organizationAuthority'));
-    profileAuthorityA = await putBusinessProfile(pool, { organizationId: ORG_A, userId: USERS.owner, profile });
+    profileAuthorityA = await putBusinessProfile(pool, {
+      organizationId: ORG_A, userId: USERS.owner, expectedVersion: null, profile,
+    });
     profileAuthorityB = await putBusinessProfile(pool, {
       organizationId: ORG_B,
       userId: USERS.other,
+      expectedVersion: null,
       profile: otherProfile,
     });
     integrationAuthorityA = await bindIntegrationOwner(pool, {

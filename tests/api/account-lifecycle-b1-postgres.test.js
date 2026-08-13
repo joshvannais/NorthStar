@@ -115,6 +115,10 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     if (allocation) await allocation.cleanup();
   });
 
+  afterEach(() => {
+    controlledNow = null;
+  });
+
   test('signup commits pending authority and one hash-only verification token without session cookies', async () => {
     const response = await request(app)
       .post('/api/auth/signup')
@@ -659,13 +663,40 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       state: 'trialing', daysRemaining: 1, endsToday: true, readOnly: false,
       upgradeAvailable: false,
     }));
-    controlledNow = new Date(status.body.subscription.trialEnd);
-    const expired = await request(app).get('/api/account/subscription').set('Cookie', jar);
-    expect(expired.status).toBe(200);
-    expect(expired.body.subscription).toEqual(expect.objectContaining({
-      state: 'expired', daysRemaining: 0, readOnly: true,
-      upgradeAvailable: false, showTrialBanner: false,
-    }));
+
+    for (const [storedState, microseconds, expectedStoredState] of [
+      ['trialing', '000000', 'expired'],
+      ['trialing', '000123', 'trialing'],
+      ['expired', '000000', 'expired'],
+      ['expired', '000123', 'expired'],
+    ]) {
+      await pool.query(
+        `UPDATE subscriptions
+            SET status = $2, trial_started_at = $3::timestamptz, trial_ends_at = $4::timestamptz
+          WHERE organization_id = $1`,
+        [owner.rows[0].organization_id, storedState,
+          `2026-08-01T12:00:00.${microseconds}Z`, `2026-08-15T12:00:00.${microseconds}Z`]
+      );
+      controlledNow = new Date('2026-08-15T12:00:00.000Z');
+      const projected = await request(app).get('/api/account/subscription').set('Cookie', jar);
+      expect(projected.status).toBe(200);
+      expect(projected.body.subscription).toEqual(expect.objectContaining({
+        state: 'expired', daysRemaining: 0, readOnly: true,
+        upgradeAvailable: false, showTrialBanner: false,
+      }));
+      const stored = (await pool.query(
+        `SELECT status,
+                to_char(trial_ends_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS trial_end_exact
+           FROM subscriptions
+          WHERE organization_id = $1`,
+        [owner.rows[0].organization_id]
+      )).rows[0];
+      expect(stored).toEqual({
+        status: expectedStoredState,
+        trial_end_exact: `2026-08-15T12:00:00.${microseconds}`,
+      });
+    }
+
     expect((await request(app).get('/api/auth/me').set('Cookie', jar)).status).toBe(200);
     expect((await request(app).get('/api/account/preferences').set('Cookie', jar)).status).toBe(200);
     const mutation = await request(app)
@@ -684,7 +715,6 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
     expect(active.body.subscription).toEqual(expect.objectContaining({
       state: 'active', readOnly: false, showTrialBanner: false, upgradeAvailable: false,
     }));
-    controlledNow = null;
   });
 
   test('mounted subscription projection keeps B1 upgrade capability false for every durable state and forgery', async () => {

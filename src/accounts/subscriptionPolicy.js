@@ -46,6 +46,7 @@ function projectSubscription(authority) {
       endsToday = calendarDifference <= 0;
     }
   }
+  if (state === 'expired') daysRemaining = 0;
 
   if (!safe) {
     return Object.freeze({

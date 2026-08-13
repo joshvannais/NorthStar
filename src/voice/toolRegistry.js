@@ -22,6 +22,7 @@ const dataLoader = require('../services/dataLoader');
 const businessProfile = require('../services/businessProfile');
 const { addLead, updateLead, getLead } = require('../leads/store');
 const crypto = require('crypto');
+const safeLogger = require('../observability/safeLogger');
 
 // ── In-memory stores for notes, tags, timeline ──────────────────
 
@@ -139,7 +140,7 @@ function updateLeadFields({ leadId, fields }) {
  * Schedule an appointment (STUB — real implementation will use calendar client).
  */
 function scheduleAppointment({ leadId, date, timeSlot, service }) {
-  console.log(`[ToolRegistry] scheduleAppointment STUB: leadId=${leadId}, date=${date}, timeSlot=${timeSlot}, service=${service}`);
+  safeLogger.info('voice', 'tool_schedule_stub_invoked');
 
   const appointmentId = 'apt-' + crypto.randomUUID().slice(0, 8);
 
@@ -278,7 +279,7 @@ function getFAQ({ question }) {
  * Check schedule availability (STUB).
  */
 function checkAvailability({ date, service }) {
-  console.log(`[ToolRegistry] checkAvailability STUB: date=${date}, service=${service}`);
+  safeLogger.info('voice', 'tool_availability_stub_invoked');
 
   // Return mock availability slots during business hours
   const defaultSlots = [

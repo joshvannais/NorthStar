@@ -8,6 +8,7 @@
 
 const https = require('https');
 const db = require('../db');
+const safeLogger = require('../observability/safeLogger');
 
 const JOBBER_AUTH_URL = 'https://api.getjobber.com/api/oauth/authorize';
 const JOBBER_TOKEN_URL = 'https://api.getjobber.com/api/oauth/token';
@@ -138,7 +139,7 @@ async function getTokens(userId) {
       expiresAt: row.jobber_token_expires
     };
   } catch (err) {
-    console.error('[Jobber] Get tokens error:', err.message);
+    safeLogger.error('jobber', 'token_lookup_failed');
     return null;
   }
 }
@@ -156,7 +157,7 @@ async function saveTokens(userId, accessToken, refreshToken, expiresIn) {
     );
     return Boolean(result && result.rowCount === 1);
   } catch (err) {
-    console.error('[Jobber] Token persistence failed');
+    safeLogger.error('jobber', 'token_persistence_failed');
     return false;
   }
 }
@@ -177,7 +178,7 @@ async function getValidAccessToken(userId) {
         return refreshed.access_token;
       }
     } catch (err) {
-      console.error('[Jobber] Token refresh failed:', err.message);
+      safeLogger.error('jobber', 'token_refresh_failed');
       return null;
     }
   }
@@ -227,7 +228,7 @@ async function createClient(lead, accessToken) {
   if (result.data?.clientCreate?.client) {
     return result.data.clientCreate.client.id;
   }
-  console.error('[Jobber] Create client error:', JSON.stringify(result.errors || result));
+  safeLogger.error('jobber', 'create_client_failed');
   return null;
 }
 
@@ -263,7 +264,7 @@ async function createJob(lead, clientId, accessToken) {
   if (result.data?.jobCreate?.job) {
     return result.data.jobCreate.job.id;
   }
-  console.error('[Jobber] Create job error:', JSON.stringify(result.errors || result));
+  safeLogger.error('jobber', 'create_job_failed');
   return null;
 }
 
@@ -274,7 +275,7 @@ async function createJob(lead, clientId, accessToken) {
 async function pushLead(lead, userId) {
   const accessToken = await getValidAccessToken(userId);
   if (!accessToken) {
-    console.log('[Jobber] No valid token for user', userId);
+    safeLogger.warn('jobber', 'token_unavailable');
     return null;
   }
   
@@ -285,7 +286,7 @@ async function pushLead(lead, userId) {
     const jobId = await createJob(lead, clientId, accessToken);
     return { clientId, jobId };
   } catch (err) {
-    console.error('[Jobber] Push lead error:', err.message);
+    safeLogger.error('jobber', 'push_lead_failed');
     return null;
   }
 }
@@ -301,7 +302,7 @@ async function disconnect(userId) {
       [userId]
     );
   } catch (err) {
-    console.error('[Jobber] Disconnect error:', err.message);
+    safeLogger.error('jobber', 'disconnect_failed');
   }
 }
 

@@ -24,6 +24,7 @@ const {
   providerEventIdentity,
 } = require('../services/canonicalRetellIngestion');
 const replayAuthority = require('../retell/webhookReplayAuthority');
+const safeLogger = require('../observability/safeLogger');
 
 // ── Configuration ──────────────────────────────────────────────
 const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
@@ -162,12 +163,12 @@ function validateSignature(rawBody, signature) {
   const apiKey = getWebhookApiKey();
   const parsed = parseSignature(signature);
   if (!apiKey) {
-    console.warn('[Voice:Webhook] Signature validation unavailable');
+    safeLogger.warn('voice', 'signature_validation_unavailable', { configured: false });
     return false;
   }
 
   if (!parsed) {
-    console.warn('[Voice:Webhook] Missing X-Retell-Signature header');
+    safeLogger.warn('voice', 'signature_missing');
     return false;
   }
 
@@ -182,7 +183,7 @@ function validateSignature(rawBody, signature) {
     const received = Buffer.from(parsed.digest, 'hex');
     return received.length === computed.length && crypto.timingSafeEqual(received, computed);
   } catch (err) {
-    console.error('[Voice:Webhook] Signature validation error:', err.message);
+    safeLogger.error('voice', 'signature_validation_failed');
     return false;
   }
 }
@@ -197,7 +198,7 @@ function validateSignature(rawBody, signature) {
  */
 function validateTimestamp(timestamp) {
   if (typeof timestamp !== 'string' || !/^\d+$/.test(timestamp)) {
-    console.warn('[Voice:Webhook] Missing timestamp');
+    safeLogger.warn('voice', 'timestamp_missing');
     return false;
   }
 
@@ -207,7 +208,7 @@ function validateTimestamp(timestamp) {
   const diff = Math.abs(now - ts);
 
   if (diff > MAX_AGE_MS) {
-    console.warn(`[Voice:Webhook] Timestamp outside ±5min window: diff=${diff}ms`);
+    safeLogger.warn('voice', 'timestamp_outside_window', { clockSkewMs: diff });
     return false;
   }
 
@@ -247,7 +248,7 @@ async function routeEvent(payload) {
   const eventId = payload.event_id || payload.call_id || '';
 
   if (!isSupportedEvent(event)) {
-    console.warn(`[Voice:Webhook] Unknown or missing event type: ${event}`);
+    safeLogger.warn('voice', 'webhook_event_unsupported', { routed: false });
     return { received: true, routed: false, reason: 'unknown_event' };
   }
 
@@ -255,7 +256,7 @@ async function routeEvent(payload) {
     return { received: true, routed: false, reason: 'webhook_shutdown', event, eventId };
   }
 
-  console.log(`[Voice:Webhook] Routing event: ${event} (id: ${eventId})`);
+  safeLogger.info('voice', 'webhook_event_routing', { routed: true });
 
   // ── Handle transcript events (streamed during call) ──
   if (event === 'transcript_ready' || event === 'transcript') {
@@ -272,7 +273,9 @@ async function routeEvent(payload) {
             timestamp: seg.timestamp || new Date().toISOString(),
           });
         }
-        console.log(`[Voice:Webhook] Processed ${segments.length} transcript segments for session ${sessionId}`);
+        safeLogger.info('voice', 'transcript_segments_processed', {
+          segmentCount: segments.length,
+        });
       } else if (event === 'transcript') {
         // Full/partial transcript update — update last segment
         const text = payload.transcript || payload.text || '';
@@ -286,7 +289,7 @@ async function routeEvent(payload) {
         }
       }
     } catch (err) {
-      console.error(`[Voice:Webhook] Transcript handling error for ${event}:`, err.message);
+      safeLogger.error('voice', 'transcript_handling_failed');
     }
 
     // Transcript events are acked immediately — no business event needed
@@ -326,7 +329,7 @@ async function routeEvent(payload) {
         err.code === 'WEBHOOK_SHUTDOWN'
       );
       if (!expectedCancellation) {
-        console.error(`[Voice:Webhook] Event handler error for ${event}:`, err.message);
+        safeLogger.error('voice', 'event_handler_failed');
       }
       // Don't fail the webhook response — Retell will retry if we 500
     } finally {
@@ -455,7 +458,7 @@ async function handleSignedWebhook(req, res, ingestionSource) {
         error: { code: 'UNSUPPORTED_WEBHOOK_EVENT', message: 'Webhook event type is not supported' },
       });
     }
-    console.log(`[Voice:Webhook] Received supported event: ${payload.event}`);
+    safeLogger.info('voice', 'webhook_event_received', { routed: true });
 
     // 4. Canonical session/event/graph state, one accepted audit row, and the
     // token-owned replay transition share one recoverable PostgreSQL outcome.
@@ -481,7 +484,7 @@ async function handleSignedWebhook(req, res, ingestionSource) {
     const canonical = outcome.canonical;
 
     const elapsed = Date.now() - startTime;
-    console.log(`[Voice:Webhook] Completed: ${payload.event} (${elapsed}ms)`);
+    safeLogger.info('voice', 'webhook_event_completed', { durationMs: elapsed });
     return res.status(canonical.status).json(canonical.body);
   } catch (err) {
     if (replayClaim) {
@@ -491,7 +494,7 @@ async function handleSignedWebhook(req, res, ingestionSource) {
         err.outcome && err.outcome.canonical) {
       return res.status(err.outcome.canonical.status).json(err.outcome.canonical.body);
     }
-    console.error('[Voice:Webhook] Fatal signed webhook error:', err.message);
+    safeLogger.error('voice', 'webhook_fatal_error');
     const replayUnavailable = err && (
       err.code === 'webhook_replay_persistence_unavailable' ||
       err.code === 'webhook_replay_claim_ownership_mismatch'

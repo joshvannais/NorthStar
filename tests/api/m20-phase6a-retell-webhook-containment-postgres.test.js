@@ -286,6 +286,17 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     return { correlationId, rows: rows.rows };
   }
 
+  async function anonymousNotFoundCount(method) {
+    await settleAudit();
+    const result = await db.getPool().query(
+      `SELECT COALESCE(sum(request_count), 0)::int AS count
+         FROM api_observability_hourly
+        WHERE event_key = 'anonymous_api_not_found' AND method_class = $1`,
+      [method]
+    );
+    return result.rows[0].count;
+  }
+
   function expectOnlyAuditChanged(before, after, expectedAuditDelta) {
     for (const table of AUTHORITY_TABLES.filter(name => name !== 'audit_logs')) {
       expect(after[table]).toEqual(before[table]);
@@ -759,29 +770,14 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     const payload = nonterminalEvent('strict-route-' + crypto.randomUUID());
     const raw = JSON.stringify(payload);
     const before = await tableState();
+    const aggregateBefore = await anonymousNotFoundCount('POST');
     const response = await sendRaw(route, raw, { signature: sign(raw) });
     expect(response.status).toBe(404);
 
     const audit = await auditRowsForResponse(response);
-    expect(audit.rows).toHaveLength(1);
-    expect(audit.rows[0]).toMatchObject({
-      organization_id: null,
-      user_id: null,
-      action: 'POST 404',
-      entity_type: expect.any(String),
-    });
-    expect(audit.rows[0].details).toMatchObject({
-      actorLabel: 'anonymous',
-      role: 'anonymous',
-      requestId: audit.correlationId,
-      correlationId: audit.correlationId,
-      afterState: {
-        method: 'POST',
-        path: route,
-        status: 404,
-      },
-    });
-    expectOnlyAuditChanged(before, await tableState(), 1);
+    expect(audit.rows).toHaveLength(0);
+    expect(await anonymousNotFoundCount('POST')).toBe(aggregateBefore + 1);
+    expect(await tableState()).toEqual(before);
   });
 
   test.each([

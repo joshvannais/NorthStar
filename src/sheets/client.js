@@ -6,6 +6,7 @@
 
 const { google } = require('googleapis');
 const config = require('../config');
+const safeLogger = require('../observability/safeLogger');
 
 let sheetsClient = null;
 
@@ -13,7 +14,7 @@ function getClient() {
   if (sheetsClient) return sheetsClient;
 
   if (!config.sheets.clientEmail || !config.sheets.privateKey) {
-    console.log('[Sheets] Not configured — skipping.');
+    safeLogger.warn('google_sheets', 'provider_unconfigured', { configured: false });
     return null;
   }
 
@@ -28,7 +29,7 @@ function getClient() {
     sheetsClient = google.sheets({ version: 'v4', auth });
     return sheetsClient;
   } catch (err) {
-    console.error('[Sheets] Auth error:', err.message);
+    safeLogger.error('google_sheets', 'client_initialization_failed');
     return null;
   }
 }
@@ -79,9 +80,9 @@ async function appendLead(lead, contractorId = 'default') {
       resource: { values },
     });
 
-    console.log(`[Sheets] Lead ${lead.id} saved to sheet "${contractorId}"`);
+    safeLogger.info('google_sheets', 'lead_appended');
   } catch (err) {
-    console.error('[Sheets] Append error:', err.message);
+    safeLogger.error('google_sheets', 'notification_send_failed');
   }
 }
 
@@ -101,9 +102,9 @@ async function ensureHeaders(client, spreadsheetId, sheetName) {
         valueInputOption: 'USER_ENTERED',
         resource: { values: [SHEET_HEADERS] },
       });
-      console.log(`[Sheets] Created headers for sheet "${sheetName}"`);
+      safeLogger.info('google_sheets', 'headers_created');
     } catch (err) {
-      console.error(`[Sheets] Error creating headers: ${err.message}`);
+      safeLogger.error('google_sheets', 'headers_create_failed');
     }
   }
 }

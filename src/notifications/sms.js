@@ -3,6 +3,7 @@
  */
 
 const config = require('../config');
+const safeLogger = require('../observability/safeLogger');
 
 let twilioClient = null;
 
@@ -10,7 +11,7 @@ function getClient() {
   if (twilioClient) return twilioClient;
 
   if (!config.twilio.accountSid || !config.twilio.authToken) {
-    console.log('[SMS] Twilio not configured — skipping.');
+    safeLogger.warn('twilio', 'provider_unconfigured', { configured: false });
     return null;
   }
 
@@ -21,7 +22,7 @@ function getClient() {
     );
     return twilioClient;
   } catch (err) {
-    console.error('[SMS] Init error:', err.message);
+    safeLogger.error('twilio', 'client_initialization_failed');
     return null;
   }
 }
@@ -50,7 +51,7 @@ async function sendLeadNotification(lead, toNumber) {
   const from = config.twilio.phoneNumber;
 
   if (!to || !from) {
-    console.log('[SMS] Missing to/from number — skipping.');
+    safeLogger.warn('twilio', 'recipient_unavailable');
     return;
   }
 
@@ -60,9 +61,9 @@ async function sendLeadNotification(lead, toNumber) {
       from,
       to,
     });
-    console.log(`[SMS] Notification sent to ${to} (SID: ${message.sid})`);
+    safeLogger.info('twilio', 'notification_sent');
   } catch (err) {
-    console.error('[SMS] Send error:', err.message);
+    safeLogger.error('twilio', 'notification_send_failed');
   }
 }
 

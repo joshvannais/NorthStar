@@ -221,9 +221,10 @@ describe('Mission 19 Part 3 migrated audit contract', () => {
     db.query.mockRejectedValueOnce(new Error('private database outage detail'));
     const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
     await expect(audit.record({ action: 'm19.commit1.outage', correlationId: 'request-outage' })).resolves.toBeUndefined();
-    expect(warning).toHaveBeenCalledWith('[Audit] Persistence warning:', {
-      requestId: 'request-outage',
+    expect(warning).toHaveBeenCalledWith({
+      component: 'audit',
       event: 'audit_persistence_failed',
+      requestId: 'unavailable',
     });
     expect(JSON.stringify(warning.mock.calls)).not.toContain('private database outage detail');
     warning.mockRestore();

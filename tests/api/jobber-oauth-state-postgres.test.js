@@ -722,7 +722,11 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
       expect(response.text).not.toContain(authority.user_id);
       expect(response.text).not.toContain(authority.session_id);
       expect(response.text).not.toContain(authority.organization_id);
-      expect(consoleSpy).toHaveBeenCalledWith('[Jobber] OAuth authorization failed');
+      expect(consoleSpy).toHaveBeenCalledWith({
+        component: 'jobber',
+        event: 'oauth_authorization_failed',
+        requestId: 'unavailable',
+      });
     } finally {
       consoleSpy.mockRestore();
     }
@@ -765,7 +769,10 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
         'intercepted-unpersisted-refresh',
         3600
       )).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith('[Jobber] Token persistence failed');
+      expect(consoleSpy).toHaveBeenCalledWith({
+        component: 'jobber',
+        event: 'token_persistence_failed',
+      });
     } finally {
       consoleSpy.mockRestore();
     }
@@ -837,7 +844,12 @@ describe('mounted opaque Jobber OAuth authorization state on required PostgreSQL
         requestId: 'unavailable',
       });
       expect(response.text).not.toContain(privateProviderBody);
-      expect(consoleSpy).toHaveBeenCalledWith('[Jobber] OAuth callback failed');
+      expect(consoleSpy).toHaveBeenCalledWith({
+        component: 'jobber',
+        event: 'oauth_callback_failed',
+        requestId: 'unavailable',
+      });
+      expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain(privateProviderBody);
     } finally {
       consoleSpy.mockRestore();
     }

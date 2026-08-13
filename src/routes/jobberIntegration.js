@@ -5,6 +5,7 @@ const jobber = require('../integrations/jobber');
 const oauthAuthorizationState = require('../integrations/oauthAuthorizationState');
 const { requireVerifiedExternalAction } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
+const safeLogger = require('../observability/safeLogger');
 
 const UNAVAILABLE_RESPONSE = Object.freeze({
   error: 'Jobber integration is unavailable',
@@ -123,7 +124,9 @@ function createJobberIntegrationRouter(options = {}) {
             'Integration authorization is temporarily unavailable'
           );
         }
-        console.error('[Jobber] OAuth authorization failed');
+        safeLogger.error('jobber', 'oauth_authorization_failed', {
+          requestId: requestId(req),
+        });
         return failure(
           req,
           res,
@@ -209,7 +212,9 @@ function createJobberIntegrationRouter(options = {}) {
 
         return res.redirect('/dashboard/integrations?jobber=connected');
       } catch (_error) {
-        console.error('[Jobber] OAuth callback failed');
+        safeLogger.error('jobber', 'oauth_callback_failed', {
+          requestId: requestId(req),
+        });
         return failure(
           req,
           res,

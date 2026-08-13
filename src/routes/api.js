@@ -18,6 +18,7 @@ const {
 const { requirePermission } = require('../auth/permissions');
 const { createCanonicalVoiceCall } = require('../services/canonicalVoiceSessionCreation');
 const { getDataRoot, dataPath } = require('../services/dataRoot');
+const safeLogger = require('../observability/safeLogger');
 
 const router = express.Router();
 
@@ -396,7 +397,10 @@ router.post('/retell/create-call', requireVerifiedExternalAction, requirePermiss
       canonicalGraphPendingWebhook: true,
     });
   } catch (err) {
-    console.error('[API] Retell create-call error:', err.message);
+    safeLogger.error('retell', 'create_call_failed', {
+      requestId: req.requestId || req.correlationId || 'unavailable',
+      statusCode: err && Number.isInteger(err.status) ? err.status : 503,
+    });
     const status = err && err.status ? err.status : 503;
     res.status(status).json({
       success: false,

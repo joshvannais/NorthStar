@@ -4,6 +4,7 @@
 
 const config = require('../config');
 const nodemailer = require('nodemailer');
+const safeLogger = require('../observability/safeLogger');
 
 let transporter = null;
 
@@ -11,7 +12,7 @@ function getTransporter() {
   if (transporter) return transporter;
 
   if (!config.smtp.user || !config.smtp.pass) {
-    console.log('[Email] SMTP not configured — skipping.');
+    safeLogger.warn('smtp', 'provider_unconfigured', { configured: false });
     return null;
   }
 
@@ -27,7 +28,7 @@ function getTransporter() {
     });
     return transporter;
   } catch (err) {
-    console.error('[Email] Init error:', err.message);
+    safeLogger.error('smtp', 'client_initialization_failed');
     return null;
   }
 }
@@ -61,7 +62,7 @@ async function sendLeadNotification(lead, toEmail) {
   // values are not notification authority.
   const to = typeof toEmail === 'string' ? toEmail.trim() : '';
   if (!to) {
-    console.log('[Email] No recipient configured — skipping.');
+    safeLogger.warn('smtp', 'recipient_unavailable');
     return;
   }
 
@@ -73,9 +74,9 @@ async function sendLeadNotification(lead, toEmail) {
       subject,
       html,
     });
-    console.log(`[Email] Notification sent to ${to}`);
+    safeLogger.info('smtp', 'notification_sent');
   } catch (err) {
-    console.error('[Email] Send error:', err.message);
+    safeLogger.error('smtp', 'notification_send_failed');
   }
 }
 

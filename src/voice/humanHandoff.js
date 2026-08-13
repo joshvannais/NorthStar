@@ -16,6 +16,8 @@
 
 'use strict';
 
+const safeLogger = require('../observability/safeLogger');
+
 // ── In-memory escalation store ───────────────────────────────────
 
 /** @type {Map<string, Object>}  sessionId → escalation record */
@@ -224,7 +226,7 @@ function initiateEscalation(sessionId, reason, context) {
 
   _escalations.set(sessionId, escalation);
 
-  console.log(`[HumanHandoff] Escalation initiated for session ${sessionId}: ${escalation.reason.trigger}`);
+  safeLogger.info('voice', 'escalation_initiated');
 
   return { ...escalation };
 }
@@ -246,7 +248,7 @@ function resolveEscalation(sessionId, resolution) {
 
   _escalations.set(sessionId, escalation);
 
-  console.log(`[HumanHandoff] Escalation resolved for session ${sessionId}`);
+  safeLogger.info('voice', 'escalation_resolved');
 
   return { ...escalation };
 }

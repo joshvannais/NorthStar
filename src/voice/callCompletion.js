@@ -16,6 +16,7 @@
 'use strict';
 
 const db = require('../db');
+const safeLogger = require('../observability/safeLogger');
 const { addLead, updateLead, getLead } = require('../leads/store');
 const { getContext } = require('./eventIntelligence');
 
@@ -218,7 +219,7 @@ function generateTimelineEntry(summary, leadId) {
  */
 async function persistVoiceSession(session) {
   if (!db.isAvailable()) {
-    console.log('[CallCompletion] DB not available — skipping voice_sessions persist');
+    safeLogger.warn('voice', 'voice_session_persistence_unavailable');
     return null;
   }
 
@@ -254,10 +255,10 @@ async function persistVoiceSession(session) {
       ]
     );
 
-    console.log(`[CallCompletion] Voice session persisted: ${session.callId}`);
+    safeLogger.info('voice', 'voice_session_persisted');
     return result.rows[0];
   } catch (err) {
-    console.error('[CallCompletion] Failed to persist voice session:', err.message);
+    safeLogger.error('voice', 'voice_session_persistence_failed');
     return null;
   }
 }
@@ -277,7 +278,7 @@ async function executeCallCompletion(event) {
   const context = getContext();
   const callId = callData.callId || event.sessionId || 'unknown';
 
-  console.log(`[CallCompletion] Starting pipeline for call: ${callId}`);
+  safeLogger.info('voice', 'call_completion_started');
 
   const result = {
     callId,
@@ -353,7 +354,10 @@ async function executeCallCompletion(event) {
   result.stepCount = Object.keys(result.steps).length;
   result.errorCount = result.errors.length;
 
-  console.log(`[CallCompletion] Pipeline complete: ${callId} (${result.stepCount} steps, ${result.errorCount} errors)`);
+  safeLogger.info('voice', 'call_completion_completed', {
+    stepCount: result.stepCount,
+    errorCount: result.errorCount,
+  });
 
   return result;
 }

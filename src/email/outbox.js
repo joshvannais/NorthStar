@@ -1,6 +1,7 @@
 'use strict';
 
 const { AccountRepository } = require('../accounts/repository');
+const safeLogger = require('../observability/safeLogger');
 
 const DEFAULT_INTERVAL_MS = 1000;
 const DEFAULT_HOUSEKEEPING_INTERVAL_MS = 60000;
@@ -17,16 +18,6 @@ function safeCategory(error) {
     return error.code;
   }
   return 'delivery_failed';
-}
-
-function safeDiagnostic(job, category) {
-  return {
-    jobId: job && typeof job.id === 'string' ? job.id : 'unavailable',
-    purpose: job && ['email_verification', 'password_reset'].includes(job.purpose)
-      ? job.purpose : 'unavailable',
-    attempt: Number.isInteger(job && job.attempt_count) ? job.attempt_count : null,
-    category,
-  };
 }
 
 class AccountEmailOutboxWorker {
@@ -92,7 +83,10 @@ class AccountEmailOutboxWorker {
       return { delivered: Boolean(finalized) };
     } catch (error) {
       const category = safeCategory(error);
-      console.warn('[Auth] Account email outbox delivery failed:', safeDiagnostic(job, category));
+      safeLogger.warn('email', 'outbox_delivery_failed', {
+        attempt: job && job.attempt_count,
+        category,
+      });
       const finalized = await this.repository.finalizeAccountEmailJob({
         id: job.id,
         claimToken: job.claim_token,
@@ -152,7 +146,7 @@ class AccountEmailOutboxWorker {
     try {
       await this.drainOnce();
     } catch (_error) {
-      console.warn('[Auth] Account email outbox unavailable:', { event: 'outbox_tick_failed' });
+      safeLogger.warn('email', 'outbox_tick_failed');
     } finally {
       this.running = false;
       if (this.housekeepingSaturated) this.scheduleHousekeepingCatchUp();

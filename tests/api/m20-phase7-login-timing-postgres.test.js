@@ -14,6 +14,23 @@ const PROVIDER_ENVIRONMENT = [
   'TWILIO_ACCOUNT_SID',
   'TWILIO_AUTH_TOKEN',
 ];
+const SUPPORTED_BCRYPT_PREFIXES = ['a', 'b', 'y'];
+const SUPPORTED_BCRYPT_COSTS = [4, 5, 6, 7, 8, 9, 10, 11, 12];
+const MAX_TIMING_MEDIAN_RATIO = 1.15;
+const MAX_TIMING_RELATIVE_GAP = 0.13;
+const CANONICAL_BCRYPT_WORK_UNITS = 2 * (2 ** 12);
+
+function bcryptPrefix(hash, prefix) {
+  return `${hash.slice(0, 2)}${prefix}${hash.slice(3)}`;
+}
+
+function bcryptCost(hash, cost) {
+  return `${hash.slice(0, 4)}${String(cost).padStart(2, '0')}${hash.slice(6)}`;
+}
+
+function currentPasswordMaterial(password) {
+  return `northstar-sha512:${crypto.createHash('sha512').update(password, 'utf8').digest('base64')}`;
+}
 
 function median(values) {
   const sorted = [...values].sort((left, right) => left - right);
@@ -34,20 +51,27 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
   let pool;
   let app;
   let bcrypt;
+  let realBcryptCompare;
   let compareSpy;
   let loginDelays;
   let providerCalls;
   let priorDatabaseUrl;
   let priorFetch;
   const accounts = [];
+  const supportedLegacyAccounts = [];
+  const inactiveLegacyAccounts = [];
 
-  async function insertAccount(label) {
+  async function insertAccount(label, options = {}) {
     const { hashPassword } = require('../../src/accounts/service');
     const organizationId = crypto.randomUUID();
     const userId = crypto.randomUUID();
     const membershipId = crypto.randomUUID();
-    const email = `${label}-${crypto.randomUUID()}@example.test`;
-    const password = `Timing-${crypto.randomUUID()}!`;
+    const email = options.email || `${label}-${crypto.randomUUID()}@example.test`;
+    const password = options.password || `Timing-${crypto.randomUUID()}!`;
+    const passwordHash = options.passwordHash || await hashPassword(password);
+    const userStatus = options.userStatus || 'active';
+    const membershipStatus = options.membershipStatus || 'active';
+    const role = options.role || 'owner';
     await pool.query(
       'INSERT INTO organizations (id, name, owner_name, email, phone) VALUES ($1,$2,$3,$4,$5)',
       [organizationId, `Timing ${label}`, 'Timing Owner', email, '']
@@ -55,20 +79,27 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
     await pool.query(
       `INSERT INTO users
         (id, organization_id, name, email, email_normalized, password_hash, phone, role, status)
-       VALUES ($1,$2,'Timing Owner',$3,$3,$4,'','owner','active')`,
-      [userId, organizationId, email, await hashPassword(password)]
+       VALUES ($1,$2,'Timing Owner',$3,$3,$4,'',$5,$6)`,
+      [userId, organizationId, email, passwordHash, role, userStatus]
     );
     await pool.query(
       `INSERT INTO organization_memberships (id, organization_id, user_id, role, status)
-       VALUES ($1,$2,$3,'owner','active')`,
-      [membershipId, organizationId, userId]
+       VALUES ($1,$2,$3,$4,$5)`,
+      [membershipId, organizationId, userId, role, membershipStatus]
     );
     await pool.query(
       `INSERT INTO organization_onboarding (organization_id, status)
-       VALUES ($1, 'business_profile_required')`,
+      VALUES ($1, 'business_profile_required')`,
       [organizationId]
     );
-    return { email, password, userId };
+    return {
+      email,
+      password,
+      passwordHash,
+      userId,
+      prefix: options.prefix,
+      cost: options.cost,
+    };
   }
 
   async function timedWrongLogin(email, source) {
@@ -82,6 +113,7 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
       response,
       durationMs: performance.now() - started,
       compareCalls: compareSpy.mock.calls.length - callsBefore,
+      compareArguments: compareSpy.mock.calls.slice(callsBefore),
     };
   }
 
@@ -95,6 +127,7 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
     process.env.DATABASE_URL = allocation.connectionString;
     jest.resetModules();
     bcrypt = require('bcryptjs');
+    realBcryptCompare = bcrypt.compare.bind(bcrypt);
     db = require('../../src/db');
     expect(await db.initDatabase()).toBe(true);
     pool = db.getPool();
@@ -129,6 +162,34 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
     for (let index = 0; index < 7; index += 1) {
       accounts.push(await insertAccount(`existing-${index}`));
     }
+    for (const cost of SUPPORTED_BCRYPT_COSTS) {
+      const password = `Supported-legacy-${cost}-password!`;
+      const baseHash = await bcrypt.hash(password, cost);
+      for (const prefix of SUPPORTED_BCRYPT_PREFIXES) {
+        supportedLegacyAccounts.push(await insertAccount(`legacy-${prefix}-${cost}`, {
+          password,
+          passwordHash: bcryptPrefix(baseHash, prefix),
+          prefix,
+          cost,
+        }));
+      }
+    }
+    const inactivePassword = 'Inactive-legacy-password!';
+    const inactiveBase = await bcrypt.hash(inactivePassword, 4);
+    inactiveLegacyAccounts.push(await insertAccount('legacy-disabled', {
+      password: inactivePassword,
+      passwordHash: inactiveBase,
+      prefix: 'b',
+      cost: 4,
+      userStatus: 'disabled',
+    }));
+    inactiveLegacyAccounts.push(await insertAccount('legacy-membership-inactive', {
+      password: inactivePassword,
+      passwordHash: bcryptPrefix(inactiveBase, 'a'),
+      prefix: 'a',
+      cost: 4,
+      membershipStatus: 'suspended',
+    }));
   }, 60000);
 
   afterAll(async () => {
@@ -200,6 +261,9 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
       });
       expect(sample.response.headers['set-cookie']).toBeUndefined();
       expect(sample.compareCalls).toBe(2);
+      expect(sample.compareArguments.reduce(
+        (total, call) => total + (2 ** bcrypt.getRounds(call[1])), 0
+      )).toBe(CANONICAL_BCRYPT_WORK_UNITS);
     }
     expect(loginDelays).toEqual(Array(12).fill(0));
     expect(providerCalls).toBe(0);
@@ -213,9 +277,385 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
     expect(limits.every(row => ['login_ip', 'login_source_email'].includes(row.event_type))).toBe(true);
     expect(limits.every(row => /^[0-9a-f]{64}$/.test(row.key_hash) && row.attempt_count === 1)).toBe(true);
 
-    expect(medianRatio).toBeLessThanOrEqual(1.5);
-    expect(relativeGap).toBeLessThanOrEqual(0.3);
+    expect(medianRatio).toBeLessThanOrEqual(MAX_TIMING_MEDIAN_RATIO);
+    expect(relativeGap).toBeLessThanOrEqual(MAX_TIMING_RELATIVE_GAP);
   }, 30000);
+
+  test('every supported bcrypt prefix and cost has bounded invalid-credential work and preserves stored hashes', async () => {
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const warningLog = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const baseline = [];
+      for (let index = 0; index < 3; index += 1) {
+        baseline.push(await timedWrongLogin(
+          accounts[index + 1].email,
+          `198.51.100.${120 + index}`
+        ));
+        baseline.push(await timedWrongLogin(
+          `supported-missing-${index}-${crypto.randomUUID()}@example.test`,
+          `198.51.100.${130 + index}`
+        ));
+      }
+
+      const samples = [];
+      for (let index = 0; index < supportedLegacyAccounts.length; index += 1) {
+        const account = supportedLegacyAccounts[index];
+        samples.push({
+          ...await timedWrongLogin(account.email, `192.0.2.${20 + index}`),
+          account,
+        });
+      }
+
+      const baselineMedianMs = median(baseline.map(sample => sample.durationMs));
+      const costSummaries = SUPPORTED_BCRYPT_COSTS.map(cost => {
+        const costSamples = samples.filter(sample => sample.account.cost === cost);
+        const costMedianMs = median(costSamples.map(sample => sample.durationMs));
+        return {
+          cost,
+          medianMs: costMedianMs,
+          ratio: Math.max(costMedianMs, baselineMedianMs) / Math.min(costMedianMs, baselineMedianMs),
+          relativeGap: Math.abs(costMedianMs - baselineMedianMs) / Math.max(costMedianMs, baselineMedianMs),
+          compareCalls: costSamples.map(sample => sample.compareCalls),
+        };
+      });
+      console.info('[login-timing-supported-matrix]', JSON.stringify({
+        baselineMedianMs: Number(baselineMedianMs.toFixed(2)),
+        costs: costSummaries.map(summary => ({
+          cost: summary.cost,
+          medianMs: Number(summary.medianMs.toFixed(2)),
+          ratio: Number(summary.ratio.toFixed(3)),
+          relativeGap: Number(summary.relativeGap.toFixed(3)),
+          compareCalls: summary.compareCalls,
+        })),
+      }));
+
+      for (const sample of [...baseline, ...samples]) {
+        expect(sample.response.status).toBe(401);
+        expect(publicBody(sample.response)).toEqual({
+          error: 'Invalid email or password', code: 'invalid_credentials',
+        });
+        expect(sample.response.headers['set-cookie']).toBeUndefined();
+      }
+      for (const sample of baseline) expect(sample.compareCalls).toBe(2);
+      for (const sample of samples) {
+        const expectedCalls = 2 + (12 - sample.account.cost);
+        expect(sample.compareCalls).toBe(expectedCalls);
+        expect(sample.compareArguments.slice(0, 2).every(call => call[1] === sample.account.passwordHash)).toBe(true);
+        expect(sample.compareArguments.slice(2).map(call => bcrypt.getRounds(call[1])))
+          .toEqual(SUPPORTED_BCRYPT_COSTS.filter(cost => cost > sample.account.cost));
+        expect(sample.compareArguments.reduce(
+          (total, call) => total + (2 ** bcrypt.getRounds(call[1])), 0
+        )).toBe(CANONICAL_BCRYPT_WORK_UNITS);
+      }
+      for (const summary of costSummaries) {
+        expect(summary.ratio).toBeLessThanOrEqual(MAX_TIMING_MEDIAN_RATIO);
+        expect(summary.relativeGap).toBeLessThanOrEqual(MAX_TIMING_RELATIVE_GAP);
+      }
+
+      const stored = (await pool.query(
+        'SELECT email_normalized, password_hash FROM users WHERE email_normalized = ANY($1::text[])',
+        [supportedLegacyAccounts.map(account => account.email)]
+      )).rows;
+      const storedByEmail = new Map(stored.map(row => [row.email_normalized, row.password_hash]));
+      for (const account of supportedLegacyAccounts) {
+        expect(storedByEmail.get(account.email)).toBe(account.passwordHash);
+      }
+      expect((await pool.query('SELECT count(*)::int AS count FROM auth_sessions')).rows[0].count).toBe(0);
+      expect(loginDelays).toEqual(Array(baseline.length + samples.length).fill(0));
+      expect(providerCalls).toBe(0);
+      expect(errorLog).not.toHaveBeenCalled();
+      expect(warningLog).not.toHaveBeenCalled();
+    } finally {
+      errorLog.mockRestore();
+      warningLog.mockRestore();
+    }
+  }, 30000);
+
+  test('every supported bcrypt prefix and cost authenticates and noncanonical material upgrades', async () => {
+    const currentMaterialAccounts = [];
+    for (const cost of SUPPORTED_BCRYPT_COSTS) {
+      const password = `Supported-current-material-${cost}-password!`;
+      const baseHash = await bcrypt.hash(currentPasswordMaterial(password), cost);
+      for (const prefix of SUPPORTED_BCRYPT_PREFIXES) {
+        currentMaterialAccounts.push(await insertAccount(`current-material-${prefix}-${cost}`, {
+          password,
+          passwordHash: bcryptPrefix(baseHash, prefix),
+          prefix,
+          cost,
+        }));
+      }
+    }
+
+    for (let index = 0; index < supportedLegacyAccounts.length; index += 1) {
+      const account = supportedLegacyAccounts[index];
+      const callsBefore = compareSpy.mock.calls.length;
+      const response = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', `203.0.113.${20 + index}`)
+        .send({ email: account.email, password: account.password });
+      expect(response.status).toBe(200);
+      expect(response.headers['set-cookie']).toHaveLength(3);
+      expect(compareSpy.mock.calls.length - callsBefore).toBe(2);
+      const upgraded = (await pool.query(
+        'SELECT password_hash FROM users WHERE id = $1',
+        [account.userId]
+      )).rows[0].password_hash;
+      expect(upgraded).not.toBe(account.passwordHash);
+      expect(upgraded).toMatch(/^\$2b\$12\$/);
+      expect(bcrypt.getRounds(upgraded)).toBe(12);
+      const { verifyPassword } = require('../../src/accounts/service');
+      expect(await verifyPassword(account.password, upgraded)).toEqual({ valid: true, needsUpgrade: false });
+    }
+    for (let index = 0; index < currentMaterialAccounts.length; index += 1) {
+      const account = currentMaterialAccounts[index];
+      const callsBefore = compareSpy.mock.calls.length;
+      const response = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', `203.0.113.${80 + index}`)
+        .send({ email: account.email, password: account.password });
+      expect(response.status).toBe(200);
+      expect(response.headers['set-cookie']).toHaveLength(3);
+      expect(compareSpy.mock.calls.length - callsBefore).toBe(1);
+      const upgraded = (await pool.query(
+        'SELECT password_hash FROM users WHERE id = $1',
+        [account.userId]
+      )).rows[0].password_hash;
+      if (account.prefix === 'b' && account.cost === 12) {
+        expect(upgraded).toBe(account.passwordHash);
+      } else {
+        expect(upgraded).not.toBe(account.passwordHash);
+      }
+      expect(upgraded).toMatch(/^\$2b\$12\$/);
+      expect(bcrypt.getRounds(upgraded)).toBe(12);
+      const { verifyPassword } = require('../../src/accounts/service');
+      expect(await verifyPassword(account.password, upgraded)).toEqual({ valid: true, needsUpgrade: false });
+    }
+    expect((await pool.query('SELECT count(*)::int AS count FROM auth_sessions')).rows[0].count)
+      .toBe(supportedLegacyAccounts.length + currentMaterialAccounts.length);
+    expect((await pool.query('SELECT count(*)::int AS count FROM auth_rate_limits')).rows[0].count).toBe(0);
+    expect(loginDelays).toEqual([]);
+    expect(providerCalls).toBe(0);
+  }, 90000);
+
+  test('malformed and unsupported cost hashes fail closed through bounded dummy work', async () => {
+    const password = 'Unsupported-hash-password!';
+    const cost13Base = await bcrypt.hash(password, 13);
+    const cost12Base = await bcrypt.hash(password, 12);
+    const unsupported = [];
+    for (const prefix of SUPPORTED_BCRYPT_PREFIXES) {
+      unsupported.push(await insertAccount(`unsupported-${prefix}-13`, {
+        password,
+        passwordHash: bcryptPrefix(cost13Base, prefix),
+        prefix,
+        cost: 13,
+      }));
+      unsupported.push(await insertAccount(`unsupported-${prefix}-31`, {
+        password,
+        passwordHash: bcryptCost(bcryptPrefix(cost12Base, prefix), 31),
+        prefix,
+        cost: 31,
+      }));
+    }
+    const malformed = [
+      await insertAccount('malformed-short', { password, passwordHash: 'not-a-bcrypt-hash' }),
+      await insertAccount('malformed-revision', {
+        password,
+        passwordHash: `${cost12Base.slice(0, 2)}x${cost12Base.slice(3)}`,
+      }),
+      await insertAccount('malformed-length', { password, passwordHash: cost12Base.slice(0, 55) }),
+    ];
+
+    let selectedCost31 = 0;
+    compareSpy.mockImplementation(async (candidate, hash) => {
+      if (typeof hash === 'string' && hash.slice(4, 6) === '31') {
+        selectedCost31 += 1;
+        throw new Error('test guard blocked attacker-selected cost 31 work');
+      }
+      return realBcryptCompare(candidate, hash);
+    });
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const groups = { absent: [], unsupported13: [], unsupported31: [], malformed: [] };
+      for (let index = 0; index < 3; index += 1) {
+        groups.absent.push(await timedWrongLogin(
+          `bounded-absent-${index}-${crypto.randomUUID()}@example.test`,
+          `198.51.100.${150 + index}`
+        ));
+      }
+      for (let index = 0; index < unsupported.length; index += 1) {
+        const account = unsupported[index];
+        const callsBefore = compareSpy.mock.calls.length;
+        const started = performance.now();
+        const response = await request(app)
+          .post('/api/auth/login')
+          .set('X-Forwarded-For', `198.51.100.${160 + index}`)
+          .send({ email: account.email, password: 'definitely-the-wrong-password' });
+        const sample = {
+          response,
+          durationMs: performance.now() - started,
+          compareCalls: compareSpy.mock.calls.slice(callsBefore),
+          account,
+        };
+        groups[account.cost === 13 ? 'unsupported13' : 'unsupported31'].push(sample);
+      }
+      for (let index = 0; index < malformed.length; index += 1) {
+        const account = malformed[index];
+        const callsBefore = compareSpy.mock.calls.length;
+        const started = performance.now();
+        const response = await request(app)
+          .post('/api/auth/login')
+          .set('X-Forwarded-For', `198.51.100.${180 + index}`)
+          .send({ email: account.email, password: 'definitely-the-wrong-password' });
+        groups.malformed.push({
+          response,
+          durationMs: performance.now() - started,
+          compareCalls: compareSpy.mock.calls.slice(callsBefore),
+          account,
+        });
+      }
+
+      const medians = Object.fromEntries(Object.entries(groups).map(([name, samples]) => [
+        name, median(samples.map(sample => sample.durationMs)),
+      ]));
+      console.info('[login-timing-unsupported-matrix]', JSON.stringify(Object.fromEntries(
+        Object.entries(medians).map(([name, value]) => [name, Number(value.toFixed(2))])
+      )));
+      const baseline = medians.absent;
+      for (const [name, samples] of Object.entries(groups)) {
+        for (const sample of samples) {
+          expect(sample.response.status).toBe(401);
+          expect(publicBody(sample.response)).toEqual({
+            error: 'Invalid email or password', code: 'invalid_credentials',
+          });
+          expect(sample.response.headers['set-cookie']).toBeUndefined();
+          if (name === 'absent') {
+            expect(sample.compareCalls).toBe(2);
+            expect(sample.compareArguments.reduce(
+              (total, call) => total + (2 ** bcrypt.getRounds(call[1])), 0
+            )).toBe(CANONICAL_BCRYPT_WORK_UNITS);
+          } else {
+            expect(sample.compareCalls).toHaveLength(2);
+            expect(sample.compareCalls.every(call => bcrypt.getRounds(call[1]) === 12)).toBe(true);
+            expect(sample.compareCalls.every(call => call[1] !== sample.account.passwordHash)).toBe(true);
+          }
+        }
+        const ratio = Math.max(baseline, medians[name]) / Math.min(baseline, medians[name]);
+        const gap = Math.abs(baseline - medians[name]) / Math.max(baseline, medians[name]);
+        expect(ratio).toBeLessThanOrEqual(MAX_TIMING_MEDIAN_RATIO);
+        expect(gap).toBeLessThanOrEqual(MAX_TIMING_RELATIVE_GAP);
+      }
+      expect(selectedCost31).toBe(0);
+
+      for (let index = 0; index < 2; index += 1) {
+        const account = unsupported[index];
+        const response = await request(app)
+          .post('/api/auth/login')
+          .set('X-Forwarded-For', `198.51.100.${190 + index}`)
+          .send({ email: account.email, password: account.password });
+        expect(response.status).toBe(401);
+        expect(publicBody(response)).toEqual({
+          error: 'Invalid email or password', code: 'invalid_credentials',
+        });
+      }
+      const checked = [...unsupported, ...malformed];
+      const rows = (await pool.query(
+        'SELECT email_normalized, password_hash FROM users WHERE email_normalized = ANY($1::text[])',
+        [checked.map(account => account.email)]
+      )).rows;
+      const byEmail = new Map(rows.map(row => [row.email_normalized, row.password_hash]));
+      for (const account of checked) expect(byEmail.get(account.email)).toBe(account.passwordHash);
+      expect((await pool.query('SELECT count(*)::int AS count FROM auth_sessions')).rows[0].count).toBe(0);
+      expect(providerCalls).toBe(0);
+      expect(errorLog).not.toHaveBeenCalled();
+    } finally {
+      errorLog.mockRestore();
+      compareSpy.mockImplementation(realBcryptCompare);
+    }
+  }, 30000);
+
+  test('inactive supported legacy authorities and progressive throttle semantics remain intact', async () => {
+    for (let index = 0; index < inactiveLegacyAccounts.length; index += 1) {
+      const account = inactiveLegacyAccounts[index];
+      const response = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', `203.0.113.${80 + index}`)
+        .send({ email: account.email, password: account.password });
+      expect(response.status).toBe(403);
+      expect(publicBody(response)).toEqual({
+        error: 'This account is not available', code: 'account_inactive',
+      });
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect((await pool.query('SELECT password_hash FROM users WHERE id = $1', [account.userId])).rows[0].password_hash)
+        .toBe(account.passwordHash);
+    }
+    expect((await pool.query('SELECT count(*)::int AS count FROM auth_sessions')).rows[0].count).toBe(0);
+
+    await pool.query('DELETE FROM auth_rate_limits');
+    compareSpy.mockClear();
+    const legacyPassword = 'Progressive-legacy-password!';
+    const account = await insertAccount('progressive-legacy', {
+      password: legacyPassword,
+      passwordHash: await bcrypt.hash(legacyPassword, 4),
+      prefix: 'b',
+      cost: 4,
+    });
+    const source = '203.0.113.90';
+    for (let index = 0; index < 6; index += 1) {
+      const wrong = await timedWrongLogin(account.email, source);
+      expect(wrong.response.status).toBe(401);
+      expect(wrong.compareCalls).toBe(10);
+    }
+    expect(loginDelays).toEqual([0, 0, 250, 500, 1000, 2000]);
+    const correct = await request(app)
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', source)
+      .send({ email: account.email, password: account.password });
+    expect(correct.status).toBe(200);
+    expect(correct.headers['set-cookie']).toHaveLength(3);
+    expect((await pool.query('SELECT count(*)::int AS count FROM auth_sessions')).rows[0].count).toBe(1);
+    expect((await pool.query('SELECT count(*)::int AS count FROM auth_rate_limits')).rows[0].count).toBe(0);
+    expect(providerCalls).toBe(0);
+  }, 30000);
+
+  test('a bcrypt failure during lower-cost padding fails closed before failure mutation', async () => {
+    const legacyPassword = 'Padding-failure-legacy-password!';
+    const account = await insertAccount('padding-failure-legacy', {
+      password: legacyPassword,
+      passwordHash: bcryptPrefix(await bcrypt.hash(legacyPassword, 4), 'a'),
+      prefix: 'a',
+      cost: 4,
+    });
+    let calls = 0;
+    compareSpy.mockImplementation(async (...args) => {
+      calls += 1;
+      if (calls === 3) throw new Error('synthetic padding bcrypt failure');
+      return realBcryptCompare(...args);
+    });
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '203.0.113.100')
+        .send({ email: account.email, password: 'definitely-the-wrong-password' });
+      expect(response.status).toBe(500);
+      expect(publicBody(response)).toEqual({
+        error: 'Authentication request failed', code: 'auth_request_failed',
+      });
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect(calls).toBe(3);
+      expect(errorLog).toHaveBeenCalledWith('[Auth] Request failed:', {
+        requestId: 'unavailable', event: 'login_failed',
+      });
+      expect((await pool.query('SELECT count(*)::int AS count FROM auth_sessions')).rows[0].count).toBe(0);
+      expect((await pool.query(
+        'SELECT event_type, attempt_count FROM auth_rate_limits ORDER BY event_type'
+      )).rows).toEqual([{ event_type: 'login_ip', attempt_count: 1 }]);
+      expect(providerCalls).toBe(0);
+    } finally {
+      errorLog.mockRestore();
+      compareSpy.mockImplementation(realBcryptCompare);
+    }
+  });
 
   test('a correct login still succeeds, creates one session, and clears only its own throttle keys', async () => {
     const source = '198.51.100.80';

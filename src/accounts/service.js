@@ -13,6 +13,19 @@ const { projectSubscription } = require('./subscriptionPolicy');
 // operation. This fixed hash is not derived from a request, account, secret, or
 // environment setting and can never grant authority without an account row.
 const LOGIN_DUMMY_PASSWORD_HASH = '$2b$12$Fe2eC306EHU7fEolv4fqPuCddsTvclr8ksAQrPyFPtUgNQhM/BgTW';
+const LOGIN_DUMMY_PADDING_HASHES = Object.freeze({
+  5: '$2b$05$2wRlGIsf8Rg3jKQihMqmyOT/qrXQuZA06EVVxhwnvGcaTRt5R9eWe',
+  6: '$2b$06$eyYUYHsTP2oaivrVcr0ghugWcY5wOafEYNgF8bm6zy4mq7Mq4bZ1W',
+  7: '$2b$07$bU5813kJFMnFAUaEWODmUunfZJv0DwJTxqs7R.9B/K2kevn...Czq',
+  8: '$2b$08$N70313OQHJ1iY0TA2IH62u2kkji1AyC2jNGgvg2uAxX.DMU8aKme6',
+  9: '$2b$09$ZnH0/NiVKcLdZ1SkzlVP4eLr9XM9.qcF/29sXbAHNazDBWrRoCCkG',
+  10: '$2b$10$rB.rSunQcb1.1Su/a3dY6OOl5wjzIS7myXcawpiOQOY2e1IpbUKFO',
+  11: '$2b$11$qrx02NbSp66xtDJwRNe1d.lxF83/y8RlAtVz3l.kmIDy5OswPP.Z.',
+  12: LOGIN_DUMMY_PASSWORD_HASH,
+});
+const LOGIN_PASSWORD_HASH_PATTERN = /^\$2[aby]\$(\d{2})\$[./A-Za-z0-9]{53}$/;
+const LOGIN_PASSWORD_MINIMUM_COST = 4;
+const LOGIN_PASSWORD_CURRENT_COST = 12;
 
 class AccountError extends Error {
   constructor(status, code, message) {
@@ -52,19 +65,42 @@ function passwordMaterial(password) {
 }
 
 async function hashVerifiedPassword(password) {
-  return bcrypt.hash(passwordMaterial(password), 12);
+  return bcrypt.hash(passwordMaterial(password), LOGIN_PASSWORD_CURRENT_COST);
 }
 
 async function hashPassword(password) {
   return hashVerifiedPassword(validatePassword(password));
 }
 
+function supportedLoginPasswordHash(hash) {
+  if (typeof hash !== 'string') return null;
+  const match = LOGIN_PASSWORD_HASH_PATTERN.exec(hash);
+  if (!match) return null;
+  const workFactor = Number(match[1]);
+  if (workFactor < LOGIN_PASSWORD_MINIMUM_COST || workFactor > LOGIN_PASSWORD_CURRENT_COST) return null;
+  return { workFactor };
+}
+
 async function verifyPassword(password, hash) {
-  if (typeof password !== 'string' || typeof hash !== 'string') return { valid: false, needsUpgrade: false };
+  if (typeof password !== 'string' || !supportedLoginPasswordHash(hash)) {
+    return { valid: false, needsUpgrade: false };
+  }
   const current = await bcrypt.compare(passwordMaterial(password), hash);
-  if (current) return { valid: true, needsUpgrade: false };
+  if (current) {
+    return {
+      valid: true,
+      needsUpgrade: !hash.startsWith(`$2b$${LOGIN_PASSWORD_CURRENT_COST}$`),
+    };
+  }
   const legacy = await bcrypt.compare(password, hash);
   return { valid: legacy, needsUpgrade: legacy };
+}
+
+async function padInvalidPasswordVerification(password, workFactor) {
+  const material = passwordMaterial(password);
+  for (let cost = workFactor + 1; cost <= LOGIN_PASSWORD_CURRENT_COST; cost += 1) {
+    await bcrypt.compare(material, LOGIN_DUMMY_PADDING_HASHES[cost]);
+  }
 }
 
 function sessionMaterial() {
@@ -323,11 +359,17 @@ class AccountService {
       `${String(requestIp || 'unknown')}\0${email}`
     );
     const authority = await this.repository.findLoginAuthority(email);
+    const storedPasswordPolicy = authority
+      ? supportedLoginPasswordHash(authority.password_hash)
+      : null;
     const verification = await verifyPassword(
       submittedPassword,
-      authority ? authority.password_hash : LOGIN_DUMMY_PASSWORD_HASH
+      storedPasswordPolicy ? authority.password_hash : LOGIN_DUMMY_PASSWORD_HASH
     );
-    if (!authority || !verification.valid) {
+    if (!authority || !storedPasswordPolicy || !verification.valid) {
+      if (storedPasswordPolicy && storedPasswordPolicy.workFactor < LOGIN_PASSWORD_CURRENT_COST) {
+        await padInvalidPasswordVerification(submittedPassword, storedPasswordPolicy.workFactor);
+      }
       const failure = await this.repository.recordLoginSourceFailure(sourceEmailKey, 900);
       await this.sleep(loginFailureDelay(failure.attemptCount));
       throw new AccountError(401, 'invalid_credentials', 'Invalid email or password');

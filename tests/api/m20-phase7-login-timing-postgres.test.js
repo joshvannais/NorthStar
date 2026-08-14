@@ -281,20 +281,19 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
     expect(relativeGap).toBeLessThanOrEqual(MAX_TIMING_RELATIVE_GAP);
   }, 30000);
 
-  test('every supported bcrypt prefix and cost has bounded invalid-credential work and preserves stored hashes', async () => {
+  async function exerciseSupportedTimingGroup(groupLabel, groupCosts) {
     const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     const warningLog = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const warmupRounds = 2;
       const measuredRounds = 15;
-      const baselineClassLabel = 'current-canonical';
-      const timingClasses = [
-        { label: baselineClassLabel },
-        ...SUPPORTED_BCRYPT_COSTS.map(cost => ({ cost, label: `cost-${cost}` })),
-      ].map(timingClass => ({
+      const timingClasses = groupCosts.map(cost => ({
+        cost,
+        label: `cost-${cost}`,
+      })).map(timingClass => ({
         ...timingClass,
         orderKey: crypto.createHash('sha256')
-          .update(`m20-phase7-supported-timing:${timingClass.label}`, 'utf8')
+          .update(`m20-phase7-supported-adjacent:${groupLabel}:${timingClass.label}`, 'utf8')
           .digest('hex'),
       })).sort((left, right) => left.orderKey.localeCompare(right.orderKey));
       const orderForRound = round => {
@@ -303,9 +302,7 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
         );
         return round % 2 === 0 ? rotated : [...rotated].reverse();
       };
-      const allSamples = [];
-      const pairedBaselines = [];
-      const samples = [];
+      const allPairs = [];
       const timingPairs = [];
       const measuredOrders = [];
       let attemptIndex = 0;
@@ -315,53 +312,65 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
         const isWarmup = executionRound < warmupRounds;
         const measuredRound = executionRound - warmupRounds;
         const orderedClasses = orderForRound(executionRound);
-        const roundSamples = new Map();
         if (!isWarmup) {
           measuredOrders.push(orderedClasses.map(timingClass => timingClass.label));
         }
         for (const timingClass of orderedClasses) {
-          const source = `192.0.2.${20 + attemptIndex}`;
-          attemptIndex += 1;
+          const baselineAccount = accounts[
+            1 + ((executionRound + timingClass.cost) % (accounts.length - 1))
+          ];
+          const costAccounts = supportedLegacyAccounts.filter(
+            account => account.cost === timingClass.cost
+          );
+          const account = costAccounts[executionRound % costAccounts.length];
+          const baselineRequest = async () => ({
+            ...await timedWrongLogin(
+              baselineAccount.email,
+              `192.0.2.${20 + attemptIndex++}`
+            ),
+            classLabel: 'current-canonical',
+            measuredRound,
+            warmup: isWarmup,
+          });
+          const sampleRequest = async () => ({
+            ...await timedWrongLogin(
+              account.email,
+              `192.0.2.${20 + attemptIndex++}`
+            ),
+            account,
+            classLabel: timingClass.label,
+            cost: timingClass.cost,
+            measuredRound,
+            warmup: isWarmup,
+          });
+          const baselineFirst = (
+            executionRound + groupCosts.indexOf(timingClass.cost)
+          ) % 2 === 0;
+          let baseline;
           let sample;
-          if (timingClass.label === baselineClassLabel) {
-            sample = {
-              ...await timedWrongLogin(
-                accounts[1 + (executionRound % (accounts.length - 1))].email,
-                source
-              ),
-              classLabel: timingClass.label,
-              measuredRound,
-              warmup: isWarmup,
-            };
+          if (baselineFirst) {
+            baseline = await baselineRequest();
+            sample = await sampleRequest();
           } else {
-            const costAccounts = supportedLegacyAccounts.filter(
-              account => account.cost === timingClass.cost
-            );
-            const account = costAccounts[executionRound % costAccounts.length];
-            sample = {
-              ...await timedWrongLogin(account.email, source),
-              account,
-              classLabel: timingClass.label,
-              cost: timingClass.cost,
-              measuredRound,
-              warmup: isWarmup,
-            };
+            sample = await sampleRequest();
+            baseline = await baselineRequest();
           }
-          allSamples.push(sample);
-          roundSamples.set(timingClass.label, sample);
-        }
-        if (!isWarmup) {
-          const baseline = roundSamples.get(baselineClassLabel);
-          pairedBaselines.push(baseline);
-          for (const cost of SUPPORTED_BCRYPT_COSTS) {
-            const sample = roundSamples.get(`cost-${cost}`);
-            samples.push(sample);
-            timingPairs.push({ baseline, cost, measuredRound, sample });
+          const pair = {
+            baseline,
+            baselineFirst,
+            cost: timingClass.cost,
+            measuredRound,
+            sample,
+            warmup: isWarmup,
+          };
+          allPairs.push(pair);
+          if (!isWarmup) {
+            timingPairs.push(pair);
           }
         }
       }
 
-      const costSummaries = SUPPORTED_BCRYPT_COSTS.map(cost => {
+      const costSummaries = groupCosts.map(cost => {
         const costPairs = timingPairs.filter(pair => pair.cost === cost);
         const costSamples = costPairs.map(pair => pair.sample);
         const baselineSamples = costPairs.map(pair => pair.baseline);
@@ -376,40 +385,64 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
           Math.max(pair.sample.durationMs, pair.baseline.durationMs) /
           Math.min(pair.sample.durationMs, pair.baseline.durationMs)
         );
+        const signedPairRatios = costPairs.map(
+          pair => pair.sample.durationMs / pair.baseline.durationMs
+        );
+        const logRatios = signedPairRatios.map(ratio => Math.log(ratio));
+        const medianLogRatio = median(logRatios);
+        const pairedMagnitude = Math.abs(medianLogRatio);
+        const marginalRatio = Math.max(costMedianMs, baselineMedianMs) /
+          Math.min(costMedianMs, baselineMedianMs);
+        const marginalRelativeGap = Math.abs(costMedianMs - baselineMedianMs) /
+          Math.max(costMedianMs, baselineMedianMs);
+        const baselineFirstCount = costPairs.filter(pair => pair.baselineFirst).length;
+        expect([7, 8]).toContain(baselineFirstCount);
+        expect([7, 8]).toContain(costPairs.length - baselineFirstCount);
         return {
           cost,
           baselineMedianMs,
+          baselineFirstCount,
           medianMs: costMedianMs,
           pairRatios,
-          ratio: Math.max(costMedianMs, baselineMedianMs) /
-            Math.min(costMedianMs, baselineMedianMs),
-          relativeGap: Math.abs(costMedianMs - baselineMedianMs) /
-            Math.max(costMedianMs, baselineMedianMs),
+          signedPairRatios,
+          logRatios,
+          marginalRatio,
+          marginalRelativeGap,
+          medianLogRatio,
+          ratio: Math.exp(pairedMagnitude),
+          relativeGap: 1 - Math.exp(-pairedMagnitude),
           rawBaselineMs: baselineSamples.map(sample => sample.durationMs),
           rawSampleMs: costSamples.map(sample => sample.durationMs),
           compareCalls: costSamples.map(sample => sample.compareCalls),
         };
       });
       console.info('[login-timing-supported-matrix]', JSON.stringify({
+        groupLabel,
         measuredOrders,
         costs: costSummaries.map(summary => ({
           cost: summary.cost,
           baselineMedianMs: Number(summary.baselineMedianMs.toFixed(2)),
           medianMs: Number(summary.medianMs.toFixed(2)),
+          marginalRatio: Number(summary.marginalRatio.toFixed(3)),
+          marginalRelativeGap: Number(summary.marginalRelativeGap.toFixed(3)),
+          medianLogRatio: Number(summary.medianLogRatio.toFixed(6)),
           ratio: Number(summary.ratio.toFixed(3)),
           relativeGap: Number(summary.relativeGap.toFixed(3)),
           rawBaselineMs: summary.rawBaselineMs.map(value => Number(value.toFixed(2))),
           rawSampleMs: summary.rawSampleMs.map(value => Number(value.toFixed(2))),
           pairRatios: summary.pairRatios.map(value => Number(value.toFixed(3))),
+          signedPairRatios: summary.signedPairRatios.map(value => Number(value.toFixed(3))),
+          logRatios: summary.logRatios.map(value => Number(value.toFixed(6))),
+          baselineFirstCount: summary.baselineFirstCount,
           compareCalls: summary.compareCalls,
         })),
       }));
 
-      expect(pairedBaselines).toHaveLength(measuredRounds);
-      expect(samples).toHaveLength(measuredRounds * SUPPORTED_BCRYPT_COSTS.length);
-      expect(allSamples).toHaveLength(
-        (warmupRounds + measuredRounds) * timingClasses.length
+      expect(timingPairs).toHaveLength(measuredRounds * groupCosts.length);
+      expect(allPairs).toHaveLength(
+        (warmupRounds + measuredRounds) * groupCosts.length
       );
+      const allSamples = allPairs.flatMap(pair => [pair.baseline, pair.sample]);
       for (const sample of allSamples) {
         expect(sample.response.status).toBe(401);
         expect(publicBody(sample.response)).toEqual({
@@ -417,13 +450,12 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
         });
         expect(sample.response.headers['set-cookie']).toBeUndefined();
       }
-      for (const sample of allSamples.filter(item => item.classLabel === baselineClassLabel)) {
-        expect(sample.compareCalls).toBe(2);
-        expect(sample.compareArguments.reduce(
+      for (const pair of allPairs) {
+        expect(pair.baseline.compareCalls).toBe(2);
+        expect(pair.baseline.compareArguments.reduce(
           (total, call) => total + (2 ** bcrypt.getRounds(call[1])), 0
         )).toBe(CANONICAL_BCRYPT_WORK_UNITS);
-      }
-      for (const sample of allSamples.filter(item => item.classLabel !== baselineClassLabel)) {
+        const sample = pair.sample;
         const expectedCalls = 2 + (12 - sample.account.cost);
         expect(sample.compareCalls).toBe(expectedCalls);
         expect(sample.compareArguments.slice(0, 2).every(call => call[1] === sample.account.passwordHash)).toBe(true);
@@ -440,10 +472,13 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
 
       const stored = (await pool.query(
         'SELECT email_normalized, password_hash FROM users WHERE email_normalized = ANY($1::text[])',
-        [supportedLegacyAccounts.map(account => account.email)]
+        [supportedLegacyAccounts.filter(account => groupCosts.includes(account.cost))
+          .map(account => account.email)]
       )).rows;
       const storedByEmail = new Map(stored.map(row => [row.email_normalized, row.password_hash]));
-      for (const account of supportedLegacyAccounts) {
+      for (const account of supportedLegacyAccounts.filter(
+        candidate => groupCosts.includes(candidate.cost)
+      )) {
         expect(storedByEmail.get(account.email)).toBe(account.passwordHash);
       }
       expect((await pool.query('SELECT count(*)::int AS count FROM auth_sessions')).rows[0].count).toBe(0);
@@ -455,6 +490,18 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
       errorLog.mockRestore();
       warningLog.mockRestore();
     }
+  }
+
+  test('supported bcrypt costs 4 through 6 have adjacent current-cost controls', async () => {
+    await exerciseSupportedTimingGroup('costs-4-6', [4, 5, 6]);
+  }, 120000);
+
+  test('supported bcrypt costs 7 through 9 have adjacent current-cost controls', async () => {
+    await exerciseSupportedTimingGroup('costs-7-9', [7, 8, 9]);
+  }, 120000);
+
+  test('supported bcrypt costs 10 through 12 have adjacent current-cost controls', async () => {
+    await exerciseSupportedTimingGroup('costs-10-12', [10, 11, 12]);
   }, 120000);
 
   test('every supported bcrypt prefix and cost authenticates and noncanonical material upgrades', async () => {
@@ -561,93 +608,165 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
     });
     const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const timingClasses = {
+      const warmupRounds = 2;
+      const measuredRounds = 15;
+      const timingClasses = Object.entries({
         unsupported13: unsupported.filter(account => account.cost === 13),
         unsupported31: unsupported.filter(account => account.cost === 31),
         malformed,
+      }).map(([name, accountsForClass]) => ({
+        accountsForClass,
+        name,
+        orderKey: crypto.createHash('sha256')
+          .update(`m20-phase7-unsupported-adjacent:${name}`, 'utf8')
+          .digest('hex'),
+      })).sort((left, right) => left.orderKey.localeCompare(right.orderKey));
+      const orderForRound = round => {
+        const offset = round % timingClasses.length;
+        const rotated = timingClasses.slice(offset).concat(timingClasses.slice(0, offset));
+        return round % 2 === 0 ? rotated : [...rotated].reverse();
       };
+      const allPairs = [];
       const timingPairs = [];
-      for (const [name, accountsForClass] of Object.entries(timingClasses)) {
-        expect(accountsForClass).toHaveLength(3);
-        for (let index = 0; index < accountsForClass.length; index += 1) {
-          const account = accountsForClass[index];
-          const pairIndex = timingPairs.length;
+      const measuredOrders = [];
+      let attemptIndex = 0;
+      for (
+        let executionRound = 0;
+        executionRound < warmupRounds + measuredRounds;
+        executionRound += 1
+      ) {
+        const isWarmup = executionRound < warmupRounds;
+        const measuredRound = executionRound - warmupRounds;
+        const orderedClasses = orderForRound(executionRound);
+        if (!isWarmup) {
+          measuredOrders.push(orderedClasses.map(timingClass => timingClass.name));
+        }
+        for (const timingClass of orderedClasses) {
+          const { accountsForClass, name } = timingClass;
+          expect(accountsForClass).toHaveLength(3);
+          const account = accountsForClass[executionRound % accountsForClass.length];
+          const nextSource = () => `198.51.100.${100 + attemptIndex++}`;
           const baselineRequest = () => timedWrongLogin(
-            `bounded-absent-${name}-${index}-${crypto.randomUUID()}@example.test`,
-            `198.51.100.${150 + pairIndex}`
+            `bounded-absent-${name}-${executionRound}-${crypto.randomUUID()}@example.test`,
+            nextSource()
           );
           const classRequest = async () => ({
-            ...await timedWrongLogin(account.email, `198.51.100.${170 + pairIndex}`),
+            ...await timedWrongLogin(account.email, nextSource()),
             account,
           });
+          const baselineFirst = (
+            executionRound + timingClasses.indexOf(timingClass)
+          ) % 2 === 0;
           let baseline;
           let sample;
-          if (pairIndex % 2 === 0) {
+          if (baselineFirst) {
             baseline = await baselineRequest();
             sample = await classRequest();
           } else {
             sample = await classRequest();
             baseline = await baselineRequest();
           }
-          timingPairs.push({ baseline, name, sample });
+          const pair = {
+            baseline,
+            baselineFirst,
+            name,
+            sample,
+            warmup: isWarmup,
+          };
+          allPairs.push(pair);
+          if (!isWarmup) timingPairs.push({ ...pair, measuredRound });
         }
       }
 
-      const summaries = Object.keys(timingClasses).map(name => {
+      const summaries = timingClasses.map(({ accountsForClass, name }) => {
         const classPairs = timingPairs.filter(pair => pair.name === name);
         const baselineSamples = classPairs.map(pair => pair.baseline);
         const classSamples = classPairs.map(pair => pair.sample);
+        expect(classPairs).toHaveLength(measuredRounds);
+        expect(accountsForClass.map(account => classSamples.filter(
+          sample => sample.account.email === account.email
+        ).length)).toEqual([5, 5, 5]);
         const baselineMedianMs = median(baselineSamples.map(sample => sample.durationMs));
         const medianMs = median(classSamples.map(sample => sample.durationMs));
+        const pairRatios = classPairs.map(pair =>
+          Math.max(pair.baseline.durationMs, pair.sample.durationMs) /
+          Math.min(pair.baseline.durationMs, pair.sample.durationMs)
+        );
+        const signedPairRatios = classPairs.map(
+          pair => pair.sample.durationMs / pair.baseline.durationMs
+        );
+        const logRatios = signedPairRatios.map(ratio => Math.log(ratio));
+        const medianLogRatio = median(logRatios);
+        const pairedMagnitude = Math.abs(medianLogRatio);
+        const marginalRatio = Math.max(baselineMedianMs, medianMs) /
+          Math.min(baselineMedianMs, medianMs);
+        const marginalRelativeGap = Math.abs(baselineMedianMs - medianMs) /
+          Math.max(baselineMedianMs, medianMs);
+        const baselineFirstCount = classPairs.filter(pair => pair.baselineFirst).length;
+        expect([7, 8]).toContain(baselineFirstCount);
+        expect([7, 8]).toContain(classPairs.length - baselineFirstCount);
         return {
           name,
           baselineMedianMs,
+          baselineFirstCount,
+          logRatios,
+          marginalRatio,
+          marginalRelativeGap,
+          medianLogRatio,
           medianMs,
-          ratio: Math.max(baselineMedianMs, medianMs) / Math.min(baselineMedianMs, medianMs),
-          relativeGap: Math.abs(baselineMedianMs - medianMs) / Math.max(baselineMedianMs, medianMs),
-          pairRatios: classPairs.map(pair =>
-            Math.max(pair.baseline.durationMs, pair.sample.durationMs) /
-            Math.min(pair.baseline.durationMs, pair.sample.durationMs)
-          ),
+          pairRatios,
+          ratio: Math.exp(pairedMagnitude),
+          relativeGap: 1 - Math.exp(-pairedMagnitude),
           rawBaselineMs: baselineSamples.map(sample => sample.durationMs),
           rawSampleMs: classSamples.map(sample => sample.durationMs),
+          signedPairRatios,
         };
       });
       console.info('[login-timing-unsupported-matrix]', JSON.stringify({
+        measuredOrders,
         classes: summaries.map(summary => ({
           name: summary.name,
           baselineMedianMs: Number(summary.baselineMedianMs.toFixed(2)),
+          baselineFirstCount: summary.baselineFirstCount,
+          logRatios: summary.logRatios.map(value => Number(value.toFixed(6))),
+          marginalRatio: Number(summary.marginalRatio.toFixed(3)),
+          marginalRelativeGap: Number(summary.marginalRelativeGap.toFixed(3)),
+          medianLogRatio: Number(summary.medianLogRatio.toFixed(6)),
           medianMs: Number(summary.medianMs.toFixed(2)),
           ratio: Number(summary.ratio.toFixed(3)),
           relativeGap: Number(summary.relativeGap.toFixed(3)),
           pairRatios: summary.pairRatios.map(value => Number(value.toFixed(3))),
           rawBaselineMs: summary.rawBaselineMs.map(value => Number(value.toFixed(2))),
           rawSampleMs: summary.rawSampleMs.map(value => Number(value.toFixed(2))),
+          signedPairRatios: summary.signedPairRatios.map(value => Number(value.toFixed(3))),
         })),
       }));
-      for (const summary of summaries) {
-        const classPairs = timingPairs.filter(pair => pair.name === summary.name);
-        expect(classPairs).toHaveLength(3);
-        for (const { baseline, sample } of classPairs) {
-          for (const responseSample of [baseline, sample]) {
-            expect(responseSample.response.status).toBe(401);
-            expect(publicBody(responseSample.response)).toEqual({
-              error: 'Invalid email or password', code: 'invalid_credentials',
-            });
-            expect(responseSample.response.headers['set-cookie']).toBeUndefined();
-          }
-          expect(baseline.compareCalls).toBe(2);
-          expect(baseline.compareArguments.reduce(
-            (total, call) => total + (2 ** bcrypt.getRounds(call[1])), 0
-          )).toBe(CANONICAL_BCRYPT_WORK_UNITS);
-          expect(sample.compareCalls).toBe(2);
-          expect(sample.compareArguments).toHaveLength(2);
-          expect(sample.compareArguments.every(call => bcrypt.getRounds(call[1]) === 12)).toBe(true);
-          expect(sample.compareArguments.reduce(
-            (total, call) => total + (2 ** bcrypt.getRounds(call[1])), 0
-          )).toBe(CANONICAL_BCRYPT_WORK_UNITS);
-          expect(sample.compareArguments.every(call => call[1] !== sample.account.passwordHash)).toBe(true);
+      expect(timingPairs).toHaveLength(measuredRounds * timingClasses.length);
+      expect(allPairs).toHaveLength(
+        (warmupRounds + measuredRounds) * timingClasses.length
+      );
+      expect(measuredOrders).toHaveLength(measuredRounds);
+      for (const { baseline, sample } of allPairs) {
+        for (const responseSample of [baseline, sample]) {
+          expect(responseSample.response.status).toBe(401);
+          expect(publicBody(responseSample.response)).toEqual({
+            error: 'Invalid email or password', code: 'invalid_credentials',
+          });
+          expect(responseSample.response.headers['set-cookie']).toBeUndefined();
         }
+        expect(baseline.compareCalls).toBe(2);
+        expect(baseline.compareArguments.reduce(
+          (total, call) => total + (2 ** bcrypt.getRounds(call[1])), 0
+        )).toBe(CANONICAL_BCRYPT_WORK_UNITS);
+        expect(sample.compareCalls).toBe(2);
+        expect(sample.compareArguments).toHaveLength(2);
+        expect(sample.compareArguments.every(call => bcrypt.getRounds(call[1]) === 12)).toBe(true);
+        expect(sample.compareArguments.reduce(
+          (total, call) => total + (2 ** bcrypt.getRounds(call[1])), 0
+        )).toBe(CANONICAL_BCRYPT_WORK_UNITS);
+        expect(sample.compareArguments.every(call => call[1] !== sample.account.passwordHash)).toBe(true);
+      }
+      for (const summary of summaries) {
         expect(summary.ratio).toBeLessThanOrEqual(MAX_TIMING_MEDIAN_RATIO);
         expect(summary.relativeGap).toBeLessThanOrEqual(MAX_TIMING_RELATIVE_GAP);
       }
@@ -678,7 +797,7 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
       errorLog.mockRestore();
       compareSpy.mockImplementation(realBcryptCompare);
     }
-  }, 30000);
+  }, 120000);
 
   test('inactive supported legacy authorities and progressive throttle semantics remain intact', async () => {
     for (let index = 0; index < inactiveLegacyAccounts.length; index += 1) {

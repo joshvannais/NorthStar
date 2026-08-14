@@ -677,7 +677,37 @@ class AccountRepository {
 
   async rotateRefresh(input) {
     return this.transaction(async client => {
-      const result = await client.query(
+      const routeResult = await client.query(
+        `SELECT token.id AS token_id,
+                 token.session_id,
+                 token.family_id,
+                 session.user_id,
+                 session.organization_id,
+                 session.membership_id
+            FROM auth_refresh_tokens token
+            JOIN auth_sessions session ON session.id = token.session_id
+           WHERE token.token_hash = $1`,
+        [input.presentedTokenHash]
+      );
+      const route = rows(routeResult)[0];
+      if (!route) return { outcome: 'invalid' };
+
+      const authorityResult = await client.query(
+        `SELECT u.status AS user_status,
+                membership.status AS membership_status
+           FROM users u
+           JOIN organization_memberships membership
+              ON membership.id = $2
+             AND membership.organization_id = $3
+             AND membership.user_id = u.id
+          WHERE u.id = $1 AND u.organization_id = $3
+          FOR UPDATE OF u, membership`,
+        [route.user_id, route.membership_id, route.organization_id]
+      );
+      const authority = rows(authorityResult)[0];
+      if (!authority) return { outcome: 'invalid' };
+
+      const currentResult = await client.query(
         `SELECT token.id AS token_id,
                 token.session_id,
                 token.family_id,
@@ -687,22 +717,32 @@ class AccountRepository {
                 session.organization_id,
                 session.membership_id,
                 session.status AS session_status,
-                session.refresh_expires_at,
-                u.status AS user_status,
-                membership.status AS membership_status
-           FROM auth_refresh_tokens token
-           JOIN auth_sessions session ON session.id = token.session_id
-           JOIN users u ON u.id = session.user_id
-           JOIN organization_memberships membership
-             ON membership.id = session.membership_id
-            AND membership.organization_id = session.organization_id
-            AND membership.user_id = session.user_id
-          WHERE token.token_hash = $1
-          FOR UPDATE OF token, session, u, membership`,
-        [input.presentedTokenHash]
+                session.refresh_expires_at
+           FROM auth_sessions session
+           JOIN auth_refresh_tokens token
+             ON token.id = $2
+            AND token.session_id = session.id
+            AND token.family_id = $3
+            AND token.token_hash = $7
+          WHERE session.id = $1
+            AND session.user_id = $4
+            AND session.organization_id = $5
+            AND session.membership_id = $6
+          FOR UPDATE OF session, token`,
+        [
+          route.session_id,
+          route.token_id,
+          route.family_id,
+          route.user_id,
+          route.organization_id,
+          route.membership_id,
+          input.presentedTokenHash,
+        ]
       );
-      const current = rows(result)[0];
+      const current = rows(currentResult)[0];
       if (!current) return { outcome: 'invalid' };
+      current.user_status = authority.user_status;
+      current.membership_status = authority.membership_status;
 
       if (current.token_status !== 'active') {
         await client.query(

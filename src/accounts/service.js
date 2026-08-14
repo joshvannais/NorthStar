@@ -358,6 +358,11 @@ class AccountService {
       'login_source_email',
       `${String(requestIp || 'unknown')}\0${email}`
     );
+    const rejectInvalidCredentials = async () => {
+      const failure = await this.repository.recordLoginSourceFailure(sourceEmailKey, 900);
+      await this.sleep(loginFailureDelay(failure.attemptCount));
+      throw new AccountError(401, 'invalid_credentials', 'Invalid email or password');
+    };
     const authority = await this.repository.findLoginAuthority(email);
     const storedPasswordPolicy = authority
       ? supportedLoginPasswordHash(authority.password_hash)
@@ -370,22 +375,23 @@ class AccountService {
       if (storedPasswordPolicy && storedPasswordPolicy.workFactor < LOGIN_PASSWORD_CURRENT_COST) {
         await padInvalidPasswordVerification(submittedPassword, storedPasswordPolicy.workFactor);
       }
-      const failure = await this.repository.recordLoginSourceFailure(sourceEmailKey, 900);
-      await this.sleep(loginFailureDelay(failure.attemptCount));
-      throw new AccountError(401, 'invalid_credentials', 'Invalid email or password');
+      await rejectInvalidCredentials();
     }
     if (!['pending_verification', 'active'].includes(authority.user_status) ||
         authority.membership_status !== 'active' || !isCanonicalAccessRole(authority.role)) {
       throw new AccountError(403, 'account_inactive', 'This account is not available');
     }
-    if (verification.needsUpgrade) {
-      await this.repository.upgradePasswordHash(authority.user_id, await hashVerifiedPassword(submittedPassword));
-    }
+    const upgradedPasswordHash = verification.needsUpgrade
+      ? await hashVerifiedPassword(submittedPassword)
+      : null;
     const material = sessionMaterial();
     const current = await this.repository.createLoginSession({
       userId: authority.user_id,
+      verifiedPasswordHash: authority.password_hash,
+      upgradedPasswordHash,
       ...material,
     });
+    if (current && current.credentialMismatch === true) await rejectInvalidCredentials();
     if (!current) throw new AccountError(403, 'account_inactive', 'This account is not available');
     material.accessToken = credentials.signAccess(current.user_id, material.sessionId);
     await Promise.all([

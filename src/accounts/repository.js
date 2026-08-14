@@ -208,6 +208,7 @@ class AccountRepository {
                 u.email,
                 u.phone,
                 u.status AS user_status,
+                u.password_hash = $2 AS credential_matches,
                 m.id AS membership_id,
                 m.role,
                 m.status AS membership_status,
@@ -223,12 +224,25 @@ class AccountRepository {
              ON active_profile.organization_id = o.id AND active_profile.is_active = TRUE
           WHERE u.id = $1
           FOR UPDATE OF u, m`,
-        [input.userId]
+        [input.userId, input.verifiedPasswordHash]
       );
       const authority = rows(authorityResult)[0];
       if (!authority || authority.membership_status !== 'active' ||
           !['pending_verification', 'active'].includes(authority.user_status)) {
         return null;
+      }
+      if (authority.credential_matches !== true) return { credentialMismatch: true };
+      const currentAuthority = { ...authority };
+      delete currentAuthority.credential_matches;
+
+      if (input.upgradedPasswordHash) {
+        const upgrade = await client.query(
+          `UPDATE users SET password_hash = $2, updated_at = clock_timestamp()
+            WHERE id = $1 AND password_hash = $3
+            RETURNING id`,
+          [input.userId, input.upgradedPasswordHash, input.verifiedPasswordHash]
+        );
+        if (upgrade.rowCount !== 1) throw new Error('Login credential authority changed during upgrade');
       }
 
       await client.query(
@@ -238,9 +252,9 @@ class AccountRepository {
          ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           input.sessionId,
-          authority.user_id,
-          authority.organization_id,
-          authority.membership_id,
+          currentAuthority.user_id,
+          currentAuthority.organization_id,
+          currentAuthority.membership_id,
           input.accessExpiresAt,
           input.refreshExpiresAt,
           input.csrfTokenHash,
@@ -252,7 +266,7 @@ class AccountRepository {
          ) VALUES ($1, $2, $3, $4, $5)`,
         [input.refreshTokenId, input.sessionId, input.refreshFamilyId, input.refreshTokenHash, input.refreshExpiresAt]
       );
-      return authority;
+      return currentAuthority;
     });
   }
 

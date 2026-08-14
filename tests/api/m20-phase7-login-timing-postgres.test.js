@@ -285,58 +285,88 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
     const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     const warningLog = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const baseline = [];
-      for (let index = 0; index < 3; index += 1) {
-        baseline.push(await timedWrongLogin(
-          accounts[index + 1].email,
-          `198.51.100.${120 + index}`
-        ));
-        baseline.push(await timedWrongLogin(
-          `supported-missing-${index}-${crypto.randomUUID()}@example.test`,
-          `198.51.100.${130 + index}`
-        ));
-      }
-
+      const pairedBaselines = [];
       const samples = [];
-      for (let index = 0; index < supportedLegacyAccounts.length; index += 1) {
-        const account = supportedLegacyAccounts[index];
-        samples.push({
-          ...await timedWrongLogin(account.email, `192.0.2.${20 + index}`),
-          account,
-        });
+      const timingPairs = [];
+      for (const cost of SUPPORTED_BCRYPT_COSTS) {
+        const costAccounts = supportedLegacyAccounts.filter(account => account.cost === cost);
+        for (let repetition = 0; repetition < 5; repetition += 1) {
+          const account = costAccounts[repetition % costAccounts.length];
+          const index = timingPairs.length;
+          const baselineRequest = async () => ({
+            ...await timedWrongLogin(
+              accounts[1 + (index % (accounts.length - 1))].email,
+              `203.0.113.${20 + index}`
+            ),
+            cost,
+          });
+          const supportedRequest = async () => ({
+            ...await timedWrongLogin(account.email, `192.0.2.${20 + index}`), account,
+          });
+          let baseline;
+          let sample;
+          if (index % 2 === 0) {
+            baseline = await baselineRequest();
+            sample = await supportedRequest();
+          } else {
+            sample = await supportedRequest();
+            baseline = await baselineRequest();
+          }
+          pairedBaselines.push(baseline);
+          samples.push(sample);
+          timingPairs.push({ baseline, cost, sample });
+        }
       }
 
-      const baselineMedianMs = median(baseline.map(sample => sample.durationMs));
       const costSummaries = SUPPORTED_BCRYPT_COSTS.map(cost => {
-        const costSamples = samples.filter(sample => sample.account.cost === cost);
+        const costPairs = timingPairs.filter(pair => pair.cost === cost);
+        const costSamples = costPairs.map(pair => pair.sample);
+        const baselineSamples = costPairs.map(pair => pair.baseline);
         const costMedianMs = median(costSamples.map(sample => sample.durationMs));
+        const baselineMedianMs = median(baselineSamples.map(sample => sample.durationMs));
+        const pairRatios = costPairs.map(pair =>
+          Math.max(pair.sample.durationMs, pair.baseline.durationMs) /
+          Math.min(pair.sample.durationMs, pair.baseline.durationMs)
+        );
+        const pairRelativeGaps = costPairs.map(pair =>
+          Math.abs(pair.sample.durationMs - pair.baseline.durationMs) /
+          Math.max(pair.sample.durationMs, pair.baseline.durationMs)
+        );
         return {
           cost,
+          baselineMedianMs,
           medianMs: costMedianMs,
-          ratio: Math.max(costMedianMs, baselineMedianMs) / Math.min(costMedianMs, baselineMedianMs),
-          relativeGap: Math.abs(costMedianMs - baselineMedianMs) / Math.max(costMedianMs, baselineMedianMs),
+          pairRatios,
+          ratio: median(pairRatios),
+          relativeGap: median(pairRelativeGaps),
           compareCalls: costSamples.map(sample => sample.compareCalls),
         };
       });
       console.info('[login-timing-supported-matrix]', JSON.stringify({
-        baselineMedianMs: Number(baselineMedianMs.toFixed(2)),
         costs: costSummaries.map(summary => ({
           cost: summary.cost,
+          baselineMedianMs: Number(summary.baselineMedianMs.toFixed(2)),
           medianMs: Number(summary.medianMs.toFixed(2)),
           ratio: Number(summary.ratio.toFixed(3)),
           relativeGap: Number(summary.relativeGap.toFixed(3)),
+          pairRatios: summary.pairRatios.map(value => Number(value.toFixed(3))),
           compareCalls: summary.compareCalls,
         })),
       }));
 
-      for (const sample of [...baseline, ...samples]) {
+      for (const sample of [...pairedBaselines, ...samples]) {
         expect(sample.response.status).toBe(401);
         expect(publicBody(sample.response)).toEqual({
           error: 'Invalid email or password', code: 'invalid_credentials',
         });
         expect(sample.response.headers['set-cookie']).toBeUndefined();
       }
-      for (const sample of baseline) expect(sample.compareCalls).toBe(2);
+      for (const sample of pairedBaselines) {
+        expect(sample.compareCalls).toBe(2);
+        expect(sample.compareArguments.reduce(
+          (total, call) => total + (2 ** bcrypt.getRounds(call[1])), 0
+        )).toBe(CANONICAL_BCRYPT_WORK_UNITS);
+      }
       for (const sample of samples) {
         const expectedCalls = 2 + (12 - sample.account.cost);
         expect(sample.compareCalls).toBe(expectedCalls);
@@ -361,7 +391,7 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
         expect(storedByEmail.get(account.email)).toBe(account.passwordHash);
       }
       expect((await pool.query('SELECT count(*)::int AS count FROM auth_sessions')).rows[0].count).toBe(0);
-      expect(loginDelays).toEqual(Array(baseline.length + samples.length).fill(0));
+      expect(loginDelays).toEqual(Array(pairedBaselines.length + samples.length).fill(0));
       expect(providerCalls).toBe(0);
       expect(errorLog).not.toHaveBeenCalled();
       expect(warningLog).not.toHaveBeenCalled();
@@ -369,7 +399,7 @@ describe('Mission 20 Phase 7 mounted login timing safety', () => {
       errorLog.mockRestore();
       warningLog.mockRestore();
     }
-  }, 30000);
+  }, 120000);
 
   test('every supported bcrypt prefix and cost authenticates and noncanonical material upgrades', async () => {
     const currentMaterialAccounts = [];

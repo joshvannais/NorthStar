@@ -9,6 +9,11 @@ const safeLogger = require('../observability/safeLogger');
 const { AccountPersistenceError, AccountRepository } = require('./repository');
 const { projectSubscription } = require('./subscriptionPolicy');
 
+// Missing durable authority still performs the canonical cost-12 verification
+// operation. This fixed hash is not derived from a request, account, secret, or
+// environment setting and can never grant authority without an account row.
+const LOGIN_DUMMY_PASSWORD_HASH = '$2b$12$Fe2eC306EHU7fEolv4fqPuCddsTvclr8ksAQrPyFPtUgNQhM/BgTW';
+
 class AccountError extends Error {
   constructor(status, code, message) {
     super(message);
@@ -318,9 +323,10 @@ class AccountService {
       `${String(requestIp || 'unknown')}\0${email}`
     );
     const authority = await this.repository.findLoginAuthority(email);
-    const verification = authority
-      ? await verifyPassword(submittedPassword, authority.password_hash)
-      : { valid: false, needsUpgrade: false };
+    const verification = await verifyPassword(
+      submittedPassword,
+      authority ? authority.password_hash : LOGIN_DUMMY_PASSWORD_HASH
+    );
     if (!authority || !verification.valid) {
       const failure = await this.repository.recordLoginSourceFailure(sourceEmailKey, 900);
       await this.sleep(loginFailureDelay(failure.attemptCount));

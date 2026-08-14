@@ -100,36 +100,76 @@ async function withTransaction(work) {
   }
 }
 
-async function loadBoundAuthority(client, binding) {
+async function lockExternalAuthority(client, binding) {
+  const user = (await client.query(
+    `SELECT id AS user_id, organization_id, status AS user_status
+       FROM users
+      WHERE id = $1 AND organization_id = $2
+      FOR UPDATE`,
+    [binding.userId, binding.organizationId]
+  )).rows[0];
+  if (!user) return null;
+  const membership = (await client.query(
+    `SELECT id AS membership_id, status AS membership_status, role
+       FROM organization_memberships
+      WHERE user_id = $1 AND organization_id = $2
+      FOR UPDATE`,
+    [binding.userId, binding.organizationId]
+  )).rows[0];
+  if (!membership) return null;
+  const onboarding = (await client.query(
+    `SELECT status AS onboarding_status
+       FROM organization_onboarding
+      WHERE organization_id = $1
+      FOR UPDATE`,
+    [binding.organizationId]
+  )).rows[0];
+  if (!onboarding) return null;
+  return { ...user, ...membership, ...onboarding };
+}
+
+async function lockBoundSession(client, binding, authority) {
+  const session = (await client.query(
+    `SELECT id AS session_id,
+            status AS session_status,
+            revoked_at AS session_revoked_at,
+            (access_expires_at > NOW()) AS access_current,
+            (refresh_expires_at > NOW()) AS refresh_current
+       FROM auth_sessions
+      WHERE id = $1 AND user_id = $2 AND organization_id = $3 AND membership_id = $4
+      FOR UPDATE`,
+    [binding.sessionId, binding.userId, binding.organizationId, authority.membership_id]
+  )).rows[0];
+  return session ? { ...authority, ...session } : null;
+}
+
+async function lockBoundState(client, input, authority, stateHash) {
   const result = await client.query(
-    `SELECT session.id AS session_id,
-            session.user_id,
-            session.organization_id,
+    `SELECT state.id,
+            state.provider,
+            state.organization_id,
+            state.user_id,
+            state.auth_session_id AS session_id,
+            state.status AS state_status,
+            (state.expires_at > NOW()) AS state_current,
             session.status AS session_status,
             session.revoked_at AS session_revoked_at,
             (session.access_expires_at > NOW()) AS access_current,
-            (session.refresh_expires_at > NOW()) AS refresh_current,
-            users.status AS user_status,
-            membership.status AS membership_status,
-            membership.role,
-            onboarding.status AS onboarding_status
-       FROM auth_sessions session
-       JOIN users
-         ON users.id = session.user_id
-        AND users.organization_id = session.organization_id
-       JOIN organization_memberships membership
-         ON membership.id = session.membership_id
-        AND membership.user_id = session.user_id
-        AND membership.organization_id = session.organization_id
-       JOIN organization_onboarding onboarding
-         ON onboarding.organization_id = session.organization_id
-      WHERE session.id = $1
-        AND session.user_id = $2
-        AND session.organization_id = $3
-      FOR UPDATE OF session, users, membership, onboarding`,
-    [binding.sessionId, binding.userId, binding.organizationId]
+            (session.refresh_expires_at > NOW()) AS refresh_current
+       FROM oauth_authorization_states state
+       JOIN auth_sessions session
+         ON session.id = state.auth_session_id
+        AND session.user_id = state.user_id
+        AND session.organization_id = state.organization_id
+      WHERE state.state_hash = $1
+        AND state.organization_id = $2
+        AND state.user_id = $3
+        AND state.auth_session_id = $4
+        AND session.membership_id = $5
+      FOR UPDATE OF session, state`,
+    [stateHash, input.organizationId, input.userId, input.sessionId, authority.membership_id]
   );
-  return result.rows[0] || null;
+  return result.rows[0] ? { ...authority, ...result.rows[0] } : null;
 }
 
 async function issueAuthorizationState(binding) {
@@ -137,14 +177,21 @@ async function issueAuthorizationState(binding) {
   const rawState = newState();
   const stateHash = hashState(rawState);
   const issued = await withTransaction(async client => {
+    const authority = await lockExternalAuthority(client, binding);
+    const boundAuthority = authority && await lockBoundSession(client, binding, authority);
     await cleanup(client);
-    const authority = await loadBoundAuthority(client, binding);
-    if (!currentExternalAuthority(authority)) return false;
+    if (!currentExternalAuthority(boundAuthority)) return false;
     await client.query(
       `INSERT INTO oauth_authorization_states (
          provider, organization_id, user_id, auth_session_id, state_hash
        ) VALUES ($1, $2, $3, $4, $5)`,
-      [binding.provider, authority.organization_id, authority.user_id, authority.session_id, stateHash]
+      [
+        binding.provider,
+        boundAuthority.organization_id,
+        boundAuthority.user_id,
+        boundAuthority.session_id,
+        stateHash,
+      ]
     );
     return true;
   });
@@ -155,42 +202,9 @@ async function consumeAuthorizationState(input) {
   if (!input || !validateProvider(input.provider) || !isCanonicalState(input.rawState)) return null;
   const stateHash = hashState(input.rawState);
   return withTransaction(async client => {
+    const authority = await lockExternalAuthority(client, input);
+    const row = authority && await lockBoundState(client, input, authority, stateHash);
     await cleanup(client);
-    const result = await client.query(
-      `SELECT state.id,
-              state.provider,
-              state.organization_id,
-              state.user_id,
-              state.auth_session_id AS session_id,
-              state.status AS state_status,
-              (state.expires_at > NOW()) AS state_current,
-              session.status AS session_status,
-              session.revoked_at AS session_revoked_at,
-              (session.access_expires_at > NOW()) AS access_current,
-              (session.refresh_expires_at > NOW()) AS refresh_current,
-              users.status AS user_status,
-              membership.status AS membership_status,
-              membership.role,
-              onboarding.status AS onboarding_status
-         FROM oauth_authorization_states state
-         JOIN auth_sessions session
-           ON session.id = state.auth_session_id
-          AND session.user_id = state.user_id
-          AND session.organization_id = state.organization_id
-         JOIN users
-           ON users.id = session.user_id
-          AND users.organization_id = session.organization_id
-         JOIN organization_memberships membership
-           ON membership.id = session.membership_id
-          AND membership.user_id = session.user_id
-          AND membership.organization_id = session.organization_id
-         JOIN organization_onboarding onboarding
-           ON onboarding.organization_id = session.organization_id
-        WHERE state.state_hash = $1
-        FOR UPDATE OF state, session, users, membership, onboarding`,
-      [stateHash]
-    );
-    const row = result.rows[0];
     if (!row || row.provider !== input.provider || row.state_status !== 'pending' ||
         row.state_current !== true || row.session_id !== input.sessionId ||
         row.user_id !== input.userId || row.organization_id !== input.organizationId ||

@@ -337,6 +337,9 @@ async function main() {
     const policySave = ownerPage.waitForResponse(response =>
       response.url() === origin + '/api/v1/business-profile/workforce' && response.request().method() === 'PUT'
     );
+    const policyReload = ownerPage.waitForResponse(response =>
+      response.url() === origin + '/api/workforce' && response.request().method() === 'GET'
+    );
     await ownerPage.click('#savePolicies');
     const policySaveResponse = await policySave;
     assert.strictEqual(policySaveResponse.status(), 200, 'owner saves versioned workforce policy');
@@ -352,7 +355,8 @@ async function main() {
       enabled: true,
     }] }, 'workforce policy browser sends policy value inside the version envelope');
 
-    await ownerPage.evaluate(() => window.NorthStarWorkforce.reload());
+    assert.strictEqual((await policyReload).status(), 200, 'saved workforce policy reloads current authority');
+    await ownerPage.waitForLoadState('networkidle');
     await waitReady(ownerPage);
     const concurrentBase = await getActiveBusinessProfile(pool, ORG_A);
     const concurrentProfile = JSON.parse(JSON.stringify(concurrentBase.rawProfile));

@@ -343,14 +343,20 @@ async function bannerEvidence(page, expectedText) {
   return evidence;
 }
 
-async function login(page, baseUrl, email, password) {
-  await page.goto(`${baseUrl}/login`);
+async function submitLogin(page, email, password) {
+  await page.locator('#loginForm').waitFor({ state: 'visible' });
+  await page.locator('#email').waitFor({ state: 'visible' });
   await page.fill('#email', email);
   await page.fill('#password', password);
   await Promise.all([
     page.waitForURL(url => ['/dashboard', '/dashboard/business-profile'].includes(url.pathname)),
     page.click('#loginForm button[type="submit"]'),
   ]);
+}
+
+async function login(page, baseUrl, email, password) {
+  await page.goto(`${baseUrl}/login`);
+  await submitLogin(page, email, password);
 }
 
 async function runJourney(spec, viewport, state) {
@@ -412,11 +418,17 @@ async function runJourney(spec, viewport, state) {
     await page.goto(`${state.baseUrl}/dashboard/business-profile`);
     await bannerEvidence(page, /14 days remaining/);
     const saved = await page.evaluate(async profile => {
+      const currentResponse = await NorthStarAccountSession.fetch('/api/v1/business-profile');
+      const current = await currentResponse.json();
+      const authority = current && current.data && current.data.canonicalAuthority;
+      const expectedVersion = authority && typeof authority.version === 'string' ? authority.version : null;
       const response = await NorthStarAccountSession.fetch('/api/v1/business-profile', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedVersion, value: profile }),
       });
-      return { status: response.status, body: await response.json() };
+      return { expectedVersion, status: response.status, body: await response.json() };
     }, canonicalFenceProfile({ companyName: `Browser Company ${suffix}` }));
+    assert.ok(saved.expectedVersion === null || /^org-profile-v[1-9][0-9]*$/.test(saved.expectedVersion));
     assert.strictEqual(saved.status, 200);
 
     await page.goto(`${state.baseUrl}/dashboard`);
@@ -434,7 +446,7 @@ async function runJourney(spec, viewport, state) {
       page.waitForURL(url => url.pathname === '/login'),
       page.evaluate(() => NorthStarAccountSession.logout()),
     ]);
-    await login(page, state.baseUrl, email, oldPassword);
+    await submitLogin(page, email, oldPassword);
     await page.goto(`${state.baseUrl}/forgot-password`);
     await page.fill('#email', email);
     const forgotResponse = page.waitForResponse(response => response.url().endsWith('/api/auth/forgot-password'));

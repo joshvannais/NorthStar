@@ -126,6 +126,11 @@ async function openVoiceEditor(page, origin) {
   await page.goto(origin + '/dashboard/business-profile?section=retell#voice-assistant-configuration', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.getElementById('businessProfileRoot').dataset.state === 'ready');
   await page.waitForFunction(() => document.getElementById('section-retell').classList.contains('active'));
+  await page.waitForFunction(() => (
+    document.getElementById('profileReadiness').dataset.state === 'ready' &&
+    document.documentElement.getAttribute('data-asset-catalogue-state') === 'ready' &&
+    document.documentElement.getAttribute('data-northstar-navigation') === 'ready'
+  ));
 }
 
 async function main() {
@@ -214,7 +219,13 @@ async function main() {
     assert.strictEqual(await ownerPage.inputValue('#voice-assistant-name'), '', 'legacy values are not copied into neutral controls');
     assert.strictEqual((await pool.query("SELECT raw_profile ? 'voiceAssistant' AS present FROM canonical_business_profiles WHERE organization_id = $1 AND is_active = TRUE", [ORG_A])).rows[0].present, false);
 
-    await ownerPage.click('[data-section="company"]');
+    await Promise.all([
+      ownerPage.waitForFunction(() => {
+        const section = document.getElementById('section-company');
+        return section.classList.contains('active') && !section.hidden;
+      }),
+      ownerPage.click('[data-section="company"]'),
+    ]);
     await ownerPage.fill('#company-dba', 'Unrelated saved DBA');
     const unrelatedSave = ownerPage.waitForResponse(response => response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT');
     await ownerPage.click('#saveBtn');

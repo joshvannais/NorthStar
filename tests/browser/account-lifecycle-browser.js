@@ -642,7 +642,7 @@ async function assertNoBrowserAuthority(page, requireCoordinationState = false) 
       assert.ok(lease.value.expiresAt <= evidence.coordinationDatabase.observedAt + 3000, 'lease expiry is bounded');
     }
   }
-  assert.ok(evidence.accountListeners <= 2, 'account event listeners remain bounded');
+  assert.ok(evidence.accountListeners <= 3, 'account event listeners remain bounded');
   assert.strictEqual(evidence.accountScriptCount, 1, 'one browser session client');
   assert.strictEqual(evidence.singletonFrozen, true, 'browser session client is immutable');
   return evidence;

@@ -844,7 +844,11 @@ async function main() {
       '008_canonical_demo_authority.sql', '009_canonical_voice_provider_identity.sql',
       '010_account_session_authority.sql', '011_oauth_authorization_states.sql',
       '012_account_verification_trial.sql',
-    ], 'real mounted startup applies migrations 001-012');
+      '015_workforce_authority.sql', '016_tenant_asset_catalogue.sql',
+      '017_retell_webhook_replay_authority.sql', '018_canonical_map_preferences.sql',
+      '019_account_email_outbox.sql', '020_canonical_workforce_access_roles.sql',
+      '021_bounded_api_observability.sql',
+    ], 'real mounted startup applies the exact committed migration set through 021');
 
     await pool.query(
       `INSERT INTO organizations (id, name, email) VALUES

@@ -68,6 +68,7 @@ describe('mounted site-wide theme inventory', () => {
     const expectedRoutes = [
       ...MOUNTED_THEME_PAGES.map(page => page.route),
       ...MOUNTED_REDIRECTS,
+      '/site.webmanifest', // Explicit non-HTML install metadata; not a themed page.
     ].sort();
     expect(mountedGetRoutes()).toEqual(expectedRoutes);
     expect(new Set(MOUNTED_THEME_PAGES.map(page => page.route)).size).toBe(MOUNTED_THEME_PAGES.length);

@@ -35,6 +35,7 @@ const TEST_PATHS = Object.freeze([
   'tests/ratification/m19-part4-final-reachability.test.js',
 ]);
 const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
+  'public/js/homepage-demo.js',
   'public/js/navigation-launcher.js',
   'public/js/transcript-renderer.js',
 ]);
@@ -141,7 +142,7 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
     expect(readBlob(BASE, 'public/dashboard.html')).not.toBe(readBlob(LEGACY_INLINE_COMMIT, 'public/dashboard.html'));
   });
 
-  test('only the two authorized public scripts are absent while retained boundaries remain', () => {
+  test('only the authorized public script additions are present while retained boundaries remain', () => {
     const base = new Set(treePaths(BASE));
     const current = new Set(currentTrackedPaths());
     const missingPublicScripts = [...base]
@@ -191,7 +192,7 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
     expect(production.filter(file => /navigator\s*\.\s*serviceWorker|\bcaches\s*\.\s*open|\bimportScripts\s*\(/.test(file.source)))
       .toEqual([]);
     expect(currentTrackedPaths().filter(relative => /(^|\/)(?:service-worker|sw)\.js$|\.webmanifest$/i.test(relative)))
-      .toEqual([]);
+      .toEqual(['public/site.webmanifest']);
   });
 
   test('the real package entrypoint mounts all 31 pages and retires both direct/deep asset URLs', async () => {

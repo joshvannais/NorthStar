@@ -66,6 +66,9 @@ app.use(auditLogger);
 app.use('/css', express.static('public/css'));
 app.use('/js', express.static('public/js'));
 app.use('/assets', express.static('public/assets'));
+app.get('/site.webmanifest', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'site.webmanifest'));
+});
 
 // Frontend page routes
 const pages = {

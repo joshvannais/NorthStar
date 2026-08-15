@@ -56,7 +56,14 @@ function statusBody(lifecycle) {
 router.get('/status', async function (_req, res) {
   try {
     await getProvisionedDemoOrganization(db.getPool(), configuredOrganizationId());
-    return res.json({ status: 'ok', available: true, persistence: 'postgresql', canonicalLifecycle: true });
+    return res.json({
+      status: 'ok',
+      available: true,
+      persistence: 'postgresql',
+      canonicalLifecycle: true,
+      outboundCalls: false,
+      guidedPreview: true,
+    });
   } catch (error) {
     return errorResponse(res, error);
   }

@@ -54,7 +54,7 @@
       '<div class="mobile-overlay" id="mobileOverlay"></div>' +
       '<div class="mobile-menu" id="mobileMenu">' +
         '<div class="mobile-menu-header">' +
-          '<a href="/dashboard" style="font-size:17px;font-weight:700;color:var(--brand-600);text-decoration:none;display:flex;align-items:center;gap:8px;"><img src="/assets/logo.png" alt="NorthStar" style="height:22px;"> NorthStar</a>' +
+          '<a href="/dashboard" class="northstar-lockup"><img src="/assets/logo.png" alt=""> NorthStar</a>' +
           '<button class="mobile-menu-close" id="navCloseBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
         '</div>' +
         '<nav class="mobile-menu-nav">' +
@@ -69,8 +69,8 @@
   function buildSidebar(items) {
     return '' +
       '<aside class="sidebar">' +
-        '<a href="/dashboard" class="sidebar-logo">' +
-          '<img src="/assets/logo.png" alt="NorthStar" class="logo-img">' +
+        '<a href="/dashboard" class="sidebar-logo northstar-lockup">' +
+          '<img src="/assets/logo.png" alt="" class="logo-img">' +
           'NorthStar' +
         '</a>' +
         '<nav class="sidebar-nav">' +

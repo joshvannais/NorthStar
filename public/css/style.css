@@ -14,6 +14,9 @@
   --brand-700: #6D5005;
   --brand-800: #7A5C08;
   --brand-900: #5C4506;
+  --northstar-brand-gold: #6D5005;
+  --northstar-lockup-width: 148px;
+  --northstar-lockup-height: 40px;
 
   --accent: #D4AF37;        /* Warm gold accent */
   --accent-hover: #C89B2C;
@@ -157,9 +160,11 @@ textarea:focus-visible {
 }
 
 .nav-logo {
+  width: var(--northstar-lockup-width);
+  height: var(--northstar-lockup-height);
   font-size: 17px;
   font-weight: 700;
-  color: var(--brand-700);
+  color: var(--northstar-brand-gold);
   text-decoration: none;
   display: flex;
   align-items: center;
@@ -169,6 +174,36 @@ textarea:focus-visible {
 }
 
 .nav-logo svg { width: 26px; height: 26px; flex-shrink: 0; }
+
+.northstar-lockup {
+  width: var(--northstar-lockup-width);
+  min-width: var(--northstar-lockup-width);
+  height: var(--northstar-lockup-height);
+  color: var(--northstar-brand-gold);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.northstar-lockup img,
+.nav-logo .logo-img,
+.sidebar-logo .logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.nav-links > .btn-primary[href="/signup"],
+.demo-dashboard-header-actions > .btn-primary[href="/signup"] {
+  width: var(--northstar-lockup-width);
+  min-width: var(--northstar-lockup-width);
+  height: var(--northstar-lockup-height);
+  min-height: var(--northstar-lockup-height);
+  justify-content: center;
+}
 
 .nav-links {
   display: flex;
@@ -449,17 +484,20 @@ textarea:focus-visible {
 
 .account-auth-brand a,
 .standalone-brand a {
+  width: var(--northstar-lockup-width);
+  min-width: var(--northstar-lockup-width);
+  height: var(--northstar-lockup-height);
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: var(--brand-700);
+  color: var(--northstar-brand-gold);
   font-size: 18px;
   font-weight: 750;
   text-decoration: none;
 }
 
 .account-auth-brand img,
-.standalone-brand img { width: 34px; height: 34px; object-fit: contain; }
+.standalone-brand img { width: 32px; height: 32px; object-fit: contain; }
 
 .account-auth-shell,
 .standalone-shell {
@@ -925,6 +963,7 @@ textarea:focus-visible {
 .footer {
   border-top: 1px solid var(--neutral-200);
   padding: 32px 16px;
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 72px));
   text-align: center;
   width: 100%;
 }
@@ -954,9 +993,12 @@ textarea:focus-visible {
 }
 
 .sidebar-logo {
+  width: var(--northstar-lockup-width);
+  min-width: var(--northstar-lockup-width);
+  height: var(--northstar-lockup-height);
   font-size: 17px;
   font-weight: 700;
-  color: var(--brand-600);
+  color: var(--northstar-brand-gold);
   text-decoration: none;
   display: flex;
   align-items: center;
@@ -1475,6 +1517,7 @@ tr:hover td { background: var(--neutral-50); }
    ============================================ */
 [data-theme="dark"] {
   color-scheme: dark;
+  --northstar-brand-gold: #D4AF37;
   --neutral-50: #0B0D17;
   --neutral-100: #131624;
   --neutral-200: #1E2235;
@@ -1523,7 +1566,7 @@ html[data-theme="dark"] body {
 [data-theme="dark"] .verification-brand-link,
 [data-theme="dark"] .account-auth-brand a,
 [data-theme="dark"] .standalone-brand a {
-  color: var(--brand-200);
+  color: var(--northstar-brand-gold);
 }
 
 [data-theme="dark"] .demo-banner {
@@ -3648,7 +3691,7 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 .nav-logo,
 .mobile-menu-header a,
 .auth-recovery-link {
-  color: var(--brand-700);
+  color: var(--northstar-brand-gold);
 }
 
 .theme-preview-content h1 span {
@@ -3749,7 +3792,7 @@ textarea:disabled {
 [data-theme="dark"] .account-auth-eyebrow,
 [data-theme="dark"] .standalone-eyebrow,
 [data-theme="dark"] .mobile-menu-header a {
-  color: var(--brand-200) !important;
+  color: var(--northstar-brand-gold) !important;
 }
 
 [data-theme="dark"] .pricing-card .btn-primary,

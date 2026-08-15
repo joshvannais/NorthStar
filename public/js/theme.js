@@ -104,7 +104,7 @@
         rect.bottom <= 0 || rect.top >= global.innerHeight) return false;
     for (var current = element; current; current = current.parentElement) {
       var style = global.getComputedStyle(current);
-      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) <= 0) return false;
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
     }
     return true;
   }

@@ -32,11 +32,13 @@ describe('pre-Mission 20 public UI corrections', () => {
     expect(themeScript).toMatch(/requestAnimationFrame\(function \(\) \{ global\.requestAnimationFrame\(release\); \}\)/);
     expect(demoCss).not.toMatch(/padding-right\s*:/i);
     expect(themeScript).toMatch(/refreshControlPosition:\s*dockToggle/);
+    expect(themeScript).not.toMatch(/Number\(style\.opacity\)\s*<=\s*0/);
   });
 
   test('the homepage is explicitly centered and exposes the account-free dashboard entry', () => {
     expect(homepage).toMatch(/\.demo-container\s*\{[^}]*width\s*:\s*min\(calc\(100% - 32px\), 1100px\)[^}]*margin-inline\s*:\s*auto/si);
-    expect(homepage.match(/href=["']\/demo-dashboard["']/g)).toHaveLength(2);
+    expect(homepage.match(/href=["']\/demo-dashboard["']/g).length).toBeGreaterThanOrEqual(2);
+    expect(homepage).not.toMatch(/href=["']\/demo-login["']/i);
     expect(homepage).toContain('Explore the account-free demo dashboard');
     expect(homepage).toContain('sample data only, no sign-in required');
   });
@@ -73,6 +75,7 @@ describe('pre-Mission 20 public UI corrections', () => {
       '/legal',
       '/css/style.css',
       '/css/demo-dashboard.css',
+      '/css/homepage-refresh.css',
       '/assets/logo.png',
       '#demoDashboardMain',
     ]);

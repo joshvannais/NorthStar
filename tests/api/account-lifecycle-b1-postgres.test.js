@@ -731,6 +731,7 @@ describe('Account Lifecycle PR B1 mounted PostgreSQL authority', () => {
       "SELECT organization_id FROM users WHERE email_normalized = 'no-upgrade.b1@example.test'"
     )).rows[0].organization_id;
 
+    controlledNow = new Date('2026-08-08T00:00:00.000Z');
     const states = [
       ['pending_verification', null, null],
       ['trialing', '2026-08-01T00:00:00.000Z', '2026-08-15T00:00:00.000Z'],

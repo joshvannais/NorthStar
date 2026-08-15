@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { performance } = require('perf_hooks');
 const bcrypt = require('bcryptjs');
 const credentials = require('../auth/credentials');
 const { isCanonicalAccessRole, navigationForRole } = require('../auth/permissions');
@@ -26,6 +27,9 @@ const LOGIN_DUMMY_PADDING_HASHES = Object.freeze({
 const LOGIN_PASSWORD_HASH_PATTERN = /^\$2[aby]\$(\d{2})\$[./A-Za-z0-9]{53}$/;
 const LOGIN_PASSWORD_MINIMUM_COST = 4;
 const LOGIN_PASSWORD_CURRENT_COST = 12;
+// Recovery responses share a source-owned minimum duration after the durable
+// source limit succeeds. The delay is never credential or reset authority.
+const RECOVERY_RESPONSE_MINIMUM_MS = 100;
 
 class AccountError extends Error {
   constructor(status, code, message) {
@@ -313,22 +317,28 @@ class AccountService {
     await this.consumeLimit('forgot_ip', requestIp, {
       limit: 8, windowSeconds: 3600, blockSeconds: 3600,
     });
-    let email;
-    try { email = normalizeEmail(input && input.email); } catch (_error) { return { accepted: true }; }
-    const authority = await this.repository.findRecoveryAuthority(email);
-    if (!authority || authority.user_status !== 'active' || authority.membership_status !== 'active') {
+    const startedAt = performance.now();
+    try {
+      let email;
+      try { email = normalizeEmail(input && input.email); } catch (_error) { return { accepted: true }; }
+      const authority = await this.repository.findRecoveryAuthority(email);
+      if (!authority || authority.user_status !== 'active' || authority.membership_status !== 'active') {
+        return { accepted: true };
+      }
+      const token = actionToken();
+      const current = await this.repository.replaceResetToken({
+        userId: authority.user_id,
+        organizationId: authority.organization_id,
+        tokenId: token.id,
+        tokenHash: token.tokenHash,
+        rawToken: token.rawToken,
+      });
+      if (!current) return { accepted: true };
       return { accepted: true };
+    } finally {
+      const remainingMs = RECOVERY_RESPONSE_MINIMUM_MS - (performance.now() - startedAt);
+      if (remainingMs > 0) await this.sleep(remainingMs);
     }
-    const token = actionToken();
-    const current = await this.repository.replaceResetToken({
-      userId: authority.user_id,
-      organizationId: authority.organization_id,
-      tokenId: token.id,
-      tokenHash: token.tokenHash,
-      rawToken: token.rawToken,
-    });
-    if (!current) return { accepted: true };
-    return { accepted: true };
   }
 
   async resetPassword(input, requestIp) {

@@ -2,17 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Explore a fictional, isolated NorthStar Contractor Command Center without an account.">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101217" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="/demo">
+  <title>Contractor Command Center Demo — NorthStar</title>
   <script src="/js/theme.js"></script>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-  <title>Demo Dashboard — NorthStar</title>
-  <meta name="description" content="Explore an isolated NorthStar dashboard preview with fictional sample data and no account required.">
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="/css/demo-dashboard.css">
   <link rel="stylesheet" href="/css/homepage-refresh.css">
+  <link rel="stylesheet" href="/css/demo-dashboard.css">
   <link rel="icon" href="/assets/logo.png">
 </head>
-<body class="demo-dashboard-page">
-  <a class="skip-link" href="#demoDashboardMain">Skip to dashboard</a>
+<body class="demo-dashboard-page demo-command-center-page">
+  <a class="skip-link" href="#demoCommandMain">Skip to demo content</a>
 
   <header class="demo-dashboard-header">
     <div class="demo-dashboard-header-inner">
@@ -21,202 +24,91 @@
         <span>NorthStar</span>
       </a>
       <div class="demo-dashboard-header-actions">
-        <span class="demo-data-pill">Sample data · account-free</span>
+        <span class="demo-data-pill">Fictional data · account-free</span>
         <a class="demo-header-link" href="/">Homepage</a>
         <a class="btn btn-primary btn-sm" href="/signup">Start free trial</a>
       </div>
     </div>
   </header>
 
-  <main class="demo-dashboard-main" id="demoDashboardMain">
-    <section class="demo-dashboard-intro" aria-labelledby="demoDashboardTitle">
-      <div>
-        <p class="demo-eyebrow">Contractor command center</p>
-        <h1 id="demoDashboardTitle">See what needs attention before the day gets away from you.</h1>
-        <p class="demo-intro-copy">This isolated preview shows how NorthStar turns calls, leads, appointments, and business activity into one actionable daily view.</p>
+  <div class="demo-command-layout">
+    <aside class="demo-command-sidebar" aria-label="Demo Command Center navigation">
+      <p class="demo-panel-kicker">Contractor Command Center</p>
+      <nav id="demoCommandNavigation" class="demo-command-navigation"></nav>
+      <div class="demo-command-sidebar-note">
+        <strong>One isolated demo workspace</strong>
+        <span>Every destination reads the same fictional session state.</span>
       </div>
-      <div class="demo-intro-actions">
-        <a class="btn btn-primary" href="/#demoPreCallView">Try a guided call</a>
-        <a class="btn btn-secondary" href="/signup">Create your workspace</a>
-      </div>
-    </section>
-
-    <aside class="demo-disclosure" aria-label="Demo data disclosure">
-      <strong>Fictional preview:</strong> this page is not connected to an account, provider, customer record, or production data source. Nothing you do here changes NorthStar data.
     </aside>
 
-    <section class="demo-dashboard-priority-grid" aria-label="Daily intelligence">
-      <article class="demo-panel demo-daily-brief">
-        <div class="demo-panel-heading">
-          <div>
-            <p class="demo-panel-kicker">Daily brief</p>
-            <h2>Three things deserve your attention</h2>
-          </div>
-          <span class="demo-updated">Updated 8:15 AM</span>
-        </div>
-        <ol class="demo-priority-list">
-          <li>
-            <span class="demo-priority-rank">1</span>
-            <div>
-              <strong>Call the Rivera roofing lead</strong>
-              <p>$14,800 opportunity · storm damage · 92% booking probability</p>
-            </div>
-            <span class="demo-priority-badge demo-priority-high">High</span>
-          </li>
-          <li>
-            <span class="demo-priority-rank">2</span>
-            <div>
-              <strong>Confirm tomorrow’s HVAC replacement</strong>
-              <p>Crew B is available; equipment and travel windows align.</p>
-            </div>
-            <span class="demo-priority-badge">Today</span>
-          </li>
-          <li>
-            <span class="demo-priority-rank">3</span>
-            <div>
-              <strong>Review an overdue estimate</strong>
-              <p>The customer opened it twice and asked about financing.</p>
-            </div>
-            <span class="demo-priority-badge">Follow up</span>
-          </li>
-        </ol>
-      </article>
-
-      <article class="demo-panel demo-polaris-panel">
-        <div class="demo-polaris-brandline">
-          <span class="demo-polaris-mark" aria-hidden="true">✦</span>
-          <div>
-            <p class="demo-panel-kicker">Polaris intelligence</p>
-            <h2>Best next move</h2>
-          </div>
-        </div>
-        <p class="demo-polaris-copy">Prioritize Rivera Roofing before 10 AM. Similar storm-damage leads booked 34% more often when contacted within two hours.</p>
-        <div class="demo-polaris-metrics">
-          <div><span>Opportunity</span><strong>$14,800</strong></div>
-          <div><span>Confidence</span><strong>92%</strong></div>
-          <div><span>Expected duration</span><strong>2.5 days</strong></div>
-        </div>
-        <p class="demo-reasoning"><strong>Why:</strong> urgency, insurance readiness, property fit, and available crew capacity all support a fast follow-up.</p>
-      </article>
-    </section>
-
-    <section class="demo-kpi-grid" aria-label="Business snapshot">
-      <article class="demo-kpi-card">
-        <span>Estimated revenue opportunity</span>
-        <strong>$42,860</strong>
-        <small>Across 11 active opportunities</small>
-      </article>
-      <article class="demo-kpi-card">
-        <span>Calls answered</span>
-        <strong>98%</strong>
-        <small>47 of 48 calls this week</small>
-      </article>
-      <article class="demo-kpi-card">
-        <span>Appointments booked</span>
-        <strong>12</strong>
-        <small>Up 3 from last week</small>
-      </article>
-      <article class="demo-kpi-card">
-        <span>Average lead response</span>
-        <strong>1m 18s</strong>
-        <small>Every new call captured</small>
-      </article>
-    </section>
-
-    <section class="demo-dashboard-analytics-grid" aria-label="Revenue and schedule">
-      <article class="demo-panel demo-revenue-panel">
-        <div class="demo-panel-heading">
-          <div>
-            <p class="demo-panel-kicker">Revenue trends</p>
-            <h2>Qualified opportunity by week</h2>
-          </div>
-          <span class="demo-positive">+18.4%</span>
-        </div>
-        <div class="demo-chart" role="img" aria-label="Six-week qualified revenue trend rising from 24 thousand dollars to 43 thousand dollars">
-          <div class="demo-chart-grid" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-          <div class="demo-chart-bars">
-            <div><span class="demo-chart-bar-1"></span><small>W1</small></div>
-            <div><span class="demo-chart-bar-2"></span><small>W2</small></div>
-            <div><span class="demo-chart-bar-3"></span><small>W3</small></div>
-            <div><span class="demo-chart-bar-4"></span><small>W4</small></div>
-            <div><span class="demo-chart-bar-5"></span><small>W5</small></div>
-            <div><span class="demo-chart-bar-6"></span><small>W6</small></div>
-          </div>
-        </div>
-        <div class="demo-chart-summary">
-          <div><span>Six-week total</span><strong>$214,320</strong></div>
-          <div><span>Projected close value</span><strong>$83,585</strong></div>
-        </div>
-      </article>
-
-      <article class="demo-panel demo-schedule-panel">
-        <div class="demo-panel-heading">
-          <div>
-            <p class="demo-panel-kicker">Upcoming appointments</p>
-            <h2>Today and tomorrow</h2>
-          </div>
-          <span class="demo-count-pill">4 scheduled</span>
-        </div>
-        <ol class="demo-schedule-list">
-          <li><time datetime="09:00">9:00</time><div><strong>Rivera roof inspection</strong><span>18 min travel · Crew A</span></div></li>
-          <li><time datetime="11:30">11:30</time><div><strong>Patel HVAC estimate</strong><span>32 min travel · Owner visit</span></div></li>
-          <li><time datetime="14:00">2:00</time><div><strong>Lewis service follow-up</strong><span>Phone appointment</span></div></li>
-          <li><time datetime="2026-08-07T08:00">Tomorrow</time><div><strong>Nguyen replacement install</strong><span>Crew B · equipment confirmed</span></div></li>
-        </ol>
-      </article>
-    </section>
-
-    <section class="demo-panel demo-leads-panel" aria-labelledby="demoLeadsTitle">
-      <div class="demo-panel-heading">
+    <main class="demo-dashboard-main demo-command-main" id="demoCommandMain">
+      <section class="demo-command-heading" aria-labelledby="demoCommandTitle">
         <div>
-          <p class="demo-panel-kicker">Recent leads</p>
-          <h2 id="demoLeadsTitle">Qualified conversations ready for action</h2>
+          <p class="demo-eyebrow">Account-free product walkthrough</p>
+          <h1 id="demoCommandTitle">Loading Command Center…</h1>
+          <p id="demoCommandDescription" class="demo-intro-copy">Loading the isolated fictional workspace.</p>
         </div>
-        <span class="demo-count-pill">11 active</span>
-      </div>
-      <div class="demo-table-wrap">
-        <table>
-          <thead><tr><th scope="col">Customer</th><th scope="col">Request</th><th scope="col">Opportunity</th><th scope="col">Status</th><th scope="col">Next action</th></tr></thead>
-          <tbody>
-            <tr><td><strong>Maria Rivera</strong><span>12 minutes ago</span></td><td>Storm-damage roof</td><td>$14,800</td><td><span class="demo-status demo-status-hot">Hot</span></td><td>Call before 10 AM</td></tr>
-            <tr><td><strong>Dev Patel</strong><span>38 minutes ago</span></td><td>HVAC replacement</td><td>$9,600</td><td><span class="demo-status demo-status-booked">Booked</span></td><td>Prepare estimate</td></tr>
-            <tr><td><strong>Avery Lewis</strong><span>Yesterday</span></td><td>Electrical panel</td><td>$4,250</td><td><span class="demo-status">Follow-up</span></td><td>Confirm financing</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+        <div class="demo-command-session" aria-label="Demo session status">
+          <span id="demoSessionDurability" class="demo-count-pill">Projection-only until you act</span>
+          <span id="demoWorkspaceRevision">Revision —</span>
+        </div>
+      </section>
 
-    <section class="demo-bottom-grid" aria-label="Coach and system status">
-      <article class="demo-panel demo-coach-panel">
-        <p class="demo-panel-kicker">NorthStar Coach</p>
-        <h2>Your close rate improves when estimates go out the same day.</h2>
-        <p>Four completed calls are waiting on estimates. Sending them by 4 PM could protect approximately $21,300 in qualified opportunity.</p>
-      </article>
-      <article class="demo-panel demo-status-panel">
+      <aside class="demo-disclosure" aria-label="Demo data disclosure">
+        <strong>This is a fictional, isolated preview.</strong>
+        <span>No customer, provider, production, account, or billing data is used. Configuration pages are stable and read-only.</span>
+      </aside>
+
+      <section class="demo-command-controls" aria-labelledby="demoControlsTitle">
         <div>
-          <p class="demo-panel-kicker">NorthStar status</p>
-          <h2>Coverage is active</h2>
-          <p>Calls, transcripts, lead capture, and Polaris analysis are operating normally in this fictional snapshot.</p>
+          <p class="demo-panel-kicker">Demo-only controls</p>
+          <h2 id="demoControlsTitle">Add one fictional lead to the shared workspace</h2>
+          <p>Simulate Lead commits one bounded record graph to this browser's durable demo session. Every relevant demo page then reads that same revision.</p>
         </div>
-        <span class="demo-live-status"><i aria-hidden="true"></i>All systems ready</span>
-      </article>
-    </section>
+        <div class="demo-command-control-actions">
+          <label for="demoScenario">Fictional service scenario</label>
+          <select id="demoScenario">
+            <option value="fence">Fence installation</option>
+            <option value="roofing">Roof replacement</option>
+            <option value="hvac">HVAC service</option>
+            <option value="plumbing">Plumbing service</option>
+            <option value="electrical">Electrical service</option>
+            <option value="concrete">Concrete installation</option>
+          </select>
+          <div class="demo-command-buttons">
+            <button class="btn btn-primary" id="demoSimulateLead" type="button">Simulate Lead</button>
+            <button class="btn btn-secondary" id="demoReset" type="button">Reset demo</button>
+          </div>
+        </div>
+      </section>
 
-    <section class="demo-dashboard-cta" aria-labelledby="demoCtaTitle">
-      <div>
-        <p class="demo-panel-kicker">Ready to use your own business data?</p>
-        <h2 id="demoCtaTitle">Build a NorthStar workspace around the way your company actually operates.</h2>
-      </div>
-      <div class="demo-intro-actions">
-        <a class="btn btn-primary" href="/signup">Start free trial</a>
-        <a class="btn btn-secondary" href="/">Return home</a>
-      </div>
-    </section>
-  </main>
+      <p id="demoCommandStatus" class="demo-command-status" role="status" aria-live="polite" aria-atomic="true">Loading the isolated demo workspace…</p>
+      <section id="demoCommandContent" class="demo-command-content" aria-live="off" aria-busy="true">
+        <div class="demo-panel demo-command-loading">
+          <p class="demo-panel-kicker">Loading</p>
+          <h2>Preparing the fictional workspace</h2>
+        </div>
+      </section>
+
+      <section class="demo-dashboard-cta" aria-labelledby="demoCtaTitle">
+        <div>
+          <p class="demo-panel-kicker">Ready to use your own business data?</p>
+          <h2 id="demoCtaTitle">Build a NorthStar workspace around the way your company actually operates.</h2>
+        </div>
+        <div class="demo-intro-actions">
+          <a class="btn btn-primary" href="/signup">Start free trial</a>
+          <a class="btn btn-secondary" href="/">Return home</a>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <footer class="demo-dashboard-footer">
-    <p>NorthStar account-free dashboard preview · fictional sample data</p>
+    <span>NorthStar · Fictional product preview</span>
     <nav aria-label="Legal links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/legal">Legal</a></nav>
   </footer>
+
+  <script src="/js/command-center-contract.js"></script>
+  <script src="/js/demo-command-center.js"></script>
 </body>
 </html>

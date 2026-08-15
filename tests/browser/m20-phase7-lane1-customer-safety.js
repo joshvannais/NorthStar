@@ -34,7 +34,6 @@ const SURFACES = Object.freeze([
   { key: 'leads', route: '/dashboard/leads', ready: '.leads-table tbody tr' },
   { key: 'communications', route: '/dashboard/communications', ready: '.call-card' },
   { key: 'command-center', route: '/dashboard', ready: '#ccCustomers .cc-cust-item' },
-  { key: 'legacy-dashboard', route: '/dashboard/legacy', ready: '#ccCustomers .cc-cust-item' },
   { key: 'calendar', route: '/dashboard/calendar', ready: '.cal-layout[aria-busy="false"]' },
   { key: 'executive-brief', route: '/dashboard/executive-brief', ready: '#ebCustomers .eb-customer-item' },
   { key: 'lead-detail', route: null, ready: '#leadDetailContainer .lead-detail-header' },

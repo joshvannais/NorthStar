@@ -27,7 +27,7 @@ const EXPECTED_NAVIGATION = Object.freeze([
   Object.freeze({ id: 'integrations', href: '/dashboard/integrations', label: 'Integrations' }),
 ]);
 const PAGES = Object.freeze([
-  Object.freeze({ label: 'Legacy dashboard', route: '/dashboard/legacy', active: 'command-center' }),
+  Object.freeze({ label: 'Canonical Command Center', route: '/dashboard', active: 'command-center' }),
   Object.freeze({ label: 'Lead detail', route: '/dashboard/lead?id=navigation-contract', active: 'leads' }),
   Object.freeze({ label: 'Executive brief', route: '/dashboard/executive-brief', active: 'command-center' }),
   ...(BASE_RED ? [] : [Object.freeze({ label: 'Canonical control', route: '/dashboard/leads', active: 'leads' })]),

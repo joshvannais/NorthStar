@@ -72,10 +72,13 @@ describe('mounted site-wide theme inventory', () => {
     ].sort();
     expect(mountedGetRoutes()).toEqual(expectedRoutes);
     expect(new Set(MOUNTED_THEME_PAGES.map(page => page.route)).size).toBe(MOUNTED_THEME_PAGES.length);
-    expect(new Set(MOUNTED_THEME_PAGES.map(page => page.file)).size).toBe(MOUNTED_THEME_PAGES.length);
+    const demoPages = MOUNTED_THEME_PAGES.filter(page => page.surface === 'public-demo');
+    expect(demoPages).toHaveLength(12);
+    expect(new Set(demoPages.map(page => page.file))).toEqual(new Set(['public/demo-dashboard.html']));
 
     const expectedHtml = [
-      ...MOUNTED_THEME_PAGES.map(page => page.file),
+      ...new Set(MOUNTED_THEME_PAGES.map(page => page.file)),
+      'public/dashboard.html', // Preserved unmounted legacy simulation-harness provenance.
       'public/design-system.html', // Deliberately unmounted internal design reference.
     ].sort();
     expect(htmlFiles(path.join(ROOT, 'public')).sort()).toEqual(expectedHtml);

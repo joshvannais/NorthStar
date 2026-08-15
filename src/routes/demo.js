@@ -1,15 +1,122 @@
 'use strict';
 
 const express = require('express');
+const config = require('../config');
 const db = require('../db');
 const { getProvisionedDemoOrganization } = require('../services/organizationAuthority');
 const { readDemoLifecycle } = require('../services/demoVoiceLifecycle');
+const { sha256 } = require('../services/businessProfileAdapter');
+const {
+  DemoCommandCenterError,
+  DemoCommandCenterRepository,
+} = require('../commandCenter/demoRepository');
+const { buildDemoWorkspace, DEMO_SERVICES } = require('../commandCenter/workspace');
 const scenarios = require('./simulation/scenario-catalog');
 
 const router = express.Router();
+const commandCenterRepository = new DemoCommandCenterRepository();
+const DEMO_COOKIE = 'northstar_demo_workspace';
+const mutationBuckets = new Map();
+const DETAIL_IDENTIFIERS = Object.freeze({ customer: 'customer', lead: 'lead', work: 'work' });
 
 function configuredOrganizationId() {
   return process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
+}
+
+function cookieValue(req, name) {
+  const source = String(req.headers.cookie || '').split(';');
+  for (const part of source) {
+    const separator = part.indexOf('=');
+    if (separator < 0 || part.slice(0, separator).trim() !== name) continue;
+    try { return decodeURIComponent(part.slice(separator + 1).trim()); } catch (_error) { return ''; }
+  }
+  return '';
+}
+
+function commandCenterToken(req, res) {
+  let token = commandCenterRepository.token(cookieValue(req, DEMO_COOKIE));
+  if (token) return token;
+  token = commandCenterRepository.issue();
+  res.cookie(DEMO_COOKIE, token.token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.auth.secureCookies,
+    path: '/',
+    maxAge: Math.max(1, token.expiresAt.getTime() - Date.now()),
+  });
+  return token;
+}
+
+function demoWorkspace(record) {
+  return buildDemoWorkspace({
+    tenantId: record.tenantId,
+    sessionId: record.sessionId,
+    state: record.state,
+    revision: record.revision,
+    simulationCount: record.simulationCount,
+    persisted: record.persisted,
+    expiresAt: record.expiresAt,
+  });
+}
+
+function commandCenterFailure(req, res, error) {
+  const known = error instanceof DemoCommandCenterError ||
+    (error && Number.isInteger(error.status) && typeof error.code === 'string');
+  const status = known ? error.status : 503;
+  return res.status(status).json({
+    success: false,
+    requestId: req.requestId || req.correlationId || 'unavailable',
+    error: {
+      code: known ? String(error.code).toLowerCase() : 'demo_command_center_unavailable',
+      message: known && status < 500 ? error.message : 'The isolated account-free demo is temporarily unavailable.',
+    },
+  });
+}
+
+function exactBody(value, keys) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  const expected = keys.slice().sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+function mutationBoundary(req, res, intent) {
+  const origin = req.get('Origin');
+  const expectedOrigin = req.protocol + '://' + req.get('host');
+  const fetchSite = req.get('Sec-Fetch-Site');
+  if (!origin || origin !== expectedOrigin || (fetchSite && !['same-origin', 'none'].includes(fetchSite))) {
+    res.status(403).json({
+      success: false,
+      error: { code: 'demo_same_origin_required', message: 'Demo actions require the same NorthStar origin.' },
+    });
+    return false;
+  }
+  if (req.get('X-NorthStar-Demo-Intent') !== intent) {
+    res.status(403).json({
+      success: false,
+      error: { code: 'demo_intent_required', message: 'The explicit demo action intent is required.' },
+    });
+    return false;
+  }
+  const minute = Math.floor(Date.now() / 60000);
+  const key = sha256({ ip: req.ip, minute });
+  if (mutationBuckets.size > 1024) {
+    for (const [storedKey, value] of mutationBuckets) {
+      if (value.minute < minute) mutationBuckets.delete(storedKey);
+    }
+    while (mutationBuckets.size > 1024) mutationBuckets.delete(mutationBuckets.keys().next().value);
+  }
+  const current = mutationBuckets.get(key) || { minute, count: 0 };
+  current.count += 1;
+  mutationBuckets.set(key, current);
+  if (current.count > 30) {
+    res.status(429).json({
+      success: false,
+      error: { code: 'demo_rate_limit', message: 'The bounded demo action limit was reached. Try again later.' },
+    });
+    return false;
+  }
+  return true;
 }
 
 function errorResponse(res, error) {
@@ -75,6 +182,83 @@ router.get('/industries', function (_req, res) {
       return { id: key, name: scenarios[key].displayName };
     }),
   });
+});
+
+router.get('/command-center', async function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.vary('Cookie');
+  try {
+    const token = commandCenterToken(req, res);
+    const record = await commandCenterRepository.read(token);
+    return res.json({ success: true, data: demoWorkspace(record) });
+  } catch (error) {
+    return commandCenterFailure(req, res, error);
+  }
+});
+
+router.post('/command-center/simulations/leads', async function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  if (!mutationBoundary(req, res, 'simulate-lead')) return undefined;
+  if (!exactBody(req.body, ['expectedRevision', 'service']) ||
+      !Object.prototype.hasOwnProperty.call(DEMO_SERVICES, req.body.service)) {
+    return res.status(422).json({
+      success: false,
+      error: { code: 'demo_scenario_invalid', message: 'Choose one supported fictional demo scenario.' },
+    });
+  }
+  try {
+    const token = commandCenterToken(req, res);
+    const result = await commandCenterRepository.mutate(token, {
+      operation: 'simulate_lead',
+      expectedRevision: req.body.expectedRevision,
+      serviceKey: req.body.service,
+      idempotencyKey: req.get('Idempotency-Key'),
+    });
+    return res.status(result.replayed ? 200 : 201).json({
+      success: true,
+      replayed: result.replayed,
+      data: demoWorkspace(result.record),
+    });
+  } catch (error) {
+    return commandCenterFailure(req, res, error);
+  }
+});
+
+router.post('/command-center/reset', async function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  if (!mutationBoundary(req, res, 'reset')) return undefined;
+  if (!exactBody(req.body, ['expectedRevision'])) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'demo_reset_invalid', message: 'Refresh the demo before resetting it.' },
+    });
+  }
+  try {
+    const token = commandCenterToken(req, res);
+    const result = await commandCenterRepository.mutate(token, {
+      operation: 'reset',
+      expectedRevision: req.body.expectedRevision,
+      idempotencyKey: req.get('Idempotency-Key'),
+    });
+    return res.json({ success: true, replayed: result.replayed, data: demoWorkspace(result.record) });
+  } catch (error) {
+    return commandCenterFailure(req, res, error);
+  }
+});
+
+router.get('/command-center/polaris/:kind/:id', async function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  const idKey = DETAIL_IDENTIFIERS[req.params.kind];
+  if (!idKey) return res.status(404).json({ success: false, error: { code: 'demo_detail_not_found', message: 'Demo detail not found.' } });
+  try {
+    const token = commandCenterToken(req, res);
+    const record = await commandCenterRepository.read(token);
+    const graph = record.state.graphs.find(item => item && item.ids && item.ids[idKey] === req.params.id);
+    if (!graph) return res.status(404).json({ success: false, error: { code: 'demo_detail_not_found', message: 'Demo detail not found.' } });
+    return res.json({ success: true, data: graph, integrity: demoWorkspace(record).integrity });
+  } catch (error) {
+    return commandCenterFailure(req, res, error);
+  }
 });
 
 router.post('/call', function (_req, res) {

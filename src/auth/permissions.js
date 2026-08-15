@@ -4,6 +4,8 @@
  * Data isolation enforced via organization_id
  */
 
+const commandCenterContract = require('../../public/js/command-center-contract');
+
 const CANONICAL_ACCESS_ROLES = Object.freeze(['owner', 'admin', 'member', 'viewer']);
 const canonicalAccessRoleSet = new Set(CANONICAL_ACCESS_ROLES);
 
@@ -69,19 +71,11 @@ const PERMISSIONS = {
 
 // The server permission matrix is the visibility authority. The browser keeps
 // labels and icons only; it never derives destination visibility from a role.
-const NAVIGATION_DESTINATIONS = Object.freeze([
-  Object.freeze({ id: 'command-center', href: '/dashboard', resource: 'dashboard' }),
-  Object.freeze({ id: 'polaris', href: '/dashboard/polaris', resource: 'ai' }),
-  Object.freeze({ id: 'leads', href: '/dashboard/leads', resource: 'leads' }),
-  Object.freeze({ id: 'communications', href: '/dashboard/communications', resource: 'calls' }),
-  Object.freeze({ id: 'my-number', href: '/dashboard/my-number', resource: 'calls' }),
-  Object.freeze({ id: 'calendar', href: '/dashboard/calendar', resource: 'calendar' }),
-  Object.freeze({ id: 'team', href: '/dashboard/team', resource: 'team' }),
-  Object.freeze({ id: 'ai-settings', href: '/dashboard/ai-settings', resource: 'ai' }),
-  Object.freeze({ id: 'business-profile', href: '/dashboard/business-profile', resource: 'settings' }),
-  Object.freeze({ id: 'settings', href: '/dashboard/settings', resource: 'settings' }),
-  Object.freeze({ id: 'integrations', href: '/dashboard/integrations', resource: 'integrations' }),
-]);
+const NAVIGATION_DESTINATIONS = Object.freeze(commandCenterContract.ROUTES.map(destination => Object.freeze({
+  id: destination.id,
+  href: destination.paidPath,
+  resource: destination.resource,
+})));
 
 /**
  * Check if a role has permission for a resource+action.

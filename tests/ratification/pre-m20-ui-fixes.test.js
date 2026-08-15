@@ -53,22 +53,26 @@ describe('pre-Mission 20 public UI corrections', () => {
     expect(demo.match(/<script\b[^>]*\bsrc=["']\/js\/theme\.js["'][^>]*><\/script>/gi)).toHaveLength(1);
     expect(demo.match(/<link\b[^>]*\bhref=["']\/css\/style\.css["'][^>]*>/gi)).toHaveLength(1);
     expect(demo.match(/<link\b[^>]*\bhref=["']\/css\/demo-dashboard\.css["'][^>]*>/gi)).toHaveLength(1);
-    expect(demo).toMatch(/Fictional preview:/);
-    expect(demo).toMatch(/not connected to an account, provider, customer record, or production data source/);
+    expect(demo).toContain('This is a fictional, isolated preview.');
+    expect(demo).toContain('No customer, provider, production, account, or billing data is used.');
     expect(demo).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/i);
     expect(demo).not.toMatch(/\bstyle\s*=/i);
   });
 
-  test('the demo is read-only, provider-free, and linked only to public destinations', () => {
+  test('the demo has only isolated demo controls and links only to public destinations', () => {
     expect(demo).not.toMatch(/\/api\/|\bfetch\s*\(|XMLHttpRequest|EventSource|WebSocket|auth-session|app-store/i);
-    expect(demo).not.toMatch(/<form\b|<input\b|<button\b/i);
+    expect(demo).not.toMatch(/<form\b|<input\b/i);
+    expect(demo.match(/<button\b/gi)).toHaveLength(2);
+    expect(demo).toContain('id="demoSimulateLead"');
+    expect(demo).toContain('id="demoReset"');
+    expect(demo).toContain('id="demoScenario"');
     expect(demo).not.toMatch(/href=["']\/(?:dashboard|settings|leads|calls|reports|calendar|business-profile)(?:[\/?#"'])/i);
     expect(demo).not.toMatch(/<(?:script|link|img)\b[^>]*(?:src|href)=["']https?:\/\//i);
 
     const hrefs = Array.from(demo.matchAll(/\bhref=["']([^"']+)["']/gi), match => match[1]);
     const allowed = new Set([
       '/',
-      '/#demoPreCallView',
+      '/demo',
       '/signup',
       '/privacy',
       '/terms',
@@ -77,7 +81,7 @@ describe('pre-Mission 20 public UI corrections', () => {
       '/css/demo-dashboard.css',
       '/css/homepage-refresh.css',
       '/assets/logo.png',
-      '#demoDashboardMain',
+      '#demoCommandMain',
     ]);
     expect(hrefs.filter(href => !allowed.has(href))).toEqual([]);
   });

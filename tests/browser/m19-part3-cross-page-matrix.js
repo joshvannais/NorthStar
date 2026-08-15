@@ -75,7 +75,6 @@ const PAGES = [
   { label: 'Calendar', route: '/dashboard/calendar', target: 'calendar', surfaces: ['calendar', 'leads'], appStore: true },
   { label: 'Command Center', route: '/dashboard', target: 'command-center', surfaces: ['command-center', 'executive', 'customer-detail', 'calendar', 'leads'], appStore: true },
   { label: 'Polaris', route: '/dashboard/polaris', target: 'polaris', surfaces: ['polaris', 'customer-detail', 'leads'], appStore: false },
-  { label: 'Dashboard', route: '/dashboard/legacy', target: 'command-center', surfaces: ['command-center', 'executive', 'customer-detail', 'calendar', 'leads'], appStore: true },
 ];
 
 function clone(value) {
@@ -772,6 +771,44 @@ async function exerciseLiveSimulation(browser, origin, auth, pool, profileAuthor
   return { label: input.label, canonicalPrice, requestFields: Object.keys(requestBody).sort() };
 }
 
+async function assertPaidCommandCenterRealOnly(browser, origin, auth, evidence) {
+  const bundle = await createBrowserContext(browser, origin, auth, SESSION_A, evidence);
+  const testCase = {
+    label: 'Paid Command Center real-tenant boundary',
+    route: '/dashboard',
+    target: 'command-center',
+    surfaces: ['command-center', 'executive', 'customer-detail', 'calendar', 'leads'],
+    appStore: true,
+  };
+  const opened = await openPage(bundle, origin, testCase, 1, evidence);
+  const boundary = await opened.page.evaluate(async function () {
+    const source = await fetch('/dashboard', { credentials: 'same-origin' }).then(function (response) {
+      if (!response.ok) throw new Error('paid Command Center source returned HTTP ' + response.status);
+      return response.text();
+    });
+    return {
+      hasSimulateControl: Boolean(document.querySelector('#ccSimBtn, #ccSimStatusText, [data-demo-simulate], [data-simulate-lead]')),
+      loadsSimulator: Array.from(document.scripts).some(function (script) {
+        return /(?:^|\/)simulator\.js(?:$|\?)/.test(script.src || '');
+      }),
+      sourceHasSimulationEndpoint: source.includes('/api/v1/simulations/leads'),
+      sourceHasSimulationLanguage: /\b(?:simulate lead|simulation mode|scenario controls?)\b/i.test(source),
+      sourceHasSessionFilter: /(?:northstarSessionId|sessionId\s*=|[?&]sessionId=)/.test(source),
+    };
+  });
+  assert.deepStrictEqual(boundary, {
+    hasSimulateControl: false,
+    loadsSimulator: false,
+    sourceHasSimulationEndpoint: false,
+    sourceHasSimulationLanguage: false,
+    sourceHasSessionFilter: false,
+  }, 'paid Command Center exposes only real-tenant projections and no simulation surface');
+  assert.deepStrictEqual(opened.pageErrors, [], 'paid Command Center real-tenant boundary has no uncaught page error');
+  await opened.page.close();
+  await bundle.context.close();
+  return boundary;
+}
+
 async function assertRejectedConsumers(page, label) {
   await page.waitForFunction(function () {
     var state = window.AppStore && window.AppStore.getState();
@@ -847,8 +884,8 @@ async function main() {
       '015_workforce_authority.sql', '016_tenant_asset_catalogue.sql',
       '017_retell_webhook_replay_authority.sql', '018_canonical_map_preferences.sql',
       '019_account_email_outbox.sql', '020_canonical_workforce_access_roles.sql',
-      '021_bounded_api_observability.sql',
-    ], 'real mounted startup applies the exact committed migration set through 021');
+      '021_bounded_api_observability.sql', '022_demo_command_center_sessions.sql',
+    ], 'real mounted startup applies the exact committed migration set through 022');
 
     await pool.query(
       `INSERT INTO organizations (id, name, email) VALUES
@@ -1056,29 +1093,8 @@ async function main() {
     await authOpened.page.close();
     await authRejectBundle.context.close();
 
+    const paidCommandCenter = await assertPaidCommandCenterRealOnly(browser, serverHandle.origin, authA, evidence);
     const liveSimulations = [];
-    liveSimulations.push(await exerciseLiveSimulation(
-      browser, serverHandle.origin, authA, pool, profileA, evidence,
-      {
-        label: 'Command Center live simulation',
-        route: '/dashboard',
-        sessionId: 'm19-part3-live-ui-command',
-        contactSuffix: 'command-center',
-        idempotencyKey: 'm19-part3-live-ui-4',
-        requestFields: ['name', 'phone', 'email', 'service', 'description', 'sessionId'],
-      }
-    ));
-    liveSimulations.push(await exerciseLiveSimulation(
-      browser, serverHandle.origin, authA, pool, profileA, evidence,
-      {
-        label: 'Dashboard live simulation',
-        route: '/dashboard/legacy',
-        sessionId: 'm19-part3-live-ui-dashboard',
-        contactSuffix: 'dashboard',
-        idempotencyKey: 'm19-part3-live-ui-5',
-        requestFields: ['name', 'phone', 'email', 'service', 'description'],
-      }
-    ));
 
     assert.deepStrictEqual(evidence.externalMutationAttempts, [], 'every external/provider mutation destination is intercepted before action');
     const browserMutations = evidence.requests.filter(function (entry) {
@@ -1092,10 +1108,10 @@ async function main() {
     });
     const businessMutations = browserMutations.filter(function (entry) {
       const pathname = new URL(entry.url).pathname;
-      return !(entry.method === 'POST' && (pathname === '/api/auth/refresh' || pathname === '/api/v1/simulations/leads'));
+      return !(entry.method === 'POST' && pathname === '/api/auth/refresh');
     });
     assert.strictEqual(authRefreshAttempts.length, 1, 'revoked session makes one bounded loopback auth refresh attempt');
-    assert.strictEqual(liveSimulationPosts.length, 2, 'the two existing live simulation callers each make one authorized mounted POST');
+    assert.strictEqual(liveSimulationPosts.length, 0, 'the sole mounted paid Command Center makes no simulation POST');
     assert.deepStrictEqual(businessMutations, [], 'no unbounded business mutations occur');
     assert.deepStrictEqual(evidence.pageErrors, [], 'all real pages remain free of uncaught errors');
     assert.strictEqual(directoryDigest(dataRoot), dataBefore, 'isolated file data is unchanged');
@@ -1121,6 +1137,7 @@ async function main() {
       externalMutationAttempts: evidence.externalMutationAttempts.length,
       providerActions: 0,
       authRefreshAttempts: authRefreshAttempts.length,
+      paidCommandCenter,
       liveSimulations,
       businessMutations: businessMutations.length,
       pageErrors: evidence.pageErrors.length,

@@ -215,8 +215,10 @@ async function inspectCase(browser, origin, selected, viewport, theme, scenarioK
     assert.strictEqual(preview.xss, 0, `${selected}/${viewport.label}/${theme}: business-name payload inert`);
     assert.match(preview.status, /guided call ready/i, `${selected}/${viewport.label}/${theme}: ready state`);
     assert.strictEqual(preview.booking, 'Not calculated in guided preview', `${selected}/${viewport.label}/${theme}: no invented probability`);
-    assert.match(preview.notice, /No call was placed and no data was sent or stored/i,
-      `${selected}/${viewport.label}/${theme}: truthful completion`);
+    assert.match(preview.notice, /did not place a call or send your entries/i,
+      `${selected}/${viewport.label}/${theme}: no provider or server submission`);
+    assert.match(preview.notice, /Only your scenario and industry are remembered in this browser tab until you reset or close it/i,
+      `${selected}/${viewport.label}/${theme}: truthful bounded session disclosure`);
     assert.deepStrictEqual(Object.keys(preview.stored).sort(), [
       'northstar.homepage.industry',
       'northstar.homepage.scenario',
@@ -233,6 +235,22 @@ async function inspectCase(browser, origin, selected, viewport, theme, scenarioK
     await page.click('#modalCancelBtn');
     assert.strictEqual(await page.getAttribute('#preCallModal', 'aria-hidden'), 'true',
       `${selected}/${viewport.label}/${theme}: explicit review action closes`);
+
+    const resetState = await page.evaluate(() => {
+      window.resetDemo();
+      const homepageKeys = [];
+      for (let index = 0; index < sessionStorage.length; index += 1) {
+        const key = sessionStorage.key(index);
+        if (key.indexOf('northstar.homepage.') === 0) homepageKeys.push(key);
+      }
+      return {
+        businessName: document.getElementById('demoBusinessName').value,
+        industry: document.getElementById('demoIndustry').value,
+        homepageKeys: homepageKeys.sort(),
+      };
+    });
+    assert.deepStrictEqual(resetState, { businessName: '', industry: '', homepageKeys: [] },
+      `${selected}/${viewport.label}/${theme}: reset clears form and bounded session state`);
 
     const forbiddenRequests = requests.filter(request => {
       if (!/^https?:/i.test(request.url)) return false;

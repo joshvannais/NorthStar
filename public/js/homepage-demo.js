@@ -161,6 +161,13 @@
     } catch (_error) {}
   }
 
+  function clearRememberedSelection() {
+    try {
+      global.sessionStorage.removeItem('northstar.homepage.scenario');
+      global.sessionStorage.removeItem('northstar.homepage.industry');
+    } catch (_error) {}
+  }
+
   function syncScenarioButtons() {
     Array.prototype.forEach.call(global.document.querySelectorAll('[data-scenario]'), function (button) {
       var active = button.getAttribute('data-scenario') === currentScenario;
@@ -327,7 +334,7 @@
     setText('demoPolarisConfidence', '—');
     setText('demoSummary', values.businessName + ' · ' + values.industry + ': ' + scenario.summary);
     renderActions(scenario.actions);
-    setNotice('guidedPreviewNotice', 'Preview ready. No call was placed and no data was sent or stored.', 'success');
+    setNotice('guidedPreviewNotice', 'Preview ready. The guided preview did not place a call or send your entries. Only your scenario and industry are remembered in this browser tab until you reset or close it.', 'success');
     var actions = byId('guidedPreviewActions');
     if (actions) actions.hidden = false;
     var button = byId('demoCallBtn');
@@ -391,7 +398,9 @@
     if (industry) industry.value = '';
     setNotice('demoFormNotice', '', '');
     setNotice('guidedPreviewNotice', '', '');
-    setScenario('emergency');
+    currentScenario = 'emergency';
+    syncScenarioButtons();
+    clearRememberedSelection();
     returnToForm(false);
     if (businessName) businessName.focus();
   }

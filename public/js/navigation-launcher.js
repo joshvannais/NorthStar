@@ -349,7 +349,7 @@
       ['canUpdateOrganization', 'canUpdateSelf'],
       preferenceFailure
     );
-    if (typeof permissions.canUpdateOrganization !== 'boolean' || permissions.canUpdateSelf !== true) preferenceFailure();
+    if (typeof permissions.canUpdateOrganization !== 'boolean' || typeof permissions.canUpdateSelf !== 'boolean') preferenceFailure();
     return deepFreeze(effective.preferences);
   }
 

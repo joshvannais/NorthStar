@@ -647,6 +647,10 @@
   }
 
   function request(url, options) {
+    if (global.NorthStarDemoRuntime && global.NorthStarDemoRuntime.active === true &&
+        typeof global.NorthStarDemoRuntime.fetch === 'function') {
+      return global.NorthStarDemoRuntime.fetch(url, optionsWithSession(options));
+    }
     var localOutcome = { failed: false, completedAt: 0, attemptId: '' };
     var prepared = optionsWithSession(options);
     var capture = Object.freeze({
@@ -698,6 +702,14 @@
   function load(force) {
     if (account && !force) return Promise.resolve(account);
     if (pendingLoad && !force) return pendingLoad;
+    if (global.NorthStarDemoRuntime && global.NorthStarDemoRuntime.active === true &&
+        typeof global.NorthStarDemoRuntime.loadAccount === 'function') {
+      pendingLoad = global.NorthStarDemoRuntime.loadAccount(Boolean(force))
+        .then(function (value) { return publish(value); })
+        .catch(function (error) { publish(null); throw error; })
+        .finally(function () { pendingLoad = null; });
+      return pendingLoad;
+    }
     pendingLoad = json('/api/auth/me', { method: 'GET', cache: 'no-store' })
       .then(function (body) { return publish(body.account); })
       .catch(function (error) { publish(null); throw error; })
@@ -707,6 +719,7 @@
 
   function destination(value) {
     if (!value || !value.user) return '/login';
+    if (value.mode === 'demo') return '/demo';
     if (value.onboarding && value.onboarding.status !== 'complete') {
       return '/dashboard/business-profile';
     }

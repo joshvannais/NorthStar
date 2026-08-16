@@ -14,8 +14,9 @@ function read(relativePath) {
 describe('pre-Mission 20 public UI corrections', () => {
   const sharedCss = read('public/css/style.css');
   const homepage = read('public/index.html');
-  const demo = read('public/demo-dashboard.html');
-  const demoCss = read('public/css/demo-dashboard.css');
+  const demo = read('public/dashboard/command-center.html');
+  const demoCss = read('public/css/demo-runtime.css');
+  const demoRuntime = read('public/js/demo-runtime.js');
   const themeScript = read('public/js/theme.js');
 
   test('the fixed theme toggle no longer reserves a horizontal body rail', () => {
@@ -52,37 +53,23 @@ describe('pre-Mission 20 public UI corrections', () => {
     expect(response.text).toBe(demo);
     expect(demo.match(/<script\b[^>]*\bsrc=["']\/js\/theme\.js["'][^>]*><\/script>/gi)).toHaveLength(1);
     expect(demo.match(/<link\b[^>]*\bhref=["']\/css\/style\.css["'][^>]*>/gi)).toHaveLength(1);
-    expect(demo.match(/<link\b[^>]*\bhref=["']\/css\/demo-dashboard\.css["'][^>]*>/gi)).toHaveLength(1);
-    expect(demo).toContain('This is a fictional, isolated preview.');
-    expect(demo).toContain('No customer, provider, production, account, or billing data is used.');
-    expect(demo).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/i);
-    expect(demo).not.toMatch(/\bstyle\s*=/i);
+    expect(demo.match(/<link\b[^>]*\bhref=["']\/css\/demo-runtime\.css["'][^>]*>/gi)).toHaveLength(1);
+    expect(demo).toContain('/js/demo-runtime.js');
+    expect(demo).toContain('/js/nav-component.js');
+    expect(demo).toContain('Command Center');
+    expect(demo).toContain('Polaris™ Intelligence');
   });
 
-  test('the demo has only isolated demo controls and links only to public destinations', () => {
-    expect(demo).not.toMatch(/\/api\/|\bfetch\s*\(|XMLHttpRequest|EventSource|WebSocket|auth-session|app-store/i);
-    expect(demo).not.toMatch(/<form\b|<input\b/i);
-    expect(demo.match(/<button\b/gi)).toHaveLength(2);
-    expect(demo).toContain('id="demoSimulateLead"');
-    expect(demo).toContain('id="demoReset"');
-    expect(demo).toContain('id="demoScenario"');
-    expect(demo).not.toMatch(/href=["']\/(?:dashboard|settings|leads|calls|reports|calendar|business-profile)(?:[\/?#"'])/i);
-    expect(demo).not.toMatch(/<(?:script|link|img)\b[^>]*(?:src|href)=["']https?:\/\//i);
-
-    const hrefs = Array.from(demo.matchAll(/\bhref=["']([^"']+)["']/gi), match => match[1]);
-    const allowed = new Set([
-      '/',
-      '/demo',
-      '/signup',
-      '/privacy',
-      '/terms',
-      '/legal',
-      '/css/style.css',
-      '/css/demo-dashboard.css',
-      '/css/homepage-refresh.css',
-      '/assets/logo.png',
-      '#demoCommandMain',
-    ]);
-    expect(hrefs.filter(href => !allowed.has(href))).toEqual([]);
+  test('the shared adapter exposes only bounded demo mutations and rewrites paid links locally', () => {
+    expect(demoRuntime).toContain("simulate.id = 'demoSimulateLead'");
+    expect(demoRuntime).toContain("reset.id = 'demoReset'");
+    expect(demoRuntime).toContain("select.id = 'demoScenario'");
+    expect(demoRuntime).toContain('/api/demo/command-center/simulations/leads');
+    expect(demoRuntime).toContain('/api/demo/command-center/reset');
+    expect(demoRuntime).toContain("code: 'demo_external_request_blocked'");
+    expect(demoRuntime).toContain('route.demoPath');
+    expect(demoRuntime).not.toMatch(/https?:\/\/(?!northstar\.invalid)/i);
+    expect(demoCss).toMatch(/\.northstar-demo-toolbar[\s\S]*max-width:\s*100%/);
+    expect(demoCss).toMatch(/@media \(max-width:\s*768px\)/);
   });
 });

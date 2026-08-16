@@ -151,6 +151,44 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
       polaris: expect.objectContaining({ completeDetail: true, snapshotDigest: expect.stringMatching(/^[0-9a-f]{64}$/) }),
     }));
 
+    for (const surface of ['customer-detail', 'leads', 'communications', 'calendar']) {
+      const projected = await request(app)
+        .get('/api/demo/command-center/canonical/compat/' + surface)
+        .set('Host', 'northstar.test')
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(projected.body.data).toEqual(expect.objectContaining({
+        surface,
+        authority: expect.objectContaining({
+          organizationId: created.body.data.tenant.id,
+          userId: created.body.data.viewer.id,
+          sessionId: created.body.data.session.id,
+        }),
+        records: expect.any(Array),
+        items: expect.any(Array),
+        metrics: expect.objectContaining({ graphCount: 4 }),
+      }));
+      expect(projected.body.data.records).toHaveLength(4);
+      expect(projected.body.data.items).toHaveLength(4);
+      expect(projected.body.data.records[0]).toEqual(expect.objectContaining({
+        canonical: expect.objectContaining({
+          ids: expect.objectContaining({ graph: graph.ids.graph, customer: graph.ids.customer }),
+          snapshotDigest: graph.polaris.snapshotDigest,
+        }),
+      }));
+      if (surface === 'customer-detail') {
+        expect(projected.body.data.records[0].name).toBe(graph.customer.name);
+      } else {
+        expect(projected.body.data.records[0].customer.name).toBe(graph.customer.name);
+      }
+      if (surface === 'communications') {
+        const transcript = JSON.parse(projected.body.data.records[0].transcript.text);
+        expect(transcript.length).toBeGreaterThan(1);
+        expect(transcript[0]).toEqual(expect.objectContaining({ speaker: 'ai', text: expect.any(String) }));
+        expect(transcript.some(turn => turn.speaker === 'customer')).toBe(true);
+      }
+    }
+
     const replay = await mutation(request(app), cookie, '/api/demo/command-center/simulations/leads', 'simulate-lead', key, {
       service: 'fence',
       expectedRevision: 1,

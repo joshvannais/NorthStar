@@ -10,7 +10,16 @@ const {
   DemoCommandCenterError,
   DemoCommandCenterRepository,
 } = require('../commandCenter/demoRepository');
-const { buildDemoWorkspace, DEMO_SERVICES } = require('../commandCenter/workspace');
+const {
+  buildDemoWorkspace,
+  demoCanonicalItems,
+  DEMO_SERVICES,
+} = require('../commandCenter/workspace');
+const {
+  SURFACES,
+  compatibilityProjection,
+  surfaceProjection,
+} = require('./canonicalPolaris');
 const scenarios = require('./simulation/scenario-catalog');
 
 const router = express.Router();
@@ -56,6 +65,52 @@ function demoWorkspace(record) {
     persisted: record.persisted,
     expiresAt: record.expiresAt,
   });
+}
+
+function demoCanonicalContext(workspace) {
+  return Object.freeze({
+    organizationId: workspace.tenant.id,
+    userId: workspace.viewer.id,
+    sessionId: workspace.session.id,
+    explicitSession: workspace.session.id,
+  });
+}
+
+function demoCanonicalFilters(items, query) {
+  let result = items;
+  if (query.status) {
+    result = result.filter(function (item) { return item.opportunity.status === query.status; });
+  }
+  if (query.customerId) {
+    result = result.filter(function (item) { return item.ids.customer === query.customerId; });
+  }
+  const parsedLimit = Number.parseInt(query.limit, 10);
+  const limit = Number.isSafeInteger(parsedLimit) ? Math.max(1, Math.min(100, parsedLimit)) : 100;
+  return result.slice(0, limit);
+}
+
+async function demoCanonicalProjection(req, res, compatibility) {
+  res.set('Cache-Control', 'no-store');
+  res.vary('Cookie');
+  if (!SURFACES.has(req.params.surface)) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'demo_surface_not_found', message: 'Demo surface not found.' },
+    });
+  }
+  try {
+    const token = commandCenterToken(req, res);
+    const record = await commandCenterRepository.read(token);
+    const workspace = demoWorkspace(record);
+    const items = demoCanonicalFilters(demoCanonicalItems(workspace), req.query || {});
+    const context = demoCanonicalContext(workspace);
+    const data = compatibility
+      ? compatibilityProjection(req.params.surface, items, context)
+      : surfaceProjection(req.params.surface, items, context);
+    return res.json({ success: true, data });
+  } catch (error) {
+    return commandCenterFailure(req, res, error);
+  }
 }
 
 function commandCenterFailure(req, res, error) {
@@ -240,6 +295,14 @@ router.post('/command-center/reset', async function (req, res) {
   } catch (error) {
     return commandCenterFailure(req, res, error);
   }
+});
+
+router.get('/command-center/canonical/compat/:surface', function (req, res) {
+  return demoCanonicalProjection(req, res, true);
+});
+
+router.get('/command-center/canonical/surfaces/:surface', function (req, res) {
+  return demoCanonicalProjection(req, res, false);
 });
 
 router.get('/command-center/polaris/:kind/:id', async function (req, res) {

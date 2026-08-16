@@ -135,7 +135,7 @@ window.CustomerDetail = (function() {
     html += '      <div class="drawer-section">';
     html += '        <h3>Job Details</h3>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="cdService">\u2014</span></div>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Description</span><span class="drawer-detail-value" id="cdDescription">\u2014</span></div>';
+    html += '        <div class="drawer-detail-row drawer-description-row"><span class="drawer-detail-label">Description</span><span class="drawer-detail-value" id="cdDescription">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Estimated Value</span><span class="drawer-detail-value" id="cdEstValue">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Opportunity Stage</span><span class="drawer-detail-value" id="cdStage">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Close Probability</span><span class="drawer-detail-value" id="cdProb">\u2014</span></div>';

@@ -41,6 +41,7 @@ const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/homepage-demo.js',
   'public/js/navigation-launcher.js',
   'public/js/transcript-renderer.js',
+  'public/js/vendor/retell-web-client.mjs',
 ]);
 const { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS } = require('../helpers/site-theme-pages');
 const packageMetadata = require('../../package.json');
@@ -198,9 +199,9 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
       .toEqual(['public/site.webmanifest']);
   });
 
-  test('the real package entrypoint mounts all 41 pages and retires legacy and direct/deep asset URLs', async () => {
+  test('the real package entrypoint mounts all 42 pages and retires legacy and direct/deep asset URLs', async () => {
     const mounted = mountedRoutePaths();
-    expect(MOUNTED_THEME_PAGES).toHaveLength(41);
+    expect(MOUNTED_THEME_PAGES).toHaveLength(42);
     for (const page of MOUNTED_THEME_PAGES) expect(mounted).toContain(page.route);
     for (const route of MOUNTED_REDIRECTS) expect(mounted).toContain(route);
 

@@ -12,6 +12,8 @@ const safeLogger = require('../observability/safeLogger');
 
 const RETELL_BASE = 'https://api.retellai.com';
 const RETELL_V2 = 'https://api.retellai.com/v2';
+const RETELL_REQUEST_TIMEOUT_MS = 8000;
+const RETELL_MAX_RESPONSE_BYTES = 512 * 1024;
 
 /**
  * Custom error that carries the exact failure stage and diagnostic details.
@@ -25,6 +27,39 @@ class DiagnosticError extends Error {
     this.details = details;
     this.httpStatus = httpStatus;
   }
+}
+
+async function boundedResponseText(response) {
+  const declared = Number(response && response.headers && typeof response.headers.get === 'function'
+    ? response.headers.get('content-length') : NaN);
+  if (Number.isFinite(declared) && declared > RETELL_MAX_RESPONSE_BYTES) {
+    throw new DiagnosticError('retell_response', 'RETELL_RESPONSE_TOO_LARGE',
+      'Retell returned a response larger than the bounded provider limit.', 502);
+  }
+  if (!response || !response.body || typeof response.body.getReader !== 'function') {
+    const text = await response.text();
+    if (Buffer.byteLength(text, 'utf8') > RETELL_MAX_RESPONSE_BYTES) {
+      throw new DiagnosticError('retell_response', 'RETELL_RESPONSE_TOO_LARGE',
+        'Retell returned a response larger than the bounded provider limit.', 502);
+    }
+    return text;
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const part = await reader.read();
+    if (part.done) break;
+    const chunk = Buffer.from(part.value);
+    total += chunk.length;
+    if (total > RETELL_MAX_RESPONSE_BYTES) {
+      try { await reader.cancel(); } catch (_error) {}
+      throw new DiagnosticError('retell_response', 'RETELL_RESPONSE_TOO_LARGE',
+        'Retell returned a response larger than the bounded provider limit.', 502);
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks, total).toString('utf8');
 }
 
 async function request(method, path, body, attemptNum = 1) {
@@ -56,24 +91,41 @@ async function request(method, path, body, attemptNum = 1) {
     methodClass: method,
   });
 
+  const controller = new AbortController();
+  const timeout = setTimeout(function () {
+    controller.abort();
+  }, RETELL_REQUEST_TIMEOUT_MS);
+  options.signal = controller.signal;
+
   let res;
+  let rawBody;
   try {
     res = await fetch(url, options);
+    rawBody = await boundedResponseText(res);
   } catch (err) {
-    safeLogger.error('retell', 'request_network_failed', { attempt: attemptNum });
+    if (err instanceof DiagnosticError) throw err;
+    const timedOut = controller.signal.aborted || (err && err.name === 'AbortError');
+    safeLogger.error('retell', 'request_network_failed', {
+      attempt: attemptNum,
+    });
     throw new DiagnosticError(
       'retell_network',
-      'RETELL_NETWORK_ERROR',
-      `Backend timeout or network error contacting Retell: ${err.message}`,
-      502
+      timedOut ? 'RETELL_REQUEST_TIMEOUT' : 'RETELL_NETWORK_ERROR',
+      timedOut
+        ? 'Retell did not respond within the bounded provider timeout.'
+        : `Backend network error contacting Retell: ${err.message}`,
+      timedOut ? 504 : 502
     );
+  } finally {
+    clearTimeout(timeout);
   }
 
-  const rawBody = await res.text();
   safeLogger.info('retell', 'response_received', {
     attempt: attemptNum,
     statusCode: res.status,
   });
+
+  if (res.ok && res.status === 204) return null;
 
   let data;
   try {
@@ -101,9 +153,20 @@ async function request(method, path, body, attemptNum = 1) {
       throw new DiagnosticError('retell_auth', 'RETELL_AUTH_FAILED',
         `Retell authentication failed — check RETELL_API_KEY. ${errDetail}`, 502);
     }
+    const callOperation = ['/get-call/', '/stop-call/', '/delete-call/'].some(function (segment) {
+      return path.includes(segment);
+    });
+    if (res.status === 404 && callOperation) {
+      throw new DiagnosticError('retell_call', 'RETELL_CALL_NOT_FOUND',
+        `Retell call was not found. ${errDetail}`, 404);
+    }
     if (res.status === 404 || (data?.error_type && data.error_type.includes('agent'))) {
       throw new DiagnosticError('retell_agent', 'RETELL_AGENT_NOT_FOUND',
         `Agent ID not found. Check RETELL_AGENT_ID. ${errDetail}`, 502);
+    }
+    if (res.status === 422 && path.includes('/stop-call/')) {
+      throw new DiagnosticError('retell_call', 'RETELL_CALL_NOT_STOPPABLE',
+        'Retell reports that the call is no longer ongoing.', 422);
     }
     if (data?.error_type === 'outbound_calling_disabled' || (errDetail && errDetail.toLowerCase().includes('outbound'))) {
       throw new DiagnosticError('retell_outbound', 'RETELL_OUTBOUND_DISABLED',
@@ -186,7 +249,46 @@ async function registerWebhook(webhookUrl) {
  * Get call details including transcript and analysis.
  */
 async function getCall(callId) {
-  return request('GET', `/v2/get-call/${callId}`);
+  return request('GET', '/v2/get-call/' + providerIdentifier(callId, 'call_id'));
+}
+
+function providerIdentifier(value, field) {
+  const result = typeof value === 'string' ? value.trim() : '';
+  if (!result || result.length > 160 || !/^[A-Za-z0-9_-]+$/.test(result)) {
+    throw new DiagnosticError('validation', 'RETELL_PROVIDER_IDENTIFIER_INVALID',
+      `${field} is invalid.`, 400);
+  }
+  return result;
+}
+
+async function getAgent(agentId) {
+  return request('GET', '/get-agent/' + providerIdentifier(agentId, 'agent_id'));
+}
+
+async function createWebCall(agentId, dynamicVariables, agentVersion) {
+  const variables = dynamicVariables && typeof dynamicVariables === 'object'
+    ? Object.fromEntries(Object.entries(dynamicVariables).map(([key, value]) => [String(key), String(value)]))
+    : {};
+  const body = {
+    agent_id: providerIdentifier(agentId, 'agent_id'),
+    retell_llm_dynamic_variables: variables,
+  };
+  if (agentVersion !== undefined) {
+    if (!Number.isInteger(agentVersion) || agentVersion < 0 || agentVersion > Number.MAX_SAFE_INTEGER) {
+      throw new DiagnosticError('validation', 'RETELL_AGENT_VERSION_INVALID',
+        'agent_version is invalid.', 400);
+    }
+    body.agent_version = agentVersion;
+  }
+  return request('POST', '/v2/create-web-call', body);
+}
+
+async function stopCall(callId) {
+  return request('POST', '/v2/stop-call/' + providerIdentifier(callId, 'call_id'));
+}
+
+async function deleteCall(callId) {
+  return request('DELETE', '/v2/delete-call/' + providerIdentifier(callId, 'call_id'));
 }
 
 
@@ -490,6 +592,10 @@ module.exports = {
   buildPrompt,
   registerWebhook,
   getCall,
+  getAgent,
+  createWebCall,
+  stopCall,
+  deleteCall,
   createCall,
   verifyApiKey,
   sendSMS,
@@ -497,4 +603,6 @@ module.exports = {
   retellFinancialSemantics,
   PROMPT_VARIABLE_KEYS,
   DiagnosticError,
+  RETELL_MAX_RESPONSE_BYTES,
+  RETELL_REQUEST_TIMEOUT_MS,
 };

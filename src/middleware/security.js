@@ -15,7 +15,7 @@ function getCspDirectives() {
     'img-src': ["'self'", "data:", "https:"],
     // Mounted Jobber OAuth remains source-disabled until canonical token
     // persistence exists, so browsers have no Jobber connection destination.
-    'connect-src': ["'self'", "https://api.retellai.com"],
+    'connect-src': ["'self'", "https://*.livekit.cloud", "wss://*.livekit.cloud"],
     'frame-src': ["'none'"],
     'object-src': ["'none'"]
   };
@@ -42,7 +42,7 @@ function securityHeaders(req, res, next) {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
 
   // Cache control for API responses
   if (req.path.startsWith('/api/')) {

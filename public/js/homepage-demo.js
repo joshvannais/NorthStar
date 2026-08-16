@@ -1,140 +1,50 @@
 (function (global) {
   'use strict';
 
-  var CONNECTION_TIMEOUT_MS = 10000;
-  var SCENARIOS = Object.freeze({
-    'emergency': Object.freeze({
-      label: 'Emergency',
-      context: 'A homeowner reports an urgent leak near an electrical panel.',
-      intent: 'Urgent service request',
-      qualification: 'Safety, location, and urgency context captured',
-      summary: 'The guided call prioritizes immediate safety, confirms the service context, and leaves the consequential response to an authorized person.',
-      actions: Object.freeze(['Confirm everyone is away from immediate danger', 'Capture the service address and a safe callback path', 'Escalate for authorized human follow-up']),
-      turns: Object.freeze([
-        Object.freeze({ speaker: 'customer', text: 'A pipe just burst and water is getting close to the electrical panel.' }),
-        Object.freeze({ speaker: 'ai', text: 'If there is immediate danger, move to a safe place and contact emergency services. Is everyone safely away from the panel?' }),
-        Object.freeze({ speaker: 'customer', text: 'Yes. We shut the door and moved outside.' }),
-        Object.freeze({ speaker: 'ai', text: 'Thank you. I would capture the service address and a safe callback number, then mark this for urgent review by an authorized team member.' })
-      ])
-    }),
-    'estimate': Object.freeze({
-      label: 'Estimate',
-      context: 'A homeowner wants an estimate for a defined home-service project.',
-      intent: 'Estimate request',
-      qualification: 'Scope, property, and timing questions identified',
-      summary: 'The guided call collects estimate inputs without inventing a price or promising availability.',
-      actions: Object.freeze(['Clarify the requested scope', 'Record property and timing context', 'Arrange an authorized estimate follow-up']),
-      turns: Object.freeze([
-        Object.freeze({ speaker: 'customer', text: 'I would like an estimate for replacing the roof on my detached garage.' }),
-        Object.freeze({ speaker: 'ai', text: 'I can help organize the request. What is the garage size, roof material, and approximate age?' }),
-        Object.freeze({ speaker: 'customer', text: 'It is a two-car garage with asphalt shingles, roughly twenty years old.' }),
-        Object.freeze({ speaker: 'ai', text: 'I would record those details and the property address, then route the request for an on-site assessment before any price is offered.' })
-      ])
-    }),
-    'price-shopper': Object.freeze({
-      label: 'Price Shopper',
-      context: 'A prospective customer asks for a price before the work scope is known.',
-      intent: 'Early price comparison',
-      qualification: 'Missing scope and site details made explicit',
-      summary: 'The guided call acknowledges the price question while keeping the estimate dependent on real job facts.',
-      actions: Object.freeze(['Acknowledge the comparison request', 'Collect the minimum job facts', 'Offer a truthful estimate next step']),
-      turns: Object.freeze([
-        Object.freeze({ speaker: 'customer', text: 'What do you charge to replace a water heater?' }),
-        Object.freeze({ speaker: 'ai', text: 'The total depends on the current unit, access, fuel type, and local requirements. May I collect those details for an accurate follow-up?' }),
-        Object.freeze({ speaker: 'customer', text: 'It is a gas unit in the basement, but I do not know the size.' }),
-        Object.freeze({ speaker: 'ai', text: 'I would note what is known, mark the missing capacity, and avoid inventing a quote before an authorized review.' })
-      ])
-    }),
-    'returning': Object.freeze({
-      label: 'Returning Customer',
-      context: 'A returning customer needs follow-up on prior work.',
-      intent: 'Existing-work follow-up',
-      qualification: 'Identity and prior-work lookup required',
-      summary: 'The guided call preserves continuity while requiring identity and role checks before exposing any real record.',
-      actions: Object.freeze(['Confirm identity through the real workflow', 'Locate the role-authorized work record', 'Record the requested follow-up']),
-      turns: Object.freeze([
-        Object.freeze({ speaker: 'customer', text: 'Your team repaired our furnace last month, and the same noise is back.' }),
-        Object.freeze({ speaker: 'ai', text: 'I can organize the follow-up. In a real workspace, I would first verify the customer and locate the authorized service record.' }),
-        Object.freeze({ speaker: 'customer', text: 'The visit was at our Oak Street address.' }),
-        Object.freeze({ speaker: 'ai', text: 'I would record the symptom and requested timing without exposing or changing a customer record until verification is complete.' })
-      ])
-    }),
-    'insurance': Object.freeze({
-      label: 'Insurance',
-      context: 'A homeowner asks about documenting storm-related damage for an insurance process.',
-      intent: 'Damage documentation request',
-      qualification: 'Incident, property, and documentation needs identified',
-      summary: 'The guided call captures factual job context without giving coverage, legal, or claim-handling advice.',
-      actions: Object.freeze(['Record when and where the damage occurred', 'List available photos or documents', 'Route the inspection request for human review']),
-      turns: Object.freeze([
-        Object.freeze({ speaker: 'customer', text: 'A storm damaged our siding, and our insurer asked for contractor documentation.' }),
-        Object.freeze({ speaker: 'ai', text: 'I can help organize an inspection request, but I cannot determine coverage. When did the damage occur and which areas are affected?' }),
-        Object.freeze({ speaker: 'customer', text: 'Yesterday evening, mostly on the west side.' }),
-        Object.freeze({ speaker: 'ai', text: 'I would capture those facts and available photos, then route the request to an authorized person for the next step.' })
-      ])
-    }),
-    'difficult': Object.freeze({
-      label: 'Difficult Customer',
-      context: 'A frustrated customer wants a clear response about a delayed visit.',
-      intent: 'Service recovery request',
-      qualification: 'Concern, requested resolution, and urgency captured',
-      summary: 'The guided call acknowledges frustration, records facts, and avoids promises that the system cannot authorize.',
-      actions: Object.freeze(['Acknowledge the concern', 'Capture the specific missed expectation', 'Escalate without promising an unconfirmed outcome']),
-      turns: Object.freeze([
-        Object.freeze({ speaker: 'customer', text: 'I waited all afternoon and nobody arrived. I need an answer now.' }),
-        Object.freeze({ speaker: 'ai', text: 'I understand why that is frustrating. I can capture exactly what happened and mark it for prompt review.' }),
-        Object.freeze({ speaker: 'customer', text: 'The appointment window ended two hours ago.' }),
-        Object.freeze({ speaker: 'ai', text: 'I would record the missed window and your requested resolution, then escalate it without promising a time that has not been confirmed.' })
-      ])
-    }),
-    'scheduling-conflict': Object.freeze({
-      label: 'Scheduling Conflict',
-      context: 'A customer cannot make the current appointment window and needs alternatives.',
-      intent: 'Appointment change request',
-      qualification: 'Current appointment and preferred alternatives identified',
-      summary: 'The guided call captures scheduling preferences without claiming that a calendar change has been committed.',
-      actions: Object.freeze(['Confirm the appointment being discussed', 'Capture acceptable alternative windows', 'Request an authorized schedule change']),
-      turns: Object.freeze([
-        Object.freeze({ speaker: 'customer', text: 'I cannot make tomorrow morning anymore. Can we move the appointment?' }),
-        Object.freeze({ speaker: 'ai', text: 'I can organize the request. Which existing appointment are you referring to, and what alternative windows work?' }),
-        Object.freeze({ speaker: 'customer', text: 'The plumbing visit at ten. Thursday afternoon or Friday morning would work.' }),
-        Object.freeze({ speaker: 'ai', text: 'I would record both preferences and request confirmation from the authorized scheduler rather than claim the appointment changed.' })
-      ])
-    }),
-    'billing': Object.freeze({
-      label: 'Billing',
-      context: 'A customer has a question about an invoice and needs an authorized review.',
-      intent: 'Invoice clarification',
-      qualification: 'Invoice reference and disputed item identified',
-      summary: 'The guided call captures the billing question without taking payment or exposing financial details.',
-      actions: Object.freeze(['Record the invoice reference safely', 'Identify the line item in question', 'Route to an authorized billing reviewer']),
-      turns: Object.freeze([
-        Object.freeze({ speaker: 'customer', text: 'I have a question about a line item on my latest invoice.' }),
-        Object.freeze({ speaker: 'ai', text: 'I can organize that question. Please avoid sharing card or bank information. Which invoice and line item need review?' }),
-        Object.freeze({ speaker: 'customer', text: 'It is the labor line on invoice 1042.' }),
-        Object.freeze({ speaker: 'ai', text: 'I would record that reference and route the question to an authorized billing reviewer without changing or collecting payment.' })
-      ])
-    }),
-    'custom': Object.freeze({
-      label: 'Custom',
-      context: 'Use your own fictional customer situation while reviewing the guided pattern.',
-      intent: 'Custom service request',
-      qualification: 'Intent, job facts, urgency, and next step remain explicit',
-      summary: 'The custom path demonstrates the same truthful pattern: capture facts, identify what is missing, and leave consequential action to an authorized person.',
-      actions: Object.freeze(['State the fictional customer need', 'Identify known and missing job facts', 'Choose an accountable next step']),
-      turns: Object.freeze([
-        Object.freeze({ speaker: 'customer', text: 'I have a home-service request that does not fit the other examples.' }),
-        Object.freeze({ speaker: 'ai', text: 'Please describe the work, location, timing, and any immediate safety concern.' }),
-        Object.freeze({ speaker: 'customer', text: 'The work is not urgent, but I would like someone to review it next week.' }),
-        Object.freeze({ speaker: 'ai', text: 'I would capture the available facts, mark what is still missing, and route a clear next action for authorized review.' })
-      ])
-    })
-  });
+  var STATUS_URL = '/api/demo/homepage/status';
+  var WEB_CALL_URL = '/api/demo/homepage/web-call';
+  var SDK_URL = '/js/vendor/retell-web-client.mjs';
+  var CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
+  var DISCLOSURE_COPY = 'This is a NorthStar AI demonstration. Microphone audio is processed and recorded temporarily for this call. Do not share sensitive information. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
+  var CONSENT_TIMEOUT_MS = 30000;
+  var CONNECTION_TIMEOUT_MS = 20000;
+  var API_REQUEST_TIMEOUT_MS = 60000;
+  var MAX_CALL_MS = 5 * 60 * 1000;
+  var MAX_TRANSCRIPT_TURNS = 48;
+  var ALLOWED_INDUSTRIES = Object.freeze([
+    'Roofing', 'HVAC', 'Plumbing', 'Electrical', 'Painting', 'Tree Service', 'Window Tinting', 'Concrete'
+  ]);
 
-  var currentScenario = 'emergency';
+  var sdkPromise = null;
   var previousFocus = null;
-  var connectionTimer = null;
-  var renderTimer = null;
+  var state = freshState();
+
+  function freshState() {
+    return {
+      available: false,
+      availabilityChecked: false,
+      client: null,
+      callId: null,
+      purgeToken: null,
+      accessToken: null,
+      businessName: '',
+      industry: '',
+      transcript: [],
+      ignoredTranscriptKeys: new Set(),
+      consented: false,
+      startedAt: null,
+      timerInterval: null,
+      consentTimeout: null,
+      connectionTimeout: null,
+      maximumTimeout: null,
+      disclosureCancel: null,
+      cancelRequested: false,
+      finalizing: false,
+      deletionState: 'none',
+      result: null,
+      durationSeconds: 0,
+    };
+  }
 
   function byId(id) {
     return global.document.getElementById(id);
@@ -142,74 +52,159 @@
 
   function setText(id, value) {
     var element = byId(id);
-    if (element) element.textContent = value;
+    if (element) element.textContent = value == null ? '' : String(value);
   }
 
-  function setNotice(id, message, state) {
-    var element = byId(id);
-    if (!element) return;
-    element.textContent = message || '';
-    if (state) element.setAttribute('data-state', state);
-    else element.removeAttribute('data-state');
+  function setNotice(message, status) {
+    var notice = byId('demoFormNotice');
+    if (!notice) return;
+    notice.textContent = message || '';
+    if (status) notice.setAttribute('data-state', status);
+    else notice.removeAttribute('data-state');
   }
 
-  function rememberSelection() {
+  function setLiveNotice(message, status) {
+    var notice = byId('guidedPreviewNotice');
+    if (!notice) return;
+    notice.textContent = message || '';
+    if (status) notice.setAttribute('data-state', status);
+    else notice.removeAttribute('data-state');
+  }
+
+  function errorMessage(error, fallback) {
+    if (error && typeof error.message === 'string' && error.message.trim()) return error.message.trim();
+    return fallback;
+  }
+
+  function apiError(payload, response) {
+    var message = payload && payload.error && typeof payload.error.message === 'string'
+      ? payload.error.message : 'The browser Web Call request failed.';
+    var error = new Error(message);
+    error.status = response.status;
+    error.code = payload && payload.error ? payload.error.code : 'homepage_request_failed';
+    return error;
+  }
+
+  async function requestJson(url, options) {
+    var request = Object.assign({
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    }, options || {});
+    request.headers = Object.assign({ Accept: 'application/json' }, (options && options.headers) || {});
+    var controller = typeof global.AbortController === 'function' ? new global.AbortController() : null;
+    var timeout = null;
+    if (controller) {
+      request.signal = controller.signal;
+      timeout = global.setTimeout(function () { controller.abort(); }, API_REQUEST_TIMEOUT_MS);
+    }
+    var response;
+    var payload = null;
     try {
-      global.sessionStorage.setItem('northstar.homepage.scenario', currentScenario);
-      var industry = byId('demoIndustry');
-      if (industry && industry.value) global.sessionStorage.setItem('northstar.homepage.industry', industry.value);
-    } catch (_error) {}
+      response = await global.fetch(url, request);
+      try { payload = await response.json(); } catch (_parseError) {}
+    } catch (error) {
+      if (controller && controller.signal.aborted) {
+        throw new Error('The Web Call request timed out. No result is available until deletion is verified.');
+      }
+      throw error;
+    } finally {
+      if (timeout) global.clearTimeout(timeout);
+    }
+    if (!response.ok || !payload || payload.success !== true) throw apiError(payload, response);
+    return payload.data === undefined ? payload : payload.data;
   }
 
-  function clearRememberedSelection() {
+  function setButtonAvailability() {
+    var button = byId('demoCallBtn');
+    if (!button) return;
+    button.disabled = !state.available || state.finalizing;
+    button.textContent = state.available ? 'Start Browser Web Call' : 'Web Call Awaiting Approval';
+  }
+
+  async function refreshAvailability() {
+    state.availabilityChecked = false;
+    state.available = false;
+    setButtonAvailability();
     try {
-      global.sessionStorage.removeItem('northstar.homepage.scenario');
-      global.sessionStorage.removeItem('northstar.homepage.industry');
-    } catch (_error) {}
+      var payload = await requestJson(STATUS_URL);
+      state.available = Boolean(payload && payload.webCall && payload.webCall.available === true);
+      state.availabilityChecked = true;
+      if (state.available) {
+        setNotice('Ready. Check the consent box to review the audible disclosure.', 'success');
+      } else {
+        setNotice('The browser Web Call is not active. Final attorney and Retell privacy approval is still required.', 'error');
+      }
+    } catch (_error) {
+      state.availabilityChecked = true;
+      state.available = false;
+      setNotice('The browser Web Call availability check failed closed. Please try again later.', 'error');
+    }
+    setButtonAvailability();
   }
 
-  function syncScenarioButtons() {
-    Array.prototype.forEach.call(global.document.querySelectorAll('[data-scenario]'), function (button) {
-      var active = button.getAttribute('data-scenario') === currentScenario;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
-    var scenario = SCENARIOS[currentScenario];
-    setText('selectedScenarioContext', scenario.label + ': ' + scenario.context);
+  function showView(view) {
+    var pre = byId('demoPreCallView');
+    var live = byId('demoLiveView');
+    var post = byId('demoPostCallView');
+    if (pre) pre.style.display = view === 'pre' ? 'block' : 'none';
+    if (live) live.style.display = view === 'live' ? 'block' : 'none';
+    if (post) post.style.display = view === 'post' ? 'block' : 'none';
   }
 
-  function setScenario(key) {
-    if (!Object.prototype.hasOwnProperty.call(SCENARIOS, key)) return false;
-    currentScenario = key;
-    syncScenarioButtons();
-    rememberSelection();
-    return true;
+  function clearTimers() {
+    if (state.timerInterval) global.clearInterval(state.timerInterval);
+    if (state.consentTimeout) global.clearTimeout(state.consentTimeout);
+    if (state.connectionTimeout) global.clearTimeout(state.connectionTimeout);
+    if (state.maximumTimeout) global.clearTimeout(state.maximumTimeout);
+    state.timerInterval = null;
+    state.consentTimeout = null;
+    state.connectionTimeout = null;
+    state.maximumTimeout = null;
   }
 
   function validateForm() {
     var businessName = byId('demoBusinessName');
     var industry = byId('demoIndustry');
-    if (!businessName || !businessName.value.trim()) {
-      setNotice('demoFormNotice', 'Enter a business name to frame the fictional preview.', 'error');
+    var consent = byId('demoConsentCheckbox');
+    var name = businessName && typeof businessName.value === 'string' ? businessName.value.trim() : '';
+    if (!name || name.length > 80) {
+      setNotice('Enter a business name of 80 characters or fewer. It stays only in this browser memory.', 'error');
       if (businessName) businessName.focus();
       return null;
     }
-    if (!industry || !industry.value) {
-      setNotice('demoFormNotice', 'Select one of the seven supported preview industries.', 'error');
+    if (!industry || ALLOWED_INDUSTRIES.indexOf(industry.value) < 0) {
+      setNotice('Choose a supported home-service industry.', 'error');
       if (industry) industry.focus();
       return null;
     }
-    setNotice('demoFormNotice', 'Ready. Review the coaching tip before starting.', 'success');
-    rememberSelection();
-    return { businessName: businessName.value.trim(), industry: industry.value };
+    if (!consent || consent.checked !== true) {
+      setNotice('Check the consent box before microphone access or temporary processing can begin.', 'error');
+      if (consent) consent.focus();
+      return null;
+    }
+    if (!state.available) {
+      setNotice('The browser Web Call remains unavailable until its approval and privacy gates are satisfied.', 'error');
+      return null;
+    }
+    return { businessName: name, industry: industry.value };
   }
 
   function focusableInDialog() {
     var dialog = byId('preCallModal');
     if (!dialog) return [];
     return Array.prototype.filter.call(dialog.querySelectorAll('button, [href], input, select, [tabindex]'), function (element) {
-      return !element.disabled && element.getAttribute('tabindex') !== '-1' && !element.hidden;
+      return !element.disabled && !element.hidden && element.getAttribute('tabindex') !== '-1';
     });
+  }
+
+  function closeDialog(returnFocus) {
+    var dialog = byId('preCallModal');
+    if (!dialog) return;
+    dialog.classList.remove('active');
+    dialog.setAttribute('aria-hidden', 'true');
+    global.document.removeEventListener('keydown', handleDialogKeydown);
+    if (returnFocus && previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
   }
 
   function handleDialogKeydown(event) {
@@ -234,230 +229,732 @@
     }
   }
 
-  function openDialog() {
+  function showPreCallModal() {
+    var values = validateForm();
+    if (!values) return false;
+    state.businessName = values.businessName;
+    state.industry = values.industry;
+    setText('selectedScenarioContext', values.industry + ' demo selected. “' + values.businessName + '” remains only in browser memory and is never sent to Retell or NorthStar.');
     var dialog = byId('preCallModal');
-    if (!dialog) return;
-    var active = global.document.activeElement;
-    previousFocus = active && active !== global.document.body ? active : byId('demoCallBtn');
-    syncScenarioButtons();
+    if (!dialog) return false;
+    previousFocus = global.document.activeElement || byId('demoCallBtn');
     dialog.classList.add('active');
     dialog.setAttribute('aria-hidden', 'false');
     global.document.addEventListener('keydown', handleDialogKeydown);
     var primary = byId('modalCallBtn');
     if (primary) primary.focus();
+    return true;
   }
 
-  function closeDialog(returnFocus) {
-    var dialog = byId('preCallModal');
-    if (!dialog) return;
-    dialog.classList.remove('active');
-    dialog.setAttribute('aria-hidden', 'true');
-    global.document.removeEventListener('keydown', handleDialogKeydown);
-    if (returnFocus && previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
-  }
-
-  function showPreCallModal() {
-    var values = validateForm();
-    if (!values) return;
-    openDialog();
-  }
-
-  function clearPreviewTimers() {
-    if (connectionTimer) global.clearTimeout(connectionTimer);
-    if (renderTimer) global.clearTimeout(renderTimer);
-    connectionTimer = null;
-    renderTimer = null;
-  }
-
-  function showPreviewView() {
-    var pre = byId('demoPreCallView');
-    var live = byId('demoLiveView');
-    var post = byId('demoPostCallView');
-    if (pre) pre.style.display = 'none';
-    if (live) live.style.display = 'block';
-    if (post) post.style.display = 'none';
-    ['callStateDialing', 'callStateRinging', 'callStateAnswered'].forEach(function (id) {
-      var state = byId(id);
-      if (state) state.classList.remove('active');
+  function speakDisclosure() {
+    return new Promise(function (resolve, reject) {
+      if (!global.speechSynthesis || typeof global.SpeechSynthesisUtterance !== 'function') {
+        reject(new Error('This browser cannot play the required audible disclosure, so the call was not started.'));
+        return;
+      }
+      var settled = false;
+      var timeout = global.setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        state.disclosureCancel = null;
+        try { global.speechSynthesis.cancel(); } catch (_error) {}
+        reject(new Error('The required audible disclosure did not finish, so the call was not started.'));
+      }, 25000);
+      var utterance = new global.SpeechSynthesisUtterance(DISCLOSURE_COPY);
+      utterance.rate = 0.96;
+      state.disclosureCancel = function () {
+        if (settled) return;
+        settled = true;
+        global.clearTimeout(timeout);
+        try { global.speechSynthesis.cancel(); } catch (_error) {}
+        reject(new Error('The Web Call start was cancelled before microphone access.'));
+      };
+      utterance.onend = function () {
+        if (settled) return;
+        settled = true;
+        global.clearTimeout(timeout);
+        state.disclosureCancel = null;
+        resolve();
+      };
+      utterance.onerror = function () {
+        if (settled) return;
+        settled = true;
+        global.clearTimeout(timeout);
+        state.disclosureCancel = null;
+        reject(new Error('The required audible disclosure could not be played, so the call was not started.'));
+      };
+      try {
+        global.speechSynthesis.cancel();
+        global.speechSynthesis.speak(utterance);
+      } catch (_error) {
+        global.clearTimeout(timeout);
+        state.disclosureCancel = null;
+        reject(new Error('The required audible disclosure could not be played, so the call was not started.'));
+      }
     });
-    var header = byId('demoLiveHeader');
-    if (header) header.style.display = 'block';
-    var actions = byId('guidedPreviewActions');
-    if (actions) actions.hidden = true;
   }
 
-  function renderActions(actions) {
-    var list = byId('demoActions');
-    if (!list) return;
-    var nodes = actions.map(function (action) {
-      var item = global.document.createElement('li');
-      item.textContent = action;
-      return item;
-    });
-    list.replaceChildren.apply(list, nodes);
-  }
-
-  function failPreview(message) {
-    clearPreviewTimers();
-    setText('demoStatusLabel', 'Preview needs another try');
-    setNotice('guidedPreviewNotice', message, 'error');
-    var button = byId('demoCallBtn');
-    if (button) {
-      button.disabled = false;
-      button.textContent = 'Start Guided Call';
+  function loadSdk() {
+    if (!sdkPromise) {
+      sdkPromise = import(SDK_URL).then(function (module) {
+        if (!module || typeof module.RetellWebClient !== 'function') throw new Error('The Web Call client is unavailable.');
+        return module.RetellWebClient;
+      });
     }
-    var actions = byId('guidedPreviewActions');
-    if (actions) actions.hidden = false;
+    return sdkPromise;
   }
 
-  function renderScenario(values, scenario) {
-    if (!global.NorthStarTranscriptRenderer || typeof global.NorthStarTranscriptRenderer.render !== 'function') {
-      failPreview('The safe transcript renderer is unavailable. Reload the page and try again.');
+  function showCallPhase(phase) {
+    ['Dialing', 'Ringing', 'Answered'].forEach(function (name) {
+      var element = byId('callState' + name);
+      if (element) element.style.display = name.toLowerCase() === phase ? 'block' : 'none';
+    });
+  }
+
+  function formatDuration(seconds) {
+    var safe = Math.max(0, Number(seconds) || 0);
+    var minutes = Math.floor(safe / 60);
+    var remainder = Math.floor(safe % 60);
+    return String(minutes).padStart(2, '0') + ':' + String(remainder).padStart(2, '0');
+  }
+
+  function updateTimer() {
+    var seconds = state.startedAt ? Math.floor((Date.now() - state.startedAt) / 1000) : 0;
+    state.durationSeconds = seconds;
+    setText('demoLiveTimer', formatDuration(seconds));
+  }
+
+  function setLiveControls(mode) {
+    var hangup = byId('demoHangupBtn');
+    var withdraw = byId('demoWithdrawBtn');
+    var retry = byId('demoRetryDeleteBtn');
+    if (hangup) hangup.hidden = mode !== 'active';
+    if (withdraw) withdraw.hidden = mode !== 'active';
+    if (retry) retry.hidden = mode !== 'retry';
+  }
+
+  function transcriptKey(turn) {
+    return turn.speaker + '\u0000' + turn.text.toLocaleLowerCase();
+  }
+
+  function normalizedTurns(event) {
+    var source = event && Array.isArray(event.transcript) ? event.transcript
+      : (event && Array.isArray(event.transcripts) ? event.transcripts : []);
+    return source.map(function (turn) {
+      var role = turn && (turn.role || turn.speaker);
+      var speaker = role === 'agent' || role === 'assistant' || role === 'ai' ? 'agent'
+        : (role === 'user' || role === 'customer' ? 'customer' : null);
+      var content = turn && (turn.content === undefined ? turn.text : turn.content);
+      var text = typeof content === 'string' ? content.trim().replace(/\s+/g, ' ') : '';
+      if (!speaker || !text) return null;
+      return { speaker: speaker, text: text.slice(0, 600) };
+    }).filter(Boolean).slice(-12);
+  }
+
+  function isConsent(text) {
+    var value = String(text || '').toLocaleLowerCase().replace(/[^a-z\s']/g, ' ').replace(/\s+/g, ' ').trim();
+    return value === CONSENT_PHRASE.toLocaleLowerCase() || value === ('yes ' + CONSENT_PHRASE.toLocaleLowerCase());
+  }
+
+  function isWithdrawal(text) {
+    var value = String(text || '').toLocaleLowerCase();
+    return /\b(i (?:do not|don't) consent|i withdraw|stop the call|delete the call|no consent)\b/.test(value);
+  }
+
+  function absorbTurns(turns) {
+    turns.forEach(function (turn) {
+      var key = transcriptKey(turn);
+      if (state.ignoredTranscriptKeys.has(key)) return;
+      var recent = state.transcript.slice(-12);
+      if (recent.some(function (existing) { return transcriptKey(existing) === key; })) return;
+      var last = state.transcript[state.transcript.length - 1];
+      if (last && last.speaker === turn.speaker &&
+          (turn.text.indexOf(last.text) === 0 || last.text.indexOf(turn.text) === 0)) {
+        if (turn.text.length > last.text.length) last.text = turn.text;
+        return;
+      }
+      state.transcript.push(turn);
+    });
+    if (state.transcript.length > MAX_TRANSCRIPT_TURNS) {
+      state.transcript = state.transcript.slice(-MAX_TRANSCRIPT_TURNS);
+    }
+  }
+
+  function renderTranscript() {
+    var body = byId('demoTranscriptBody');
+    if (!body) return;
+    body.replaceChildren();
+    var system = global.document.createElement('div');
+    system.className = 'demo-msg system';
+    system.textContent = state.consented
+      ? 'Temporary browser memory only. Transcript is purged before any result is shown.'
+      : 'Waiting for the exact verbal consent phrase. Pre-consent transcript content is not displayed or retained by NorthStar.';
+    body.appendChild(system);
+    state.transcript.forEach(function (turn) {
+      var message = global.document.createElement('div');
+      message.className = 'demo-msg ' + (turn.speaker === 'agent' ? 'ai' : 'customer');
+      var label = global.document.createElement('div');
+      label.className = 'demo-msg-label';
+      label.textContent = turn.speaker === 'agent' ? 'NorthStar AI demo' : 'You';
+      var content = global.document.createElement('div');
+      content.textContent = turn.text;
+      message.appendChild(label);
+      message.appendChild(content);
+      body.appendChild(message);
+    });
+    setText('demoTranscriptCount', state.transcript.length + (state.transcript.length === 1 ? ' message' : ' messages'));
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function handleTranscriptUpdate(event) {
+    if (state.finalizing || !state.callId) return;
+    var turns = normalizedTurns(event);
+    if (!turns.length) return;
+    var withdrawn = turns.some(function (turn) { return turn.speaker === 'customer' && isWithdrawal(turn.text); });
+    if (withdrawn) {
+      setLiveNotice('Withdrawal heard. Ending the call and verifying deletion now.', 'error');
+      finalizeCall(false);
       return;
     }
-    clearPreviewTimers();
-    var transcript = byId('demoTranscriptBody');
-    var result = global.NorthStarTranscriptRenderer.render(transcript, scenario.turns, {
-      labels: { ai: 'NorthStar guide', customer: 'Customer', system: '' },
-      live: 'polite',
-      scroll: 'top'
-    });
-    setText('demoTranscriptCount', result.count + (result.count === 1 ? ' message' : ' messages'));
-    setText('demoStatusLabel', scenario.label + ' guided call ready');
-    setText('demoLiveTimer', 'Browser-only');
-    var dot = byId('demoStatusDot');
-    if (dot) dot.className = 'demo-status-ended';
-    setText('demoIntent', scenario.intent);
-    setText('demoQualification', scenario.qualification);
-    setText('demoBookingProb', 'Not calculated in guided preview');
-    setText('demoPolarisRevenue', 'Not calculated in guided preview');
-    setText('demoPolarisConfidence', '—');
-    setText('demoSummary', values.businessName + ' · ' + values.industry + ': ' + scenario.summary);
-    renderActions(scenario.actions);
-    setNotice('guidedPreviewNotice', 'Preview ready. The guided preview did not place a call or send your entries. Only your scenario and industry are remembered in this browser tab until you reset or close it.', 'success');
-    var actions = byId('guidedPreviewActions');
-    if (actions) actions.hidden = false;
-    var button = byId('demoCallBtn');
-    if (button) {
-      button.disabled = false;
-      button.textContent = 'Start Guided Call';
+    if (!state.consented) {
+      var consentIndex = -1;
+      turns.forEach(function (turn, index) {
+        if (turn.speaker === 'customer' && isConsent(turn.text)) consentIndex = index;
+      });
+      if (consentIndex < 0) return;
+      turns.slice(0, consentIndex + 1).forEach(function (turn) {
+        state.ignoredTranscriptKeys.add(transcriptKey(turn));
+      });
+      state.consented = true;
+      if (state.consentTimeout) global.clearTimeout(state.consentTimeout);
+      state.consentTimeout = null;
+      showCallPhase('answered');
+      setText('demoStatusLabel', 'Consented fictional conversation in progress');
+      setText('demoIntent', state.industry + ' fictional service request');
+      setText('demoQualification', 'Collecting supported job facts');
+      setText('demoSummary', 'Polaris will process the consented conversation in memory after you hang up.');
+      setLiveNotice('Verbal consent confirmed. Continue with fictional job details only.', 'success');
+      absorbTurns(turns.slice(consentIndex + 1));
+      renderTranscript();
+      return;
     }
-    var live = byId('demoLiveView');
-    if (live) live.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    absorbTurns(turns);
+    renderTranscript();
   }
 
-  function executeDemoCall() {
+  function attachClientEvents(client) {
+    client.on('call_started', function () {
+      if (state.client !== client || !state.callId || state.finalizing) return;
+      if (state.connectionTimeout) global.clearTimeout(state.connectionTimeout);
+      state.connectionTimeout = null;
+      showCallPhase('ringing');
+      setText('demoStatusLabel', 'Connected — say the displayed consent phrase');
+      setLiveNotice('Say “' + CONSENT_PHRASE + '” within 30 seconds. You can hang up or withdraw at any time.', 'success');
+      state.consentTimeout = global.setTimeout(function () {
+        if (!state.consented) {
+          setLiveNotice('Verbal consent was not confirmed. Ending and deleting the call.', 'error');
+          finalizeCall(false);
+        }
+      }, CONSENT_TIMEOUT_MS);
+    });
+    client.on('call_ready', function () {
+      if (state.client !== client || !state.callId || state.finalizing) return;
+      setText('demoStatusLabel', state.consented ? 'Consented fictional conversation in progress' : 'Connected — say the displayed consent phrase');
+    });
+    client.on('update', function (event) {
+      if (state.client !== client) return;
+      handleTranscriptUpdate(event);
+    });
+    client.on('agent_start_talking', function () {
+      if (state.client !== client || !state.callId || state.finalizing) return;
+      if (state.consented) setText('demoStatusLabel', 'NorthStar AI demo is speaking');
+    });
+    client.on('agent_stop_talking', function () {
+      if (state.client !== client || !state.callId || state.finalizing) return;
+      if (state.consented) setText('demoStatusLabel', 'Listening for fictional job details');
+    });
+    client.on('call_ended', function () {
+      if (state.client === client && !state.finalizing && state.callId) finalizeCall(state.consented);
+    });
+    client.on('error', function () {
+      if (state.client === client && !state.finalizing && state.callId) {
+        setLiveNotice('The Web Call client reported an error. Deletion is being verified.', 'error');
+        finalizeCall(false);
+      }
+    });
+  }
+
+  function startLivePresentation() {
+    showView('live');
+    showCallPhase('dialing');
+    setLiveControls('active');
+    setText('demoStatusLabel', 'Checking privacy gates before microphone access');
+    setText('demoLiveTimer', '00:00');
+    setText('demoIntent', 'Consent pending');
+    setText('demoQualification', 'Not started');
+    setText('demoSummary', 'The conversation is not retained until the exact verbal consent phrase is confirmed.');
+    var actions = byId('demoActions');
+    if (actions) {
+      actions.replaceChildren();
+      var item = global.document.createElement('li');
+      item.textContent = 'Say “' + CONSENT_PHRASE + ',” then describe a fictional job.';
+      actions.appendChild(item);
+    }
+    state.transcript = [];
+    renderTranscript();
+    global.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function executeDemoCall() {
+    if (state.finalizing || state.callId) return false;
     var values = validateForm();
     if (!values) {
-      closeDialog(false);
+      closeDialog(true);
+      return false;
+    }
+    state.businessName = values.businessName;
+    state.industry = values.industry;
+    state.cancelRequested = false;
+    closeDialog(false);
+    state.finalizing = true;
+    setButtonAvailability();
+    startLivePresentation();
+    try {
+      setText('demoStatusLabel', 'Playing required disclosure before microphone access');
+      await speakDisclosure();
+      state.disclosureCancel = null;
+      if (state.cancelRequested) throw new Error('The Web Call start was cancelled before microphone access.');
+      setText('demoStatusLabel', 'Creating temporary Basic-Attributes-Only Web Call');
+      var Client = await loadSdk();
+      if (state.cancelRequested) throw new Error('The Web Call start was cancelled before microphone access.');
+      var created = await requestJson(WEB_CALL_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-NorthStar-Demo-Intent': 'start-homepage-web-call',
+        },
+        body: JSON.stringify({ consentAcknowledged: true, industry: state.industry }),
+      });
+      state.callId = created.callId;
+      state.purgeToken = created.purgeToken;
+      state.accessToken = created.accessToken;
+      if (created.verbalConsentPhrase !== CONSENT_PHRASE || created.storage !== 'basic_attributes_only' || created.retentionDays !== 1) {
+        throw new Error('The temporary Web Call did not return the required consent and privacy contract.');
+      }
+      state.deletionState = 'pending';
+      if (state.cancelRequested) {
+        state.finalizing = false;
+        await finalizeCall(false);
+        return false;
+      }
+      state.startedAt = Date.now();
+      state.durationSeconds = 0;
+      var client = new Client();
+      state.client = client;
+      attachClientEvents(client);
+      state.finalizing = false;
+      updateTimer();
+      state.timerInterval = global.setInterval(updateTimer, 1000);
+      state.maximumTimeout = global.setTimeout(function () {
+        setLiveNotice('The five-minute demo limit was reached. Ending and deleting the call.', 'error');
+        finalizeCall(state.consented);
+      }, MAX_CALL_MS);
+      state.connectionTimeout = global.setTimeout(function () {
+        setLiveNotice('The Web Call did not connect in time. Deletion is being verified.', 'error');
+        finalizeCall(false);
+      }, CONNECTION_TIMEOUT_MS);
+      await client.startCall({ accessToken: state.accessToken });
+      // The pinned SDK cannot abort Room.connect before its internal connected
+      // bit is set. If withdrawal/deletion won that race, stop the exact local
+      // client again after startCall settles so a late connection cannot leave
+      // microphone transport alive or mutate a later demo state.
+      if (state.client !== client || state.callId !== created.callId || state.finalizing) {
+        try { client.stopCall(); } catch (_error) {}
+        return false;
+      }
+      return true;
+    } catch (error) {
+      state.finalizing = false;
+      if (state.callId && state.purgeToken) {
+        setLiveNotice(errorMessage(error, 'The Web Call could not start.') + ' Deletion is being verified.', 'error');
+        await finalizeCall(false);
+      } else {
+        clearTimers();
+        state.disclosureCancel = null;
+        state.cancelRequested = false;
+        clearCallSecrets();
+        showView('pre');
+        setNotice(errorMessage(error, 'The Web Call could not start.'), 'error');
+        setButtonAvailability();
+      }
+      return false;
+    }
+  }
+
+  async function requestPolaris() {
+    if (!state.callId || !state.purgeToken || !state.consented || !state.transcript.length) return null;
+    return requestJson('/api/demo/homepage/polaris/' + encodeURIComponent(state.callId), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-NorthStar-Demo-Intent': 'calculate-homepage-polaris',
+      },
+      body: JSON.stringify({
+        callDurationSeconds: state.durationSeconds,
+        industry: state.industry,
+        purgeToken: state.purgeToken,
+        transcript: state.transcript,
+      }),
+    });
+  }
+
+  async function requestPurge() {
+    if (!state.callId || !state.purgeToken) throw new Error('The temporary deletion authority is unavailable.');
+    return requestJson('/api/demo/homepage/web-call/' + encodeURIComponent(state.callId), {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-NorthStar-Demo-Intent': 'delete-homepage-web-call',
+      },
+      body: JSON.stringify({ purgeToken: state.purgeToken }),
+    });
+  }
+
+  function stopBrowserClient() {
+    var client = state.client;
+    state.client = null;
+    if (client && typeof client.stopCall === 'function') {
+      try { client.stopCall(); } catch (_error) {}
+    }
+  }
+
+  function requestCallEnd(buildPolaris) {
+    if (!state.callId && state.finalizing) {
+      state.cancelRequested = true;
+      setLiveControls('none');
+      setText('demoStatusLabel', 'Cancelling before microphone access');
+      setLiveNotice('The Web Call start is being cancelled. No result will be created.', 'error');
+      if (typeof state.disclosureCancel === 'function') state.disclosureCancel();
+      return true;
+    }
+    return finalizeCall(buildPolaris);
+  }
+
+  function clearCallSecrets() {
+    state.callId = null;
+    state.purgeToken = null;
+    state.accessToken = null;
+    state.transcript = [];
+    state.ignoredTranscriptKeys = new Set();
+    state.consented = false;
+    state.startedAt = null;
+    state.disclosureCancel = null;
+    state.cancelRequested = false;
+    state.deletionState = 'verified';
+    renderTranscript();
+  }
+
+  function failClosedDeletion(error) {
+    state.deletionState = 'unverified';
+    state.accessToken = null;
+    state.transcript = [];
+    state.result = null;
+    state.consented = false;
+    renderTranscript();
+    setLiveControls('retry');
+    showCallPhase('dialing');
+    setText('demoStatusLabel', 'Deletion not verified — results withheld');
+    setLiveNotice(errorMessage(error, 'Deletion could not be verified.') + ' No result is available. Retry verified deletion.', 'error');
+    state.finalizing = false;
+  }
+
+  async function finalizeCall(buildPolaris) {
+    if (state.finalizing || !state.callId) return false;
+    state.finalizing = true;
+    clearTimers();
+    updateTimer();
+    stopBrowserClient();
+    setLiveControls('none');
+    setText('demoStatusLabel', 'Ending call and verifying provider deletion');
+    setLiveNotice('Results remain hidden until Retell deletion and NorthStar purge are both verified.', 'success');
+    var result = null;
+    var projectionError = null;
+    try {
+      if (buildPolaris && state.consented && state.transcript.length) result = await requestPolaris();
+    } catch (error) {
+      projectionError = error;
+    }
+    try {
+      var purge = await requestPurge();
+      if (!purge || purge.providerDeletionVerified !== true || purge.northstarPurged !== true) {
+        throw new Error('Deletion did not return the required verification receipt.');
+      }
+    } catch (error) {
+      failClosedDeletion(error);
+      return false;
+    }
+    var duration = state.durationSeconds;
+    clearCallSecrets();
+    state.finalizing = false;
+    setButtonAvailability();
+    if (projectionError || !result) {
+      showView('pre');
+      setNotice(projectionError
+        ? 'The call was deleted and purged, but Polaris could not build a result: ' + errorMessage(projectionError, 'processing failed')
+        : 'The call was deleted and purged. No result was created because consented fictional job details were not captured.', 'error');
+      return true;
+    }
+    state.result = result;
+    state.durationSeconds = duration;
+    renderPolaris(result);
+    showView('post');
+    global.scrollTo({ top: 0, behavior: 'smooth' });
+    return true;
+  }
+
+  async function retryDeletion() {
+    if (state.finalizing || state.deletionState !== 'unverified') return false;
+    state.finalizing = true;
+    setLiveControls('none');
+    setText('demoStatusLabel', 'Retrying verified deletion');
+    try {
+      var purge = await requestPurge();
+      if (!purge || purge.providerDeletionVerified !== true || purge.northstarPurged !== true) {
+        throw new Error('Deletion did not return the required verification receipt.');
+      }
+      clearCallSecrets();
+      state.finalizing = false;
+      showView('pre');
+      setNotice('Verified deletion completed. No transcript or result was retained.', 'success');
+      setButtonAvailability();
+      return true;
+    } catch (error) {
+      failClosedDeletion(error);
+      return false;
+    }
+  }
+
+  function formatCurrency(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not calculated';
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+  }
+
+  function setList(id, values, fallback) {
+    var list = byId(id);
+    if (!list) return;
+    list.replaceChildren();
+    var items = values && values.length ? values : [fallback];
+    items.forEach(function (value) {
+      var item = global.document.createElement('li');
+      item.textContent = value;
+      list.appendChild(item);
+    });
+  }
+
+  function renderFactRows(facts) {
+    var body = byId('reportVarsBody');
+    if (!body) return;
+    body.replaceChildren();
+    if (!facts || !facts.length) {
+      var missing = global.document.createElement('p');
+      missing.textContent = 'No supported estimating variable was captured, so pricing was not calculated.';
+      body.appendChild(missing);
       return;
     }
-    var scenario = SCENARIOS[currentScenario];
-    closeDialog(false);
-    clearPreviewTimers();
-    showPreviewView();
-    setText('demoStatusLabel', 'Preparing ' + scenario.label.toLowerCase() + ' guided call...');
-    setText('demoLiveTimer', 'Browser-only');
-    setNotice('guidedPreviewNotice', 'Preparing the fictional conversation in this browser...', '');
-    var button = byId('demoCallBtn');
-    if (button) {
-      button.disabled = true;
-      button.textContent = 'Preparing Browser Preview...';
+    facts.forEach(function (fact) {
+      var row = global.document.createElement('div');
+      row.className = 'polaris-customer-row';
+      var label = global.document.createElement('span');
+      label.className = 'polaris-customer-label';
+      label.textContent = fact.variable;
+      var value = global.document.createElement('span');
+      value.className = 'polaris-customer-value';
+      value.textContent = fact.displayValue;
+      row.appendChild(label);
+      row.appendChild(value);
+      body.appendChild(row);
+    });
+  }
+
+  function renderPolaris(result) {
+    var pricing = result.pricing || {};
+    var confidence = result.confidence || {};
+    var qualification = result.qualification || {};
+    var actions = Array.isArray(result.recommendedActions) ? result.recommendedActions.map(function (action) {
+      return action && (action.label || action.action) ? String(action.label || action.action) : null;
+    }).filter(Boolean) : [];
+    var price = formatCurrency(pricing.customerFacingPrice);
+    var score = Number.isFinite(Number(confidence.score)) ? Math.max(0, Math.min(100, Number(confidence.score))) : 0;
+    var primaryAction = actions[0] || 'Collect the missing supported scope and review with an authorized person.';
+    setText('demoCallDuration', 'Call length: ' + formatDuration(state.durationSeconds));
+    setText('reportRevenue', price);
+    setText('reportConfidence', Math.round(score) + '%');
+    var fill = byId('reportConfFill');
+    if (fill) fill.style.width = Math.round(score) + '%';
+    var rec = byId('reportRec');
+    if (rec) {
+      var recText = rec.querySelector('.polaris-report-rec-text');
+      if (recText) recText.textContent = primaryAction;
     }
-    connectionTimer = global.setTimeout(function () {
-      failPreview('The guided call took too long to start. Return to the form and try again.');
-    }, CONNECTION_TIMEOUT_MS);
-    renderTimer = global.setTimeout(function () {
-      renderScenario(values, scenario);
-    }, 120);
+    setText('reportExecBody', 'Canonical Polaris processed ' + (qualification.captured || 0) + ' of ' +
+      (qualification.expected || 0) + ' supported estimating facts for this consented fictional ' + state.industry +
+      ' conversation. ' + (pricing.status === 'calculated'
+        ? 'The displayed range comes from the versioned fictional demo Business Profile and is not a quote.'
+        : 'Pricing remains not calculated because required supported scope was not captured.'));
+    renderFactRows(result.facts || []);
+    setText('reportIntent', state.industry + ' fictional request');
+    setText('reportQual', (qualification.captured || 0) + ' / ' + (qualification.expected || 0) + ' supported facts');
+    setText('reportBooking', 'Not predicted');
+    setList('reportActionsList', actions, 'Collect supported scope for authorized follow-up.');
+    var reasoning = byId('reportReasoningBody');
+    if (reasoning) {
+      reasoning.replaceChildren();
+      var explanation = global.document.createElement('p');
+      explanation.textContent = 'Calculation: ' + ((result.provenance && result.provenance.calculationVersion) || 'canonical') +
+        '. Business Profile: ' + ((result.profile && result.profile.version) || 'fictional demo') +
+        '. Customer contact fields and the call transcript are not included in this result.';
+      reasoning.appendChild(explanation);
+    }
+    var report = byId('polarisReportContainer');
+    if (report) report.style.display = 'block';
+    var customer = byId('reportCustomerSection');
+    if (customer) customer.style.display = 'none';
+    var adjustments = byId('reportAdjSection');
+    if (adjustments) adjustments.style.display = 'none';
+    var actionsSection = byId('postActionsSection');
+    if (actionsSection) {
+      actionsSection.replaceChildren();
+      var notice = global.document.createElement('p');
+      notice.className = 'homepage-result-notice';
+      notice.textContent = (result.profile && result.profile.pricingNotice) || 'Illustrative fictional demo output; not a quote.';
+      actionsSection.appendChild(notice);
+    }
   }
 
-  function returnToForm(openCoaching) {
-    clearPreviewTimers();
-    var pre = byId('demoPreCallView');
-    var live = byId('demoLiveView');
-    var post = byId('demoPostCallView');
-    if (pre) pre.style.display = 'block';
-    if (live) live.style.display = 'none';
-    if (post) post.style.display = 'none';
-    if (pre) pre.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (openCoaching) showPreCallModal();
+  function toggleReportReasoning() {
+    var body = byId('reportReasoningBody');
+    if (body) body.classList.toggle('open');
   }
 
-  function launchNewScenario(scenarioType) {
-    setScenario(scenarioType);
-    returnToForm(true);
+  function togglePolarisReasoning() {
+    var body = byId('polarisReasoningBody');
+    if (body) body.classList.toggle('open');
   }
 
   function resetDemo() {
-    clearPreviewTimers();
-    closeDialog(false);
-    var businessName = byId('demoBusinessName');
+    if (state.callId) {
+      setLiveNotice('Delete the active call before starting another.', 'error');
+      showView('live');
+      return false;
+    }
+    clearTimers();
+    state.result = null;
+    state.cancelRequested = false;
+    state.businessName = '';
+    state.industry = '';
+    state.durationSeconds = 0;
+    var business = byId('demoBusinessName');
     var industry = byId('demoIndustry');
-    if (businessName) businessName.value = '';
+    var consent = byId('demoConsentCheckbox');
+    if (business) business.value = '';
     if (industry) industry.value = '';
-    setNotice('demoFormNotice', '', '');
-    setNotice('guidedPreviewNotice', '', '');
-    currentScenario = 'emergency';
-    syncScenarioButtons();
-    clearRememberedSelection();
-    returnToForm(false);
-    if (businessName) businessName.focus();
+    if (consent) consent.checked = false;
+    setText('reportRevenue', 'Analyzing...');
+    var report = byId('polarisReportContainer');
+    if (report) report.style.display = 'none';
+    showView('pre');
+    setNotice(state.available
+      ? 'Ready. Check the consent box to review the audible disclosure.'
+      : 'The browser Web Call remains unavailable until its approval and privacy gates are satisfied.', state.available ? 'success' : 'error');
+    setButtonAvailability();
+    global.scrollTo({ top: 0, behavior: 'smooth' });
+    return true;
   }
 
-  function ownScenarioButtons(selector) {
-    Array.prototype.forEach.call(global.document.querySelectorAll(selector), function (button) {
-      var owned = button.cloneNode(true);
-      button.parentNode.replaceChild(owned, button);
-      owned.addEventListener('click', function () {
-        setScenario(owned.getAttribute('data-scenario'));
+  function deleteBrowserResults() {
+    state.result = null;
+    resetDemo();
+    setNotice('Browser-memory results deleted.', 'success');
+  }
+
+  function launchNewScenario() {
+    return resetDemo();
+  }
+
+  function pageHidePurge() {
+    if (!state.callId || !state.purgeToken) return;
+    stopBrowserClient();
+    try {
+      global.fetch('/api/demo/homepage/web-call/' + encodeURIComponent(state.callId), {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-NorthStar-Demo-Intent': 'delete-homepage-web-call',
+        },
+        body: JSON.stringify({ purgeToken: state.purgeToken }),
       });
+    } catch (_error) {}
+    state.transcript = [];
+    state.result = null;
+    state.accessToken = null;
+  }
+
+  function bind() {
+    var cancel = byId('modalCancelBtn');
+    var overlay = byId('preCallModal');
+    var hangup = byId('demoHangupBtn');
+    var withdraw = byId('demoWithdrawBtn');
+    var retry = byId('demoRetryDeleteBtn');
+    var deleteResults = byId('demoDeleteResultsBtn');
+    var another = byId('guidedTryAnother');
+    if (cancel) cancel.addEventListener('click', function () { closeDialog(true); });
+    if (overlay) overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) closeDialog(true);
+    });
+    if (hangup) hangup.addEventListener('click', function () { requestCallEnd(true); });
+    if (withdraw) withdraw.addEventListener('click', function () { requestCallEnd(false); });
+    if (retry) retry.addEventListener('click', retryDeletion);
+    if (deleteResults) deleteResults.addEventListener('click', deleteBrowserResults);
+    if (another) another.addEventListener('click', resetDemo);
+    global.addEventListener('pagehide', pageHidePurge);
+  }
+
+  function diagnostics() {
+    return Object.freeze({
+      available: state.available,
+      availabilityChecked: state.availabilityChecked,
+      active: Boolean(state.callId),
+      consented: state.consented,
+      transcriptTurns: state.transcript.length,
+      deletionState: state.deletionState,
+      resultVisible: Boolean(state.result),
+      persistence: 'browser-memory-only',
     });
   }
 
-  function restoreSelection() {
-    try {
-      var storedScenario = global.sessionStorage.getItem('northstar.homepage.scenario');
-      if (storedScenario && Object.prototype.hasOwnProperty.call(SCENARIOS, storedScenario)) currentScenario = storedScenario;
-      var storedIndustry = global.sessionStorage.getItem('northstar.homepage.industry');
-      var industry = byId('demoIndustry');
-      if (industry && storedIndustry && Array.prototype.some.call(industry.options, function (option) { return option.value === storedIndustry; })) {
-        industry.value = storedIndustry;
-      }
-    } catch (_error) {}
-  }
-
-  function initialize() {
-    ownScenarioButtons('#scenarioChips [data-scenario]');
-    ownScenarioButtons('#modalScenarioChips [data-scenario]');
-    restoreSelection();
-    syncScenarioButtons();
-    var cancel = byId('modalCancelBtn');
-    if (cancel) cancel.addEventListener('click', function () { closeDialog(true); });
-    var tryAnother = byId('guidedTryAnother');
-    if (tryAnother) tryAnother.addEventListener('click', function () { returnToForm(true); });
-    var industry = byId('demoIndustry');
-    if (industry) industry.addEventListener('change', rememberSelection);
-    var dialog = byId('preCallModal');
-    if (dialog) dialog.setAttribute('aria-hidden', 'true');
-    if (global.NorthStarTheme && typeof global.NorthStarTheme.refreshControlPosition === 'function') {
-      global.NorthStarTheme.refreshControlPosition();
-    }
-  }
-
   global.showPreCallModal = showPreCallModal;
-  global.startDemoCall = showPreCallModal;
   global.executeDemoCall = executeDemoCall;
-  global.launchNewScenario = launchNewScenario;
   global.resetDemo = resetDemo;
+  global.launchNewScenario = launchNewScenario;
+  global.toggleReportReasoning = toggleReportReasoning;
+  global.togglePolarisReasoning = togglePolarisReasoning;
   global.NorthStarHomepageDemo = Object.freeze({
-    connectionTimeoutMs: CONNECTION_TIMEOUT_MS,
-    scenarios: SCENARIOS,
-    selectScenario: setScenario,
-    start: showPreCallModal,
-    reset: resetDemo
+    getState: diagnostics,
+    refreshAvailability: refreshAvailability,
   });
 
-  if (global.document.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', initialize);
-  else initialize();
+  function initialize() {
+    bind();
+    showView('pre');
+    setButtonAvailability();
+    refreshAvailability();
+  }
+
+  if (global.document.readyState === 'loading') {
+    global.document.addEventListener('DOMContentLoaded', initialize, { once: true });
+  } else {
+    initialize();
+  }
 })(window);

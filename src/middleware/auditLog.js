@@ -40,6 +40,12 @@ const PUBLIC_DEMO_COMMAND_CENTER_MUTATIONS = new Set([
   '/api/demo/command-center/reset',
 ]);
 
+const PUBLIC_EPHEMERAL_HOMEPAGE_MUTATIONS = Object.freeze([
+  Object.freeze({ method: 'POST', pattern: /^\/api\/demo\/homepage\/web-call$/ }),
+  Object.freeze({ method: 'POST', pattern: /^\/api\/demo\/homepage\/polaris\/[A-Za-z0-9_-]+$/ }),
+  Object.freeze({ method: 'DELETE', pattern: /^\/api\/demo\/homepage\/web-call\/[A-Za-z0-9_-]+$/ }),
+]);
+
 function normalizedRequestPath(value) {
   const path = String(value || '').split('?')[0].replace(/\/+$/, '');
   return (path || '/').toLowerCase();
@@ -53,6 +59,16 @@ function isPublicDemoCommandCenterMutation(req) {
     : requestPath;
   return PUBLIC_DEMO_COMMAND_CENTER_MUTATIONS.has(requestPath) ||
     PUBLIC_DEMO_COMMAND_CENTER_MUTATIONS.has(mountedPath);
+}
+
+function isPublicEphemeralHomepageMutation(req) {
+  const requestPath = normalizedRequestPath(exactRequestPath(req));
+  const mountedPath = typeof req.route?.path === 'string'
+    ? normalizedRequestPath(`${req.baseUrl || ''}${req.route.path}`)
+    : requestPath;
+  return PUBLIC_EPHEMERAL_HOMEPAGE_MUTATIONS.some(function (entry) {
+    return req.method === entry.method && (entry.pattern.test(requestPath) || entry.pattern.test(mountedPath));
+  });
 }
 
 function requestAuditEntry(req, status, duration) {
@@ -90,6 +106,10 @@ function auditLogger(req, res, next) {
   // Log on response finish
   res.on('finish', () => {
     const duration = Date.now() - start;
+    // A verified Homepage Web Call webhook is a zero-persistence processing
+    // path. The signed handler marks it before sending 204 so even generic
+    // request-completion telemetry cannot create a log/analytics record.
+    if (req.homepageEphemeralWebhook === true) return;
     safeLogger.info('http', 'request_completed', {
       requestId: req.requestId,
       methodClass: req.method,
@@ -108,11 +128,12 @@ function auditLogger(req, res, next) {
       res.statusCode === 503;
     const signedWebhookPost = isSignedWebhookPost(req);
     const publicDemoCommandCenterMutation = isPublicDemoCommandCenterMutation(req);
+    const publicEphemeralHomepageMutation = isPublicEphemeralHomepageMutation(req);
 
     // Account-free Command Center mutations own their bounded durable signal
     // in the HMAC admission/session authority. A generic row would persist a
     // raw source address and allocate once per accepted or rejected request.
-    if (publicDemoCommandCenterMutation) return;
+    if (publicDemoCommandCenterMutation || publicEphemeralHomepageMutation) return;
 
     const anonymousNotFound = !signedWebhookPost && isAnonymousNotFound(req, res.statusCode);
 
@@ -145,6 +166,7 @@ module.exports = {
   correlationId,
   isAnonymousNotFound,
   isPublicDemoCommandCenterMutation,
+  isPublicEphemeralHomepageMutation,
   isSignedWebhookPost,
   requestAuditEntry,
 };

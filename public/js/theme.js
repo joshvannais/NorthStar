@@ -119,6 +119,11 @@
     var control = document.querySelector('[data-northstar-theme-control]');
     if (!control || !document.body) return;
 
+    if (control.closest('[data-northstar-theme-slot]')) {
+      control.style.removeProperty('--northstar-theme-control-bottom');
+      return;
+    }
+
     control.style.removeProperty('--northstar-theme-control-bottom');
     var baseRect = control.getBoundingClientRect();
     if (baseRect.width <= 0 || baseRect.height <= 0) return;
@@ -171,7 +176,8 @@
         '<span aria-hidden="true" data-theme-icon></span>' +
         '<span class="sr-only" data-theme-label></span>' +
       '</button>';
-    document.body.appendChild(control);
+    var slot = document.querySelector('[data-northstar-theme-slot]');
+    (slot || document.body).appendChild(control);
     control.querySelector('button').addEventListener('click', toggleTheme);
     updateToggle(currentTheme());
     dockToggle();

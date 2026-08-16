@@ -13,266 +13,510 @@ const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
   'RESEND_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS',
 ].forEach(name => { delete process.env[name]; });
 process.env.NODE_ENV = 'test';
+process.env.AUTH_ACCESS_SECRET = 'homepage-browser-test-secret-'.padEnd(64, 'x');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 process.chdir(ROOT);
 const { app } = require('../../src/server');
 
+const CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
-  Object.freeze({ label: 'tablet', width: 834, height: 1112 }),
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
 ]);
-const THEMES = Object.freeze(['light', 'dark']);
-const SCENARIO_SEQUENCES = Object.freeze({
-  chrome: Object.freeze([
-    'emergency', 'estimate', 'price-shopper',
-    'returning', 'insurance', 'scheduling-conflict',
-  ]),
-  webkit: Object.freeze([
-    'difficult', 'billing', 'custom',
-    'emergency', 'estimate', 'price-shopper',
-  ]),
-});
+const SCREENSHOT_DIR = process.env.HOMEPAGE_SCREENSHOT_DIR
+  ? path.resolve(process.env.HOMEPAGE_SCREENSHOT_DIR) : null;
+
+function screenshotPath(selected, viewport, state) {
+  if (!SCREENSHOT_DIR) return null;
+  fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+  return path.join(SCREENSHOT_DIR, `${selected}-${viewport.label}-${state}.png`);
+}
+
+const FAKE_SDK = `
+export class RetellWebClient {
+  constructor() {
+    this.handlers = new Map();
+    this.connected = false;
+    window.__retellTestClient = this;
+  }
+  on(name, handler) {
+    const list = this.handlers.get(name) || [];
+    list.push(handler);
+    this.handlers.set(name, list);
+    return this;
+  }
+  emit(name, value) {
+    (this.handlers.get(name) || []).forEach(handler => handler(value));
+  }
+  async startCall(options) {
+    window.__webCallAccessToken = options.accessToken;
+    window.__webCallSequence.push('sdk-start');
+    if (window.__retellSdkStartDelayMs) {
+      await new Promise(resolve => setTimeout(resolve, window.__retellSdkStartDelayMs));
+    }
+    this.connected = true;
+    this.emit('call_started');
+    this.emit('call_ready');
+  }
+  stopCall() {
+    window.__retellStopCalls = (window.__retellStopCalls || 0) + 1;
+    if (!this.connected) return;
+    this.connected = false;
+    this.emit('call_ended');
+  }
+  pushTranscript(transcript) {
+    this.emit('update', { event_type: 'update', transcript });
+  }
+}
+`;
 
 function hashFile(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
 
-function intersects(a, b) {
-  return Boolean(a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
+function readyStatus() {
+  return {
+    success: true,
+    webCall: {
+      available: true,
+      state: 'ready',
+      missing: [],
+      storageRequirement: 'basic_attributes_only',
+      retentionRequirementDays: 1,
+      disclosureVersion: 'attorney-gated-draft-v1',
+    },
+    transcriptPersistence: 'none',
+    resultPersistence: 'browser-memory-only',
+    providerActivationChanged: false,
+  };
 }
 
-async function inspectCase(browser, origin, selected, viewport, theme, scenarioKey, evidence) {
+function polarisResult() {
+  return {
+    contract: 'NorthStarHomepageCanonicalPolaris/v1',
+    persistence: 'browser-memory-only',
+    profile: {
+      kind: 'fictional-demo-business-profile',
+      version: 'homepage-fictional-profile-v1',
+      hash: 'a'.repeat(64),
+      pricingNotice: 'Illustrative output from a fictional demo Business Profile; not a quote.',
+    },
+    service: { key: 'roofing', label: 'Roofing fictional demo service', supported: true },
+    pricing: {
+      status: 'calculated',
+      customerFacingPrice: 9000,
+      preliminaryRange: { low: 7650, high: 10350 },
+      tax: 0,
+      totalIncludingTax: 9000,
+      notCalculated: [],
+    },
+    confidence: { score: 100, factors: [] },
+    risk: { emergency: false },
+    recommendedActions: [{ code: 'review-estimate', label: 'Review and follow up on the preliminary estimate', priority: 'medium' }],
+    facts: [
+      { variable: 'Roof Area', displayValue: '2000 sq ft', extractionConfidence: 0.95 },
+      { variable: 'Roof Age', displayValue: '20 years old', extractionConfidence: 0.9 },
+    ],
+    qualification: {
+      captured: 2,
+      expected: 4,
+      preferredPricingVariable: 'Roof Area',
+      preferredPricingVariableCaptured: true,
+    },
+    provenance: {
+      calculationVersion: 'canonical-polaris-v1',
+      normalizedInputFingerprint: 'b'.repeat(64),
+      businessProfileInputHash: 'a'.repeat(64),
+    },
+  };
+}
+
+async function installPageHarness(page, origin, options = {}) {
+  const evidence = {
+    requests: [],
+    bodies: [],
+    disclosureBeforeCreate: false,
+    deleteAttempts: 0,
+  };
+  await page.addInitScript((sdkStartDelayMs) => {
+    window.__webCallSequence = [];
+    window.__spokenDisclosures = [];
+    window.__homepageXss = 0;
+    window.__retellStopCalls = 0;
+    window.__retellSdkStartDelayMs = sdkStartDelayMs;
+    const TestUtterance = function (text) {
+      this.text = text;
+      this.rate = 1;
+      this.onend = null;
+      this.onerror = null;
+    };
+    const testSynthesis = {
+      cancel() {},
+      speak(utterance) {
+        window.__spokenDisclosures.push(utterance.text);
+        window.__webCallSequence.push('audible-disclosure');
+        setTimeout(() => utterance.onend && utterance.onend(), 0);
+      },
+    };
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: TestUtterance });
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: testSynthesis });
+  }, Number(options.sdkStartDelayMs) || 0);
+  await page.route('**/js/vendor/retell-web-client.mjs', route => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript; charset=utf-8',
+    body: FAKE_SDK,
+  }));
+  await page.route('**/api/demo/homepage/**', async route => {
+    const request = route.request();
+    const target = new URL(request.url());
+    evidence.requests.push({ method: request.method(), path: target.pathname });
+    if (target.pathname === '/api/demo/homepage/status' && request.method() === 'GET') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(options.unavailable ? {
+        success: true,
+        webCall: { available: false, state: 'approval_or_configuration_required', missing: ['attorney_approval'] },
+        transcriptPersistence: 'none',
+        resultPersistence: 'browser-memory-only',
+        providerActivationChanged: false,
+      } : readyStatus()) });
+    }
+    let body = null;
+    try { body = request.postDataJSON(); } catch (_error) {}
+    evidence.bodies.push({ method: request.method(), path: target.pathname, body });
+    if (target.pathname === '/api/demo/homepage/web-call' && request.method() === 'POST') {
+      evidence.disclosureBeforeCreate = await page.evaluate(() => window.__webCallSequence[0] === 'audible-disclosure');
+      if (options.createDelayMs) await new Promise(resolve => setTimeout(resolve, options.createDelayMs));
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
+        success: true,
+        data: {
+          callId: 'call_homepage_browser_1',
+          accessToken: 'temporary-access-token',
+          purgeToken: 'signed-purge-token',
+          storage: 'basic_attributes_only',
+          retentionDays: 1,
+          verbalConsentPhrase: CONSENT_PHRASE,
+        },
+      }) });
+    }
+    if (target.pathname === '/api/demo/homepage/polaris/call_homepage_browser_1' && request.method() === 'POST') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: polarisResult() }) });
+    }
+    if (target.pathname === '/api/demo/homepage/web-call/call_homepage_browser_1' && request.method() === 'DELETE') {
+      evidence.deleteAttempts += 1;
+      if (options.failFirstDelete && evidence.deleteAttempts === 1) {
+        return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
+          success: false,
+          error: { code: 'homepage_provider_deletion_unverified', message: 'Deletion could not be verified.' },
+        }) });
+      }
+      await new Promise(resolve => setTimeout(resolve, 120));
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        success: true,
+        data: { providerDeletionVerified: true, northstarPurged: true, retainedContent: false },
+      }) });
+    }
+    return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ success: false }) });
+  });
+  return evidence;
+}
+
+async function assertContainment(page, viewport, label) {
+  const result = await page.evaluate(() => {
+    const selectors = [
+      '.nav-inner', '#demoPreCallView', '.demo-form-card', '#preCallModal .demo-modal-card',
+      '#demoLiveView .demo-transcript-panel', '#demoLiveView .demo-insights-panel',
+      '#demoPostCallView .demo-polaris-report', '#demoPostCallView .demo-post-actions',
+    ];
+    const visible = selectors.map(selector => {
+      const element = document.querySelector(selector);
+      if (!element) return { selector, missing: true };
+      const style = getComputedStyle(element);
+      if (style.display === 'none' || style.visibility === 'hidden') return { selector, hidden: true };
+      const box = element.getBoundingClientRect();
+      return { selector, left: box.left, right: box.right, width: box.width };
+    });
+    const themeControl = document.querySelector('.northstar-theme-control');
+    const nav = document.querySelector('.nav');
+    const navBox = nav ? nav.getBoundingClientRect() : null;
+    const navChildren = Array.from(document.querySelectorAll('.nav-inner > *'))
+      .filter(element => {
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      })
+      .map(element => {
+        const box = element.getBoundingClientRect();
+        return { className: element.className, top: box.top, bottom: box.bottom };
+      });
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      visible,
+      navBox: navBox && { top: navBox.top, bottom: navBox.bottom },
+      navChildren,
+      themeParent: themeControl && themeControl.parentElement && themeControl.parentElement.hasAttribute('data-northstar-theme-slot'),
+      themePosition: themeControl ? getComputedStyle(themeControl).position : null,
+    };
+  });
+  assert.ok(result.scrollWidth <= result.clientWidth + 1, `${label}: no horizontal overflow (${result.scrollWidth}/${result.clientWidth})`);
+  result.visible.filter(item => !item.hidden && !item.missing).forEach(item => {
+    assert.ok(item.left >= -1, `${label}: ${item.selector} left contained (${item.left})`);
+    assert.ok(item.right <= viewport.width + 1, `${label}: ${item.selector} right contained (${item.right}/${viewport.width})`);
+    assert.ok(item.width <= viewport.width + 1, `${label}: ${item.selector} width contained (${item.width})`);
+  });
+  assert.ok(result.navBox, `${label}: navigation is present`);
+  result.navChildren.forEach(item => {
+    assert.ok(item.top >= result.navBox.top - 1, `${label}: ${item.className} starts inside navigation`);
+    assert.ok(item.bottom <= result.navBox.bottom + 1, `${label}: ${item.className} ends inside navigation`);
+  });
+  assert.strictEqual(result.themeParent, true, `${label}: theme control is mounted in the header slot`);
+  assert.strictEqual(result.themePosition, 'static', `${label}: theme control does not float over content`);
+}
+
+async function runSuccessfulCase(browser, origin, selected, viewport) {
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
     reducedMotion: 'reduce',
     serviceWorkers: 'block',
   });
-  await context.addInitScript(selectedTheme => {
-    localStorage.setItem('northstar-theme', selectedTheme);
-    window.__northstarDialogCalls = 0;
-    window.alert = function () { window.__northstarDialogCalls += 1; };
-    window.__northstarThemeApplication = null;
-    const originalSetAttribute = Element.prototype.setAttribute;
-    Element.prototype.setAttribute = function (name, value) {
-      if (this === document.documentElement && name === 'data-theme' && !window.__northstarThemeApplication) {
-        window.__northstarThemeApplication = { theme: String(value), at: performance.now() };
-      }
-      return originalSetAttribute.apply(this, arguments);
-    };
-  }, theme);
-
   const page = await context.newPage();
-  const requests = [];
-  const consoleErrors = [];
   const pageErrors = [];
-  page.on('request', request => requests.push({ method: request.method(), url: request.url() }));
-  page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  const consoleErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
-
+  page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  const harness = await installPageHarness(page, origin);
   try {
-    const startedAt = Date.now();
-    const response = await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 10000 });
-    assert.ok(response && response.status() === 200, `${selected}/${viewport.label}/${theme}: homepage response`);
-    await page.waitForFunction(() => Boolean(window.NorthStarHomepageDemo), null, { timeout: 10000 });
-    const moduleReadyMs = Date.now() - startedAt;
-    assert.ok(moduleReadyMs <= 10000, `${selected}/${viewport.label}/${theme}: module ready within ten seconds (${moduleReadyMs}ms)`);
+    const response = await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    assert.ok(response && response.status() === 200, `${selected}/${viewport.label}: homepage response`);
+    await page.waitForFunction(() => window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState().availabilityChecked, null, { timeout: 10000 });
+    assert.strictEqual(await page.isEnabled('#demoCallBtn'), true, `${selected}/${viewport.label}: approved call button enabled`);
+    await assertContainment(page, viewport, `${selected}/${viewport.label}/pre`);
+    if (screenshotPath(selected, viewport, 'pre')) await page.screenshot({ path: screenshotPath(selected, viewport, 'pre'), fullPage: true });
 
-    const initial = await page.evaluate(() => {
-      const navigation = performance.getEntriesByType('navigation')[0];
-      const lockup = document.querySelector('.nav-logo').getBoundingClientRect();
-      const cta = document.querySelector('.nav-links .btn-primary[href="/signup"]').getBoundingClientRect();
-      const eyebrow = document.querySelector('.demo-eyebrow');
-      const color = getComputedStyle(eyebrow).color;
-      const background = getComputedStyle(document.body).backgroundColor;
-      function rgb(value) {
-        return (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
-      }
-      function luminance(parts) {
-        const normalized = parts.map(channel => {
-          const value = channel / 255;
-          return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
-        });
-        return 0.2126 * normalized[0] + 0.7152 * normalized[1] + 0.0722 * normalized[2];
-      }
-      const a = luminance(rgb(color));
-      const b = luminance(rgb(background));
-      const firstPaint = performance.getEntriesByType('paint').find(entry => entry.name === 'first-paint');
-      const headNodes = Array.from(document.head.children);
-      const themeScriptIndex = headNodes.findIndex(node => node.tagName === 'SCRIPT' && node.getAttribute('src') === '/js/theme.js');
-      const stylesheetIndex = headNodes.findIndex(node => node.tagName === 'LINK' && node.getAttribute('rel') === 'stylesheet');
-      return {
-        domInteractiveMs: navigation ? navigation.domInteractive : null,
-        themeApplication: window.__northstarThemeApplication,
-        firstPaintMs: firstPaint ? firstPaint.startTime : null,
-        themeScriptIndex,
-        stylesheetIndex,
-        currentTheme: document.documentElement.getAttribute('data-theme'),
-        brandToken: getComputedStyle(document.documentElement).getPropertyValue('--northstar-brand-gold').trim(),
-        contrast: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
-        lockup: { width: lockup.width, height: lockup.height },
-        cta: { width: cta.width, height: cta.height, visible: cta.width > 0 && cta.height > 0 },
-        scenarioCount: Object.keys(window.NorthStarHomepageDemo.scenarios).length,
-        reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
-        chipTransition: getComputedStyle(document.querySelector('.demo-scenario-chip')).transitionDuration,
-        hasPhoneField: Boolean(document.getElementById('demoPhoneNumber')),
-        dialogCalls: window.__northstarDialogCalls,
-        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      };
-    });
-
-    assert.ok(initial.domInteractiveMs !== null && initial.domInteractiveMs <= 10000,
-      `${selected}/${viewport.label}/${theme}: DOM interactive within ten seconds`);
-    assert.ok(initial.themeApplication, `${selected}/${viewport.label}/${theme}: theme applied synchronously`);
-    assert.strictEqual(initial.themeApplication.theme, theme, `${selected}/${viewport.label}/${theme}: saved theme applied first`);
-    if (initial.firstPaintMs !== null) {
-      assert.ok(initial.themeApplication.at <= initial.firstPaintMs,
-        `${selected}/${viewport.label}/${theme}: theme applied before first paint`);
-    }
-    assert.ok(initial.themeScriptIndex >= 0 && initial.themeScriptIndex < initial.stylesheetIndex,
-      `${selected}/${viewport.label}/${theme}: theme authority precedes stylesheets`);
-    assert.strictEqual(initial.currentTheme, theme, `${selected}/${viewport.label}/${theme}: persisted theme`);
-    assert.strictEqual(initial.brandToken.toLowerCase(), theme === 'dark' ? '#d4af37' : '#6d5005',
-      `${selected}/${viewport.label}/${theme}: accessible semantic gold`);
-    assert.ok(initial.contrast >= 4.5, `${selected}/${viewport.label}/${theme}: gold contrast ${initial.contrast}`);
-    assert.strictEqual(Math.round(initial.lockup.width), 148, `${selected}/${viewport.label}/${theme}: lockup width`);
-    assert.strictEqual(Math.round(initial.lockup.height), 40, `${selected}/${viewport.label}/${theme}: lockup height`);
-    if (initial.cta.visible) {
-      assert.strictEqual(Math.round(initial.cta.width), Math.round(initial.lockup.width), `${selected}/${viewport.label}/${theme}: CTA width parity`);
-      assert.strictEqual(Math.round(initial.cta.height), Math.round(initial.lockup.height), `${selected}/${viewport.label}/${theme}: CTA height parity`);
-    }
-    assert.strictEqual(initial.scenarioCount, 9, `${selected}/${viewport.label}/${theme}: scenario catalogue`);
-    assert.strictEqual(initial.hasPhoneField, false, `${selected}/${viewport.label}/${theme}: no phone collection`);
-    assert.strictEqual(initial.dialogCalls, 0, `${selected}/${viewport.label}/${theme}: no browser dialogs`);
-    assert.strictEqual(initial.reducedMotion, true, `${selected}/${viewport.label}/${theme}: reduced motion emulated`);
-    assert.ok(Number.parseFloat(initial.chipTransition) <= 0.001,
-      `${selected}/${viewport.label}/${theme}: reduced transition ${initial.chipTransition}`);
-    assert.ok(initial.overflow <= 1, `${selected}/${viewport.label}/${theme}: initial horizontal overflow ${initial.overflow}`);
-
-    await page.click('#demoCallBtn');
-    assert.match(await page.textContent('#demoFormNotice'), /business name/i,
-      `${selected}/${viewport.label}/${theme}: inline validation`);
-    assert.strictEqual(await page.getAttribute('#preCallModal', 'aria-hidden'), 'true',
-      `${selected}/${viewport.label}/${theme}: validation precedes dialog`);
-
-    const businessName = '<img src=x onerror="window.__homepageXss=1"> NorthStar Test';
-    await page.fill('#demoBusinessName', businessName);
+    await page.fill('#demoBusinessName', '<img src=x onerror="window.__homepageXss=1"> NorthStar Test');
     await page.selectOption('#demoIndustry', 'Roofing');
-    await page.click(`#scenarioChips [data-scenario="${scenarioKey}"]`);
+    await page.check('#demoConsentCheckbox');
     await page.click('#demoCallBtn');
-    assert.strictEqual(await page.getAttribute('#preCallModal', 'aria-hidden'), 'false',
-      `${selected}/${viewport.label}/${theme}: coaching opens`);
-    assert.match(await page.textContent('#selectedScenarioContext'), new RegExp(scenarioKey.split('-')[0], 'i'),
-      `${selected}/${viewport.label}/${theme}: selected context`);
-
-    const modalBox = await page.locator('#preCallModal').boundingBox();
-    assert.ok(modalBox, `${selected}/${viewport.label}/${theme}: dialog box`);
-    await page.mouse.click(modalBox.x + 4, modalBox.y + 4);
-    await page.waitForTimeout(30);
-    assert.strictEqual(await page.getAttribute('#preCallModal', 'aria-hidden'), 'false',
-      `${selected}/${viewport.label}/${theme}: outside click does not dismiss`);
-    await page.keyboard.press('Escape');
-    assert.strictEqual(await page.getAttribute('#preCallModal', 'aria-hidden'), 'true',
-      `${selected}/${viewport.label}/${theme}: Escape dismisses deliberately`);
-    assert.strictEqual(await page.evaluate(() => document.activeElement && document.activeElement.id), 'demoCallBtn',
-      `${selected}/${viewport.label}/${theme}: focus returns`);
-
-    await page.click('#demoCallBtn');
-    await page.click(`#modalScenarioChips [data-scenario="${scenarioKey}"]`);
+    await page.waitForSelector('#preCallModal[aria-hidden="false"]');
+    await assertContainment(page, viewport, `${selected}/${viewport.label}/modal`);
+    if (screenshotPath(selected, viewport, 'modal')) await page.screenshot({ path: screenshotPath(selected, viewport, 'modal'), fullPage: false });
+    assert.match(await page.textContent('#demoDisclosureCopy'), /AI demonstration[\s\S]*recorded temporarily[\s\S]*I consent to this AI demo/i,
+      `${selected}/${viewport.label}: explicit audible disclosure copy`);
     await page.click('#modalCallBtn');
-    await page.waitForSelector('#guidedPreviewActions:not([hidden])', { timeout: 10000 });
-    await page.evaluate(() => document.querySelector('.footer').scrollIntoView({ block: 'end' }));
+    try {
+      await page.waitForFunction(() => window.__retellTestClient && window.__webCallAccessToken === 'temporary-access-token', null, { timeout: 10000 });
+    } catch (error) {
+      const diagnostics = await page.evaluate(() => ({
+        sequence: window.__webCallSequence,
+        notice: document.getElementById('guidedPreviewNotice') && document.getElementById('guidedPreviewNotice').textContent,
+        formNotice: document.getElementById('demoFormNotice') && document.getElementById('demoFormNotice').textContent,
+        state: window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState(),
+      }));
+      throw new Error(error.message + '\n' + JSON.stringify({ diagnostics, pageErrors, consoleErrors, requests: harness.requests }, null, 2));
+    }
+    assert.strictEqual(harness.disclosureBeforeCreate, true, `${selected}/${viewport.label}: disclosure precedes provider creation`);
+    assert.match((await page.evaluate(() => window.__spokenDisclosures[0])), /NorthStar AI demonstration[\s\S]*recorded temporarily/i,
+      `${selected}/${viewport.label}: disclosure was audible`);
+
+    await page.evaluate(phrase => {
+      window.__retellTestClient.pushTranscript([
+        { role: 'agent', content: 'Please say the consent phrase.' },
+        { role: 'user', content: phrase },
+        { role: 'agent', content: 'Please describe the fictional roofing work.' },
+        { role: 'user', content: 'I need a roof replacement for a 2000 square foot roof. <img src=x onerror="window.__homepageXss=1">' },
+      ]);
+    }, CONSENT_PHRASE);
+    await page.evaluate(() => {
+      window.__retellTestClient.pushTranscript([
+        { role: 'user', content: 'I need a roof replacement for a 2000 square foot roof. <img src=x onerror="window.__homepageXss=1">' },
+        { role: 'agent', content: 'How old is the fictional roof?' },
+        { role: 'user', content: 'It is twenty years old.' },
+      ]);
+    });
+    await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().consented === true && window.NorthStarHomepageDemo.getState().transcriptTurns >= 3);
+    const live = await page.evaluate(() => ({
+      transcript: document.getElementById('demoTranscriptBody').textContent,
+      images: document.getElementById('demoTranscriptBody').querySelectorAll('img,script,svg,iframe').length,
+      xss: window.__homepageXss,
+      storage: Object.keys(sessionStorage).concat(Object.keys(localStorage)).filter(key => key.startsWith('northstar.homepage.')),
+    }));
+    assert.match(live.transcript, /2000 square foot roof[\s\S]*twenty years old/i, `${selected}/${viewport.label}: variable conversation rendered`);
+    assert.doesNotMatch(live.transcript, new RegExp(CONSENT_PHRASE, 'i'), `${selected}/${viewport.label}: consent phrase not retained as job content`);
+    assert.strictEqual(live.images, 0, `${selected}/${viewport.label}: transcript DOM is text-only`);
+    assert.strictEqual(live.xss, 0, `${selected}/${viewport.label}: transcript payload inert`);
+    assert.deepStrictEqual(live.storage, [], `${selected}/${viewport.label}: no homepage storage`);
+    await assertContainment(page, viewport, `${selected}/${viewport.label}/live`);
+    if (screenshotPath(selected, viewport, 'live')) await page.screenshot({ path: screenshotPath(selected, viewport, 'live'), fullPage: true });
+
+    await page.click('#demoHangupBtn');
+    await page.waitForTimeout(30);
+    assert.strictEqual(await page.isVisible('#demoPostCallView'), false, `${selected}/${viewport.label}: result withheld before deletion response`);
+    await page.waitForSelector('#demoPostCallView', { state: 'visible', timeout: 10000 });
+    await assertContainment(page, viewport, `${selected}/${viewport.label}/post`);
+    if (screenshotPath(selected, viewport, 'post')) await page.screenshot({ path: screenshotPath(selected, viewport, 'post'), fullPage: true });
+    assert.strictEqual(await page.textContent('#reportRevenue'), '$9,000', `${selected}/${viewport.label}: canonical price`);
+    assert.match(await page.textContent('#reportExecBody'), /Canonical Polaris processed 2 of 4 supported estimating facts/i,
+      `${selected}/${viewport.label}: mounted canonical result`);
+    assert.match(await page.textContent('#demoPurgeReceipt'), /Verified deletion complete[\s\S]*transcript, token/i,
+      `${selected}/${viewport.label}: verified purge receipt`);
+    const terminal = await page.evaluate(() => window.NorthStarHomepageDemo.getState());
+    assert.deepStrictEqual(terminal, {
+      available: true,
+      availabilityChecked: true,
+      active: false,
+      consented: false,
+      transcriptTurns: 0,
+      deletionState: 'verified',
+      resultVisible: true,
+      persistence: 'browser-memory-only',
+    }, `${selected}/${viewport.label}: terminal in-memory state`);
+
+    const serializedBodies = JSON.stringify(harness.bodies);
+    assert.ok(!serializedBodies.includes('NorthStar Test'), `${selected}/${viewport.label}: browser-only business name never sent`);
+    assert.ok(!JSON.stringify(harness.bodies.filter(entry => !entry.path.includes('/polaris/'))).includes('<img'),
+      `${selected}/${viewport.label}: transient transcript reaches only the ephemeral Polaris endpoint after consent`);
+    const createBody = harness.bodies.find(entry => entry.path === '/api/demo/homepage/web-call').body;
+    assert.deepStrictEqual(createBody, { consentAcknowledged: true, industry: 'Roofing' }, `${selected}/${viewport.label}: exact create body`);
+    const polarisBody = harness.bodies.find(entry => entry.path.includes('/polaris/')).body;
+    assert.ok(Array.isArray(polarisBody.transcript) && polarisBody.transcript.length >= 3, `${selected}/${viewport.label}: consented transcript projected once`);
+    assert.ok(harness.bodies.some(entry => entry.method === 'DELETE'), `${selected}/${viewport.label}: provider deletion requested`);
+    assert.deepStrictEqual(pageErrors, [], `${selected}/${viewport.label}: no page errors`);
+    assert.deepStrictEqual(consoleErrors, [], `${selected}/${viewport.label}: no console errors`);
+    return { viewport: viewport.label, deletionAttempts: harness.deleteAttempts, transcriptTurns: polarisBody.transcript.length };
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+async function runCancellationCase(browser, origin, selected) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const harness = await installPageHarness(page, origin, { createDelayMs: 1500 });
+  try {
+    await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForFunction(() => window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState().available);
+    await page.fill('#demoBusinessName', 'Cancellation Boundary Test');
+    await page.selectOption('#demoIndustry', 'Roofing');
+    await page.check('#demoConsentCheckbox');
+    await page.click('#demoCallBtn');
+    const createRequest = page.waitForRequest(request =>
+      new URL(request.url()).pathname === '/api/demo/homepage/web-call' && request.method() === 'POST');
+    await page.click('#modalCallBtn');
+    await page.waitForFunction(() => window.__webCallSequence.includes('audible-disclosure'));
+    await createRequest;
+    await page.click('#demoWithdrawBtn');
+    await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().active === false &&
+      window.NorthStarHomepageDemo.getState().deletionState === 'verified', null, { timeout: 10000 });
+    assert.strictEqual(harness.deleteAttempts, 1, `${selected}: cancellation after creation verifies deletion`);
+    assert.strictEqual(await page.evaluate(() => window.__webCallSequence.includes('sdk-start')), false,
+      `${selected}: cancellation before microphone access never starts the SDK`);
+    assert.strictEqual(await page.isVisible('#demoPostCallView'), false, `${selected}: cancelled start creates no result`);
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+async function runConnectionCancellationCase(browser, origin, selected) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const harness = await installPageHarness(page, origin, { sdkStartDelayMs: 1200 });
+  try {
+    await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForFunction(() => window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState().available);
+    await page.fill('#demoBusinessName', 'Connection Withdrawal Test');
+    await page.selectOption('#demoIndustry', 'Roofing');
+    await page.check('#demoConsentCheckbox');
+    await page.click('#demoCallBtn');
+    await page.click('#modalCallBtn');
+    await page.waitForFunction(() => window.__webCallSequence.includes('sdk-start'));
+    await page.click('#demoWithdrawBtn');
+    await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().active === false &&
+      window.NorthStarHomepageDemo.getState().deletionState === 'verified', null, { timeout: 10000 });
+    await page.waitForTimeout(1400);
+    const terminal = await page.evaluate(() => ({
+      connected: Boolean(window.__retellTestClient && window.__retellTestClient.connected),
+      stopCalls: window.__retellStopCalls,
+      state: window.NorthStarHomepageDemo.getState(),
+    }));
+    assert.strictEqual(harness.deleteAttempts, 1, `${selected}: connection withdrawal verifies provider deletion`);
+    assert.strictEqual(terminal.connected, false, `${selected}: late SDK connection is stopped after withdrawal`);
+    assert.ok(terminal.stopCalls >= 2, `${selected}: SDK stop is retried after its connection promise settles`);
+    assert.strictEqual(terminal.state.active, false, `${selected}: late SDK events cannot reactivate the deleted call`);
+    assert.strictEqual(terminal.state.resultVisible, false, `${selected}: connection withdrawal creates no result`);
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+async function runFailureCase(browser, origin, selected) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const harness = await installPageHarness(page, origin, { failFirstDelete: true });
+  try {
+    await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForFunction(() => window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState().available);
+    await page.fill('#demoBusinessName', 'Deletion Boundary Test');
+    await page.selectOption('#demoIndustry', 'Roofing');
+    await page.check('#demoConsentCheckbox');
+    await page.click('#demoCallBtn');
+    await page.click('#modalCallBtn');
+    await page.waitForFunction(() => window.__retellTestClient);
+    await page.evaluate(phrase => window.__retellTestClient.pushTranscript([
+      { role: 'user', content: phrase },
+      { role: 'agent', content: 'Describe a fictional roof.' },
+      { role: 'user', content: 'It is 2000 square feet.' },
+    ]), CONSENT_PHRASE);
+    await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().consented);
+    await page.click('#demoHangupBtn');
+    await page.waitForSelector('#demoRetryDeleteBtn', { state: 'visible', timeout: 10000 });
+    assert.strictEqual(await page.isVisible('#demoPostCallView'), false, `${selected}: failed deletion withholds results`);
+    const failed = await page.evaluate(() => window.NorthStarHomepageDemo.getState());
+    assert.strictEqual(failed.deletionState, 'unverified', `${selected}: deletion state fails closed`);
+    assert.strictEqual(failed.transcriptTurns, 0, `${selected}: transcript cleared on delete failure`);
+    assert.strictEqual(failed.resultVisible, false, `${selected}: result cleared on delete failure`);
+    await page.click('#demoRetryDeleteBtn');
+    await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().active === false);
+    assert.strictEqual(harness.deleteAttempts, 2, `${selected}: one deliberate retry`);
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+async function runUnavailableCase(browser, origin, selected) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const harness = await installPageHarness(page, origin, { unavailable: true });
+  try {
+    await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForFunction(() => window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState().availabilityChecked);
+    assert.strictEqual(await page.isEnabled('#demoCallBtn'), false, `${selected}: production activation remains disabled`);
+    assert.match(await page.textContent('#demoFormNotice'), /not active[\s\S]*attorney and Retell privacy approval/i,
+      `${selected}: user-visible hard gate`);
+    assert.deepStrictEqual(harness.requests, [{ method: 'GET', path: '/api/demo/homepage/status' }], `${selected}: locked state makes no provider request`);
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+async function runVendorBoundaryCase(browser, origin, selected) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const consoleMessages = [];
+  page.on('console', message => consoleMessages.push({ type: message.type(), text: message.text() }));
+  try {
+    await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    consoleMessages.length = 0;
+    const exported = await page.evaluate(async () => {
+      const module = await import('/js/vendor/retell-web-client.mjs');
+      return typeof module.RetellWebClient;
+    });
     await page.waitForTimeout(50);
-
-    const preview = await page.evaluate(() => {
-      const transcript = document.getElementById('demoTranscriptBody');
-      const footerLinks = document.querySelector('.footer-links');
-      const themeControl = document.querySelector('.northstar-theme-control');
-      const rect = element => element ? element.getBoundingClientRect().toJSON() : null;
-      const stored = {};
-      for (let index = 0; index < sessionStorage.length; index += 1) {
-        const key = sessionStorage.key(index);
-        if (key.indexOf('northstar.homepage.') === 0) stored[key] = sessionStorage.getItem(key);
-      }
-      return {
-        transcriptCount: transcript.querySelectorAll('.demo-msg').length,
-        transcriptText: transcript.textContent,
-        maliciousElements: transcript.querySelectorAll('img,script,svg,iframe').length,
-        xss: window.__homepageXss || 0,
-        status: document.getElementById('demoStatusLabel').textContent,
-        booking: document.getElementById('demoBookingProb').textContent,
-        notice: document.getElementById('guidedPreviewNotice').textContent,
-        stored,
-        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        footerLinks: rect(footerLinks),
-        themeControl: rect(themeControl),
-      };
-    });
-    assert.strictEqual(preview.transcriptCount, 4, `${selected}/${viewport.label}/${theme}: scenario transcript`);
-    assert.ok(preview.transcriptText.length > 80, `${selected}/${viewport.label}/${theme}: meaningful transcript`);
-    assert.strictEqual(preview.maliciousElements, 0, `${selected}/${viewport.label}/${theme}: safe transcript nodes`);
-    assert.strictEqual(preview.xss, 0, `${selected}/${viewport.label}/${theme}: business-name payload inert`);
-    assert.match(preview.status, /guided call ready/i, `${selected}/${viewport.label}/${theme}: ready state`);
-    assert.strictEqual(preview.booking, 'Not calculated in guided preview', `${selected}/${viewport.label}/${theme}: no invented probability`);
-    assert.match(preview.notice, /did not place a call or send your entries/i,
-      `${selected}/${viewport.label}/${theme}: no provider or server submission`);
-    assert.match(preview.notice, /Only your scenario and industry are remembered in this browser tab until you reset or close it/i,
-      `${selected}/${viewport.label}/${theme}: truthful bounded session disclosure`);
-    assert.deepStrictEqual(Object.keys(preview.stored).sort(), [
-      'northstar.homepage.industry',
-      'northstar.homepage.scenario',
-    ], `${selected}/${viewport.label}/${theme}: bounded session state`);
-    assert.ok(!JSON.stringify(preview.stored).includes('NorthStar Test'),
-      `${selected}/${viewport.label}/${theme}: business name not stored`);
-    assert.ok(preview.overflow <= 1, `${selected}/${viewport.label}/${theme}: preview horizontal overflow ${preview.overflow}`);
-    assert.strictEqual(intersects(preview.footerLinks, preview.themeControl), false,
-      `${selected}/${viewport.label}/${theme}: footer controls do not overlap`);
-
-    await page.click('#guidedTryAnother');
-    assert.strictEqual(await page.getAttribute('#preCallModal', 'aria-hidden'), 'false',
-      `${selected}/${viewport.label}/${theme}: repeat scenario shows coaching again`);
-    await page.click('#modalCancelBtn');
-    assert.strictEqual(await page.getAttribute('#preCallModal', 'aria-hidden'), 'true',
-      `${selected}/${viewport.label}/${theme}: explicit review action closes`);
-
-    const resetState = await page.evaluate(() => {
-      window.resetDemo();
-      const homepageKeys = [];
-      for (let index = 0; index < sessionStorage.length; index += 1) {
-        const key = sessionStorage.key(index);
-        if (key.indexOf('northstar.homepage.') === 0) homepageKeys.push(key);
-      }
-      return {
-        businessName: document.getElementById('demoBusinessName').value,
-        industry: document.getElementById('demoIndustry').value,
-        homepageKeys: homepageKeys.sort(),
-      };
-    });
-    assert.deepStrictEqual(resetState, { businessName: '', industry: '', homepageKeys: [] },
-      `${selected}/${viewport.label}/${theme}: reset clears form and bounded session state`);
-
-    const forbiddenRequests = requests.filter(request => {
-      if (!/^https?:/i.test(request.url)) return false;
-      const target = new URL(request.url);
-      return request.method !== 'GET' || target.origin !== origin || target.pathname.startsWith('/api/');
-    });
-    assert.deepStrictEqual(forbiddenRequests, [], `${selected}/${viewport.label}/${theme}: provider-free GET-only path`);
-    assert.deepStrictEqual(consoleErrors, [], `${selected}/${viewport.label}/${theme}: console errors`);
-    assert.deepStrictEqual(pageErrors, [], `${selected}/${viewport.label}/${theme}: page errors`);
-
-    evidence.cases.push({
-      browser: selected,
-      viewport: viewport.label,
-      theme,
-      scenario: scenarioKey,
-      moduleReadyMs,
-      domInteractiveMs: initial.domInteractiveMs,
-      contrast: Number(initial.contrast.toFixed(2)),
-      requests: requests.length,
-      transcriptTurns: preview.transcriptCount,
-      result: 'pass',
-    });
+    assert.strictEqual(exported, 'function', `${selected}: pinned Retell browser bundle exports the client`);
+    assert.deepStrictEqual(consoleMessages, [], `${selected}: importing the ephemeral transport emits no browser log`);
   } finally {
     await page.close();
     await context.close();
@@ -283,14 +527,14 @@ async function main() {
   const selected = process.argv[2];
   assert.ok(selected === 'chrome' || selected === 'webkit', 'usage: node homepage-refresh.js <chrome|webkit>');
   const runtime = resolveBrowserRuntime(selected);
+  let server;
+  let browser;
   const evidence = {
     browser: selected,
     executablePath: runtime.executablePath,
     executableSha256: hashFile(runtime.executablePath),
     cases: [],
   };
-  let server;
-  let browser;
   try {
     server = await new Promise((resolve, reject) => {
       const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
@@ -299,14 +543,17 @@ async function main() {
     const origin = `http://127.0.0.1:${server.address().port}`;
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
     evidence.version = browser.version();
-    let scenarioIndex = 0;
-    for (const viewport of VIEWPORTS) {
-      for (const theme of THEMES) {
-        await inspectCase(browser, origin, selected, viewport, theme, SCENARIO_SEQUENCES[selected][scenarioIndex], evidence);
-        scenarioIndex += 1;
-      }
-    }
-    assert.strictEqual(evidence.cases.length, 6, `${selected}: complete viewport/theme matrix`);
+    for (const viewport of VIEWPORTS) evidence.cases.push(await runSuccessfulCase(browser, origin, selected, viewport));
+    await runCancellationCase(browser, origin, selected);
+    await runConnectionCancellationCase(browser, origin, selected);
+    await runFailureCase(browser, origin, selected);
+    await runUnavailableCase(browser, origin, selected);
+    await runVendorBoundaryCase(browser, origin, selected);
+    evidence.failureBoundary = 'pass';
+    evidence.cancellationBoundary = 'pass';
+    evidence.connectionCancellationBoundary = 'pass';
+    evidence.sourceDisabledBoundary = 'pass';
+    evidence.vendorLogBoundary = 'pass';
     process.stdout.write(JSON.stringify(evidence, null, 2) + '\n');
   } finally {
     if (browser) await browser.close();

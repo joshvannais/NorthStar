@@ -17,6 +17,15 @@ const config = {
     phoneNumber: process.env.RETELL_PHONE_NUMBER,
   },
 
+  // Homepage browser Web Call. Every switch defaults closed. These flags are
+  // an activation receipt, not a substitute for counsel or provider review.
+  homepageWebCall: {
+    enabled: process.env.HOMEPAGE_RETELL_WEB_CALL_ENABLED === 'true',
+    legalApproved: process.env.HOMEPAGE_RETELL_LEGAL_APPROVED === 'true',
+    providerApproved: process.env.HOMEPAGE_RETELL_PROVIDER_APPROVED === 'true',
+    webhookIsolationApproved: process.env.HOMEPAGE_RETELL_WEBHOOK_ISOLATION_APPROVED === 'true',
+  },
+
   // Twilio
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID,

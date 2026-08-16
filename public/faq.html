@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script src="/js/theme.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frequently Asked Questions — NorthStar</title>
+  <meta name="description" content="Answers about NorthStar, its account-free demos, public pricing, and provider-readiness boundaries.">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <style>
+    .faq-shell { width: min(calc(100% - 32px), 900px); margin: 0 auto; padding: clamp(46px, 8vw, 82px) 0; }
+    .faq-hero { text-align: center; max-width: 700px; margin: 0 auto 36px; }
+    .demo-eyebrow { margin-bottom: 8px; color: var(--brand-700); font-size: 13px; font-weight: 750; letter-spacing: 0.12em; text-transform: uppercase; }
+    .faq-hero h1 { margin-bottom: 12px; font-size: clamp(30px, 6vw, 46px); }
+    .faq-hero p { color: var(--theme-muted); font-size: 17px; line-height: 1.65; }
+    .faq-list { display: grid; gap: 14px; }
+    .faq-item { padding: clamp(20px, 5vw, 28px); background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-lg); }
+    .faq-item h2 { margin-bottom: 8px; color: var(--theme-text); font-size: 19px; }
+    .faq-item p { color: var(--theme-muted); line-height: 1.7; }
+    .faq-item a { color: var(--brand-700); font-weight: 650; }
+    [data-theme="dark"] .faq-item a { color: var(--brand-300); }
+    .faq-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 30px; }
+    @media (max-width: 560px) {
+      .faq-actions { display: grid; }
+      .faq-actions > * { width: 100%; }
+      .nav-inner { flex-wrap: wrap; }
+      .nav-links { order: 3; width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo northstar-lockup" aria-label="NorthStar homepage">
+        <img src="/assets/logo.png" alt="" class="logo-img">
+        NorthStar
+      </a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/#how-it-works">How It Works</a>
+        <a href="/#pricing">Pricing</a>
+        <a href="/demo-dashboard">Demo Dashboard</a>
+        <a href="/contact">Contact</a>
+      </div>
+      <span class="northstar-theme-slot" data-northstar-theme-slot></span>
+    </div>
+  </nav>
+
+  <main class="faq-shell">
+    <header class="faq-hero">
+      <p class="demo-eyebrow">Straight answers</p>
+      <h1>Frequently Asked Questions</h1>
+      <p>What NorthStar and its public demos do today—and which commercial, legal, and provider details remain intentionally unclaimed.</p>
+    </header>
+
+    <div class="faq-list">
+      <section class="faq-item">
+        <h2>What is NorthStar?</h2>
+        <p>NorthStar is an AI Office Manager and business operating system for home-service businesses. It connects calls, leads, customers, work, estimates, schedules, next actions, and outcomes in one role-authorized operating view.</p>
+      </section>
+      <section class="faq-item">
+        <h2>What can I explore without an account?</h2>
+        <p>The <a href="/demo-dashboard">Contractor Command Center demo</a> is an isolated fictional workspace. Its mounted destinations share one durable demo session, while configuration destinations remain truthful, stable, and read-only.</p>
+      </section>
+      <section class="faq-item">
+        <h2>Does the Homepage call my phone?</h2>
+        <p>No. The designed experience is a visitor-initiated browser Web Call, not an outbound callback. It requests no phone number. Production activation remains unavailable until final attorney wording, Retell privacy settings, temporary-processing isolation, and verified deletion are independently approved.</p>
+      </section>
+      <section class="faq-item">
+        <h2>What happens to a browser Web Call?</h2>
+        <p>When approved and enabled, the page requires a checked microphone/temporary-processing notice, plays an audible AI-demo and temporary-recording disclosure, and requires affirmative verbal consent. Hang-up or withdrawal begins Retell Delete Call verification and NorthStar purge. Polaris results remain hidden if deletion cannot be verified, and any visible result stays in browser memory only.</p>
+      </section>
+      <section class="faq-item">
+        <h2>Are the Polaris results a quote?</h2>
+        <p>No. The public result uses a versioned fictional demo Business Profile and the mounted canonical Polaris calculation. It demonstrates how supported job facts can become an estimate range and next action; it is not a contractor quote or a promise of availability.</p>
+      </section>
+      <section class="faq-item">
+        <h2>What are the published prices?</h2>
+        <p>The queued monthly list prices are Starter $149, Growth $299, and Complete $499. Plan contents, allowances, provider readiness, taxes, discounts, and other commercial terms are not inferred or promised on the public site.</p>
+      </section>
+      <section class="faq-item">
+        <h2>Are listed integrations connected?</h2>
+        <p>Not by appearing in the catalogue. Each entry states whether provider approval or future work is required. A catalogue entry does not establish authorization, synchronization, tenant readiness, or live provider configuration.</p>
+      </section>
+      <section class="faq-item">
+        <h2>How do map preferences work?</h2>
+        <p>Authorized users can choose Apple Maps, Google Maps, or Waze as a navigation preference. NorthStar launches the selected provider with the available destination; it does not claim the provider accepted, routed, or completed the trip.</p>
+      </section>
+      <section class="faq-item">
+        <h2>How do I get support?</h2>
+        <p>Email <a href="mailto:Support@northstar-os.ai">Support@northstar-os.ai</a>. The <a href="/contact">contact page</a> explains the email-provider delivery boundary and does not pretend a retired website form sent a message.</p>
+      </section>
+    </div>
+
+    <div class="faq-actions">
+      <a class="btn btn-primary" href="/demo-dashboard">Explore the Demo Dashboard</a>
+      <a class="btn btn-secondary" href="/contact">Contact Support</a>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-links">
+      <a href="/">Home</a>
+      <a href="/#how-it-works">How It Works</a>
+      <a href="/#pricing">Pricing</a>
+      <a href="/faq">FAQ</a>
+      <a href="/contact">Contact</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/refund">Refunds</a>
+      <a href="/legal">Legal</a>
+    </div>
+    <p>© 2026 NorthStar Solutions LLC. All rights reserved.</p>
+  </footer>
+</body>
+</html>

@@ -4,80 +4,63 @@
   <meta charset="UTF-8">
   <script src="/js/theme.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Contact — NorthStar AI</title>
+  <title>Contact — NorthStar</title>
+  <meta name="description" content="Contact NorthStar product support at Support@northstar-os.ai.">
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <style>
+    .contact-shell { width: min(calc(100% - 32px), 760px); margin: 0 auto; padding: clamp(48px, 8vw, 84px) 0; }
+    .contact-hero { text-align: center; margin-bottom: 30px; }
+    .demo-eyebrow { margin-bottom: 8px; color: var(--brand-700); font-size: 13px; font-weight: 750; letter-spacing: 0.12em; text-transform: uppercase; }
+    .contact-hero h1 { margin-bottom: 10px; font-size: clamp(30px, 6vw, 46px); }
+    .contact-hero p { max-width: 620px; margin: 0 auto; color: var(--theme-muted); font-size: 17px; line-height: 1.65; }
+    .contact-card { padding: clamp(24px, 6vw, 40px); background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); }
+    .contact-address { display: block; margin: 18px 0; color: var(--brand-700); font-size: clamp(18px, 5vw, 26px); font-weight: 750; overflow-wrap: anywhere; }
+    [data-theme="dark"] .contact-address { color: var(--brand-300); }
+    .contact-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+    .contact-boundary { margin-top: 22px; padding: 16px; color: var(--theme-muted); background: var(--theme-surface-soft); border: 1px solid var(--theme-border); border-radius: var(--radius-md); line-height: 1.6; }
+    @media (max-width: 560px) {
+      .contact-actions { display: grid; }
+      .contact-actions > * { width: 100%; }
+      .nav-inner { flex-wrap: wrap; }
+      .nav-links { order: 3; width: 100%; justify-content: center; }
+    }
+  </style>
 </head>
 <body>
-
   <nav class="nav">
     <div class="nav-inner">
-      <a href="/" class="nav-logo">
-        <img src="/assets/logo.png" alt="NorthStar" class="logo-img">
+      <a href="/" class="nav-logo northstar-lockup" aria-label="NorthStar homepage">
+        <img src="/assets/logo.png" alt="" class="logo-img">
         NorthStar
       </a>
       <div class="nav-links">
         <a href="/">Home</a>
         <a href="/#pricing">Pricing</a>
-        <a href="/#faq">FAQ</a>
-        <a href="/login" class="btn btn-ghost btn-sm">Sign In</a>
-        <a href="/signup" class="btn btn-primary btn-sm">Start Free Trial</a>
+        <a href="/faq">FAQ</a>
+        <a href="/demo-dashboard">Demo Dashboard</a>
       </div>
+      <span class="northstar-theme-slot" data-northstar-theme-slot></span>
     </div>
   </nav>
 
-  <main style="max-width:600px;margin:0 auto;padding:60px 24px;">
-    <div style="text-align:center;margin-bottom:48px;">
-      <h1 style="font-size:clamp(28px,5vw,36px);font-weight:700;margin-bottom:8px;">Get in Touch</h1>
-      <p style="color:var(--neutral-500);font-size:clamp(15px,2.5vw,17px);">Have a question or need help? We're here to help.</p>
-    </div>
+  <main class="contact-shell">
+    <header class="contact-hero">
+      <p class="demo-eyebrow">NorthStar Support</p>
+      <h1>How can we help?</h1>
+      <p>For product questions, account help, or a support request, email the NorthStar team directly.</p>
+    </header>
 
-    <div class="settings-section" style="margin-bottom:24px;">
-      <h2>📧 Email Us</h2>
-      <p class="description">Send us a message and we'll get back to you within 24 hours.</p>
-      <form id="contactForm" style="display:flex;flex-direction:column;gap:16px;">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="name">Your Name</label>
-            <input type="text" id="name" placeholder="John Smith" required>
-          </div>
-          <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" placeholder="you@example.com" required>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="subject">Subject</label>
-          <input type="text" id="subject" placeholder="How can we help?" required>
-        </div>
-        <div class="form-group">
-          <label for="message">Message</label>
-          <textarea id="message" placeholder="Tell us more about what you need..." required style="min-height:120px;"></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Send Message</button>
-      </form>
-      <p style="font-size:13px;color:var(--neutral-400);margin-top:12px;text-align:center;">Or email us directly at <strong>northstar-solutions-4e85c6e9@ctomail.io</strong></p>
-    </div>
-
-    <div class="settings-section" style="text-align:center;">
-      <h2>💬 Other Ways to Reach Us</h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
-        <div class="card" style="padding:20px;text-align:center;">
-          <div style="font-size:24px;margin-bottom:8px;">📧</div>
-          <h3 style="font-size:14px;font-weight:600;">Email</h3>
-          <p style="font-size:13px;color:var(--neutral-500);">northstar-solutions-4e85c6e9@ctomail.io</p>
-        </div>
-        <div class="card" style="padding:20px;text-align:center;">
-          <div style="font-size:24px;margin-bottom:8px;">📞</div>
-          <h3 style="font-size:14px;font-weight:600;">Phone</h3>
-          <p style="font-size:13px;color:var(--neutral-500);">(860) 970-5750</p>
-        </div>
+    <section class="contact-card" aria-labelledby="contactEmailHeading">
+      <h2 id="contactEmailHeading">Email NorthStar Support</h2>
+      <a class="contact-address" href="mailto:Support@northstar-os.ai">Support@northstar-os.ai</a>
+      <p>Include the page you were using and a brief description of what happened. Do not send passwords, API keys, payment-card details, medical information, or other sensitive data.</p>
+      <div class="contact-actions">
+        <a class="btn btn-primary" href="mailto:Support@northstar-os.ai?subject=NorthStar%20Support%20Request">Open Your Email App</a>
+        <a class="btn btn-secondary" href="/demo-dashboard">Explore the Demo Dashboard</a>
       </div>
-    </div>
-
-    <div style="text-align:center;margin-top:32px;">
-      <p style="font-size:14px;color:var(--neutral-500);">Prefer to try it yourself first?</p>
-      <a href="/demo-dashboard" class="btn btn-secondary" style="margin-top:8px;">Explore the Demo Dashboard</a>
-    </div>
+      <p class="contact-boundary"><strong>Delivery boundary:</strong> this page opens a message addressed to Support@northstar-os.ai. Your email app and provider send it and determine delivery; NorthStar does not claim delivery until that provider confirms it.</p>
+    </section>
   </main>
 
   <footer class="footer">
@@ -85,56 +68,14 @@
       <a href="/">Home</a>
       <a href="/#how-it-works">How It Works</a>
       <a href="/#pricing">Pricing</a>
-      <a href="/#faq">FAQ</a>
+      <a href="/faq">FAQ</a>
       <a href="/contact">Contact</a>
       <a href="/privacy">Privacy</a>
       <a href="/terms">Terms</a>
       <a href="/refund">Refunds</a>
       <a href="/legal">Legal</a>
     </div>
-    <div class="footer-trust">
-      <span>🔒 SSL Secured</span>
-      <span>🛡️ Data Encrypted</span>
-      <span>📞 (860) 970-5750</span>
-    </div>
-    <p>© 2026 NorthStar Solutions. All rights reserved.</p>
+    <p>© 2026 NorthStar Solutions LLC. All rights reserved.</p>
   </footer>
-
-  <div id="toast" class="toast"></div>
-
-  <script>
-    document.getElementById('contactForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = e.target.querySelector('button');
-      btn.disabled = true;
-      btn.textContent = 'Sending...';
-
-      try {
-        const res = await fetch('/api/contact', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: document.getElementById('name').value,
-            email: document.getElementById('email').value,
-            subject: document.getElementById('subject').value,
-            message: document.getElementById('message').value
-          })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ Message received! We\'ll get back to you soon.');
-          e.target.reset();
-        } else {
-          showToast('❌ ' + (data.error || 'Something went wrong. Please email us directly.'));
-        }
-      } catch (err) {
-        showToast('❌ Could not send. Please email us directly at northstar-solutions-4e85c6e9@ctomail.io');
-      }
-
-      btn.disabled = false;
-      btn.textContent = 'Send Message';
-    });
-  </script>
-  <script src="/js/api.js"></script>
 </body>
 </html>

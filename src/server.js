@@ -98,6 +98,7 @@ const pages = {
   '/dashboard/lead': 'public/dashboard/lead.html',
   '/dashboard/polaris': 'public/dashboard/polaris.html',
   '/contact': 'public/contact.html',
+  '/faq': 'public/faq.html',
   '/privacy': 'public/privacy.html',
   '/terms': 'public/terms.html',
   '/refund': 'public/refund.html',

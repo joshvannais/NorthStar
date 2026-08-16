@@ -76,7 +76,7 @@ app.get('/site.webmanifest', (_req, res) => {
 // Frontend page routes
 const pages = {
   '/': 'public/index.html',
-  '/demo-dashboard': 'public/demo-dashboard.html',
+  '/demo-dashboard': 'public/dashboard/command-center.html',
   '/login': 'public/login.html',
   '/signup': 'public/signup.html',
   '/verify-email': 'public/verify-email.html',
@@ -107,11 +107,24 @@ const pages = {
   '/preview-light': 'public/previews/light.html',
 };
 
-// Every paid navigation destination has one account-free counterpart. All
-// demo paths mount the same canonical Contractor Command Center shell; the
-// shared route contract selects the destination module in the browser.
+// Every account-free destination mounts the same established page shell and
+// browser modules as its paid counterpart. DemoRuntime changes only authority,
+// routes, and transport; it never replaces these pages with a generic renderer.
+const demoPageFiles = Object.freeze({
+  'command-center': 'public/dashboard/command-center.html',
+  polaris: 'public/dashboard/polaris.html',
+  leads: 'public/dashboard/leads.html',
+  communications: 'public/dashboard/communications.html',
+  'my-number': 'public/dashboard/my-number.html',
+  calendar: 'public/dashboard/calendar.html',
+  team: 'public/dashboard/team.html',
+  'ai-settings': 'public/dashboard/ai-settings.html',
+  'business-profile': 'public/dashboard/business-profile.html',
+  settings: 'public/dashboard/settings.html',
+  integrations: 'public/dashboard/integrations.html',
+});
 for (const destination of commandCenterContract.ROUTES) {
-  pages[destination.demoPath] = 'public/demo-dashboard.html';
+  pages[destination.demoPath] = demoPageFiles[destination.id];
 }
 
 // Redirect old /dashboard/calls to /dashboard/communications

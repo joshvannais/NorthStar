@@ -83,7 +83,8 @@ describe('Mission 19 universal navigation authority', () => {
     expect(source).toMatch(/NorthStarAccountSession\.load\(\)/);
     expect(source).toMatch(/account\.navigation/);
     expect(source).toMatch(/data-nav-id/);
-    expect(source).toMatch(/location\.replace\(['"]\/dashboard['"]\)/);
+    expect(source).toMatch(/mode === 'demo' \? '\/demo' : '\/dashboard'/);
+    expect(source).toMatch(/contractRoute\.demoPath/);
     expect(source).toMatch(/data-northstar-navigation/);
     expect(source).not.toMatch(/ROLE_PERMISSIONS|owner\s*:\s*\[|viewer\s*:\s*\[/);
     expect(source).toMatch(/href="\/login"[^>]*data-account-logout/);

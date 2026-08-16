@@ -146,6 +146,188 @@ function graphIds(tenantId, key) {
   };
 }
 
+function demoViewerId(tenantId) {
+  return id(tenantId, 'account-free-demo-viewer');
+}
+
+function demoTranscriptText(value) {
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value)) return '';
+  const turns = value.map(function (line) {
+    if (typeof line === 'string') return { speaker: 'system', text: line };
+    if (!line || typeof line !== 'object') return null;
+    const text = String(line.text || line.content || line.message || '').trim();
+    if (!text) return null;
+    return {
+      speaker: String(line.speaker || line.role || 'system').trim().toLowerCase(),
+      text,
+    };
+  }).filter(Boolean);
+  return turns.length ? JSON.stringify(turns) : '';
+}
+
+function demoCanonicalItem(tenantId, graph, configuration) {
+  if (!graph || !graph.ids || !graph.polaris || !graph.polaris.snapshot) {
+    throw new Error('Demo canonical graph is malformed.');
+  }
+  const createdAt = iso(graph.timestamps && graph.timestamps.createdAt);
+  const updatedAt = iso(graph.timestamps && (graph.timestamps.updatedAt || graph.timestamps.createdAt));
+  const occurredAt = iso(graph.timestamps && (graph.timestamps.communicationOccurredAt || graph.timestamps.createdAt));
+  const transcriptId = id(tenantId, graph.ids.graph + ':transcript');
+  const rawFacts = Array.isArray(graph.polaris.facts) ? graph.polaris.facts : [];
+  const facts = rawFacts.map(function (fact, index) {
+    const canonicalFact = {
+      id: id(tenantId, graph.ids.graph + ':fact:' + String(index + 1)),
+      ordinal: index,
+      variable: String(fact && fact.variable || 'demo_fact_' + String(index + 1)),
+      status: String(fact && fact.status || 'collected'),
+      normalizedValue: stableValue(fact && Object.prototype.hasOwnProperty.call(fact, 'normalizedValue')
+        ? fact.normalizedValue : null),
+      evidenceText: String(fact && fact.evidenceText || 'Fictional demo evidence.'),
+      speaker: String(fact && fact.speaker || 'customer'),
+      confidence: Number.isFinite(Number(fact && fact.confidence)) ? Number(fact.confidence) : 1,
+      createdAt,
+    };
+    canonicalFact.factFingerprint = sha256({
+      variable: canonicalFact.variable,
+      normalizedValue: canonicalFact.normalizedValue,
+      evidenceText: canonicalFact.evidenceText,
+      speaker: canonicalFact.speaker,
+      ordinal: canonicalFact.ordinal,
+    });
+    return canonicalFact;
+  });
+  const businessProfile = configuration && configuration.businessProfile || {};
+  const businessProfileAuthorityId = id(tenantId, 'demo-business-profile');
+  const businessProfileInputHash = sha256(businessProfile);
+  const transcriptText = demoTranscriptText(graph.communication && graph.communication.transcript);
+  const timestamps = {
+    operationClaimedAt: createdAt,
+    operationCreatedAt: createdAt,
+    operationCompletedAt: createdAt,
+    operationUpdatedAt: updatedAt,
+    customerCreatedAt: createdAt,
+    customerUpdatedAt: updatedAt,
+    transcriptOccurredAt: occurredAt,
+    transcriptCreatedAt: createdAt,
+    communicationOccurredAt: occurredAt,
+    communicationCreatedAt: createdAt,
+    opportunityCreatedAt: createdAt,
+    opportunityUpdatedAt: updatedAt,
+    estimateCreatedAt: createdAt,
+    appointmentCreatedAt: createdAt,
+    appointmentUpdatedAt: updatedAt,
+    snapshotCreatedAt: createdAt,
+  };
+  const canonical = {
+    readModelVersion: 'canonical-polaris-read-model-v1',
+    legacy: false,
+    ids: {
+      operation: graph.ids.operation,
+      graph: graph.ids.graph,
+      customer: graph.ids.customer,
+      transcript: transcriptId,
+      communication: graph.ids.communication,
+      opportunity: graph.ids.opportunity || graph.ids.lead,
+      estimate: graph.ids.estimate,
+      appointment: graph.ids.appointment || graph.ids.work,
+      polarisSnapshot: graph.ids.polarisSnapshot,
+      facts: facts.map(function (fact) { return fact.id; }),
+    },
+    source: {
+      type: 'account_free_demo',
+      version: String(graph.source && graph.source.version || DEMO_STATE_VERSION),
+      externalCustomerId: null,
+      externalCallId: null,
+      externalTranscriptId: null,
+      externalCommunicationId: null,
+      externalAppointmentId: null,
+    },
+    customer: {
+      id: graph.ids.customer,
+      name: graph.customer && graph.customer.name || null,
+      email: graph.customer && graph.customer.email || null,
+      phone: graph.customer && graph.customer.phone || null,
+      address: graph.customer && graph.customer.address || null,
+    },
+    transcript: {
+      id: transcriptId,
+      text: transcriptText,
+      occurredAt,
+      durationSeconds: null,
+    },
+    communication: {
+      id: graph.ids.communication,
+      channel: graph.communication && graph.communication.channel || 'voice',
+      direction: graph.communication && graph.communication.direction || 'inbound',
+      subject: graph.communication && graph.communication.subject || null,
+    },
+    opportunity: {
+      id: graph.ids.opportunity || graph.ids.lead,
+      status: graph.lead && graph.lead.status || 'new',
+      serviceType: graph.lead && graph.lead.serviceType || null,
+      scope: graph.polaris.snapshot.service && graph.polaris.snapshot.service.scope || {},
+      appointmentPreference: null,
+    },
+    estimate: {
+      id: graph.ids.estimate,
+      currency: graph.estimate && graph.estimate.currency || 'USD',
+      customerPrice: graph.estimate && graph.estimate.customerPrice,
+      lineItems: graph.estimate && graph.estimate.lineItems || [],
+    },
+    appointment: {
+      id: graph.ids.appointment || graph.ids.work,
+      preference: null,
+      scheduledStart: graph.work && graph.work.scheduledStart || null,
+      scheduledEnd: null,
+      status: graph.work && graph.work.status || 'preferred',
+    },
+    facts,
+    calculationVersion: graph.polaris.calculationVersion || DEMO_CALCULATION_VERSION,
+    normalizedInputFingerprint: sha256({ graph: graph.ids.graph, snapshot: graph.polaris.snapshot }),
+    businessProfileInputVersion: '1',
+    businessProfileInputHash,
+    businessProfileAuthorityId,
+    supportingTranscriptFactIds: facts.map(function (fact) { return fact.id; }),
+    snapshotDigest: graph.polaris.snapshotDigest,
+    snapshot: stableValue(graph.polaris.snapshot),
+    snapshotCreatedAt: createdAt,
+    timestamps,
+    metadata: {
+      operationState: 'completed',
+      operationPayloadFingerprint: sha256({ graph: graph.ids.graph, source: 'account_free_demo' }),
+      transcriptFingerprint: sha256(transcriptText),
+    },
+  };
+  canonical.projectionDigest = sha256({
+    readModelVersion: canonical.readModelVersion,
+    ids: canonical.ids,
+    source: canonical.source,
+    facts: canonical.facts,
+    normalizedInputFingerprint: canonical.normalizedInputFingerprint,
+    supportingTranscriptFactIds: canonical.supportingTranscriptFactIds,
+    calculationVersion: canonical.calculationVersion,
+    snapshotDigest: canonical.snapshotDigest,
+    timestamps: canonical.timestamps,
+    metadata: canonical.metadata,
+    businessProfile: {
+      id: canonical.businessProfileAuthorityId,
+      version: canonical.businessProfileInputVersion,
+      hash: canonical.businessProfileInputHash,
+    },
+  });
+  return canonical;
+}
+
+function demoCanonicalItems(workspace) {
+  if (!workspace || !workspace.tenant || !Array.isArray(workspace.graphs)) {
+    throw new Error('Demo workspace is malformed.');
+  }
+  return workspace.graphs.map(function (graph) {
+    return demoCanonicalItem(workspace.tenant.id, graph, workspace.configuration);
+  });
+}
+
 function buildDemoGraph(input) {
   const ids = graphIds(input.tenantId, input.key);
   const createdAt = iso(input.createdAt);
@@ -154,11 +336,15 @@ function buildDemoGraph(input) {
     { code: 'fictional-demo-scope', label: input.serviceLabel + ' scope', category: 'service', customerCharge: input.estimatedValue },
   ];
   const snapshot = {
-    contract: 'DemoPolarisDetail',
+    contract: 'CanonicalPolarisOutput',
     calculationVersion: DEMO_CALCULATION_VERSION,
     service: { key: input.serviceKey, label: input.serviceLabel, supported: true, scope: stableValue(input.scope || {}) },
     customerFacingPrice: input.estimatedValue,
     estimatedRevenue: input.estimatedValue,
+    grossProfit: null,
+    grossMarginPercent: null,
+    netProfit: null,
+    netMarginPercent: null,
     preliminaryRange: {
       low: Math.round(input.estimatedValue * 0.9),
       high: Math.round(input.estimatedValue * 1.1),
@@ -388,6 +574,10 @@ function buildDemoWorkspace(input) {
     expiresAt: iso(input.expiresAt),
     simulationCount: input.simulationCount,
   };
+  workspace.viewer = {
+    id: demoViewerId(input.tenantId),
+    label: 'Account-free demo visitor',
+  };
   return workspace;
 }
 
@@ -440,7 +630,9 @@ module.exports = {
   buildPaidWorkspace,
   buildSimulatedGraph,
   createInitialDemoState,
+  demoCanonicalItems,
   demoConfiguration,
+  demoViewerId,
   routeProjection,
   tenantIdFromTokenHash,
 };

@@ -182,6 +182,14 @@ describe('Mission 20 Phase 6E navigation URL and authority contract', () => {
       usableProviders: ['google_maps', 'apple_maps', 'waze'],
       chooserProviders: ['apple_maps', 'waze'],
     });
+
+    const readOnly = responseWith(preferenceDocument('google_maps'));
+    readOnly.data.permissions.canUpdateSelf = false;
+    expect(contract.selectLaunchPolicy(contract.parsePreferenceResponse(readOnly))).toEqual({
+      defaultProvider: 'google_maps',
+      usableProviders: ['google_maps', 'apple_maps', 'waze'],
+      chooserProviders: ['apple_maps', 'waze'],
+    });
   });
 
   test.each([

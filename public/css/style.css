@@ -3447,8 +3447,28 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 }
 .drawer-detail-row:last-child { border-bottom: none; }
 .drawer-detail-row-nb { border-bottom: none !important; }
-.drawer-detail-label { color: var(--neutral-500); }
-.drawer-detail-value { font-weight: 500; color: var(--neutral-800); }
+.drawer-detail-label { color: var(--neutral-500); flex: 0 0 auto; }
+.drawer-detail-value {
+  min-width: 0;
+  max-width: 72%;
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-weight: 500;
+  color: var(--neutral-800);
+}
+.drawer-description-row {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+}
+.drawer-description-row .drawer-detail-value {
+  width: 100%;
+  max-width: 100%;
+  text-align: left;
+  line-height: 1.5;
+}
 [data-theme="dark"] .drawer-detail-row { border-bottom-color: var(--neutral-200); }
 [data-theme="dark"] .drawer-detail-value { color: var(--neutral-700); }
 

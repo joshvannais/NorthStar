@@ -57,7 +57,11 @@
     return html;
   }
 
-  function buildMobileNav(items) {
+  function buildMobileNav(items, mode) {
+    var homePath = mode === 'demo' ? '/demo' : '/dashboard';
+    var footerLink = mode === 'demo'
+      ? '<a href="/" id="navExitDemo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 18l6-6-6-6"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg>Exit demo</a>'
+      : '<a href="/login" id="navSignOut" data-account-logout><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>';
     return '' +
       '<style id="nav-critical-css">' +
         '.mobile-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;}' +
@@ -73,22 +77,26 @@
       '<div class="mobile-overlay" id="mobileOverlay"></div>' +
       '<div class="mobile-menu" id="mobileMenu">' +
         '<div class="mobile-menu-header">' +
-          '<a href="/dashboard" class="northstar-lockup"><img src="/assets/logo.png" alt=""> NorthStar</a>' +
+          '<a href="' + homePath + '" class="northstar-lockup"><img src="/assets/logo.png" alt=""> NorthStar</a>' +
           '<button class="mobile-menu-close" id="navCloseBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
         '</div>' +
         '<nav class="mobile-menu-nav">' +
           makeNavLinks(true, items) +
         '</nav>' +
         '<div class="mobile-menu-footer">' +
-          '<a href="/login" id="navSignOut" data-account-logout><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>' +
+          footerLink +
         '</div>' +
       '</div>';
   }
 
-  function buildSidebar(items) {
+  function buildSidebar(items, mode) {
+    var homePath = mode === 'demo' ? '/demo' : '/dashboard';
+    var footerLink = mode === 'demo'
+      ? '<a href="/" tabindex="0" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 18l6-6-6-6"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg><span>Exit demo</span></a>'
+      : '<a href="/login" data-account-logout tabindex="0" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>';
     return '' +
       '<aside class="sidebar">' +
-        '<a href="/dashboard" class="sidebar-logo northstar-lockup">' +
+        '<a href="' + homePath + '" class="sidebar-logo northstar-lockup">' +
           '<img src="/assets/logo.png" alt="" class="logo-img">' +
           'NorthStar' +
         '</a>' +
@@ -96,10 +104,7 @@
           makeNavLinks(false, items) +
         '</nav>' +
         '<div class="sidebar-footer">' +
-          '<a href="/login" data-account-logout tabindex="0" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>' +
-            '<span>Sign Out</span>' +
-          '</a>' +
+          footerLink +
         '</div>' +
       '</aside>';
   }
@@ -108,6 +113,7 @@
     if (!account || !Array.isArray(account.navigation) || account.navigation.length === 0 ||
         account.navigation.length > NAV_ITEMS.length) return null;
     var allowed = Object.create(null);
+    var mode = account.mode === 'demo' ? 'demo' : 'paid';
     for (var index = 0; index < account.navigation.length; index++) {
       var projected = account.navigation[index];
       if (!projected || typeof projected.id !== 'string' || typeof projected.href !== 'string' || allowed[projected.id]) {
@@ -120,10 +126,18 @@
           break;
         }
       }
-      if (!canonical || canonical.href !== projected.href) return null;
+      var contractRoute = routeContract && routeContract.ROUTES && routeContract.ROUTES.find(function(route) {
+        return route.id === projected.id;
+      });
+      var expectedHref = contractRoute && mode === 'demo' ? contractRoute.demoPath : canonical && canonical.href;
+      if (!canonical || !contractRoute || expectedHref !== projected.href) return null;
       allowed[projected.id] = true;
     }
-    return NAV_ITEMS.filter(function(item) { return allowed[item.id] === true; });
+    return NAV_ITEMS.filter(function(item) { return allowed[item.id] === true; }).map(function(item) {
+      if (mode !== 'demo') return item;
+      var contractRoute = routeContract.ROUTES.find(function(route) { return route.id === item.id; });
+      return { id: item.id, href: contractRoute.demoPath, label: item.label, svg: item.svg };
+    });
   }
 
   function removeGeneratedMobileNav() {
@@ -134,17 +148,17 @@
     }
   }
 
-  function installSidebar(items) {
+  function installSidebar(items, mode) {
     var sidebars = document.querySelectorAll('.sidebar');
     var existingSidebar = sidebars.length ? sidebars[0] : null;
     for (var index = 1; index < sidebars.length; index++) sidebars[index].remove();
     if (existingSidebar) {
-      existingSidebar.outerHTML = buildSidebar(items);
+      existingSidebar.outerHTML = buildSidebar(items, mode);
       return true;
     }
     var layout = document.querySelector('.app-layout') || document.querySelector('.dashboard-layout');
     if (!layout) return false;
-    layout.insertAdjacentHTML('afterbegin', buildSidebar(items));
+    layout.insertAdjacentHTML('afterbegin', buildSidebar(items, mode));
     return true;
   }
 
@@ -184,6 +198,7 @@
 
       return window.NorthStarAccountSession.load().then(function(account) {
         var items = projectedItems(account);
+        var mode = account && account.mode === 'demo' ? 'demo' : 'paid';
         if (!items) {
           root.setAttribute('data-northstar-navigation', 'denied');
           window.location.replace('/login');
@@ -194,7 +209,7 @@
         if (!activeAllowed) {
           root.setAttribute('data-northstar-navigation', 'denied');
           if (items.some(function(item) { return item.id === 'command-center'; })) {
-            window.location.replace('/dashboard');
+            window.location.replace(mode === 'demo' ? '/demo' : '/dashboard');
           } else {
             window.location.replace('/login');
           }
@@ -202,10 +217,10 @@
         }
 
         removeGeneratedMobileNav();
-        document.body.insertAdjacentHTML('afterbegin', buildMobileNav(items));
-        if (!installSidebar(items)) {
+        document.body.insertAdjacentHTML('afterbegin', buildMobileNav(items, mode));
+        if (!installSidebar(items, mode)) {
           root.setAttribute('data-northstar-navigation', 'denied');
-          window.location.replace('/dashboard');
+          window.location.replace(mode === 'demo' ? '/demo' : '/dashboard');
           return null;
         }
 

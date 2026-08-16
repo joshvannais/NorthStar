@@ -12,12 +12,26 @@ const {
   buildPaidWorkspace,
   buildSimulatedGraph,
   createInitialDemoState,
+  demoCanonicalItems,
   demoConfiguration,
   tenantIdFromTokenHash,
 } = require('../../src/commandCenter/workspace');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const TOKEN_HASH = 'a'.repeat(64);
+const PAGE_BY_ROUTE = Object.freeze({
+  'command-center': 'public/dashboard/command-center.html',
+  polaris: 'public/dashboard/polaris.html',
+  leads: 'public/dashboard/leads.html',
+  communications: 'public/dashboard/communications.html',
+  'my-number': 'public/dashboard/my-number.html',
+  calendar: 'public/dashboard/calendar.html',
+  team: 'public/dashboard/team.html',
+  'ai-settings': 'public/dashboard/ai-settings.html',
+  'business-profile': 'public/dashboard/business-profile.html',
+  settings: 'public/dashboard/settings.html',
+  integrations: 'public/dashboard/integrations.html',
+});
 
 function read(relative) {
   return fs.readFileSync(path.join(ROOT, relative), 'utf8');
@@ -31,13 +45,15 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(new Set(contract.ROUTES.map(route => route.demoPath)).size).toBe(11);
     expect(contract.routeForPath('/demo-dashboard').id).toBe('command-center');
 
-    const expectedShell = read('public/demo-dashboard.html');
     for (const destination of contract.ROUTES) {
       const response = await request(app).get(destination.demoPath).expect(200);
-      expect(response.text).toBe(expectedShell);
+      expect(response.text).toBe(read(PAGE_BY_ROUTE[destination.id]));
+      expect(response.text).toContain('/js/demo-runtime.js');
+      expect(response.text).toContain('/js/nav-component.js');
       expect(destination.demoPath).toMatch(/^\/demo(?:\/|$)/);
     }
-    expect((await request(app).get('/demo-dashboard').expect(200)).text).toBe(expectedShell);
+    expect((await request(app).get('/demo-dashboard').expect(200)).text)
+      .toBe(read(PAGE_BY_ROUTE['command-center']));
   });
 
   test('paid Command Center uses real tenant projections and exposes no simulation language or controls', async () => {
@@ -94,22 +110,23 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(retiredLegacy.headers.location).toBe('/dashboard');
   });
 
-  test('the account-free shell alone owns explicit bounded demo controls and safe rendering', () => {
-    const html = read('public/demo-dashboard.html');
-    const client = read('public/js/demo-command-center.js');
-    expect(html).toContain('Fictional data · account-free');
-    expect(html).toContain('id="demoSimulateLead"');
-    expect(html).toContain('id="demoReset"');
-    expect(html).toContain('No customer, provider, production, account, or billing data is used');
-    expect(html).not.toMatch(/auth-session\.js|nav-component\.js|NorthStarAccountSession/);
+  test('one shared demo runtime adapts established page modules without a generic renderer', () => {
+    const client = read('public/js/demo-runtime.js');
+    const server = read('src/server.js');
+    expect(client).toContain("section.id = 'northstarDemoToolbar'");
+    expect(client).toContain("simulate.id = 'demoSimulateLead'");
+    expect(client).toContain("reset.id = 'demoReset'");
     expect(client).toContain('/api/demo/command-center/simulations/leads');
     expect(client).toContain("'X-NorthStar-Demo-Intent': intent");
-    expect(client).toContain('contract.validateWorkspace');
     expect(client).not.toMatch(/\.innerHTML\s*=|insertAdjacentHTML|document\.write|eval\s*\(/);
+    expect(server).toContain("'command-center': 'public/dashboard/command-center.html'");
+    expect(server).toContain("integrations: 'public/dashboard/integrations.html'");
+    expect(server).not.toContain("pages[destination.demoPath] = 'public/demo-dashboard.html'");
     expect(read('src/routes/demo.js')).toContain('secure: config.auth.secureCookies');
     for (const destination of contract.ROUTES) {
-      const key = destination.id.includes('-') ? `'${destination.id}'` : destination.id;
-      expect(client).toContain(`${key}: render`);
+      const html = read(PAGE_BY_ROUTE[destination.id]);
+      expect(html).toContain('/js/demo-runtime.js');
+      expect(html).toMatch(new RegExp(`NavComponent\\.init\\(['"]${destination.id}['"]\\)`));
     }
   });
 
@@ -149,10 +166,25 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(graph.ids).toEqual(expect.objectContaining({ customer: expect.any(String), lead: expect.any(String), work: expect.any(String) }));
     expect(graph.polaris).toEqual(expect.objectContaining({ completeDetail: true, snapshotDigest: expect.stringMatching(/^[0-9a-f]{64}$/) }));
     expect(graph.polaris.snapshot).toEqual(expect.objectContaining({
+      contract: 'CanonicalPolarisOutput',
       confidence: expect.any(Object),
+      grossProfit: null,
+      netProfit: null,
       recommendedActions: expect.any(Array),
       reasoning: expect.any(Array),
       notCalculated: expect.any(Array),
+    }));
+    const canonical = demoCanonicalItems(after);
+    expect(canonical).toHaveLength(after.graphs.length);
+    expect(canonical[0]).toEqual(expect.objectContaining({
+      readModelVersion: 'canonical-polaris-read-model-v1',
+      ids: expect.objectContaining({
+        graph: graph.ids.graph,
+        transcript: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        facts: expect.any(Array),
+      }),
+      businessProfileAuthorityId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      projectionDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
     }));
   });
 

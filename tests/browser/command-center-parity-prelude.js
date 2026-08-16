@@ -576,7 +576,8 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     const leadsRoute = ROUTES.find(route => route.id === 'leads');
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' leads-revisit-start');
     const leads = await clickRoute(page, origin, leadsRoute, 2, viewport);
-    await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
+    await page.waitForFunction(name => Array.from(document.querySelectorAll('#leadsContent tr'))
+      .some(row => row.textContent.includes(name)), added.customer.name, { timeout: 10000 });
     assert.ok(leads.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph), 'Leads reads the committed graph');
     const rowTarget = await page.evaluate(async name => {
       const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate => candidate.textContent.includes(name));

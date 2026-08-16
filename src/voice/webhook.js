@@ -25,6 +25,7 @@ const {
 } = require('../services/canonicalRetellIngestion');
 const replayAuthority = require('../retell/webhookReplayAuthority');
 const safeLogger = require('../observability/safeLogger');
+const { HOMEPAGE_WEBHOOK_CONTRACT } = require('../services/homepageWebCall');
 
 // ── Configuration ──────────────────────────────────────────────
 const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
@@ -362,6 +363,16 @@ function decodeWebhookBody(rawBody) {
   return payload;
 }
 
+function isEphemeralHomepageWebhook(payload) {
+  const call = payload && payload.call;
+  const variables = call && call.retell_llm_dynamic_variables;
+  return Boolean(call && typeof call === 'object' && !Array.isArray(call) &&
+    call.call_type === 'web_call' && variables && typeof variables === 'object' &&
+    !Array.isArray(variables) &&
+    variables.northstar_demo_mode === 'homepage_browser_web_call' &&
+    variables.northstar_demo_webhook_contract === HOMEPAGE_WEBHOOK_CONTRACT);
+}
+
 function acceptedWebhookAuditEntry(req, canonical, ingestionSource, duration) {
   const context = canonical && canonical.auditContext;
   if (!context || !context.organizationId || !context.voiceSessionId || context.source !== ingestionSource) {
@@ -458,6 +469,20 @@ async function handleSignedWebhook(req, res, ingestionSource) {
         error: { code: 'UNSUPPORTED_WEBHOOK_EVENT', message: 'Webhook event type is not supported' },
       });
     }
+    // Homepage browser calls are deliberately ephemeral. Their signed Retell
+    // webhook payloads are authenticated and replay-claimed, then discarded
+    // without canonical ingestion, audit rows, transcript streams, analytics,
+    // or durable call identifiers. Releasing the claim leaves no NorthStar row.
+    if (isEphemeralHomepageWebhook(payload)) {
+      Object.defineProperty(req, 'homepageEphemeralWebhook', {
+        value: true,
+        enumerable: false,
+        configurable: false,
+        writable: false,
+      });
+      await releaseClaim();
+      return res.status(204).end();
+    }
     safeLogger.info('voice', 'webhook_event_received', { routed: true });
 
     // 4. Canonical session/event/graph state, one accepted audit row, and the
@@ -544,6 +569,7 @@ module.exports = {
   parseSignature,
   providerEventIdentity,
   isSupportedEvent,
+  isEphemeralHomepageWebhook,
   SUPPORTED_EVENTS,
   validateSignature,
   validateTimestamp,

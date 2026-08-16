@@ -1803,6 +1803,27 @@ html[data-theme-switching] *::after {
   z-index: 2500;
 }
 
+.northstar-theme-slot {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.northstar-theme-slot .northstar-theme-control {
+  position: static;
+  inset: auto;
+  z-index: auto;
+}
+
+.northstar-theme-slot .theme-toggle {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  box-shadow: none;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
 .theme-toggle {
   position: relative;
   background: var(--theme-control);

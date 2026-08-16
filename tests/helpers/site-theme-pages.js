@@ -31,6 +31,7 @@ const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/dashboard/lead', file: 'public/dashboard/lead.html', surface: 'dashboard' },
   { route: '/dashboard/polaris', file: 'public/dashboard/polaris.html', surface: 'dashboard' },
   { route: '/contact', file: 'public/contact.html', surface: 'public' },
+  { route: '/faq', file: 'public/faq.html', surface: 'public' },
   { route: '/privacy', file: 'public/privacy.html', surface: 'public' },
   { route: '/terms', file: 'public/terms.html', surface: 'public' },
   { route: '/refund', file: 'public/refund.html', surface: 'public' },

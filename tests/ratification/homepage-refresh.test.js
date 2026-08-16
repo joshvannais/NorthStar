@@ -31,10 +31,14 @@ describe('authorized Homepage Refresh contracts', () => {
   const sharedCss = read('public/css/style.css');
   const homepageCss = readOptional('public/css/homepage-refresh.css');
   const homepageDemo = readOptional('public/js/homepage-demo.js');
+  const retellWebEntry = read('src/browser/retellWebEntry.mjs');
   const nav = read('public/js/nav-component.js');
   const commandCenter = read('public/dashboard/command-center.html');
   const demoDashboard = read('public/demo-dashboard.html');
   const demoRoute = read('src/routes/demo.js');
+  const faq = read('public/faq.html');
+  const contact = read('public/contact.html');
+  const legal = read('public/legal.html');
   const manifestText = readOptional('public/site.webmanifest');
 
   test('public positioning describes the truthful operating system rather than a disguised receptionist', () => {
@@ -59,7 +63,7 @@ describe('authorized Homepage Refresh contracts', () => {
     expect(pricing).not.toMatch(/\$99|\$199|Professional|Enterprise|<ul\b|Everything in|phone number|minutes|calls|seats|allowance|overage|add-on/i);
   });
 
-  test('the account-free guided call preserves seven industries and all nine scenario choices', () => {
+  test('the account-free browser Web Call exposes only mounted supported industries and no scripted scenario catalogue', () => {
     const industryBlock = blockById(homepage, 'demoIndustry');
     const industries = attributeValues(industryBlock, 'value').filter(Boolean);
     expect(industries).toEqual([
@@ -67,59 +71,69 @@ describe('authorized Homepage Refresh contracts', () => {
       'HVAC',
       'Plumbing',
       'Electrical',
-      'Landscaping',
-      'Cleaning',
-      'General',
+      'Painting',
+      'Tree Service',
+      'Window Tinting',
+      'Concrete',
     ]);
-
-    const expectedScenarios = [
-      'emergency',
-      'estimate',
-      'price-shopper',
-      'returning',
-      'insurance',
-      'difficult',
-      'scheduling-conflict',
-      'billing',
-      'custom',
-    ];
-    expect(attributeValues(blockById(homepage, 'scenarioChips'), 'data-scenario').sort())
-      .toEqual([...expectedScenarios].sort());
-    expect(attributeValues(blockById(homepage, 'modalScenarioChips'), 'data-scenario').sort())
-      .toEqual([...expectedScenarios].sort());
-    expect(homepageDemo).toContain("var CONNECTION_TIMEOUT_MS = 10000;");
-    for (const scenario of expectedScenarios) expect(homepageDemo).toContain("'" + scenario + "'");
+    expect(homepage).not.toContain('id="scenarioChips"');
+    expect(homepage).not.toContain('id="modalScenarioChips"');
+    expect(homepageDemo).not.toMatch(/scenario\.turns|var SCENARIOS/);
+    expect(homepageDemo).toContain("var CONNECTION_TIMEOUT_MS = 20000;");
+    expect(homepageDemo).toContain("var MAX_CALL_MS = 5 * 60 * 1000;");
   });
 
-  test('the coaching dialog validates first, cannot be backdrop-dismissed, and stays accessible', () => {
+  test('FAQ and support are focused, truthful destinations with the canonical entity footer', () => {
+    expect(homepage).toContain('href="/faq"');
+    expect(faq).toContain('Frequently Asked Questions');
+    expect(faq).toContain('Starter $149, Growth $299, and Complete $499');
+    expect(faq).toContain('Production activation remains unavailable');
+    expect(contact).toContain('href="mailto:Support@northstar-os.ai"');
+    expect(contact).toContain('Delivery boundary:');
+    expect(contact).not.toContain('/api/contact');
+    expect(contact).not.toMatch(/ctomail/i);
+    for (const source of [homepage, faq, contact]) {
+      expect(source).toContain('NorthStar Solutions LLC');
+    }
+    expect(legal).toContain('<strong>NorthStar Solutions LLC</strong>');
+    expect(legal).toContain('Last updated: August 16, 2026');
+    expect(legal).not.toMatch(/formation in progress/i);
+  });
+
+  test('the consent dialog validates first, is deliberately dismissible, and stays accessible', () => {
     expect(homepage).toMatch(/id=["']demoFormNotice["'][^>]*role=["']status["'][^>]*aria-live=["']polite["']/i);
     expect(homepage).toMatch(/id=["']preCallModal["'][^>]*role=["']dialog["'][^>]*aria-modal=["']true["']/i);
-    expect(homepage).toContain('One Quick Tip Before We Call');
+    expect(homepage).toContain('Before Your Browser Web Call');
     expect(homepage).toContain('id="selectedScenarioContext"');
-    expect(homepageDemo).toMatch(/function showPreCallModal\(\)[\s\S]*validateForm\(\)[\s\S]*openDialog\(/);
-    expect(homepageDemo).not.toMatch(/target\s*===\s*(?:modal|overlay)|dismissOutside|backdrop/i);
+    expect(homepageDemo).toMatch(/function showPreCallModal\(\)[\s\S]*validateForm\(\)/);
+    expect(homepageDemo).toMatch(/event\.target\s*===\s*overlay/);
     expect(homepageDemo).toMatch(/previousFocus/);
     expect(homepageDemo).toMatch(/aria-hidden/);
     expect(homepageDemo).not.toMatch(/\balert\s*\(|\bconfirm\s*\(|\bprompt\s*\(/);
   });
 
-  test('the selected scenario drives a provider-free browser preview with bounded recovery', () => {
-    expect(homepage).toContain('This guided preview runs in your browser');
+  test('the page drives a user-initiated Retell browser Web Call with audible consent and fail-closed deletion', () => {
+    expect(homepage).toContain('Account-free browser Web Call');
+    expect(homepage).toContain('id="demoConsentCheckbox"');
+    expect(homepage).toContain('Withdraw &amp; Delete');
+    expect(homepage).toContain('Retry Verified Deletion');
     expect(homepageDemo).toContain('NorthStarHomepageDemo');
-    expect(homepageDemo).toContain('NorthStarTranscriptRenderer.render');
-    expect(homepageDemo).toMatch(/scenario\.turns/);
-    expect(homepageDemo).toMatch(/connectionTimer\s*=\s*global\.setTimeout/);
+    expect(homepageDemo).toContain("import(SDK_URL)");
+    expect(homepageDemo).toContain('SpeechSynthesisUtterance');
+    expect(homepageDemo).toContain("var CONSENT_PHRASE = 'I consent to this AI demo and temporary recording'");
+    expect(homepageDemo).toContain("'X-NorthStar-Demo-Intent': 'start-homepage-web-call'");
+    expect(homepageDemo).toContain("'X-NorthStar-Demo-Intent': 'calculate-homepage-polaris'");
+    expect(homepageDemo).toContain("'X-NorthStar-Demo-Intent': 'delete-homepage-web-call'");
     expect(homepageDemo).toMatch(/CONNECTION_TIMEOUT_MS/);
-    expect(homepageDemo).toContain('The guided call took too long to start.');
-    expect(homepageDemo).not.toMatch(/\/api\/demo\/call|\/:id\/simulate|RETELL|TWILIO|fetch\s*\(/i);
+    expect(homepageDemo).toContain('Deletion not verified — results withheld');
+    expect(retellWebEntry).toMatch(/setLogLevel\(LogLevel\.silent\)/);
+    expect(homepageDemo).not.toMatch(/\/api\/demo\/call|\/:id\/simulate|TWILIO/i);
     expect(homepage).not.toMatch(/href=["']\/demo-login/i);
     expect(demoRoute).toContain("outboundCalls: false");
-    expect(demoRoute).toContain("guidedPreview: true");
+    expect(demoRoute).toContain("guidedPreview: false");
+    expect(demoRoute).toContain("browserWebCall: true");
     expect(demoRoute).toContain("code: 'demo_external_action_retired'");
-
-    const legacyInlineEnd = homepage.lastIndexOf('function resetDemo');
-    const moduleDeclaration = homepage.lastIndexOf('/js/homepage-demo.js');
-    expect(moduleDeclaration).toBeGreaterThan(legacyInlineEnd);
+    expect(homepageDemo).not.toMatch(/sessionStorage|localStorage|indexedDB/i);
   });
 
   test('one accessible brand token and lockup contract spans public, auth, demo, and paid surfaces', () => {
@@ -142,7 +156,9 @@ describe('authorized Homepage Refresh contracts', () => {
     expect(homepage).toMatch(/name=["']theme-color["'][^>]*media=["']\(prefers-color-scheme: light\)["']/i);
     expect(homepage).toMatch(/name=["']theme-color["'][^>]*media=["']\(prefers-color-scheme: dark\)["']/i);
     expect(homepageCss).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(homepageCss).toMatch(/\.demo-scenarios[\s\S]*flex-wrap:\s*wrap/);
+    expect(homepageCss).toMatch(/\.demo-modal-card[\s\S]*max-height:\s*calc\(100dvh/);
+    expect(homepageCss).toMatch(/\.web-call-controls[\s\S]*flex-wrap:\s*wrap/);
+    expect(homepageCss).toMatch(/\.nav-inner[\s\S]*width:\s*min\(calc\(100% - 32px\)/);
     expect(sharedCss).toMatch(/\.footer[\s\S]*padding-bottom:\s*max\(/);
 
     expect(manifestText).not.toBe('');

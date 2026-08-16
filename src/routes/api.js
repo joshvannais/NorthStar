@@ -5,6 +5,7 @@
 const express = require('express');
 const { getAllLeads, getLead } = require('../leads/store');
 const demoRouter = require('./demo');
+const { createHomepageDemoRouter } = require('./homepageDemo');
 const { scheduleEstimate } = require('../calendar/client');
 const db = require('../db');
 const config = require('../config');
@@ -110,6 +111,10 @@ router.post('/contact', async (req, res) => {
     res.status(500).json({ error: 'Failed to submit message' });
   }
 });
+
+// Homepage Web Call owns an ephemeral, fail-closed provider boundary before
+// the broader account-free demo router.
+router.use('/demo/homepage', createHomepageDemoRouter());
 
 // Demo routes — public interactive demo
 router.use('/demo', demoRouter);

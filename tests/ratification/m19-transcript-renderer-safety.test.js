@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const RENDERER_PATH = path.join(ROOT, 'public', 'js', 'transcript-renderer.js');
 const CUSTOMER_DETAIL_PATH = path.join(ROOT, 'public', 'js', 'customer-detail.js');
 const INDEX_PATH = path.join(ROOT, 'public', 'index.html');
+const HOMEPAGE_DEMO_PATH = path.join(ROOT, 'public', 'js', 'homepage-demo.js');
 const LEAD_PATH = path.join(ROOT, 'public', 'dashboard', 'lead.html');
 const CUSTOMER_DETAIL_CONSUMERS = [
   path.join(ROOT, 'public', 'dashboard', 'leads.html'),
@@ -209,8 +210,7 @@ describe('Mission 19 shared transcript rendering safety', () => {
     });
 
     const indexSources = scriptSources(read(INDEX_PATH));
-    expect(indexSources.indexOf('/js/transcript-renderer.js')).toBeGreaterThan(-1);
-    expect(indexSources.indexOf('/js/transcript-renderer.js')).toBeLessThan(indexSources.indexOf('<inline>'));
+    expect(indexSources).not.toContain('/js/transcript-renderer.js');
 
     const leadSources = scriptSources(read(LEAD_PATH));
     expect(leadSources.indexOf('/js/transcript-renderer.js')).toBeGreaterThan(-1);
@@ -220,6 +220,7 @@ describe('Mission 19 shared transcript rendering safety', () => {
   test('superseded unsafe transcript helpers and sinks are absent from exact consumers', () => {
     const customerDetail = read(CUSTOMER_DETAIL_PATH);
     const index = read(INDEX_PATH);
+    const homepageDemo = read(HOMEPAGE_DEMO_PATH);
     const lead = read(LEAD_PATH);
     expect(customerDetail).not.toMatch(/function\s+renderTranscriptBubbles|function\s+renderLegacyTranscript/);
     expect(customerDetail).not.toMatch(/\$\('cdTranscript'\)\.innerHTML\s*=/);
@@ -227,7 +228,10 @@ describe('Mission 19 shared transcript rendering safety', () => {
     expect(index).not.toMatch(/function\s+normalizeSpeaker/);
     expect(index).not.toMatch(/postBody\.innerHTML\s*=\s*liveBody\.innerHTML/);
     expect(index).not.toMatch(/html\s*\+=\s*line\.text/);
-    expect(index).toMatch(/NorthStarTranscriptRenderer\.render/);
+    expect(index).not.toMatch(/NorthStarTranscriptRenderer/);
+    expect(homepageDemo).toMatch(/function\s+renderTranscript/);
+    expect(homepageDemo).toMatch(/content\.textContent\s*=\s*turn\.text/);
+    expect(homepageDemo).not.toMatch(/innerHTML\s*=/);
     expect(lead).not.toMatch(/\+\s*transcript\s*\+/);
     expect(lead).toMatch(/NorthStarTranscriptRenderer\.render/);
   });

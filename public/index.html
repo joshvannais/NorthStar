@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <script src="/js/theme.js"></script>
-  <script src="/js/transcript-renderer.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>NorthStar — AI Office Manager and Business Operating System</title>
   <meta name="description" content="NorthStar is an AI Office Manager and business operating system for home-service contractors, connecting calls, leads, estimates, schedules, and next actions.">
@@ -762,10 +761,12 @@
       <div class="nav-links">
         <a href="#how-it-works">How It Works</a>
         <a href="#pricing">Pricing</a>
+        <a href="/faq">FAQ</a>
         <a href="/demo-dashboard">Demo Dashboard</a>
         <a href="/login" class="btn btn-ghost btn-sm">Sign In</a>
         <a href="/signup" class="btn btn-primary btn-sm">Start Free Trial</a>
       </div>
+      <span class="northstar-theme-slot" data-northstar-theme-slot aria-label="Theme controls"></span>
     </div>
   </nav>
 
@@ -779,24 +780,12 @@
        ══════════════════════════════════════════════════ -->
   <section class="demo-container" id="demoPreCallView">
     <div class="demo-hero fade-in">
-      <p class="demo-eyebrow">NorthStar for home-service contractors</p>
+      <p class="demo-eyebrow">Built for home service businesses</p>
       <h1>Your <span>AI Office Manager</span> for the work between every call and outcome</h1>
       <p class="demo-hero-copy">NorthStar is an AI Office Manager and business operating system that connects calls, leads, estimates, schedules, and next actions in one role-authorized workspace—with outcome learning tied back to the work.</p>
-      
-      <div class="demo-scenarios" id="scenarioChips">
-        <button type="button" class="demo-scenario-chip" data-scenario="emergency">Emergency</button>
-        <button type="button" class="demo-scenario-chip" data-scenario="estimate">Estimate</button>
-        <button type="button" class="demo-scenario-chip" data-scenario="price-shopper">Price Shopper</button>
-        <button type="button" class="demo-scenario-chip" data-scenario="returning">Returning Customer</button>
-        <button type="button" class="demo-scenario-chip" data-scenario="insurance">Insurance</button>
-        <button type="button" class="demo-scenario-chip" data-scenario="difficult">Difficult Customer</button>
-        <button type="button" class="demo-scenario-chip" data-scenario="scheduling-conflict">Scheduling Conflict</button>
-        <button type="button" class="demo-scenario-chip" data-scenario="billing">Billing</button>
-        <button type="button" class="demo-scenario-chip custom" data-scenario="custom">Custom</button>
-      </div>
 
       <div class="guided-preview-disclosure" id="simulationModeBanner">
-        <strong>Account-free guided call.</strong> This guided preview runs in your browser. It does not place a phone call, contact a provider, or store customer data.
+        <strong>Account-free browser Web Call.</strong> When its attorney and provider gates are approved, this visitor-initiated microphone demo uses a real Retell Web Call and mounted canonical Polaris. It never creates a customer record.
       </div>
 
       <div class="demo-form-card" id="demoFormCard">
@@ -810,55 +799,48 @@
           <option value="HVAC">HVAC</option>
           <option value="Plumbing">Plumbing</option>
           <option value="Electrical">Electrical</option>
-          <option value="Landscaping">Landscaping</option>
-          <option value="Cleaning">Cleaning</option>
-          <option value="General">General</option>
+          <option value="Painting">Painting</option>
+          <option value="Tree Service">Tree Service</option>
+          <option value="Window Tinting">Window Tinting</option>
+          <option value="Concrete">Concrete</option>
         </select>
 
+        <label class="demo-consent-check" for="demoConsentCheckbox">
+          <input type="checkbox" id="demoConsentCheckbox">
+          <span>I agree to microphone access and temporary call processing for this AI demonstration. I will use fictional job details only.</span>
+        </label>
         <div class="demo-form-notice" id="demoFormNotice" role="status" aria-live="polite"></div>
-        <button type="button" class="demo-btn-call" id="demoCallBtn" onclick="showPreCallModal()">Start Guided Call</button>
-        <p class="demo-form-help">No account, phone number, or provider connection is required.</p>
+        <button type="button" class="demo-btn-call" id="demoCallBtn" onclick="showPreCallModal()">Start Browser Web Call</button>
+        <p class="demo-form-help">No account or phone number is required. Production activation remains unavailable until attorney and Retell privacy approval.</p>
       </div>
 
       <div class="demo-modal-overlay" id="preCallModal" role="dialog" aria-modal="true" aria-labelledby="preCallTitle" aria-hidden="true">
         <div class="demo-modal-card" tabindex="-1">
-          <h2 id="preCallTitle">One Quick Tip Before We Call</h2>
-          <p class="modal-subtitle">For the best experience, <strong>pretend you're one of your own customers.</strong></p>
-          <p class="modal-subtitle">Read both sides of the browser conversation as if this were a real service call. No call will be placed.</p>
+          <h2 id="preCallTitle">Before Your Browser Web Call</h2>
+          <p class="modal-subtitle">NorthStar will ask for microphone access only after the required audible disclosure finishes.</p>
+          <p class="modal-subtitle" id="demoDisclosureCopy"><strong>Audible disclosure:</strong> This is a NorthStar AI demonstration. This call will be processed and recorded temporarily only to produce your fictional demo result. Do not share payment, medical, government-ID, or other sensitive information. To continue, say “I consent to this AI demo and temporary recording.”</p>
           <p class="modal-selected-context" id="selectedScenarioContext"></p>
           <ul class="modal-tip-list">
-            <li>Notice how intent and urgency change the next action.</li>
-            <li>Look for the questions that qualify the work.</li>
-            <li>Use another scenario to compare the operating context.</li>
+            <li>Use fictional job details and speak naturally—the conversation is not scripted.</li>
+            <li>You can hang up, withdraw consent, or request deletion at any time.</li>
+            <li>Results appear only after Retell deletion and NorthStar purge are verified.</li>
           </ul>
-          <div class="modal-divider">Choose a scenario</div>
-          <div class="demo-modal-scenarios" id="modalScenarioChips">
-            <button type="button" class="demo-modal-chip" data-scenario="emergency">Emergency</button>
-            <button type="button" class="demo-modal-chip" data-scenario="estimate">Estimate</button>
-            <button type="button" class="demo-modal-chip" data-scenario="price-shopper">Price Shopper</button>
-            <button type="button" class="demo-modal-chip" data-scenario="returning">Returning Customer</button>
-            <button type="button" class="demo-modal-chip" data-scenario="insurance">Insurance</button>
-            <button type="button" class="demo-modal-chip" data-scenario="difficult">Difficult Customer</button>
-            <button type="button" class="demo-modal-chip" data-scenario="scheduling-conflict">Scheduling Conflict</button>
-            <button type="button" class="demo-modal-chip" data-scenario="billing">Billing</button>
-            <button type="button" class="demo-modal-chip" data-scenario="custom">Custom</button>
-          </div>
           <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" id="modalCancelBtn">Review form</button>
-            <button type="button" class="btn-modal-call" id="modalCallBtn" onclick="executeDemoCall()">Start Browser Preview</button>
+            <button type="button" class="btn btn-secondary" id="modalCancelBtn">Not now</button>
+            <button type="button" class="btn-modal-call" id="modalCallBtn" onclick="executeDemoCall()">Hear Disclosure &amp; Start</button>
           </div>
         </div>
       </div>
 
       <div class="hero-stats">
         <div class="hero-stat-item">
-          <div class="hero-stat-value">One operating view</div>
-          <div class="hero-stat-label">From calls and leads to next actions</div>
+          <div class="hero-stat-value">Real browser Web Call</div>
+          <div class="hero-stat-label">Visitor initiated, microphone and consent gated</div>
         </div>
         <div class="hero-stat-divider"></div>
         <div class="hero-stat-item">
-          <div class="hero-stat-value">Account-free preview</div>
-          <div class="hero-stat-label">Fictional scenarios, no provider action</div>
+          <div class="hero-stat-value">Canonical Polaris</div>
+          <div class="hero-stat-label">Mounted calculation after verified deletion</div>
         </div>
       </div>
     </div>
@@ -871,31 +853,36 @@
     <!-- Call Lifecycle States -->
     <div class="demo-call-state demo-state-dialing" id="callStateDialing">
       <div class="state-icon">🧭</div>
-      <div class="state-label">Preparing the guided call...</div>
-      <div class="state-sub">No provider connection is being made</div>
+      <div class="state-label">Starting the browser Web Call...</div>
+      <div class="state-sub">Microphone access follows the audible disclosure</div>
     </div>
     <div class="demo-call-state demo-state-ringing" id="callStateRinging">
       <div class="state-icon">🔔</div>
-      <div class="state-label">Loading the selected scenario...</div>
-      <div class="state-sub">The preview remains entirely in this browser</div>
+      <div class="state-label">Connecting to the NorthStar AI demo...</div>
+      <div class="state-sub">Say the exact consent phrase before sharing fictional job details</div>
     </div>
     <div class="demo-call-state" id="callStateAnswered">
       <div class="state-icon" style="font-size:28px;">✅</div>
-      <div class="state-label">Guided call ready</div>
-      <div class="state-sub">Review the fictional customer conversation below</div>
+      <div class="state-label">Consented conversation active</div>
+      <div class="state-sub">Use only fictional job details; withdraw or hang up at any time</div>
     </div>
     <div style="text-align:center;padding:20px 24px 12px;" id="demoLiveHeader">        
       <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
         <span class="demo-status-connecting" id="demoStatusDot"></span>
-        <span style="font-weight:600;font-size:15px;" id="demoStatusLabel">Preparing browser preview...</span>
-        <span class="preview-pill" id="demoLiveTimer">Browser-only</span>
+        <span style="font-weight:600;font-size:15px;" id="demoStatusLabel">Checking Web Call privacy gates...</span>
+        <span class="preview-pill" id="demoLiveTimer">00:00</span>
       </div>
+    </div>
+    <div class="web-call-controls" aria-label="Browser Web Call controls">
+      <button type="button" class="btn btn-secondary" id="demoHangupBtn">Hang Up &amp; Verify Delete</button>
+      <button type="button" class="btn btn-ghost" id="demoWithdrawBtn">Withdraw &amp; Delete</button>
+      <button type="button" class="btn btn-secondary" id="demoRetryDeleteBtn" hidden>Retry Verified Deletion</button>
     </div>
     <div class="demo-live-view">
       <!-- Left: Transcript -->
       <div class="demo-transcript-panel">
         <div class="demo-transcript-header">
-          <span style="font-weight:600;font-size:14px;">📝 Conversation</span>
+          <span style="font-weight:600;font-size:14px;">📝 Temporary Conversation</span>
           <span style="margin-left:auto;font-size:11px;color:var(--neutral-400);" id="demoTranscriptCount">0 messages</span>
         </div>
         <div class="demo-transcript-body" id="demoTranscriptBody">
@@ -949,7 +936,7 @@
         </div>
         <div class="demo-insight-card">
           <div class="insight-label">📊 Booking Outcome</div>
-          <div class="insight-value" id="demoBookingProb" style="font-size:14px;">Not calculated in guided preview</div>
+          <div class="insight-value" id="demoBookingProb" style="font-size:14px;">Not predicted in this demo</div>
           <div class="demo-prob-bar" hidden><div class="demo-prob-fill" id="demoProbBar" style="width:0%;background:#f59e0b;"></div></div>
         </div>
         <div class="demo-insight-card">
@@ -958,13 +945,13 @@
         </div>
         <div class="demo-insight-card">
           <div class="insight-label">📋 Executive Summary</div>
-          <div class="insight-value" style="font-size:13px;font-weight:400;line-height:1.5;color:var(--neutral-600);" id="demoSummary">Select a scenario to see its fictional operating context.</div>
+          <div class="insight-value" style="font-size:13px;font-weight:400;line-height:1.5;color:var(--neutral-600);" id="demoSummary">Waiting for a consented fictional conversation.</div>
         </div>
       </div>
     </div>
     <div class="guided-preview-notice" id="guidedPreviewNotice" role="status" aria-live="polite"></div>
     <div class="guided-preview-actions" id="guidedPreviewActions" hidden>
-      <button type="button" class="btn btn-secondary" id="guidedTryAnother">Try Another Scenario</button>
+      <button type="button" class="btn btn-secondary" id="guidedTryAnother">Start Another Web Call</button>
       <a href="/demo-dashboard" class="btn btn-primary">Explore the Account-Free Dashboard</a>
     </div>
   </section>
@@ -976,9 +963,9 @@
     <!-- ── 1. Header ── -->
     <div style="text-align:center;padding:32px 24px;">
       <div style="font-size:48px;margin-bottom:12px;">✅</div>
-      <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Guided Preview Complete</h2>
-      <p style="color:var(--neutral-500);margin-bottom:8px;">This browser-only scenario demonstrates how call context can become an operational next action.</p>
-      <p style="font-size:13px;color:var(--neutral-400);" id="demoCallDuration">Preview length: —</p>
+      <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Web Call Deleted. Polaris Ready.</h2>
+      <p style="color:var(--neutral-500);margin-bottom:8px;">Retell deletion was verified before these derived fictional results were shown. The transcript and call tokens have been purged.</p>
+      <p style="font-size:13px;color:var(--neutral-400);" id="demoCallDuration">Call length: —</p>
     </div>
 
     <!-- ── 2. Polaris Executive Intelligence Report ── -->
@@ -1070,62 +1057,30 @@
     <div id="demoPostExecutiveSummary" style="display:none"></div>
     <div id="postActionsSection" class="post-actions-section"></div>
 
-    <!-- ── 5. Transcript ── -->
-    <div class="post-transcript-area">
-      <div class="demo-transcript-panel">
-        <div class="demo-transcript-header">
-          <span style="font-weight:600;font-size:14px;">📝 Call Transcript</span>
-        </div>
-        <div class="demo-transcript-body" id="demoPostTranscriptBody"></div>
-      </div>
+    <div class="web-call-purge-receipt" id="demoPurgeReceipt" role="status">
+      <strong>Verified deletion complete.</strong>
+      <span>Provider call data deleted; NorthStar transcript, token, and temporary call state purged. Only this derived result remains in browser memory.</span>
     </div>
 
     <!-- ── 6. Buttons ── -->
     <div class="demo-post-actions">
-      <button class="btn btn-secondary" onclick="resetDemo()">🔄 Try Another Scenario</button>
+      <button class="btn btn-secondary" onclick="resetDemo()">Start Another Web Call</button>
+      <button class="btn btn-ghost" id="demoDeleteResultsBtn">Delete Browser Results</button>
       <a href="/demo-dashboard" class="btn btn-primary">Explore the Account-Free Dashboard</a>
     </div>
 
-    <!-- Part 10: Continue Exploring NorthStar -->
+    <!-- Start a fresh variable conversation -->
     <div class="demo-scenario-section">
-      <h3>🔍 Continue Exploring NorthStar</h3>
-      <p>Try another demo scenario — same business, different conversation.</p>
-      <div class="demo-scenario-grid" id="postDemoScenarioGrid">
-        <div class="demo-scenario-card" data-post-scenario="emergency" onclick="launchNewScenario('emergency')">
-          <span class="scenario-emoji">🚨</span> Emergency Call
-        </div>
-        <div class="demo-scenario-card" data-post-scenario="estimate" onclick="launchNewScenario('estimate')">
-          <span class="scenario-emoji">📋</span> Request an Estimate
-        </div>
-        <div class="demo-scenario-card" data-post-scenario="price-shopper" onclick="launchNewScenario('price-shopper')">
-          <span class="scenario-emoji">💰</span> Price Shopper
-        </div>
-        <div class="demo-scenario-card" data-post-scenario="returning" onclick="launchNewScenario('returning')">
-          <span class="scenario-emoji">👷</span> Returning Customer
-        </div>
-        <div class="demo-scenario-card" data-post-scenario="insurance" onclick="launchNewScenario('insurance')">
-          <span class="scenario-emoji">📄</span> Insurance Claim
-        </div>
-        <div class="demo-scenario-card" data-post-scenario="difficult" onclick="launchNewScenario('difficult')">
-          <span class="scenario-emoji">😤</span> Difficult Customer
-        </div>
-        <div class="demo-scenario-card" data-post-scenario="scheduling-conflict" onclick="launchNewScenario('scheduling-conflict')">
-          <span class="scenario-emoji">📅</span> Scheduling Conflict
-        </div>
-        <div class="demo-scenario-card" data-post-scenario="billing" onclick="launchNewScenario('billing')">
-          <span class="scenario-emoji">💬</span> Billing Question
-        </div>
-        <div class="demo-scenario-card" data-post-scenario="custom" onclick="launchNewScenario('custom')">
-          <span class="scenario-emoji">🎭</span> I'll Make My Own Scenario
-        </div>
-      </div>
+      <h3>Start a New Conversation</h3>
+      <p>Each Web Call is user-driven and variable. NorthStar does not select or replay a scripted transcript.</p>
+      <button type="button" class="btn btn-secondary" onclick="launchNewScenario()">Start Fresh</button>
     </div>
   </section>
 
   <!-- Features -->
   <section class="section" id="features">
     <div class="section-header">
-      <h2>One Operating System for Contractor Work</h2>
+      <h2>One Operating View for Contractor Work</h2>
       <p>NorthStar connects the operational context around calls, customers, work, schedules, estimates, and outcomes.</p>
     </div>
     <div class="grid grid-3">
@@ -1245,34 +1200,13 @@
     </div>
   </section>
 
-  <!-- FAQ -->
-  <section class="section section-alt" id="faq">
+  <!-- FAQ lives on its own page -->
+  <section class="section section-alt faq-preview" id="faq">
     <div class="section-header">
       <h2>Frequently Asked Questions</h2>
-      <p>What this public experience does—and does not—claim.</p>
+      <p>Read the full account-free demo, privacy, pricing, and product answers on one focused page.</p>
     </div>
-    <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
-      <div class="card" style="text-align:left;padding:20px 24px;">
-        <h3 style="font-size:15px;font-weight:600;margin-bottom:6px;">What is NorthStar?</h3>
-        <p style="font-size:14px;color:var(--neutral-500);line-height:1.6;">NorthStar is an AI Office Manager and business operating system for home-service contractors. It is designed to connect call and lead context with customers, work, estimates, schedules, next actions, and outcomes.</p>
-      </div>
-      <div class="card" style="text-align:left;padding:20px 24px;">
-        <h3 style="font-size:15px;font-weight:600;margin-bottom:6px;">Does the guided call place a real call?</h3>
-        <p style="font-size:14px;color:var(--neutral-500);line-height:1.6;">No. The homepage preview uses a fictional scenario entirely in your browser. It does not request a phone number, contact a provider, or create a customer record.</p>
-      </div>
-      <div class="card" style="text-align:left;padding:20px 24px;">
-        <h3 style="font-size:15px;font-weight:600;margin-bottom:6px;">What can I explore without an account?</h3>
-        <p style="font-size:14px;color:var(--neutral-500);line-height:1.6;">Use the guided call above, then <a href="/demo-dashboard" style="color:var(--northstar-brand-gold);font-weight:600;">explore the account-free dashboard</a>. Both use fictional preview content and do not touch production data.</p>
-      </div>
-      <div class="card" style="text-align:left;padding:20px 24px;">
-        <h3 style="font-size:15px;font-weight:600;margin-bottom:6px;">What is included in each price?</h3>
-        <p style="font-size:14px;color:var(--neutral-500);line-height:1.6;">Only the approved monthly list prices are published here. Plan contents, allowances, provider readiness, and other commercial terms are finalized before launch rather than inferred on this page.</p>
-      </div>
-      <div class="card" style="text-align:left;padding:20px 24px;">
-        <h3 style="font-size:15px;font-weight:600;margin-bottom:6px;">How do I get help if something goes wrong?</h3>
-        <p style="font-size:14px;color:var(--neutral-500);line-height:1.6;">Use <a href="/contact" style="color:var(--northstar-brand-gold);font-weight:600;">the contact page</a> for product questions or support.</p>
-      </div>
-    </div>
+    <div class="modal-actions"><a href="/faq" class="btn btn-secondary">Open the Full FAQ</a></div>
   </section>
 
   <!-- CTA -->
@@ -1291,7 +1225,7 @@
       <a href="/">Home</a>
       <a href="/#how-it-works">How It Works</a>
       <a href="/#pricing">Pricing</a>
-      <a href="/#faq">FAQ</a>
+      <a href="/faq">FAQ</a>
       <a href="/contact">Contact</a>
       <a href="/privacy">Privacy</a>
       <a href="/terms">Terms</a>
@@ -1299,1353 +1233,17 @@
       <a href="/legal">Legal</a>
     </div>
     <div class="footer-trust">
-      <span>Account-free guided preview</span>
-      <span>Fictional demo content</span>
-      <span>No provider action</span>
+      <span>User-initiated browser Web Call</span>
+      <span>Fictional demo context</span>
+      <span>Verified delete before results</span>
     </div>
-    <p>© 2026 NorthStar Solutions. All rights reserved.</p>
+    <p>© 2026 NorthStar Solutions LLC. All rights reserved.</p>
   </footer>
 
   <!-- ══════════════════════════════════════════════════
        DEMO JAVASCRIPT
        ══════════════════════════════════════════════════ -->
-  <script>
-    // ── M18O: State lifecycle rank — monotonic progression ──
-    // Prevents stale poll responses from regressing SSE-delivered state.
-    // Terminal states (failed) are always accepted from any position.
-    var STATE_RANK = {
-      'idle':              0,
-      'requesting_call':   1,
-      'call_created':      2,
-      'dialing':           3,
-      'ringing':           4,
-      'answered':          5,
-      'media_connected':   6,
-      'live':              7,
-      'completed':         8,
-      'polaris_summary':   9,
-      'failed':           10,
-    };
-    function isValidNextState(current, next) {
-      if (!next) return false;
-      if (!current) return true; // first state — always accept
-      if (next === 'failed') return true; // terminal — always accept
-      var curRank = STATE_RANK[current];
-      var nextRank = STATE_RANK[next];
-      if (curRank === undefined || nextRank === undefined) return true; // unknown — allow
-      return nextRank >= curRank;
-    }
 
-    // ── Demo State ──
-    var demoState = {
-      sessionId: null,
-      callStatus: null,
-      timerSec: 0,
-      timerInterval: null,
-      finalTimerValue: null,
-      transcriptInterval: null,
-      statusInterval: null,
-      transcriptSeq: 0,
-      speakingIndicator: null,
-      transcriptLinesCache: [],
-      postCallTransitioned: false, // M18O: guard against duplicate post-call transitions
-      // M19.4: Cached canonical estimate for post-call report
-      polarisEstimate: null,
-      polarisIntelligence: null,
-    };
-
-    // Store business info for multi-scenario replay
-    var demoBusinessInfo = {
-      businessName: '',
-      industry: '',
-      phoneNumber: '',
-      currentScenario: null
-    };
-
-    var DEMO_API = '/api/demo';
-
-    // ── Notification system ──
-    var _notifyTimer = null;
-    function showNotification(message, type) {
-      var el = document.getElementById('demoNotification');
-      if (!el) return;
-      if (_notifyTimer) clearTimeout(_notifyTimer);
-      el.className = 'demo-notification notification-' + (type || 'warning');
-      el.textContent = message;
-      // Force reflow then animate in
-      el.offsetHeight;
-      el.classList.add('show');
-      _notifyTimer = setTimeout(function() {
-        el.classList.remove('show');
-      }, 4000);
-    }
-
-    // ── M18M: Render speaking indicator dots ──
-    function renderSpeakingIndicator(speaker) {
-      // ── M18N: Log every transition for debugging ──
-      if (speaker !== demoState.speakingIndicator) {
-        console.log('[Demo:M18N] speakingIndicator: ' + demoState.speakingIndicator + ' → ' + speaker);
-      }
-      demoState.speakingIndicator = speaker;
-      var body = document.getElementById('demoTranscriptBody');
-      if (!body) return;
-
-      var agentActive = (speaker === 'agent') ? ' active' : '';
-      var customerActive = (speaker === 'customer') ? ' active' : '';
-      var currentLabel = '';
-      var labelClass = '';
-
-      if (speaker === 'agent') {
-        currentLabel = '🔵 Agent is speaking...';
-        labelClass = ' agent';
-      } else if (speaker === 'customer') {
-        currentLabel = '🟡 Customer is speaking...';
-        labelClass = ' customer';
-      } else {
-        currentLabel = 'Waiting for conversation...';
-        labelClass = '';
-      }
-
-      body.innerHTML = '' +
-        '<div class="demo-speaking-indicator">' +
-          '<div class="demo-speaking-dots">' +
-            '<div class="demo-speaking-dot agent' + agentActive + '" title="Agent (NorthStar AI)"></div>' +
-            '<div class="demo-speaking-dot customer' + customerActive + '" title="Customer"></div>' +
-          '</div>' +
-          '<div class="demo-speaking-current' + labelClass + '">' + currentLabel + '</div>' +
-        '</div>';
-      console.log('[Demo:M18M] Speaking indicator: ' + speaker);
-    }
-
-    // ── Scenario shortcuts ──
-    document.querySelectorAll('.demo-scenario-chip').forEach(function(chip) {
-      chip.addEventListener('click', function() {
-        document.querySelectorAll('.demo-scenario-chip').forEach(function(c) { c.classList.remove('active'); });
-        this.classList.add('active');
-        var scenario = this.dataset.scenario;
-        if (scenario === 'storm') {
-          document.getElementById('demoIndustry').value = 'Roofing';
-          document.getElementById('demoBusinessName').value = 'StormShield Roofing';
-        } else if (scenario === 'emergency') {
-          document.getElementById('demoIndustry').value = 'Plumbing';
-          document.getElementById('demoBusinessName').value = 'RapidResponse Plumbing';
-        } else if (scenario === 'estimate') {
-          document.getElementById('demoIndustry').value = 'HVAC';
-          document.getElementById('demoBusinessName').value = 'ComfortAir HVAC';
-        } else if (scenario === 'scheduling') {
-          document.getElementById('demoIndustry').value = 'Electrical';
-          document.getElementById('demoBusinessName').value = 'BrightWire Electric';
-        } else if (scenario === 'billing') {
-          document.getElementById('demoIndustry').value = 'Landscaping';
-          document.getElementById('demoBusinessName').value = 'GreenScape Landscaping';
-        }
-        // Scroll to form
-        document.getElementById('demoFormCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    });
-
-    // ── Modal scenario chip handlers ──
-    document.querySelectorAll('#modalScenarioChips .demo-modal-chip').forEach(function(chip) {
-      chip.addEventListener('click', function(e) {
-        e.stopPropagation();
-        document.querySelectorAll('#modalScenarioChips .demo-modal-chip').forEach(function(c) { c.classList.remove('active'); });
-        this.classList.add('active');
-        var scenario = this.dataset.scenario;
-        if (scenario === 'storm') {
-          document.getElementById('demoIndustry').value = 'Roofing';
-          document.getElementById('demoBusinessName').value = 'StormShield Roofing';
-        } else if (scenario === 'emergency') {
-          document.getElementById('demoIndustry').value = 'Plumbing';
-          document.getElementById('demoBusinessName').value = 'RapidResponse Plumbing';
-        } else if (scenario === 'estimate') {
-          document.getElementById('demoIndustry').value = 'HVAC';
-          document.getElementById('demoBusinessName').value = 'ComfortAir HVAC';
-        } else if (scenario === 'scheduling') {
-          document.getElementById('demoIndustry').value = 'Electrical';
-          document.getElementById('demoBusinessName').value = 'BrightWire Electric';
-        } else if (scenario === 'billing') {
-          document.getElementById('demoIndustry').value = 'Landscaping';
-          document.getElementById('demoBusinessName').value = 'GreenScape Landscaping';
-        } else if (scenario === 'returning') {
-          document.getElementById('demoIndustry').value = 'Roofing';
-          document.getElementById('demoBusinessName').value = 'Heritage Roofing Co';
-        }
-      });
-    });
-
-    // ── Start Demo Call (backwards compat) ──
-    function startDemoCall() {
-      showPreCallModal();
-    }
-
-    // ── Part 9: Show Pre-Call Modal ──
-    function showPreCallModal() {
-      var businessName = document.getElementById('demoBusinessName').value.trim();
-      var industry = document.getElementById('demoIndustry').value;
-      var phoneNumber = document.getElementById('demoPhoneNumber').value.trim();
-
-      if (!businessName) { showNotification('Please enter a business name.', 'warning'); return; }
-      if (!industry) { showNotification('Please select an industry.', 'warning'); return; }
-      if (!phoneNumber) { showNotification('Please enter a phone number.', 'warning'); return; }
-
-      // Save business info for replay
-      demoBusinessInfo.businessName = businessName;
-      demoBusinessInfo.industry = industry;
-      demoBusinessInfo.phoneNumber = phoneNumber;
-
-      showPreCallModalWithDismiss();
-    }
-    function showPreCallModalWithDismiss() {
-      var modal = document.getElementById('preCallModal');
-      modal.classList.add('active');
-      modal.addEventListener('click', function dismissOutside(e) {
-        if (e.target === modal) {
-          modal.classList.remove('active');
-          modal.removeEventListener('click', dismissOutside);
-        }
-      });
-      function escHandler(e) {
-        if (e.key === 'Escape') {
-          modal.classList.remove('active');
-          document.removeEventListener('keydown', escHandler);
-        }
-      }
-      document.addEventListener('keydown', escHandler);
-    }
-
-    // ── Check pre-call status on load ──
-    async function checkDemoStatus() {
-      try {
-        var resp = await fetch(DEMO_API + '/status');
-        if (resp.ok) {
-          var data = await resp.json();
-          if (data.mode === 'simulation') {
-            document.getElementById('simulationModeBanner').style.display = 'block';
-          }
-        }
-      } catch(e) {}
-    }
-    // Retained for canonical lifecycle compatibility; the homepage preview does not invoke it.
-
-    // ── Toggle Polaris reasoning panel ──
-    function togglePolarisReasoning() {
-      var body = document.getElementById('polarisReasoningBody');
-      var toggle = document.getElementById('polarisReasoningToggle');
-      var arrow = toggle.querySelector('.polaris-arrow');
-      body.classList.toggle('open');
-      arrow.classList.toggle('open');
-      var span = toggle.querySelector('span:first-child');
-      span.textContent = body.classList.contains('open') ? '🔍 Hide reasoning' : '🔍 Show reasoning';
-    }
-
-    // ── Render Polaris estimate into the card ──
-    function toggleReportReasoning() {
-      var body = document.getElementById('reportReasoningBody');
-      var toggle = document.querySelector('.polaris-report-reasoning-toggle');
-      if (body) body.classList.toggle('open');
-      if (toggle) {
-        var arrow = toggle.querySelector('.polaris-arrow');
-        if (arrow) arrow.classList.toggle('open');
-      }
-    }
-    function renderPolarisEstimate(estimate) {
-      if (!estimate) return;
-      // Confidence percentage
-      var confEl = document.getElementById('demoPolarisConfidence');
-      if (confEl) confEl.textContent = estimate.confidence + '%';
-      // Confidence fill bar
-      var fillEl = document.getElementById('demoPolarisConfidenceFill');
-      if (fillEl) fillEl.style.width = estimate.confidence + '%';
-      // Revenue / opportunity value
-      var revEl = document.getElementById('demoPolarisRevenue');
-      if (revEl) revEl.textContent = estimate.revenueRange || 'Analyzing...';
-      // AI Recommendation from first reasoning factor
-      var recEl = document.getElementById('demoPolarisRec');
-      if (recEl && estimate.reasoning && estimate.reasoning.length > 0) {
-        var firstDetail = estimate.reasoning[0].detail || '';
-        var urgency = '';
-        for (var ri = 0; ri < estimate.reasoning.length; ri++) {
-          if (estimate.reasoning[ri].factor === 'Urgency Level') {
-            urgency = estimate.reasoning[ri].detail.toLowerCase();
-            break;
-          }
-        }
-        var serviceWord = firstDetail.toLowerCase();
-        var action = '';
-        if (urgency && urgency !== 'standard') {
-          action = 'Prioritize an on-site evaluation due to ' + urgency + ' urgency';
-        } else {
-          action = 'Schedule a consultation for ' + serviceWord + ' at the customer\'s earliest convenience';
-        }
-        recEl.innerHTML = '<span class="polaris-rec-label">AI Recommendation</span><span class="polaris-rec-text">' + action + '.</span>';
-      } else if (recEl) {
-        recEl.innerHTML = '<span class="polaris-rec-label">AI Recommendation</span><span class="polaris-rec-text">Analyzing call...</span>';
-      }
-      // Reasoning factors
-      var body = document.getElementById('polarisReasoningBody');
-      if (estimate.reasoning && estimate.reasoning.length > 0) {
-        var html = '';
-        for (var i = 0; i < estimate.reasoning.length; i++) {
-          var f = estimate.reasoning[i];
-          html += '<div class="polaris-reasoning-factor"><span class="factor-label">' + f.factor + '</span><span class="factor-detail">' + f.detail + '</span></div>';
-        }
-        body.innerHTML = html;
-      }
-    }
-    async function executeDemoCall() {
-      var modal = document.getElementById('preCallModal');
-      modal.classList.remove('active');
-
-      var businessName = demoBusinessInfo.businessName;
-      var industry = demoBusinessInfo.industry;
-      var phoneNumber = demoBusinessInfo.phoneNumber;
-
-      var btn = document.getElementById('demoCallBtn');
-      btn.disabled = true;
-      btn.textContent = '⏳ Preparing call...';
-
-      try {
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
-        var resp = await fetch(DEMO_API + '/call', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ businessName: businessName, industry: industry, phoneNumber: phoneNumber }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        // ── Parse response ──
-        var data;
-        try {
-          data = await resp.json();
-        } catch (parseErr) {
-          showCustomerError("We couldn\u2019t place your call right now. Please try again in a few moments.");
-          btn.disabled = false;
-          btn.textContent = "\uD83D\uDCDE Call Me Now";
-          return;
-        }
-
-        // ── Handle standard error: success === false ──
-        if (data && data.success === false) {
-          var customerMsg = data?.error?.message || "Unable to place call.";
-          showCustomerError(customerMsg);
-          btn.disabled = false;
-          btn.textContent = "\uD83D\uDCDE Call Me Now";
-          return;
-        }
-
-        // ── Handle HTTP error without success=false ──
-        if (!resp.ok) {
-          var errMsg = data?.error?.message || "Unable to place call.";
-          showCustomerError(errMsg);
-          btn.disabled = false;
-          btn.textContent = "\uD83D\uDCDE Call Me Now";
-          return;
-        }
-
-        // ── Validate response has required fields ──
-        if (!data.demoSessionId || !data.callId) {
-          showCustomerError("Unable to place call.");
-          btn.disabled = false;
-          btn.textContent = "\uD83D\uDCDE Call Me Now";
-          return;
-        }
-
-        demoState.sessionId = data.demoSessionId;
-        demoState.callStatus = data.status;
-
-        if (data.status === 'idle') {
-          // Simulation path — call /simulate to start
-          var simResp = await fetch(DEMO_API + '/' + data.demoSessionId + '/simulate', { method: 'POST' });
-          if (!simResp.ok) {
-            var simData;
-            try { simData = await simResp.json(); } catch(e) { simData = {}; }
-            showCustomerError(simData?.error?.message || 'Unable to start simulation.');
-            btn.disabled = false;
-            btn.textContent = '\uD83D\uDCDE Call Me Now';
-            return;
-          }
-          var simData = await simResp.json();
-          demoState.callStatus = simData.status;
-          transitionToLiveView('simulation');
-        } else if (data.status === 'call_created') {
-          // Live call — show preparing state
-          transitionToLiveView('call_created');
-        } else {
-          transitionToLiveView(data.status);
-        }
-
-        btn.disabled = false;
-        btn.textContent = '\uD83D\uDCDE Call Me Now';
-      } catch (err) {
-        console.error('[Demo] Call error:', err.message);
-        if (err.name === 'AbortError') {
-          showCustomerError('The request took too long. Please try again.');
-        } else {
-          showCustomerError('Something went wrong. Please try again.');
-        }
-        btn.disabled = false;
-        btn.textContent = '\uD83D\uDCDE Call Me Now';
-      }
-    }
-
-    // ── Customer-friendly error display ──
-    // Never shows HTML, HTTP codes, stage names, or internal diagnostics.
-    // Only clean, friendly messages.
-    function showCustomerError(message) {
-      var safe = (message || 'Something went wrong. Please try again.');
-      showNotification(safe, 'error');
-    }
-
-    // ── Start simulation (called when Retell is not configured) ──
-    async function startSimulation(businessName, industry) {
-      demoState.callStatus = 'simulation';
-      try {
-        var resp = await fetch(DEMO_API + '/' + demoState.sessionId + '/simulate', { method: 'POST' });
-        if (resp.ok) {
-          var data = await resp.json();
-          demoState.callStatus = data.status;
-        }
-      } catch(e) {}
-      transitionToLiveView(demoState.callStatus);
-    }
-
-    // ── Transition to live view ──
-    // The frontend ONLY reflects what the backend tells us.
-    // We NEVER invent or predict state.
-    function transitionToLiveView(callStatus) {
-      demoState.postCallTransitioned = false;
-      if (demoState.timerInterval) clearInterval(demoState.timerInterval);
-      if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
-      if (demoState.statusInterval) clearInterval(demoState.statusInterval);
-
-      // Close any existing SSE connection
-      if (demoState.sseSource) {
-        demoState.sseSource.close();
-        demoState.sseSource = null;
-      }
-
-      demoState.timerSec = 0;
-      demoState.transcriptSeq = 0;
-      demoState.transcriptLinesCache = [];
-
-      document.getElementById('demoPreCallView').style.display = 'none';
-      document.getElementById('demoLiveView').style.display = 'block';
-      document.getElementById('demoPostCallView').style.display = 'none';
-
-      // Hide all call state overlays
-      document.getElementById('callStateDialing').classList.remove('active');
-      document.getElementById('callStateRinging').classList.remove('active');
-      document.getElementById('callStateAnswered').classList.remove('active');
-      document.getElementById('demoLiveHeader').style.display = 'none';
-
-      document.getElementById('demoTranscriptBody').innerHTML = '';
-      renderSpeakingIndicator(null);
-      document.getElementById('demoTranscriptCount').textContent = '0 messages';
-      document.getElementById('demoStatusDot').className = 'demo-status-connecting';
-      document.getElementById('demoStatusLabel').textContent = getStatusLabel(callStatus);
-      document.getElementById('demoLiveTimer').textContent = '0:00';
-
-      // Reset Polaris card
-      document.getElementById('demoPolarisConfidence').textContent = '—';
-      document.getElementById('demoPolarisRevenue').textContent = 'Waiting...';
-      document.getElementById('polarisReasoningBody').innerHTML = '<div class="polaris-reasoning-loader">Waiting for conversation...</div>';
-
-      document.getElementById('demoIntent').textContent = 'Waiting...';
-      document.getElementById('demoQualification').textContent = 'Waiting...';
-      document.getElementById('demoBookingProb').textContent = '—';
-      document.getElementById('demoProbBar').style.width = '0%';
-      document.getElementById('demoActions').innerHTML = '<li>Waiting for conversation...</li>';
-      document.getElementById('demoSummary').textContent = 'Waiting for call to connect...';
-
-      // Show appropriate pre-live state based on EXACT backend state
-      if (callStatus === 'call_created' || callStatus === 'dialing') {
-        document.getElementById('callStateDialing').classList.add('active');
-      } else if (callStatus === 'ringing') {
-        document.getElementById('callStateRinging').classList.add('active');
-      } else if (callStatus === 'answered' || callStatus === 'media_connected') {
-        document.getElementById('callStateAnswered').classList.add('active');
-      } else if (callStatus === 'simulation' || callStatus === 'live') {
-        document.getElementById('demoLiveHeader').style.display = 'block';
-      }
-
-      // Only start timer if backend confirms talk time
-      startDemoTimer(callStatus);
-      startTranscriptPolling();
-      startStatusPolling();
-      startSSEConnection();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    // ── Map backend state to human-readable label ──
-    function getStatusLabel(state) {
-      var labels = {
-        'call_created':    'Preparing your call...',
-        'dialing':         'Calling your phone...',
-        'ringing':         'Ringing...',
-        'answered':        'Connected!',
-        'media_connected': 'Connected!',
-        'live':            'Listening...',
-        'simulation':      'Preparing simulation...',
-        'completed':       'Call Ended',
-        'polaris_summary': 'Generating Summary...',
-        'failed':          'Call Failed',
-      };
-      return labels[state] || 'Connecting...';
-    }
-
-    // ── Part 10: Launch new scenario from post-demo view ──
-    function launchNewScenario(scenarioType) {
-      if (!demoBusinessInfo.businessName || !demoBusinessInfo.phoneNumber) {
-        demoBusinessInfo.businessName = document.getElementById('demoBusinessName').value.trim();
-        demoBusinessInfo.industry = document.getElementById('demoIndustry').value;
-        demoBusinessInfo.phoneNumber = document.getElementById('demoPhoneNumber').value.trim();
-      }
-      if (!demoBusinessInfo.businessName) { showNotification('Business info not available. Please try again from the form.', 'warning'); resetDemo(); return; }
-      if (!demoBusinessInfo.phoneNumber) { showNotification('Phone number not available. Please try again from the form.', 'warning'); resetDemo(); return; }
-
-      demoBusinessInfo.currentScenario = scenarioType;
-
-      // ── M18.3: Show the pre-call view so the modal is visible ──
-      // After a demo, demoPreCallView is display:none (set by transitionToLiveView).
-      // The modal lives inside demoPreCallView, so it's invisible even with .active.
-      document.getElementById('demoLiveView').style.display = 'none';
-      // Clear M19.2 sections
-      var resetActions = document.getElementById('postActionsSection');
-      if (resetActions) resetActions.innerHTML = '';
-
-      document.getElementById('demoPostCallView').style.display = 'none';
-      document.getElementById('demoPreCallView').style.display = 'block';
-
-      showPreCallModalWithDismiss();
-
-      document.querySelectorAll('#modalScenarioChips .demo-modal-chip').forEach(function(c) {
-        c.classList.remove('active');
-        if (c.dataset.scenario === scenarioType) c.classList.add('active');
-      });
-
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    // ── Simulated demo (when Retell isn't available) ──
-    async function runSimulatedDemo(businessName, industry) {
-      try {
-        var resp = await fetch(DEMO_API + '/call', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ businessName: businessName, industry: industry, phoneNumber: '(555) 000-0000' })
-        });
-        if (!resp.ok) throw new Error('Simulated call request failed');
-        var data = await resp.json();
-        demoState.sessionId = data.demoSessionId;
-        demoState.callStatus = 'simulated';
-      } catch(e) {
-        demoState.sessionId = 'demo-' + Date.now().toString(36);
-        demoState.callStatus = 'simulated';
-      }
-      transitionToLiveView();
-    }
-
-    // ── Timer ──
-    // Timer ONLY starts when backend confirms call has been answered.
-    // Before that, timer stays at 0:00.
-    function startDemoTimer(callStatus) {
-      demoState.timerSec = 0;
-      if (demoState.timerInterval) clearInterval(demoState.timerInterval);
-
-      // Only start counting for answered/live/completed states
-      var talkStates = ['answered', 'media_connected', 'live', 'completed'];
-      if (talkStates.indexOf(callStatus) === -1) {
-        // Not yet answered — don't start timer
-        return;
-      }
-
-      demoState.timerInterval = setInterval(function() {
-        demoState.timerSec++;
-        var m = Math.floor(demoState.timerSec / 60);
-        var s = demoState.timerSec % 60;
-        document.getElementById('demoLiveTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
-      }, 1000);
-    }
-
-    // ── Transcript Polling ──
-    function startTranscriptPolling() {
-      if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
-      // Initial fetch
-      pollTranscript();
-      // Poll every 2s
-      demoState.transcriptInterval = setInterval(pollTranscript, 2000);
-    }
-
-    async function pollTranscript() {
-      if (!demoState.sessionId) return;
-      try {
-        var resp = await fetch(DEMO_API + '/' + demoState.sessionId + '/transcript');
-        if (!resp.ok) { console.warn('[Demo:PollTranscript] HTTP error:', resp.status); return; }
-        var data = await resp.json();
-
-        // LOG: what we got from the backend
-        console.log('[Demo:PollTranscript] Response:', JSON.stringify({
-          linesLength: data.lines ? data.lines.length : 'undefined',
-          demoStateSeq: demoState.transcriptSeq,
-          callStatus: data.callStatus,
-          count: data.count,
-          message: data.message || '',
-          speakingIndicator: data.speakingIndicator,
-        }));
-
-        // ── M18M: Determine mode — speaking indicator or full transcript ──
-        // During live calls: lines is empty, speakingIndicator is set (agent/customer/null)
-        // After completed: lines has content
-        if (data.lines && data.lines.length > 0) {
-          // Full transcript mode (completed call)
-          if (data.lines.length > demoState.transcriptSeq) {
-            demoState.transcriptSeq = data.lines.length;
-            console.log('[Demo:PollTranscript] RENDERING ' + data.lines.length + ' lines via poll');
-            renderTranscript(data.lines);
-            document.getElementById('demoTranscriptCount').textContent = data.lines.length + ' messages';
-          } else {
-            console.log('[Demo:PollTranscript] SKIP render: lines=' + data.lines.length + ' seq=' + demoState.transcriptSeq);
-          }
-        } else {
-          // Live call with speaking indicator
-          if (data.speakingIndicator !== undefined && data.speakingIndicator !== demoState.speakingIndicator) {
-            renderSpeakingIndicator(data.speakingIndicator);
-          }
-          document.getElementById('demoTranscriptCount').textContent = '0 messages';
-          console.log('[Demo:M18M] Speaking indicator from poll: ' + data.speakingIndicator);
-        }
-      } catch(e) {
-        console.warn('[Demo] Transcript poll error:', e.message);
-      }
-    }
-
-    // ── Shared transcript presentation ──
-    // Provider variants are normalized by NorthStarTranscriptRenderer.
-    function renderTranscript(lines) {
-      var transcriptLines = Array.isArray(lines) ? lines.slice() : [];
-      demoState.transcriptLinesCache = transcriptLines;
-      console.log('[Demo:RenderTranscript] Called with ' + transcriptLines.length + ' lines. First speaker=' + (transcriptLines[0] ? window.NorthStarTranscriptRenderer.normalizeSpeaker(transcriptLines[0].speaker) : 'N/A'));
-      var body = document.getElementById('demoTranscriptBody');
-      var result = window.NorthStarTranscriptRenderer.render(body, transcriptLines, {
-        labels: { ai: 'NorthStar AI', customer: 'Customer', system: '' },
-        scroll: 'bottom',
-        live: 'polite'
-      });
-      console.log('[Demo:RenderTranscript] rendered=' + result.count + ' lines=' + transcriptLines.length);
-    }
-
-    // ── Status Polling ──
-    // The frontend NEVER advances state. It ONLY reflects what the backend returns.
-    function startStatusPolling() {
-      if (demoState.statusInterval) clearInterval(demoState.statusInterval);
-      pollStatus();
-      demoState.statusInterval = setInterval(pollStatus, 2000);
-    }
-
-    async function pollStatus() {
-      if (!demoState.sessionId) return;
-      try {
-        var resp = await fetch(DEMO_API + '/' + demoState.sessionId + '/status');
-        if (!resp.ok) return;
-        var data = await resp.json();
-
-        // Backend is the SINGLE source of truth for all state
-                    var backendState = data.callStatus;
-                    // ── M18O: Reject stale backward transitions ──
-                    // Poll responses can arrive after SSE has already delivered a later state.
-                    // Only accept if the backend state is at or ahead of the current state.
-                    if (!isValidNextState(demoState.callStatus, backendState)) {
-                      console.log('[Demo:PollStatus] REJECTED stale transition: ' + demoState.callStatus + ' → ' + backendState);
-                      return;
-                    }
-                    demoState.callStatus = backendState;
-
-        // ── Call lifecycle overlays ──
-        // Only update overlays if state has changed since last poll
-        var preLiveOverlayStates = ['call_created', 'dialing', 'ringing', 'answered', 'media_connected', 'simulation', 'live'];
-        var isPreLive = preLiveOverlayStates.indexOf(backendState) >= 0;
-
-        // Hide all overlays first
-        document.getElementById('callStateDialing').classList.remove('active');
-        document.getElementById('callStateRinging').classList.remove('active');
-        document.getElementById('callStateAnswered').classList.remove('active');
-
-        if (backendState === 'call_created' || backendState === 'dialing') {
-          document.getElementById('callStateDialing').classList.add('active');
-          document.getElementById('demoLiveHeader').style.display = 'none';
-        } else if (backendState === 'ringing') {
-          document.getElementById('callStateRinging').classList.add('active');
-          document.getElementById('demoLiveHeader').style.display = 'none';
-        } else if (backendState === 'answered' || backendState === 'media_connected') {
-          document.getElementById('callStateAnswered').classList.add('active');
-          document.getElementById('demoLiveHeader').style.display = 'none';
-        } else if (backendState === 'live') {
-          document.getElementById('demoLiveHeader').style.display = 'block';
-          document.getElementById('demoStatusLabel').textContent = 'Live Conversation';
-        } else if (backendState === 'simulation') {
-          // Simulation shows loading state, backend advances to 'live' after 3s
-          document.getElementById('demoLiveHeader').style.display = 'none';
-        }
-
-        // ── Status dot ──
-        var dot = document.getElementById('demoStatusDot');
-        var label = document.getElementById('demoStatusLabel');
-        if (backendState === 'completed' || backendState === 'polaris_summary') {
-          dot.className = 'demo-status-ended';
-          label.textContent = 'Call Ended';
-          // Store executive summary for post-call view
-          if (data.executiveSummary) {
-            demoState.executiveSummary = data.executiveSummary;
-          }
-          // M19.4: Cache the polaris estimate before transition
-          if (data.polarisEstimate) {
-            demoState.polarisEstimate = data.polarisEstimate;
-            if (data.polarisEstimate.polarisIntelligence) {
-              demoState.polarisIntelligence = data.polarisEstimate.polarisIntelligence;
-            }
-          }
-          transitionToPostCall();
-        } else if (backendState === 'failed') {
-          dot.className = 'demo-status-ended';
-          label.textContent = 'Call Failed';
-        } else if (backendState === 'live') {
-          dot.className = 'demo-status-connected';
-          label.textContent = 'Live Conversation';
-        } else {
-          dot.className = 'demo-status-connecting';
-          label.textContent = getStatusLabel(backendState);
-        }
-
-        // ── Timer ──
-        // Only update from backend's actual duration
-        if (data.talkTimeStarted) {
-          var m = Math.floor(data.duration / 60);
-          var s = data.duration % 60;
-          document.getElementById('demoLiveTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
-        } else {
-          document.getElementById('demoLiveTimer').textContent = '0:00';
-        }
-
-        // ── M18.2: Start local timer when entering a talk state ──
-        if (data.talkTimeStarted && !demoState.timerInterval) {
-          demoState.timerSec = data.duration || 0;
-          demoState.timerInterval = setInterval(function() {
-            demoState.timerSec++;
-            var m = Math.floor(demoState.timerSec / 60);
-            var s = demoState.timerSec % 60;
-            document.getElementById('demoLiveTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
-          }, 1000);
-        }
-
-        // ── Polaris card ──
-        // Only populate when backend says analyzing
-        // ── M19.3: Polaris loading state ──
-        var polarisCard = document.querySelector('#demoInsights .polaris-card');
-        if (data.polarisState === 'analyzing' && data.polarisEstimate) {
-          // M19.4: Cache the latest for post-call transition
-          demoState.polarisEstimate = data.polarisEstimate;
-          if (data.polarisEstimate.polarisIntelligence) {
-            demoState.polarisIntelligence = data.polarisEstimate.polarisIntelligence;
-          }
-          renderPolarisEstimate(data.polarisEstimate);
-          if (polarisCard) { polarisCard.classList.remove('polaris-loading'); polarisCard.classList.add('polaris-ready'); }
-        } else if (data.polarisState === 'waiting' || !data.polarisEstimate) {
-          var pRev = document.getElementById('demoPolarisRevenue');
-          if (pRev && pRev.textContent === 'Analyzing...') pRev.textContent = 'Analyzing Opportunity...';
-          if (polarisCard) polarisCard.classList.add('polaris-loading');
-        }
-
-        // ── AI Panel Updates ──
-        // Update Customer Intent
-        if (data.customerIntent) {
-          document.getElementById('demoIntent').textContent = data.customerIntent;
-        }
-        // Update Lead Qualification
-        if (data.leadQualification) {
-          document.getElementById('demoQualification').textContent = data.leadQualification;
-        }
-        // Update Booking Probability
-        if (typeof data.bookingProbability === 'number') {
-          document.getElementById('demoBookingProb').textContent = data.bookingProbability + '%';
-          document.getElementById('demoProbBar').style.width = data.bookingProbability + '%';
-        }
-        // Update Recommended Actions
-        if (data.recommendedActions && data.recommendedActions.length > 0) {
-          var actionsHtml = '';
-          for (var a = 0; a < data.recommendedActions.length; a++) {
-            actionsHtml += '<li>' + data.recommendedActions[a] + '</li>';
-          }
-          document.getElementById('demoActions').innerHTML = actionsHtml;
-        }
-        // Update Executive Summary
-        if (data.executiveSummaryText) {
-          document.getElementById('demoSummary').textContent = data.executiveSummaryText;
-        }
-        // Update transcript count
-        if (typeof data.transcriptLineCount === 'number') {
-          document.getElementById('demoTranscriptCount').textContent = data.transcriptLineCount + ' messages';
-        }
-        // ── M18M: Update speaking indicator from status ──
-        if (data.currentSpeaker && data.currentSpeaker !== demoState.speakingIndicator) {
-          renderSpeakingIndicator(data.currentSpeaker);
-        }
-        // ── End AI Panel Updates ──
-
-        // ── Transcript polling ──
-        // Only enable transcript polling when state is 'live' or later
-        if (backendState === 'live' || backendState === 'completed' || backendState === 'polaris_summary') {
-          // Transcript polling is already running
-        }
-
-        // LOG the full status for debugging
-        console.log('[Demo:PollStatus] callStatus=' + backendState + ' transcriptLineCount=' + data.transcriptLineCount + ' polarisState=' + data.polarisState);
-      } catch(e) {
-        console.warn('[Demo] Status poll error:', e.message);
-      }
-    }
-
-    // ── SSE Connection for real-time updates ──
-    // Connects to the SSE endpoint for live status changes, transcript
-    // updates, and executive summary delivery. Falls back to polling
-    // if EventSource is unavailable or the connection fails.
-    function startSSEConnection() {
-      if (!demoState.sessionId) return;
-      if (typeof EventSource === 'undefined') {
-        console.log('[Demo:SSE] EventSource not available — using polling only');
-        return;
-      }
-
-      // Close any existing connection
-      if (demoState.sseSource) {
-        demoState.sseSource.close();
-      }
-
-      var url = DEMO_API + '/' + demoState.sessionId + '/events';
-      console.log('[Demo:SSE] Connecting to ' + url);
-
-      try {
-        var source = new EventSource(url);
-        demoState.sseSource = source;
-
-        source.addEventListener('connected', function(e) {
-          try {
-            var data = JSON.parse(e.data);
-            console.log('[Demo:SSE] Connected — session=' + data.sessionId + ' status=' + data.callStatus);
-          } catch(err) {}
-        });
-
-        source.addEventListener('status', function(e) {
-          try {
-            var data = JSON.parse(e.data);
-            console.log('[Demo:SSE] State change: ' + (data.previousStatus || '?') + ' → ' + data.callStatus);
-
-            // ── M18O: Reject stale backward transitions ──
-            // SSE events can arrive interleaved with poll responses.
-            // Only accept if the new state is at or ahead of the current state.
-            var newState = data.callStatus;
-            if (!isValidNextState(demoState.callStatus, newState)) {
-              console.log('[Demo:SSE] REJECTED stale transition: ' + demoState.callStatus + ' → ' + newState);
-              return;
-            }
-
-            // Update overlays based on new state
-            demoState.callStatus = newState;
-
-            document.getElementById('callStateDialing').classList.remove('active');
-            document.getElementById('callStateRinging').classList.remove('active');
-            document.getElementById('callStateAnswered').classList.remove('active');
-
-            if (newState === 'call_created' || newState === 'dialing') {
-              document.getElementById('callStateDialing').classList.add('active');
-              document.getElementById('demoLiveHeader').style.display = 'none';
-            } else if (newState === 'ringing') {
-              document.getElementById('callStateRinging').classList.add('active');
-              document.getElementById('demoLiveHeader').style.display = 'none';
-            } else if (newState === 'answered' || newState === 'media_connected') {
-              document.getElementById('callStateAnswered').classList.add('active');
-              document.getElementById('demoLiveHeader').style.display = 'none';
-            } else if (newState === 'live') {
-              document.getElementById('demoLiveHeader').style.display = 'block';
-              document.getElementById('demoStatusLabel').textContent = 'Live Conversation';
-            }
-
-            var dot = document.getElementById('demoStatusDot');
-            var label = document.getElementById('demoStatusLabel');
-            if (newState === 'completed' || newState === 'polaris_summary') {
-              dot.className = 'demo-status-ended';
-              label.textContent = 'Call Ended';
-            } else if (newState === 'failed') {
-              dot.className = 'demo-status-ended';
-              label.textContent = 'Call Failed';
-            } else if (newState === 'live') {
-              dot.className = 'demo-status-connected';
-            } else {
-              dot.className = 'demo-status-connecting';
-              label.textContent = getStatusLabel(newState);
-            }
-
-            // ── M18.2: Start local timer when entering a talk state ──
-            var talkStates = ['answered', 'media_connected', 'live'];  // M19.5: removed 'completed' — no new timer on call end
-            if (talkStates.indexOf(newState) >= 0 && !demoState.timerInterval) {
-              demoState.timerSec = 0;
-              demoState.timerInterval = setInterval(function() {
-                demoState.timerSec++;
-                var m = Math.floor(demoState.timerSec / 60);
-                var s = demoState.timerSec % 60;
-                document.getElementById('demoLiveTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
-              }, 1000);
-            }
-          } catch(err) {
-            console.warn('[Demo:SSE] Status parse error:', err.message);
-          }
-        });
-
-        source.addEventListener('transcript', function(e) {
-          try {
-            var data = JSON.parse(e.data);
-            console.log('[Demo:SSE:Transcript] Received — callEnded=' + (data.callEnded || false) + ' totalLines=' + data.totalLines + ' linesProvided=' + (data.lines ? data.lines.length : 0));
-
-            // ── M18M: Handle callEnded full transcript broadcast ──
-            if (data.callEnded && data.lines && data.lines.length > 0) {
-              // Call has ended — render the full parsed transcript immediately
-              console.log('[Demo:SSE:M18M] Rendering full transcript: ' + data.lines.length + ' lines');
-              renderTranscript(data.lines);
-              document.getElementById('demoTranscriptCount').textContent = data.lines.length + ' messages';
-              demoState.transcriptLinesCache = data.lines;
-              demoState.transcriptSeq = data.lines.length;
-              return;
-            }
-
-            // ── Original per-line transcript (from simulation or legacy) ──
-            if (data.line) {
-              if (demoState.transcriptSeq === 0) {
-                demoState.transcriptLinesCache = [];
-              }
-              demoState.transcriptLinesCache.push(data.line);
-              renderTranscript(demoState.transcriptLinesCache);
-              document.getElementById('demoTranscriptCount').textContent = (data.totalLines || demoState.transcriptLinesCache.length) + ' messages';
-              var loading = document.getElementById('demoTranscriptLoading');
-              if (loading) loading.style.display = 'none';
-            }
-          } catch(err) {
-            console.warn('[Demo:SSE:Transcript] Parse error:', err.message);
-          }
-        });
-
-        // ── M18M: Speaking indicator via SSE ──
-        source.addEventListener('speaking', function(e) {
-          try {
-            var data = JSON.parse(e.data);
-            console.log('[Demo:SSE:M18M] Speaking: ' + data.speaker);
-            if (data.speaker) {
-              renderSpeakingIndicator(data.speaker);
-            }
-          } catch(err) {
-            console.warn('[Demo:SSE:Speaking] Parse error:', err.message);
-          }
-        });
-
-        source.addEventListener('executiveSummary', function(e) {
-          try {
-            var data = JSON.parse(e.data);
-            console.log('[Demo:SSE] Executive summary received');
-            demoState.executiveSummary = data;
-          } catch(err) {
-            console.warn('[Demo:SSE] Executive summary parse error:', err.message);
-          }
-        });
-
-        source.addEventListener('polarisSummary', function(e) {
-          try {
-            var data = JSON.parse(e.data);
-            console.log('[Demo:SSE] Polaris summary received — lead=' + data.leadId);
-          } catch(err) {
-            console.warn('[Demo:SSE] Polaris summary parse error:', err.message);
-          }
-        });
-
-        source.addEventListener('heartbeat', function(e) {
-          // Keep-alive — no action needed
-        });
-
-        source.onerror = function(err) {
-          console.warn('[Demo:SSE] Connection error — falling back to polling');
-          if (demoState.sseSource) {
-            demoState.sseSource.close();
-            demoState.sseSource = null;
-          }
-        };
-      } catch(err) {
-        console.warn('[Demo:SSE] Failed to create EventSource:', err.message);
-      }
-    }
-
-    // ── Transition to post-call ──
-    async function transitionToPostCall() {
-      // ── M18O: Guard against duplicate execution ──
-      // Both SSE and poll can trigger this — only run once.
-      if (demoState.postCallTransitioned) {
-        console.log('[Demo:M18O] transitionToPostCall already executed — skipping');
-        return;
-      }
-      demoState.postCallTransitioned = true;
-      // ── M19.5 Phase A: Freeze terminal duration BEFORE clearing timer ──
-      // Assign immutable finalTimerValue while the DOM still holds the live count.
-      // Priority: frozen browser timer serves as display fallback per spec.
-      demoState.finalTimerValue = document.getElementById('demoLiveTimer').textContent;
-      if (demoState.timerInterval) clearInterval(demoState.timerInterval);
-      if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
-      if (demoState.statusInterval) clearInterval(demoState.statusInterval);
-      if (demoState.sseSource) {
-        demoState.sseSource.close();
-        demoState.sseSource = null;
-      }
-
-      // ── M18M: Fetch the full transcript before transitioning ──
-      // The SSE may have already populated it, but fetch to be sure
-      if (demoState.sessionId) {
-        try {
-          var tResp = await fetch(DEMO_API + '/' + demoState.sessionId + '/transcript');
-          if (tResp.ok) {
-            var tData = await tResp.json();
-            if (tData.lines && tData.lines.length > 0) {
-              // Render the transcript in the live view so it gets copied below
-              renderTranscript(tData.lines);
-              document.getElementById('demoTranscriptCount').textContent = tData.lines.length + ' messages';
-              console.log('[Demo:M18M] Fetched ' + tData.lines.length + ' lines for post-call view');
-            }
-          }
-        } catch(e) {
-          console.warn('[Demo:M18M] Post-call transcript fetch error:', e.message);
-        }
-      }
-
-      var finalTimer = demoState.finalTimerValue || document.getElementById('demoLiveTimer').textContent;
-      document.getElementById('demoCallDuration').textContent = 'Duration: ' + finalTimer;
-
-      // Render the same canonical transcript turns into the post-call view.
-      var postBody = document.getElementById('demoPostTranscriptBody');
-      window.NorthStarTranscriptRenderer.render(postBody, demoState.transcriptLinesCache, {
-        labels: { ai: 'NorthStar AI', customer: 'Customer', system: '' },
-        scroll: 'top',
-        live: 'polite'
-      });
-      console.log('[Demo:Transition] Rendered ' + demoState.transcriptLinesCache.length + ' transcript lines into post-call view');
-
-      // Copy insights
-      var insights = document.getElementById('demoInsights');
-      var postInsights = document.getElementById('demoPostInsights');
-      if (insights && postInsights) {
-        postInsights.innerHTML = insights.innerHTML;
-      }
-
-      // Render Executive Summary if available
-      renderPostCallExecutiveSummary();
-
-      // ── M19.3.2: Removed — duplicate of Polaris Report Recommended Next Steps ──
-
-      // ── M19.3.1: Suppress legacy exec summary — Polaris Report is canonical ──
-      document.getElementById('demoPostExecutiveSummary').style.display = 'none';
-
-      // ── M19.3.4: Populate Customer Profile from executiveSummary ──
-      populateCustomerProfile();
-      // ── M19.3: Build the Polaris Executive Report from cloned data ──
-      buildPolarisReport();
-
-      document.getElementById('demoLiveView').style.display = 'none';
-      document.getElementById('demoPostCallView').style.display = 'block';
-    }
-
-    function populateCustomerProfile() {
-      // M19.4: Read from canonical record first, fall back to execSummary
-      var intel = demoState.polarisIntelligence;
-      var name = '', phone = '', addr = '', email = '';
-      if (intel && intel.customerFacts) {
-        name = intel.customerFacts.name || '';
-        phone = intel.customerFacts.phone || '';
-        addr = intel.customerFacts.address || '';
-        email = intel.customerFacts.email || '';
-      }
-      var es = demoState.executiveSummary;
-      if (!name && es && es.customerName) name = es.customerName;
-      if (!phone && es && es.customerPhone) phone = es.customerPhone;
-      if (!addr && es && es.customerAddress) addr = es.customerAddress;
-      if (!email && es && es.customerEmail) email = es.customerEmail;
-      var nameEl = document.getElementById('reportCustomerName');
-      var phoneEl = document.getElementById('reportCustomerPhone');
-      var addrEl = document.getElementById('reportCustomerAddress');
-      var emailEl = document.getElementById('reportCustomerEmail');
-      if (nameEl) nameEl.textContent = name || 'Not provided';
-      if (phoneEl) phoneEl.textContent = phone || 'Not provided';
-      if (addrEl) addrEl.textContent = addr || 'Not provided';
-      if (emailEl) emailEl.textContent = email || 'Not provided';
-    }
-    function buildPolarisReport() {
-      var report = document.getElementById('polarisReportContainer');
-      if (!report) return;
-      // M19.4: Read from cached canonical record
-      var intel = demoState.polarisIntelligence;
-      var est = demoState.polarisEstimate;
-      // --- Hero section ---
-      var rRev = document.getElementById('reportRevenue');
-      if (rRev) {
-        var rev = (intel && intel.estimate && intel.estimate.revenueRange) ||
-                   (est && est.revenueRange) || 'Analyzing...';
-        rRev.textContent = rev;
-      }
-      var rConf = document.getElementById('reportConfidence');
-      var rConfFill = document.getElementById('reportConfFill');
-      var confidenceVal = (intel && intel.estimate && intel.estimate.confidence) ||
-                           (est && est.confidence) || 0;
-      if (rConf) rConf.textContent = confidenceVal + '%';
-      if (rConfFill) rConfFill.style.width = confidenceVal + '%';
-      // --- AI Recommendation ---
-      var rRec = document.getElementById('reportRec');
-      if (rRec) {
-        var reasoning = (intel && intel.reasoning) || (est && est.reasoning) || [];
-        var firstDetail = reasoning.length > 0 ? reasoning[0].detail || '' : '';
-        var urgency = '';
-        for (var ri = 0; ri < reasoning.length; ri++) {
-          if (reasoning[ri].factor === 'Urgency Level') {
-            urgency = reasoning[ri].detail.toLowerCase();
-            break;
-          }
-        }
-        var action = '';
-        if (urgency && urgency !== 'standard') {
-          action = 'Prioritize an on-site evaluation due to ' + urgency + ' urgency';
-        } else if (firstDetail) {
-          action = 'Schedule a consultation for ' + firstDetail.toLowerCase() + ' at the customer\'s earliest convenience';
-        } else {
-          action = 'Analyzing call...';
-        }
-        rRec.innerHTML = '<span class="polaris-report-rec-label">AI Recommendation</span><span class="polaris-report-rec-text">' + action + '.</span>';
-      }
-      // --- Executive Briefing ---
-      var rExec = document.getElementById('reportExecBody');
-      if (rExec) {
-        var briefing = (intel && intel.executiveBriefing) || 'Call completed. Analysis available.';
-        rExec.textContent = briefing;
-      }
-      // --- Call Intelligence KPIs ---
-      var rIntent = document.getElementById('reportIntent');
-      var rQual = document.getElementById('reportQual');
-      var rBook = document.getElementById('reportBooking');
-      if (rIntent) {
-        var intentFact = reasoning ? reasoning.find(function(rf) { return rf.factor === 'Customer Intent'; }) : null;
-        rIntent.textContent = intentFact ? intentFact.detail : '—';
-      }
-      if (rQual) {
-        var collected = (intel && intel.estimatingVariables) ? intel.estimatingVariables.filter(function(v) { return v.status === 'collected'; }).length : 0;
-        var total = (intel && intel.estimatingVariables) ? intel.estimatingVariables.length : 0;
-        rQual.textContent = total > 0 ? collected + '/' + total + ' variables collected' : '—';
-      }
-      if (rBook) {
-        rBook.textContent = confidenceVal > 0 ? Math.min(confidenceVal + 5, 95) + '%' : '—';
-      }
-      // --- Estimating Variables ---
-      var varsBody = document.getElementById('reportVarsBody');
-      if (varsBody && intel && intel.estimatingVariables && intel.estimatingVariables.length > 0) {
-        var vh = '';
-        for (var vi = 0; vi < intel.estimatingVariables.length; vi++) {
-          var v = intel.estimatingVariables[vi];
-          var statusIcon = v.status === 'collected' ? '&#9989;' : '&#10060;';
-          var displayVal = v.display || 'Not discussed';
-          var sourceHtml = v.sourceQuote ? '<div class="polaris-var-source">\u201c' + v.sourceQuote + '\u201d</div>' : '';
-          var confPct = Math.round(v.confidence * 100) + '%';
-          vh += '<div class="polaris-var-row">';
-          vh += '  <span class="polaris-var-status">' + statusIcon + '</span>';
-          vh += '  <span class="polaris-var-name">' + v.variable + '</span>';
-          vh += '  <span class="polaris-var-value">' + displayVal + '</span>';
-          vh += '  <span class="polaris-var-conf">' + confPct + '</span>';
-          vh += '</div>';
-          if (sourceHtml) vh += sourceHtml;
-        }
-        varsBody.innerHTML = vh;
-      } else if (varsBody) {
-        varsBody.innerHTML = '<div style="font-size:13px;color:#9ca3af;">No variables extracted yet.</div>';
-      }
-      // --- Estimate Adjustments ---
-      var adjBody = document.getElementById('reportAdjBody');
-      if (adjBody && intel && intel.estimate && intel.estimate.adjustments) {
-        var adj = intel.estimate.adjustments;
-        if (adj.reasons && adj.reasons.length > 0) {
-          var ah = '';
-          ah += '<div class="polaris-adj-row"><span class="polaris-adj-label">Base Estimate</span><span class="polaris-adj-value">$' + adj.baseValue.toLocaleString() + '</span></div>';
-          ah += '<div class="polaris-adj-row"><span class="polaris-adj-label">Adjustment Factor</span><span class="polaris-adj-value">' + adj.factMultiplier.toFixed(1) + 'x</span></div>';
-          for (var ai = 0; ai < adj.reasons.length; ai++) {
-            ah += '<div class="polaris-adj-row polaris-adj-reason"><span class="polaris-adj-label">Reason</span><span class="polaris-adj-value">' + adj.reasons[ai] + '</span></div>';
-          }
-          ah += '<div class="polaris-adj-row polaris-adj-total"><span class="polaris-adj-label">Estimated Range</span><span class="polaris-adj-value">' + intel.estimate.revenueRange + '</span></div>';
-          adjBody.innerHTML = ah;
-        } else {
-          adjBody.innerHTML = '<div style="font-size:13px;color:#9ca3af;">Standard estimate based on typical scope.</div>';
-        }
-      } else if (adjBody) {
-        adjBody.innerHTML = '';
-      }
-      // --- Missing Information -> Next Steps ---
-      var rAct = document.getElementById('reportActionsList');
-      if (rAct) {
-        var missing = (intel && intel.missingInformation) || [];
-        if (missing.length > 0) {
-          var mh = '<li style="font-weight:600;color:#7c3aed;">Information needed to refine estimate:</li>';
-          for (var mi = 0; mi < missing.length; mi++) {
-            mh += '<li>&#9656; Confirm ' + missing[mi].toLowerCase() + '</li>';
-          }
-          mh += '<li>&#9656; Schedule on-site evaluation</li>';
-          mh += '<li>&#9656; Send follow-up with pricing</li>';
-          rAct.innerHTML = mh;
-        } else {
-          rAct.innerHTML = '<li>Call completed. Lead captured.</li>';
-        }
-      }
-      // --- Reasoning factors (from canonical record) ---
-      var rReas = document.getElementById('reportReasoningBody');
-      if (rReas) {
-        if (reasoning && reasoning.length > 0) {
-          var rh = '';
-          for (var rfi = 0; rfi < reasoning.length; rfi++) {
-            var rf = reasoning[rfi];
-            rh += '<div class="polaris-reasoning-factor"><span class="factor-label">' + rf.factor + '</span><span class="factor-detail">' + rf.detail + '</span></div>';
-          }
-          rReas.innerHTML = rh;
-        } else {
-          rReas.innerHTML = '<div class="polaris-reasoning-loader">Loading...</div>';
-        }
-      }
-      // --- Show adjustments section if there are reasons ---
-      var adjSection = document.getElementById('reportAdjSection');
-      if (adjSection && intel && intel.estimate && intel.estimate.adjustments &&
-          intel.estimate.adjustments.reasons && intel.estimate.adjustments.reasons.length > 0) {
-        adjSection.style.display = 'block';
-      } else if (adjSection) {
-        adjSection.style.display = 'none';
-      }
-      // --- Show variables section ---
-      var varsSection = document.getElementById('reportVarsSection');
-      if (varsSection && intel && intel.estimatingVariables && intel.estimatingVariables.length > 0) {
-        varsSection.style.display = 'block';
-      } else if (varsSection) {
-        varsSection.style.display = 'none';
-      }
-      // --- Show report ---
-      report.style.display = 'block';
-    }
-      function renderPostCallExecutiveSummary() {
-      var es = demoState.executiveSummary;
-      var container = document.getElementById('demoPostExecutiveSummary');
-      if (!container) return;
-      if (!es) { container.style.display = 'none'; return; }
-
-      var sentimentColor = es.sentiment === 'positive' ? '#16a34a' : es.sentiment === 'negative' || es.sentiment === 'frustrated' ? '#dc2626' : '#d97706';
-      var polarisBadge = '';
-      if (es.polarisOpportunityScore) {
-        var ps = es.polarisOpportunityScore;
-        polarisBadge = '<span style="display:inline-block;padding:4px 10px;border-radius:100px;font-size:12px;font-weight:600;background:' + (ps.placeholder ? '#fef3c7' : '#dcfce7') + ';color:' + (ps.placeholder ? '#92400e' : '#166534') + ';">⭐ POLARIS Score: ' + ps.score + (ps.placeholder ? ' (pending)' : '') + '</span>';
-      }
-      var keyTopicsHtml = '';
-      if (es.keyTopics && es.keyTopics.length > 0) {
-        keyTopicsHtml = '<div style="margin-bottom:8px;"><strong>Key Topics:</strong> ' + es.keyTopics.map(function(t){return '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#f3f4f6;border-radius:100px;font-size:12px;">' + t + '</span>';}).join('') + '</div>';
-      }
-      var actionItemsHtml = '';
-      if (es.actionItems && es.actionItems.length > 0) {
-        actionItemsHtml = '<div style="margin-top:12px;"><strong>Action Items:</strong><ul style="list-style:none;padding:0;margin:4px 0;">';
-        es.actionItems.forEach(function(a) {
-          var prioColor = a.priority === 'high' ? '#dc2626' : a.priority === 'medium' ? '#d97706' : '#9ca3af';
-          actionItemsHtml += '<li style="padding:3px 0;font-size:13px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + prioColor + ';margin-right:8px;"></span>' + a.description + '</li>';
-        });
-        actionItemsHtml += '</ul></div>';
-      }
-      var recsHtml = '';
-      if (es.recommendations && es.recommendations.length > 0) {
-        recsHtml = '<div style="margin-top:8px;"><strong>Recommendations:</strong>';
-        es.recommendations.forEach(function(r) {
-          recsHtml += '<div style="font-size:13px;padding:2px 0;">📌 ' + r.description + '</div>';
-        });
-        recsHtml += '</div>';
-      }
-
-      container.innerHTML = '' +
-        '<div style="background:#fff;border:1px solid var(--neutral-200);border-radius:12px;padding:20px;margin-bottom:12px;">' +
-          '<h3 style="margin:0 0 8px;font-size:16px;">📋 Executive Summary</h3>' +
-          '<div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
-            '<span style="font-weight:600;">' + (es.callOutcome || 'Call completed') + '</span>' +
-            (polarisBadge || '') +
-          '</div>' +
-          '<div style="font-size:14px;color:#6b7280;margin-bottom:8px;">' +
-            '<strong>Sentiment:</strong> <span style="color:' + sentimentColor + ';text-transform:capitalize;">' + (es.sentiment || 'neutral') + '</span>' +
-            (es.customerName ? ' · <strong>Customer:</strong> ' + es.customerName : '') +
-            (es.serviceRequested ? ' · <strong>Service:</strong> ' + es.serviceRequested : '') +
-            (es.durationFormatted ? ' · <strong>Duration:</strong> ' + es.durationFormatted : '') +
-          '</div>' +
-          keyTopicsHtml +
-          actionItemsHtml +
-          recsHtml +
-          '<div style="font-size:11px;color:#9ca3af;margin-top:8px;">Generated: ' + new Date(es.generatedAt).toLocaleString() + '</div>' +
-        '</div>';
-      container.style.display = 'block';
-    }
-
-    // ── Reset demo ──
-    function resetDemo() {
-      if (demoState.timerInterval) clearInterval(demoState.timerInterval);
-      if (demoState.transcriptInterval) clearInterval(demoState.transcriptInterval);
-      if (demoState.statusInterval) clearInterval(demoState.statusInterval);
-
-      demoState = {
-        sessionId: null,
-        callStatus: null,
-        timerSec: 0,
-        timerInterval: null,
-        transcriptInterval: null,
-        statusInterval: null,
-        transcriptSeq: 0,
-        speakingIndicator: null,
-        transcriptLinesCache: [],
-      };
-
-      // Reset business info
-      demoBusinessInfo = {
-        businessName: '',
-        industry: '',
-        phoneNumber: '',
-        currentScenario: null
-      };
-
-      // Hide modal if open
-      var modal = document.getElementById('preCallModal');
-      if (modal) modal.classList.remove('active');
-
-      // Reset modal chips
-      document.querySelectorAll('#modalScenarioChips .demo-modal-chip').forEach(function(c) {
-        c.classList.remove('active');
-      });
-
-      document.getElementById('demoLiveView').style.display = 'none';
-      document.getElementById('demoPostCallView').style.display = 'none';
-      document.getElementById('demoPreCallView').style.display = 'block';
-
-      // Reset form
-      document.getElementById('demoBusinessName').value = '';
-      document.getElementById('demoIndustry').value = '';
-      document.getElementById('demoPhoneNumber').value = '';
-      document.getElementById('demoCallBtn').disabled = false;
-      document.getElementById('demoCallBtn').textContent = '📞 Call Me Now';
-      document.querySelectorAll('.demo-scenario-chip').forEach(function(c) { c.classList.remove('active'); });
-
-      // Reset transcript
-      document.getElementById('demoTranscriptBody').innerHTML = '<div class="demo-loading" id="demoTranscriptLoading"><div class="demo-spinner"></div><p style="font-size:14px;color:var(--neutral-500);">Waiting for conversation to begin...</p></div>';
-      document.getElementById('demoTranscriptCount').textContent = '0 messages';
-      document.getElementById('demoStatusDot').className = 'demo-status-connecting';
-      document.getElementById('demoStatusLabel').textContent = 'Connecting...';
-      document.getElementById('demoLiveTimer').textContent = '0:00';
-
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  </script>
 
   <script src="/js/homepage-demo.js"></script>
 

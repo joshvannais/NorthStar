@@ -220,7 +220,8 @@ router.get('/status', async function (_req, res) {
       persistence: 'postgresql',
       canonicalLifecycle: true,
       outboundCalls: false,
-      guidedPreview: true,
+      guidedPreview: false,
+      browserWebCall: true,
     });
   } catch (error) {
     return errorResponse(res, error);

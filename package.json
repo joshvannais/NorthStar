@@ -7,6 +7,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "jest --config jest.config.js",
+    "build:retell-web": "esbuild src/browser/retellWebEntry.mjs --bundle --format=esm --platform=browser --minify --drop:console --legal-comments=external --outfile=public/js/vendor/retell-web-client.mjs",
     "test:integration": "jest --config jest.config.js tests/integration/",
     "test:api": "jest --config jest.config.js tests/api/",
     "test:regression": "jest --config jest.config.js tests/regression/"
@@ -23,10 +24,12 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.7",
     "pg": "^8.22.0",
+    "retell-client-js-sdk": "2.0.8",
     "twilio": "^4.19.0",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
     "jest": "^30.4.2",
     "supertest": "^7.2.2"
   }

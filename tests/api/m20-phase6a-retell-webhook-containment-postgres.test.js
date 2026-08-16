@@ -761,6 +761,47 @@ realPostgres('Mission 20 Phase 6A Retell webhook containment', () => {
     expect(await tableState()).toEqual(before);
   });
 
+  test('signed Homepage Web Call events are discarded without any durable NorthStar row', async () => {
+    const sentinel = 'homepage-private-webhook-' + crypto.randomUUID();
+    const payload = {
+      event: 'call_ended',
+      call: {
+        call_id: 'homepage-call-' + crypto.randomUUID(),
+        call_type: 'web_call',
+        agent_id: FORBIDDEN_AGENT,
+        transcript: `Customer: ${sentinel}`,
+        transcript_object: [{ role: 'user', words: sentinel }],
+        retell_llm_dynamic_variables: {
+          northstar_demo_mode: 'homepage_browser_web_call',
+          northstar_demo_webhook_contract: 'homepage-ephemeral-web-call-v1',
+        },
+      },
+    };
+    const raw = JSON.stringify(payload);
+    const fingerprint = replayAuthority.requestFingerprint(Buffer.from(raw, 'utf8'));
+    const before = await tableState(AUTHORITY_TABLES.concat(['api_observability_hourly']));
+
+    const info = jest.spyOn(console, 'info').mockImplementation(() => {});
+    let response;
+    let infoCalls;
+    try {
+      response = await sendRaw('/api/retell/webhook', raw, { signature: sign(raw) });
+      infoCalls = info.mock.calls.slice();
+    } finally {
+      info.mockRestore();
+    }
+
+    expect(response.status).toBe(204);
+    expect(response.text).toBe('');
+    expect(infoCalls).toHaveLength(0);
+    expect(await tableState(AUTHORITY_TABLES.concat(['api_observability_hourly']))).toEqual(before);
+    const replay = await db.getPool().query(
+      'SELECT count(*)::int AS count FROM retell_webhook_replay_claims WHERE request_fingerprint = $1',
+      [fingerprint]
+    );
+    expect(replay.rows[0].count).toBe(0);
+  });
+
   test.each([
     ['/API/RETELL/WEBHOOK', 'legacy mixed case'],
     ['/api/retell/webhook/', 'legacy trailing slash'],

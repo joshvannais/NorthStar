@@ -890,6 +890,17 @@
 
       // ── Send / Retry ──
 
+      function respondToAccountFreeDemoChat() {
+        if (!window.NorthStarDemoRuntime || window.NorthStarDemoRuntime.active !== true) return false;
+        addMessage(
+          'assistant',
+          'Live Polaris chat is not available in the account-free demo. Explore the canonical Polaris results on this page; no request was sent.',
+          'sent'
+        );
+        input.focus();
+        return true;
+      }
+
       function sendMessage() {
         var message = input.value.trim();
         if (!message || isLoading) return;
@@ -898,6 +909,10 @@
         addMessage('user', message, 'sent');
         input.value = '';
         resetInputHeight();
+
+        // Demo pages preserve the canonical presentation without invoking the
+        // retired paid-only chat transport or creating a server audit record.
+        if (respondToAccountFreeDemoChat()) return;
 
         // Show typing indicator
         showTyping();
@@ -945,6 +960,10 @@
 
       function retryLastMessage(text) {
         if (isLoading) return;
+
+        // Defensive parity with Send: a legacy retry must also stay entirely
+        // inside the browser when this paid shell is mounted at /demo/polaris.
+        if (respondToAccountFreeDemoChat()) return;
 
         // Remove last error message
         if (messages.length > 0) {

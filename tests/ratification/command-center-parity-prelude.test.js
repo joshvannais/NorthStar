@@ -119,6 +119,10 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(client).toContain('/api/demo/command-center/simulations/leads');
     expect(client).toContain("'X-NorthStar-Demo-Intent': intent");
     expect(client).not.toMatch(/\.innerHTML\s*=|insertAdjacentHTML|document\.write|eval\s*\(/);
+    const polaris = read('public/dashboard/polaris.html');
+    expect(polaris).toContain('function respondToAccountFreeDemoChat()');
+    expect(polaris.match(/respondToAccountFreeDemoChat\(\)/g)).toHaveLength(3);
+    expect(polaris).toContain('no request was sent.');
     expect(server).toContain("'command-center': 'public/dashboard/command-center.html'");
     expect(server).toContain("integrations: 'public/dashboard/integrations.html'");
     expect(server).not.toContain("pages[destination.demoPath] = 'public/demo-dashboard.html'");

@@ -241,6 +241,20 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     for (const route of ROUTES.slice(1)) {
       const snapshot = await clickRoute(page, origin, route, 1, viewport);
       assert.strictEqual(snapshot.workspace.integrity.digest, initialDigest, route.path + ' exact initial digest');
+      if (route.id === 'polaris') {
+        const requestOffset = ledger.requests.length;
+        const prompt = page.locator('#polarisPromptInput').first();
+        const send = page.locator('#polarisSendBtn').first();
+        await prompt.fill('Show the account-free demo boundary.');
+        await send.click();
+        await page.waitForFunction(() => Array.from(document.querySelectorAll('.polaris-chat-message')).some(node =>
+          node.textContent.includes('Live Polaris chat is not available in the account-free demo.')
+        ));
+        const chatRequests = ledger.requests.slice(requestOffset).filter(entry =>
+          new URL(entry.url).pathname === '/api/v1/polaris/chat'
+        );
+        assert.deepStrictEqual(chatRequests, [], viewport.label + ' demo Polaris chat stays browser-local');
+      }
       console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' route ' + route.id);
     }
 

@@ -343,6 +343,23 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(text).not.toContain('0% confidence');
   });
 
+  test('Command Center numeric normalization preserves absence and legitimate recorded zero', () => {
+    const script = read('public/js/command-center-page.js');
+    const start = script.indexOf('function finiteNumber(value) {');
+    const end = script.indexOf('\n\n  function formatMoney', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const finiteNumber = vm.runInNewContext('(' + script.slice(start, end).trim() + ')', { Number });
+
+    expect(finiteNumber(null)).toBeNull();
+    expect(finiteNumber(undefined)).toBeNull();
+    expect(finiteNumber('')).toBeNull();
+    expect(finiteNumber(false)).toBeNull();
+    expect(finiteNumber(0)).toBe(0);
+    expect(finiteNumber('0')).toBe(0);
+    expect(finiteNumber('4250.50')).toBe(4250.5);
+  });
+
   test('the server-owned scenario builder exposes and materializes far more than 100 distinct paths', () => {
     expect(scenarioSpace.DIMENSION_ORDER).toEqual([
       'business', 'service', 'intent', 'urgency', 'context', 'scheduling', 'outcome',

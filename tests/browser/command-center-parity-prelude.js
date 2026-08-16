@@ -54,7 +54,8 @@ function paidBusinessProfile(companyName) {
   return profile;
 }
 
-function paidGraphRequest(organizationId, key, customerName, phone) {
+function paidGraphRequest(organizationId, key, customerName, phone, material) {
+  const selectedMaterial = material || 'cedar';
   return {
     tenantContext: { organizationId },
     idempotencyKey: key,
@@ -74,13 +75,13 @@ function paidGraphRequest(organizationId, key, customerName, phone) {
     },
     transcript: [
       { speaker: 'agent', text: 'Thanks for calling. What kind of fence work do you need?' },
-      { speaker: 'customer', text: 'I need a 120 foot cedar privacy fence and an appointment next week.' },
+      { speaker: 'customer', text: 'I need a 120 foot ' + selectedMaterial + ' privacy fence and an appointment next week.' },
     ],
     facts: [
-      { variable: 'jobType', normalizedValue: 'Cedar privacy fence installation', evidenceText: 'The customer requested a cedar privacy fence.', speaker: 'customer', confidence: 0.98 },
+      { variable: 'jobType', normalizedValue: selectedMaterial + ' privacy fence installation', evidenceText: 'The customer requested a ' + selectedMaterial + ' privacy fence.', speaker: 'customer', confidence: 0.98 },
       { variable: 'linearFeet', normalizedValue: 120, evidenceText: 'The customer requested 120 feet.', speaker: 'customer', confidence: 0.98 },
     ],
-    service: { key: 'fence', scope: { linearFeet: 120, material: 'cedar', gates: 1 } },
+    service: { key: 'fence', scope: { linearFeet: 120, material: selectedMaterial, gates: 1 } },
     appointmentPreference: { window: 'next week', flexibility: 'weekday' },
     scheduledAppointment: { start: '2026-08-20T14:00:00.000Z', end: '2026-08-20T16:00:00.000Z' },
     travel: { miles: 8 },
@@ -434,6 +435,32 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger) 
     assert.ok(entry && [200, 304].includes(entry.status()), 'paid Command Center shell loads');
     const first = await inspectPaidCurrent(page, ROUTES[0], viewport);
     assert.strictEqual(first.objectHrefs.length >= 3, true, viewport.label + ' paid Command Center exposes complete object paths');
+    const absentEstimate = await page.evaluate(() => {
+      const valueCard = Array.from(document.querySelectorAll('#commandCenterKpis .demo-kpi-card')).find(card => {
+        const label = card.querySelector('span');
+        return label && label.textContent.trim() === 'Recorded opportunity value';
+      });
+      return {
+        kpiValue: valueCard && valueCard.querySelector('strong') && valueCard.querySelector('strong').textContent.trim(),
+        kpiNote: valueCard && valueCard.querySelector('small') && valueCard.querySelector('small').textContent.trim(),
+        chart: document.getElementById('commandCenterChartBars').innerText,
+        chartSummary: document.getElementById('commandCenterChartSummary').innerText,
+        tableValues: Array.from(document.querySelectorAll('#commandCenterLeadRows tr td:nth-child(3)'))
+          .map(cell => cell.textContent.trim()),
+        polaris: document.getElementById('commandCenterPolaris').innerText,
+      };
+    });
+    assert.strictEqual(absentEstimate.kpiValue, 'Unavailable', viewport.label + ' null estimate stays unavailable in the paid KPI');
+    assert.strictEqual(absentEstimate.kpiNote, 'No role-authorized customer price is available.',
+      viewport.label + ' paid KPI explains the absent canonical price');
+    assert.ok(absentEstimate.chart.includes('No recorded opportunity values are available for this view.'),
+      viewport.label + ' null estimate stays absent from the chart');
+    assert.ok(absentEstimate.chartSummary.includes('empty until a role-authorized estimate is recorded'),
+      viewport.label + ' paid chart explains its missing input');
+    assert.deepStrictEqual(absentEstimate.tableValues, ['Unavailable — no recorded estimate'],
+      viewport.label + ' paid table does not fabricate a zero-dollar estimate');
+    assert.ok(!absentEstimate.polaris.includes('A recorded customer-facing estimate is available for review.'),
+      viewport.label + ' paid Polaris card does not claim an absent estimate exists');
     await exercisePolarisDisclosure(page, { ...ROUTES[0], path: ROUTES[0].paidPath }, viewport);
 
     for (const route of ROUTES.slice(1)) {
@@ -773,7 +800,7 @@ async function main() {
       expectedVersion: null,
       profile: paidBusinessProfile('Paid Browser Organization B'),
     });
-    const paidA = await ingestRetell(pool, paidGraphRequest(PAID_ORG_A, 'paid-browser-a', PAID_CUSTOMER_A, '+15550101001'));
+    const paidA = await ingestRetell(pool, paidGraphRequest(PAID_ORG_A, 'paid-browser-a', PAID_CUSTOMER_A, '+15550101001', 'redwood'));
     const paidB = await ingestRetell(pool, paidGraphRequest(PAID_ORG_B, 'paid-browser-b', PAID_CUSTOMER_B, '+15550101002'));
     assert.strictEqual(paidA.status, 201, 'tenant A real canonical graph created');
     assert.strictEqual(paidB.status, 201, 'tenant B negative-control graph created');

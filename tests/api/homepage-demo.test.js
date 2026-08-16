@@ -96,7 +96,10 @@ describe('Homepage demo route contract', () => {
       transcript,
     }).expect(200);
     expect(projected.body.data.contract).toBe('NorthStarHomepageCanonicalPolaris/v1');
+    expect(service.verifyCallAuthority).toHaveBeenCalledWith('call_1', 'purge');
     expect(admission.admitProjection).toHaveBeenCalledWith('a'.repeat(64));
+    expect(service.verifyCallAuthority.mock.invocationCallOrder[0])
+      .toBeLessThan(admission.admitProjection.mock.invocationCallOrder[0]);
     expect(service.projectPolaris).toHaveBeenCalledWith('call_1', 'purge', 'Roofing', transcript, 30);
 
     const deleted = await mutation(request(app), 'delete', '/api/demo/homepage/web-call/call_1', 'delete-homepage-web-call', {
@@ -122,6 +125,35 @@ describe('Homepage demo route contract', () => {
     expect(service.verifyCallAuthority).not.toHaveBeenCalled();
     expect(admission.admitPurge).not.toHaveBeenCalled();
     expect(service.purge).not.toHaveBeenCalled();
+  });
+
+  test('invalid signed projection authority is rejected before projection admission', async () => {
+    const verificationError = Object.assign(new Error('The temporary projection authority is invalid.'), {
+      status: 403,
+      code: 'homepage_purge_authority_invalid',
+    });
+    const service = {
+      availability: () => ({ available: true }),
+      verifyCallAuthority: jest.fn(() => { throw verificationError; }),
+      projectPolaris: jest.fn(),
+      purge: jest.fn(),
+    };
+    const { app, admission } = build({ service });
+    const response = await mutation(
+      request(app),
+      'post',
+      '/api/demo/homepage/polaris/call_1',
+      'calculate-homepage-polaris',
+      {
+        callDurationSeconds: 30,
+        industry: 'Roofing',
+        purgeToken: 'invalid',
+        transcript: [{ speaker: 'customer', text: 'A fictional roof.' }],
+      }
+    ).expect(403);
+    expect(response.body.error.code).toBe('homepage_purge_authority_invalid');
+    expect(admission.admitProjection).not.toHaveBeenCalled();
+    expect(service.projectPolaris).not.toHaveBeenCalled();
   });
 
   test('invalid signed deletion authority is rejected before purge admission', async () => {

@@ -98,6 +98,7 @@ function createHomepageDemoRouter(options = {}) {
       });
     }
     try {
+      service.verifyCallAuthority(req.params.callId, req.body.purgeToken);
       await admission.admitProjection(hashSource(req.ip));
       const result = service.projectPolaris(
         req.params.callId,

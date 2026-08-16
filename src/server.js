@@ -77,7 +77,7 @@ app.get('/site.webmanifest', (_req, res) => {
 // Frontend page routes
 const pages = {
   '/': 'public/index.html',
-  '/demo-dashboard': 'public/dashboard/command-center.html',
+  '/demo-dashboard': 'public/demo-dashboard.html',
   '/login': 'public/login.html',
   '/signup': 'public/signup.html',
   '/verify-email': 'public/verify-email.html',
@@ -85,7 +85,7 @@ const pages = {
   '/reset-password': 'public/reset-password.html',
   '/accept-invitation': 'public/accept-invitation.html',
   '/account/pending': 'public/account/pending.html',
-  '/dashboard': 'public/dashboard/command-center.html',
+  '/dashboard': 'public/demo-dashboard.html',
   '/dashboard/executive-brief': 'public/dashboard/executive-brief.html',
   '/dashboard/leads': 'public/dashboard/leads.html',
   '/dashboard/communications': 'public/dashboard/communications.html',
@@ -113,7 +113,7 @@ const pages = {
 // browser modules as its paid counterpart. DemoRuntime changes only authority,
 // routes, and transport; it never replaces these pages with a generic renderer.
 const demoPageFiles = Object.freeze({
-  'command-center': 'public/dashboard/command-center.html',
+  'command-center': 'public/demo-dashboard.html',
   polaris: 'public/dashboard/polaris.html',
   leads: 'public/dashboard/leads.html',
   communications: 'public/dashboard/communications.html',

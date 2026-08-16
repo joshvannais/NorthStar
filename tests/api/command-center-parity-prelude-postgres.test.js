@@ -5,6 +5,15 @@ const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database'
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ORIGIN = 'http://northstar.test';
+const RICH_SCENARIO = Object.freeze({
+  business: 'multi_crew',
+  service: 'roofing',
+  intent: 'second_opinion',
+  urgency: 'safety_emergency',
+  context: 'insurance_claim',
+  scheduling: 'weather_window',
+  outcome: 'needs_information',
+});
 
 function cookieFrom(response) {
   const header = response.headers['set-cookie'];
@@ -124,7 +133,7 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(1);
     const key = 'simulate-command-center-demo-00000001';
     const created = await mutation(request(app), cookie, '/api/demo/command-center/simulations/leads', 'simulate-lead', key, {
-      service: 'fence',
+      scenario: RICH_SCENARIO,
       expectedRevision: 1,
     }).expect(201);
 
@@ -146,9 +155,28 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     const graph = created.body.data.graphs[0];
     expect(graph).toEqual(expect.objectContaining({
       customer: expect.objectContaining({ fictional: true }),
-      lead: expect.objectContaining({ serviceType: 'fence' }),
-      work: expect.objectContaining({ id: expect.any(String) }),
-      polaris: expect.objectContaining({ completeDetail: true, snapshotDigest: expect.stringMatching(/^[0-9a-f]{64}$/) }),
+      lead: expect.objectContaining({
+        serviceType: 'roofing',
+        callerIntent: 'Get a second opinion',
+        urgency: 'Safety or active-damage emergency',
+        outcome: 'More information needed',
+      }),
+      work: expect.objectContaining({
+        id: expect.any(String),
+        schedulingConstraint: 'Weather-dependent window',
+      }),
+      scenario: expect.objectContaining({
+        signature: 'multi_crew:roofing:second_opinion:safety_emergency:insurance_claim:weather_window:needs_information',
+        selection: RICH_SCENARIO,
+      }),
+      polaris: expect.objectContaining({
+        completeDetail: true,
+        snapshotDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+        snapshot: expect.objectContaining({
+          risk: expect.objectContaining({ emergency: true }),
+          missingInformation: expect.arrayContaining([expect.any(String)]),
+        }),
+      }),
     }));
 
     for (const surface of ['customer-detail', 'leads', 'communications', 'calendar']) {
@@ -190,7 +218,7 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     }
 
     const replay = await mutation(request(app), cookie, '/api/demo/command-center/simulations/leads', 'simulate-lead', key, {
-      service: 'fence',
+      scenario: RICH_SCENARIO,
       expectedRevision: 1,
     }).expect(200);
     expect(replay.body.replayed).toBe(true);
@@ -198,7 +226,7 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect(replay.body.data.graphs).toHaveLength(4);
 
     const conflictingReplay = await mutation(request(app), cookie, '/api/demo/command-center/simulations/leads', 'simulate-lead', key, {
-      service: 'roofing',
+      scenario: { ...RICH_SCENARIO, outcome: 'booked' },
       expectedRevision: 1,
     }).expect(409);
     expect(conflictingReplay.body.error.code).toBe('demo_idempotency_conflict');
@@ -237,7 +265,7 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
       expectedRevision: 2,
     }).expect(200);
     const staleReplay = await mutation(request(app), cookie, '/api/demo/command-center/simulations/leads', 'simulate-lead', key, {
-      service: 'fence',
+      scenario: RICH_SCENARIO,
       expectedRevision: 1,
     }).expect(409);
     expect(staleReplay.body.error.code).toBe('demo_idempotency_stale');
@@ -386,5 +414,45 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
       .send({ service: 'fence', expectedRevision: 1 });
     expect([401, 404, 405]).toContain(response.status);
     expect(response.status).not.toBe(201);
+  });
+
+  test('production proxy metadata accepts only the exact public NorthStar origins', async () => {
+    const config = require('../../src/config');
+    const priorSecureCookies = config.auth.secureCookies;
+    config.auth.secureCookies = true;
+    try {
+      const internalHost = 'northstar-production.up.railway.app';
+      const first = await request(app).get('/api/demo/command-center')
+        .set('Host', internalHost)
+        .expect(200);
+      const cookie = cookieFrom(first);
+      const accepted = await request(app).post('/api/demo/command-center/simulations/leads')
+        .set('Host', internalHost)
+        .set('Origin', 'https://northstar-os.ai')
+        .set('Sec-Fetch-Site', 'same-origin')
+        .set('Cookie', cookie)
+        .set('Idempotency-Key', 'production-proxy-origin-000000000001')
+        .set('X-NorthStar-Demo-Intent', 'simulate-lead')
+        .send({ scenario: RICH_SCENARIO, expectedRevision: 1 })
+        .expect(201);
+      expect(accepted.body.data.integrity.revision).toBe(2);
+      expect(accepted.body.data.graphs[0].scenario.selection).toEqual(RICH_SCENARIO);
+
+      const attackerFirst = await request(app).get('/api/demo/command-center')
+        .set('Host', internalHost)
+        .expect(200);
+      const rejected = await request(app).post('/api/demo/command-center/simulations/leads')
+        .set('Host', internalHost)
+        .set('Origin', 'https://northstar-os.ai.attacker.example')
+        .set('Sec-Fetch-Site', 'cross-site')
+        .set('Cookie', cookieFrom(attackerFirst))
+        .set('Idempotency-Key', 'production-proxy-origin-000000000002')
+        .set('X-NorthStar-Demo-Intent', 'simulate-lead')
+        .send({ scenario: RICH_SCENARIO, expectedRevision: 1 })
+        .expect(403);
+      expect(rejected.body.error.code).toBe('demo_same_origin_required');
+    } finally {
+      config.auth.secureCookies = priorSecureCookies;
+    }
   });
 });

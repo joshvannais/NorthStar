@@ -205,7 +205,7 @@ function generateTranscript(scenario) {
   // Ask discovery questions (the required scope dimensions)
   const discoveryQs = (svc.questions.discovery || []).slice(0, 3);
   for (const q of discoveryQs) {
-    const answer = _buildAnswer(scenario, q);
+    const answer = _buildAnswer(scenario, q, svc);
     if (!answer || answer === 'skip') continue;
     turns.push({ speaker: 'ai', text: q.ask });
     turns.push({ speaker: 'customer', text: answer });
@@ -214,7 +214,7 @@ function generateTranscript(scenario) {
   // Ask scope questions (recommended dimensions)
   const scopeQs = (svc.questions.scope || []).slice(0, 5);
   for (const q of scopeQs) {
-    const answer = _buildAnswer(scenario, q);
+    const answer = _buildAnswer(scenario, q, svc);
     if (!answer || answer === 'skip') continue;
     turns.push({ speaker: 'ai', text: q.ask });
     turns.push({ speaker: 'customer', text: answer });
@@ -232,7 +232,7 @@ function generateTranscript(scenario) {
   // Scheduling
   const schedQs = (svc.questions.scheduling || []).slice(0, 2);
   for (const q of schedQs) {
-    const answer = _buildAnswer(scenario, q);
+    const answer = _buildAnswer(scenario, q, svc);
     if (!answer) continue;
     turns.push({ speaker: 'ai', text: q.ask });
     turns.push({ speaker: 'customer', text: answer });
@@ -306,13 +306,22 @@ function _buildFollowUp(scenario, svc) {
   return `I can help with that, ${firstName}. Let me ask a few questions to understand the scope.`;
 }
 
-function _buildAnswer(scenario, question) {
+function _buildAnswer(scenario, question, svc) {
   const scope = scenario.job.scope;
   const id = question.id;
 
+  const jobTypeAnswers = {
+    fence: { install: 'New fence installation.', replace: 'Replacing an existing fence.', repair: 'Repairing damaged fence sections.' },
+    roofing: { replace: 'Full roof replacement.', repair: 'Repairing the damaged roof area.', inspect: 'Roof inspection before authorizing work.' },
+    hvac: { replace: 'Replacing the existing system.', repair: 'Diagnosing and repairing the existing system.', maintain: 'Scheduled system maintenance.' },
+    plumbing: { repair: 'Repairing the affected plumbing system.', replace: 'Replacing the affected fixture or system.', inspect: 'Inspecting the plumbing issue before work.' },
+    electrical: { repair: 'Repairing the electrical issue.', upgrade: 'Upgrading the electrical system.', inspect: 'Electrical safety inspection before work.' },
+    concrete: { install: 'New concrete installation.', replace: 'Removing and replacing the existing concrete.', repair: 'Repairing the damaged concrete.' },
+  };
+
   const answers = {
     // Fence
-    jobType: { install: 'New installation.', replace: 'Replacing an existing fence.', repair: 'Repairing some damaged sections.' }[scope.jobType],
+    jobType: jobTypeAnswers[svc && svc.id] && jobTypeAnswers[svc.id][scope.jobType],
     linearFeet: `About ${scope.linearFeet} feet.`,
     material: scope.material ? `${scope.material.charAt(0).toUpperCase() + scope.material.slice(1)}${scope.hoa && scope.hoa.includes('yes') ? ' — our HOA requires it' : ''}.` : 'Not sure yet.',
     height: scope.height ? `${scope.height} feet.` : '6 feet.',

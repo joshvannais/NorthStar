@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
+  <link rel="stylesheet" href="/css/polaris-card.css">
   <script src="/js/theme.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Leads - NorthStar AI</title>
@@ -226,38 +227,6 @@
       </div>
       </div>
 
-      <!-- Polaris Revenue Intelligence Card -->
-      <div class="ds-widget ds-widget-full">
-      <div class="polaris-card" id="polarisCard">
-        <div class="polaris-header">
-          <h2 style="display:flex;align-items:center;gap:8px;">
-            <img src="/assets/logo.png" alt="NorthStar" style="height:18px;width:auto;vertical-align:middle;">
-            POLARIS™ Revenue Intelligence</h2>
-          <span class="polaris-badge">LIVE</span>
-        </div>
-        <div class="polaris-grid" id="polarisGrid">
-          <div class="polaris-item">
-            <div class="polaris-item-label">Top Opportunity</div>
-            <div class="polaris-item-value" id="polarisTopOpp">-</div>
-            <div class="polaris-item-desc" id="polarisTopOppDesc">Lead with highest potential value</div>
-            <span class="polaris-confidence high" id="polarisTopConf">High</span>
-          </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Estimated Pipeline</div>
-            <div class="polaris-item-value" id="polarisPipeline">$0</div>
-            <div class="polaris-item-desc">Total qualified lead value</div>
-            <span class="polaris-confidence medium" id="polarisPipeConf">Medium</span>
-          </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Recommended Focus</div>
-            <div class="polaris-item-value" id="polarisFocus">-</div>
-            <div class="polaris-item-desc" id="polarisFocusDesc">Highest volume service category</div>
-            <span class="polaris-confidence high" id="polarisFocusConf">High</span>
-          </div>
-        </div>
-      </div>
-      </div>
-
       <!-- Leads Table -->
       <div class="ds-widget ds-widget-full">
       <div class="table-container">
@@ -412,7 +381,6 @@
         document.getElementById('leadCount').textContent = pageLeads.length + ' leads';
         renderLeads(pageLeads);
         renderKpiCards(pageLeads);
-        renderPolarisCard(pageLeads);
       });
     }
 
@@ -426,17 +394,10 @@
       document.getElementById('kpiTotalLeadChange').textContent = total == null ? 'Unavailable' : total + ' canonical graphs';
       document.getElementById('kpiQualified').textContent = '\u2014';
       document.getElementById('kpiWon').textContent = '\u2014';
-      document.getElementById('kpiRevenue').textContent = revenue == null ? 'Not calculated' : '$' + Number(revenue).toLocaleString();
+      document.getElementById('kpiRevenue').textContent = revenue == null ? 'Unavailable' : '$' + Number(revenue).toLocaleString();
       document.getElementById('kpiConversion').textContent = '\u2014';
-      document.getElementById('kpiConversionDetail').textContent = 'Not calculated by Part 3';
-      document.getElementById('kpiAvgValue').textContent = 'Not calculated';
-    }
-
-    // === Polaris Revenue Intelligence Card ===
-    function renderPolarisCard(leads) {
-      if (typeof PolarisEngine !== 'undefined' && PolarisEngine.renderPolarisCard) {
-        PolarisEngine.renderPolarisCard(leads);
-      }
+      document.getElementById('kpiConversionDetail').textContent = 'Requires recorded qualified and won outcomes';
+      document.getElementById('kpiAvgValue').textContent = 'Unavailable';
     }
 
     // === Leads Table ===
@@ -482,8 +443,10 @@
   </script>
 
   <script src="/js/tooltip-service.js"></script>
-  <script src="/js/command-center-contract.js"></script>
-  <script src="/js/nav-component.js"></script>
+<script src="/js/command-center-contract.js"></script>
+<script src="/js/polaris-card.js"></script>
+<script src="/js/polaris-surface-card.js"></script>
+<script src="/js/nav-component.js"></script>
   <script>NavComponent.init("leads");</script>
 </body>
 </html>

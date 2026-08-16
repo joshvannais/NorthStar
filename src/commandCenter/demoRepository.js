@@ -10,6 +10,7 @@ const {
   createInitialDemoState,
   tenantIdFromTokenHash,
 } = require('./workspace');
+const { DEFAULT_SELECTION, normalizeSelection } = require('./scenarioSpace');
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const SIMULATION_COOLDOWN_MS = 750;
@@ -134,15 +135,19 @@ function mutationInput(input) {
     idempotencyHash: sha256(input.idempotencyKey),
   };
   if (input.operation === 'simulate_lead') {
-    if (typeof input.serviceKey !== 'string' || input.serviceKey !== input.serviceKey.trim().toLowerCase()) {
+    const fallback = typeof input.serviceKey === 'string'
+      ? { ...DEFAULT_SELECTION, service: input.serviceKey }
+      : null;
+    const scenarioSelection = normalizeSelection(input.scenarioSelection || fallback);
+    if (!scenarioSelection) {
       fail(422, 'DEMO_SCENARIO_INVALID', 'A supported fictional demo scenario is required.');
     }
-    normalized.serviceKey = input.serviceKey;
+    normalized.scenarioSelection = scenarioSelection;
   }
   normalized.requestDigest = sha256({
     operation: normalized.operation,
     expectedRevision: normalized.expectedRevision,
-    serviceKey: normalized.serviceKey || null,
+    scenarioSelection: normalized.scenarioSelection || null,
   });
   return normalized;
 }
@@ -414,7 +419,7 @@ class DemoCommandCenterRepository {
         const graph = buildSimulatedGraph({
           tenantId: current.tenantId,
           key,
-          serviceKey: input.serviceKey,
+          scenarioSelection: input.scenarioSelection,
           createdAt: now,
         });
         nextState = stableValue({ ...current.state, graphs: [graph].concat(current.state.graphs) });

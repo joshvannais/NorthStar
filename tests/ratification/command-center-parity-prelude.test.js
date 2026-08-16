@@ -2,11 +2,13 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const request = require('supertest');
 const { app } = require('../../src/server');
 const contract = require('../../public/js/command-center-contract');
 const permissions = require('../../src/auth/permissions');
 const { paidRequestContext } = require('../../src/routes/commandCenter');
+const scenarioSpace = require('../../src/commandCenter/scenarioSpace');
 const {
   buildDemoWorkspace,
   buildPaidWorkspace,
@@ -20,7 +22,7 @@ const {
 const ROOT = path.resolve(__dirname, '..', '..');
 const TOKEN_HASH = 'a'.repeat(64);
 const PAGE_BY_ROUTE = Object.freeze({
-  'command-center': 'public/dashboard/command-center.html',
+  'command-center': 'public/demo-dashboard.html',
   polaris: 'public/dashboard/polaris.html',
   leads: 'public/dashboard/leads.html',
   communications: 'public/dashboard/communications.html',
@@ -37,6 +39,53 @@ function read(relative) {
   return fs.readFileSync(path.join(ROOT, relative), 'utf8');
 }
 
+function surfaceProjector(search = '') {
+  const window = {
+    location: { pathname: '/demo/polaris', search },
+    NorthStarPolarisCard: { CONTRACT: 'northstar_polaris_intelligence_card_v1' },
+  };
+  const document = { readyState: 'loading', addEventListener: jest.fn() };
+  vm.runInNewContext(read('public/js/polaris-surface-card.js'), {
+    window, document, URLSearchParams, Intl, Date, Number, Promise,
+    encodeURIComponent, decodeURIComponent,
+  });
+  return window.NorthStarPolarisSurface;
+}
+
+function cardRenderer() {
+  function Element(tag) {
+    this.tagName = tag;
+    this.children = [];
+    this.childNodes = this.children;
+    this.className = '';
+    this.dataset = {};
+    this.textContent = '';
+    this.classList = { add: (...values) => { this.className += ' ' + values.join(' '); } };
+  }
+  Element.prototype.appendChild = function appendChild(child) {
+    this.children.push(child);
+    return child;
+  };
+  Element.prototype.append = function append(...children) {
+    children.forEach(child => this.appendChild(child));
+  };
+  Element.prototype.replaceChildren = function replaceChildren(...children) {
+    this.children.length = 0;
+    this.append(...children);
+  };
+  Element.prototype.setAttribute = function setAttribute(name, value) {
+    this[name] = String(value);
+  };
+  const document = { createElement: tag => new Element(tag) };
+  const window = {};
+  vm.runInNewContext(read('public/js/polaris-card.js'), { window, document, Number });
+  return { card: window.NorthStarPolarisCard, createElement: document.createElement };
+}
+
+function renderedText(node) {
+  return [node.textContent, ...(node.children || []).map(renderedText)].filter(Boolean).join(' ');
+}
+
 describe('Demo/Paid Command Center Parity Prelude contracts', () => {
   test('one shared route manifest binds all eleven paid destinations to account-free counterparts', async () => {
     expect(contract.ROUTES).toHaveLength(11);
@@ -50,17 +99,31 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       expect(response.text).toBe(read(PAGE_BY_ROUTE[destination.id]));
       expect(response.text).toContain('/js/demo-runtime.js');
       expect(response.text).toContain('/js/nav-component.js');
+      expect(response.text).toContain('/css/polaris-card.css');
+      expect(response.text).toContain('/js/polaris-card.js');
+      if (destination.id !== 'command-center') {
+        expect(response.text).toContain('/js/polaris-surface-card.js');
+      }
       expect(destination.demoPath).toMatch(/^\/demo(?:\/|$)/);
     }
     expect((await request(app).get('/demo-dashboard').expect(200)).text)
       .toBe(read(PAGE_BY_ROUTE['command-center']));
+
+    const leadsPage = read(PAGE_BY_ROUTE.leads);
+    expect(leadsPage).not.toContain('id="polarisCard"');
+    expect(leadsPage).not.toContain('Not calculated');
   });
 
   test('paid Command Center uses real tenant projections and exposes no simulation language or controls', async () => {
-    const paid = read('public/dashboard/command-center.html');
+    const paid = read('public/demo-dashboard.html');
+    const pageClient = read('public/js/command-center-page.js');
     expect(paid).toContain('/js/command-center-contract.js');
-    expect(paid).toContain('PolarisApi.getDashboard');
-    expect(paid).toContain('processes real tenant interactions');
+    expect(paid).toContain('/js/command-center-page.js');
+    expect(paid).toContain('demo-dashboard-priority-grid');
+    expect(paid).toContain('demo-dashboard-analytics-grid');
+    expect(paid).toContain('demo-leads-panel');
+    expect(pageClient).toContain("'/api/v1/command-center/workspace'");
+    expect(pageClient).toContain("'Tenant data · role-authorized'");
     expect(paid).not.toMatch(/Simulate Lead|ccSim|SIM_SESSION|northstarSessionId|sessionStorage|simulator\.js|scenario|reset demo|\/api\/v1\/simulations\/leads/i);
 
     const route = read('src/routes/commandCenter.js');
@@ -117,13 +180,17 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(client).toContain("simulate.id = 'demoSimulateLead'");
     expect(client).toContain("reset.id = 'demoReset'");
     expect(client).toContain('/api/demo/command-center/simulations/leads');
+    expect(client).toContain('scenario: selected');
+    expect(client).toContain('scenarioSpace.dimensions.forEach');
     expect(client).toContain("'X-NorthStar-Demo-Intent': intent");
     expect(client).not.toMatch(/\.innerHTML\s*=|insertAdjacentHTML|document\.write|eval\s*\(/);
+    expect(client).not.toContain('northstarDemoPolarisDetail');
     const polaris = read('public/dashboard/polaris.html');
     expect(polaris).toContain('function respondToAccountFreeDemoChat()');
     expect(polaris.match(/respondToAccountFreeDemoChat\(\)/g)).toHaveLength(3);
     expect(polaris).toContain('no request was sent.');
-    expect(server).toContain("'command-center': 'public/dashboard/command-center.html'");
+    expect(server).toContain("'command-center': 'public/demo-dashboard.html'");
+    expect(server).toContain("'/dashboard': 'public/demo-dashboard.html'");
     expect(server).toContain("integrations: 'public/dashboard/integrations.html'");
     expect(server).not.toContain("pages[destination.demoPath] = 'public/demo-dashboard.html'");
     expect(read('src/routes/demo.js')).toContain('secure: config.auth.secureCookies');
@@ -131,6 +198,234 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       const html = read(PAGE_BY_ROUTE[destination.id]);
       expect(html).toContain('/js/demo-runtime.js');
       expect(html).toMatch(new RegExp(`NavComponent\\.init\\(['"]${destination.id}['"]\\)`));
+    }
+  });
+
+  test('one shared Polaris projection contract is page-specific, human-readable, and fail-closed', () => {
+    const tenantId = tenantIdFromTokenHash('c'.repeat(64));
+    const createdAt = new Date('2026-08-16T12:00:00.000Z');
+    const initial = createInitialDemoState(tenantId, createdAt);
+    const scenarioSelection = {
+      business: 'multi_crew', service: 'electrical', intent: 'inspection',
+      urgency: 'safety_emergency', context: 'property_manager',
+      scheduling: 'after_hours', outcome: 'booked',
+    };
+    const added = buildSimulatedGraph({
+      tenantId,
+      key: 'polaris-surface-ratification',
+      scenarioSelection,
+      createdAt: new Date('2026-08-16T12:01:00.000Z'),
+    });
+    const workspace = buildDemoWorkspace({
+      tenantId,
+      sessionId: '00000000-0000-4000-8000-000000000011',
+      state: { ...initial, graphs: [added, ...initial.graphs] },
+      revision: 2,
+      simulationCount: 1,
+      persisted: true,
+      expiresAt: new Date('2026-08-17T12:00:00.000Z'),
+    });
+    const configuration = workspace.configuration;
+    const supplements = {
+      team: { members: configuration.workforce.members },
+      'business-profile': {
+        itemOrder: ['dispatch', 'guidance'],
+        items: {
+          dispatch: { label: 'Dispatch origin', state: 'reviewed' },
+          guidance: { label: 'Customer guidance', state: 'needs_review', help: 'Confirm customer guidance before dispatch.' },
+        },
+      },
+      settings: {
+        emailEnabled: true, emailCallSummary: true, emailAppointment: true,
+        smsEnabled: true, smsUrgent: true, smartRouting: true,
+        securityEmailMandatory: true, securityEmailAddress: 'demo@northstar.invalid',
+      },
+      integrations: configuration.integrations,
+    };
+    const projector = surfaceProjector();
+    const surfaces = contract.ROUTES.slice(1).map(route => route.id);
+    const projections = surfaces.map(surface => projector.project(surface, workspace, supplements[surface] || null));
+
+    expect(new Set(projections.map(projection => projection.title)).size).toBe(surfaces.length);
+    projections.forEach((projection, index) => {
+      expect(projection).toEqual(expect.objectContaining({
+        projectionContract: 'northstar_polaris_surface_projection_v1',
+        contract: 'northstar_polaris_intelligence_card_v1',
+        surface: surfaces[index],
+        title: expect.any(String),
+        summary: expect.any(String),
+        confidenceExplanation: expect.any(String),
+        evidence: expect.any(Array),
+        missing: expect.any(Array),
+        risks: expect.any(Array),
+        opportunities: expect.any(Array),
+        recommendations: expect.any(Array),
+        objects: expect.any(Array),
+      }));
+      expect(projection.detailed).toBe(['leads', 'polaris'].includes(projection.surface));
+      expect(projection.objects).toHaveLength(3);
+      expect(projection.objects.map(entry => entry.href)).toEqual(expect.arrayContaining([
+        expect.stringContaining(encodeURIComponent(added.ids.customer)),
+        expect.stringContaining(encodeURIComponent(added.ids.lead)),
+        expect.stringContaining(encodeURIComponent(added.ids.work)),
+      ]));
+      expect(JSON.stringify(projection)).not.toMatch(/\[object Object\]|Not calculated/);
+    });
+
+    const detailProjector = surfaceProjector('?kind=lead&id=' + encodeURIComponent(added.ids.lead));
+    const detail = detailProjector.project('polaris', workspace, null);
+    expect(detail.title).toContain(added.customer.name);
+    expect(detail.summary).toBe(added.lead.summary);
+    expect(detail.evidence.length).toBeGreaterThan(0);
+    expect(detail.missing.some(item => item.includes('is unavailable:'))).toBe(true);
+
+    const missingProjector = surfaceProjector('?kind=work&id=not-authorized');
+    const unavailable = missingProjector.project('polaris', workspace, null);
+    expect(unavailable.title).toBe('Requested Polaris detail is unavailable');
+    expect(unavailable.objects).toEqual([]);
+    expect(unavailable.summary).toContain('No fallback object is shown');
+    expect(() => projector.project('leads', null, null)).toThrow('role-authorized workspace projection is unavailable');
+
+    const paid = buildPaidWorkspace({
+      context: { organizationId: 'paid-tenant-a' },
+      items: [{
+        ids: {
+          graph: 'paid-graph', customer: 'paid-customer', opportunity: 'paid-lead',
+          appointment: 'paid-work', polarisSnapshot: 'paid-polaris', estimate: 'paid-estimate',
+          communication: 'paid-communication', transcript: 'paid-transcript', facts: ['paid-fact'],
+        },
+        source: { type: 'retell', version: 1 },
+        customer: { id: 'paid-customer', name: 'Authorized Customer' },
+        opportunity: { id: 'paid-lead', status: 'follow_up', serviceType: 'electrical', serviceLabel: 'Electrical service', summary: 'Inspection follow-up requires review.' },
+        communication: { id: 'paid-communication', channel: 'voice', direction: 'inbound', subject: 'Inspection follow-up', intent: 'Inspection' },
+        transcript: { id: 'paid-transcript', text: JSON.stringify([{ speaker: 'customer', text: 'Please review the inspection.' }]) },
+        appointment: { id: 'paid-work', status: 'follow_up_due', scheduledStart: null, assignedTo: null },
+        estimate: { id: 'paid-estimate', currency: 'USD', customerPrice: 4250, lineItems: [] },
+        calculationVersion: 'paid-v1',
+        snapshotDigest: 'd'.repeat(64),
+        snapshot: {
+          service: { key: 'electrical', label: 'Electrical service', supported: true, scope: {} },
+          confidence: { score: 84 },
+          risk: { emergency: false, signal: 'Follow-up due', evidence: 'The inspection follow-up remains open.' },
+          missingInformation: ['Appointment timing is not recorded.'],
+          recommendedActions: [{ label: 'Review the inspection follow-up.', priority: 'high' }],
+        },
+        facts: [{ id: 'paid-fact', evidenceText: 'The customer requested an inspection follow-up.' }],
+        timestamps: { createdAt: createdAt.toISOString(), updatedAt: createdAt.toISOString() },
+        projectionDigest: 'e'.repeat(64),
+      }],
+    });
+    for (const surface of surfaces) {
+      const paidProjection = projector.project(surface, paid, null);
+      const demoProjection = projector.project(surface, workspace, supplements[surface] || null);
+      expect(Object.keys(paidProjection).sort()).toEqual(Object.keys(demoProjection).sort());
+      expect(paidProjection.surface).toBe(surface);
+      expect(paidProjection.objects.every(entry => entry.href.startsWith('/dashboard/polaris?'))).toBe(true);
+      expect(JSON.stringify(paidProjection)).not.toMatch(/fictional|simulate lead|demo session/i);
+    }
+  });
+
+  test('missing confidence remains explicitly unavailable instead of becoming a fabricated zero', () => {
+    const renderer = cardRenderer();
+    const container = renderer.createElement('section');
+    const value = renderer.card.render(container, {
+      contract: renderer.card.CONTRACT,
+      surface: 'calendar',
+      title: 'Scheduling intelligence',
+      summary: 'No complete scheduling inputs are available.',
+      confidence: null,
+      confidenceExplanation: 'Confidence is unavailable because scheduling inputs are incomplete.',
+      evidence: [], missing: [], risks: [], opportunities: [], recommendations: [], objects: [],
+    });
+    const text = renderedText(container);
+    expect(value.confidence).toBeNull();
+    expect(text).toContain('Confidence unavailable');
+    expect(text).not.toContain('0% confidence');
+  });
+
+  test('Command Center numeric normalization preserves absence and legitimate recorded zero', () => {
+    const script = read('public/js/command-center-page.js');
+    const start = script.indexOf('function finiteNumber(value) {');
+    const end = script.indexOf('\n\n  function formatMoney', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const finiteNumber = vm.runInNewContext('(' + script.slice(start, end).trim() + ')', { Number });
+
+    expect(finiteNumber(null)).toBeNull();
+    expect(finiteNumber(undefined)).toBeNull();
+    expect(finiteNumber('')).toBeNull();
+    expect(finiteNumber(false)).toBeNull();
+    expect(finiteNumber(0)).toBe(0);
+    expect(finiteNumber('0')).toBe(0);
+    expect(finiteNumber('4250.50')).toBe(4250.5);
+  });
+
+  test('the server-owned scenario builder exposes and materializes far more than 100 distinct paths', () => {
+    expect(scenarioSpace.DIMENSION_ORDER).toEqual([
+      'business', 'service', 'intent', 'urgency', 'context', 'scheduling', 'outcome',
+    ]);
+    expect(scenarioSpace.COMBINATION_COUNT).toBe(38400);
+    expect(scenarioSpace.publicScenarioSpace()).toEqual(expect.objectContaining({
+      contract: 'northstar_demo_scenario_space_v1',
+      combinationCount: 38400,
+      dimensions: expect.any(Array),
+    }));
+
+    const tenantId = tenantIdFromTokenHash('b'.repeat(64));
+    const generated = [];
+    let sequence = 0;
+    for (const business of scenarioSpace.DIMENSIONS.business.options) {
+      for (const service of scenarioSpace.DIMENSIONS.service.options) {
+        for (const intent of scenarioSpace.DIMENSIONS.intent.options) {
+          for (const urgency of scenarioSpace.DIMENSIONS.urgency.options) {
+            const selection = {
+              ...scenarioSpace.DEFAULT_SELECTION,
+              business: business.id,
+              service: service.id,
+              intent: intent.id,
+              urgency: urgency.id,
+              context: scenarioSpace.DIMENSIONS.context.options[sequence % scenarioSpace.DIMENSIONS.context.options.length].id,
+              scheduling: scenarioSpace.DIMENSIONS.scheduling.options[sequence % scenarioSpace.DIMENSIONS.scheduling.options.length].id,
+              outcome: scenarioSpace.DIMENSIONS.outcome.options[sequence % scenarioSpace.DIMENSIONS.outcome.options.length].id,
+            };
+            sequence += 1;
+            generated.push(buildSimulatedGraph({
+              tenantId,
+              key: 'scenario-diversity-' + String(sequence),
+              scenarioSelection: selection,
+              createdAt: new Date('2026-08-16T12:00:00.000Z'),
+            }));
+            if (generated.length === 120) break;
+          }
+          if (generated.length === 120) break;
+        }
+        if (generated.length === 120) break;
+      }
+      if (generated.length === 120) break;
+    }
+
+    expect(generated).toHaveLength(120);
+    expect(new Set(generated.map(graph => graph.scenario.signature)).size).toBe(120);
+    for (const graph of generated) {
+      expect(graph.scenario.contract).toBe('northstar_demo_scenario_selection_v1');
+      expect(graph.communication.transcript).toEqual(expect.arrayContaining([
+        expect.objectContaining({ speaker: 'customer', text: expect.any(String) }),
+      ]));
+      expect(graph.polaris.facts.map(fact => fact.variable)).toEqual(expect.arrayContaining([
+        'businessContext', 'callerIntent', 'urgency', 'customerContext',
+        'schedulingConstraint', 'conversationOutcome',
+      ]));
+      expect(graph.lead).toEqual(expect.objectContaining({
+        callerIntent: graph.scenario.labels.intent,
+        urgency: graph.scenario.labels.urgency,
+        outcome: graph.scenario.labels.outcome,
+      }));
+      expect(graph.work.schedulingConstraint).toBe(graph.scenario.labels.scheduling);
+      expect(graph.polaris.snapshot).toEqual(expect.objectContaining({
+        risk: expect.objectContaining({ emergency: expect.any(Boolean) }),
+        missingInformation: expect.any(Array),
+        recommendedActions: expect.any(Array),
+      }));
     }
   });
 

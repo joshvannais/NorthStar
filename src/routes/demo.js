@@ -15,6 +15,7 @@ const {
   demoCanonicalItems,
   DEMO_SERVICES,
 } = require('../commandCenter/workspace');
+const { DEFAULT_SELECTION, normalizeSelection } = require('../commandCenter/scenarioSpace');
 const {
   SURFACES,
   compatibilityProjection,
@@ -26,6 +27,10 @@ const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
 const DEMO_COOKIE = 'northstar_demo_workspace';
 const DETAIL_IDENTIFIERS = Object.freeze({ customer: 'customer', lead: 'lead', work: 'work' });
+const PRODUCTION_DEMO_ORIGINS = new Set([
+  'https://northstar-os.ai',
+  'https://www.northstar-os.ai',
+]);
 
 function configuredOrganizationId() {
   return process.env.NORTHSTAR_DEMO_ORGANIZATION_ID;
@@ -138,7 +143,9 @@ function mutationBoundary(req, res, intent) {
   const origin = req.get('Origin');
   const expectedOrigin = req.protocol + '://' + req.get('host');
   const fetchSite = req.get('Sec-Fetch-Site');
-  if (!origin || origin !== expectedOrigin || (fetchSite && !['same-origin', 'none'].includes(fetchSite))) {
+  const recognizedProductionOrigin = config.auth.secureCookies && PRODUCTION_DEMO_ORIGINS.has(origin);
+  if (!origin || (!recognizedProductionOrigin && origin !== expectedOrigin) ||
+      (fetchSite && !['same-origin', 'none'].includes(fetchSite))) {
     res.status(403).json({
       success: false,
       error: { code: 'demo_same_origin_required', message: 'Demo actions require the same NorthStar origin.' },
@@ -153,6 +160,20 @@ function mutationBoundary(req, res, intent) {
     return false;
   }
   return true;
+}
+
+function scenarioSelection(body) {
+  if (exactBody(body, ['expectedRevision', 'scenario'])) {
+    return normalizeSelection(body.scenario);
+  }
+  // One-release compatibility for a cached pre-restoration demo client. The
+  // old service-only request maps to the new contract defaults and remains
+  // subject to the same origin, intent, CAS, idempotency, and admission gates.
+  if (exactBody(body, ['expectedRevision', 'service']) &&
+      Object.prototype.hasOwnProperty.call(DEMO_SERVICES, body.service)) {
+    return normalizeSelection({ ...DEFAULT_SELECTION, service: body.service });
+  }
+  return null;
 }
 
 function durableSourceHash(req) {
@@ -251,8 +272,8 @@ router.get('/command-center', async function (req, res) {
 router.post('/command-center/simulations/leads', async function (req, res) {
   res.set('Cache-Control', 'no-store');
   if (!mutationBoundary(req, res, 'simulate-lead')) return undefined;
-  if (!exactBody(req.body, ['expectedRevision', 'service']) ||
-      !Object.prototype.hasOwnProperty.call(DEMO_SERVICES, req.body.service)) {
+  const selectedScenario = scenarioSelection(req.body);
+  if (!selectedScenario) {
     return res.status(422).json({
       success: false,
       error: { code: 'demo_scenario_invalid', message: 'Choose one supported fictional demo scenario.' },
@@ -263,7 +284,7 @@ router.post('/command-center/simulations/leads', async function (req, res) {
     const result = await commandCenterRepository.mutate(token, {
       operation: 'simulate_lead',
       expectedRevision: req.body.expectedRevision,
-      serviceKey: req.body.service,
+      scenarioSelection: selectedScenario,
       idempotencyKey: req.get('Idempotency-Key'),
     }, { sourceHash: durableSourceHash(req) });
     return res.status(result.replayed ? 200 : 201).json({

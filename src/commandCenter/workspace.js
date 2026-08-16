@@ -6,18 +6,24 @@ const { sha256, stableValue } = require('../services/businessProfileAdapter');
 const { projectIntegrationCatalogue } = require('../integrations/catalogue');
 const { defaultPreferenceDocument, PROVIDERS: MAP_PROVIDERS } = require('../mapPreferences/contract');
 const pipeline = require('../routes/simulation/pipeline');
+const {
+  DEFAULT_SELECTION,
+  DIMENSIONS: SCENARIO_DIMENSIONS,
+  normalizeSelection,
+  publicScenarioSpace,
+  selectionProfile,
+} = require('./scenarioSpace');
 
 const DEMO_NAMESPACE = '827bcc4d-601f-4d8b-9d3f-57570d942b11';
 const DEMO_STATE_VERSION = 1;
 const DEMO_CALCULATION_VERSION = 'command-center-demo-v1';
-const DEMO_SERVICES = Object.freeze({
-  fence: Object.freeze({ label: 'Fence installation', estimate: 6800 }),
-  roofing: Object.freeze({ label: 'Roof replacement', estimate: 14800 }),
-  hvac: Object.freeze({ label: 'HVAC service', estimate: 9600 }),
-  plumbing: Object.freeze({ label: 'Plumbing service', estimate: 2850 }),
-  electrical: Object.freeze({ label: 'Electrical service', estimate: 4250 }),
-  concrete: Object.freeze({ label: 'Concrete installation', estimate: 11200 }),
-});
+const DEMO_SERVICES = Object.freeze(SCENARIO_DIMENSIONS.service.options.reduce((services, definition) => {
+  services[definition.id] = Object.freeze({
+    label: definition.label,
+    estimate: definition.material.estimate,
+  });
+  return services;
+}, {}));
 const DEMO_CUSTOMER_NAMES = Object.freeze([
   'Jordan Blake', 'Taylor Morgan', 'Casey Nguyen', 'Riley Adams',
   'Cameron Brooks', 'Morgan Ellis', 'Avery Chen', 'Drew Martinez',
@@ -65,6 +71,7 @@ function demoIntegrationCatalogue() {
 function demoConfiguration() {
   return stableValue({
     immutableAcrossSimulation: true,
+    scenarioSpace: publicScenarioSpace(),
     businessProfile: {
       mode: 'fictional_read_only',
       company: 'Rivera Home Services',
@@ -358,9 +365,10 @@ function buildDemoGraph(input) {
         { factor: 'roleAuthorizedDetail', value: true },
       ],
     },
-    risk: { emergency: false, signal: null, evidence: null },
+    risk: stableValue(input.risk || { emergency: false, signal: null, evidence: null }),
     recommendedActions: stableValue(input.recommendedActions),
     reasoning: stableValue(input.reasoning),
+    missingInformation: stableValue(input.missingInformation || []),
     notCalculated: [
       { field: 'knownDirectCosts', reason: 'The account-free demo does not represent a contractor\'s authoritative cost configuration.' },
       { field: 'netProfit', reason: 'Profit requires complete tenant-authored cost and overhead authority.' },
@@ -377,6 +385,7 @@ function buildDemoGraph(input) {
       phone: input.phone,
       email: input.email,
       address: input.address,
+      context: input.customerContext || null,
       fictional: true,
     },
     lead: {
@@ -385,12 +394,16 @@ function buildDemoGraph(input) {
       serviceType: input.serviceKey,
       serviceLabel: input.serviceLabel,
       summary: input.summary,
+      callerIntent: input.callerIntent || null,
+      urgency: input.urgency || null,
+      outcome: input.outcome || null,
     },
     communication: {
       id: ids.communication,
       channel: 'voice',
       direction: 'inbound',
       subject: input.summary,
+      intent: input.callerIntent || null,
       transcript: stableValue(input.transcript || []),
     },
     work: {
@@ -399,6 +412,7 @@ function buildDemoGraph(input) {
       title: input.serviceLabel + ' estimate visit',
       scheduledStart: input.scheduledStart ? iso(input.scheduledStart) : null,
       assignedTo: input.assignedTo || null,
+      schedulingConstraint: input.schedulingConstraint || null,
     },
     estimate: {
       id: ids.estimate,
@@ -407,6 +421,7 @@ function buildDemoGraph(input) {
       lineItems,
       fictional: true,
     },
+    scenario: stableValue(input.scenario || null),
     polaris: {
       id: ids.polarisSnapshot,
       calculationVersion: DEMO_CALCULATION_VERSION,
@@ -474,24 +489,61 @@ function createInitialDemoState(tenantId, createdAt) {
 }
 
 function buildSimulatedGraph(input) {
-  const service = DEMO_SERVICES[input.serviceKey];
-  if (!service) {
+  const fallbackSelection = input && input.serviceKey
+    ? { ...DEFAULT_SELECTION, service: input.serviceKey }
+    : null;
+  const selection = normalizeSelection(input && (input.scenarioSelection || fallbackSelection));
+  const profile = selectionProfile(selection);
+  const service = profile && DEMO_SERVICES[selection.service];
+  if (!service || !profile) {
     const error = new Error('A supported fictional demo scenario is required.');
     error.code = 'DEMO_SCENARIO_INVALID';
     error.status = 422;
     throw error;
   }
-  const seed = sha256({ tenantId: input.tenantId, key: input.key, service: input.serviceKey });
+  const seed = sha256({ tenantId: input.tenantId, key: input.key, scenario: selection });
   const nameIndex = Number.parseInt(seed.slice(0, 8), 16) % DEMO_CUSTOMER_NAMES.length;
   const customerName = DEMO_CUSTOMER_NAMES[nameIndex];
   const prepared = pipeline.withDeterministicSeed(seed, () => {
-    const scenario = pipeline.generateScenario(input.serviceKey, customerName);
+    const scenario = pipeline.generateScenario(selection.service, customerName);
+    scenario.job.scope.callerIntent = selection.intent;
+    scenario.job.scope.urgency = selection.urgency;
+    scenario.job.scope.customerContext = selection.context;
+    scenario.job.scope.schedulingConstraint = selection.scheduling;
+    scenario.job.scope.conversationOutcome = selection.outcome;
+    scenario.job.scope.businessContext = selection.business;
     const transcript = pipeline.generateTranscript(scenario);
+    transcript.splice(2, 0,
+      { speaker: 'ai', text: 'What outcome would be most useful from this call?' },
+      { speaker: 'customer', text: profile.intent.material.customerLine },
+      { speaker: 'ai', text: 'How quickly does the team need to respond?' },
+      { speaker: 'customer', text: profile.urgency.material.customerLine },
+      { speaker: 'ai', text: 'Is there customer, property, or access context we should account for?' },
+      { speaker: 'customer', text: profile.context.label + '. ' + profile.scheduling.material.customerLine },
+      { speaker: 'ai', text: 'What should happen after we confirm the scope?' },
+      { speaker: 'customer', text: profile.outcome.material.customerLine }
+    );
     const extracted = pipeline.extractScope(transcript, scenario);
     return { scenario, transcript, extracted };
   });
-  const scope = prepared.extracted.extracted;
-  const evidence = prepared.extracted.evidence || {};
+  const scope = stableValue({
+    ...(prepared.extracted.extracted || {}),
+    businessContext: profile.business.label,
+    callerIntent: profile.intent.label,
+    urgency: profile.urgency.label,
+    customerContext: profile.context.label,
+    schedulingConstraint: profile.scheduling.label,
+    conversationOutcome: profile.outcome.label,
+  });
+  const evidence = {
+    ...(prepared.extracted.evidence || {}),
+    businessContext: profile.business.description,
+    callerIntent: profile.intent.material.customerLine,
+    urgency: profile.urgency.material.customerLine,
+    customerContext: profile.context.description,
+    schedulingConstraint: profile.scheduling.material.customerLine,
+    conversationOutcome: profile.outcome.material.customerLine,
+  };
   const facts = Object.keys(scope).filter(field => evidence[field]).sort().map((field, index) => ({
     id: input.key + '-fact-' + String(index + 1),
     variable: field,
@@ -502,6 +554,22 @@ function buildSimulatedGraph(input) {
     confidence: 1,
   }));
   const createdAt = iso(input.createdAt);
+  const visitOffset = Math.min(
+    profile.urgency.material.hoursUntilVisit,
+    profile.scheduling.material.dayOffset * 24 + Math.max(1, profile.scheduling.material.hour - 8)
+  );
+  const scheduledStart = ['booked'].includes(selection.outcome)
+    ? shift(createdAt, visitOffset * 60 * 60 * 1000)
+    : null;
+  const missingInformation = [profile.context.material.missing];
+  if (selection.outcome === 'needs_information') {
+    missingInformation.push('One material scope or approval input must be confirmed before scheduling.');
+  }
+  const priorityAction = {
+    code: 'scenario-' + selection.outcome,
+    label: profile.outcome.material.action,
+    priority: profile.urgency.material.priority,
+  };
   return buildDemoGraph({
     tenantId: input.tenantId,
     key: input.key,
@@ -510,20 +578,54 @@ function buildSimulatedGraph(input) {
     phone: prepared.scenario.customer.phone,
     email: prepared.scenario.customer.email,
     address: prepared.scenario.customer.address,
-    serviceKey: input.serviceKey,
+    serviceKey: selection.service,
     serviceLabel: service.label,
     estimatedValue: service.estimate,
-    confidence: 86,
-    leadStatus: 'new',
-    workStatus: 'triage',
-    scheduledStart: shift(createdAt, 30 * 60 * 60 * 1000),
-    assignedTo: null,
-    summary: 'A new fictional ' + service.label.toLowerCase() + ' request entered the isolated demo workspace.',
+    confidence: profile.outcome.material.confidence,
+    leadStatus: profile.outcome.material.leadStatus,
+    workStatus: profile.outcome.material.workStatus,
+    scheduledStart,
+    assignedTo: profile.business.material.assignedTo,
+    summary: profile.intent.label + ' for ' + service.label.toLowerCase() +
+      ' with ' + profile.urgency.label.toLowerCase() + ' urgency; outcome: ' +
+      profile.outcome.label.toLowerCase() + '.',
     scope,
     transcript: prepared.transcript,
     facts,
-    recommendedActions: [{ code: 'review-new-lead', label: 'Review the new lead and confirm the estimate visit', priority: 'high' }],
-    reasoning: ['The fictional interaction supplied a customer identity and meaningful work scope.', 'The new record now drives every demo destination from this session state.'],
+    recommendedActions: [
+      priorityAction,
+      { code: 'capacity-check', label: 'Confirm ' + profile.business.material.capacityLabel.toLowerCase() + ' capacity.', priority: 'medium' },
+    ],
+    reasoning: [
+      profile.urgency.description,
+      profile.business.material.capacityRisk,
+      'The selected customer, scheduling, and outcome context now drives every demo destination from this session state.',
+    ],
+    risk: {
+      emergency: profile.urgency.material.emergency,
+      signal: profile.urgency.label,
+      evidence: profile.urgency.material.customerLine,
+    },
+    missingInformation,
+    customerContext: profile.context.label,
+    callerIntent: profile.intent.label,
+    urgency: profile.urgency.label,
+    outcome: profile.outcome.label,
+    schedulingConstraint: profile.scheduling.label,
+    scenario: {
+      contract: 'northstar_demo_scenario_selection_v1',
+      signature: profile.signature,
+      selection,
+      labels: {
+        business: profile.business.label,
+        service: profile.service.label,
+        intent: profile.intent.label,
+        urgency: profile.urgency.label,
+        context: profile.context.label,
+        scheduling: profile.scheduling.label,
+        outcome: profile.outcome.label,
+      },
+    },
   });
 }
 

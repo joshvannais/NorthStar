@@ -5,21 +5,24 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
+const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const { ingestRetell } = require('../../src/services/canonicalGraphService');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const ROUTES = Object.freeze([
-  Object.freeze({ id: 'command-center', path: '/demo', marker: 'Command Center', surface: '.cc-workspace' }),
-  Object.freeze({ id: 'polaris', path: '/demo/polaris', marker: 'POLARIS', surface: '.polaris-workspace' }),
-  Object.freeze({ id: 'leads', path: '/demo/leads', marker: 'All Leads', surface: '.leads-kpi-grid' }),
-  Object.freeze({ id: 'communications', path: '/demo/communications', marker: 'Communications', surface: '#kpiGrid' }),
-  Object.freeze({ id: 'my-number', path: '/demo/my-number', marker: 'My Number', surface: '.settings-section' }),
-  Object.freeze({ id: 'calendar', path: '/demo/calendar', marker: 'Calendar', surface: '#calendarGrid' }),
-  Object.freeze({ id: 'team', path: '/demo/team', marker: 'Team', surface: '.wf-shell' }),
-  Object.freeze({ id: 'ai-settings', path: '/demo/ai-settings', marker: 'AI Settings', surface: '.ai-settings-gateway' }),
-  Object.freeze({ id: 'business-profile', path: '/demo/business-profile', marker: 'Business Profile', surface: '#businessProfileRoot' }),
-  Object.freeze({ id: 'settings', path: '/demo/settings', marker: 'Settings', surface: '.settings-section' }),
-  Object.freeze({ id: 'integrations', path: '/demo/integrations', marker: 'Integrations', surface: '#integrationAuthority' }),
+  Object.freeze({ id: 'command-center', path: '/demo', paidPath: '/dashboard', marker: 'One operating view for the day ahead.', surface: '.command-center-blueprint-main' }),
+  Object.freeze({ id: 'polaris', path: '/demo/polaris', paidPath: '/dashboard/polaris', marker: 'POLARIS', surface: '.polaris-workspace' }),
+  Object.freeze({ id: 'leads', path: '/demo/leads', paidPath: '/dashboard/leads', marker: 'All Leads', surface: '.leads-kpi-grid' }),
+  Object.freeze({ id: 'communications', path: '/demo/communications', paidPath: '/dashboard/communications', marker: 'Communications', surface: '#kpiGrid' }),
+  Object.freeze({ id: 'my-number', path: '/demo/my-number', paidPath: '/dashboard/my-number', marker: 'My Number', surface: '.settings-section' }),
+  Object.freeze({ id: 'calendar', path: '/demo/calendar', paidPath: '/dashboard/calendar', marker: 'Calendar', surface: '#calendarGrid' }),
+  Object.freeze({ id: 'team', path: '/demo/team', paidPath: '/dashboard/team', marker: 'Team', surface: '.wf-shell' }),
+  Object.freeze({ id: 'ai-settings', path: '/demo/ai-settings', paidPath: '/dashboard/ai-settings', marker: 'AI Settings', surface: '.ai-settings-gateway' }),
+  Object.freeze({ id: 'business-profile', path: '/demo/business-profile', paidPath: '/dashboard/business-profile', marker: 'Business Profile', surface: '#businessProfileRoot' }),
+  Object.freeze({ id: 'settings', path: '/demo/settings', paidPath: '/dashboard/settings', marker: 'Settings', surface: '.settings-section' }),
+  Object.freeze({ id: 'integrations', path: '/demo/integrations', paidPath: '/dashboard/integrations', marker: 'Integrations', surface: '#integrationAuthority' }),
 ]);
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
@@ -31,6 +34,61 @@ const PROVIDER_ENVIRONMENT = Object.freeze([
   'TWILIO_PHONE_NUMBER', 'RESEND_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS',
   'JOBBER_CLIENT_ID', 'JOBBER_CLIENT_SECRET',
 ]);
+const PAID_ORG_A = '8b000000-0000-4000-8000-000000000001';
+const PAID_ORG_B = '8b000000-0000-4000-8000-000000000002';
+const PAID_USER_A = '8c000000-0000-4000-8000-000000000001';
+const PAID_USER_B = '8c000000-0000-4000-8000-000000000002';
+const PAID_CUSTOMER_A = 'Authorized Paid Customer';
+const PAID_CUSTOMER_B = 'Other Tenant Private Customer';
+
+function paidBusinessProfile(companyName) {
+  const profile = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'business-profile.json'), 'utf8'));
+  const canonical = canonicalFenceProfile({
+    companyName,
+    materialRates: { cedar: 123, pine: 71, vinyl: 83, 'chain-link': 47 },
+  });
+  profile.company.name = companyName;
+  profile.services = canonical.services;
+  profile.canonicalPricing = canonical.canonicalPricing;
+  profile.canonicalCosts = canonical.canonicalCosts;
+  return profile;
+}
+
+function paidGraphRequest(organizationId, key, customerName, phone, material) {
+  const selectedMaterial = material || 'cedar';
+  return {
+    tenantContext: { organizationId },
+    idempotencyKey: key,
+    sourceVersion: 'command-center-paid-browser-v1',
+    external: {
+      customerId: key + ':customer',
+      callId: key + ':call',
+      transcriptId: key + ':transcript',
+      communicationId: key + ':communication',
+      appointmentId: key + ':appointment',
+    },
+    customer: {
+      name: customerName,
+      phone,
+      email: key + '@paid-browser.test',
+      address: { city: 'Raleigh', state: 'NC' },
+    },
+    transcript: [
+      { speaker: 'agent', text: 'Thanks for calling. What kind of fence work do you need?' },
+      { speaker: 'customer', text: 'I need a 120 foot ' + selectedMaterial + ' privacy fence and an appointment next week.' },
+    ],
+    facts: [
+      { variable: 'jobType', normalizedValue: selectedMaterial + ' privacy fence installation', evidenceText: 'The customer requested a ' + selectedMaterial + ' privacy fence.', speaker: 'customer', confidence: 0.98 },
+      { variable: 'linearFeet', normalizedValue: 120, evidenceText: 'The customer requested 120 feet.', speaker: 'customer', confidence: 0.98 },
+    ],
+    service: { key: 'fence', scope: { linearFeet: 120, material: selectedMaterial, gates: 1 } },
+    appointmentPreference: { window: 'next week', flexibility: 'weekday' },
+    scheduledAppointment: { start: '2026-08-20T14:00:00.000Z', end: '2026-08-20T16:00:00.000Z' },
+    travel: { miles: 8 },
+    callDurationSeconds: 185,
+    occurredAt: '2026-08-16T16:00:00.000Z',
+  };
+}
 
 function treeDigest(directory) {
   const hash = crypto.createHash('sha256');
@@ -62,17 +120,20 @@ async function closeServer(server) {
 }
 
 async function waitReady(page, route, revision) {
-  await page.waitForFunction(({ expectedRevision, marker, surface }) => {
+  await page.waitForFunction(({ expectedRevision, marker, surface, routeId }) => {
     const api = window.NorthStarDemoRuntime;
     const value = api && api.getWorkspace && api.getWorkspace();
     const root = document.documentElement;
     const node = document.querySelector(surface);
+    const cardReady = routeId === 'command-center'
+      ? Boolean(document.querySelector('#commandCenterPolaris[data-polaris-card="northstar_polaris_intelligence_card_v1"]'))
+      : Boolean(document.querySelector('#northstarPolarisSurfaceCard[data-state="ready"]'));
     return value && value.integrity.revision === expectedRevision &&
       root.getAttribute('data-northstar-navigation') === 'ready' &&
       root.getAttribute('data-demo-workspace') === 'ready' &&
-      document.getElementById('northstarDemoToolbar') && node &&
+      document.getElementById('northstarDemoToolbar') && node && cardReady &&
       document.body.textContent.includes(marker);
-  }, { expectedRevision: revision, marker: route.marker, surface: route.surface }, { timeout: 15000 });
+  }, { expectedRevision: revision, marker: route.marker, surface: route.surface, routeId: route.id }, { timeout: 15000 });
 }
 
 async function inspectCurrent(page, route, revision, viewport) {
@@ -87,7 +148,11 @@ async function inspectCurrent(page, route, revision, viewport) {
       if (!node) return false;
       const value = rect(node);
       const style = getComputedStyle(node);
-      return value.width > 0 && value.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      const browserVisible = typeof node.checkVisibility === 'function'
+        ? node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+        : node.getClientRects().length > 0;
+      return browserVisible && value.width > 0 && value.height > 0 &&
+        style.display !== 'none' && style.visibility !== 'hidden';
     }
     const main = document.querySelector('.main-content');
     const toolbar = document.getElementById('northstarDemoToolbar');
@@ -118,9 +183,12 @@ async function inspectCurrent(page, route, revision, viewport) {
       id: node.dataset.navId, href: node.getAttribute('href'), current: node.getAttribute('aria-current'),
     }));
     const polarisCard = document.querySelector('.polaris-card');
-    const polarisGrid = polarisCard && polarisCard.querySelector('.polaris-grid');
-    const polarisCardRect = rect(polarisCard);
-    const polarisItemsContained = !polarisCard || Array.from(polarisCard.querySelectorAll('.polaris-item')).every(node => {
+    const mountedPolarisCard = routeId === 'command-center'
+      ? document.querySelector('#commandCenterPolaris[data-polaris-card]')
+      : document.getElementById('northstarPolarisSurfaceCard');
+    const polarisGrid = mountedPolarisCard && mountedPolarisCard.querySelector('.polaris-card-detail-grid');
+    const polarisCardRect = rect(mountedPolarisCard);
+    const polarisItemsContained = !mountedPolarisCard || Array.from(mountedPolarisCard.querySelectorAll('li, a, p, span')).every(node => {
       const itemRect = rect(node);
       return itemRect.left >= polarisCardRect.left - 1 && itemRect.right <= polarisCardRect.right + 1;
     });
@@ -138,6 +206,7 @@ async function inspectCurrent(page, route, revision, viewport) {
       genericShells: document.querySelectorAll('.demo-command-layout, .demo-command-nav-link, #demoCommandContent').length,
       contentLeft,
       contentRight,
+      mainRect,
       mainPaddingLeft: parseFloat(mainStyle.paddingLeft || '0'),
       mainPaddingRight: parseFloat(mainStyle.paddingRight || '0'),
       toolbarRect,
@@ -146,6 +215,14 @@ async function inspectCurrent(page, route, revision, viewport) {
       themeRect: rect(document.querySelector('[data-northstar-theme-control]')),
       polarisGridOverflow: polarisGrid ? polarisGrid.scrollWidth - polarisGrid.clientWidth : null,
       polarisItemsContained,
+      polarisCardCount: document.querySelectorAll('[data-polaris-card="northstar_polaris_intelligence_card_v1"]').length,
+      polarisCardPresent: Boolean(mountedPolarisCard),
+      polarisCardContract: mountedPolarisCard && mountedPolarisCard.dataset.polarisCard,
+      polarisCardSurface: mountedPolarisCard && mountedPolarisCard.dataset.polarisSurface,
+      polarisCardState: routeId === 'command-center' ? 'ready' : mountedPolarisCard && mountedPolarisCard.dataset.state,
+      polarisCardText: mountedPolarisCard && mountedPolarisCard.textContent,
+      polarisObjectHrefs: mountedPolarisCard ? Array.from(mountedPolarisCard.querySelectorAll('.polaris-card-object-links a')).map(node => node.getAttribute('href')) : [],
+      polarisDetailed: Boolean(mountedPolarisCard && mountedPolarisCard.querySelector('.polaris-card-details')),
       routeId,
       routePath,
       mobile,
@@ -164,13 +241,24 @@ async function inspectCurrent(page, route, revision, viewport) {
   assert.strictEqual(snapshot.mobileHeaderVisible, viewport.width <= 768, route.path + ' responsive mobile header visibility');
   assert.strictEqual(snapshot.genericShells, 0, route.path + ' generic Parity shell removed');
   assert.ok(snapshot.overflow <= 1, route.path + ' no horizontal overflow');
-  assert.ok(snapshot.mainPaddingLeft >= 15 && snapshot.mainPaddingRight >= 15, route.path + ' contained page gutters');
+  assert.ok(snapshot.toolbarRect.left - snapshot.mainRect.left >= 11 &&
+    snapshot.mainRect.right - snapshot.toolbarRect.right >= 11,
+  route.path + ' demo controls retain responsive outer gutters');
   assert.ok(snapshot.toolbarRect.left >= snapshot.contentLeft - 1 && snapshot.toolbarRect.right <= snapshot.contentRight + 1,
     route.path + ' demo controls stay within content gutters');
   if (snapshot.nextSurfaceRect) {
     assert.ok(snapshot.nextSurfaceRect.top - snapshot.toolbarRect.bottom >= 8, route.path + ' demo controls do not touch canonical surface');
   }
   assert.deepStrictEqual(snapshot.overlaps, [], route.path + ' demo controls do not overlap');
+  assert.strictEqual(snapshot.polarisCardPresent, true, route.path + ' shared Polaris card is mounted');
+  assert.strictEqual(snapshot.polarisCardCount, 1, route.path + ' has exactly one mounted Polaris card');
+  assert.strictEqual(snapshot.polarisCardContract, 'northstar_polaris_intelligence_card_v1', route.path + ' Polaris card contract');
+  assert.strictEqual(snapshot.polarisCardSurface, route.id, route.path + ' page-specific Polaris surface');
+  assert.strictEqual(snapshot.polarisCardState, 'ready', route.path + ' Polaris projection ready');
+  assert.ok(!snapshot.polarisCardText.includes('[object Object]'), route.path + ' no raw object rendering');
+  assert.ok(!snapshot.polarisCardText.includes('Not calculated'), route.path + ' no unexplained calculation placeholder');
+  assert.strictEqual(snapshot.polarisDetailed, ['command-center', 'leads', 'polaris'].includes(route.id),
+    route.path + ' detailed-card depth');
   if (snapshot.polarisGridOverflow !== null) {
     assert.ok(snapshot.polarisGridOverflow <= 1, route.path + ' Polaris card text stays contained');
     assert.strictEqual(snapshot.polarisItemsContained, true, route.path + ' Polaris items stay within the card');
@@ -179,6 +267,21 @@ async function inspectCurrent(page, route, revision, viewport) {
     snapshot.themeRect.top >= 0 && snapshot.themeRect.bottom <= viewport.height,
   route.path + ' theme toggle remains in the viewport');
   return snapshot;
+}
+
+async function exercisePolarisDisclosure(page, route, viewport) {
+  if (!['command-center', 'leads', 'polaris'].includes(route.id)) return;
+  const selector = route.id === 'command-center'
+    ? '#commandCenterPolaris .polaris-card-details'
+    : '#northstarPolarisSurfaceCard .polaris-card-details';
+  const details = page.locator(selector);
+  assert.strictEqual(await details.count(), 1, route.path + ' one detailed Polaris disclosure');
+  assert.strictEqual(await details.evaluate(node => node.open), false, route.path + ' details start collapsed');
+  await details.locator('summary').click();
+  assert.strictEqual(await details.evaluate(node => node.open), true, route.path + ' details expand by click');
+  await details.locator('summary').click();
+  assert.strictEqual(await details.evaluate(node => node.open), false, route.path + ' details collapse by click');
+  console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' polaris-disclosure ' + route.id);
 }
 
 async function enterDemo(page, origin, revision, viewport) {
@@ -201,6 +304,188 @@ async function clickRoute(page, origin, route, revision, viewport) {
     page.click(selector),
   ]);
   return inspectCurrent(page, route, revision, viewport);
+}
+
+async function waitPaidReady(page, route) {
+  await page.waitForFunction(({ marker, surface, routeId }) => {
+    const account = window.NorthStarAccountSession && window.NorthStarAccountSession.getAccount &&
+      window.NorthStarAccountSession.getAccount();
+    const cardReady = routeId === 'command-center'
+      ? Boolean(document.querySelector('#commandCenterPolaris[data-polaris-card="northstar_polaris_intelligence_card_v1"]'))
+      : Boolean(document.querySelector('#northstarPolarisSurfaceCard[data-state="ready"]'));
+    return account && document.documentElement.getAttribute('data-northstar-navigation') === 'ready' &&
+      !document.getElementById('northstarDemoToolbar') && document.querySelector(surface) && cardReady &&
+      document.body.textContent.includes(marker);
+  }, { marker: route.marker, surface: route.surface, routeId: route.id }, { timeout: 15000 });
+}
+
+async function inspectPaidCurrent(page, route, viewport) {
+  await waitPaidReady(page, route);
+  const snapshot = await page.evaluate(({ routeId, expectedPath }) => {
+    function rect(node) {
+      if (!node) return null;
+      const value = node.getBoundingClientRect();
+      return { left: value.left, right: value.right, top: value.top, bottom: value.bottom };
+    }
+    const mounted = routeId === 'command-center'
+      ? document.querySelector('#commandCenterPolaris[data-polaris-card]')
+      : document.getElementById('northstarPolarisSurfaceCard');
+    const cardRect = rect(mounted);
+    const contained = !mounted || Array.from(mounted.querySelectorAll('li, a, p, span')).filter(node => {
+      return typeof node.checkVisibility === 'function'
+        ? node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+        : node.getClientRects().length > 0;
+    }).every(node => {
+      const value = rect(node);
+      return value.left >= cardRect.left - 1 && value.right <= cardRect.right + 1;
+    });
+    const sidebarLinks = Array.from(document.querySelectorAll('.sidebar-nav a')).map(node => ({
+      id: node.dataset.navId, href: node.getAttribute('href'), current: node.getAttribute('aria-current'),
+    }));
+    const mobileLinks = Array.from(document.querySelectorAll('.mobile-menu-nav a')).map(node => ({
+      id: node.dataset.navId, href: node.getAttribute('href'), current: node.getAttribute('aria-current'),
+    }));
+    return {
+      pathname: location.pathname,
+      expectedPath,
+      body: document.body.innerText,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      toolbar: Boolean(document.getElementById('northstarDemoToolbar')),
+      sidebarLinks,
+      mobileLinks,
+      activeSidebar: sidebarLinks.filter(item => item.current === 'page').map(item => item.id),
+      activeMobile: mobileLinks.filter(item => item.current === 'page').map(item => item.id),
+      cardCount: document.querySelectorAll('[data-polaris-card="northstar_polaris_intelligence_card_v1"]').length,
+      cardContract: mounted && mounted.dataset.polarisCard,
+      cardSurface: mounted && mounted.dataset.polarisSurface,
+      cardState: routeId === 'command-center' ? 'ready' : mounted && mounted.dataset.state,
+      cardText: mounted && mounted.innerText,
+      cardDetailed: Boolean(mounted && mounted.querySelector('.polaris-card-details')),
+      cardContained: contained,
+      objectHrefs: mounted ? Array.from(mounted.querySelectorAll('.polaris-card-object-links a')).map(node => node.getAttribute('href')) : [],
+    };
+  }, { routeId: route.id, expectedPath: route.paidPath });
+
+  assert.strictEqual(snapshot.pathname, route.paidPath, route.paidPath + ' exact paid route');
+  assert.strictEqual(snapshot.toolbar, false, route.paidPath + ' has no demo controls');
+  assert.strictEqual(snapshot.sidebarLinks.length, ROUTES.length, route.paidPath + ' full paid desktop navigation');
+  assert.strictEqual(snapshot.mobileLinks.length, ROUTES.length, route.paidPath + ' full paid mobile navigation');
+  assert.deepStrictEqual(snapshot.sidebarLinks.map(item => item.href), ROUTES.map(item => item.paidPath),
+    route.paidPath + ' exact paid desktop destinations');
+  assert.deepStrictEqual(snapshot.mobileLinks.map(item => item.href), ROUTES.map(item => item.paidPath),
+    route.paidPath + ' exact paid mobile destinations');
+  assert.deepStrictEqual(snapshot.activeSidebar, [route.id], route.paidPath + ' paid desktop active destination');
+  assert.deepStrictEqual(snapshot.activeMobile, [route.id], route.paidPath + ' paid mobile active destination');
+  assert.strictEqual(snapshot.cardCount, 1, route.paidPath + ' exactly one mounted Polaris card');
+  assert.strictEqual(snapshot.cardContract, 'northstar_polaris_intelligence_card_v1', route.paidPath + ' shared card contract');
+  assert.strictEqual(snapshot.cardSurface, route.id, route.paidPath + ' page-specific projection');
+  assert.strictEqual(snapshot.cardState, 'ready', route.paidPath + ' role-authorized projection ready');
+  assert.strictEqual(snapshot.cardContained, true, route.paidPath + ' card content stays contained');
+  assert.strictEqual(snapshot.cardDetailed, ['command-center', 'leads', 'polaris'].includes(route.id),
+    route.paidPath + ' detailed-card depth');
+  assert.ok(snapshot.overflow <= 1, route.paidPath + ' has no horizontal overflow at ' + viewport.label);
+  assert.ok(snapshot.cardText.includes(PAID_CUSTOMER_A), route.paidPath + ' reads real tenant A data');
+  assert.ok(!snapshot.body.includes(PAID_CUSTOMER_B), route.paidPath + ' excludes tenant B data');
+  assert.ok(!/Simulate Lead|Reset demo|account-free demo workspace|fictional demo workspace/i.test(snapshot.body),
+    route.paidPath + ' contains no demo controls or language');
+  assert.ok(!snapshot.cardText.includes('[object Object]') && !snapshot.cardText.includes('Not calculated'),
+    route.paidPath + ' card remains human-readable');
+  assert.ok(snapshot.objectHrefs.every(href => href && href.startsWith('/dashboard')),
+    route.paidPath + ' actions remain in paid role-authorized routes');
+  assert.ok(snapshot.objectHrefs.filter(href => href.startsWith('/dashboard/polaris?')).length >= 3,
+    route.paidPath + ' exposes customer, lead, and work detail paths');
+  return snapshot;
+}
+
+async function clickPaidRoute(page, origin, route, viewport) {
+  const mobile = viewport.width <= 768;
+  if (mobile) {
+    await page.click('#navHamburgerBtn');
+    await page.waitForFunction(() => document.getElementById('mobileMenu').classList.contains('open'));
+  }
+  const selector = (mobile ? '.mobile-menu-nav' : '.sidebar-nav') + ' a[data-nav-id="' + route.id + '"]';
+  await Promise.all([
+    page.waitForURL(url => url.origin === origin && url.pathname === route.paidPath, { timeout: 15000 }),
+    page.click(selector),
+  ]);
+  return inspectPaidCurrent(page, route, viewport);
+}
+
+async function exercisePaidViewport(browser, origin, viewport, session, ledger) {
+  const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block' });
+  context.setDefaultTimeout(10000);
+  await context.addCookies(Object.entries(session.cookies).map(([name, value]) => ({
+    name, value, url: origin, httpOnly: name !== 'northstar_csrf', sameSite: 'Lax',
+  })));
+  const label = 'paid-' + viewport.label;
+  const page = await context.newPage();
+  page.on('request', request => ledger.requests.push({ viewport: label, method: request.method(), url: request.url() }));
+  page.on('response', response => {
+    if (response.status() >= 400) ledger.httpErrors.push({ viewport: label, status: response.status(), url: response.url() });
+  });
+  page.on('console', message => {
+    const location = message.location();
+    const source = location && location.url ? ' [' + location.url + (location.lineNumber != null ? ':' + location.lineNumber : '') + ']' : '';
+    if (message.type() === 'warning') ledger.warnings.push(label + ': ' + message.text() + source);
+    if (message.type() === 'error') ledger.consoleErrors.push(label + ': ' + message.text() + source);
+  });
+  page.on('pageerror', error => ledger.pageErrors.push(label + ': ' + error.message));
+  try {
+    const entry = await page.goto(origin + ROUTES[0].paidPath, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    assert.ok(entry && [200, 304].includes(entry.status()), 'paid Command Center shell loads');
+    const first = await inspectPaidCurrent(page, ROUTES[0], viewport);
+    assert.strictEqual(first.objectHrefs.length >= 3, true, viewport.label + ' paid Command Center exposes complete object paths');
+    const absentEstimate = await page.evaluate(() => {
+      const valueCard = Array.from(document.querySelectorAll('#commandCenterKpis .demo-kpi-card')).find(card => {
+        const label = card.querySelector('span');
+        return label && label.textContent.trim() === 'Recorded opportunity value';
+      });
+      return {
+        kpiValue: valueCard && valueCard.querySelector('strong') && valueCard.querySelector('strong').textContent.trim(),
+        kpiNote: valueCard && valueCard.querySelector('small') && valueCard.querySelector('small').textContent.trim(),
+        chart: document.getElementById('commandCenterChartBars').innerText,
+        chartSummary: document.getElementById('commandCenterChartSummary').innerText,
+        tableValues: Array.from(document.querySelectorAll('#commandCenterLeadRows tr td:nth-child(3)'))
+          .map(cell => cell.textContent.trim()),
+        polaris: document.getElementById('commandCenterPolaris').innerText,
+      };
+    });
+    assert.strictEqual(absentEstimate.kpiValue, 'Unavailable', viewport.label + ' null estimate stays unavailable in the paid KPI');
+    assert.strictEqual(absentEstimate.kpiNote, 'No role-authorized customer price is available.',
+      viewport.label + ' paid KPI explains the absent canonical price');
+    assert.ok(absentEstimate.chart.includes('No recorded opportunity values are available for this view.'),
+      viewport.label + ' null estimate stays absent from the chart');
+    assert.ok(absentEstimate.chartSummary.includes('empty until a role-authorized estimate is recorded'),
+      viewport.label + ' paid chart explains its missing input');
+    assert.deepStrictEqual(absentEstimate.tableValues, ['Unavailable — no recorded estimate'],
+      viewport.label + ' paid table does not fabricate a zero-dollar estimate');
+    assert.ok(!absentEstimate.polaris.includes('A recorded customer-facing estimate is available for review.'),
+      viewport.label + ' paid Polaris card does not claim an absent estimate exists');
+    await exercisePolarisDisclosure(page, { ...ROUTES[0], path: ROUTES[0].paidPath }, viewport);
+
+    for (const route of ROUTES.slice(1)) {
+      await clickPaidRoute(page, origin, route, viewport);
+      await exercisePolarisDisclosure(page, { ...route, path: route.paidPath }, viewport);
+      console.log('PARITY_BROWSER_CHECKPOINT paid-' + viewport.label + ' route ' + route.id);
+    }
+
+    await clickPaidRoute(page, origin, ROUTES[0], viewport);
+    const leadLink = page.locator('#commandCenterPolaris .polaris-card-object-links a', { hasText: 'lead detail' }).first();
+    const leadHref = await leadLink.getAttribute('href');
+    assert.ok(leadHref && leadHref.startsWith('/dashboard/polaris?kind=lead&id='), viewport.label + ' paid lead path');
+    await Promise.all([
+      page.waitForURL(url => url.origin === origin && url.pathname + url.search === leadHref, { timeout: 15000 }),
+      leadLink.click(),
+    ]);
+    const detail = await inspectPaidCurrent(page, ROUTES[1], viewport);
+    assert.ok(detail.cardText.includes(PAID_CUSTOMER_A) && detail.cardText.includes('Evidence'),
+      viewport.label + ' paid role-authorized complete Polaris detail');
+    assert.ok(!detail.cardText.includes(PAID_CUSTOMER_B), viewport.label + ' paid detail excludes tenant B');
+    console.log('PARITY_BROWSER_CHECKPOINT paid-' + viewport.label + ' complete');
+    return { viewport: viewport.label, routes: ROUTES.length, tenant: PAID_ORG_A };
+  } finally {
+    await context.close();
+  }
 }
 
 async function exerciseTheme(page, viewport) {
@@ -243,6 +528,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
   try {
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' entry');
     const initial = await enterDemo(page, origin, 1, viewport);
+    await exercisePolarisDisclosure(page, ROUTES[0], viewport);
     assert.strictEqual(initial.workspace.session.durable, false, viewport.label + ' GET remains projection-only');
     assert.strictEqual(initial.workspace.graphs.length, 3, viewport.label + ' seed graph count');
     const initialConfiguration = initial.workspace.configuration;
@@ -253,6 +539,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
 
     for (const route of ROUTES.slice(1)) {
       const snapshot = await clickRoute(page, origin, route, 1, viewport);
+      await exercisePolarisDisclosure(page, route, viewport);
       assert.strictEqual(snapshot.workspace.integrity.digest, initialDigest, route.path + ' exact initial digest');
       if (route.id === 'polaris') {
         const requestOffset = ledger.requests.length;
@@ -272,7 +559,22 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     }
 
     await clickRoute(page, origin, ROUTES[0], 1, viewport);
-    await page.selectOption('#demoScenario', 'fence');
+    const scenarioBuilder = page.locator('.northstar-demo-scenario-builder');
+    if (!(await scenarioBuilder.evaluate(node => node.open))) {
+      await scenarioBuilder.locator('summary').click();
+    }
+    const scenarioSelection = {
+      business: 'multi_crew',
+      service: 'roofing',
+      intent: 'second_opinion',
+      urgency: 'safety_emergency',
+      context: 'insurance_claim',
+      scheduling: 'weather_window',
+      outcome: 'booked',
+    };
+    for (const [dimension, value] of Object.entries(scenarioSelection)) {
+      await page.selectOption('[data-scenario-dimension="' + dimension + '"]', value);
+    }
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
       page.click('#demoSimulateLead'),
@@ -287,14 +589,22 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.deepStrictEqual(simulated.configuration, initialConfiguration, viewport.label + ' configuration remains stable');
     assert.deepStrictEqual(simulated.navigation, initialNavigation, viewport.label + ' navigation remains stable');
     const added = simulated.graphs[0];
-    assert.strictEqual(added.lead.serviceType, 'fence', viewport.label + ' selected scenario');
+    assert.strictEqual(added.lead.serviceType, 'roofing', viewport.label + ' selected service');
+    assert.deepStrictEqual(added.scenario.selection, scenarioSelection, viewport.label + ' complete selected scenario');
+    assert.strictEqual(added.polaris.snapshot.risk.emergency, true, viewport.label + ' urgency changes Polaris risk');
+    assert.ok(added.communication.transcript.some(turn => turn.text.includes('second opinion')),
+      viewport.label + ' caller intent changes the generated conversation');
     assert.strictEqual(added.polaris.completeDetail, true, viewport.label + ' complete Polaris detail');
     assert.match(added.polaris.snapshotDigest, /^[0-9a-f]{64}$/, viewport.label + ' snapshot digest');
+    const simulatedCommandCard = await inspectCurrent(page, ROUTES[0], 2, viewport);
+    assert.ok(simulatedCommandCard.polarisObjectHrefs.some(href => href && href.includes(encodeURIComponent(added.ids.lead))),
+      viewport.label + ' Command Center card links to the simulated lead detail');
 
     const leadsRoute = ROUTES.find(route => route.id === 'leads');
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' leads-revisit-start');
     const leads = await clickRoute(page, origin, leadsRoute, 2, viewport);
-    await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
+    await page.waitForFunction(name => Array.from(document.querySelectorAll('#leadsContent tr'))
+      .some(row => row.textContent.includes(name)), added.customer.name, { timeout: 10000 });
     assert.ok(leads.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph), 'Leads reads the committed graph');
     const rowTarget = await page.evaluate(async name => {
       const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate => candidate.textContent.includes(name));
@@ -367,23 +677,31 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     }
 
     const polarisRoute = ROUTES.find(route => route.id === 'polaris');
-    await clickRoute(page, origin, polarisRoute, 2, viewport);
     const detailPath = polarisRoute.path + '?kind=lead&id=' + encodeURIComponent(added.ids.lead);
-    const detailResponse = await page.goto(origin + detailPath, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    assert.ok(detailResponse && [200, 304].includes(detailResponse.status()), viewport.label + ' Polaris detail shell');
+    const detailLink = page.locator('#commandCenterPolaris .polaris-card-object-links a', { hasText: 'lead detail' }).first();
+    assert.strictEqual(await detailLink.getAttribute('href'), detailPath, viewport.label + ' exact lead-detail destination');
+    await Promise.all([
+      page.waitForURL(url => url.origin === origin && url.pathname + url.search === detailPath, { timeout: 15000 }),
+      detailLink.click(),
+    ]);
     const detail = await inspectCurrent(page, polarisRoute, 2, viewport);
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' polaris-detail');
-    assert.ok(detail.body.includes(added.ids.customer), viewport.label + ' customer authority ID visible');
-    assert.ok(detail.body.includes(added.ids.lead), viewport.label + ' lead authority ID visible');
-    assert.ok(detail.body.includes(added.ids.work), viewport.label + ' work authority ID visible');
-    assert.ok(detail.body.includes(added.polaris.snapshotDigest), viewport.label + ' Polaris digest visible');
-    assert.ok(detail.body.includes('Supporting facts'), viewport.label + ' full supporting facts visible');
-    assert.ok(detail.body.includes('Not calculated'), viewport.label + ' bounded calculation limitations visible');
+    assert.ok(detail.polarisCardText.includes(added.customer.name), viewport.label + ' customer detail is human-readable');
+    assert.ok(detail.polarisCardText.includes(added.lead.serviceLabel), viewport.label + ' lead detail retains service context');
+    assert.ok(detail.polarisCardText.includes('Evidence'), viewport.label + ' complete supporting evidence is available');
+    assert.ok(detail.polarisCardText.includes('Missing information'), viewport.label + ' missing inputs are explained');
+    assert.ok(detail.polarisObjectHrefs.some(href => href && href.includes(encodeURIComponent(added.ids.customer))),
+      viewport.label + ' customer object has a complete detail path');
+    assert.ok(detail.polarisObjectHrefs.some(href => href && href.includes(encodeURIComponent(added.ids.work))),
+      viewport.label + ' work object has a complete detail path');
+    await exercisePolarisDisclosure(page, polarisRoute, viewport);
 
     for (const id of ['team', 'ai-settings', 'business-profile', 'settings', 'integrations']) {
       const route = ROUTES.find(candidate => candidate.id === id);
       const snapshot = await clickRoute(page, origin, route, 2, viewport);
       assert.deepStrictEqual(snapshot.workspace.configuration, initialConfiguration, route.path + ' configuration stability');
+      assert.ok(snapshot.polarisObjectHrefs.some(href => href && href.includes(encodeURIComponent(added.ids.lead))),
+        route.path + ' Polaris card advances with the simulated canonical state');
       console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' config ' + id);
     }
 
@@ -438,6 +756,57 @@ async function main() {
     process.chdir(ROOT);
     db = require('../../src/db');
     assert.strictEqual(await db.initDatabase(), true, 'disposable PostgreSQL initialized');
+    const pool = db.getPool();
+    await pool.query(
+      `INSERT INTO organizations (id, name, email) VALUES
+        ($1, 'Paid Browser Organization A', 'paid-browser-a@northstar.test'),
+        ($2, 'Paid Browser Organization B', 'paid-browser-b@northstar.test')`,
+      [PAID_ORG_A, PAID_ORG_B]
+    );
+    for (const user of [
+      [PAID_USER_A, PAID_ORG_A, 'paid-browser-owner-a@northstar.test'],
+      [PAID_USER_B, PAID_ORG_B, 'paid-browser-owner-b@northstar.test'],
+    ]) {
+      await pool.query(
+        `INSERT INTO users (id, organization_id, name, email, password_hash, role, status)
+         VALUES ($1,$2,$3,$4,'not-used','owner','active')`,
+        [user[0], user[1], user[2], user[2]]
+      );
+    }
+    await pool.query(
+      `INSERT INTO notification_preferences (
+         organization_id, email_new_lead, email_call_summary, email_appointment,
+         sms_new_lead, sms_urgent, notification_email, notification_phone
+       ) VALUES
+         ($1,TRUE,TRUE,TRUE,FALSE,TRUE,'paid-browser-owner-a@northstar.test',''),
+         ($2,FALSE,FALSE,FALSE,FALSE,FALSE,'paid-browser-owner-b@northstar.test','')`,
+      [PAID_ORG_A, PAID_ORG_B]
+    );
+    await pool.query(
+      `INSERT INTO organization_account_preferences (organization_id, preferences)
+       VALUES ($1,'{}'::jsonb),($2,'{}'::jsonb)`,
+      [PAID_ORG_A, PAID_ORG_B]
+    );
+    const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+    await putBusinessProfile(pool, {
+      organizationId: PAID_ORG_A,
+      userId: PAID_USER_A,
+      expectedVersion: null,
+      profile: paidBusinessProfile('Paid Browser Organization A'),
+    });
+    await putBusinessProfile(pool, {
+      organizationId: PAID_ORG_B,
+      userId: PAID_USER_B,
+      expectedVersion: null,
+      profile: paidBusinessProfile('Paid Browser Organization B'),
+    });
+    const paidA = await ingestRetell(pool, paidGraphRequest(PAID_ORG_A, 'paid-browser-a', PAID_CUSTOMER_A, '+15550101001', 'redwood'));
+    const paidB = await ingestRetell(pool, paidGraphRequest(PAID_ORG_B, 'paid-browser-b', PAID_CUSTOMER_B, '+15550101002'));
+    assert.strictEqual(paidA.status, 201, 'tenant A real canonical graph created');
+    assert.strictEqual(paidB.status, 201, 'tenant B negative-control graph created');
+    const paidSession = await provisionDurableSession(pool, {
+      userId: PAID_USER_A, organizationId: PAID_ORG_A, role: 'owner',
+    });
     global.fetch = async function () { throw new Error('provider boundary must remain unused'); };
     const { app } = require('../../src/server');
     server = await listen(app);
@@ -446,6 +815,10 @@ async function main() {
     const ledger = { requests: [], httpErrors: [], warnings: [], consoleErrors: [], pageErrors: [] };
     const receipts = [];
     for (const viewport of selectedViewports) receipts.push(await exerciseViewport(browser, origin, viewport, ledger));
+    const paidReceipts = [];
+    for (const viewport of selectedViewports) {
+      paidReceipts.push(await exercisePaidViewport(browser, origin, viewport, paidSession, ledger));
+    }
 
     const external = ledger.requests.filter(entry => new URL(entry.url).origin !== origin);
     const mutations = ledger.requests.filter(entry => entry.method !== 'GET' && entry.method !== 'HEAD' && entry.method !== 'OPTIONS');
@@ -460,7 +833,6 @@ async function main() {
     assert.deepStrictEqual(ledger.consoleErrors, [], 'browser console errors');
     assert.deepStrictEqual(ledger.pageErrors, [], 'browser page errors');
 
-    const pool = db.getPool();
     const rows = (await pool.query(
       `SELECT count(*)::int AS sessions,
               count(DISTINCT tenant_id)::int AS tenants,
@@ -483,6 +855,7 @@ async function main() {
       viewports: selectedViewports.map(value => value.label),
       routes: ROUTES.length,
       receipts,
+      paidReceipts,
       requests: ledger.requests.length,
       mutations: mutations.length,
       externalRequests: external.length,

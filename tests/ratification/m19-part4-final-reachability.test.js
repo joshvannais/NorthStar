@@ -36,10 +36,13 @@ const TEST_PATHS = Object.freeze([
 ]);
 const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/command-center-contract.js',
+  'public/js/command-center-page.js',
   'public/js/demo-command-center.js',
   'public/js/demo-runtime.js',
   'public/js/homepage-demo.js',
   'public/js/navigation-launcher.js',
+  'public/js/polaris-card.js',
+  'public/js/polaris-surface-card.js',
   'public/js/transcript-renderer.js',
   'public/js/vendor/retell-web-client.mjs',
 ]);

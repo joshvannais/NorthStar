@@ -456,40 +456,6 @@
     });
   }
 
-  function installPolarisDetail(value) {
-    if (path !== '/demo/polaris' || document.getElementById('northstarDemoPolarisDetail')) return;
-    var query = new URLSearchParams(global.location.search);
-    var kind = query.get('kind') || (query.get('leadId') ? 'lead' : '');
-    var identifier = query.get('id') || query.get('leadId');
-    if (!kind || !identifier || ['customer', 'lead', 'work'].indexOf(kind) < 0) return;
-    var graph = value.graphs.find(function (candidate) {
-      var key = kind === 'lead' ? 'lead' : kind;
-      return candidate.ids && candidate.ids[key] === identifier;
-    });
-    if (!graph) return;
-    var main = document.querySelector('.main-content');
-    var toolbar = document.getElementById('northstarDemoToolbar');
-    if (!main) return;
-    var section = control('section', '', 'northstar-demo-polaris-detail');
-    section.id = 'northstarDemoPolarisDetail';
-    section.append(control('p', 'CANONICAL POLARIS RESULT', 'northstar-demo-eyebrow'));
-    section.append(control('h2', graph.customer.name + ' · ' + graph.lead.serviceLabel));
-    section.append(control('p', graph.lead.summary));
-    var grid = control('dl', '', 'northstar-demo-detail-grid');
-    [
-      ['Customer', graph.ids.customer], ['Lead', graph.ids.lead], ['Work', graph.ids.work],
-      ['Estimate', '$' + Number(graph.estimate.customerPrice || 0).toLocaleString()],
-      ['Snapshot digest', graph.polaris.snapshotDigest],
-      ['Supporting facts', String((graph.polaris.facts || []).length)],
-    ].forEach(function (entry) {
-      grid.append(control('dt', entry[0]), control('dd', entry[1]));
-    });
-    section.append(grid);
-    var limitations = control('p', 'Not calculated: tenant-authored costs and net profit remain unavailable in the account-free demo.', 'northstar-demo-detail-note');
-    section.append(limitations);
-    main.insertBefore(section, toolbar ? toolbar.nextSibling : main.firstChild);
-  }
-
   function initializeDocument() {
     document.body.classList.add('northstar-demo-mode');
     rewriteLinks(document);
@@ -504,7 +470,6 @@
     observer.observe(document.body, { childList: true, subtree: true });
     loadWorkspace(false).then(function (value) {
       installToolbar(value);
-      installPolarisDetail(value);
     }).catch(function () {
       var main = document.querySelector('.main-content');
       if (!main) return;

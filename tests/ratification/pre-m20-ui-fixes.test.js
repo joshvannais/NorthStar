@@ -14,7 +14,7 @@ function read(relativePath) {
 describe('pre-Mission 20 public UI corrections', () => {
   const sharedCss = read('public/css/style.css');
   const homepage = read('public/index.html');
-  const demo = read('public/dashboard/command-center.html');
+  const demo = read('public/demo-dashboard.html');
   const demoCss = read('public/css/demo-runtime.css');
   const demoRuntime = read('public/js/demo-runtime.js');
   const themeScript = read('public/js/theme.js');
@@ -56,14 +56,16 @@ describe('pre-Mission 20 public UI corrections', () => {
     expect(demo.match(/<link\b[^>]*\bhref=["']\/css\/demo-runtime\.css["'][^>]*>/gi)).toHaveLength(1);
     expect(demo).toContain('/js/demo-runtime.js');
     expect(demo).toContain('/js/nav-component.js');
-    expect(demo).toContain('Command Center');
-    expect(demo).toContain('Polaris™ Intelligence');
+    expect(demo).toContain('Contractor Command Center');
+    expect(demo).toContain('Polaris intelligence');
   });
 
   test('the shared adapter exposes only bounded demo mutations and rewrites paid links locally', () => {
     expect(demoRuntime).toContain("simulate.id = 'demoSimulateLead'");
     expect(demoRuntime).toContain("reset.id = 'demoReset'");
-    expect(demoRuntime).toContain("select.id = 'demoScenario'");
+    expect(demoRuntime).toContain('scenarioSpace.dimensions.forEach');
+    expect(demoRuntime).toContain("var id = 'demoScenario-' + dimension.id");
+    expect(demoRuntime).toContain('select.dataset.scenarioDimension = dimension.id');
     expect(demoRuntime).toContain('/api/demo/command-center/simulations/leads');
     expect(demoRuntime).toContain('/api/demo/command-center/reset');
     expect(demoRuntime).toContain("code: 'demo_external_request_blocked'");

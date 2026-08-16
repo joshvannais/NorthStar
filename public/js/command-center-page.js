@@ -49,12 +49,15 @@
     return contract.destinationPath(id, mode);
   }
 
-  function detailHref(graph) {
-    var id = graph && graph.ids && (graph.ids.lead || graph.ids.opportunity);
+  function detailHref(graph, kind) {
+    var selectedKind = kind || 'lead';
+    var ids = graph && graph.ids || {};
+    var id = selectedKind === 'customer' ? ids.customer
+      : selectedKind === 'work' ? (ids.work || ids.appointment)
+        : (ids.lead || ids.opportunity);
     if (!id) return destination('polaris');
-    return mode === 'demo'
-      ? '/demo/polaris?kind=lead&id=' + encodeURIComponent(id)
-      : '/dashboard/polaris?leadId=' + encodeURIComponent(id);
+    var base = mode === 'demo' ? '/demo/polaris' : '/dashboard/polaris';
+    return base + '?kind=' + encodeURIComponent(selectedKind) + '&id=' + encodeURIComponent(id);
   }
 
   function latestGraphs() {
@@ -230,7 +233,9 @@
       opportunities: opportunities,
       recommendations: recommendations,
       objects: [
-        { label: 'Open complete Polaris detail', href: detailHref(graph) },
+        { label: 'Open ' + customer + ' customer detail', href: detailHref(graph, 'customer') },
+        { label: 'Open ' + service + ' lead detail', href: detailHref(graph, 'lead') },
+        { label: 'Open ' + service + ' work detail', href: detailHref(graph, 'work') },
         { label: 'Review all leads', href: destination('leads') },
       ],
     });

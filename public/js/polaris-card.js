@@ -85,11 +85,14 @@
     if (!input || input.contract !== CONTRACT || typeof input.surface !== 'string') {
       throw new Error('The Polaris intelligence card contract is unavailable.');
     }
+    var rawConfidence = input.confidence;
+    var numericConfidence = rawConfidence === null || rawConfidence === undefined || rawConfidence === '' ||
+      typeof rawConfidence === 'boolean' ? null : Number(rawConfidence);
     return {
       surface: input.surface,
       title: safeText(input.title) || 'Polaris intelligence is unavailable',
       summary: safeText(input.summary) || 'No role-authorized summary can be calculated from the current inputs.',
-      confidence: Number.isFinite(Number(input.confidence)) ? Math.max(0, Math.min(100, Number(input.confidence))) : null,
+      confidence: Number.isFinite(numericConfidence) ? Math.max(0, Math.min(100, numericConfidence)) : null,
       confidenceExplanation: safeText(input.confidenceExplanation) || 'Confidence is unavailable because supporting inputs are incomplete.',
       evidence: safeItems(input.evidence, 'No supporting evidence is recorded for this projection.'),
       missing: safeItems(input.missing, 'No missing-input explanation was supplied.'),

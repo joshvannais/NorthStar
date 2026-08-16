@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const { v5: uuidv5 } = require('uuid');
 const db = require('../db');
+const safeLogger = require('../observability/safeLogger');
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
 const {
   buildSimulatedGraph,
@@ -14,6 +15,14 @@ const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const SIMULATION_COOLDOWN_MS = 750;
 const MAX_MUTATIONS = 24;
 const EXPIRED_CLEANUP_LIMIT = 100;
+const ADMISSION_HISTORY_MS = 2 * 60 * 60 * 1000;
+const ADMISSION_LOCK_KEY = '718842570021';
+const GLOBAL_ADMISSION_HASH = '0'.repeat(64);
+const MAX_ACTIVE_SESSIONS = 4096;
+const MAX_GLOBAL_CREATIONS_PER_MINUTE = 120;
+const MAX_SOURCE_CREATIONS_PER_MINUTE = 30;
+const DEFAULT_HOUSEKEEPING_INTERVAL_MS = 60 * 1000;
+const DEFAULT_HOUSEKEEPING_MAX_BATCHES = 10;
 const TOKEN = /^[A-Za-z0-9_-]{43}\.[0-9]{10}$/;
 
 class DemoCommandCenterError extends Error {
@@ -63,6 +72,18 @@ function count(value, maximum) {
     fail(503, 'DEMO_STATE_INVALID', 'The isolated demo counter is unavailable.');
   }
   return number;
+}
+
+function boundedOption(value, minimum, maximum, fallback) {
+  return Number.isInteger(value) && value >= minimum && value <= maximum ? value : fallback;
+}
+
+function admission(value) {
+  const sourceHash = value && typeof value.sourceHash === 'string' ? value.sourceHash : '';
+  if (!/^[0-9a-f]{64}$/.test(sourceHash)) {
+    fail(503, 'DEMO_ADMISSION_UNAVAILABLE', 'The isolated demo admission authority is unavailable.');
+  }
+  return { sourceHash };
 }
 
 function normalizeToken(raw, now) {
@@ -163,6 +184,17 @@ class DemoCommandCenterRepository {
   constructor(poolProvider = () => db.getPool(), options = {}) {
     this.poolProvider = poolProvider;
     this.clock = typeof options.clock === 'function' ? options.clock : () => new Date();
+    this.maxActiveSessions = boundedOption(
+      options.maxActiveSessions, 1, MAX_ACTIVE_SESSIONS, MAX_ACTIVE_SESSIONS
+    );
+    this.maxGlobalCreationsPerMinute = boundedOption(
+      options.maxGlobalCreationsPerMinute, 1, MAX_GLOBAL_CREATIONS_PER_MINUTE,
+      MAX_GLOBAL_CREATIONS_PER_MINUTE
+    );
+    this.maxSourceCreationsPerMinute = boundedOption(
+      options.maxSourceCreationsPerMinute, 1, MAX_SOURCE_CREATIONS_PER_MINUTE,
+      MAX_SOURCE_CREATIONS_PER_MINUTE
+    );
   }
 
   pool() {
@@ -192,8 +224,116 @@ class DemoCommandCenterRepository {
     return recordFromRow(result.rows[0] || null, token, Boolean(result.rows[0]));
   }
 
-  async mutate(token, rawInput) {
+  async deleteExpiredBatch(client, now, batchSize) {
+    const expiredSessions = await client.query(
+      `WITH expired AS (
+         SELECT id
+           FROM demo_command_center_sessions
+          WHERE expires_at <= $1
+          ORDER BY expires_at, id
+          LIMIT $2
+          FOR UPDATE SKIP LOCKED
+       )
+       DELETE FROM demo_command_center_sessions sessions
+        USING expired
+        WHERE sessions.id = expired.id
+       RETURNING sessions.id`,
+      [now, batchSize]
+    );
+    const admissionCutoff = new Date(now.getTime() - ADMISSION_HISTORY_MS);
+    const expiredWindows = await client.query(
+      `WITH expired AS (
+         SELECT window_start, scope, subject_hash
+           FROM demo_command_center_admission_windows
+          WHERE window_start < $1
+          ORDER BY window_start, scope, subject_hash
+          LIMIT $2
+          FOR UPDATE SKIP LOCKED
+       )
+       DELETE FROM demo_command_center_admission_windows windows
+        USING expired
+        WHERE windows.window_start = expired.window_start
+          AND windows.scope = expired.scope
+          AND windows.subject_hash = expired.subject_hash
+       RETURNING windows.subject_hash`,
+      [admissionCutoff, batchSize]
+    );
+    return { sessions: expiredSessions.rowCount, admissionWindows: expiredWindows.rowCount };
+  }
+
+  async expire(options = {}) {
+    const batchSize = boundedOption(options.batchSize, 1, 1000, EXPIRED_CLEANUP_LIMIT);
+    const client = await this.pool().connect();
+    let open = false;
+    try {
+      await client.query('BEGIN');
+      open = true;
+      const result = await this.deleteExpiredBatch(client, date(this.clock()), batchSize);
+      await client.query('COMMIT');
+      open = false;
+      return result;
+    } catch (error) {
+      if (open) {
+        try { await client.query('ROLLBACK'); } catch (_) {}
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async claimAdmission(client, now, scope, subjectHash, limit) {
+    const claimed = await client.query(
+      `INSERT INTO demo_command_center_admission_windows
+         (window_start, scope, subject_hash, request_count, created_at, updated_at)
+       VALUES (date_trunc('minute', $1::timestamptz), $2, $3, 1, $1, $1)
+       ON CONFLICT (window_start, scope, subject_hash) DO UPDATE
+         SET request_count = demo_command_center_admission_windows.request_count + 1,
+             updated_at = EXCLUDED.updated_at
+       WHERE demo_command_center_admission_windows.request_count < $4
+       RETURNING request_count`,
+      [now, scope, subjectHash, limit]
+    );
+    if (claimed.rowCount !== 1) {
+      const code = scope === 'source' ? 'DEMO_SOURCE_RATE_LIMIT' : 'DEMO_GLOBAL_RATE_LIMIT';
+      fail(429, code, 'The bounded demo action limit was reached. Try again later.');
+    }
+  }
+
+  async insertNewSession(client, token, now, sourceHash) {
+    await this.deleteExpiredBatch(client, now, EXPIRED_CLEANUP_LIMIT);
+    await this.claimAdmission(
+      client, now, 'source', sourceHash, this.maxSourceCreationsPerMinute
+    );
+    await this.claimAdmission(
+      client, now, 'global', GLOBAL_ADMISSION_HASH, this.maxGlobalCreationsPerMinute
+    );
+    const active = await client.query(
+      `SELECT count(*)::int AS count
+         FROM demo_command_center_sessions
+        WHERE expires_at > $1`,
+      [now]
+    );
+    const activeCount = Number(active.rows[0] && active.rows[0].count);
+    if (!Number.isSafeInteger(activeCount) || activeCount < 0) {
+      fail(503, 'DEMO_STATE_INVALID', 'The isolated demo capacity is unavailable.');
+    }
+    if (activeCount >= this.maxActiveSessions) {
+      fail(429, 'DEMO_CAPACITY_LIMIT', 'The bounded account-free demo is at capacity. Try again later.');
+    }
+    const initial = createInitialDemoState(token.tenantId, token.issuedAt);
+    await client.query(
+      `INSERT INTO demo_command_center_sessions
+         (id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
+          created_at, updated_at, expires_at)
+       VALUES ($1,$2,$3,$4,1,0,0,$5,$5,$6)`,
+      [token.sessionId, token.tenantId, token.tokenHash, initial, token.issuedAt, token.expiresAt]
+    );
+  }
+
+  async mutate(token, rawInput, rawAdmission) {
     const input = mutationInput(rawInput);
+    const admitted = admission(rawAdmission);
     const pool = this.pool();
     const client = await pool.connect();
     let open = false;
@@ -201,28 +341,7 @@ class DemoCommandCenterRepository {
       await client.query('BEGIN');
       open = true;
       const now = date(this.clock());
-      await client.query(
-        `DELETE FROM demo_command_center_sessions
-          WHERE id IN (
-            SELECT id
-             FROM demo_command_center_sessions
-             WHERE expires_at <= $1
-             ORDER BY expires_at, id
-             LIMIT $2
-             FOR UPDATE SKIP LOCKED
-          )`,
-        [now, EXPIRED_CLEANUP_LIMIT]
-      );
-      const initial = createInitialDemoState(token.tenantId, token.issuedAt);
-      await client.query(
-        `INSERT INTO demo_command_center_sessions
-           (id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
-            created_at, updated_at, expires_at)
-         VALUES ($1,$2,$3,$4,1,0,0,$5,$5,$6)
-         ON CONFLICT (token_hash) DO NOTHING`,
-        [token.sessionId, token.tenantId, token.tokenHash, initial, token.issuedAt, token.expiresAt]
-      );
-      const locked = await client.query(
+      let locked = await client.query(
         `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
                 last_simulated_at, expires_at
            FROM demo_command_center_sessions
@@ -230,6 +349,28 @@ class DemoCommandCenterRepository {
           FOR UPDATE`,
         [token.tokenHash]
       );
+      if (!locked.rows.length) {
+        await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [ADMISSION_LOCK_KEY]);
+        locked = await client.query(
+          `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
+                  last_simulated_at, expires_at
+             FROM demo_command_center_sessions
+            WHERE token_hash = $1
+            FOR UPDATE`,
+          [token.tokenHash]
+        );
+        if (!locked.rows.length) {
+          await this.insertNewSession(client, token, now, admitted.sourceHash);
+          locked = await client.query(
+            `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
+                    last_simulated_at, expires_at
+               FROM demo_command_center_sessions
+              WHERE token_hash = $1
+              FOR UPDATE`,
+            [token.tokenHash]
+          );
+        }
+      }
       const current = recordFromRow(locked.rows[0] || null, token, true);
       if (current.expiresAt.getTime() <= now.getTime()) {
         fail(410, 'DEMO_SESSION_EXPIRED', 'This demo session expired. Refresh to start a new isolated preview.');
@@ -317,11 +458,78 @@ class DemoCommandCenterRepository {
   }
 }
 
+class DemoCommandCenterHousekeepingWorker {
+  constructor(options = {}) {
+    this.repository = options.repository || new DemoCommandCenterRepository();
+    this.intervalMs = boundedOption(
+      options.intervalMs, 10000, 3600000, DEFAULT_HOUSEKEEPING_INTERVAL_MS
+    );
+    this.batchSize = boundedOption(options.batchSize, 1, 1000, EXPIRED_CLEANUP_LIMIT);
+    this.maxBatches = boundedOption(
+      options.maxBatches, 1, 25, DEFAULT_HOUSEKEEPING_MAX_BATCHES
+    );
+    this.timer = null;
+    this.running = false;
+    this.stopped = false;
+  }
+
+  async drainOnce() {
+    let sessions = 0;
+    let admissionWindows = 0;
+    for (let batch = 0; batch < this.maxBatches; batch += 1) {
+      const expired = await this.repository.expire({ batchSize: this.batchSize });
+      if (!expired || !Number.isInteger(expired.sessions) || !Number.isInteger(expired.admissionWindows) ||
+          expired.sessions < 0 || expired.sessions > this.batchSize ||
+          expired.admissionWindows < 0 || expired.admissionWindows > this.batchSize) {
+        throw new Error('Demo command center housekeeping returned invalid counts');
+      }
+      sessions += expired.sessions;
+      admissionWindows += expired.admissionWindows;
+      if (expired.sessions < this.batchSize && expired.admissionWindows < this.batchSize) break;
+    }
+    return { sessions, admissionWindows };
+  }
+
+  async tick() {
+    if (this.running || this.stopped) return false;
+    this.running = true;
+    try {
+      await this.drainOnce();
+    } catch (_error) {
+      safeLogger.warn('observability', 'demo_housekeeping_failed');
+    } finally {
+      this.running = false;
+    }
+    return true;
+  }
+
+  start() {
+    if (this.timer || this.stopped) return false;
+    this.timer = setInterval(() => { void this.tick(); }, this.intervalMs);
+    if (typeof this.timer.unref === 'function') this.timer.unref();
+    void this.tick();
+    return true;
+  }
+
+  stop() {
+    this.stopped = true;
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+}
+
 module.exports = {
+  ADMISSION_HISTORY_MS,
+  DEFAULT_HOUSEKEEPING_INTERVAL_MS,
+  DEFAULT_HOUSEKEEPING_MAX_BATCHES,
   DemoCommandCenterError,
+  DemoCommandCenterHousekeepingWorker,
   DemoCommandCenterRepository,
   EXPIRED_CLEANUP_LIMIT,
+  MAX_ACTIVE_SESSIONS,
+  MAX_GLOBAL_CREATIONS_PER_MINUTE,
   MAX_MUTATIONS,
+  MAX_SOURCE_CREATIONS_PER_MINUTE,
   SIMULATION_COOLDOWN_MS,
   TOKEN_LIFETIME_MS,
   issueToken,

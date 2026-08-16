@@ -163,7 +163,9 @@ async function main() {
   const runtime = resolveBrowserRuntime(selected);
   const suiteDatabase = await createSuiteDatabase('cc-parity-browser');
   const originalEnvironment = new Map();
-  for (const name of PROVIDER_ENVIRONMENT.concat(['DATABASE_URL', 'NODE_ENV'])) originalEnvironment.set(name, process.env[name]);
+  for (const name of PROVIDER_ENVIRONMENT.concat(['DATABASE_URL', 'NODE_ENV', 'AUTH_ACCESS_SECRET'])) {
+    originalEnvironment.set(name, process.env[name]);
+  }
   const beforeData = treeDigest(path.join(ROOT, 'data'));
   let db;
   let server;
@@ -173,6 +175,7 @@ async function main() {
     for (const name of PROVIDER_ENVIRONMENT) delete process.env[name];
     process.env.DATABASE_URL = suiteDatabase.connectionString;
     process.env.NODE_ENV = 'test';
+    process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
     process.chdir(ROOT);
     db = require('../../src/db');
     assert.strictEqual(await db.initDatabase(), true, 'disposable PostgreSQL initialized');

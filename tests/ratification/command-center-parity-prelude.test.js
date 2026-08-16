@@ -179,7 +179,17 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(migration).toContain("expires_at <= created_at + INTERVAL '24 hours'");
     expect(migration).toContain('octet_length(state::text) <= 524288');
     expect(migration).toContain('CREATE TABLE demo_command_center_mutations');
+    expect(migration).toContain('CREATE TABLE demo_command_center_admission_windows');
+    expect(migration).toContain("CHECK (scope IN ('source', 'global'))");
+    expect(migration).toContain("subject_hash ~ '^[0-9a-f]{64}$'");
     expect(migration).toContain('request_digest CHAR(64) NOT NULL');
     expect(migration).not.toMatch(/password|email|phone|credential|provider_token|production_data/i);
+    const repository = read('src/commandCenter/demoRepository.js');
+    expect(repository).toContain('pg_advisory_xact_lock');
+    expect(repository).toContain('MAX_ACTIVE_SESSIONS = 4096');
+    expect(repository).toContain('DemoCommandCenterHousekeepingWorker');
+    const server = read('src/server.js');
+    expect(server).toContain('productionDemoHousekeepingWorker.start()');
+    expect(server).toContain('productionDemoHousekeepingWorker.stop()');
   });
 });

@@ -35,6 +35,8 @@ const TEST_PATHS = Object.freeze([
   'tests/ratification/m19-part4-final-reachability.test.js',
 ]);
 const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
+  'public/js/command-center-contract.js',
+  'public/js/demo-command-center.js',
   'public/js/homepage-demo.js',
   'public/js/navigation-launcher.js',
   'public/js/transcript-renderer.js',

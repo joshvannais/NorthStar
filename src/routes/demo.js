@@ -1,11 +1,11 @@
 'use strict';
 
+const crypto = require('crypto');
 const express = require('express');
 const config = require('../config');
 const db = require('../db');
 const { getProvisionedDemoOrganization } = require('../services/organizationAuthority');
 const { readDemoLifecycle } = require('../services/demoVoiceLifecycle');
-const { sha256 } = require('../services/businessProfileAdapter');
 const {
   DemoCommandCenterError,
   DemoCommandCenterRepository,
@@ -16,7 +16,6 @@ const scenarios = require('./simulation/scenario-catalog');
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
 const DEMO_COOKIE = 'northstar_demo_workspace';
-const mutationBuckets = new Map();
 const DETAIL_IDENTIFIERS = Object.freeze({ customer: 'customer', lead: 'lead', work: 'work' });
 
 function configuredOrganizationId() {
@@ -98,25 +97,22 @@ function mutationBoundary(req, res, intent) {
     });
     return false;
   }
-  const minute = Math.floor(Date.now() / 60000);
-  const key = sha256({ ip: req.ip, minute });
-  if (mutationBuckets.size > 1024) {
-    for (const [storedKey, value] of mutationBuckets) {
-      if (value.minute < minute) mutationBuckets.delete(storedKey);
-    }
-    while (mutationBuckets.size > 1024) mutationBuckets.delete(mutationBuckets.keys().next().value);
-  }
-  const current = mutationBuckets.get(key) || { minute, count: 0 };
-  current.count += 1;
-  mutationBuckets.set(key, current);
-  if (current.count > 30) {
-    res.status(429).json({
-      success: false,
-      error: { code: 'demo_rate_limit', message: 'The bounded demo action limit was reached. Try again later.' },
-    });
-    return false;
-  }
   return true;
+}
+
+function durableSourceHash(req) {
+  const secret = config.auth.accessSecret;
+  const source = typeof req.ip === 'string' ? req.ip.trim() : '';
+  if (typeof secret !== 'string' || Buffer.byteLength(secret, 'utf8') < 32 ||
+      !source || Buffer.byteLength(source, 'utf8') > 128) {
+    throw new DemoCommandCenterError(
+      503, 'DEMO_ADMISSION_UNAVAILABLE', 'The isolated demo admission authority is unavailable.'
+    );
+  }
+  return crypto.createHmac('sha256', secret)
+    .update('northstar-demo-command-center-admission-v1\0', 'utf8')
+    .update(source, 'utf8')
+    .digest('hex');
 }
 
 function errorResponse(res, error) {
@@ -213,7 +209,7 @@ router.post('/command-center/simulations/leads', async function (req, res) {
       expectedRevision: req.body.expectedRevision,
       serviceKey: req.body.service,
       idempotencyKey: req.get('Idempotency-Key'),
-    });
+    }, { sourceHash: durableSourceHash(req) });
     return res.status(result.replayed ? 200 : 201).json({
       success: true,
       replayed: result.replayed,
@@ -239,7 +235,7 @@ router.post('/command-center/reset', async function (req, res) {
       operation: 'reset',
       expectedRevision: req.body.expectedRevision,
       idempotencyKey: req.get('Idempotency-Key'),
-    });
+    }, { sourceHash: durableSourceHash(req) });
     return res.json({ success: true, replayed: result.replayed, data: demoWorkspace(result.record) });
   } catch (error) {
     return commandCenterFailure(req, res, error);

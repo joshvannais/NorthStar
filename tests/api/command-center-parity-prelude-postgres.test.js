@@ -88,6 +88,7 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect(first.body.data.navigation).toHaveLength(11);
     expect(first.body.data.graphs).toHaveLength(3);
     expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(0);
+    expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_admission_windows')).rows[0].count).toBe(0);
 
     const rejected = await request(app).post('/api/demo/command-center/simulations/leads')
       .set('Host', 'northstar.test')
@@ -126,6 +127,16 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect(created.body.data.session).toEqual(expect.objectContaining({ durable: true, simulationCount: 1 }));
     expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(1);
     expect(created.body.data.configuration).toEqual(beforeConfiguration);
+    const admissionRows = (await pool.query(
+      `SELECT scope, trim(subject_hash) AS subject_hash, request_count
+         FROM demo_command_center_admission_windows
+        ORDER BY scope`
+    )).rows;
+    expect(admissionRows).toEqual([
+      { scope: 'global', subject_hash: '0'.repeat(64), request_count: 1 },
+      { scope: 'source', subject_hash: expect.stringMatching(/^[0-9a-f]{64}$/), request_count: 1 },
+    ]);
+    expect(admissionRows[1].subject_hash).not.toContain('127.0.0.1');
     const graph = created.body.data.graphs[0];
     expect(graph).toEqual(expect.objectContaining({
       customer: expect.objectContaining({ fictional: true }),
@@ -209,6 +220,119 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
       .set('Host', 'northstar.test').set('Cookie', cookie).expect(200);
     expect(refreshed.body.data.integrity.revision).toBe(3);
     expect(refreshed.body.data.graphs).toHaveLength(3);
+  });
+
+  test('PostgreSQL admission survives process boundaries and hard-bounds aggregate allocation', async () => {
+    const {
+      DemoCommandCenterRepository,
+    } = require('../../src/commandCenter/demoRepository');
+    const now = new Date('2026-08-15T22:10:00.000Z');
+    let sequence = 0;
+    const create = (repository, sourceHash) => {
+      sequence += 1;
+      return repository.mutate(repository.issue(), {
+        operation: 'simulate_lead',
+        expectedRevision: 1,
+        serviceKey: 'fence',
+        idempotencyKey: 'durable-admission-' + String(sequence).padStart(4, '0') + '-0000000000000000',
+      }, { sourceHash });
+    };
+
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+    await pool.query('TRUNCATE demo_command_center_admission_windows');
+    const sourceBound = new DemoCommandCenterRepository(() => pool, {
+      clock: () => now,
+      maxActiveSessions: 10,
+      maxGlobalCreationsPerMinute: 10,
+      maxSourceCreationsPerMinute: 2,
+    });
+    const sourceBoundPeer = new DemoCommandCenterRepository(() => pool, {
+      clock: () => now,
+      maxActiveSessions: 10,
+      maxGlobalCreationsPerMinute: 10,
+      maxSourceCreationsPerMinute: 2,
+    });
+    await create(sourceBound, 'a'.repeat(64));
+    await create(sourceBoundPeer, 'a'.repeat(64));
+    await expect(create(sourceBound, 'a'.repeat(64))).rejects.toMatchObject({
+      status: 429,
+      code: 'DEMO_SOURCE_RATE_LIMIT',
+    });
+    expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(2);
+    expect((await pool.query(
+      `SELECT request_count FROM demo_command_center_admission_windows
+        WHERE scope = 'source' AND subject_hash = $1`, ['a'.repeat(64)]
+    )).rows[0].request_count).toBe(2);
+
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+    await pool.query('TRUNCATE demo_command_center_admission_windows');
+    const globalBound = new DemoCommandCenterRepository(() => pool, {
+      clock: () => now,
+      maxActiveSessions: 10,
+      maxGlobalCreationsPerMinute: 2,
+      maxSourceCreationsPerMinute: 3,
+    });
+    await create(globalBound, 'a'.repeat(64));
+    await create(globalBound, 'b'.repeat(64));
+    await expect(create(globalBound, 'c'.repeat(64))).rejects.toMatchObject({
+      status: 429,
+      code: 'DEMO_GLOBAL_RATE_LIMIT',
+    });
+    expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(2);
+
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+    await pool.query('TRUNCATE demo_command_center_admission_windows');
+    const capacityBound = new DemoCommandCenterRepository(() => pool, {
+      clock: () => now,
+      maxActiveSessions: 2,
+      maxGlobalCreationsPerMinute: 10,
+      maxSourceCreationsPerMinute: 3,
+    });
+    const capacityResults = await Promise.allSettled([
+      create(capacityBound, 'a'.repeat(64)),
+      create(capacityBound, 'b'.repeat(64)),
+      create(capacityBound, 'c'.repeat(64)),
+    ]);
+    expect(capacityResults.filter(result => result.status === 'fulfilled')).toHaveLength(2);
+    const capacityFailure = capacityResults.find(result => result.status === 'rejected');
+    expect(capacityFailure.reason).toMatchObject({ status: 429, code: 'DEMO_CAPACITY_LIMIT' });
+    expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(2);
+  });
+
+  test('the bounded housekeeping worker reclaims expired sessions and admission windows without a public mutation', async () => {
+    const {
+      DemoCommandCenterHousekeepingWorker,
+      DemoCommandCenterRepository,
+    } = require('../../src/commandCenter/demoRepository');
+    const now = new Date('2026-08-15T23:00:00.000Z');
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+    await pool.query('TRUNCATE demo_command_center_admission_windows');
+    await pool.query(
+      `INSERT INTO demo_command_center_sessions
+         (id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
+          created_at, updated_at, expires_at)
+       VALUES
+         ('00000000-0000-4000-8000-0000000000a1',
+          '00000000-0000-4000-8000-0000000000a2', $1, '{}'::jsonb, 1, 0, 0,
+          $2::timestamptz - INTERVAL '25 hours', $2::timestamptz - INTERVAL '25 hours',
+          $2::timestamptz - INTERVAL '1 hour')`,
+      ['d'.repeat(64), now]
+    );
+    await pool.query(
+      `INSERT INTO demo_command_center_admission_windows
+         (window_start, scope, subject_hash, request_count, created_at, updated_at)
+       VALUES ($1::timestamptz - INTERVAL '3 hours', 'source', $2, 1,
+               $1::timestamptz - INTERVAL '3 hours', $1::timestamptz - INTERVAL '3 hours')`,
+      [now, 'e'.repeat(64)]
+    );
+    const worker = new DemoCommandCenterHousekeepingWorker({
+      repository: new DemoCommandCenterRepository(() => pool, { clock: () => now }),
+      batchSize: 10,
+      maxBatches: 2,
+    });
+    await expect(worker.drainOnce()).resolves.toEqual({ sessions: 1, admissionWindows: 1 });
+    expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(0);
+    expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_admission_windows')).rows[0].count).toBe(0);
   });
 
   test('paid namespace has no demo mutation surface', async () => {

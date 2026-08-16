@@ -33,6 +33,7 @@ const { AssetCatalogueService } = require('./assets/service');
 const { createAssetCatalogueRouter } = require('./routes/assets');
 const { createIntegrationStatusRouter } = require('./routes/integrationStatus');
 const { createCommandCenterRouter } = require('./routes/commandCenter');
+const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
 const commandCenterContract = require('../public/js/command-center-contract');
 const db = require('./db');
 const cache = require('./cache/client');
@@ -142,6 +143,7 @@ const productionWorkforceService = new WorkforceService(undefined, {
 const productionEmailOutboxWorker = new AccountEmailOutboxWorker({
   transactionalEmail: productionTransactionalEmail,
 });
+const productionDemoHousekeepingWorker = new DemoCommandCenterHousekeepingWorker();
 app.locals.workforceService = productionWorkforceService;
 app.locals.assetCatalogueService = new AssetCatalogueService();
 app.use('/api/auth', createAuthRouter({
@@ -210,6 +212,7 @@ async function start(options) {
   await cache.init();
   await audit.ensureTable();
   productionEmailOutboxWorker.start();
+  productionDemoHousekeepingWorker.start();
 
 
   const onListening = () => {
@@ -248,6 +251,7 @@ async function start(options) {
 
   server.once('close', () => {
     productionEmailOutboxWorker.stop();
+    productionDemoHousekeepingWorker.stop();
     voiceWebhook.shutdown();
   });
 

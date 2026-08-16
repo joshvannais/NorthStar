@@ -34,6 +34,31 @@ CREATE TABLE demo_command_center_sessions (
 CREATE INDEX demo_command_center_sessions_expiry
   ON demo_command_center_sessions (expires_at);
 
+-- Public session creation is admitted through PostgreSQL, not process-local
+-- memory. The source identifier is an HMAC digest; raw addresses are never
+-- persisted. A separate global row bounds distributed allocation.
+CREATE TABLE demo_command_center_admission_windows (
+  window_start TIMESTAMPTZ NOT NULL,
+  scope VARCHAR(16) NOT NULL,
+  subject_hash CHAR(64) NOT NULL,
+  request_count SMALLINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT demo_command_center_admission_windows_pkey
+    PRIMARY KEY (window_start, scope, subject_hash),
+  CONSTRAINT demo_command_center_admission_windows_scope_check
+    CHECK (scope IN ('source', 'global')),
+  CONSTRAINT demo_command_center_admission_windows_subject_hash_check
+    CHECK (subject_hash ~ '^[0-9a-f]{64}$'),
+  CONSTRAINT demo_command_center_admission_windows_count_check
+    CHECK (request_count BETWEEN 1 AND 32767),
+  CONSTRAINT demo_command_center_admission_windows_time_check
+    CHECK (updated_at >= created_at)
+);
+
+CREATE INDEX demo_command_center_admission_windows_expiry
+  ON demo_command_center_admission_windows (window_start);
+
 CREATE TABLE demo_command_center_mutations (
   session_id UUID NOT NULL,
   idempotency_hash CHAR(64) NOT NULL,

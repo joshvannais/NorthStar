@@ -23,6 +23,10 @@ function mutation(agent, cookie, path, intent, key, body) {
     .send(body);
 }
 
+function settleAuditLogger() {
+  return new Promise(resolve => setTimeout(resolve, 25));
+}
+
 realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authority', () => {
   let suiteDatabase;
   let db;
@@ -99,6 +103,8 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
       .expect(403);
     expect(rejected.body.error.code).toBe('demo_same_origin_required');
     expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(0);
+    await settleAuditLogger();
+    expect((await pool.query('SELECT count(*)::int AS count FROM audit_logs')).rows[0].count).toBe(0);
   });
 
   test('one durable CAS graph updates all relevant surfaces and replays without duplication', async () => {
@@ -197,6 +203,8 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
       expectedRevision: 1,
     }).expect(409);
     expect(staleReplay.body.error.code).toBe('demo_idempotency_stale');
+    await settleAuditLogger();
+    expect((await pool.query('SELECT count(*)::int AS count FROM audit_logs')).rows[0].count).toBe(0);
   });
 
   test('reset is isolated, CAS-fenced, and leaves stable configuration untouched', async () => {

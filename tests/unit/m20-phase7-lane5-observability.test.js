@@ -174,6 +174,51 @@ describe('Mission 20 Phase 7 Lane 5 bounded and redacted observability', () => {
     expect(record).not.toHaveBeenCalled();
   });
 
+  test('public Command Center mutations retain safe telemetry without raw-address audit allocation', async () => {
+    const record = jest.fn().mockResolvedValue(undefined);
+    const recordAnonymousNotFound = jest.fn().mockResolvedValue(undefined);
+    jest.doMock('../../src/audit/client', () => ({ record, recordAnonymousNotFound }));
+    const info = jest.spyOn(console, 'info').mockImplementation(() => {});
+    const { auditLogger, isPublicDemoCommandCenterMutation } = require('../../src/middleware/auditLog');
+    const cases = [
+      {
+        path: '/api/demo/command-center/simulations/leads',
+        originalUrl: '/api/demo/command-center/simulations/leads?source=private',
+        route: { path: '/command-center/simulations/leads' },
+        baseUrl: '/api/demo',
+        status: 201,
+      },
+      {
+        path: '/API/DEMO/COMMAND-CENTER/RESET/',
+        originalUrl: '/API/DEMO/COMMAND-CENTER/RESET/',
+        status: 403,
+      },
+    ];
+
+    for (const item of cases) {
+      const req = {
+        method: 'POST', path: item.path, originalUrl: item.originalUrl,
+        route: item.route, baseUrl: item.baseUrl,
+        headers: { 'user-agent': 'private-demo-agent' },
+        requestId: '77b66d85-06c1-4d6e-a19a-8c5826af349f',
+        ip: '203.0.113.45', params: {},
+      };
+      expect(isPublicDemoCommandCenterMutation(req)).toBe(true);
+      const res = response(item.status);
+      auditLogger(req, res, jest.fn());
+      res.emit('finish');
+    }
+    await settle();
+
+    expect(record).not.toHaveBeenCalled();
+    expect(recordAnonymousNotFound).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledTimes(cases.length);
+    const telemetry = JSON.stringify(info.mock.calls);
+    expect(telemetry).not.toContain('203.0.113.45');
+    expect(telemetry).not.toContain('private-demo-agent');
+    expect(telemetry).not.toContain('source=private');
+  });
+
   test('aggregate client uses a fixed UTC-hour slot and handles persistence failure without audit memory growth', async () => {
     jest.dontMock('../../src/audit/client');
     const query = jest.fn()

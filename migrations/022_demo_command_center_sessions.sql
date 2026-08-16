@@ -35,8 +35,9 @@ CREATE INDEX demo_command_center_sessions_expiry
   ON demo_command_center_sessions (expires_at);
 
 -- Public session creation is admitted through PostgreSQL, not process-local
--- memory. The source identifier is an HMAC digest; raw addresses are never
--- persisted. A separate global row bounds distributed allocation.
+-- memory. This table stores only an HMAC source digest, never a raw address;
+-- the public Command Center mutation flow owns no generic per-request audit
+-- row. A separate global row bounds distributed allocation.
 CREATE TABLE demo_command_center_admission_windows (
   window_start TIMESTAMPTZ NOT NULL,
   scope VARCHAR(16) NOT NULL,

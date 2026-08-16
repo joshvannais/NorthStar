@@ -32,6 +32,9 @@ const { createWorkforceRouter } = require('./routes/workforce');
 const { AssetCatalogueService } = require('./assets/service');
 const { createAssetCatalogueRouter } = require('./routes/assets');
 const { createIntegrationStatusRouter } = require('./routes/integrationStatus');
+const { createCommandCenterRouter } = require('./routes/commandCenter');
+const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
+const commandCenterContract = require('../public/js/command-center-contract');
 const db = require('./db');
 const cache = require('./cache/client');
 const audit = require('./audit/client');
@@ -83,7 +86,6 @@ const pages = {
   '/account/pending': 'public/account/pending.html',
   '/dashboard': 'public/dashboard/command-center.html',
   '/dashboard/executive-brief': 'public/dashboard/executive-brief.html',
-  '/dashboard/legacy': 'public/dashboard.html',
   '/dashboard/leads': 'public/dashboard/leads.html',
   '/dashboard/communications': 'public/dashboard/communications.html',
   '/dashboard/calendar': 'public/dashboard/calendar.html',
@@ -105,9 +107,21 @@ const pages = {
   '/preview-light': 'public/previews/light.html',
 };
 
+// Every paid navigation destination has one account-free counterpart. All
+// demo paths mount the same canonical Contractor Command Center shell; the
+// shared route contract selects the destination module in the browser.
+for (const destination of commandCenterContract.ROUTES) {
+  pages[destination.demoPath] = 'public/demo-dashboard.html';
+}
+
 // Redirect old /dashboard/calls to /dashboard/communications
 app.get('/dashboard/calls', (req, res) => {
   res.redirect(301, '/dashboard/communications');
+});
+
+// The standalone Contractor Command Center is the only paid dashboard shell.
+app.get('/dashboard/legacy', (_req, res) => {
+  res.redirect(301, '/dashboard');
 });
 
 Object.entries(pages).forEach(([route, file]) => {
@@ -129,6 +143,7 @@ const productionWorkforceService = new WorkforceService(undefined, {
 const productionEmailOutboxWorker = new AccountEmailOutboxWorker({
   transactionalEmail: productionTransactionalEmail,
 });
+const productionDemoHousekeepingWorker = new DemoCommandCenterHousekeepingWorker();
 app.locals.workforceService = productionWorkforceService;
 app.locals.assetCatalogueService = new AssetCatalogueService();
 app.use('/api/auth', createAuthRouter({
@@ -157,6 +172,7 @@ app.all('/api/admin/users', legacyAdminDisabled);
 
 // ── /api/v1/* routes — registered BEFORE /api to avoid interception by apiRoutes' global requireAuth
 const simulationsRoutes = require('./routes/simulations');
+app.use('/api/v1/command-center', createCommandCenterRouter());
 app.use('/api/v1', simulationsRoutes);
 app.use('/api/v1/canonical', createCanonicalRouter());
 // Canonical compatibility routes precede legacy dashboard/public routers so
@@ -196,6 +212,7 @@ async function start(options) {
   await cache.init();
   await audit.ensureTable();
   productionEmailOutboxWorker.start();
+  productionDemoHousekeepingWorker.start();
 
 
   const onListening = () => {
@@ -234,6 +251,7 @@ async function start(options) {
 
   server.once('close', () => {
     productionEmailOutboxWorker.stop();
+    productionDemoHousekeepingWorker.stop();
     voiceWebhook.shutdown();
   });
 

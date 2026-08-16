@@ -1,8 +1,15 @@
 'use strict';
 
+const commandCenterContract = require('../../public/js/command-center-contract');
+
 const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/', file: 'public/index.html', surface: 'public' },
   { route: '/demo-dashboard', file: 'public/demo-dashboard.html', surface: 'public-demo' },
+  ...commandCenterContract.ROUTES.map(destination => ({
+    route: destination.demoPath,
+    file: 'public/demo-dashboard.html',
+    surface: 'public-demo',
+  })),
   { route: '/login', file: 'public/login.html', surface: 'auth' },
   { route: '/signup', file: 'public/signup.html', surface: 'auth' },
   { route: '/verify-email', file: 'public/verify-email.html', surface: 'auth' },
@@ -12,7 +19,6 @@ const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/account/pending', file: 'public/account/pending.html', surface: 'account' },
   { route: '/dashboard', file: 'public/dashboard/command-center.html', surface: 'dashboard' },
   { route: '/dashboard/executive-brief', file: 'public/dashboard/executive-brief.html', surface: 'dashboard' },
-  { route: '/dashboard/legacy', file: 'public/dashboard.html', surface: 'dashboard' },
   { route: '/dashboard/leads', file: 'public/dashboard/leads.html', surface: 'dashboard' },
   { route: '/dashboard/communications', file: 'public/dashboard/communications.html', surface: 'dashboard' },
   { route: '/dashboard/calendar', file: 'public/dashboard/calendar.html', surface: 'dashboard' },
@@ -36,6 +42,7 @@ const MOUNTED_THEME_PAGES = Object.freeze([
 
 const MOUNTED_REDIRECTS = Object.freeze([
   '/dashboard/calls',
+  '/dashboard/legacy',
   '/demo-login',
 ]);
 

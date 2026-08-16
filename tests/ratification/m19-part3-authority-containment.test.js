@@ -210,7 +210,7 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     }
   });
 
-  test('live simulation keeps the generated production flow and renders only the returned canonical snapshot price', () => {
+  test('the unmounted legacy harness keeps canonical simulation provenance while paid Command Center is real-tenant only', () => {
     const route = source('src/routes/simulations.js');
     const commandCenter = source('public/dashboard/command-center.html');
     const dashboard = source('public/dashboard.html');
@@ -219,14 +219,13 @@ describe('Mission 19 Part 3 ratification and legacy-authority containment', () =
     expect(route).toContain('pipeline.generateTranscript(scenario)');
     expect(route).toContain('pipeline.extractScope(transcript, scenario)');
     expect(route).not.toMatch(/hasControlledScenario|controlled-scenario-v1|externalTranscriptId|externalCommunicationId|externalAppointmentId/);
-    for (const caller of [commandCenter, dashboard]) {
-      expect(caller).toContain("headers: { 'Idempotency-Key': idempotencyKey }");
-      expect(caller).toContain('result.snapshot.customerFacingPrice');
-      expect(caller).not.toMatch(/PolarisEngine\.analyzeLead\s*\(|\bestimatedValue\s*:/);
-      expect(caller).not.toMatch(/\b(?:transcript|facts|scope|travel|callDurationSeconds|scheduledAppointment|externalTranscriptId)\s*:/);
-    }
-    expect(commandCenter).toContain('sessionId: window.SIM_SESSION_ID');
+    expect(dashboard).toContain("headers: { 'Idempotency-Key': idempotencyKey }");
+    expect(dashboard).toContain('result.snapshot.customerFacingPrice');
+    expect(dashboard).not.toMatch(/PolarisEngine\.analyzeLead\s*\(|\bestimatedValue\s*:/);
+    expect(dashboard).not.toMatch(/\b(?:transcript|facts|scope|travel|callDurationSeconds|scheduledAppointment|externalTranscriptId)\s*:/);
     expect(dashboard).not.toContain('sessionId: window.SIM_SESSION_ID');
+    expect(commandCenter).toContain('processes real tenant interactions');
+    expect(commandCenter).not.toMatch(/Simulate Lead|ccSim|SIM_SESSION|northstarSessionId|sessionStorage|simulator\.js|scenario|\/api\/v1\/simulations\/leads/i);
   });
 
   test('deployment inventory discloses route, canary, rollback, CI, and production boundaries', () => {

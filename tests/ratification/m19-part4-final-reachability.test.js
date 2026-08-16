@@ -35,6 +35,8 @@ const TEST_PATHS = Object.freeze([
   'tests/ratification/m19-part4-final-reachability.test.js',
 ]);
 const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
+  'public/js/command-center-contract.js',
+  'public/js/demo-command-center.js',
   'public/js/homepage-demo.js',
   'public/js/navigation-launcher.js',
   'public/js/transcript-renderer.js',
@@ -195,9 +197,9 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
       .toEqual(['public/site.webmanifest']);
   });
 
-  test('the real package entrypoint mounts all 31 pages and retires both direct/deep asset URLs', async () => {
+  test('the real package entrypoint mounts all 41 pages and retires legacy and direct/deep asset URLs', async () => {
     const mounted = mountedRoutePaths();
-    expect(MOUNTED_THEME_PAGES).toHaveLength(31);
+    expect(MOUNTED_THEME_PAGES).toHaveLength(41);
     for (const page of MOUNTED_THEME_PAGES) expect(mounted).toContain(page.route);
     for (const route of MOUNTED_REDIRECTS) expect(mounted).toContain(route);
 
@@ -216,6 +218,7 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
 
     const redirectExpectations = Object.freeze({
       '/dashboard/calls': { status: 301, location: '/dashboard/communications' },
+      '/dashboard/legacy': { status: 301, location: '/dashboard' },
       '/demo-login': { status: 302, location: '/login?demo=retired' },
     });
     for (const route of MOUNTED_REDIRECTS) {

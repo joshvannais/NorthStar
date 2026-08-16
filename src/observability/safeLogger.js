@@ -35,6 +35,7 @@ const EVENTS = new Set([
   'create_call_succeeded',
   'create_client_failed',
   'create_job_failed',
+  'demo_housekeeping_failed',
   'disconnect_failed',
   'event_create_failed',
   'event_created',

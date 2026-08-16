@@ -233,6 +233,10 @@ async function main() {
     assert.strictEqual((await pool.query("SELECT raw_profile ? 'voiceAssistant' AS present FROM canonical_business_profiles WHERE organization_id = $1 AND is_active = TRUE", [ORG_A])).rows[0].present, false, 'unrelated browser save preserves neutral absence');
 
     await ownerPage.click('[data-section="retell"]');
+    await ownerPage.waitForFunction(() => {
+      const section = document.getElementById('section-retell');
+      return section && section.classList.contains('active') && !section.hidden;
+    });
     const literalGreeting = 'Hello, ' + COMPANY_NAME;
     await ownerPage.fill('#voice-assistant-name', '  Canonical <Guide> 🧭  ');
     await ownerPage.fill('#voice-assistant-style', '  Calm guidance\nKeep markup literal.  ');

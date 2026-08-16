@@ -27,6 +27,25 @@
     { id: 'integrations',     href: '/dashboard/integrations',      label: 'Integrations',       svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>' }
   ];
 
+  // Labels/icons remain presentation-only. The paid paths and ordering come
+  // from the same UMD contract consumed by server permissions and demo routes.
+  var routeContract = window.NorthStarCommandCenterContract;
+  if (!routeContract || !Array.isArray(routeContract.ROUTES) || routeContract.ROUTES.length !== NAV_ITEMS.length) {
+    NAV_ITEMS = [];
+  } else {
+    NAV_ITEMS = routeContract.ROUTES.map(function(route, index) {
+      var presentation = NAV_ITEMS[index];
+      if (!presentation || presentation.id !== route.id || route.paidPath !== presentation.href) return null;
+      return {
+        id: route.id,
+        href: route.paidPath,
+        label: route.label === 'Polaris' ? 'POLARIS' : route.label,
+        svg: presentation.svg,
+      };
+    }).filter(Boolean);
+    if (NAV_ITEMS.length !== routeContract.ROUTES.length) NAV_ITEMS = [];
+  }
+
   function makeNavLinks(isMobile, items) {
     var html = '';
     for (var i = 0; i < items.length; i++) {

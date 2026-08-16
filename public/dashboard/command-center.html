@@ -16,36 +16,6 @@
 
     .cc-workspace { max-width: 1400px; margin: 0 auto; padding: 16px 24px; }
 
-    /* ── Simulate Lead ── */
-    .cc-sim-banner {
-      background: linear-gradient(135deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.02) 100%);
-      border: 1px solid rgba(212,175,55,0.2);
-      border-radius: 10px; padding: 14px 20px; margin-bottom: 14px;
-      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-    }
-    .cc-sim-text { flex: 1; min-width: 180px; }
-    .cc-sim-text p { margin: 0; font-size: 12px; color: var(--neutral-500); line-height: 1.4; }
-    .cc-sim-text .cc-sim-heading { font-weight: 600; font-size: 14px; color: var(--neutral-800); margin-bottom: 2px; }
-    [data-theme="dark"] .cc-sim-text .cc-sim-heading { color: #e8eaed; }
-    .cc-sim-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 8px 20px; border-radius: 7px; border: none;
-      background: linear-gradient(135deg, var(--brand-500) 0%, #c9a227 100%);
-      color: #fff; font-size: 13px; font-weight: 600;
-      cursor: pointer; transition: all 0.2s; white-space: nowrap;
-      box-shadow: 0 2px 6px rgba(212,175,55,0.25);
-    }
-    .cc-sim-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.35); }
-    .cc-sim-btn:active { transform: translateY(0); }
-    .cc-sim-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-    .cc-sim-spinner {
-      display: inline-block; width: 12px; height: 12px;
-      border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
-      border-radius: 50%; animation: cc-spin 0.6s linear infinite;
-    }
-    @keyframes cc-spin { to { transform: rotate(360deg); } }
-    .cc-sim-status { font-size: 11px; color: var(--success); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
-
     /* ── Header ── */
     .cc-header {
       display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
@@ -230,15 +200,6 @@
   <div class="app-layout">
     <main class="main-content">
       <div class="cc-workspace">
-        <!-- SIMULATE LEAD -->
-        <div class="cc-sim-banner" id="ccSimBanner">
-          <div class="cc-sim-text">
-            <div class="cc-sim-heading">Try Polaris™ Intelligence</div>
-            <p>Generate a realistic customer interaction and watch Polaris™ process the entire workflow in real time.</p>
-            <div class="cc-sim-status" id="ccSimStatus" style="display:none;"><span>&#9989;</span><span id="ccSimStatusText">Lead generated</span></div>
-          </div>
-          <button class="cc-sim-btn" id="ccSimBtn" onclick="ccSimulateLead()"><span>&#127917;</span><span>Simulate Lead</span></button>
-        </div>
         <!-- HEADER -->
         <div class="cc-header">
           <div class="cc-header-left">
@@ -275,7 +236,6 @@
   <!-- Shared JS — load order matters -->
   <script src="/js/event-bus.js"></script>
   <script src="/js/app-store.js"></script>
-  <script src="/js/simulator.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
       <script src="/js/status-pill.js"></script>
@@ -289,10 +249,6 @@
     (function() {
       var loading = document.getElementById('ccLoading');
       var content = document.getElementById('ccContent');
-      var simBtn = document.getElementById('ccSimBtn');
-      var simStatus = document.getElementById('ccSimStatus');
-      var simStatusText = document.getElementById('ccSimStatusText');
-
       // ── Mobile menu ──
       window.toggleMobileMenu = function() {
         document.getElementById('mobileMenu').classList.toggle('open');
@@ -300,32 +256,11 @@
         if (overlay) overlay.classList.toggle('open');
       };
 
-      // ── Theme sync ──
-      // ── Demo session lifecycle — clean state on page reload ──
-      (function() {
-        var isReload = false;
-        // Try modern Navigation API
-        if (performance && performance.getEntriesByType) {
-          try { var navs = performance.getEntriesByType('navigation'); isReload = navs.length > 0 && navs[0].type === 'reload'; } catch(e) {}
-        }
-        // Fallback: legacy navigation.type (1=TYPE_RELOAD)
-        if (!isReload && performance && performance.navigation) {
-          isReload = performance.navigation.type === 1;
-        }
-        // Last resort: treat as reload if no prior session exists (first visit = fresh)
-        // CanonicalIntelligence owns per-tab session metadata.
-        window.SIM_SESSION_ID = sessionStorage.getItem('northstarSessionId');
-      })();
-
       // ── Auth-aware fetch with 10s timeout ──
       function apiFetch(url, opts) {
         opts = opts || {};
         opts.headers = opts.headers || {};
         if (opts.body) opts.headers['Content-Type'] = 'application/json';
-        if (window.SIM_SESSION_ID) {
-          var sep = url.indexOf('?') >= 0 ? '&' : '?';
-          url = url + sep + 'sessionId=' + encodeURIComponent(window.SIM_SESSION_ID);
-        }
         return NorthStarAccountSession.fetch(url, opts);
       }
 
@@ -387,75 +322,6 @@
         var s = String(val);
         return s.indexOf('%') >= 0 ? s : Math.round(parseFloat(val)) + '%';
       }
-
-      // ── Simulate Lead (unchanged core, but with proper brace closing) ──
-      window.ccSimulateLead = function() {
-        if (simBtn.disabled) return;
-        simBtn.disabled = true;
-        simBtn.innerHTML = '<span class="cc-sim-spinner"></span><span>Processing...</span>';
-        simStatus.style.display = 'none';
-
-        try {
-          if (typeof genCall !== 'function') {
-            simBtn.disabled = false;
-            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-            simStatus.style.display = '';
-            simStatus.style.color = 'var(--danger)';
-            simStatusText.textContent = 'Simulator not loaded. Please refresh.';
-            return;
-          }
-
-          console.log('[CC] Simulating lead...');
-          var lead = genCall();
-          var leadName = lead && lead.caller ? lead.caller : 'Customer';
-          var idempotencyKey = window.crypto && typeof window.crypto.randomUUID === 'function'
-            ? window.crypto.randomUUID()
-            : String(window.SIM_SESSION_ID || 'simulation') + ':' + String(Date.now());
-
-          apiFetch('/api/v1/simulations/leads', {
-            method: 'POST',
-            headers: { 'Idempotency-Key': idempotencyKey },
-            body: JSON.stringify({
-              name: leadName,
-              phone: lead.phone || '',
-              email: lead.email || '',
-              service: lead.service || 'General',
-              description: lead.description || '',
-              sessionId: window.SIM_SESSION_ID
-            })
-          }).then(function(resp) {
-            if (!resp.ok) {
-              return resp.json().then(function(errBody) {
-                throw new Error(errBody.error || 'Simulation failed at stage: ' + (errBody.stage || 'unknown'));
-              });
-            }
-            return resp.json();
-          }).then(function(result) {
-            simStatus.style.display = '';
-            simStatus.style.color = 'var(--success)';
-            var canonicalPrice = result && result.snapshot ? result.snapshot.customerFacingPrice : null;
-            simStatusText.textContent = 'Lead generated: ' + leadName + ' ($' + String(canonicalPrice === null || canonicalPrice === undefined ? 'not calculated' : canonicalPrice) + ' estimated) — Synced to all pages';
-            console.log('[CC] Simulation complete:', result && result.ids);
-            render();
-            // Stage 3: Emit simulation:completed for notification toasts and cross-page sync
-            if (typeof EventBus !== 'undefined') {
-              EventBus.emit('simulation:completed', result);
-            }
-            simBtn.disabled = false;
-            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-          }).catch(function(err) {
-            console.error('[CC] Simulation failed:', err && err.message);
-            simStatus.style.display = '';
-            simStatus.style.color = 'var(--danger)';
-            simStatusText.textContent = 'Simulation failed: ' + ((err && err.message) || 'unknown error');
-            simBtn.disabled = false;
-            simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-          });
-        } catch(ex) {
-          simBtn.disabled = false;
-          simBtn.innerHTML = '<span>&#127917;</span><span>Simulate Lead</span>';
-        }
-      };  // <-- THE MISSING CLOSING BRACE
 
       window.ccRefresh = function() { loading.style.display = ''; content.style.display = 'none'; render(); };
 
@@ -635,7 +501,7 @@
           } else {
             var empty = document.createElement('div');
             empty.className = 'cc-empty';
-            empty.textContent = 'Customer profiles appear as Polaris\u2122 processes calls. Start a simulation above.';
+            empty.textContent = 'Customer profiles appear as Polaris\u2122 processes real tenant interactions.';
             el.appendChild(empty);
           }
         }
@@ -752,6 +618,7 @@
 
 
 
+  <script src="/js/command-center-contract.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("command-center");</script>
 </body>

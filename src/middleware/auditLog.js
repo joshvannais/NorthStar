@@ -35,6 +35,26 @@ function isSignedWebhookPost(req) {
   );
 }
 
+const PUBLIC_DEMO_COMMAND_CENTER_MUTATIONS = new Set([
+  '/api/demo/command-center/simulations/leads',
+  '/api/demo/command-center/reset',
+]);
+
+function normalizedRequestPath(value) {
+  const path = String(value || '').split('?')[0].replace(/\/+$/, '');
+  return (path || '/').toLowerCase();
+}
+
+function isPublicDemoCommandCenterMutation(req) {
+  if (req.method !== 'POST') return false;
+  const requestPath = normalizedRequestPath(exactRequestPath(req));
+  const mountedPath = typeof req.route?.path === 'string'
+    ? normalizedRequestPath(`${req.baseUrl || ''}${req.route.path}`)
+    : requestPath;
+  return PUBLIC_DEMO_COMMAND_CENTER_MUTATIONS.has(requestPath) ||
+    PUBLIC_DEMO_COMMAND_CENTER_MUTATIONS.has(mountedPath);
+}
+
 function requestAuditEntry(req, status, duration) {
   const path = String(req.path || exactRequestPath(req));
   const entityType = path.split('/').filter(Boolean)[1] || 'unknown';
@@ -87,6 +107,13 @@ function auditLogger(req, res, next) {
       String(req.originalUrl || req.url || '').split('?')[0] === '/api/auth/signup' &&
       res.statusCode === 503;
     const signedWebhookPost = isSignedWebhookPost(req);
+    const publicDemoCommandCenterMutation = isPublicDemoCommandCenterMutation(req);
+
+    // Account-free Command Center mutations own their bounded durable signal
+    // in the HMAC admission/session authority. A generic row would persist a
+    // raw source address and allocate once per accepted or rejected request.
+    if (publicDemoCommandCenterMutation) return;
+
     const anonymousNotFound = !signedWebhookPost && isAnonymousNotFound(req, res.statusCode);
 
     if (anonymousNotFound) {
@@ -113,4 +140,11 @@ function auditLogger(req, res, next) {
   next();
 }
 
-module.exports = { auditLogger, correlationId, isAnonymousNotFound, isSignedWebhookPost, requestAuditEntry };
+module.exports = {
+  auditLogger,
+  correlationId,
+  isAnonymousNotFound,
+  isPublicDemoCommandCenterMutation,
+  isSignedWebhookPost,
+  requestAuditEntry,
+};

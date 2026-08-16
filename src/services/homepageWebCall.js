@@ -14,7 +14,7 @@ const MAX_TRANSCRIPT_TURNS = 48;
 const MAX_TURN_BYTES = 600;
 const MAX_TRANSCRIPT_BYTES = 16 * 1024;
 const CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
-const DISCLOSURE_COPY = 'This is a NorthStar AI demonstration. Microphone audio is processed and recorded temporarily for this call. Do not share sensitive information. Say I consent to this AI demo and temporary recording to continue, or hang up to withdraw.';
+const DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce a fictional demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say I consent to this AI demo and temporary recording to continue, or hang up to withdraw.';
 const HOMEPAGE_WEBHOOK_CONTRACT = 'homepage-ephemeral-web-call-v1';
 
 const INDUSTRY_PROFILE = Object.freeze({
@@ -290,7 +290,11 @@ class HomepageWebCallService {
   constructor(options = {}) {
     this.retell = options.retellClient || retellClient;
     this.settings = options.settings || config.homepageWebCall || {};
-    this.provider = options.provider || config.retell || {};
+    this.provider = options.provider || {
+      apiKey: config.retell && config.retell.apiKey,
+      agentId: config.homepageWebCall && config.homepageWebCall.agentId,
+      agentVersion: config.homepageWebCall && config.homepageWebCall.agentVersion,
+    };
     this.secret = options.secret === undefined ? config.auth.accessSecret : options.secret;
     this.now = options.now || function () { return new Date(); };
     this.randomBytes = options.randomBytes || crypto.randomBytes;
@@ -305,7 +309,9 @@ class HomepageWebCallService {
     if (this.settings.legalApproved !== true) missing.push('attorney_approval');
     if (this.settings.providerApproved !== true) missing.push('provider_approval');
     if (this.settings.webhookIsolationApproved !== true) missing.push('webhook_isolation_approval');
-    if (!this.provider.apiKey || !this.provider.agentId) missing.push('provider_configuration');
+    if (!this.provider.apiKey) missing.push('provider_configuration');
+    if (!this.provider.agentId || !Number.isSafeInteger(this.provider.agentVersion) ||
+        this.provider.agentVersion < 0) missing.push('homepage_agent_binding');
     if (!boundedSecret(this.secret)) missing.push('purge_authority');
     return {
       available: missing.length === 0,
@@ -313,7 +319,7 @@ class HomepageWebCallService {
       missing,
       storageRequirement: BASIC_STORAGE,
       retentionRequirementDays: REQUIRED_RETENTION_DAYS,
-      disclosureVersion: 'attorney-gated-draft-v1',
+      disclosureVersion: 'attorney-gated-draft-v2',
     };
   }
 
@@ -360,23 +366,27 @@ class HomepageWebCallService {
     this.requireAvailable();
     const industry = safeIndustry(industryValue);
     const agent = await this.retell.getAgent(this.provider.agentId);
-    if (!agent || agent.data_storage_setting !== BASIC_STORAGE ||
-        agent.data_storage_retention_days !== REQUIRED_RETENTION_DAYS ||
-        !Number.isSafeInteger(agent.version) || agent.version < 0) {
+    if (!agent || agent.agent_id !== this.provider.agentId ||
+        agent.version !== this.provider.agentVersion) {
+      fail(503, 'homepage_provider_agent_binding_failed', 'The browser Web Call is unavailable because the configured Retell agent binding changed.');
+    }
+    if (agent.data_storage_setting !== BASIC_STORAGE ||
+        agent.data_storage_retention_days !== REQUIRED_RETENTION_DAYS) {
       fail(503, 'homepage_provider_privacy_gate_failed', 'The browser Web Call is unavailable because its provider privacy gate is not satisfied.');
     }
     const result = await this.retell.createWebCall(this.provider.agentId, {
       northstar_demo_mode: 'homepage_browser_web_call',
+      northstar_demo_transport: 'retell_browser_web_call_no_phone_number',
       northstar_demo_industry: industry,
       northstar_demo_disclosure: DISCLOSURE_COPY,
       northstar_demo_consent_phrase: CONSENT_PHRASE,
       northstar_demo_webhook_contract: HOMEPAGE_WEBHOOK_CONTRACT,
       northstar_demo_sensitive_data_rule: 'Do not request or repeat sensitive personal, financial, medical, credential, or account information.',
-    }, agent.version);
+    }, this.provider.agentVersion);
     const callId = safeCallId(result && result.call_id);
     if (!result || result.call_type !== 'web_call' || typeof result.access_token !== 'string' ||
         !result.access_token || result.agent_id !== this.provider.agentId ||
-        result.agent_version !== agent.version || result.data_storage_setting !== BASIC_STORAGE) {
+        result.agent_version !== this.provider.agentVersion || result.data_storage_setting !== BASIC_STORAGE) {
       try {
         await this.deleteUnverifiedCreation(callId);
       } catch (_cleanupError) {
@@ -390,6 +400,8 @@ class HomepageWebCallService {
       purgeToken: signPurgeToken(callId, this.secret, this.now(), this.randomBytes),
       storage: BASIC_STORAGE,
       retentionDays: REQUIRED_RETENTION_DAYS,
+      transport: 'retell_browser_web_call_no_phone_number',
+      disclosureText: DISCLOSURE_COPY,
       verbalConsentPhrase: CONSENT_PHRASE,
     };
   }

@@ -5,7 +5,7 @@
   var WEB_CALL_URL = '/api/demo/homepage/web-call';
   var SDK_URL = '/js/vendor/retell-web-client.mjs';
   var CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
-  var DISCLOSURE_COPY = 'This is a NorthStar AI demonstration. Microphone audio is processed and recorded temporarily for this call. Do not share sensitive information. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
+  var DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce a fictional demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
   var CONSENT_TIMEOUT_MS = 30000;
   var CONNECTION_TIMEOUT_MS = 20000;
   var API_REQUEST_TIMEOUT_MS = 60000;
@@ -538,7 +538,9 @@
       state.callId = created.callId;
       state.purgeToken = created.purgeToken;
       state.accessToken = created.accessToken;
-      if (created.verbalConsentPhrase !== CONSENT_PHRASE || created.storage !== 'basic_attributes_only' || created.retentionDays !== 1) {
+      if (created.verbalConsentPhrase !== CONSENT_PHRASE || created.disclosureText !== DISCLOSURE_COPY ||
+          created.transport !== 'retell_browser_web_call_no_phone_number' ||
+          created.storage !== 'basic_attributes_only' || created.retentionDays !== 1) {
         throw new Error('The temporary Web Call did not return the required consent and privacy contract.');
       }
       state.deletionState = 'pending';

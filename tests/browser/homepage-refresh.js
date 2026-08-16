@@ -20,6 +20,7 @@ process.chdir(ROOT);
 const { app } = require('../../src/server');
 
 const CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
+const DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce a fictional demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
@@ -84,7 +85,7 @@ function readyStatus() {
       missing: [],
       storageRequirement: 'basic_attributes_only',
       retentionRequirementDays: 1,
-      disclosureVersion: 'attorney-gated-draft-v1',
+      disclosureVersion: 'attorney-gated-draft-v2',
     },
     transcriptPersistence: 'none',
     resultPersistence: 'browser-memory-only',
@@ -194,6 +195,8 @@ async function installPageHarness(page, origin, options = {}) {
           purgeToken: 'signed-purge-token',
           storage: 'basic_attributes_only',
           retentionDays: 1,
+          transport: 'retell_browser_web_call_no_phone_number',
+          disclosureText: DISCLOSURE_COPY,
           verbalConsentPhrase: CONSENT_PHRASE,
         },
       }) });

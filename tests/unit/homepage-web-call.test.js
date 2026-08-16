@@ -48,7 +48,7 @@ function fakeRetell(overrides = {}) {
 
 describe('Homepage browser Web Call service', () => {
   const secret = 'homepage-test-secret-'.padEnd(64, 'x');
-  const provider = { apiKey: 'test-only-key', agentId: 'agent_homepage' };
+  const provider = { apiKey: 'test-only-key', agentId: 'agent_homepage', agentVersion: 7 };
   const fixedNow = new Date('2026-08-16T12:00:00.000Z');
 
   test('every source, legal, provider, privacy, and purge gate fails closed', () => {
@@ -96,6 +96,7 @@ describe('Homepage browser Web Call service', () => {
       'northstar_demo_disclosure',
       'northstar_demo_industry',
       'northstar_demo_mode',
+      'northstar_demo_transport',
       'northstar_demo_webhook_contract',
       'northstar_demo_sensitive_data_rule',
     ].sort());
@@ -109,6 +110,8 @@ describe('Homepage browser Web Call service', () => {
       accessToken: 'temporary-browser-token',
       storage: 'basic_attributes_only',
       retentionDays: 1,
+      transport: 'retell_browser_web_call_no_phone_number',
+      disclosureText: expect.stringMatching(/recorded temporarily by NorthStar and Retell/i),
       verbalConsentPhrase: 'I consent to this AI demo and temporary recording',
       purgeToken: expect.any(String),
     }));
@@ -152,6 +155,8 @@ describe('Homepage browser Web Call service', () => {
   test('create rejects and never starts when the provider privacy contract differs', async () => {
     const retell = fakeRetell({
       getAgent: jest.fn(async () => ({
+        agent_id: 'agent_homepage',
+        version: 7,
         data_storage_setting: 'everything',
         data_storage_retention_days: 30,
       })),
@@ -164,7 +169,24 @@ describe('Homepage browser Web Call service', () => {
     expect(retell.createWebCall).not.toHaveBeenCalled();
   });
 
-  test('create pins the inspected agent version and verifies deletion when the created contract differs', async () => {
+  test('exact homepage agent ID and version drift fail before a Web Call is created', async () => {
+    const retell = fakeRetell({
+      getAgent: jest.fn(async () => ({
+        agent_id: 'agent_homepage',
+        version: 8,
+        data_storage_setting: 'basic_attributes_only',
+        data_storage_retention_days: 1,
+      })),
+    });
+    const service = new HomepageWebCallService({ retellClient: retell, settings: readySettings(), provider, secret });
+    await expect(service.create('Roofing')).rejects.toMatchObject({
+      status: 503,
+      code: 'homepage_provider_agent_binding_failed',
+    });
+    expect(retell.createWebCall).not.toHaveBeenCalled();
+  });
+
+  test('create pins the configured exact agent version and verifies deletion when the created contract differs', async () => {
     const retell = fakeRetell({
       createWebCall: jest.fn(async () => ({
         call_id: 'call_homepage_001',

@@ -41,6 +41,7 @@ describe('Homepage Retell client boundary', () => {
       agent_version: 7,
       retell_llm_dynamic_variables: { northstar_demo_mode: 'homepage' },
     });
+    expect(request.body).not.toMatch(/from_number|to_number|phone_number/i);
     expect(request.signal).toBeInstanceOf(AbortSignal);
   });
 

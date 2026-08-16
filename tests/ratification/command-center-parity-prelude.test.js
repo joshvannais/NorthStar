@@ -7,6 +7,7 @@ const { app } = require('../../src/server');
 const contract = require('../../public/js/command-center-contract');
 const permissions = require('../../src/auth/permissions');
 const { paidRequestContext } = require('../../src/routes/commandCenter');
+const scenarioSpace = require('../../src/commandCenter/scenarioSpace');
 const {
   buildDemoWorkspace,
   buildPaidWorkspace,
@@ -20,7 +21,7 @@ const {
 const ROOT = path.resolve(__dirname, '..', '..');
 const TOKEN_HASH = 'a'.repeat(64);
 const PAGE_BY_ROUTE = Object.freeze({
-  'command-center': 'public/dashboard/command-center.html',
+  'command-center': 'public/demo-dashboard.html',
   polaris: 'public/dashboard/polaris.html',
   leads: 'public/dashboard/leads.html',
   communications: 'public/dashboard/communications.html',
@@ -57,10 +58,15 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
   });
 
   test('paid Command Center uses real tenant projections and exposes no simulation language or controls', async () => {
-    const paid = read('public/dashboard/command-center.html');
+    const paid = read('public/demo-dashboard.html');
+    const pageClient = read('public/js/command-center-page.js');
     expect(paid).toContain('/js/command-center-contract.js');
-    expect(paid).toContain('PolarisApi.getDashboard');
-    expect(paid).toContain('processes real tenant interactions');
+    expect(paid).toContain('/js/command-center-page.js');
+    expect(paid).toContain('demo-dashboard-priority-grid');
+    expect(paid).toContain('demo-dashboard-analytics-grid');
+    expect(paid).toContain('demo-leads-panel');
+    expect(pageClient).toContain("'/api/v1/command-center/workspace'");
+    expect(pageClient).toContain("'Tenant data · role-authorized'");
     expect(paid).not.toMatch(/Simulate Lead|ccSim|SIM_SESSION|northstarSessionId|sessionStorage|simulator\.js|scenario|reset demo|\/api\/v1\/simulations\/leads/i);
 
     const route = read('src/routes/commandCenter.js');
@@ -117,13 +123,16 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(client).toContain("simulate.id = 'demoSimulateLead'");
     expect(client).toContain("reset.id = 'demoReset'");
     expect(client).toContain('/api/demo/command-center/simulations/leads');
+    expect(client).toContain('scenario: selected');
+    expect(client).toContain('scenarioSpace.dimensions.forEach');
     expect(client).toContain("'X-NorthStar-Demo-Intent': intent");
     expect(client).not.toMatch(/\.innerHTML\s*=|insertAdjacentHTML|document\.write|eval\s*\(/);
     const polaris = read('public/dashboard/polaris.html');
     expect(polaris).toContain('function respondToAccountFreeDemoChat()');
     expect(polaris.match(/respondToAccountFreeDemoChat\(\)/g)).toHaveLength(3);
     expect(polaris).toContain('no request was sent.');
-    expect(server).toContain("'command-center': 'public/dashboard/command-center.html'");
+    expect(server).toContain("'command-center': 'public/demo-dashboard.html'");
+    expect(server).toContain("'/dashboard': 'public/demo-dashboard.html'");
     expect(server).toContain("integrations: 'public/dashboard/integrations.html'");
     expect(server).not.toContain("pages[destination.demoPath] = 'public/demo-dashboard.html'");
     expect(read('src/routes/demo.js')).toContain('secure: config.auth.secureCookies');
@@ -131,6 +140,75 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       const html = read(PAGE_BY_ROUTE[destination.id]);
       expect(html).toContain('/js/demo-runtime.js');
       expect(html).toMatch(new RegExp(`NavComponent\\.init\\(['"]${destination.id}['"]\\)`));
+    }
+  });
+
+  test('the server-owned scenario builder exposes and materializes far more than 100 distinct paths', () => {
+    expect(scenarioSpace.DIMENSION_ORDER).toEqual([
+      'business', 'service', 'intent', 'urgency', 'context', 'scheduling', 'outcome',
+    ]);
+    expect(scenarioSpace.COMBINATION_COUNT).toBe(38400);
+    expect(scenarioSpace.publicScenarioSpace()).toEqual(expect.objectContaining({
+      contract: 'northstar_demo_scenario_space_v1',
+      combinationCount: 38400,
+      dimensions: expect.any(Array),
+    }));
+
+    const tenantId = tenantIdFromTokenHash('b'.repeat(64));
+    const generated = [];
+    let sequence = 0;
+    for (const business of scenarioSpace.DIMENSIONS.business.options) {
+      for (const service of scenarioSpace.DIMENSIONS.service.options) {
+        for (const intent of scenarioSpace.DIMENSIONS.intent.options) {
+          for (const urgency of scenarioSpace.DIMENSIONS.urgency.options) {
+            const selection = {
+              ...scenarioSpace.DEFAULT_SELECTION,
+              business: business.id,
+              service: service.id,
+              intent: intent.id,
+              urgency: urgency.id,
+              context: scenarioSpace.DIMENSIONS.context.options[sequence % scenarioSpace.DIMENSIONS.context.options.length].id,
+              scheduling: scenarioSpace.DIMENSIONS.scheduling.options[sequence % scenarioSpace.DIMENSIONS.scheduling.options.length].id,
+              outcome: scenarioSpace.DIMENSIONS.outcome.options[sequence % scenarioSpace.DIMENSIONS.outcome.options.length].id,
+            };
+            sequence += 1;
+            generated.push(buildSimulatedGraph({
+              tenantId,
+              key: 'scenario-diversity-' + String(sequence),
+              scenarioSelection: selection,
+              createdAt: new Date('2026-08-16T12:00:00.000Z'),
+            }));
+            if (generated.length === 120) break;
+          }
+          if (generated.length === 120) break;
+        }
+        if (generated.length === 120) break;
+      }
+      if (generated.length === 120) break;
+    }
+
+    expect(generated).toHaveLength(120);
+    expect(new Set(generated.map(graph => graph.scenario.signature)).size).toBe(120);
+    for (const graph of generated) {
+      expect(graph.scenario.contract).toBe('northstar_demo_scenario_selection_v1');
+      expect(graph.communication.transcript).toEqual(expect.arrayContaining([
+        expect.objectContaining({ speaker: 'customer', text: expect.any(String) }),
+      ]));
+      expect(graph.polaris.facts.map(fact => fact.variable)).toEqual(expect.arrayContaining([
+        'businessContext', 'callerIntent', 'urgency', 'customerContext',
+        'schedulingConstraint', 'conversationOutcome',
+      ]));
+      expect(graph.lead).toEqual(expect.objectContaining({
+        callerIntent: graph.scenario.labels.intent,
+        urgency: graph.scenario.labels.urgency,
+        outcome: graph.scenario.labels.outcome,
+      }));
+      expect(graph.work.schedulingConstraint).toBe(graph.scenario.labels.scheduling);
+      expect(graph.polaris.snapshot).toEqual(expect.objectContaining({
+        risk: expect.objectContaining({ emergency: expect.any(Boolean) }),
+        missingInformation: expect.any(Array),
+        recommendedActions: expect.any(Array),
+      }));
     }
   });
 

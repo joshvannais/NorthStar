@@ -3,112 +3,171 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Explore a fictional, isolated NorthStar Contractor Command Center without an account.">
+  <meta name="description" content="NorthStar Contractor Command Center for daily priorities, Polaris intelligence, pipeline, schedule, and customer work.">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#101217" media="(prefers-color-scheme: dark)">
-  <link rel="canonical" href="/demo">
-  <title>Contractor Command Center Demo — NorthStar</title>
+  <meta name="northstar-canonical-surfaces" content="command-center">
+  <title>Contractor Command Center — NorthStar</title>
   <script src="/js/theme.js"></script>
+  <script src="/js/command-center-contract.js"></script>
+  <script src="/js/demo-runtime.js"></script>
+  <script src="/js/auth-session.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/homepage-refresh.css">
   <link rel="stylesheet" href="/css/demo-dashboard.css">
+  <link rel="stylesheet" href="/css/demo-runtime.css">
+  <link rel="stylesheet" href="/css/polaris-card.css">
   <link rel="icon" href="/assets/logo.png">
 </head>
-<body class="demo-dashboard-page demo-command-center-page">
-  <a class="skip-link" href="#demoCommandMain">Skip to demo content</a>
+<body class="demo-dashboard-page command-center-blueprint-page">
+  <a class="skip-link" href="#commandCenterMain">Skip to Command Center</a>
 
-  <header class="demo-dashboard-header">
-    <div class="demo-dashboard-header-inner">
-      <a class="demo-dashboard-brand northstar-lockup" href="/" aria-label="NorthStar homepage">
-        <img src="/assets/logo.png" alt="">
-        <span>NorthStar</span>
-      </a>
-      <div class="demo-dashboard-header-actions">
-        <span class="demo-data-pill">Fictional data · account-free</span>
-        <a class="demo-header-link" href="/">Homepage</a>
-        <a class="btn btn-primary btn-sm" href="/signup">Start free trial</a>
-      </div>
-    </div>
-  </header>
-
-  <div class="demo-command-layout">
-    <aside class="demo-command-sidebar" aria-label="Demo Command Center navigation">
-      <p class="demo-panel-kicker">Contractor Command Center</p>
-      <nav id="demoCommandNavigation" class="demo-command-navigation"></nav>
-      <div class="demo-command-sidebar-note">
-        <strong>One isolated demo workspace</strong>
-        <span>Every destination reads the same fictional session state.</span>
-      </div>
-    </aside>
-
-    <main class="demo-dashboard-main demo-command-main" id="demoCommandMain">
-      <section class="demo-command-heading" aria-labelledby="demoCommandTitle">
-        <div>
-          <p class="demo-eyebrow">Account-free product walkthrough</p>
-          <h1 id="demoCommandTitle">Loading Command Center…</h1>
-          <p id="demoCommandDescription" class="demo-intro-copy">Loading the isolated fictional workspace.</p>
-        </div>
-        <div class="demo-command-session" aria-label="Demo session status">
-          <span id="demoSessionDurability" class="demo-count-pill">Projection-only until you act</span>
-          <span id="demoWorkspaceRevision">Revision —</span>
-        </div>
-      </section>
-
-      <aside class="demo-disclosure" aria-label="Demo data disclosure">
-        <strong>This is a fictional, isolated preview.</strong>
-        <span>No customer, provider, production, account, or billing data is used. Configuration pages are stable and read-only.</span>
-      </aside>
-
-      <section class="demo-command-controls" aria-labelledby="demoControlsTitle">
-        <div>
-          <p class="demo-panel-kicker">Demo-only controls</p>
-          <h2 id="demoControlsTitle">Add one fictional lead to the shared workspace</h2>
-          <p>Simulate Lead commits one bounded record graph to this browser's durable demo session. Every relevant demo page then reads that same revision.</p>
-        </div>
-        <div class="demo-command-control-actions">
-          <label for="demoScenario">Fictional service scenario</label>
-          <select id="demoScenario">
-            <option value="fence">Fence installation</option>
-            <option value="roofing">Roof replacement</option>
-            <option value="hvac">HVAC service</option>
-            <option value="plumbing">Plumbing service</option>
-            <option value="electrical">Electrical service</option>
-            <option value="concrete">Concrete installation</option>
-          </select>
-          <div class="demo-command-buttons">
-            <button class="btn btn-primary" id="demoSimulateLead" type="button">Simulate Lead</button>
-            <button class="btn btn-secondary" id="demoReset" type="button">Reset demo</button>
+  <div class="app-layout">
+    <main class="main-content command-center-blueprint-shell" id="commandCenterMain">
+      <header class="demo-dashboard-header command-center-blueprint-header">
+        <div class="demo-dashboard-header-inner">
+          <a class="demo-dashboard-brand northstar-lockup" id="commandCenterHomeLink" href="/dashboard" aria-label="NorthStar Command Center">
+            <img src="/assets/logo.png" alt="">
+            <span>NorthStar</span>
+          </a>
+          <div class="demo-dashboard-header-actions">
+            <span class="demo-data-pill" id="commandCenterAuthority">Loading workspace…</span>
+            <button class="demo-header-link command-center-refresh" id="commandCenterRefresh" type="button">Refresh</button>
+            <a class="btn btn-primary btn-sm" id="commandCenterHeaderAction" href="/dashboard/settings">Workspace settings</a>
           </div>
         </div>
-      </section>
+      </header>
 
-      <p id="demoCommandStatus" class="demo-command-status" role="status" aria-live="polite" aria-atomic="true">Loading the isolated demo workspace…</p>
-      <section id="demoCommandContent" class="demo-command-content" aria-live="off" aria-busy="true">
-        <div class="demo-panel demo-command-loading">
-          <p class="demo-panel-kicker">Loading</p>
-          <h2>Preparing the fictional workspace</h2>
-        </div>
-      </section>
+      <div class="demo-dashboard-main command-center-blueprint-main">
+        <section class="demo-dashboard-intro" aria-labelledby="commandCenterTitle">
+          <div>
+            <p class="demo-eyebrow">Contractor Command Center</p>
+            <h1 id="commandCenterTitle">One operating view for the day ahead.</h1>
+            <p class="demo-intro-copy" id="commandCenterIntro">NorthStar connects calls, leads, appointments, and work activity into one prioritized daily view.</p>
+          </div>
+          <div class="demo-intro-actions" id="commandCenterIntroActions">
+            <a class="btn btn-primary" href="/dashboard/polaris" data-command-destination="polaris">Open Polaris</a>
+            <a class="btn btn-secondary" href="/dashboard/leads" data-command-destination="leads">Review leads</a>
+          </div>
+        </section>
 
-      <section class="demo-dashboard-cta" aria-labelledby="demoCtaTitle">
-        <div>
-          <p class="demo-panel-kicker">Ready to use your own business data?</p>
-          <h2 id="demoCtaTitle">Build a NorthStar workspace around the way your company actually operates.</h2>
+        <aside class="demo-disclosure" id="commandCenterDisclosure" aria-label="Workspace data disclosure" hidden></aside>
+
+        <p class="command-center-load-status" id="commandCenterStatus" role="status" aria-live="polite" aria-atomic="true">Loading the role-authorized workspace…</p>
+
+        <div id="commandCenterContent" aria-busy="true">
+          <section class="demo-dashboard-priority-grid" aria-label="Daily intelligence">
+            <article class="demo-panel demo-daily-brief">
+              <div class="demo-panel-heading">
+                <div>
+                  <p class="demo-panel-kicker">Daily brief</p>
+                  <h2>What needs attention</h2>
+                </div>
+                <span class="demo-updated" id="commandCenterUpdated">Waiting for current data</span>
+              </div>
+              <ol class="demo-priority-list" id="commandCenterPriorities"></ol>
+            </article>
+
+            <article class="demo-panel demo-polaris-panel" id="commandCenterPolaris" aria-labelledby="commandCenterPolarisTitle">
+              <div class="demo-polaris-brandline">
+                <span class="demo-polaris-mark" aria-hidden="true">✦</span>
+                <div>
+                  <p class="demo-panel-kicker">Polaris intelligence</p>
+                  <h2 id="commandCenterPolarisTitle">Preparing current intelligence</h2>
+                </div>
+              </div>
+              <p class="demo-polaris-copy" id="commandCenterPolarisSummary">Polaris will explain the strongest current signal, its evidence, and what remains unknown.</p>
+              <div class="demo-polaris-metrics" id="commandCenterPolarisMetrics"></div>
+              <p class="demo-reasoning" id="commandCenterPolarisReasoning"></p>
+              <div class="demo-polaris-actions" id="commandCenterPolarisActions"></div>
+            </article>
+          </section>
+
+          <section class="demo-kpi-grid" id="commandCenterKpis" aria-label="Business snapshot"></section>
+
+          <section class="demo-dashboard-analytics-grid" aria-label="Pipeline and schedule">
+            <article class="demo-panel demo-revenue-panel">
+              <div class="demo-panel-heading">
+                <div>
+                  <p class="demo-panel-kicker">Qualified pipeline</p>
+                  <h2>Recorded opportunity value</h2>
+                </div>
+                <span class="demo-positive" id="commandCenterPipelineLabel">Current records</span>
+              </div>
+              <div class="demo-chart" id="commandCenterChart" role="img" aria-label="Recorded opportunity values by recent work item">
+                <div class="demo-chart-grid" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+                <div class="demo-chart-bars" id="commandCenterChartBars"></div>
+              </div>
+              <div class="demo-chart-summary" id="commandCenterChartSummary"></div>
+            </article>
+
+            <article class="demo-panel demo-schedule-panel">
+              <div class="demo-panel-heading">
+                <div>
+                  <p class="demo-panel-kicker">Upcoming appointments</p>
+                  <h2>Next scheduled work</h2>
+                </div>
+                <span class="demo-count-pill" id="commandCenterScheduleCount">0 scheduled</span>
+              </div>
+              <ol class="demo-schedule-list" id="commandCenterSchedule"></ol>
+            </article>
+          </section>
+
+          <section class="demo-panel demo-leads-panel" aria-labelledby="commandCenterLeadsTitle">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">Recent leads</p>
+                <h2 id="commandCenterLeadsTitle">Customers and requested work</h2>
+              </div>
+              <span class="demo-count-pill" id="commandCenterLeadCount">0 active</span>
+            </div>
+            <div class="demo-table-wrap">
+              <table>
+                <thead><tr><th>Customer</th><th>Service</th><th>Recorded value</th><th>Status</th><th>Next action</th></tr></thead>
+                <tbody id="commandCenterLeadRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="demo-bottom-grid" aria-label="Guidance and workspace status">
+            <article class="demo-panel demo-coach-panel">
+              <p class="demo-panel-kicker">NorthStar Coach</p>
+              <h2>Next best operational move</h2>
+              <p id="commandCenterCoach">Waiting for current role-authorized records.</p>
+            </article>
+            <article class="demo-panel demo-status-panel">
+              <div>
+                <p class="demo-panel-kicker">Workspace status</p>
+                <h2 id="commandCenterWorkspaceStatus">Loading current state</h2>
+                <p id="commandCenterWorkspaceNote">No provider or readiness claim is inferred from this view.</p>
+              </div>
+              <span class="demo-live-status" id="commandCenterStatePill"><i aria-hidden="true"></i>Loading</span>
+            </article>
+          </section>
+
+          <section class="demo-dashboard-cta" id="commandCenterCta" aria-labelledby="commandCenterCtaTitle">
+            <div>
+              <p class="demo-panel-kicker" id="commandCenterCtaKicker">Workspace</p>
+              <h2 id="commandCenterCtaTitle">Continue with the next role-authorized task.</h2>
+            </div>
+            <div class="demo-intro-actions" id="commandCenterCtaActions">
+              <a class="btn btn-primary" href="/dashboard/leads" data-command-destination="leads">Review leads</a>
+              <a class="btn btn-secondary" href="/dashboard/calendar" data-command-destination="calendar">Open calendar</a>
+            </div>
+          </section>
         </div>
-        <div class="demo-intro-actions">
-          <a class="btn btn-primary" href="/signup">Start free trial</a>
-          <a class="btn btn-secondary" href="/">Return home</a>
-        </div>
-      </section>
+      </div>
+
+      <footer class="demo-dashboard-footer">
+        <span>NorthStar Solutions LLC · Contractor Command Center</span>
+        <nav aria-label="Legal links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/legal">Legal</a></nav>
+      </footer>
     </main>
   </div>
 
-  <footer class="demo-dashboard-footer">
-    <span>NorthStar · Fictional product preview</span>
-    <nav aria-label="Legal links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/legal">Legal</a></nav>
-  </footer>
-
-  <script src="/js/command-center-contract.js"></script>
-  <script src="/js/demo-command-center.js"></script>
+  <script src="/js/polaris-card.js"></script>
+  <script src="/js/command-center-page.js"></script>
+  <script src="/js/nav-component.js"></script>
+  <script>NavComponent.init('command-center');</script>
 </body>
 </html>

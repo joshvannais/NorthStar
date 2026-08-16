@@ -343,9 +343,11 @@
           throw new Error(payload && payload.error && payload.error.message || 'The demo action could not be completed.');
         }
         workspace = payload.data;
-        try { global.sessionStorage.setItem('northstarSessionId', workspace.session.id); } catch (_error) {}
-        global.sessionStorage.setItem('northstarDemoNotice', intent === 'reset'
-          ? 'Demo restored to its starting state.' : 'One fictional lead was added across every demo destination.');
+        try {
+          global.sessionStorage.setItem('northstarSessionId', workspace.session.id);
+          global.sessionStorage.setItem('northstarDemoNotice', intent === 'reset'
+            ? 'Demo restored to its starting state.' : 'One fictional lead was added across every demo destination.');
+        } catch (_storageError) {}
         global.location.reload();
       });
     }).catch(function (error) {
@@ -358,6 +360,10 @@
     if (document.getElementById('northstarDemoToolbar')) return;
     var main = document.querySelector('.main-content');
     if (!main) return;
+    var scenarioSpace = value && value.configuration && value.configuration.scenarioSpace;
+    var scenarioReady = scenarioSpace && scenarioSpace.contract === 'northstar_demo_scenario_space_v1' &&
+      Number.isSafeInteger(scenarioSpace.combinationCount) && scenarioSpace.combinationCount >= 100 &&
+      Array.isArray(scenarioSpace.dimensions) && scenarioSpace.dimensions.length >= 6;
     var section = control('section', '', 'northstar-demo-toolbar');
     section.id = 'northstarDemoToolbar';
     section.setAttribute('aria-label', 'Account-free demo controls');
@@ -366,26 +372,63 @@
     var metadata = control('span', 'Fictional data · Revision ' + value.integrity.revision, 'northstar-demo-toolbar-meta');
     metadata.id = 'northstarDemoRevision';
     copy.append(metadata);
+    var builder = document.createElement('details');
+    builder.className = 'northstar-demo-scenario-builder';
+    builder.open = (path === '/demo' || path === '/demo-dashboard') &&
+      global.matchMedia && global.matchMedia('(min-width: 769px)').matches;
+    var summary = control('summary', scenarioReady
+      ? 'Build a lead scenario · ' + Number(scenarioSpace.combinationCount).toLocaleString() + ' material combinations'
+      : 'Scenario builder unavailable');
+    builder.appendChild(summary);
+    var selections = Object.create(null);
+    var scenarioGrid = control('div', '', 'northstar-demo-scenario-grid');
+    if (scenarioReady) {
+      scenarioSpace.dimensions.forEach(function (dimension, dimensionIndex) {
+        if (!dimension || typeof dimension.id !== 'string' || typeof dimension.label !== 'string' ||
+            !Array.isArray(dimension.options) || !dimension.options.length) {
+          scenarioReady = false;
+          return;
+        }
+        var field = control('div', '', 'northstar-demo-scenario-field');
+        var id = 'demoScenario-' + dimension.id;
+        var label = control('label', dimension.label);
+        label.htmlFor = id;
+        var select = document.createElement('select');
+        select.id = id;
+        select.dataset.scenarioDimension = dimension.id;
+        dimension.options.forEach(function (definition) {
+          var option = document.createElement('option');
+          option.value = definition.id;
+          option.textContent = definition.label;
+          option.title = definition.description || '';
+          if (scenarioSpace.defaultSelection && scenarioSpace.defaultSelection[dimension.id] === definition.id) {
+            option.selected = true;
+          }
+          select.appendChild(option);
+        });
+        selections[dimension.id] = select;
+        field.append(label, select);
+        scenarioGrid.appendChild(field);
+        if (dimensionIndex === 0) select.setAttribute('aria-describedby', 'northstarDemoScenarioHelp');
+      });
+    }
+    var scenarioHelp = control('p', scenarioReady
+      ? 'Each choice changes the conversation, record graph, schedule, risk, recommendations, and Polaris evidence—not just the label.'
+      : 'The shared scenario contract could not be verified. No demo mutation is available.',
+    'northstar-demo-scenario-help');
+    scenarioHelp.id = 'northstarDemoScenarioHelp';
+    builder.append(scenarioGrid, scenarioHelp);
     var actions = control('div', '', 'northstar-demo-toolbar-actions');
-    var label = control('label', 'Scenario', 'northstar-demo-scenario-label');
-    label.htmlFor = 'demoScenario';
-    var select = document.createElement('select');
-    select.id = 'demoScenario';
-    Object.keys({ fence: 1, roofing: 1, hvac: 1, plumbing: 1, electrical: 1, concrete: 1 }).forEach(function (key) {
-      var option = document.createElement('option');
-      option.value = key;
-      option.textContent = key.charAt(0).toUpperCase() + key.slice(1);
-      select.appendChild(option);
-    });
     var simulate = control('button', 'Simulate Lead', 'btn btn-primary');
     simulate.id = 'demoSimulateLead';
     simulate.type = 'button';
+    simulate.disabled = !scenarioReady;
     var reset = control('button', 'Reset demo', 'btn btn-secondary');
     reset.id = 'demoReset';
     reset.type = 'button';
     var exit = control('a', 'Exit demo', 'btn btn-ghost');
     exit.href = '/';
-    actions.append(label, select, simulate, reset, exit);
+    actions.append(simulate, reset, exit);
     var status = control('p', '', 'northstar-demo-toolbar-status');
     status.id = 'northstarDemoStatus';
     status.setAttribute('role', 'status');
@@ -397,11 +440,13 @@
     } catch (_storageError) {
       status.textContent = 'Every destination reads this same isolated fictional workspace.';
     }
-    section.append(copy, actions, status);
+    section.append(copy, builder, actions, status);
     main.insertBefore(section, main.firstChild);
     simulate.addEventListener('click', function () {
+      var selected = {};
+      Object.keys(selections).forEach(function (dimension) { selected[dimension] = selections[dimension].value; });
       performMutation('/api/demo/command-center/simulations/leads', 'simulate-lead', {
-        service: select.value, expectedRevision: workspace.integrity.revision,
+        scenario: selected, expectedRevision: workspace.integrity.revision,
       }, simulate, status);
     });
     reset.addEventListener('click', function () {

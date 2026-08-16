@@ -9,7 +9,7 @@ const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const ROUTES = Object.freeze([
-  Object.freeze({ id: 'command-center', path: '/demo', marker: 'Command Center', surface: '.cc-workspace' }),
+  Object.freeze({ id: 'command-center', path: '/demo', marker: 'One operating view for the day ahead.', surface: '.command-center-blueprint-main' }),
   Object.freeze({ id: 'polaris', path: '/demo/polaris', marker: 'POLARIS', surface: '.polaris-workspace' }),
   Object.freeze({ id: 'leads', path: '/demo/leads', marker: 'All Leads', surface: '.leads-kpi-grid' }),
   Object.freeze({ id: 'communications', path: '/demo/communications', marker: 'Communications', surface: '#kpiGrid' }),
@@ -87,7 +87,11 @@ async function inspectCurrent(page, route, revision, viewport) {
       if (!node) return false;
       const value = rect(node);
       const style = getComputedStyle(node);
-      return value.width > 0 && value.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      const browserVisible = typeof node.checkVisibility === 'function'
+        ? node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+        : node.getClientRects().length > 0;
+      return browserVisible && value.width > 0 && value.height > 0 &&
+        style.display !== 'none' && style.visibility !== 'hidden';
     }
     const main = document.querySelector('.main-content');
     const toolbar = document.getElementById('northstarDemoToolbar');
@@ -138,6 +142,7 @@ async function inspectCurrent(page, route, revision, viewport) {
       genericShells: document.querySelectorAll('.demo-command-layout, .demo-command-nav-link, #demoCommandContent').length,
       contentLeft,
       contentRight,
+      mainRect,
       mainPaddingLeft: parseFloat(mainStyle.paddingLeft || '0'),
       mainPaddingRight: parseFloat(mainStyle.paddingRight || '0'),
       toolbarRect,
@@ -164,7 +169,9 @@ async function inspectCurrent(page, route, revision, viewport) {
   assert.strictEqual(snapshot.mobileHeaderVisible, viewport.width <= 768, route.path + ' responsive mobile header visibility');
   assert.strictEqual(snapshot.genericShells, 0, route.path + ' generic Parity shell removed');
   assert.ok(snapshot.overflow <= 1, route.path + ' no horizontal overflow');
-  assert.ok(snapshot.mainPaddingLeft >= 15 && snapshot.mainPaddingRight >= 15, route.path + ' contained page gutters');
+  assert.ok(snapshot.toolbarRect.left - snapshot.mainRect.left >= 11 &&
+    snapshot.mainRect.right - snapshot.toolbarRect.right >= 11,
+  route.path + ' demo controls retain responsive outer gutters');
   assert.ok(snapshot.toolbarRect.left >= snapshot.contentLeft - 1 && snapshot.toolbarRect.right <= snapshot.contentRight + 1,
     route.path + ' demo controls stay within content gutters');
   if (snapshot.nextSurfaceRect) {
@@ -272,7 +279,22 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     }
 
     await clickRoute(page, origin, ROUTES[0], 1, viewport);
-    await page.selectOption('#demoScenario', 'fence');
+    const scenarioBuilder = page.locator('.northstar-demo-scenario-builder');
+    if (!(await scenarioBuilder.evaluate(node => node.open))) {
+      await scenarioBuilder.locator('summary').click();
+    }
+    const scenarioSelection = {
+      business: 'multi_crew',
+      service: 'roofing',
+      intent: 'second_opinion',
+      urgency: 'safety_emergency',
+      context: 'insurance_claim',
+      scheduling: 'weather_window',
+      outcome: 'booked',
+    };
+    for (const [dimension, value] of Object.entries(scenarioSelection)) {
+      await page.selectOption('[data-scenario-dimension="' + dimension + '"]', value);
+    }
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
       page.click('#demoSimulateLead'),
@@ -287,7 +309,11 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.deepStrictEqual(simulated.configuration, initialConfiguration, viewport.label + ' configuration remains stable');
     assert.deepStrictEqual(simulated.navigation, initialNavigation, viewport.label + ' navigation remains stable');
     const added = simulated.graphs[0];
-    assert.strictEqual(added.lead.serviceType, 'fence', viewport.label + ' selected scenario');
+    assert.strictEqual(added.lead.serviceType, 'roofing', viewport.label + ' selected service');
+    assert.deepStrictEqual(added.scenario.selection, scenarioSelection, viewport.label + ' complete selected scenario');
+    assert.strictEqual(added.polaris.snapshot.risk.emergency, true, viewport.label + ' urgency changes Polaris risk');
+    assert.ok(added.communication.transcript.some(turn => turn.text.includes('second opinion')),
+      viewport.label + ' caller intent changes the generated conversation');
     assert.strictEqual(added.polaris.completeDetail, true, viewport.label + ' complete Polaris detail');
     assert.match(added.polaris.snapshotDigest, /^[0-9a-f]{64}$/, viewport.label + ' snapshot digest');
 

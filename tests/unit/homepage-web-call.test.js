@@ -7,6 +7,7 @@ const {
   MAX_TRANSCRIPT_TURNS,
   calculateHomepagePolaris,
   normalizeTranscript,
+  verifiedPurgeReceipt,
   verifyPurgeToken,
 } = require('../../src/services/homepageWebCall');
 
@@ -115,6 +116,37 @@ describe('Homepage browser Web Call service', () => {
       version: 1,
       callId: result.callId,
     }));
+    expect(service.verifyCallAuthority(result.callId, result.purgeToken)).toEqual(expect.objectContaining({
+      version: 1,
+      callId: result.callId,
+      expiresAt: fixedNow.getTime() + (15 * 60 * 1000),
+      capabilityHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    }));
+  });
+
+  test('purge capability identity is stable per signed token and distinct across tokens', async () => {
+    let nonce = 0;
+    const service = new HomepageWebCallService({
+      retellClient: fakeRetell(),
+      settings: readySettings(),
+      provider,
+      secret,
+      now: () => fixedNow,
+      randomBytes: () => Buffer.alloc(16, ++nonce),
+    });
+    const first = await service.create('HVAC');
+    const second = await service.create('HVAC');
+    const firstAuthority = service.verifyCallAuthority(first.callId, first.purgeToken);
+    expect(service.verifyCallAuthority(first.callId, first.purgeToken).capabilityHash)
+      .toBe(firstAuthority.capabilityHash);
+    expect(service.verifyCallAuthority(second.callId, second.purgeToken).capabilityHash)
+      .not.toBe(firstAuthority.capabilityHash);
+    expect(firstAuthority.capabilityHash).not.toContain(first.callId);
+    expect(verifiedPurgeReceipt()).toEqual({
+      providerDeletionVerified: true,
+      northstarPurged: true,
+      retainedContent: false,
+    });
   });
 
   test('create rejects and never starts when the provider privacy contract differs', async () => {

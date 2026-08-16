@@ -122,10 +122,32 @@ function createHomepageDemoRouter(options = {}) {
       });
     }
     try {
-      service.verifyCallAuthority(req.params.callId, req.body.purgeToken);
-      await admission.admitPurge(hashSource(req.ip));
-      const result = await service.purge(req.params.callId, req.body.purgeToken);
-      return res.json({ success: true, data: result });
+      const authority = service.verifyCallAuthority(req.params.callId, req.body.purgeToken);
+      const claim = await admission.beginPurge(
+        hashSource(req.ip),
+        authority.capabilityHash,
+        authority.expiresAt
+      );
+      if (claim && claim.verified === true && claim.execute === false) {
+        return res.json({ success: true, data: service.verifiedPurgeReceipt() });
+      }
+      if (!claim || claim.execute !== true || claim.verified !== false) {
+        throw new HomepageWebCallError(
+          503,
+          'homepage_admission_unavailable',
+          'The verified deletion authority is unavailable.'
+        );
+      }
+      try {
+        const result = await service.purge(req.params.callId, req.body.purgeToken);
+        await admission.completePurge(authority.capabilityHash, claim.attemptCount);
+        return res.json({ success: true, data: result });
+      } catch (error) {
+        try {
+          await admission.releasePurge(authority.capabilityHash, claim.attemptCount);
+        } catch (_releaseError) {}
+        throw error;
+      }
     } catch (error) {
       return sendError(req, res, error);
     }

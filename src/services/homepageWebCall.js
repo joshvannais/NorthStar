@@ -111,6 +111,25 @@ function verifyPurgeToken(token, expectedCallId, secret, now) {
   return payload;
 }
 
+function purgeCapabilityHash(token, secret) {
+  const key = boundedSecret(secret);
+  if (!key || typeof token !== 'string' || !token || Buffer.byteLength(token, 'utf8') > 4096) {
+    fail(503, 'homepage_purge_authority_unavailable', 'The temporary-call purge authority is unavailable.');
+  }
+  return crypto.createHmac('sha256', key)
+    .update('northstar:homepage-retell-purge-capability:v1\0', 'utf8')
+    .update(token, 'utf8')
+    .digest('hex');
+}
+
+function verifiedPurgeReceipt() {
+  return {
+    providerDeletionVerified: true,
+    northstarPurged: true,
+    retainedContent: false,
+  };
+}
+
 function normalizeTranscript(value) {
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_TRANSCRIPT_TURNS) {
     fail(422, 'homepage_transcript_invalid', 'The temporary transcript is missing or too large.');
@@ -376,7 +395,14 @@ class HomepageWebCallService {
   }
 
   verifyCallAuthority(callId, purgeToken) {
-    return verifyPurgeToken(purgeToken, callId, this.secret, this.now());
+    const authority = verifyPurgeToken(purgeToken, callId, this.secret, this.now());
+    return Object.freeze(Object.assign({}, authority, {
+      capabilityHash: purgeCapabilityHash(purgeToken, this.secret),
+    }));
+  }
+
+  verifiedPurgeReceipt() {
+    return verifiedPurgeReceipt();
   }
 
   projectPolaris(callId, purgeToken, industry, transcript, callDurationSeconds) {
@@ -388,11 +414,7 @@ class HomepageWebCallService {
     const callId = safeCallId(callIdValue);
     this.verifyCallAuthority(callId, purgeToken);
     await this.deleteAndVerify(callId);
-    return {
-      providerDeletionVerified: true,
-      northstarPurged: true,
-      retainedContent: false,
-    };
+    return verifiedPurgeReceipt();
   }
 }
 
@@ -410,6 +432,8 @@ module.exports = {
   TOKEN_LIFETIME_MS,
   calculateHomepagePolaris,
   normalizeTranscript,
+  purgeCapabilityHash,
   signPurgeToken,
+  verifiedPurgeReceipt,
   verifyPurgeToken,
 };

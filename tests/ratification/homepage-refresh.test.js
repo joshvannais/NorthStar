@@ -38,6 +38,7 @@ describe('authorized Homepage Refresh contracts', () => {
   const demoRoute = read('src/routes/demo.js');
   const faq = read('public/faq.html');
   const contact = read('public/contact.html');
+  const legal = read('public/legal.html');
   const manifestText = readOptional('public/site.webmanifest');
 
   test('public positioning describes the truthful operating system rather than a disguised receptionist', () => {
@@ -94,6 +95,9 @@ describe('authorized Homepage Refresh contracts', () => {
     for (const source of [homepage, faq, contact]) {
       expect(source).toContain('NorthStar Solutions LLC');
     }
+    expect(legal).toContain('<strong>NorthStar Solutions LLC</strong>');
+    expect(legal).toContain('Last updated: August 16, 2026');
+    expect(legal).not.toMatch(/formation in progress/i);
   });
 
   test('the consent dialog validates first, is deliberately dismissible, and stays accessible', () => {

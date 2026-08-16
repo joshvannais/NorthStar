@@ -28,3 +28,39 @@ CREATE TABLE homepage_demo_admission_windows (
 
 CREATE INDEX homepage_demo_admission_windows_expiry
   ON homepage_demo_admission_windows (window_start);
+
+-- A verified purge capability receives one short-lived durable execution
+-- lease. Only its keyed digest and operational timestamps are stored; call
+-- identifiers, raw tokens, source addresses, transcripts, and results are not.
+CREATE TABLE homepage_demo_purge_operations (
+  capability_hash CHAR(64) PRIMARY KEY,
+  state VARCHAR(16) NOT NULL,
+  attempt_count SMALLINT NOT NULL DEFAULT 1,
+  lease_expires_at TIMESTAMPTZ,
+  authority_expires_at TIMESTAMPTZ NOT NULL,
+  retire_at TIMESTAMPTZ NOT NULL,
+  verified_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  CONSTRAINT homepage_demo_purge_operations_hash_check
+    CHECK (capability_hash ~ '^[0-9a-f]{64}$'),
+  CONSTRAINT homepage_demo_purge_operations_state_check
+    CHECK (state IN ('in_progress', 'verified')),
+  CONSTRAINT homepage_demo_purge_operations_attempt_check
+    CHECK (attempt_count BETWEEN 1 AND 3),
+  CONSTRAINT homepage_demo_purge_operations_lifecycle_check
+    CHECK (
+      (state = 'in_progress' AND lease_expires_at IS NOT NULL AND verified_at IS NULL) OR
+      (state = 'verified' AND lease_expires_at IS NULL AND verified_at IS NOT NULL)
+    ),
+  CONSTRAINT homepage_demo_purge_operations_time_check
+    CHECK (
+      authority_expires_at > created_at AND
+      retire_at > authority_expires_at AND
+      updated_at >= created_at AND
+      (verified_at IS NULL OR (verified_at >= created_at AND updated_at >= verified_at))
+    )
+);
+
+CREATE INDEX homepage_demo_purge_operations_retirement
+  ON homepage_demo_purge_operations (retire_at);

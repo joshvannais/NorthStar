@@ -562,7 +562,9 @@
       function exactKeys(value, expected) {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
         var keys = Object.keys(value);
-        return keys.length === expected.length && keys.every(function(key, index) { return key === expected[index]; });
+        return keys.length === expected.length && expected.every(function(key) {
+          return Object.prototype.hasOwnProperty.call(value, key);
+        });
       }
 
       function boundedText(value, maximum) {

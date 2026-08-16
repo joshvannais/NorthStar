@@ -3590,6 +3590,7 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
+  min-width: 0;
 }
 @media (max-width: 768px) { .polaris-grid { grid-template-columns: 1fr; } }
 .polaris-item {
@@ -3597,6 +3598,7 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
   border-radius: var(--radius-sm);
   padding: 14px 16px;
   border: 1px solid rgba(212,175,55,0.2);
+  min-width: 0;
 }
 .polaris-item .polaris-item-label {
   font-size: 11px;
@@ -3611,10 +3613,12 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
   font-weight: 700;
   color: var(--neutral-900);
   margin-bottom: 2px;
+  overflow-wrap: anywhere;
 }
 .polaris-item .polaris-item-desc {
   font-size: 12px;
   color: var(--neutral-600);
+  overflow-wrap: anywhere;
 }
 .polaris-item .polaris-confidence {
   display: inline-block;

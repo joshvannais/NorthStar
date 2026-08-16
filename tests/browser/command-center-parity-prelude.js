@@ -117,6 +117,13 @@ async function inspectCurrent(page, route, revision, viewport) {
     const mobileLinks = Array.from(document.querySelectorAll('.mobile-menu-nav a')).map(node => ({
       id: node.dataset.navId, href: node.getAttribute('href'), current: node.getAttribute('aria-current'),
     }));
+    const polarisCard = document.querySelector('.polaris-card');
+    const polarisGrid = polarisCard && polarisCard.querySelector('.polaris-grid');
+    const polarisCardRect = rect(polarisCard);
+    const polarisItemsContained = !polarisCard || Array.from(polarisCard.querySelectorAll('.polaris-item')).every(node => {
+      const itemRect = rect(node);
+      return itemRect.left >= polarisCardRect.left - 1 && itemRect.right <= polarisCardRect.right + 1;
+    });
     return {
       pathname: location.pathname,
       workspace: window.NorthStarDemoRuntime.getWorkspace(),
@@ -137,6 +144,8 @@ async function inspectCurrent(page, route, revision, viewport) {
       nextSurfaceRect: rect(nextSurface),
       overlaps,
       themeRect: rect(document.querySelector('[data-northstar-theme-control]')),
+      polarisGridOverflow: polarisGrid ? polarisGrid.scrollWidth - polarisGrid.clientWidth : null,
+      polarisItemsContained,
       routeId,
       routePath,
       mobile,
@@ -162,6 +171,10 @@ async function inspectCurrent(page, route, revision, viewport) {
     assert.ok(snapshot.nextSurfaceRect.top - snapshot.toolbarRect.bottom >= 8, route.path + ' demo controls do not touch canonical surface');
   }
   assert.deepStrictEqual(snapshot.overlaps, [], route.path + ' demo controls do not overlap');
+  if (snapshot.polarisGridOverflow !== null) {
+    assert.ok(snapshot.polarisGridOverflow <= 1, route.path + ' Polaris card text stays contained');
+    assert.strictEqual(snapshot.polarisItemsContained, true, route.path + ' Polaris items stay within the card');
+  }
   assert.ok(snapshot.themeRect && snapshot.themeRect.left >= 0 && snapshot.themeRect.right <= viewport.width &&
     snapshot.themeRect.top >= 0 && snapshot.themeRect.bottom <= viewport.height,
   route.path + ' theme toggle remains in the viewport');

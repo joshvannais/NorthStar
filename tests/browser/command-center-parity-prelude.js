@@ -136,8 +136,17 @@ async function waitReady(page, route, revision) {
   }, { expectedRevision: revision, marker: route.marker, surface: route.surface, routeId: route.id }, { timeout: 15000 });
 }
 
+async function waitCatalogueTerminal(page, route) {
+  if (route.id !== 'integrations') return;
+  await page.waitForFunction(() => {
+    const root = document.getElementById('integrationCatalogueRoot');
+    return root && ['ready', 'error'].includes(root.dataset.state);
+  }, null, { timeout: 15000 });
+}
+
 async function inspectCurrent(page, route, revision, viewport) {
   await waitReady(page, route, revision);
+  await waitCatalogueTerminal(page, route);
   const snapshot = await page.evaluate(({ routeId, routePath, mobile }) => {
     function rect(node) {
       if (!node) return null;
@@ -223,6 +232,9 @@ async function inspectCurrent(page, route, revision, viewport) {
       polarisCardText: mountedPolarisCard && mountedPolarisCard.textContent,
       polarisObjectHrefs: mountedPolarisCard ? Array.from(mountedPolarisCard.querySelectorAll('.polaris-card-object-links a')).map(node => node.getAttribute('href')) : [],
       polarisDetailed: Boolean(mountedPolarisCard && mountedPolarisCard.querySelector('.polaris-card-details')),
+      catalogueState: routeId === 'integrations' && document.getElementById('integrationCatalogueRoot').dataset.state,
+      catalogueCategories: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-category').length : null,
+      catalogueProviders: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-card').length : null,
       routeId,
       routePath,
       mobile,
@@ -262,6 +274,11 @@ async function inspectCurrent(page, route, revision, viewport) {
   if (snapshot.polarisGridOverflow !== null) {
     assert.ok(snapshot.polarisGridOverflow <= 1, route.path + ' Polaris card text stays contained');
     assert.strictEqual(snapshot.polarisItemsContained, true, route.path + ' Polaris items stay within the card');
+  }
+  if (route.id === 'integrations') {
+    assert.strictEqual(snapshot.catalogueState, 'ready', route.path + ' catalogue contract reaches ready');
+    assert.strictEqual(snapshot.catalogueCategories, 7, route.path + ' renders every catalogue category');
+    assert.strictEqual(snapshot.catalogueProviders, 26, route.path + ' renders every catalogue provider');
   }
   assert.ok(snapshot.themeRect && snapshot.themeRect.left >= 0 && snapshot.themeRect.right <= viewport.width &&
     snapshot.themeRect.top >= 0 && snapshot.themeRect.bottom <= viewport.height,
@@ -321,6 +338,7 @@ async function waitPaidReady(page, route) {
 
 async function inspectPaidCurrent(page, route, viewport) {
   await waitPaidReady(page, route);
+  await waitCatalogueTerminal(page, route);
   const snapshot = await page.evaluate(({ routeId, expectedPath }) => {
     function rect(node) {
       if (!node) return null;
@@ -363,6 +381,9 @@ async function inspectPaidCurrent(page, route, viewport) {
       cardDetailed: Boolean(mounted && mounted.querySelector('.polaris-card-details')),
       cardContained: contained,
       objectHrefs: mounted ? Array.from(mounted.querySelectorAll('.polaris-card-object-links a')).map(node => node.getAttribute('href')) : [],
+      catalogueState: routeId === 'integrations' && document.getElementById('integrationCatalogueRoot').dataset.state,
+      catalogueCategories: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-category').length : null,
+      catalogueProviders: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-card').length : null,
     };
   }, { routeId: route.id, expectedPath: route.paidPath });
 
@@ -394,6 +415,11 @@ async function inspectPaidCurrent(page, route, viewport) {
     route.paidPath + ' actions remain in paid role-authorized routes');
   assert.ok(snapshot.objectHrefs.filter(href => href.startsWith('/dashboard/polaris?')).length >= 3,
     route.paidPath + ' exposes customer, lead, and work detail paths');
+  if (route.id === 'integrations') {
+    assert.strictEqual(snapshot.catalogueState, 'ready', route.paidPath + ' catalogue contract reaches ready');
+    assert.strictEqual(snapshot.catalogueCategories, 7, route.paidPath + ' renders every catalogue category');
+    assert.strictEqual(snapshot.catalogueProviders, 26, route.paidPath + ' renders every catalogue provider');
+  }
   return snapshot;
 }
 

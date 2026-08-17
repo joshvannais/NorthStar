@@ -30,7 +30,9 @@ const ROUTES = Object.freeze([
 ]);
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
+  Object.freeze({ label: 'tablet', width: 1024, height: 768 }),
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
+  Object.freeze({ label: 'mobile-compact', width: 360, height: 800 }),
 ]);
 const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'polaris', 'leads', 'communications']);
 const DETAILED_POLARIS_SURFACES = Object.freeze(['command-center', 'leads', 'polaris', 'communications']);
@@ -441,18 +443,214 @@ async function enterDemo(page, origin, revision, viewport) {
   return inspectCurrent(page, route, revision, viewport);
 }
 
+async function mobileMenuSnapshot(page, routeId) {
+  return page.evaluate(expectedRouteId => {
+    function rect(node) {
+      if (!node) return null;
+      const value = node.getBoundingClientRect();
+      return {
+        left: value.left,
+        right: value.right,
+        top: value.top,
+        bottom: value.bottom,
+        width: value.width,
+        height: value.height,
+      };
+    }
+    const menu = document.getElementById('mobileMenu');
+    const overlay = document.getElementById('mobileOverlay');
+    const hamburger = document.getElementById('navHamburgerBtn');
+    const mobileHeader = document.querySelector('.mobile-header');
+    const sidebar = document.querySelector('.sidebar');
+    const firstSidebarLink = sidebar && sidebar.querySelector('.sidebar-nav a');
+    const link = menu && menu.querySelector('a[data-nav-id="' + expectedRouteId + '"]');
+    const menuStyle = menu && getComputedStyle(menu);
+    const overlayStyle = overlay && getComputedStyle(overlay);
+    const linkRect = rect(link);
+    const sidebarLinkRect = rect(firstSidebarLink);
+    const hit = linkRect && document.elementFromPoint(
+      Math.max(0, Math.min(innerWidth - 1, linkRect.left + (linkRect.width / 2))),
+      Math.max(0, Math.min(innerHeight - 1, linkRect.top + (linkRect.height / 2)))
+    );
+    const sidebarHit = sidebarLinkRect && document.elementFromPoint(
+      Math.max(0, Math.min(innerWidth - 1, sidebarLinkRect.left + (sidebarLinkRect.width / 2))),
+      Math.max(0, Math.min(innerHeight - 1, sidebarLinkRect.top + (sidebarLinkRect.height / 2)))
+    );
+    return {
+      viewport: { width: innerWidth, height: innerHeight },
+      menuRect: rect(menu),
+      linkRect,
+      menuClass: menu && menu.className,
+      menuState: menu && menu.dataset.state,
+      menuTransform: menuStyle && menuStyle.transform,
+      menuVisibility: menuStyle && menuStyle.visibility,
+      menuPointerEvents: menuStyle && menuStyle.pointerEvents,
+      overlayDisplay: overlayStyle && overlayStyle.display,
+      overlayOpacity: overlayStyle && overlayStyle.opacity,
+      overlayHidden: overlay && overlay.getAttribute('aria-hidden'),
+      expanded: hamburger && hamburger.getAttribute('aria-expanded'),
+      menuHidden: menu && menu.getAttribute('aria-hidden'),
+      menuInert: Boolean(menu && menu.hasAttribute('inert')),
+      bodyInlineOverflow: document.body.style.overflow,
+      activeId: document.activeElement && document.activeElement.id,
+      activeInsideMenu: Boolean(menu && menu.contains(document.activeElement)),
+      linkOwnsHit: Boolean(link && hit && link.contains(hit)),
+      mobileHeaderDisplay: mobileHeader && getComputedStyle(mobileHeader).display,
+      sidebarDisplay: sidebar && getComputedStyle(sidebar).display,
+      sidebarRect: rect(sidebar),
+      sidebarLinkRect,
+      sidebarLinkCount: sidebar && sidebar.querySelectorAll('.sidebar-nav a').length,
+      sidebarLinkOwnsHit: Boolean(firstSidebarLink && sidebarHit && firstSidebarLink.contains(sidebarHit)),
+      sidebarHit: sidebarHit && {
+        tag: sidebarHit.tagName,
+        id: sidebarHit.id,
+        className: typeof sidebarHit.className === 'string' ? sidebarHit.className : '',
+      },
+      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  }, routeId);
+}
+
+function assertMobileMenuClosed(snapshot, label) {
+  assert.ok(snapshot.menuRect && snapshot.menuRect.right <= 1,
+    label + ': closed menu stays fully off-canvas');
+  assert.strictEqual(snapshot.expanded, 'false', label + ': hamburger reports collapsed state');
+  assert.strictEqual(snapshot.menuHidden, 'true', label + ': closed menu is hidden from assistive technology');
+  assert.strictEqual(snapshot.menuInert, true, label + ': closed menu cannot receive keyboard or pointer interaction');
+  assert.strictEqual(snapshot.menuState, 'closed', label + ': closed state is explicit');
+  assert.strictEqual(snapshot.menuVisibility, 'hidden', label + ': closed menu is not visibly painted');
+  assert.strictEqual(snapshot.menuPointerEvents, 'none', label + ': closed menu cannot intercept pointer input');
+  assert.strictEqual(snapshot.overlayHidden, 'true', label + ': closed overlay is hidden from assistive technology');
+  assert.strictEqual(snapshot.bodyInlineOverflow, '', label + ': closed menu restores body scrolling');
+  assert.ok(snapshot.documentOverflow <= 1, label + ': closed menu creates no horizontal overflow');
+}
+
+function assertMobileMenuOpen(snapshot, label) {
+  assert.ok(snapshot.menuRect && snapshot.menuRect.left >= -1 && snapshot.menuRect.right <= snapshot.viewport.width + 1,
+    label + ': open menu is fully inside the viewport');
+  assert.ok(snapshot.linkRect && snapshot.linkRect.left >= 0 && snapshot.linkRect.right <= snapshot.viewport.width &&
+    snapshot.linkRect.top >= 0 && snapshot.linkRect.bottom <= snapshot.viewport.height,
+    label + ': requested route link is visibly inside the viewport');
+  assert.strictEqual(snapshot.expanded, 'true', label + ': hamburger reports expanded state');
+  assert.strictEqual(snapshot.menuHidden, 'false', label + ': open menu is exposed to assistive technology');
+  assert.strictEqual(snapshot.menuInert, false, label + ': open menu accepts keyboard and pointer interaction');
+  assert.strictEqual(snapshot.menuState, 'open', label + ': open state is explicit');
+  assert.strictEqual(snapshot.menuVisibility, 'visible', label + ': open menu is visibly painted');
+  assert.strictEqual(snapshot.menuPointerEvents, 'auto', label + ': open menu accepts pointer input');
+  assert.notStrictEqual(snapshot.overlayDisplay, 'none', label + ': open overlay is painted');
+  assert.strictEqual(snapshot.overlayHidden, 'false', label + ': open overlay state is truthful');
+  assert.strictEqual(snapshot.bodyInlineOverflow, 'hidden', label + ': open menu locks body scrolling');
+  assert.strictEqual(snapshot.linkOwnsHit, true, label + ': no off-screen duplicate or overlay intercepts the route link');
+  assert.ok(snapshot.documentOverflow <= 1, label + ': open menu creates no horizontal overflow');
+}
+
+async function waitForMobileMenuState(page, expectedOpen) {
+  await page.waitForFunction(open => {
+    const menu = document.getElementById('mobileMenu');
+    if (!menu) return false;
+    const value = menu.getBoundingClientRect();
+    const style = getComputedStyle(menu);
+    return open
+      ? menu.classList.contains('open') && menu.dataset.state === 'open' &&
+          value.left >= -1 && value.right <= innerWidth + 1 && style.visibility === 'visible'
+      : !menu.classList.contains('open') && menu.dataset.state === 'closed' &&
+          value.right <= 1 && style.visibility === 'hidden';
+  }, expectedOpen, { timeout: 3000 });
+}
+
+async function openMobileMenu(page, routeId, label, keyboard) {
+  const hamburger = page.locator('#navHamburgerBtn');
+  if (keyboard) {
+    await hamburger.focus();
+    await page.keyboard.press('Enter');
+  } else {
+    await hamburger.click();
+  }
+  await waitForMobileMenuState(page, true);
+  const snapshot = await mobileMenuSnapshot(page, routeId);
+  assertMobileMenuOpen(snapshot, label);
+  assert.strictEqual(snapshot.activeId, 'navCloseBtn', label + ': focus enters the open navigation drawer');
+  return snapshot;
+}
+
+async function exerciseMobileMenuControls(page, viewport, mode) {
+  const label = viewport.label + '/' + mode + '-controls';
+  await page.evaluate(() => {
+    document.documentElement.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 0);
+  });
+  await page.waitForFunction(() => window.scrollY <= 1);
+  await page.evaluate(() => document.documentElement.style.removeProperty('scroll-behavior'));
+  const initial = await mobileMenuSnapshot(page, 'polaris');
+  assertMobileMenuClosed(initial, label + '/initial');
+  if (viewport.width > 768) {
+    assert.strictEqual(initial.mobileHeaderDisplay, 'none', label + ': desktop/tablet hamburger remains hidden');
+    assert.notStrictEqual(initial.sidebarDisplay, 'none', label + ': desktop/tablet sidebar remains visible');
+    assert.ok(initial.sidebarRect && initial.sidebarRect.left >= 0 && initial.sidebarRect.right <= initial.viewport.width,
+      label + ': desktop/tablet sidebar stays in the viewport');
+    assert.strictEqual(initial.sidebarLinkCount, ROUTES.length, label + ': desktop/tablet keeps every route link');
+    assert.strictEqual(initial.sidebarLinkOwnsHit, true,
+      label + ': desktop/tablet route link owns its hit target: ' + JSON.stringify({
+        sidebar: initial.sidebarRect,
+        link: initial.sidebarLinkRect,
+        hit: initial.sidebarHit,
+      }));
+    return;
+  }
+
+  await openMobileMenu(page, 'polaris', label + '/keyboard-open', true);
+  await captureEvidence(page, mode + '-navigation', ROUTES[1], viewport, 'menu-open');
+  await page.keyboard.press('Tab');
+  assert.strictEqual((await mobileMenuSnapshot(page, 'polaris')).activeInsideMenu, true,
+    label + ': Tab navigation stays inside the open drawer');
+  await page.keyboard.press('Escape');
+  await waitForMobileMenuState(page, false);
+  const escaped = await mobileMenuSnapshot(page, 'polaris');
+  assertMobileMenuClosed(escaped, label + '/escape-close');
+  assert.strictEqual(escaped.activeId, 'navHamburgerBtn', label + ': Escape returns focus to the hamburger');
+
+  await openMobileMenu(page, 'polaris', label + '/outside-open', false);
+  const outsidePoint = await page.evaluate(() => ({ x: innerWidth - 12, y: Math.min(innerHeight - 12, 100) }));
+  assert.strictEqual(await page.evaluate(point => {
+    const node = document.elementFromPoint(point.x, point.y);
+    return Boolean(node && node.id === 'mobileOverlay');
+  }, outsidePoint), true, label + ': backdrop owns the outside-click target');
+  await page.mouse.click(outsidePoint.x, outsidePoint.y);
+  await waitForMobileMenuState(page, false);
+  assertMobileMenuClosed(await mobileMenuSnapshot(page, 'polaris'), label + '/outside-close');
+
+  await openMobileMenu(page, 'polaris', label + '/button-open', false);
+  await page.locator('#navCloseBtn').click();
+  await waitForMobileMenuState(page, false);
+  assertMobileMenuClosed(await mobileMenuSnapshot(page, 'polaris'), label + '/button-close');
+}
+
+async function clickVisibleMobileRoute(page, origin, route, label) {
+  const opened = await openMobileMenu(page, route.id, label + '/open', false);
+  const point = {
+    x: opened.linkRect.left + (opened.linkRect.width / 2),
+    y: opened.linkRect.top + (opened.linkRect.height / 2),
+  };
+  await Promise.all([
+    page.waitForURL(url => url.origin === origin && url.pathname === route.path, { timeout: 15000 }),
+    page.mouse.click(point.x, point.y),
+  ]);
+}
+
 async function clickRoute(page, origin, route, revision, viewport) {
   const mobile = viewport.width <= 768;
   if (mobile) {
-    await page.click('#navHamburgerBtn');
-    await page.waitForFunction(() => document.getElementById('mobileMenu').classList.contains('open'));
+    await clickVisibleMobileRoute(page, origin, route, viewport.label + '/demo/' + route.id);
+  } else {
+    const selector = '.sidebar-nav a[data-nav-id="' + route.id + '"]';
+    await Promise.all([
+      page.waitForURL(url => url.origin === origin && url.pathname === route.path, { timeout: 15000 }),
+      page.click(selector),
+    ]);
   }
-  const selector = (mobile ? '.mobile-menu-nav' : '.sidebar-nav') + ' a[data-nav-id="' + route.id + '"]';
-  await Promise.all([
-    page.waitForURL(url => url.origin === origin && url.pathname === route.path, { timeout: 15000 }),
-    page.click(selector),
-  ]);
-  return inspectCurrent(page, route, revision, viewport);
+  const snapshot = await inspectCurrent(page, route, revision, viewport);
+  if (mobile) assertMobileMenuClosed(await mobileMenuSnapshot(page, route.id), viewport.label + '/demo/' + route.id + '/arrival');
+  return snapshot;
 }
 
 async function waitPaidReady(page, route) {
@@ -569,15 +767,18 @@ async function inspectPaidCurrent(page, route, viewport) {
 async function clickPaidRoute(page, origin, route, viewport) {
   const mobile = viewport.width <= 768;
   if (mobile) {
-    await page.click('#navHamburgerBtn');
-    await page.waitForFunction(() => document.getElementById('mobileMenu').classList.contains('open'));
+    const projectedRoute = { id: route.id, path: route.paidPath };
+    await clickVisibleMobileRoute(page, origin, projectedRoute, viewport.label + '/paid/' + route.id);
+  } else {
+    const selector = '.sidebar-nav a[data-nav-id="' + route.id + '"]';
+    await Promise.all([
+      page.waitForURL(url => url.origin === origin && url.pathname === route.paidPath, { timeout: 15000 }),
+      page.click(selector),
+    ]);
   }
-  const selector = (mobile ? '.mobile-menu-nav' : '.sidebar-nav') + ' a[data-nav-id="' + route.id + '"]';
-  await Promise.all([
-    page.waitForURL(url => url.origin === origin && url.pathname === route.paidPath, { timeout: 15000 }),
-    page.click(selector),
-  ]);
-  return inspectPaidCurrent(page, route, viewport);
+  const snapshot = await inspectPaidCurrent(page, route, viewport);
+  if (mobile) assertMobileMenuClosed(await mobileMenuSnapshot(page, route.id), viewport.label + '/paid/' + route.id + '/arrival');
+  return snapshot;
 }
 
 async function exercisePaidViewport(browser, origin, viewport, session, ledger) {
@@ -604,6 +805,7 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger) 
     assert.ok(entry && [200, 304].includes(entry.status()), 'paid Command Center shell loads');
     const first = await inspectPaidCurrent(page, ROUTES[0], viewport);
     await captureEvidence(page, 'paid', ROUTES[0], viewport, 'canonical');
+    await exerciseMobileMenuControls(page, viewport, 'paid');
     await exerciseTheme(page, viewport);
     await captureEvidence(page, 'paid', ROUTES[0], viewport, 'theme');
     assert.strictEqual(first.objectHrefs.length >= 3, true, viewport.label + ' paid Command Center exposes complete object paths');
@@ -709,6 +911,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     const initialConfiguration = initial.workspace.configuration;
     const initialNavigation = initial.workspace.navigation;
     const initialDigest = initial.workspace.integrity.digest;
+    await exerciseMobileMenuControls(page, viewport, 'demo');
     await exerciseTheme(page, viewport);
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' theme');
 
@@ -1059,7 +1262,8 @@ async function main() {
   const selectedViewports = process.env.NORTHSTAR_VIEWPORT
     ? VIEWPORTS.filter(viewport => viewport.label === process.env.NORTHSTAR_VIEWPORT)
     : VIEWPORTS;
-  assert.ok(selectedViewports.length > 0, 'NORTHSTAR_VIEWPORT must be desktop or mobile when provided');
+  assert.ok(selectedViewports.length > 0,
+    'NORTHSTAR_VIEWPORT must be desktop, tablet, mobile, or mobile-compact when provided');
   const suiteDatabase = await createSuiteDatabase('cc-parity-browser');
   const originalEnvironment = new Map();
   for (const name of PROVIDER_ENVIRONMENT.concat(['DATABASE_URL', 'NODE_ENV', 'AUTH_ACCESS_SECRET'])) {

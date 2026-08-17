@@ -80,6 +80,19 @@ describe('surgical site professionalism correction', () => {
     expect(security).not.toMatch(/'script-src'[^\n]*data:/);
   });
 
+  test('the shared mobile navigation has one explicit accessible open and closed state', () => {
+    const navigation = read('public/js/nav-component.js');
+    expect(navigation).toContain('#mobileMenu.mobile-menu[data-state="open"]');
+    expect(navigation).toContain('aria-controls="mobileMenu" aria-expanded="false"');
+    expect(navigation).toContain('data-state="closed" aria-hidden="true" inert');
+    expect(navigation).toContain("menu.setAttribute('data-state', 'open')");
+    expect(navigation).toContain("menu.setAttribute('data-state', 'closed')");
+    expect(navigation).toContain("menu.setAttribute('inert', '')");
+    expect(navigation).toContain("closeMenu(false)");
+    expect(navigation).toContain("if (e.key === 'Escape')");
+    expect(navigation).toContain("if (e.key !== 'Tab') return");
+  });
+
   test('shared presentation formatting hides internal identifiers and renders structured values as prose', () => {
     const sandbox = { window: {}, Intl };
     sandbox.window.window = sandbox.window;

@@ -101,6 +101,71 @@ describe('Homepage Web Call durable admission', () => {
     ]));
   });
 
+  test('verified purge consumption and projection quotas commit in one transaction', async () => {
+    const claims = [];
+    const now = new Date('2026-08-16T12:34:00.000Z');
+    const client = {
+      query: jest.fn(async (sql, params) => {
+        const text = String(sql);
+        if (text.includes("SET state = 'consumed'")) {
+          return { rowCount: 1, rows: [{ capability_hash: 'e'.repeat(64) }] };
+        }
+        if (text.includes('RETURNING request_count')) {
+          claims.push(params);
+          return { rowCount: 1, rows: [{ request_count: 1 }] };
+        }
+        return { rowCount: 0, rows: [] };
+      }),
+      release: jest.fn(),
+    };
+    const repository = new HomepageDemoAdmissionRepository({
+      pool: { connect: jest.fn(async () => client) },
+      now: () => now,
+    });
+    await expect(repository.consumeVerifiedPurgeProjection(
+      'd'.repeat(64),
+      'e'.repeat(64),
+      now.getTime() - 30000,
+      now.getTime() + 90000
+    )).resolves.toBe(true);
+    expect(claims).toHaveLength(2);
+    expect(claims[0]).toEqual(expect.arrayContaining([
+      'minute', 'projection_source_minute', 'd'.repeat(64), PROJECTION_CALLS_PER_SOURCE_MINUTE,
+    ]));
+    expect(claims[1]).toEqual(expect.arrayContaining([
+      'minute', 'projection_global_minute', PROJECTION_CALLS_GLOBAL_PER_MINUTE,
+    ]));
+    expect(client.query.mock.calls[0][0]).toBe('BEGIN');
+    expect(client.query.mock.calls.at(-1)[0]).toBe('COMMIT');
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
+  test('missing or replayed verified purge rolls back without spending projection quota', async () => {
+    const now = new Date('2026-08-16T12:34:00.000Z');
+    const client = {
+      query: jest.fn(async sql => {
+        const text = String(sql);
+        if (text.includes("SET state = 'consumed'")) return { rowCount: 0, rows: [] };
+        return { rowCount: 0, rows: [] };
+      }),
+      release: jest.fn(),
+    };
+    const repository = new HomepageDemoAdmissionRepository({
+      pool: { connect: jest.fn(async () => client) },
+      now: () => now,
+    });
+    await expect(repository.consumeVerifiedPurgeProjection(
+      'd'.repeat(64),
+      'e'.repeat(64),
+      now.getTime() - 30000,
+      now.getTime() + 90000
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(client.query.mock.calls.filter(call => String(call[0]).includes('RETURNING request_count')))
+      .toHaveLength(0);
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
   test('verified deletion claims one durable capability lease before source and global quota', async () => {
     const claims = [];
     const now = new Date('2026-08-16T12:34:00.000Z');
@@ -114,6 +179,8 @@ describe('Homepage Web Call durable admission', () => {
               attempt_count: 1,
               lease_expires_at: new Date(now.getTime() + 120000),
               authority_expires_at: new Date(now.getTime() + 600000),
+              verified_at: null,
+              projection_permitted: true,
             }],
           };
         }
@@ -132,8 +199,14 @@ describe('Homepage Web Call durable admission', () => {
     await expect(repository.beginPurge(
       'd'.repeat(64),
       'e'.repeat(64),
-      now.getTime() + 600000
-    )).resolves.toEqual({ execute: true, verified: false, attemptCount: 1 });
+      now.getTime() + 600000,
+      true
+    )).resolves.toEqual({
+      execute: true,
+      verified: false,
+      attemptCount: 1,
+      projectionPermitted: true,
+    });
     expect(claims).toHaveLength(2);
     expect(claims[0]).toEqual(expect.arrayContaining([
       'minute', 'purge_source_minute', 'd'.repeat(64), PURGE_CALLS_PER_SOURCE_MINUTE,
@@ -157,6 +230,8 @@ describe('Homepage Web Call durable admission', () => {
               attempt_count: 1,
               lease_expires_at: null,
               authority_expires_at: new Date(now.getTime() + 600000),
+              verified_at: now,
+              projection_permitted: true,
             }],
           };
         }
@@ -171,8 +246,63 @@ describe('Homepage Web Call durable admission', () => {
     await expect(repository.beginPurge(
       'f'.repeat(64),
       'a'.repeat(64),
-      now.getTime() + 600000
-    )).resolves.toEqual({ execute: false, verified: true, attemptCount: 1 });
+      now.getTime() + 600000,
+      true
+    )).resolves.toEqual({
+      execute: false,
+      verified: true,
+      consumed: false,
+      attemptCount: 1,
+      verifiedAt: now.getTime(),
+      projectionPermitted: true,
+    });
+    expect(client.query.mock.calls.filter(call => String(call[0]).includes('RETURNING request_count')))
+      .toHaveLength(0);
+  });
+
+  test('cancellation monotonically revokes projection permission on a verified purge', async () => {
+    const now = new Date('2026-08-16T12:34:00.000Z');
+    const client = {
+      query: jest.fn(async sql => {
+        const text = String(sql);
+        if (text.includes('INSERT INTO homepage_demo_purge_operations')) return { rowCount: 0, rows: [] };
+        if (text.includes('SELECT state, attempt_count, lease_expires_at, authority_expires_at')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              state: 'verified',
+              attempt_count: 1,
+              lease_expires_at: null,
+              authority_expires_at: new Date(now.getTime() + 600000),
+              verified_at: now,
+              projection_permitted: true,
+            }],
+          };
+        }
+        if (text.includes('SET projection_permitted = FALSE')) {
+          return { rowCount: 1, rows: [{ capability_hash: 'a'.repeat(64) }] };
+        }
+        return { rowCount: 0, rows: [] };
+      }),
+      release: jest.fn(),
+    };
+    const repository = new HomepageDemoAdmissionRepository({
+      pool: { connect: jest.fn(async () => client) },
+      now: () => now,
+    });
+    await expect(repository.beginPurge(
+      'f'.repeat(64),
+      'a'.repeat(64),
+      now.getTime() + 600000,
+      false
+    )).resolves.toEqual({
+      execute: false,
+      verified: true,
+      consumed: false,
+      attemptCount: 1,
+      verifiedAt: now.getTime(),
+      projectionPermitted: false,
+    });
     expect(client.query.mock.calls.filter(call => String(call[0]).includes('RETURNING request_count')))
       .toHaveLength(0);
   });
@@ -192,6 +322,8 @@ describe('Homepage Web Call durable admission', () => {
                 attempt_count: attemptCount,
                 lease_expires_at: leaseExpiresAt,
                 authority_expires_at: new Date(now.getTime() + 600000),
+                verified_at: null,
+                projection_permitted: true,
               }],
             };
           }
@@ -207,11 +339,11 @@ describe('Homepage Web Call durable admission', () => {
     }
     const active = await outcome(1, new Date(now.getTime() + 60000));
     await expect(active.repository.beginPurge(
-      'b'.repeat(64), 'c'.repeat(64), now.getTime() + 600000
+      'b'.repeat(64), 'c'.repeat(64), now.getTime() + 600000, true
     )).rejects.toMatchObject({ status: 409, code: 'homepage_purge_in_progress' });
     const exhausted = await outcome(PURGE_ATTEMPTS_PER_CAPABILITY, new Date(now.getTime() - 1));
     await expect(exhausted.repository.beginPurge(
-      'b'.repeat(64), 'd'.repeat(64), now.getTime() + 600000
+      'b'.repeat(64), 'd'.repeat(64), now.getTime() + 600000, true
     )).rejects.toMatchObject({ status: 429, code: 'homepage_purge_retry_limit_reached' });
     for (const subject of [active, exhausted]) {
       expect(subject.client.query.mock.calls.filter(call => String(call[0]).includes('RETURNING request_count')))

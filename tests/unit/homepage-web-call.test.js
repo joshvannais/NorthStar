@@ -5,6 +5,7 @@ const {
   BASIC_STORAGE,
   HomepageWebCallService,
   MAX_TRANSCRIPT_TURNS,
+  VERIFIED_PURGE_RECEIPT_LIFETIME_MS,
   calculateHomepagePolaris,
   normalizeTranscript,
   verifiedPurgeReceipt,
@@ -150,6 +151,68 @@ describe('Homepage browser Web Call service', () => {
       northstarPurged: true,
       retainedContent: false,
     });
+  });
+
+  test('verified purge receipt is explicit, same-call, capability-bound, and expiring', async () => {
+    let current = new Date(fixedNow.getTime());
+    let nonce = 0;
+    const service = new HomepageWebCallService({
+      retellClient: fakeRetell(),
+      settings: readySettings(),
+      provider,
+      secret,
+      now: () => current,
+      randomBytes: () => Buffer.alloc(16, ++nonce),
+    });
+    const created = await service.create('Roofing');
+    const deletion = service.verifiedPurgeReceipt(
+      created.callId,
+      created.purgeToken,
+      fixedNow.getTime(),
+      true
+    );
+    expect(deletion).toEqual(expect.objectContaining({
+      providerDeletionVerified: true,
+      northstarPurged: true,
+      retainedContent: false,
+      verifiedPurgeReceipt: expect.any(String),
+    }));
+    expect(service.verifyPolarisAuthority(
+      created.callId,
+      created.purgeToken,
+      deletion.verifiedPurgeReceipt
+    )).toEqual(expect.objectContaining({
+      callId: created.callId,
+      verifiedPurge: expect.objectContaining({
+        verifiedAt: fixedNow.getTime(),
+        expiresAt: fixedNow.getTime() + VERIFIED_PURGE_RECEIPT_LIFETIME_MS,
+      }),
+    }));
+    expect(() => service.verifyPolarisAuthority(
+      'call_homepage_other',
+      created.purgeToken,
+      deletion.verifiedPurgeReceipt
+    )).toThrow(/temporary-call purge authorization is invalid/i);
+
+    const second = await service.create('Roofing');
+    expect(() => service.verifyPolarisAuthority(
+      second.callId,
+      second.purgeToken,
+      deletion.verifiedPurgeReceipt
+    )).toThrow(/verified-deletion receipt is required/i);
+    expect(service.verifiedPurgeReceipt(
+      created.callId,
+      created.purgeToken,
+      fixedNow.getTime(),
+      false
+    )).not.toHaveProperty('verifiedPurgeReceipt');
+
+    current = new Date(fixedNow.getTime() + VERIFIED_PURGE_RECEIPT_LIFETIME_MS + 1);
+    expect(() => service.verifyPolarisAuthority(
+      created.callId,
+      created.purgeToken,
+      deletion.verifiedPurgeReceipt
+    )).toThrow(/verified-deletion receipt is required/i);
   });
 
   test('create rejects and never starts when the provider privacy contract differs', async () => {

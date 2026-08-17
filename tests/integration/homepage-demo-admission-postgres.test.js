@@ -151,21 +151,41 @@ realPostgres('Homepage Web Call durable admission', () => {
     const digests = Array.from({ length: 10 }, (_value, index) =>
       sourceHash('purge-replay-source-' + index, secret));
     const outcomes = await Promise.allSettled(digests.map(digest =>
-      repository.beginPurge(digest, capability, expiresAt)));
+      repository.beginPurge(digest, capability, expiresAt, true)));
     const granted = outcomes.filter(outcome => outcome.status === 'fulfilled');
     expect(granted).toHaveLength(1);
-    expect(granted[0].value).toEqual({ execute: true, verified: false, attemptCount: 1 });
+    expect(granted[0].value).toEqual({
+      execute: true,
+      verified: false,
+      attemptCount: 1,
+      projectionPermitted: true,
+    });
     const rejected = outcomes.filter(outcome => outcome.status === 'rejected');
     expect(rejected).toHaveLength(9);
     rejected.forEach(outcome => {
       expect(outcome.reason).toMatchObject({ status: 409, code: 'homepage_purge_in_progress' });
     });
-    await expect(repository.completePurge(capability, 1)).resolves.toBe(true);
-    await expect(repository.completePurge(capability, 1)).resolves.toBe(true);
-    await expect(repository.beginPurge(digests[9], capability, expiresAt)).resolves.toEqual({
+    await expect(repository.completePurge(capability, 1)).resolves.toEqual({
+      verified: true,
+      consumed: false,
+      verifiedAt: now.getTime(),
+      authorityExpiresAt: expiresAt,
+      projectionPermitted: true,
+    });
+    await expect(repository.completePurge(capability, 1)).resolves.toEqual({
+      verified: true,
+      consumed: false,
+      verifiedAt: now.getTime(),
+      authorityExpiresAt: expiresAt,
+      projectionPermitted: true,
+    });
+    await expect(repository.beginPurge(digests[9], capability, expiresAt, true)).resolves.toEqual({
       execute: false,
       verified: true,
+      consumed: false,
       attemptCount: 1,
+      verifiedAt: now.getTime(),
+      projectionPermitted: true,
     });
     await expect(repository.releasePurge(capability, 1)).resolves.toBe(false);
 
@@ -198,13 +218,17 @@ realPostgres('Homepage Web Call durable admission', () => {
     const expiresAt = now.getTime() + (10 * 60 * 1000);
 
     await expect(repository.beginPurge(
-      sourceHash('purge-retry-source-1', secret), capability, expiresAt
-    )).resolves.toEqual({ execute: true, verified: false, attemptCount: 1 });
+      sourceHash('purge-retry-source-1', secret), capability, expiresAt, true
+    )).resolves.toEqual({
+      execute: true, verified: false, attemptCount: 1, projectionPermitted: true,
+    });
     await expect(repository.releasePurge(capability, 1)).resolves.toBe(true);
     now = new Date(now.getTime() + 1000);
     await expect(repository.beginPurge(
-      sourceHash('purge-retry-source-2', secret), capability, expiresAt
-    )).resolves.toEqual({ execute: true, verified: false, attemptCount: 2 });
+      sourceHash('purge-retry-source-2', secret), capability, expiresAt, true
+    )).resolves.toEqual({
+      execute: true, verified: false, attemptCount: 2, projectionPermitted: true,
+    });
     await expect(repository.completePurge(capability, 1)).rejects.toMatchObject({
       status: 503,
       code: 'homepage_admission_unavailable',
@@ -213,12 +237,14 @@ realPostgres('Homepage Web Call durable admission', () => {
     await expect(repository.releasePurge(capability, 2)).resolves.toBe(true);
     now = new Date(now.getTime() + 1000);
     await expect(repository.beginPurge(
-      sourceHash('purge-retry-source-3', secret), capability, expiresAt
-    )).resolves.toEqual({ execute: true, verified: false, attemptCount: 3 });
+      sourceHash('purge-retry-source-3', secret), capability, expiresAt, true
+    )).resolves.toEqual({
+      execute: true, verified: false, attemptCount: 3, projectionPermitted: true,
+    });
     await expect(repository.releasePurge(capability, 3)).resolves.toBe(true);
     now = new Date(now.getTime() + 1000);
     await expect(repository.beginPurge(
-      sourceHash('purge-retry-source-exhausted', secret), capability, expiresAt
+      sourceHash('purge-retry-source-exhausted', secret), capability, expiresAt, true
     )).rejects.toMatchObject({ status: 429, code: 'homepage_purge_retry_limit_reached' });
     const operation = await pool.query(
       `SELECT state, attempt_count
@@ -240,12 +266,14 @@ realPostgres('Homepage Web Call durable admission', () => {
     const expiresAt = now.getTime() + (10 * 60 * 1000);
     for (let index = 0; index < PURGE_CALLS_PER_SOURCE_MINUTE; index += 1) {
       const capability = crypto.createHash('sha256').update('source-capability-' + index).digest('hex');
-      await expect(repository.beginPurge(oneSource, capability, expiresAt)).resolves.toMatchObject({ execute: true });
+      await expect(repository.beginPurge(oneSource, capability, expiresAt, false))
+        .resolves.toMatchObject({ execute: true, projectionPermitted: false });
     }
     await expect(repository.beginPurge(
       oneSource,
       crypto.createHash('sha256').update('source-capability-over-limit').digest('hex'),
-      expiresAt
+      expiresAt,
+      false
     )).rejects.toMatchObject({ status: 429, code: 'homepage_web_call_rate_limited' });
 
     now = new Date('2026-08-16T14:41:00.000Z');
@@ -255,7 +283,7 @@ realPostgres('Homepage Web Call durable admission', () => {
       source: sourceHash('purge-global-source-' + index, secret),
     }));
     const outcomes = await Promise.allSettled(candidates.map(candidate =>
-      repository.beginPurge(candidate.source, candidate.capability, globalExpiresAt)));
+      repository.beginPurge(candidate.source, candidate.capability, globalExpiresAt, false)));
     expect(outcomes.filter(outcome => outcome.status === 'fulfilled'))
       .toHaveLength(PURGE_CALLS_GLOBAL_PER_MINUTE);
     expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(8);
@@ -266,6 +294,108 @@ realPostgres('Homepage Web Call durable admission', () => {
       [candidates.map(candidate => candidate.capability)]
     );
     expect(globalOperations.rows[0].count).toBe(PURGE_CALLS_GLOBAL_PER_MINUTE);
+  });
+
+  test('verified purge receipt authority is consumed once and projection quota commits atomically', async () => {
+    const now = new Date('2026-08-16T14:50:00.000Z');
+    const secret = 'homepage-projection-receipt-'.padEnd(64, 't');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const capability = crypto.createHash('sha256').update('projection-receipt-capability').digest('hex');
+    const expiresAt = now.getTime() + (10 * 60 * 1000);
+    const receiptExpiresAt = now.getTime() + (2 * 60 * 1000);
+    const purgeSource = sourceHash('projection-purge-source', secret);
+
+    await expect(repository.beginPurge(purgeSource, capability, expiresAt, true))
+      .resolves.toEqual({
+        execute: true,
+        verified: false,
+        attemptCount: 1,
+        projectionPermitted: true,
+      });
+    const completed = await repository.completePurge(capability, 1);
+    expect(completed).toEqual({
+      verified: true,
+      consumed: false,
+      verifiedAt: now.getTime(),
+      authorityExpiresAt: expiresAt,
+      projectionPermitted: true,
+    });
+
+    await expect(repository.consumeVerifiedPurgeProjection(
+      sourceHash('projection-wrong-receipt', secret),
+      capability,
+      now.getTime() - 1,
+      receiptExpiresAt
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
+
+    const projectionSources = [
+      sourceHash('projection-receipt-source-a', secret),
+      sourceHash('projection-receipt-source-b', secret),
+    ];
+    const outcomes = await Promise.allSettled(projectionSources.map(subject =>
+      repository.consumeVerifiedPurgeProjection(
+        subject,
+        capability,
+        completed.verifiedAt,
+        receiptExpiresAt
+      )));
+    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(1);
+    expect(outcomes.find(outcome => outcome.status === 'rejected').reason).toMatchObject({
+      status: 403,
+      code: 'homepage_verified_purge_required',
+    });
+
+    await expect(repository.consumeVerifiedPurgeProjection(
+      sourceHash('projection-replay-source', secret),
+      capability,
+      completed.verifiedAt,
+      receiptExpiresAt
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
+
+    const operation = await pool.query(
+      `SELECT state, projection_permitted
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [capability]
+    );
+    expect(operation.rows).toEqual([{ state: 'consumed', projection_permitted: true }]);
+    const quota = await pool.query(
+      `SELECT scope, count(*)::int AS rows, sum(request_count)::int AS requests
+         FROM homepage_demo_admission_windows
+        WHERE window_start = date_trunc('minute', $1::timestamptz)
+          AND scope LIKE 'projection_%'
+        GROUP BY scope ORDER BY scope`,
+      [now]
+    );
+    expect(quota.rows).toEqual([
+      { scope: 'projection_global_minute', rows: 1, requests: 1 },
+      { scope: 'projection_source_minute', rows: 1, requests: 1 },
+    ]);
+  });
+
+  test('deletion-only purge never grants a Polaris projection', async () => {
+    const now = new Date('2026-08-16T14:55:00.000Z');
+    const secret = 'homepage-deletion-only-'.padEnd(64, 'u');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const capability = crypto.createHash('sha256').update('deletion-only-capability').digest('hex');
+    const expiresAt = now.getTime() + (10 * 60 * 1000);
+
+    await expect(repository.beginPurge(
+      sourceHash('deletion-only-purge-source', secret), capability, expiresAt, false
+    )).resolves.toMatchObject({ execute: true, projectionPermitted: false });
+    const completed = await repository.completePurge(capability, 1);
+    expect(completed).toMatchObject({
+      verified: true,
+      consumed: false,
+      projectionPermitted: false,
+    });
+    await expect(repository.consumeVerifiedPurgeProjection(
+      sourceHash('deletion-only-projection-source', secret),
+      capability,
+      completed.verifiedAt,
+      now.getTime() + (2 * 60 * 1000)
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
   });
 
   test('housekeeping removes expired operation state without a later public mutation', async () => {

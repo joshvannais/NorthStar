@@ -10,6 +10,7 @@ const { QUALIFICATION_PROFILES, extractPolarisFactsWithEntities } = require('../
 const BASIC_STORAGE = 'basic_attributes_only';
 const REQUIRED_RETENTION_DAYS = 1;
 const TOKEN_LIFETIME_MS = 15 * 60 * 1000;
+const VERIFIED_PURGE_RECEIPT_LIFETIME_MS = 2 * 60 * 1000;
 const MAX_TRANSCRIPT_TURNS = 48;
 const MAX_TURN_BYTES = 600;
 const MAX_TRANSCRIPT_BYTES = 16 * 1024;
@@ -120,6 +121,82 @@ function purgeCapabilityHash(token, secret) {
     .update('northstar:homepage-retell-purge-capability:v1\0', 'utf8')
     .update(token, 'utf8')
     .digest('hex');
+}
+
+function verifiedPurgeReceiptError(status, code) {
+  fail(status, code, 'A current, same-call verified-deletion receipt is required before Polaris can calculate a result.');
+}
+
+function signVerifiedPurgeReceipt(callIdValue, capabilityHashValue, verifiedAtValue,
+  authorityExpiresAtValue, secret, nowValue) {
+  const key = boundedSecret(secret);
+  const callId = safeCallId(callIdValue);
+  const capabilityHash = typeof capabilityHashValue === 'string' ? capabilityHashValue.trim() : '';
+  const verifiedAt = Number(verifiedAtValue);
+  const authorityExpiresAt = Number(authorityExpiresAtValue);
+  const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
+  if (!key || !/^[0-9a-f]{64}$/.test(capabilityHash) || !Number.isSafeInteger(verifiedAt) ||
+      !Number.isSafeInteger(authorityExpiresAt) || !Number.isFinite(now.getTime()) ||
+      verifiedAt > now.getTime() || authorityExpiresAt <= now.getTime()) {
+    verifiedPurgeReceiptError(503, 'homepage_verified_purge_authority_unavailable');
+  }
+  const expiresAt = Math.min(authorityExpiresAt, verifiedAt + VERIFIED_PURGE_RECEIPT_LIFETIME_MS);
+  if (expiresAt <= now.getTime()) {
+    verifiedPurgeReceiptError(503, 'homepage_verified_purge_authority_unavailable');
+  }
+  const payload = base64url(JSON.stringify({
+    version: 1,
+    callId,
+    capabilityHash,
+    verifiedAt,
+    expiresAt,
+  }));
+  const signature = crypto.createHmac('sha256', key)
+    .update('northstar:homepage-retell-verified-purge:v1\0' + payload, 'utf8')
+    .digest('base64url');
+  return payload + '.' + signature;
+}
+
+function verifyVerifiedPurgeReceipt(token, expectedCallIdValue, expectedCapabilityHashValue,
+  authorityExpiresAtValue, secret, nowValue) {
+  const key = boundedSecret(secret);
+  const expectedCallId = safeCallId(expectedCallIdValue);
+  const expectedCapabilityHash = typeof expectedCapabilityHashValue === 'string'
+    ? expectedCapabilityHashValue.trim() : '';
+  const authorityExpiresAt = Number(authorityExpiresAtValue);
+  const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
+  const parts = typeof token === 'string' && Buffer.byteLength(token, 'utf8') <= 4096
+    ? token.split('.') : [];
+  if (!key || !/^[0-9a-f]{64}$/.test(expectedCapabilityHash) ||
+      !Number.isSafeInteger(authorityExpiresAt) || !Number.isFinite(now.getTime()) ||
+      parts.length !== 2 || !parts[0] || !parts[1]) {
+    verifiedPurgeReceiptError(403, 'homepage_verified_purge_receipt_invalid');
+  }
+  const expectedSignature = crypto.createHmac('sha256', key)
+    .update('northstar:homepage-retell-verified-purge:v1\0' + parts[0], 'utf8')
+    .digest('base64url');
+  if (!timingEqual(parts[1], expectedSignature)) {
+    verifiedPurgeReceiptError(403, 'homepage_verified_purge_receipt_invalid');
+  }
+  let payload;
+  try { payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')); } catch (_error) {
+    verifiedPurgeReceiptError(403, 'homepage_verified_purge_receipt_invalid');
+  }
+  const keys = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? Object.keys(payload).sort() : [];
+  const expectedKeys = ['callId', 'capabilityHash', 'expiresAt', 'verifiedAt', 'version'].sort();
+  if (keys.length !== expectedKeys.length || !keys.every(function (keyName, index) {
+    return keyName === expectedKeys[index];
+  }) || payload.version !== 1 || payload.callId !== expectedCallId ||
+      !/^[0-9a-f]{64}$/.test(payload.capabilityHash || '') ||
+      !timingEqual(payload.capabilityHash, expectedCapabilityHash) ||
+      !Number.isSafeInteger(payload.verifiedAt) || !Number.isSafeInteger(payload.expiresAt) ||
+      payload.verifiedAt > now.getTime() || payload.expiresAt <= now.getTime() ||
+      payload.expiresAt > authorityExpiresAt || payload.expiresAt <= payload.verifiedAt ||
+      payload.expiresAt - payload.verifiedAt > VERIFIED_PURGE_RECEIPT_LIFETIME_MS) {
+    verifiedPurgeReceiptError(403, 'homepage_verified_purge_receipt_invalid');
+  }
+  return payload;
 }
 
 function verifiedPurgeReceipt() {
@@ -413,12 +490,38 @@ class HomepageWebCallService {
     }));
   }
 
-  verifiedPurgeReceipt() {
-    return verifiedPurgeReceipt();
+  verifiedPurgeReceipt(callId, purgeToken, verifiedAt, projectionPermitted) {
+    const receipt = verifiedPurgeReceipt();
+    if (projectionPermitted !== true) return receipt;
+    const authority = this.verifyCallAuthority(callId, purgeToken);
+    return Object.assign(receipt, {
+      verifiedPurgeReceipt: signVerifiedPurgeReceipt(
+        callId,
+        authority.capabilityHash,
+        verifiedAt,
+        authority.expiresAt,
+        this.secret,
+        this.now()
+      ),
+    });
   }
 
-  projectPolaris(callId, purgeToken, industry, transcript, callDurationSeconds) {
-    this.verifyCallAuthority(callId, purgeToken);
+  verifyPolarisAuthority(callId, purgeToken, receiptToken) {
+    const authority = this.verifyCallAuthority(callId, purgeToken);
+    return Object.freeze(Object.assign({}, authority, {
+      verifiedPurge: Object.freeze(verifyVerifiedPurgeReceipt(
+        receiptToken,
+        callId,
+        authority.capabilityHash,
+        authority.expiresAt,
+        this.secret,
+        this.now()
+      )),
+    }));
+  }
+
+  projectPolaris(callId, purgeToken, receiptToken, industry, transcript, callDurationSeconds) {
+    this.verifyPolarisAuthority(callId, purgeToken, receiptToken);
     return calculateHomepagePolaris(industry, transcript, callDurationSeconds);
   }
 
@@ -442,10 +545,13 @@ module.exports = {
   MAX_TRANSCRIPT_TURNS,
   REQUIRED_RETENTION_DAYS,
   TOKEN_LIFETIME_MS,
+  VERIFIED_PURGE_RECEIPT_LIFETIME_MS,
   calculateHomepagePolaris,
   normalizeTranscript,
   purgeCapabilityHash,
   signPurgeToken,
+  signVerifiedPurgeReceipt,
   verifiedPurgeReceipt,
   verifyPurgeToken,
+  verifyVerifiedPurgeReceipt,
 };

@@ -91,18 +91,30 @@ function createHomepageDemoRouter(options = {}) {
 
   router.post('/polaris/:callId', async function (req, res) {
     if (!sameOriginIntent(req, res, 'calculate-homepage-polaris')) return undefined;
-    if (!exactBody(req.body, ['callDurationSeconds', 'industry', 'purgeToken', 'transcript'])) {
+    if (!exactBody(req.body, [
+      'callDurationSeconds', 'industry', 'purgeToken', 'transcript', 'verifiedPurgeReceipt',
+    ])) {
       return res.status(422).json({
         success: false,
         error: { code: 'homepage_polaris_request_invalid', message: 'The temporary Polaris request is invalid.' },
       });
     }
     try {
-      service.verifyCallAuthority(req.params.callId, req.body.purgeToken);
-      await admission.admitProjection(hashSource(req.ip));
+      const authority = service.verifyPolarisAuthority(
+        req.params.callId,
+        req.body.purgeToken,
+        req.body.verifiedPurgeReceipt
+      );
+      await admission.consumeVerifiedPurgeProjection(
+        hashSource(req.ip),
+        authority.capabilityHash,
+        authority.verifiedPurge.verifiedAt,
+        authority.verifiedPurge.expiresAt
+      );
       const result = service.projectPolaris(
         req.params.callId,
         req.body.purgeToken,
+        req.body.verifiedPurgeReceipt,
         req.body.industry,
         req.body.transcript,
         req.body.callDurationSeconds
@@ -115,7 +127,8 @@ function createHomepageDemoRouter(options = {}) {
 
   router.delete('/web-call/:callId', async function (req, res) {
     if (!sameOriginIntent(req, res, 'delete-homepage-web-call')) return undefined;
-    if (!exactBody(req.body, ['purgeToken'])) {
+    if (!exactBody(req.body, ['projectionRequested', 'purgeToken']) ||
+        typeof req.body.projectionRequested !== 'boolean') {
       return res.status(422).json({
         success: false,
         error: { code: 'homepage_purge_request_invalid', message: 'The temporary-call purge request is invalid.' },
@@ -126,10 +139,19 @@ function createHomepageDemoRouter(options = {}) {
       const claim = await admission.beginPurge(
         hashSource(req.ip),
         authority.capabilityHash,
-        authority.expiresAt
+        authority.expiresAt,
+        req.body.projectionRequested
       );
       if (claim && claim.verified === true && claim.execute === false) {
-        return res.json({ success: true, data: service.verifiedPurgeReceipt() });
+        return res.json({
+          success: true,
+          data: service.verifiedPurgeReceipt(
+            req.params.callId,
+            req.body.purgeToken,
+            claim.verifiedAt,
+            claim.projectionPermitted === true && claim.consumed !== true
+          ),
+        });
       }
       if (!claim || claim.execute !== true || claim.verified !== false) {
         throw new HomepageWebCallError(
@@ -139,9 +161,17 @@ function createHomepageDemoRouter(options = {}) {
         );
       }
       try {
-        const result = await service.purge(req.params.callId, req.body.purgeToken);
-        await admission.completePurge(authority.capabilityHash, claim.attemptCount);
-        return res.json({ success: true, data: result });
+        await service.purge(req.params.callId, req.body.purgeToken);
+        const completed = await admission.completePurge(authority.capabilityHash, claim.attemptCount);
+        return res.json({
+          success: true,
+          data: service.verifiedPurgeReceipt(
+            req.params.callId,
+            req.body.purgeToken,
+            completed.verifiedAt,
+            completed.projectionPermitted === true && completed.consumed !== true
+          ),
+        });
       } catch (error) {
         try {
           await admission.releasePurge(authority.capabilityHash, claim.attemptCount);

@@ -559,7 +559,7 @@
       state.timerInterval = global.setInterval(updateTimer, 1000);
       state.maximumTimeout = global.setTimeout(function () {
         setLiveNotice('The five-minute demo limit was reached. Ending and deleting the call.', 'error');
-        finalizeCall(state.consented);
+        finalizeCall(false);
       }, MAX_CALL_MS);
       state.connectionTimeout = global.setTimeout(function () {
         setLiveNotice('The Web Call did not connect in time. Deletion is being verified.', 'error');
@@ -593,8 +593,9 @@
     }
   }
 
-  async function requestPolaris() {
-    if (!state.callId || !state.purgeToken || !state.consented || !state.transcript.length) return null;
+  async function requestPolaris(verifiedPurgeReceipt) {
+    if (!state.callId || !state.purgeToken || !state.consented || !state.transcript.length ||
+        typeof verifiedPurgeReceipt !== 'string' || !verifiedPurgeReceipt) return null;
     return requestJson('/api/demo/homepage/polaris/' + encodeURIComponent(state.callId), {
       method: 'POST',
       headers: {
@@ -606,19 +607,22 @@
         industry: state.industry,
         purgeToken: state.purgeToken,
         transcript: state.transcript,
+        verifiedPurgeReceipt: verifiedPurgeReceipt,
       }),
     });
   }
 
-  async function requestPurge() {
-    if (!state.callId || !state.purgeToken) throw new Error('The temporary deletion authority is unavailable.');
+  async function requestPurge(projectionRequested) {
+    if (!state.callId || !state.purgeToken || typeof projectionRequested !== 'boolean') {
+      throw new Error('The temporary deletion authority is unavailable.');
+    }
     return requestJson('/api/demo/homepage/web-call/' + encodeURIComponent(state.callId), {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
         'X-NorthStar-Demo-Intent': 'delete-homepage-web-call',
       },
-      body: JSON.stringify({ purgeToken: state.purgeToken }),
+      body: JSON.stringify({ projectionRequested: projectionRequested, purgeToken: state.purgeToken }),
     });
   }
 
@@ -679,21 +683,29 @@
     setLiveControls('none');
     setText('demoStatusLabel', 'Ending call and verifying provider deletion');
     setLiveNotice('Results remain hidden until Retell deletion and NorthStar purge are both verified.', 'success');
+    var shouldProject = Boolean(buildPolaris && state.consented && state.transcript.length);
     var result = null;
     var projectionError = null;
+    var purge;
     try {
-      if (buildPolaris && state.consented && state.transcript.length) result = await requestPolaris();
-    } catch (error) {
-      projectionError = error;
-    }
-    try {
-      var purge = await requestPurge();
+      purge = await requestPurge(shouldProject);
       if (!purge || purge.providerDeletionVerified !== true || purge.northstarPurged !== true) {
         throw new Error('Deletion did not return the required verification receipt.');
       }
     } catch (error) {
       failClosedDeletion(error);
       return false;
+    }
+    if (shouldProject) {
+      if (typeof purge.verifiedPurgeReceipt !== 'string' || !purge.verifiedPurgeReceipt) {
+        projectionError = new Error('Verified deletion completed without a usable Polaris receipt.');
+      } else {
+        try {
+          result = await requestPolaris(purge.verifiedPurgeReceipt);
+        } catch (error) {
+          projectionError = error;
+        }
+      }
     }
     var duration = state.durationSeconds;
     clearCallSecrets();
@@ -720,7 +732,7 @@
     setLiveControls('none');
     setText('demoStatusLabel', 'Retrying verified deletion');
     try {
-      var purge = await requestPurge();
+      var purge = await requestPurge(false);
       if (!purge || purge.providerDeletionVerified !== true || purge.northstarPurged !== true) {
         throw new Error('Deletion did not return the required verification receipt.');
       }
@@ -895,7 +907,7 @@
           'Content-Type': 'application/json',
           'X-NorthStar-Demo-Intent': 'delete-homepage-web-call',
         },
-        body: JSON.stringify({ purgeToken: state.purgeToken }),
+        body: JSON.stringify({ projectionRequested: false, purgeToken: state.purgeToken }),
       });
     } catch (_error) {}
     state.transcript = [];

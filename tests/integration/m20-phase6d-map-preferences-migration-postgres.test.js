@@ -72,6 +72,7 @@ realPostgres('Mission 20 Phase 6D canonical map preference migration', () => {
       '021_bounded_api_observability.sql',
       '022_demo_command_center_sessions.sql',
       '023_homepage_demo_admission.sql',
+      '024_homepage_verified_purge_receipt.sql',
     ]);
     for (const filename of corpus) {
       const bytes = fs.readFileSync(path.join(MIGRATIONS, filename));

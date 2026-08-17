@@ -4,7 +4,11 @@ const crypto = require('crypto');
 const config = require('../config');
 const db = require('../db');
 const safeLogger = require('../observability/safeLogger');
-const { HomepageWebCallError, TOKEN_LIFETIME_MS } = require('./homepageWebCall');
+const {
+  HomepageWebCallError,
+  TOKEN_LIFETIME_MS,
+  VERIFIED_PURGE_RECEIPT_LIFETIME_MS,
+} = require('./homepageWebCall');
 
 const SOURCE_CALLS_PER_HOUR = 3;
 const GLOBAL_CALLS_PER_MINUTE = 12;
@@ -27,6 +31,14 @@ function failUnavailable() {
     503,
     'homepage_admission_unavailable',
     'The Web Call admission authority is unavailable.'
+  );
+}
+
+function failVerifiedPurgeRequired() {
+  throw new HomepageWebCallError(
+    403,
+    'homepage_verified_purge_required',
+    'A current, unused, same-call verified-deletion receipt is required before Polaris can calculate a result.'
   );
 }
 
@@ -191,9 +203,12 @@ class HomepageDemoAdmissionRepository {
     ]);
   }
 
-  async beginPurge(subjectHashValue, capabilityHashValue, authorityExpiresAtValue) {
+  async beginPurge(subjectHashValue, capabilityHashValue, authorityExpiresAtValue,
+    projectionRequestedValue) {
     const subjectHash = exactHash(subjectHashValue);
     const capabilityHash = exactHash(capabilityHashValue);
+    if (typeof projectionRequestedValue !== 'boolean') failUnavailable();
+    const projectionRequested = projectionRequestedValue === true;
     const now = exactDate(this.now());
     if (!Number.isSafeInteger(authorityExpiresAtValue)) failUnavailable();
     const authorityExpiresAt = exactDate(authorityExpiresAtValue);
@@ -211,16 +226,19 @@ class HomepageDemoAdmissionRepository {
       const inserted = await client.query(
         `INSERT INTO homepage_demo_purge_operations
            (capability_hash, state, attempt_count, lease_expires_at,
-            authority_expires_at, retire_at, verified_at, created_at, updated_at)
-         VALUES ($1, 'in_progress', 1, $2, $3, $4, NULL, $5, $5)
+            authority_expires_at, retire_at, verified_at, created_at, updated_at,
+            projection_permitted)
+         VALUES ($1, 'in_progress', 1, $2, $3, $4, NULL, $5, $5, $6)
          ON CONFLICT (capability_hash) DO NOTHING
-         RETURNING state, attempt_count, lease_expires_at, authority_expires_at`,
-        [capabilityHash, leaseExpiresAt, authorityExpiresAt, retireAt, now]
+         RETURNING state, attempt_count, lease_expires_at, authority_expires_at,
+                   verified_at, projection_permitted`,
+        [capabilityHash, leaseExpiresAt, authorityExpiresAt, retireAt, now, projectionRequested]
       );
       let operation = inserted.rows[0] || null;
       if (!operation) {
         const existing = await client.query(
-          `SELECT state, attempt_count, lease_expires_at, authority_expires_at
+          `SELECT state, attempt_count, lease_expires_at, authority_expires_at,
+                  verified_at, projection_permitted
              FROM homepage_demo_purge_operations
             WHERE capability_hash = $1
             FOR UPDATE`,
@@ -235,10 +253,29 @@ class HomepageDemoAdmissionRepository {
             attemptCount > PURGE_ATTEMPTS_PER_CAPABILITY) {
           failUnavailable();
         }
-        if (operation.state === 'verified') {
+        if (operation.projection_permitted === true && projectionRequested === false) {
+          const revoked = await client.query(
+            `UPDATE homepage_demo_purge_operations
+                SET projection_permitted = FALSE, updated_at = $2
+              WHERE capability_hash = $1
+                AND projection_permitted = TRUE
+              RETURNING capability_hash`,
+            [capabilityHash, now]
+          );
+          if (revoked.rowCount !== 1) failUnavailable();
+          operation = Object.assign({}, operation, { projection_permitted: false });
+        }
+        if (operation.state === 'verified' || operation.state === 'consumed') {
           await client.query('COMMIT');
           open = false;
-          return { execute: false, verified: true, attemptCount };
+          return {
+            execute: false,
+            verified: true,
+            consumed: operation.state === 'consumed',
+            attemptCount,
+            verifiedAt: exactDate(operation.verified_at).getTime(),
+            projectionPermitted: operation.projection_permitted === true,
+          };
         }
         if (operation.state !== 'in_progress') failUnavailable();
         if (exactDate(operation.lease_expires_at) > now) {
@@ -277,7 +314,12 @@ class HomepageDemoAdmissionRepository {
       );
       await client.query('COMMIT');
       open = false;
-      return { execute: true, verified: false, attemptCount: nextAttemptCount };
+      return {
+        execute: true,
+        verified: false,
+        attemptCount: nextAttemptCount,
+        projectionPermitted: operation.projection_permitted === true,
+      };
     } catch (error) {
       if (open) {
         try { await client.query('ROLLBACK'); } catch (_rollbackError) {}
@@ -299,7 +341,8 @@ class HomepageDemoAdmissionRepository {
       await client.query('BEGIN');
       open = true;
       const operation = await client.query(
-        `SELECT state, attempt_count, retire_at
+        `SELECT state, attempt_count, retire_at, verified_at,
+                authority_expires_at, projection_permitted
            FROM homepage_demo_purge_operations
           WHERE capability_hash = $1
           FOR UPDATE`,
@@ -309,10 +352,16 @@ class HomepageDemoAdmissionRepository {
       if (!row || Number(row.attempt_count) !== attemptCount || exactDate(row.retire_at) <= now) {
         failUnavailable();
       }
-      if (row.state === 'verified') {
+      if (row.state === 'verified' || row.state === 'consumed') {
         await client.query('COMMIT');
         open = false;
-        return true;
+        return {
+          verified: true,
+          consumed: row.state === 'consumed',
+          verifiedAt: exactDate(row.verified_at).getTime(),
+          authorityExpiresAt: exactDate(row.authority_expires_at).getTime(),
+          projectionPermitted: row.projection_permitted === true,
+        };
       }
       if (row.state !== 'in_progress') failUnavailable();
       const completed = await client.query(
@@ -322,10 +371,67 @@ class HomepageDemoAdmissionRepository {
           WHERE capability_hash = $1
             AND state = 'in_progress'
             AND attempt_count = $2
-          RETURNING capability_hash`,
+          RETURNING verified_at, authority_expires_at, projection_permitted`,
         [capabilityHash, attemptCount, now]
       );
       if (completed.rowCount !== 1) failUnavailable();
+      await client.query('COMMIT');
+      open = false;
+      return {
+        verified: true,
+        consumed: false,
+        verifiedAt: exactDate(completed.rows[0].verified_at).getTime(),
+        authorityExpiresAt: exactDate(completed.rows[0].authority_expires_at).getTime(),
+        projectionPermitted: completed.rows[0].projection_permitted === true,
+      };
+    } catch (error) {
+      if (open) {
+        try { await client.query('ROLLBACK'); } catch (_rollbackError) {}
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async consumeVerifiedPurgeProjection(subjectHashValue, capabilityHashValue,
+    verifiedAtValue, receiptExpiresAtValue) {
+    const subjectHash = exactHash(subjectHashValue);
+    const capabilityHash = exactHash(capabilityHashValue);
+    const now = exactDate(this.now());
+    const verifiedAt = exactDate(verifiedAtValue);
+    const receiptExpiresAt = exactDate(receiptExpiresAtValue);
+    if (verifiedAt > now || receiptExpiresAt <= now || receiptExpiresAt <= verifiedAt ||
+        receiptExpiresAt.getTime() - verifiedAt.getTime() > VERIFIED_PURGE_RECEIPT_LIFETIME_MS) {
+      failVerifiedPurgeRequired();
+    }
+    const client = await this.requirePool().connect();
+    let open = false;
+    try {
+      await client.query('BEGIN');
+      open = true;
+      await this.deleteExpiredBatch(client, now, CLEANUP_LIMIT);
+      const consumed = await client.query(
+        `UPDATE homepage_demo_purge_operations
+            SET state = 'consumed', updated_at = $4
+          WHERE capability_hash = $1
+            AND state = 'verified'
+            AND projection_permitted = TRUE
+            AND verified_at = $2
+            AND authority_expires_at >= $3
+            AND retire_at > $4
+          RETURNING capability_hash`,
+        [capabilityHash, verifiedAt, receiptExpiresAt, now]
+      );
+      if (consumed.rowCount !== 1) failVerifiedPurgeRequired();
+      await this.claim(
+        client, now, 'minute', 'projection_source_minute', subjectHash,
+        PROJECTION_CALLS_PER_SOURCE_MINUTE
+      );
+      await this.claim(
+        client, now, 'minute', 'projection_global_minute', PROJECTION_GLOBAL_HASH,
+        PROJECTION_CALLS_GLOBAL_PER_MINUTE
+      );
       await client.query('COMMIT');
       open = false;
       return true;

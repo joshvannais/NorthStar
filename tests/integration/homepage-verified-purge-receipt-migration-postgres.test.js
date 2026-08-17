@@ -63,23 +63,34 @@ realPostgres('Homepage verified-purge receipt migration', () => {
       [verifiedCapability, inProgressCapability, now]
     );
     expect((await pool.query(
-      `SELECT count(*)::int AS count
+      `SELECT column_name
          FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name = 'homepage_demo_purge_operations'
-          AND column_name = 'projection_permitted'`
-    )).rows).toEqual([{ count: 0 }]);
+          AND column_name IN ('projection_permitted', 'projection_started_at')
+        ORDER BY column_name`
+    )).rows).toEqual([]);
 
     expect(await db.runMigrations({ pool, migrationsDirectory: MIGRATIONS })).toBe(true);
     expect((await pool.query(
-      `SELECT capability_hash, state, projection_permitted
+      `SELECT capability_hash, state, projection_permitted, projection_started_at
          FROM homepage_demo_purge_operations
         WHERE capability_hash = ANY($1::char(64)[])
         ORDER BY capability_hash`,
       [[verifiedCapability, inProgressCapability]]
     )).rows).toEqual([
-      { capability_hash: inProgressCapability, state: 'in_progress', projection_permitted: false },
-      { capability_hash: verifiedCapability, state: 'verified', projection_permitted: false },
+      {
+        capability_hash: inProgressCapability,
+        state: 'in_progress',
+        projection_permitted: false,
+        projection_started_at: null,
+      },
+      {
+        capability_hash: verifiedCapability,
+        state: 'verified',
+        projection_permitted: false,
+        projection_started_at: null,
+      },
     ].sort((left, right) => left.capability_hash.localeCompare(right.capability_hash)));
 
     const { HomepageDemoAdmissionRepository } = require('../../src/services/homepageDemoAdmission');
@@ -91,24 +102,50 @@ realPostgres('Homepage verified-purge receipt migration', () => {
       now.getTime() + (2 * 60 * 1000)
     )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
 
-    await expect(pool.query(
+    await pool.query(
       `UPDATE homepage_demo_purge_operations
           SET state = 'consumed'
         WHERE capability_hash = $1`,
       [verifiedCapability]
-    )).rejects.toMatchObject({ code: '23514' });
-    await pool.query(
-      `UPDATE homepage_demo_purge_operations
-          SET state = 'consumed', projection_permitted = TRUE
-        WHERE capability_hash = $1`,
-      [verifiedCapability]
     );
     expect((await pool.query(
-      `SELECT state, projection_permitted
+      `SELECT state, projection_permitted, projection_started_at
          FROM homepage_demo_purge_operations
         WHERE capability_hash = $1`,
       [verifiedCapability]
-    )).rows).toEqual([{ state: 'consumed', projection_permitted: true }]);
+    )).rows).toEqual([{
+      state: 'consumed',
+      projection_permitted: false,
+      projection_started_at: null,
+    }]);
+    await expect(pool.query(
+      `UPDATE homepage_demo_purge_operations
+          SET projection_started_at = $2
+        WHERE capability_hash = $1`,
+      [verifiedCapability, now]
+    )).rejects.toMatchObject({ code: '23514' });
+    await pool.query(
+      `UPDATE homepage_demo_purge_operations
+          SET projection_permitted = TRUE, projection_started_at = $2
+        WHERE capability_hash = $1`,
+      [verifiedCapability, now]
+    );
+    expect((await pool.query(
+      `SELECT state, projection_permitted, projection_started_at
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [verifiedCapability]
+    )).rows).toEqual([{
+      state: 'consumed',
+      projection_permitted: true,
+      projection_started_at: now,
+    }]);
+    await expect(pool.query(
+      `UPDATE homepage_demo_purge_operations
+          SET state = 'verified'
+        WHERE capability_hash = $1`,
+      [verifiedCapability]
+    )).rejects.toMatchObject({ code: '23514' });
 
     const invalidConstraints = await pool.query(
       `SELECT count(*)::int AS count

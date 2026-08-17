@@ -307,6 +307,114 @@ describe('Homepage Web Call durable admission', () => {
       .toHaveLength(0);
   });
 
+  test('cancellation revokes a consumed receipt before durable projection start', async () => {
+    const now = new Date('2026-08-16T12:34:00.000Z');
+    const client = {
+      query: jest.fn(async sql => {
+        const text = String(sql);
+        if (text.includes('INSERT INTO homepage_demo_purge_operations')) return { rowCount: 0, rows: [] };
+        if (text.includes('SELECT state, attempt_count, lease_expires_at, authority_expires_at')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              state: 'consumed',
+              attempt_count: 1,
+              lease_expires_at: null,
+              authority_expires_at: new Date(now.getTime() + 600000),
+              verified_at: now,
+              projection_permitted: true,
+              projection_started_at: null,
+            }],
+          };
+        }
+        if (text.includes('SET projection_permitted = FALSE')) {
+          return { rowCount: 1, rows: [{ capability_hash: 'a'.repeat(64) }] };
+        }
+        return { rowCount: 0, rows: [] };
+      }),
+      release: jest.fn(),
+    };
+    const repository = new HomepageDemoAdmissionRepository({
+      pool: { connect: jest.fn(async () => client) },
+      now: () => now,
+    });
+    await expect(repository.beginPurge(
+      'f'.repeat(64),
+      'a'.repeat(64),
+      now.getTime() + 600000,
+      false
+    )).resolves.toEqual({
+      execute: false,
+      verified: true,
+      consumed: true,
+      attemptCount: 1,
+      verifiedAt: now.getTime(),
+      projectionPermitted: false,
+    });
+    expect(client.query).toHaveBeenCalledWith('COMMIT');
+    expect(client.query).not.toHaveBeenCalledWith('ROLLBACK');
+  });
+
+  test('projection start fence is atomic and cancellation cannot report success after it wins', async () => {
+    const now = new Date('2026-08-16T12:34:00.000Z');
+    const startClient = {
+      query: jest.fn(async sql => String(sql).includes('SET projection_started_at = $4')
+        ? { rowCount: 1, rows: [{ capability_hash: 'a'.repeat(64) }] }
+        : { rowCount: 0, rows: [] }),
+      release: jest.fn(),
+    };
+    const startRepository = new HomepageDemoAdmissionRepository({
+      pool: { connect: jest.fn(async () => startClient) },
+      now: () => now,
+    });
+    await expect(startRepository.beginVerifiedPurgeProjection(
+      'a'.repeat(64),
+      now.getTime() - 30000,
+      now.getTime() + 90000
+    )).resolves.toBe(true);
+    expect(startClient.query).toHaveBeenCalledWith(
+      expect.stringContaining('AND projection_started_at IS NULL'),
+      ['a'.repeat(64), new Date(now.getTime() - 30000), new Date(now.getTime() + 90000), now]
+    );
+    expect(startClient.release).toHaveBeenCalledTimes(1);
+
+    const cancellationClient = {
+      query: jest.fn(async sql => {
+        const text = String(sql);
+        if (text.includes('INSERT INTO homepage_demo_purge_operations')) return { rowCount: 0, rows: [] };
+        if (text.includes('SELECT state, attempt_count, lease_expires_at, authority_expires_at')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              state: 'consumed',
+              attempt_count: 1,
+              lease_expires_at: null,
+              authority_expires_at: new Date(now.getTime() + 600000),
+              verified_at: new Date(now.getTime() - 30000),
+              projection_permitted: true,
+              projection_started_at: now,
+            }],
+          };
+        }
+        return { rowCount: 0, rows: [] };
+      }),
+      release: jest.fn(),
+    };
+    const cancellationRepository = new HomepageDemoAdmissionRepository({
+      pool: { connect: jest.fn(async () => cancellationClient) },
+      now: () => now,
+    });
+    await expect(cancellationRepository.beginPurge(
+      'f'.repeat(64),
+      'a'.repeat(64),
+      now.getTime() + 600000,
+      false
+    )).rejects.toMatchObject({ status: 409, code: 'homepage_projection_already_started' });
+    expect(cancellationClient.query.mock.calls.some(call =>
+      String(call[0]).includes('SET projection_permitted = FALSE'))).toBe(false);
+    expect(cancellationClient.query).toHaveBeenCalledWith('ROLLBACK');
+  });
+
   test('cancellation commits projection denial before reporting an active purge lease', async () => {
     const now = new Date('2026-08-16T12:34:00.000Z');
     const client = {

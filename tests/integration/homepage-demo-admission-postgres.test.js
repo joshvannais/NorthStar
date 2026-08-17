@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto = require('crypto');
+const express = require('express');
+const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -12,6 +14,7 @@ realPostgres('Homepage Web Call durable admission', () => {
   let HomepageDemoAdmissionHousekeepingWorker;
   let HomepageDemoAdmissionRepository;
   let HomepageWebCallService;
+  let createHomepageDemoRouter;
   let PROJECTION_CALLS_GLOBAL_PER_MINUTE;
   let PROJECTION_CALLS_PER_SOURCE_MINUTE;
   let PURGE_CALLS_GLOBAL_PER_MINUTE;
@@ -39,6 +42,7 @@ realPostgres('Homepage Web Call durable admission', () => {
       sourceHash,
     } = require('../../src/services/homepageDemoAdmission'));
     ({ HomepageWebCallService, signPurgeToken } = require('../../src/services/homepageWebCall'));
+    ({ createHomepageDemoRouter } = require('../../src/routes/homepageDemo'));
   }, 60000);
 
   afterAll(async () => {
@@ -317,6 +321,201 @@ realPostgres('Homepage Web Call durable admission', () => {
     )).rows).toEqual([{ state: 'verified', projection_permitted: false }]);
   });
 
+  test('mounted cancellation after receipt consumption prevents the paused Polaris calculation', async () => {
+    const now = new Date('2026-08-16T14:34:00.000Z');
+    const secret = 'homepage-consumed-cancellation-race-'.padEnd(64, 'z');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const service = new HomepageWebCallService({ secret, now: () => now, retellClient: {} });
+    const callId = 'call_consumed_cancellation_race_123';
+    const purgeToken = signPurgeToken(callId, secret, now, () => Buffer.alloc(16, 9));
+    const authority = service.verifyCallAuthority(callId, purgeToken);
+    const purge = await repository.beginPurge(
+      sourceHash('consumed-race-purge', secret),
+      authority.capabilityHash,
+      authority.expiresAt,
+      true
+    );
+    const completed = await repository.completePurge(authority.capabilityHash, purge.attemptCount);
+    const receipt = service.verifiedPurgeReceipt(
+      callId,
+      purgeToken,
+      completed.verifiedAt,
+      true
+    ).verifiedPurgeReceipt;
+    let consumedResolve;
+    const consumed = new Promise(resolve => { consumedResolve = resolve; });
+    let releaseResolve;
+    const release = new Promise(resolve => { releaseResolve = resolve; });
+    const gatedAdmission = {
+      beginPurge: repository.beginPurge.bind(repository),
+      completePurge: repository.completePurge.bind(repository),
+      releasePurge: repository.releasePurge.bind(repository),
+      canIssueVerifiedPurgeReceipt: repository.canIssueVerifiedPurgeReceipt.bind(repository),
+      beginVerifiedPurgeProjection(...args) {
+        return repository.beginVerifiedPurgeProjection(...args);
+      },
+      async consumeVerifiedPurgeProjection(...args) {
+        const result = await repository.consumeVerifiedPurgeProjection(...args);
+        consumedResolve();
+        await release;
+        return result;
+      },
+    };
+    service.projectPolaris = jest.fn(service.projectPolaris.bind(service));
+    const app = express();
+    app.use(express.json());
+    app.use('/api/demo/homepage', createHomepageDemoRouter({
+      service,
+      admission: gatedAdmission,
+      sourceHash: value => sourceHash(value, secret),
+    }));
+    function mutation(method, path, intent, body) {
+      return request(app)[method](path)
+        .set('Origin', 'http://127.0.0.1')
+        .set('Host', '127.0.0.1')
+        .set('Sec-Fetch-Site', 'same-origin')
+        .set('X-NorthStar-Demo-Intent', intent)
+        .send(body);
+    }
+    const projectionRequest = mutation(
+      'post',
+      '/api/demo/homepage/polaris/' + callId,
+      'calculate-homepage-polaris',
+      {
+        callDurationSeconds: 30,
+        industry: 'Roofing',
+        purgeToken,
+        transcript: [
+          { speaker: 'agent', text: 'What is the fictional roof area?' },
+          { speaker: 'customer', text: 'The fictional roof area is 1000 square feet.' },
+        ],
+        verifiedPurgeReceipt: receipt,
+      }
+    ).then(response => response);
+    await consumed;
+    const cancellationResponse = await mutation(
+      'delete',
+      '/api/demo/homepage/web-call/' + callId,
+      'delete-homepage-web-call',
+      { projectionRequested: false, purgeToken }
+    );
+    const durableRow = (await pool.query(
+      `SELECT state, projection_permitted, projection_started_at
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [authority.capabilityHash]
+    )).rows[0];
+    releaseResolve();
+    const projectionResponse = await projectionRequest;
+
+    expect(cancellationResponse.status).toBe(200);
+    expect(durableRow).toEqual({
+      state: 'consumed',
+      projection_permitted: false,
+      projection_started_at: null,
+    });
+    expect(projectionResponse.status).toBe(403);
+    expect(projectionResponse.body.error.code).toBe('homepage_verified_purge_required');
+    expect(service.projectPolaris).not.toHaveBeenCalled();
+  });
+
+  test('mounted projection start wins before cancellation can report success', async () => {
+    const now = new Date('2026-08-16T14:34:30.000Z');
+    const secret = 'homepage-projection-start-race-'.padEnd(64, 'y');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const service = new HomepageWebCallService({ secret, now: () => now, retellClient: {} });
+    const callId = 'call_projection_start_race_123';
+    const purgeToken = signPurgeToken(callId, secret, now, () => Buffer.alloc(16, 10));
+    const authority = service.verifyCallAuthority(callId, purgeToken);
+    const purge = await repository.beginPurge(
+      sourceHash('projection-start-race-purge', secret),
+      authority.capabilityHash,
+      authority.expiresAt,
+      true
+    );
+    const completed = await repository.completePurge(authority.capabilityHash, purge.attemptCount);
+    const receipt = service.verifiedPurgeReceipt(
+      callId,
+      purgeToken,
+      completed.verifiedAt,
+      true
+    ).verifiedPurgeReceipt;
+    let startedResolve;
+    const started = new Promise(resolve => { startedResolve = resolve; });
+    let releaseResolve;
+    const release = new Promise(resolve => { releaseResolve = resolve; });
+    const gatedAdmission = {
+      beginPurge: repository.beginPurge.bind(repository),
+      completePurge: repository.completePurge.bind(repository),
+      releasePurge: repository.releasePurge.bind(repository),
+      canIssueVerifiedPurgeReceipt: repository.canIssueVerifiedPurgeReceipt.bind(repository),
+      consumeVerifiedPurgeProjection: repository.consumeVerifiedPurgeProjection.bind(repository),
+      async beginVerifiedPurgeProjection(...args) {
+        const result = await repository.beginVerifiedPurgeProjection(...args);
+        startedResolve();
+        await release;
+        return result;
+      },
+    };
+    service.projectPolaris = jest.fn(service.projectPolaris.bind(service));
+    const app = express();
+    app.use(express.json());
+    app.use('/api/demo/homepage', createHomepageDemoRouter({
+      service,
+      admission: gatedAdmission,
+      sourceHash: value => sourceHash(value, secret),
+    }));
+    function mutation(method, path, intent, body) {
+      return request(app)[method](path)
+        .set('Origin', 'http://127.0.0.1')
+        .set('Host', '127.0.0.1')
+        .set('Sec-Fetch-Site', 'same-origin')
+        .set('X-NorthStar-Demo-Intent', intent)
+        .send(body);
+    }
+    const projectionRequest = mutation(
+      'post',
+      '/api/demo/homepage/polaris/' + callId,
+      'calculate-homepage-polaris',
+      {
+        callDurationSeconds: 30,
+        industry: 'Roofing',
+        purgeToken,
+        transcript: [
+          { speaker: 'agent', text: 'What is the fictional roof area?' },
+          { speaker: 'customer', text: 'The fictional roof area is 1000 square feet.' },
+        ],
+        verifiedPurgeReceipt: receipt,
+      }
+    ).then(response => response);
+    await started;
+    const cancellationResponse = await mutation(
+      'delete',
+      '/api/demo/homepage/web-call/' + callId,
+      'delete-homepage-web-call',
+      { projectionRequested: false, purgeToken }
+    );
+    const durableRow = (await pool.query(
+      `SELECT state, projection_permitted, projection_started_at
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [authority.capabilityHash]
+    )).rows[0];
+    releaseResolve();
+    const projectionResponse = await projectionRequest;
+
+    expect(cancellationResponse.status).toBe(409);
+    expect(cancellationResponse.body.error.code).toBe('homepage_projection_already_started');
+    expect(durableRow).toEqual({
+      state: 'consumed',
+      projection_permitted: true,
+      projection_started_at: now,
+    });
+    expect(projectionResponse.status).toBe(200);
+    expect(projectionResponse.body.data.contract).toBe('NorthStarHomepageCanonicalPolaris/v1');
+    expect(service.projectPolaris).toHaveBeenCalledTimes(1);
+  });
+
   test('failed purge leases retry across source changes only to the durable capability cap', async () => {
     let now = new Date('2026-08-16T14:35:00.000Z');
     const secret = 'homepage-purge-retry-'.padEnd(64, 'r');
@@ -461,12 +660,42 @@ realPostgres('Homepage Web Call durable admission', () => {
     )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
 
     const operation = await pool.query(
-      `SELECT state, projection_permitted
+      `SELECT state, projection_permitted, projection_started_at
          FROM homepage_demo_purge_operations
         WHERE capability_hash = $1`,
       [capability]
     );
-    expect(operation.rows).toEqual([{ state: 'consumed', projection_permitted: true }]);
+    expect(operation.rows).toEqual([{
+      state: 'consumed',
+      projection_permitted: true,
+      projection_started_at: null,
+    }]);
+    await expect(repository.beginVerifiedPurgeProjection(
+      capability,
+      completed.verifiedAt,
+      receiptExpiresAt
+    )).resolves.toBe(true);
+    await expect(repository.beginPurge(
+      sourceHash('projection-started-cancel', secret),
+      capability,
+      expiresAt,
+      false
+    )).rejects.toMatchObject({ status: 409, code: 'homepage_projection_already_started' });
+    await expect(repository.beginVerifiedPurgeProjection(
+      capability,
+      completed.verifiedAt,
+      receiptExpiresAt
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
+    expect((await pool.query(
+      `SELECT state, projection_permitted, projection_started_at
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [capability]
+    )).rows).toEqual([{
+      state: 'consumed',
+      projection_permitted: true,
+      projection_started_at: now,
+    }]);
     const quota = await pool.query(
       `SELECT scope, count(*)::int AS rows, sum(request_count)::int AS requests
          FROM homepage_demo_admission_windows

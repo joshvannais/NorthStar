@@ -42,6 +42,14 @@ function failVerifiedPurgeRequired() {
   );
 }
 
+function failProjectionAlreadyStarted() {
+  throw new HomepageWebCallError(
+    409,
+    'homepage_projection_already_started',
+    'Polaris calculation has already started, so cancellation cannot be reported as completed.'
+  );
+}
+
 function exactHash(value) {
   const normalized = typeof value === 'string' ? value.trim() : '';
   if (!/^[0-9a-f]{64}$/.test(normalized)) failUnavailable();
@@ -231,14 +239,14 @@ class HomepageDemoAdmissionRepository {
          VALUES ($1, 'in_progress', 1, $2, $3, $4, NULL, $5, $5, $6)
          ON CONFLICT (capability_hash) DO NOTHING
          RETURNING state, attempt_count, lease_expires_at, authority_expires_at,
-                   verified_at, projection_permitted`,
+                   verified_at, projection_permitted, projection_started_at`,
         [capabilityHash, leaseExpiresAt, authorityExpiresAt, retireAt, now, projectionRequested]
       );
       let operation = inserted.rows[0] || null;
       if (!operation) {
         const existing = await client.query(
           `SELECT state, attempt_count, lease_expires_at, authority_expires_at,
-                  verified_at, projection_permitted
+                  verified_at, projection_permitted, projection_started_at
              FROM homepage_demo_purge_operations
             WHERE capability_hash = $1
             FOR UPDATE`,
@@ -253,13 +261,17 @@ class HomepageDemoAdmissionRepository {
             attemptCount > PURGE_ATTEMPTS_PER_CAPABILITY) {
           failUnavailable();
         }
-        if (operation.state !== 'consumed' && operation.projection_permitted === true &&
-            projectionRequested === false) {
+        if (operation.projection_permitted === true && projectionRequested === false) {
+          if (operation.state === 'consumed' && operation.projection_started_at != null) {
+            exactDate(operation.projection_started_at);
+            failProjectionAlreadyStarted();
+          }
           const revoked = await client.query(
             `UPDATE homepage_demo_purge_operations
                 SET projection_permitted = FALSE, updated_at = $2
               WHERE capability_hash = $1
                 AND projection_permitted = TRUE
+                AND projection_started_at IS NULL
               RETURNING capability_hash`,
             [capabilityHash, now]
           );
@@ -471,6 +483,37 @@ class HomepageDemoAdmissionRepository {
         try { await client.query('ROLLBACK'); } catch (_rollbackError) {}
       }
       throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async beginVerifiedPurgeProjection(capabilityHashValue, verifiedAtValue, receiptExpiresAtValue) {
+    const capabilityHash = exactHash(capabilityHashValue);
+    const now = exactDate(this.now());
+    const verifiedAt = exactDate(verifiedAtValue);
+    const receiptExpiresAt = exactDate(receiptExpiresAtValue);
+    if (verifiedAt > now || receiptExpiresAt <= now || receiptExpiresAt <= verifiedAt ||
+        receiptExpiresAt.getTime() - verifiedAt.getTime() > VERIFIED_PURGE_RECEIPT_LIFETIME_MS) {
+      failVerifiedPurgeRequired();
+    }
+    const client = await this.requirePool().connect();
+    try {
+      const started = await client.query(
+        `UPDATE homepage_demo_purge_operations
+            SET projection_started_at = $4, updated_at = $4
+          WHERE capability_hash = $1
+            AND state = 'consumed'
+            AND projection_permitted = TRUE
+            AND projection_started_at IS NULL
+            AND verified_at = $2
+            AND authority_expires_at >= $3
+            AND retire_at > $4
+          RETURNING capability_hash`,
+        [capabilityHash, verifiedAt, receiptExpiresAt, now]
+      );
+      if (started.rowCount !== 1) failVerifiedPurgeRequired();
+      return true;
     } finally {
       client.release();
     }

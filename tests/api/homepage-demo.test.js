@@ -36,6 +36,7 @@ function build(options = {}) {
     admit: jest.fn(async hash => { calls.push(hash); }),
     admitProjection: jest.fn(async hash => { calls.push(hash); }),
     consumeVerifiedPurgeProjection: jest.fn(async hash => { calls.push(hash); }),
+    beginVerifiedPurgeProjection: jest.fn(async hash => { calls.push(hash); }),
     canIssueVerifiedPurgeReceipt: jest.fn(async () => true),
     beginPurge: jest.fn(async (hash, _capability, _expiresAt, projectionRequested) => {
       calls.push(hash);
@@ -170,13 +171,46 @@ describe('Homepage demo route contract', () => {
       Date.parse('2026-08-16T12:05:00.000Z'),
       Date.parse('2026-08-16T12:07:00.000Z')
     );
+    expect(admission.beginVerifiedPurgeProjection).toHaveBeenCalledWith(
+      'b'.repeat(64),
+      Date.parse('2026-08-16T12:05:00.000Z'),
+      Date.parse('2026-08-16T12:07:00.000Z')
+    );
     expect(service.projectPolaris).toHaveBeenCalledWith(
       'call_1', 'purge', 'verified-purge-receipt', 'Roofing', transcript, 30
     );
     expect(admission.completePurge.mock.invocationCallOrder[0])
       .toBeLessThan(service.verifyPolarisAuthority.mock.invocationCallOrder[0]);
     expect(admission.consumeVerifiedPurgeProjection.mock.invocationCallOrder[0])
+      .toBeLessThan(admission.beginVerifiedPurgeProjection.mock.invocationCallOrder[0]);
+    expect(admission.beginVerifiedPurgeProjection.mock.invocationCallOrder[0])
       .toBeLessThan(service.projectPolaris.mock.invocationCallOrder[0]);
+  });
+
+  test('Polaris fails closed when cancellation wins after receipt consumption', async () => {
+    const cancellationWon = Object.assign(new Error('Verified deletion is required.'), {
+      status: 403,
+      code: 'homepage_verified_purge_required',
+    });
+    const { app, service, admission } = build();
+    admission.beginVerifiedPurgeProjection.mockRejectedValueOnce(cancellationWon);
+    const response = await mutation(
+      request(app),
+      'post',
+      '/api/demo/homepage/polaris/call_1',
+      'calculate-homepage-polaris',
+      {
+        callDurationSeconds: 30,
+        industry: 'Roofing',
+        purgeToken: 'purge',
+        transcript: [{ speaker: 'customer', text: 'A fictional roof.' }],
+        verifiedPurgeReceipt: 'verified-purge-receipt',
+      }
+    ).expect(403);
+    expect(response.body.error.code).toBe('homepage_verified_purge_required');
+    expect(admission.consumeVerifiedPurgeProjection).toHaveBeenCalledTimes(1);
+    expect(admission.beginVerifiedPurgeProjection).toHaveBeenCalledTimes(1);
+    expect(service.projectPolaris).not.toHaveBeenCalled();
   });
 
   test('verified deletion replay returns the cached receipt without quota or provider work', async () => {

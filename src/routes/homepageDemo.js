@@ -111,6 +111,11 @@ function createHomepageDemoRouter(options = {}) {
         authority.verifiedPurge.verifiedAt,
         authority.verifiedPurge.expiresAt
       );
+      await admission.beginVerifiedPurgeProjection(
+        authority.capabilityHash,
+        authority.verifiedPurge.verifiedAt,
+        authority.verifiedPurge.expiresAt
+      );
       const result = service.projectPolaris(
         req.params.callId,
         req.body.purgeToken,

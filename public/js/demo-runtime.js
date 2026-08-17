@@ -14,6 +14,12 @@
   var workspaceRequest = null;
   var accountRequest = null;
   var readonlyMessage = 'This account-free demo is read-only outside Simulate Lead and Reset demo.';
+  var TOOLBAR_EXCLUDED_PATHS = Object.freeze([
+    '/demo/polaris',
+    '/demo/business-profile',
+    '/demo/settings',
+    '/demo/integrations',
+  ]);
 
   function jsonResponse(body, status) {
     return new Response(JSON.stringify(body), {
@@ -358,6 +364,7 @@
 
   function installToolbar(value) {
     if (document.getElementById('northstarDemoToolbar')) return;
+    if (TOOLBAR_EXCLUDED_PATHS.indexOf(path) >= 0) return;
     var main = document.querySelector('.main-content');
     if (!main) return;
     var scenarioSpace = value && value.configuration && value.configuration.scenarioSpace;
@@ -369,7 +376,7 @@
     section.setAttribute('aria-label', 'Account-free demo controls');
     var copy = control('div', '', 'northstar-demo-toolbar-copy');
     copy.append(control('strong', 'Account-free demo workspace', 'northstar-demo-toolbar-title'));
-    var metadata = control('span', 'Fictional data · Revision ' + value.integrity.revision, 'northstar-demo-toolbar-meta');
+    var metadata = control('span', 'Fictional Data · Shared Across Every Demo Page', 'northstar-demo-toolbar-meta');
     metadata.id = 'northstarDemoRevision';
     copy.append(metadata);
     var builder = document.createElement('details');
@@ -382,6 +389,8 @@
     builder.appendChild(summary);
     var selections = Object.create(null);
     var scenarioGrid = control('div', '', 'northstar-demo-scenario-grid');
+    var businessSummary = control('p', '', 'northstar-demo-business-summary');
+    businessSummary.id = 'northstarDemoBusinessSummary';
     if (scenarioReady) {
       scenarioSpace.dimensions.forEach(function (dimension, dimensionIndex) {
         if (!dimension || typeof dimension.id !== 'string' || typeof dimension.label !== 'string' ||
@@ -409,7 +418,15 @@
         selections[dimension.id] = select;
         field.append(label, select);
         scenarioGrid.appendChild(field);
-        if (dimensionIndex === 0) select.setAttribute('aria-describedby', 'northstarDemoScenarioHelp');
+        if (dimensionIndex === 0) {
+          select.setAttribute('aria-describedby', 'northstarDemoBusinessSummary northstarDemoScenarioHelp');
+          var updateBusinessSummary = function () {
+            var selected = dimension.options.find(function (candidate) { return candidate.id === select.value; });
+            businessSummary.textContent = selected && selected.description || '';
+          };
+          select.addEventListener('change', updateBusinessSummary);
+          updateBusinessSummary();
+        }
       });
     }
     var scenarioHelp = control('p', scenarioReady
@@ -417,16 +434,16 @@
       : 'The shared scenario contract could not be verified. No demo mutation is available.',
     'northstar-demo-scenario-help');
     scenarioHelp.id = 'northstarDemoScenarioHelp';
-    builder.append(scenarioGrid, scenarioHelp);
+    builder.append(scenarioGrid, businessSummary, scenarioHelp);
     var actions = control('div', '', 'northstar-demo-toolbar-actions');
     var simulate = control('button', 'Simulate Lead', 'btn btn-primary');
     simulate.id = 'demoSimulateLead';
     simulate.type = 'button';
     simulate.disabled = !scenarioReady;
-    var reset = control('button', 'Reset demo', 'btn btn-secondary');
+    var reset = control('button', 'Reset Demo', 'btn btn-secondary');
     reset.id = 'demoReset';
     reset.type = 'button';
-    var exit = control('a', 'Exit demo', 'btn btn-ghost');
+    var exit = control('a', 'Exit Demo', 'btn btn-ghost');
     exit.href = '/';
     actions.append(simulate, reset, exit);
     var status = control('p', '', 'northstar-demo-toolbar-status');

@@ -182,72 +182,7 @@
           <button class="btn btn-primary btn-sm" data-settings-mutable onclick="addContact()" disabled>+ Add</button>
         </div>
 
-        <details style="margin-top:12px;">
-          <summary style="font-size:13px;font-weight:500;color:var(--brand-600);cursor:pointer;padding:4px 0;">📁 Import contacts from your phone</summary>
-          <div style="margin-top:12px;padding:16px;background:var(--neutral-50);border-radius:var(--radius-sm);border:1px solid var(--neutral-200);">
-            <p style="font-size:13px;color:var(--neutral-500);margin-bottom:12px;">
-              Export your contacts from your phone as a <strong>CSV file</strong>, then upload it here.
-              The file should have columns for <strong>Name</strong> and <strong>Phone</strong>.
-            </p>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
-                📤 Choose CSV File
-                <input type="file" id="csvUpload" data-settings-mutable accept=".csv" style="display:none;" onchange="importCSV(event)" disabled>
-              </label>
-              <span id="importStatus" role="status" aria-live="polite" aria-atomic="true" style="font-size:13px;color:var(--neutral-400);"></span>
-            </div>
-            <p style="font-size:12px;color:var(--neutral-400);margin-top:8px;">
-              How to export: <strong>iPhone</strong> → Settings > Contacts > Export &nbsp;·&nbsp;
-              <strong>Android</strong> → Contacts app > Export to file
-            </p>
-          </div>
-        </details>
       </div>
-
-  <!-- Integrations Section -->
-  <div class="settings-section">
-    <h2>🔌 Integrations</h2>
-    <p class="description">Provider connection state comes from NorthStar's tenant-scoped, read-only catalogue. These Settings shortcuts do not indicate that a provider is connected or configured.</p>
-    <a class="btn btn-secondary btn-sm" id="settingsIntegrationsLink" href="/dashboard/integrations" style="margin-top:10px;align-self:flex-start;">Open Integrations</a>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:12px;">
-      <div class="integration-card" id="integration-twilio">
-        <div class="icon">📞</div>
-        <div class="info"><h4>Twilio</h4><p>Phone system &amp; SMS provider for AI calls</p></div>
-        <span class="integration-catalogue-note">Authoritative status is shown in Integrations.</span>
-        <button class="btn btn-sm" onclick="showToast('Twilio integration coming soon')">Details</button>
-      </div>
-      <div class="integration-card" id="integration-openai">
-        <div class="icon">🤖</div>
-        <div class="info"><h4>OpenAI</h4><p>AI conversation engine for natural dialogue</p></div>
-        <span class="integration-catalogue-note">Authoritative status is shown in Integrations.</span>
-        <button class="btn btn-sm btn-ghost" onclick="showToast('Open Integrations for authoritative OpenAI status')">Details</button>
-      </div>
-      <div class="integration-card" id="integration-elevenlabs">
-        <div class="icon">🎙️</div>
-        <div class="info"><h4>ElevenLabs</h4><p>Voice synthesis for lifelike AI responses</p></div>
-        <span class="integration-catalogue-note">Authoritative status is shown in Integrations.</span>
-        <button class="btn btn-sm" onclick="showToast('Open Integrations for authoritative ElevenLabs status')">Details</button>
-      </div>
-      <div class="integration-card" id="integration-stripe">
-        <div class="icon">💳</div>
-        <div class="info"><h4>Stripe</h4><p>Payment processing for estimates &amp; invoices</p></div>
-        <span class="integration-catalogue-note">Authoritative status is shown in Integrations.</span>
-        <button class="btn btn-sm" onclick="showToast('Open Integrations for authoritative Stripe status')">Details</button>
-      </div>
-      <div class="integration-card" id="integration-google-cal">
-        <div class="icon">📅</div>
-        <div class="info"><h4>Google Calendar</h4><p>Auto-schedule appointments</p></div>
-        <span class="integration-catalogue-note">Authoritative status is shown in Integrations.</span>
-        <button class="btn btn-sm" onclick="showToast('Open Integrations for authoritative Google Calendar status')">Details</button>
-      </div>
-      <div class="integration-card" id="integration-email">
-        <div class="icon">✉️</div>
-        <div class="info"><h4>Email Provider</h4><p>Send estimates, invoices &amp; follow-ups</p></div>
-        <span class="integration-catalogue-note">Authoritative status is shown in Integrations.</span>
-        <button class="btn btn-sm" onclick="showToast('Open Integrations for authoritative Email status')">Details</button>
-      </div>
-    </div>
-  </div>
 <style>
 .integration-card {
   display:flex;flex-direction:column;gap:10px;
@@ -305,10 +240,11 @@
       });
       const saveButton = document.getElementById('saveSettingsBtn');
       saveButton.disabled = !settingsCanEdit;
-      saveButton.textContent = settingsCanEdit ? '💾 Save Changes' : 'Read-only settings';
+      saveButton.hidden = !settingsCanEdit;
+      saveButton.textContent = 'Save Changes';
       document.getElementById('settingsAccessStatus').textContent = settingsCanEdit
         ? 'Your durable account membership can edit these settings.'
-        : 'Read-only: your durable account membership can view these settings but cannot change them.';
+        : 'These settings are protected by your account role.';
     }
 
     function renderSettingsState() {
@@ -384,7 +320,7 @@
         showToast(error.message || 'Settings could not be saved.', 'error');
       } finally {
         saveButton.disabled = !settingsCanEdit;
-        saveButton.textContent = settingsCanEdit ? '💾 Save Changes' : 'Read-only settings';
+        saveButton.textContent = 'Save Changes';
       }
     }
 
@@ -488,69 +424,6 @@
       const removed = contacts.splice(index, 1)[0];
       saveContacts(contacts);
       showToast(`Removed "${removed.name}" from known contacts.`);
-    }
-
-    function importCSV(event) {
-      if (!settingsCanEdit) return;
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const status = document.getElementById('importStatus');
-      status.textContent = 'Reading file...';
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const text = e.target.result;
-        const lines = text.split('\n').filter(l => l.trim());
-        const contacts = getContacts();
-        let imported = 0;
-        let skipped = 0;
-
-        lines.forEach((line, i) => {
-          // Try comma or tab delimited
-          const parts = line.includes('\t') ? line.split('\t') : line.split(',');
-          if (parts.length < 2) return;
-
-          let name = '';
-          let phone = '';
-
-          // Heuristic: check if first column looks like a name or phone
-          const first = parts[0].trim().replace(/"/g, '');
-          const second = parts[1].trim().replace(/"/g, '');
-
-          if (/^[\d\s\-\(\)]+$/.test(first)) {
-            // First column is phone
-            phone = first;
-            name = second;
-          } else {
-            name = first;
-            phone = second;
-          }
-
-          // Clean phone number
-          phone = phone.replace(/[^\d\+]/g, '');
-          if (phone.length < 7) { skipped++; return; }
-
-          // Skip duplicates
-          const exists = contacts.some(c => c.phone === phone);
-          if (exists) { skipped++; return; }
-
-          contacts.push({ name: name || `Contact ${imported + 1}`, phone });
-          imported++;
-        });
-
-        saveContacts(contacts);
-        status.textContent = `✅ Imported ${imported} contact${imported !== 1 ? 's' : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}.`;
-        status.style.color = 'var(--success)';
-        event.target.value = '';
-      };
-
-      reader.onerror = function() {
-        status.textContent = '❌ Error reading file.';
-        status.style.color = 'var(--danger)';
-      };
-
-      reader.readAsText(file);
     }
 
     // Load contacts on page load

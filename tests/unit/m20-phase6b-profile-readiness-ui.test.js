@@ -186,7 +186,7 @@ describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
     const start = HTML.indexOf('function renderProfileReadiness');
     const end = HTML.indexOf('function updateProfileReadinessActionState', start);
     const render = HTML.slice(start, end);
-    expect(render).toContain('heading.textContent = item.label');
+    expect(render).toContain('heading.textContent = titleCaseLabel(item.label)');
     expect(render).toContain('help.textContent = item.help');
     expect(render).toContain('reason.textContent = reasonText');
     expect(render).toContain('list.replaceChildren(fragment)');
@@ -197,10 +197,11 @@ describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
     expect(HTML).not.toMatch(/body:\s*JSON\.stringify\(\{\s*expectedVersion:[^}]*reviewedValueHash/);
   });
 
-  test('keeps owner and admin controls separate from member and viewer read-only rendering', () => {
+  test('keeps owner and admin controls separate while hiding member and viewer mutation actions', () => {
     expect(HTML).toMatch(/profileCanEdit = role === 'owner' \|\| role === 'admin'/);
     expect(HTML).toMatch(/button\.disabled = !interactive \|\| !profileCanEdit/);
-    expect(HTML).toContain("profileCanEdit ? 'Save readiness' : 'Read-only readiness'");
+    expect(HTML).toContain("button.hidden = !profileCanEdit");
+    expect(HTML).not.toContain("'Read-only readiness'");
     expect(HTML).toContain('Business Profile changed. Your pending readiness choices remain visible');
     expect(HTML).toContain("reload.focus()");
   });

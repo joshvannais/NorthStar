@@ -354,7 +354,7 @@
           <h1>Integrations</h1>
           <p>One read-only catalogue of provider availability and NorthStar-owned connection authority.</p>
         </div>
-        <button class="btn btn-ghost btn-sm" id="refreshIntegrationsBtn" type="button">Refresh catalogue</button>
+        <button class="btn btn-sm integration-refresh-action" id="refreshIntegrationsBtn" type="button">Refresh Catalogue</button>
       </div>
 
       <section class="settings-section" aria-labelledby="integrationCatalogueHeading">
@@ -640,16 +640,18 @@
       }
 
       function providerCard(provider) {
+        var compactMapProvider = ['google_maps', 'apple_maps', 'waze'].indexOf(provider.key) >= 0;
         var item = createElement('li', 'integration-card');
+        if (compactMapProvider) item.classList.add('integration-card-map');
         item.dataset.providerKey = provider.key;
         var header = createElement('div', 'integration-card-header');
         var mark = createElement('span', 'integration-mark', provider.mark);
         mark.setAttribute('aria-hidden', 'true');
         var copy = createElement('div', 'integration-card-copy');
         copy.append(
-          createElement('h4', '', provider.name),
-          createElement('p', 'integration-card-description', provider.description)
+          createElement('h4', '', provider.name)
         );
+        if (!compactMapProvider) copy.append(createElement('p', 'integration-card-description', provider.description));
         header.append(mark, copy);
 
         var pill = createElement('span', 'integration-status', provider.presentation.label);
@@ -666,20 +668,26 @@
           appendDetail(detailList, definition[1], capabilityValue(provider.capabilities[definition[0]]));
         });
         details.append(detailList);
-        item.append(header, pill, details);
+        item.append(header, pill);
+        if (!compactMapProvider) item.append(details);
         return item;
       }
 
       function renderCatalogue(catalogue) {
         var fragment = document.createDocumentFragment();
+        var internalProviders = ['twilio', 'openai', 'elevenlabs'];
         catalogue.categories.forEach(function(category) {
+          var visibleProviders = category.providers.filter(function(provider) {
+            return internalProviders.indexOf(provider.key) < 0;
+          });
+          if (!visibleProviders.length) return;
           var categoryItem = createElement('li', 'integration-category');
           categoryItem.dataset.categoryKey = category.key;
           var heading = createElement('h3', '', category.label);
           heading.id = 'integration-category-' + category.key;
           var providerList = createElement('ul', 'integration-provider-list');
           providerList.setAttribute('aria-labelledby', heading.id);
-          category.providers.forEach(function(provider) { providerList.append(providerCard(provider)); });
+          visibleProviders.forEach(function(provider) { providerList.append(providerCard(provider)); });
           categoryItem.append(heading, providerList);
           fragment.append(categoryItem);
         });

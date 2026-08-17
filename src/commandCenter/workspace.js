@@ -504,6 +504,11 @@ function buildSimulatedGraph(input) {
   const seed = sha256({ tenantId: input.tenantId, key: input.key, scenario: selection });
   const nameIndex = Number.parseInt(seed.slice(0, 8), 16) % DEMO_CUSTOMER_NAMES.length;
   const customerName = DEMO_CUSTOMER_NAMES[nameIndex];
+  const serviceRadiusMiles = profile.business.material.serviceRadiusMiles;
+  const distanceTenths = 10 + (
+    Number.parseInt(seed.slice(8, 16), 16) % Math.max(1, serviceRadiusMiles * 10 - 9)
+  );
+  const customerDistanceMiles = distanceTenths / 10;
   const prepared = pipeline.withDeterministicSeed(seed, () => {
     const scenario = pipeline.generateScenario(selection.service, customerName);
     scenario.job.scope.callerIntent = selection.intent;
@@ -534,6 +539,10 @@ function buildSimulatedGraph(input) {
     customerContext: profile.context.label,
     schedulingConstraint: profile.scheduling.label,
     conversationOutcome: profile.outcome.label,
+    serviceRadiusMiles,
+    customerDistanceMiles,
+    crewCount: profile.business.material.crewCount,
+    pricingModel: profile.business.material.pricingModel,
   });
   const evidence = {
     ...(prepared.extracted.evidence || {}),
@@ -543,6 +552,11 @@ function buildSimulatedGraph(input) {
     customerContext: profile.context.description,
     schedulingConstraint: profile.scheduling.material.customerLine,
     conversationOutcome: profile.outcome.material.customerLine,
+    serviceRadiusMiles: profile.business.label + ' serves customers within ' + serviceRadiusMiles + ' miles.',
+    customerDistanceMiles: 'This fictional customer is ' + customerDistanceMiles + ' miles from the selected business origin.',
+    crewCount: profile.business.label + ' has ' + profile.business.material.crewCount + ' available fictional field crew' +
+      (profile.business.material.crewCount === 1 ? '.' : 's.'),
+    pricingModel: profile.business.material.pricingModel,
   };
   const facts = Object.keys(scope).filter(field => evidence[field]).sort().map((field, index) => ({
     id: input.key + '-fact-' + String(index + 1),
@@ -624,6 +638,13 @@ function buildSimulatedGraph(input) {
         context: profile.context.label,
         scheduling: profile.scheduling.label,
         outcome: profile.outcome.label,
+      },
+      businessFactors: {
+        serviceRadiusMiles,
+        customerDistanceMiles,
+        crewCount: profile.business.material.crewCount,
+        pricingModel: profile.business.material.pricingModel,
+        withinServiceRadius: customerDistanceMiles <= serviceRadiusMiles,
       },
     },
   });

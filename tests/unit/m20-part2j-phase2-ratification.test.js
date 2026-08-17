@@ -74,18 +74,19 @@ describe('Mission 20 Part 2J additive Phase 2 ratification contract', () => {
     expect(settings).not.toMatch(/<\/details>\s*<\/div>\s*<\/div>\s*<!-- Integrations Section -->/);
   });
 
-  test('Settings retains accepted preferences and UI foundations while naming controls and status', () => {
+  test('Settings retains accepted preferences and accessible controls without duplicate integration or import surfaces', () => {
     for (const key of ['companyName', 'companyPhone', 'services', 'companyInfo', 'greeting', 'smartRouting', 'contacts']) {
       expect(accountRoute).toMatch(new RegExp(`['"]${key}['"]`));
     }
     for (const id of ['integration-twilio', 'integration-openai', 'integration-elevenlabs', 'integration-stripe', 'integration-google-cal', 'integration-email']) {
-      expect(settings).toContain(`id="${id}"`);
+      expect(settings).not.toContain(`id="${id}"`);
     }
     expect(settings).toMatch(/id=["']smartRoutingLabel["'][^>]*>AI answers unknown callers only/);
     expect(settings).toMatch(/id=["']smartRouting["'][^>]*aria-labelledby=["']smartRoutingLabel["']/);
     expect(settings).toMatch(/id=["']contactName["'][^>]*aria-label=["']Known contact name["']/);
     expect(settings).toMatch(/id=["']contactPhone["'][^>]*aria-label=["']Known contact phone number["']/);
-    expect(settings).toMatch(/id=["']importStatus["'][^>]*role=["']status["'][^>]*aria-live=["']polite["']/);
+    expect(settings).not.toMatch(/id=["']importStatus["']/);
+    expect(settings).not.toMatch(/Import contacts from your phone/);
     expect(settings).toMatch(/remove\.setAttribute\('aria-label', 'Remove known contact ' \+ contact\.name\)/);
   });
 

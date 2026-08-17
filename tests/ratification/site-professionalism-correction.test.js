@@ -6,7 +6,7 @@ const vm = require('vm');
 const contract = require('../../public/js/command-center-contract');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const ALLOWLIST = Object.freeze(['command-center', 'polaris', 'leads', 'communications']);
+const ALLOWLIST = Object.freeze(['command-center', 'leads', 'communications']);
 const PAGE_BY_ROUTE = Object.freeze({
   'command-center': 'public/demo-dashboard.html',
   polaris: 'public/dashboard/polaris.html',
@@ -60,14 +60,12 @@ describe('surgical site professionalism correction', () => {
     expect(read('public/dashboard/communications.html')).not.toContain('id="polarisCard"');
   });
 
-  test('the source-bound Inter layer uses only supported weights site-wide', () => {
+  test('the site uses the native platform font stack site-wide', () => {
     expect(read('public/css/style.css').startsWith("@import url('/css/site-professionalism.css');")).toBe(true);
     const layer = read('public/css/site-professionalism.css');
-    expect(layer).toContain("font-family: 'Inter'");
-    expect(layer).toContain('font-weight: 400 800');
-    expect(layer).toContain('3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62');
-    expect(layer).toContain("data:font/woff2;base64,");
-    expect(layer).toContain("font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important");
+    expect(layer).toContain("font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif !important");
+    expect(layer).toContain("--font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif");
+    expect(layer).not.toContain("font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important");
     expect(layer).toContain('font-synthesis: none');
 
     const source = allFiles(path.join(ROOT, 'public'), ['.css', '.html'])

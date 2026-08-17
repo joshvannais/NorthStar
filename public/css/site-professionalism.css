@@ -14,7 +14,9 @@
 
 /*
  * Reversible professionalism layer.
- * The accepted design-system authority is Inter 400/500/600/700/800.
+ * The accepted design-system authority is the native system stack used by the
+ * deployed iPhone presentation. The embedded legacy Inter face above remains
+ * inert so this presentation-only correction can be reverted independently.
  * Keep product behavior in mounted page modules; this file only normalizes
  * typography, containment, spacing, and shared presentation components.
  */
@@ -25,7 +27,27 @@ html body input,
 html body select,
 html body textarea,
 html body option {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif !important;
+}
+
+html {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+}
+
+html body {
+  font-size: 16px;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+html body :is(h1, h2, h3, h4, h5, h6, .page-title, .bp-title, .stat-label, .ds-kpi-label) {
+  font-family: var(--font-display) !important;
+}
+
+html body :is(h1, h2, h3, h4, h5, h6, .page-title, .bp-title) {
+  text-transform: capitalize;
 }
 
 html body button,
@@ -90,7 +112,8 @@ html body .mobile-header .theme-toggle {
     flex: 0 0 auto;
   }
 
-  html body .app-layout {
+  html body .app-layout,
+  html body .dashboard-layout {
     padding-top: 57px;
   }
 }
@@ -128,6 +151,20 @@ html body .polaris-card-object-links a {
   border-radius: 9px;
   line-height: 1.35;
   text-decoration: none;
+}
+
+html body .polaris-card-object-links {
+  display: block;
+}
+
+html body .polaris-card-primary-action {
+  justify-content: center;
+  width: fit-content;
+  min-width: min(100%, 230px);
+  padding: 10px 16px !important;
+  border-color: rgba(255, 255, 255, .42) !important;
+  background: rgba(255, 255, 255, .12);
+  text-decoration: none !important;
 }
 
 html body .polaris-card-object-links a:hover,
@@ -305,6 +342,259 @@ html body .customer-drawer .drawer-polaris-item-value .polaris-confidence {
   overflow-wrap: anywhere;
 }
 
+html body .customer-drawer .drawer-polaris-pricing {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, .28);
+}
+
+html body .customer-drawer .drawer-polaris-pricing > summary {
+  cursor: pointer;
+  color: #fff;
+  font-weight: 700;
+}
+
+html body .customer-drawer .drawer-polaris-pricing #cdPricingBreakdown {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  color: #fff;
+  font-size: 14px;
+}
+
+html body .customer-drawer .drawer-pricing-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .18);
+}
+
+html body .polaris-surface-card-shell,
+html body .polaris-intelligence-card[data-polaris-card] {
+  border-color: rgba(196, 181, 253, .55);
+  background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 45%, #312e81 100%);
+  color: #fff;
+  box-shadow: 0 18px 44px rgba(76, 29, 149, .25);
+}
+
+html body .polaris-surface-card-shell :is(.polaris-card-summary, .polaris-card-kicker, .polaris-card-heading h2, .polaris-card-section h4, .polaris-card-link),
+html body .polaris-intelligence-card[data-polaris-card] :is(.polaris-card-summary, .polaris-card-kicker, .polaris-card-heading h2, .polaris-card-section h4, .polaris-card-link) {
+  color: #fff;
+}
+
+html body .polaris-surface-card-shell .polaris-card-link,
+html body .polaris-intelligence-card[data-polaris-card] .polaris-card-link {
+  color: #fef3c7;
+}
+
+html body :is(.stat-card, .ds-kpi-card, .demo-kpi-card) {
+  border: 1px solid var(--theme-border);
+  border-radius: 16px;
+  background: var(--theme-card);
+  box-shadow: var(--shadow-sm);
+}
+
+html body :is(.stat-icon, .ds-kpi-icon) {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+html body .ds-kpi-icon svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+html body :is(.stat-value, .ds-kpi-value, .demo-kpi-card strong) {
+  min-height: 1.15em;
+  font-size: clamp(24px, 3vw, 34px) !important;
+  font-weight: 600;
+  line-height: 1.08;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+html body :is(.stat-change, .ds-kpi-trend, .demo-kpi-card small) {
+  line-height: 1.45;
+}
+
+html body :is(.stat-card, .ds-kpi-card)[role="link"],
+html body :is(.stat-card, .ds-kpi-card)[tabindex="0"] {
+  cursor: pointer;
+}
+
+html body :is(.stat-card, .ds-kpi-card):focus-visible {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 3px;
+}
+
+html body :is(input, select, textarea) {
+  min-height: 44px;
+  line-height: 1.35;
+}
+
+html body :is(.form-group, .field, .bp-field) > label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+html body .toggle-switch,
+html body .switch,
+html body .toggle {
+  overflow: hidden;
+}
+
+html body .toggle-slider::before,
+html body .switch-slider::before {
+  top: 3px;
+  left: 3px;
+  margin: 0;
+}
+
+html body input:checked + .toggle-slider::before,
+html body input:checked + .switch-slider::before {
+  transform: translateX(calc(100% + 2px));
+}
+
+html body .toggle {
+  position: relative;
+  flex: 0 0 auto;
+  width: 50px;
+  height: 30px;
+  border-radius: 999px;
+}
+
+html body .toggle-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+html body .toggle-slider::before {
+  width: 24px;
+  height: 24px;
+}
+
+html body .toggle input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+html body .bp-header-actions {
+  justify-content: center !important;
+}
+
+html body .bp-nav {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px !important;
+}
+
+html body .bp-nav-btn {
+  min-height: 44px;
+  text-align: left;
+  border: 1px solid var(--theme-border) !important;
+}
+
+html body .bp-field :is(input, select, textarea) {
+  width: 100%;
+  min-height: 44px;
+}
+
+html body .integration-refresh-action {
+  border: 1px solid var(--brand-500) !important;
+  background: transparent !important;
+  color: var(--brand-500) !important;
+}
+
+html body .integration-refresh-action:hover {
+  background: var(--brand-500) !important;
+  color: #111827 !important;
+}
+
+html body .integration-category[data-category-key="maps_navigation"] .integration-card-description,
+html body .integration-category[data-category-key="maps_navigation"] .integration-details {
+  display: none;
+}
+
+html body .integration-category[data-category-key="maps_navigation"] .integration-card {
+  min-height: 0;
+  padding: 14px 16px;
+}
+
+html body .polaris-card-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid rgba(254, 243, 199, .5);
+  border-radius: 999px;
+  color: #fef3c7;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+html body .command-center-chart-controls {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+}
+
+html body .command-center-chart-control {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--theme-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+html body .command-center-chart-control[aria-pressed="true"] {
+  background: var(--brand-500);
+  color: #111827;
+}
+
+html body .demo-chart-bars button {
+  appearance: none;
+  display: contents;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  html body .mobile-header {
+    padding-top: env(safe-area-inset-top);
+    min-height: calc(57px + env(safe-area-inset-top));
+  }
+
+  html body .app-layout,
+  html body .dashboard-layout {
+    padding-top: calc(57px + env(safe-area-inset-top));
+  }
+
+  html body :is(h1, .page-title, .bp-title) {
+    font-weight: 700;
+    letter-spacing: -.03em;
+  }
+}
+
 html[data-theme="dark"] body .customer-drawer .drawer-polaris-insight {
   border-color: rgba(196, 181, 253, .48);
   background: linear-gradient(145deg, #2e1065, #4c1d95 58%, #5b21b6);
@@ -316,6 +606,26 @@ html body .demo-fact-card span,
 html body .demo-fact-card small {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+html body .northstar-demo-business-summary {
+  margin: .85rem 0 0;
+  padding: .8rem .9rem;
+  border-left: 3px solid var(--gold, #d6ad2f);
+  border-radius: .35rem;
+  background: rgba(214, 173, 47, .08);
+  color: var(--text-muted, #a7adbe);
+  font-size: .86rem;
+  line-height: 1.5;
+}
+
+html body .integration-provider-list .integration-card-map {
+  min-height: 0;
+  padding: 1rem;
+}
+
+html body .integration-card-map .integration-card-header {
+  align-items: center;
 }
 
 @media (max-width: 720px) {

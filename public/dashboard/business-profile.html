@@ -14,11 +14,11 @@
     body { font-family: var(--font-sans); color: inherit; background: inherit; }
     .bp-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
     .bp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-    .bp-header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .bp-header-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
     .bp-title { font-size: 24px; font-weight: 700; color: var(--neutral-900); }
     .bp-subtitle { font-size: 14px; color: var(--neutral-500); margin-top: 4px; }
-    .bp-nav { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 24px; padding: 4px; background: var(--neutral-100); border-radius: var(--radius); }
-    .bp-nav-btn { padding: 8px 14px; border-radius: var(--radius-sm); border: none; background: transparent; color: var(--neutral-600); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    .bp-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; margin-bottom: 24px; padding: 8px; background: var(--neutral-100); border-radius: var(--radius); }
+    .bp-nav-btn { padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--neutral-200); background: transparent; color: var(--neutral-600); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; transition: all 0.15s; }
     .bp-nav-btn:hover { background: var(--neutral-200); color: var(--neutral-800); }
     .bp-nav-btn.active { background: var(--neutral-50); color: var(--neutral-900); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .bp-section { display: none; }
@@ -106,7 +106,7 @@
     .bp-readiness-list { display: grid; gap: 10px; margin-top: 16px; }
     .bp-readiness-row { min-width: 0; padding: 14px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); background: var(--neutral-50); }
     .bp-readiness-row-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
-    .bp-readiness-row h3 { margin: 0; color: var(--neutral-800); font-size: 14px; text-transform: none; letter-spacing: 0; }
+    .bp-readiness-row h3 { margin: 0; color: var(--neutral-800); font-size: 14px; text-transform: capitalize; letter-spacing: 0; }
     .bp-readiness-help, .bp-readiness-reason, .bp-readiness-reviewed, .bp-readiness-pending { margin-top: 6px; color: var(--neutral-600); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
     .bp-readiness-reason { color: var(--neutral-700); }
     .bp-readiness-pending { font-weight: 600; color: var(--brand-700); }
@@ -695,10 +695,11 @@
       var saveButton = document.getElementById('saveBtn');
       if (!saveButton) return;
       saveButton.disabled = !editable || generalProfileConflicted;
-      saveButton.textContent = generalProfileConflicted ? 'Reload page before saving'
+      saveButton.hidden = !profileCanEdit;
+      saveButton.textContent = generalProfileConflicted ? 'Reload Page Before Saving'
         : editable ? '💾 Save Profile'
         : state === 'loading' ? 'Loading profile…'
-        : profileCanEdit ? 'Profile unavailable' : 'Read-only profile';
+        : 'Profile Unavailable';
     }
 
     function latchGeneralProfileConflict() {
@@ -818,6 +819,10 @@
       });
     }
 
+    function titleCaseLabel(value) {
+      return String(value || '').replace(/\b\w/g, function(letter) { return letter.toUpperCase(); });
+    }
+
     function appendProfileReadinessAction(container, item, action) {
       var button = document.createElement('button');
       button.type = 'button';
@@ -851,7 +856,7 @@
         header.className = 'bp-readiness-row-header';
         var heading = document.createElement('h3');
         heading.id = 'profile-readiness-item-' + item.id;
-        heading.textContent = item.label;
+        heading.textContent = titleCaseLabel(item.label);
         var state = document.createElement('span');
         state.className = 'bp-readiness-state';
         state.dataset.state = item.state;
@@ -917,9 +922,9 @@
       var save = document.getElementById('saveProfileReadinessBtn');
       if (save) {
         save.disabled = !interactive || !profileCanEdit || profileReadinessPendingCount() === 0;
-        save.textContent = profileReadinessSaving ? 'Saving readiness…'
-          : profileReadinessConflicted ? 'Reload before saving'
-          : profileCanEdit ? 'Save readiness' : 'Read-only readiness';
+        save.textContent = profileReadinessSaving ? 'Saving Readiness…'
+          : profileReadinessConflicted ? 'Reload Before Saving'
+          : 'Save Readiness';
       }
     }
 
@@ -1050,6 +1055,13 @@
     function applyProfileAccess(account) {
       var role = account && account.membership ? account.membership.role : '';
       profileCanEdit = role === 'owner' || role === 'admin';
+      [
+        'saveOperationalConfigurationBtn', 'saveBtn', 'reloadProfileReadinessBtn',
+        'saveProfileReadinessBtn', 'saveFinancialConfigurationBtn', 'saveVoiceAssistantBtn'
+      ].forEach(function(id) {
+        var button = document.getElementById(id);
+        if (button) button.hidden = !profileCanEdit;
+      });
     }
 
     function loadProfile() {
@@ -1067,8 +1079,8 @@
             renderProfile(profileData);
             associateProfileLabels(document);
             setProfileInteractionState('ready', profileCanEdit
-              ? 'Your durable account membership can edit this Business Profile.'
-              : 'Read-only: local form changes cannot be saved by your durable account membership.');
+              ? 'Your account role can edit this Business Profile.'
+              : 'This Business Profile is protected by your account role.');
           } else {
             setProfileInteractionState('error', 'Business Profile authority is unavailable. Editing remains disabled.');
             showToast('Failed to load profile', 'error');
@@ -1501,8 +1513,8 @@
       if (saveButton) {
         saveButton.disabled = !editable || !operationalConfigurationDirty ||
           operationalConfigurationSaving || operationalConfigurationConflicted;
-        saveButton.textContent = operationalConfigurationSaving ? 'Saving operational policies...'
-          : profileCanEdit ? 'Save operational policies' : 'Read-only operational policies';
+        saveButton.textContent = operationalConfigurationSaving ? 'Saving Operational Policies...'
+          : 'Save Operational Policies';
       }
       var reloadButton = document.getElementById('reloadOperationalConfigurationBtn');
       if (reloadButton) {
@@ -1726,8 +1738,8 @@
       if (saveButton) {
         saveButton.disabled = !editable || !financialConfigurationDirty ||
           financialConfigurationSaving || financialConfigurationConflicted;
-        saveButton.textContent = financialConfigurationSaving ? 'Saving financial configuration...'
-          : profileCanEdit ? 'Save financial configuration' : 'Read-only financial configuration';
+        saveButton.textContent = financialConfigurationSaving ? 'Saving Financial Configuration...'
+          : 'Save Financial Configuration';
       }
       var reloadButton = document.getElementById('reloadFinancialConfigurationBtn');
       if (reloadButton) {
@@ -1982,7 +1994,7 @@
       if (saveButton) {
         saveButton.disabled = !canAct || (!voiceAssistantDirty && voiceAssistantHasAuthority);
         saveButton.textContent = voiceAssistantSaving ? 'Saving AI Configuration...'
-          : profileCanEdit ? 'Save AI Configuration' : 'Read-only AI Configuration';
+          : 'Save AI Configuration';
       }
       var reloadButton = document.getElementById('reloadVoiceAssistantBtn');
       if (reloadButton) {

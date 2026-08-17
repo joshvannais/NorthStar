@@ -179,13 +179,11 @@ window.CustomerDetail = (function() {
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Revenue Opportunity</div><div class="drawer-polaris-item-value" id="cdPolRevenue">\u2014</div></div>';
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Recommended Action</div><div class="drawer-polaris-item-value" id="cdPolAction">\u2014</div></div>';
     html += '          </div>';
+    html += '          <details class="drawer-polaris-pricing">';
+    html += '            <summary>Pricing Breakdown And Supporting Factors</summary>';
+    html += '            <div id="cdPricingBreakdown"><p>No role-authorized estimate factors are available.</p></div>';
+    html += '          </details>';
     html += '        </div>';
-    html += '      </div>';
-
-    // Pricing Breakdown
-    html += '      <div class="drawer-section">';
-    html += '        <h3>Pricing Breakdown</h3>';
-    html += '        <div id="cdPricingBreakdown"><p style="font-size:13px;color:var(--neutral-500);">No estimate data available.</p></div>';
     html += '      </div>';
 
     // Call Transcript
@@ -448,7 +446,7 @@ window.CustomerDetail = (function() {
 
   function renderPricingBreakdown(estimates) {
     if (!estimates || estimates.length === 0) {
-      return '<p style="font-size:13px;color:var(--neutral-500);">Pricing is unavailable because no role-authorized estimate has been recorded.</p>';
+      return '<p>Pricing factors are not available because no role-authorized estimate has been recorded.</p>';
     }
     var est = estimates[0];
     var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(est.canonical);
@@ -470,9 +468,9 @@ window.CustomerDetail = (function() {
       return html;
     }
     if (presentation && presentation.customerPrice !== null) {
-      return '<p style="font-size:13px;color:var(--neutral-500);">Est. value: ' + presentation.customerPriceRoundedText + '</p>';
+      return '<p>Recorded Customer Estimate: <strong>' + presentation.customerPriceRoundedText + '</strong>. A more detailed factor breakdown requires recorded labor, material, equipment, travel, tax, and margin inputs.</p>';
     }
-    return '<p style="font-size:13px;color:var(--neutral-500);">Pricing is unavailable because the required estimate inputs have not been recorded.</p>';
+    return '<p>Pricing factors are not available because the required estimate inputs have not been recorded.</p>';
   }
 
   // ── Public API ──

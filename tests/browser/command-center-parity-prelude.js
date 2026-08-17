@@ -34,8 +34,11 @@ const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
   Object.freeze({ label: 'mobile-compact', width: 360, height: 800 }),
 ]);
-const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'polaris', 'leads', 'communications']);
-const DETAILED_POLARIS_SURFACES = Object.freeze(['command-center', 'leads', 'polaris', 'communications']);
+const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'leads', 'communications']);
+const DETAILED_POLARIS_SURFACES = Object.freeze(['command-center', 'leads', 'communications']);
+const DEMO_TOOLBAR_ALLOWLIST = Object.freeze([
+  'command-center', 'leads', 'communications', 'my-number', 'calendar', 'team', 'ai-settings',
+]);
 const SUPPORTED_FONT_WEIGHTS = Object.freeze(['400', '500', '600', '700', '800']);
 const PROVIDER_ENVIRONMENT = Object.freeze([
   'RETELL_API_KEY', 'RETELL_AGENT_ID', 'RETELL_PHONE_NUMBER', 'RETELL_WEBHOOK_SECRET',
@@ -120,8 +123,6 @@ function hasPolarisSurface(routeId) {
 
 async function inspectProfessionalPresentation(page, label) {
   const snapshot = await page.evaluate(async supportedWeights => {
-    const weights = supportedWeights.slice();
-    await Promise.all(weights.map(weight => document.fonts.load(weight + ' 16px Inter', 'NorthStar')));
     await document.fonts.ready;
     function visible(node) {
       if (!node) return false;
@@ -133,7 +134,8 @@ async function inspectProfessionalPresentation(page, label) {
       .filter(visible);
     const normalizedWeight = value => value === 'normal' ? '400' : value === 'bold' ? '700' : value;
     const families = Array.from(new Set(nodes.map(node => getComputedStyle(node).fontFamily)));
-    const fontOffenders = nodes.filter(node => !/^[\"']?Inter[\"']?(?:,|$)/.test(getComputedStyle(node).fontFamily)).map(node => ({
+    const nativeFamily = /(?:-apple-system|BlinkMacSystemFont|Segoe UI|Helvetica Neue|Arial|sans-serif)/i;
+    const fontOffenders = nodes.filter(node => !nativeFamily.test(getComputedStyle(node).fontFamily)).map(node => ({
       tag: node.tagName,
       id: node.id,
       className: typeof node.className === 'string' ? node.className : '',
@@ -155,21 +157,16 @@ async function inspectProfessionalPresentation(page, label) {
       ['malformed separator', /(?:—\s*)?\|\s*\|/],
     ];
     patterns.forEach(([name, pattern]) => { if (pattern.test(bodyText)) violations.push(name); });
-    const interFaces = Array.from(document.fonts).filter(face => String(face.family).replace(/["']/g, '') === 'Inter');
     return {
       bodyText,
       violations,
       families,
       fontOffenders,
       renderedWeights,
-      interFaces: interFaces.map(face => ({ status: face.status, weight: face.weight, style: face.style })),
-      loadedWeights: weights.map(weight => ({ weight, loaded: document.fonts.check(weight + ' 16px Inter', 'NorthStar') })),
     };
   }, SUPPORTED_FONT_WEIGHTS);
-  assert.ok(snapshot.interFaces.some(face => face.status === 'loaded'), label + ' loads the source-bound Inter font');
-  assert.ok(snapshot.loadedWeights.every(entry => entry.loaded), label + ' loads each supported Inter weight');
-  assert.ok(snapshot.families.length > 0 && snapshot.families.every(family => /^['"]?Inter['"]?(?:,|$)/.test(family)),
-    label + ' renders all visible text and controls with Inter: ' + JSON.stringify(snapshot.fontOffenders));
+  assert.ok(snapshot.families.length > 0 && snapshot.fontOffenders.length === 0,
+    label + ' renders all visible text and controls with the canonical native system stack: ' + JSON.stringify(snapshot.fontOffenders));
   assert.ok(snapshot.renderedWeights.every(weight => SUPPORTED_FONT_WEIGHTS.includes(weight)),
     label + ' renders only supported font weights: ' + JSON.stringify(snapshot.renderedWeights));
   assert.deepStrictEqual(snapshot.violations, [], label + ' contains no raw/internal/malformed user-facing text');
@@ -204,7 +201,7 @@ async function closeServer(server) {
 }
 
 async function waitReady(page, route, revision) {
-  await page.waitForFunction(({ expectedRevision, marker, surface, routeId, expectsPolaris }) => {
+  await page.waitForFunction(({ expectedRevision, marker, surface, routeId, expectsPolaris, expectsToolbar }) => {
     const api = window.NorthStarDemoRuntime;
     const value = api && api.getWorkspace && api.getWorkspace();
     const root = document.documentElement;
@@ -213,14 +210,18 @@ async function waitReady(page, route, revision) {
       ? document.querySelector('#commandCenterPolaris[data-polaris-card="northstar_polaris_intelligence_card_v1"]')
       : document.querySelector('#northstarPolarisSurfaceCard[data-state="ready"]');
     const cardReady = expectsPolaris ? Boolean(mountedCard) : !mountedCard;
+    const toolbarReady = expectsToolbar
+      ? Boolean(document.getElementById('northstarDemoToolbar'))
+      : !document.getElementById('northstarDemoToolbar');
     return value && value.integrity.revision === expectedRevision &&
       root.getAttribute('data-northstar-navigation') === 'ready' &&
       root.getAttribute('data-demo-workspace') === 'ready' &&
-      document.getElementById('northstarDemoToolbar') && node && cardReady &&
+      toolbarReady && node && cardReady &&
       document.body.textContent.includes(marker);
   }, {
     expectedRevision: revision, marker: route.marker, surface: route.surface,
     routeId: route.id, expectsPolaris: hasPolarisSurface(route.id),
+    expectsToolbar: DEMO_TOOLBAR_ALLOWLIST.includes(route.id),
   }, { timeout: 15000 });
 }
 
@@ -260,9 +261,9 @@ async function inspectCurrent(page, route, revision, viewport) {
     const contentLeft = mainRect.left + parseFloat(mainStyle.paddingLeft || '0');
     const contentRight = mainRect.right - parseFloat(mainStyle.paddingRight || '0');
     const nextSurface = Array.from(main.children).find(node => node !== toolbar && visible(node));
-    const controlRects = Array.from(toolbar.querySelectorAll('button, select, a')).filter(visible).map(node => ({
+    const controlRects = toolbar ? Array.from(toolbar.querySelectorAll('button, select, a')).filter(visible).map(node => ({
       id: node.id || node.textContent.trim(), rect: rect(node),
-    }));
+    })) : [];
     const overlaps = [];
     for (let left = 0; left < controlRects.length; left += 1) {
       for (let right = left + 1; right < controlRects.length; right += 1) {
@@ -351,6 +352,8 @@ async function inspectCurrent(page, route, revision, viewport) {
       catalogueState: routeId === 'integrations' && document.getElementById('integrationCatalogueRoot').dataset.state,
       catalogueCategories: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-category').length : null,
       catalogueProviders: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-card').length : null,
+      catalogueProviderNames: routeId === 'integrations' ? Array.from(document.querySelectorAll('#integrationCategoryList .integration-card h3')).map(node => node.textContent.trim()) : [],
+      catalogueProviderNames: routeId === 'integrations' ? Array.from(document.querySelectorAll('#integrationCategoryList .integration-card h3')).map(node => node.textContent.trim()) : [],
       routeId,
       routePath,
       mobile,
@@ -369,13 +372,17 @@ async function inspectCurrent(page, route, revision, viewport) {
   assert.strictEqual(snapshot.mobileHeaderVisible, viewport.width <= 768, route.path + ' responsive mobile header visibility');
   assert.strictEqual(snapshot.genericShells, 0, route.path + ' generic Parity shell removed');
   assert.ok(snapshot.overflow <= 1, route.path + ' no horizontal overflow');
-  assert.ok(snapshot.toolbarRect.left - snapshot.mainRect.left >= 11 &&
-    snapshot.mainRect.right - snapshot.toolbarRect.right >= 11,
-  route.path + ' demo controls retain responsive outer gutters');
-  assert.ok(snapshot.toolbarRect.left >= snapshot.contentLeft - 1 && snapshot.toolbarRect.right <= snapshot.contentRight + 1,
-    route.path + ' demo controls stay within content gutters');
-  if (snapshot.nextSurfaceRect) {
-    assert.ok(snapshot.nextSurfaceRect.top - snapshot.toolbarRect.bottom >= 8, route.path + ' demo controls do not touch canonical surface');
+  if (DEMO_TOOLBAR_ALLOWLIST.includes(route.id)) {
+    assert.ok(snapshot.toolbarRect.left - snapshot.mainRect.left >= 11 &&
+      snapshot.mainRect.right - snapshot.toolbarRect.right >= 11,
+    route.path + ' demo controls retain responsive outer gutters');
+    assert.ok(snapshot.toolbarRect.left >= snapshot.contentLeft - 1 && snapshot.toolbarRect.right <= snapshot.contentRight + 1,
+      route.path + ' demo controls stay within content gutters');
+    if (snapshot.nextSurfaceRect) {
+      assert.ok(snapshot.nextSurfaceRect.top - snapshot.toolbarRect.bottom >= 8, route.path + ' demo controls do not touch canonical surface');
+    }
+  } else {
+    assert.strictEqual(snapshot.toolbarRect, null, route.path + ' intentionally omits the simulation box');
   }
   assert.deepStrictEqual(snapshot.overlaps, [], route.path + ' demo controls do not overlap');
   if (hasPolarisSurface(route.id)) {
@@ -398,8 +405,10 @@ async function inspectCurrent(page, route, revision, viewport) {
   }
   if (route.id === 'integrations') {
     assert.strictEqual(snapshot.catalogueState, 'ready', route.path + ' catalogue contract reaches ready');
-    assert.strictEqual(snapshot.catalogueCategories, 7, route.path + ' renders every catalogue category');
-    assert.strictEqual(snapshot.catalogueProviders, 26, route.path + ' renders every catalogue provider');
+    assert.ok(snapshot.catalogueCategories > 0, route.path + ' renders customer-connectable catalogue categories');
+    assert.ok(snapshot.catalogueProviders > 0, route.path + ' renders customer-connectable providers');
+    assert.ok(!snapshot.catalogueProviderNames.some(name => ['OpenAI', 'Twilio', 'ElevenLabs'].includes(name)),
+      route.path + ' hides internal platform providers from the customer catalogue');
   }
   if (route.id === 'team') {
     assert.ok(snapshot.teamCrewLayout.length > 0 && snapshot.teamCrewLayout.every(row =>
@@ -749,8 +758,8 @@ async function inspectPaidCurrent(page, route, viewport) {
       route.paidPath + ' card remains human-readable');
     assert.ok(snapshot.objectHrefs.every(href => href && href.startsWith('/dashboard')),
       route.paidPath + ' actions remain in paid role-authorized routes');
-    assert.ok(snapshot.objectHrefs.filter(href => href.startsWith('/dashboard/polaris?')).length >= 3,
-      route.paidPath + ' exposes customer, lead, and work detail paths');
+    assert.strictEqual(snapshot.objectHrefs.filter(href => href.startsWith('/dashboard/polaris?')).length, 1,
+      route.paidPath + ' exposes one focused complete-intelligence path instead of stacked quick links');
   } else {
     assert.strictEqual(snapshot.cardCount, 0, route.paidPath + ' has no misplaced standalone Polaris card');
     assert.strictEqual(snapshot.cardContract, null, route.paidPath + ' has no Polaris card contract residue');
@@ -758,8 +767,10 @@ async function inspectPaidCurrent(page, route, viewport) {
   }
   if (route.id === 'integrations') {
     assert.strictEqual(snapshot.catalogueState, 'ready', route.paidPath + ' catalogue contract reaches ready');
-    assert.strictEqual(snapshot.catalogueCategories, 7, route.paidPath + ' renders every catalogue category');
-    assert.strictEqual(snapshot.catalogueProviders, 26, route.paidPath + ' renders every catalogue provider');
+    assert.ok(snapshot.catalogueCategories > 0, route.paidPath + ' renders customer-connectable catalogue categories');
+    assert.ok(snapshot.catalogueProviders > 0, route.paidPath + ' renders customer-connectable providers');
+    assert.ok(!snapshot.catalogueProviderNames.some(name => ['OpenAI', 'Twilio', 'ElevenLabs'].includes(name)),
+      route.paidPath + ' hides internal platform providers from the customer catalogue');
   }
   return snapshot;
 }
@@ -808,7 +819,7 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger) 
     await exerciseMobileMenuControls(page, viewport, 'paid');
     await exerciseTheme(page, viewport);
     await captureEvidence(page, 'paid', ROUTES[0], viewport, 'theme');
-    assert.strictEqual(first.objectHrefs.length >= 3, true, viewport.label + ' paid Command Center exposes complete object paths');
+    assert.strictEqual(first.objectHrefs.length, 1, viewport.label + ' paid Command Center exposes one focused complete-intelligence path');
     const absentEstimate = await page.evaluate(() => {
       const valueCard = Array.from(document.querySelectorAll('#commandCenterKpis .demo-kpi-card')).find(card => {
         const label = card.querySelector('span');
@@ -845,7 +856,7 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger) 
     }
 
     await clickPaidRoute(page, origin, ROUTES[0], viewport);
-    const leadLink = page.locator('#commandCenterPolaris .polaris-card-object-links a', { hasText: 'lead detail' }).first();
+    const leadLink = page.locator('#commandCenterPolaris .polaris-card-primary-action').first();
     const leadHref = await leadLink.getAttribute('href');
     assert.ok(leadHref && leadHref.startsWith('/dashboard/polaris?kind=lead&id='), viewport.label + ' paid lead path');
     await Promise.all([
@@ -854,9 +865,8 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger) 
     ]);
     const detail = await inspectPaidCurrent(page, ROUTES[1], viewport);
     await captureEvidence(page, 'paid', ROUTES[1], viewport, 'object-detail');
-    assert.ok(detail.cardText.includes(PAID_CUSTOMER_A) && detail.cardText.includes('Evidence'),
-      viewport.label + ' paid role-authorized complete Polaris detail');
-    assert.ok(!detail.cardText.includes(PAID_CUSTOMER_B), viewport.label + ' paid detail excludes tenant B');
+    assert.strictEqual(detail.cardCount, 0, viewport.label + ' paid Polaris remains chat-centric without a duplicate surface card');
+    assert.ok(!detail.body.includes(PAID_CUSTOMER_B), viewport.label + ' paid Polaris excludes tenant B');
     console.log('PARITY_BROWSER_CHECKPOINT paid-' + viewport.label + ' complete');
     return { viewport: viewport.label, routes: ROUTES.length, tenant: PAID_ORG_A };
   } finally {
@@ -924,10 +934,11 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         const requestOffset = ledger.requests.length;
         const prompt = page.locator('#polarisPromptInput').first();
         const send = page.locator('#polarisSendBtn').first();
-        await prompt.fill('Show the account-free demo boundary.');
+        await prompt.fill("What's my pipeline health?");
         await send.click();
         await page.waitForFunction(() => Array.from(document.querySelectorAll('.polaris-chat-message')).some(node =>
-          node.textContent.includes('Live Polaris chat is not available in the account-free demo.')
+          node.textContent.includes('The current fictional pipeline contains') &&
+          node.textContent.includes('no live provider request was sent')
         ));
         const chatRequests = ledger.requests.slice(requestOffset).filter(entry =>
           new URL(entry.url).pathname === '/api/v1/polaris/chat'
@@ -1144,7 +1155,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
 
     const polarisRoute = ROUTES.find(route => route.id === 'polaris');
     const detailPath = polarisRoute.path + '?kind=lead&id=' + encodeURIComponent(added.ids.lead);
-    const detailLink = page.locator('#commandCenterPolaris .polaris-card-object-links a', { hasText: 'lead detail' }).first();
+    const detailLink = page.locator('#commandCenterPolaris .polaris-card-primary-action').first();
     assert.strictEqual(await detailLink.getAttribute('href'), detailPath, viewport.label + ' exact lead-detail destination');
     await Promise.all([
       page.waitForURL(url => url.origin === origin && url.pathname + url.search === detailPath, { timeout: 15000 }),
@@ -1153,15 +1164,10 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     const detail = await inspectCurrent(page, polarisRoute, 2, viewport);
     await captureEvidence(page, 'demo', polarisRoute, viewport, 'object-detail');
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' polaris-detail');
-    assert.ok(detail.polarisCardText.includes(added.customer.name), viewport.label + ' customer detail is human-readable');
-    assert.ok(detail.polarisCardText.includes(added.lead.serviceLabel), viewport.label + ' lead detail retains service context');
-    assert.ok(detail.polarisCardText.includes('Evidence'), viewport.label + ' complete supporting evidence is available');
-    assert.ok(detail.polarisCardText.includes('Missing information'), viewport.label + ' missing inputs are explained');
-    assert.ok(detail.polarisObjectHrefs.some(href => href && href.includes(encodeURIComponent(added.ids.customer))),
-      viewport.label + ' customer object has a complete detail path');
-    assert.ok(detail.polarisObjectHrefs.some(href => href && href.includes(encodeURIComponent(added.ids.work))),
-      viewport.label + ' work object has a complete detail path');
-    await exercisePolarisDisclosure(page, polarisRoute, viewport);
+    assert.strictEqual(detail.polarisCardCount, 0, viewport.label + ' Polaris remains chat-centric without a duplicate surface card');
+    assert.ok(detail.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph),
+      viewport.label + ' Polaris reads the complete shared simulated graph');
+    assert.ok(detail.body.includes('Ask Polaris anything'), viewport.label + ' Polaris keeps the business-intelligence chat entry point');
 
     for (const id of ['team', 'ai-settings', 'business-profile', 'settings', 'integrations']) {
       const route = ROUTES.find(candidate => candidate.id === id);

@@ -21,7 +21,7 @@ const {
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const TOKEN_HASH = 'a'.repeat(64);
-const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'polaris', 'leads', 'communications']);
+const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'leads', 'communications']);
 const PAGE_BY_ROUTE = Object.freeze({
   'command-center': 'public/demo-dashboard.html',
   polaris: 'public/dashboard/polaris.html',
@@ -193,9 +193,10 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(client).not.toMatch(/\.innerHTML\s*=|insertAdjacentHTML|document\.write|eval\s*\(/);
     expect(client).not.toContain('northstarDemoPolarisDetail');
     const polaris = read('public/dashboard/polaris.html');
-    expect(polaris).toContain('function respondToAccountFreeDemoChat()');
-    expect(polaris.match(/respondToAccountFreeDemoChat\(\)/g)).toHaveLength(3);
-    expect(polaris).toContain('no request was sent.');
+    expect(polaris).toContain('function respondToAccountFreeDemoChat(message)');
+    expect(polaris).toContain('function demoPolarisResponse(message)');
+    expect(polaris).toContain('no live provider request was sent.');
+    expect(polaris).toContain('NorthStarDemoRuntime.getWorkspace()');
     expect(server).toContain("'command-center': 'public/demo-dashboard.html'");
     expect(server).toContain("'/dashboard': 'public/demo-dashboard.html'");
     expect(server).toContain("integrations: 'public/dashboard/integrations.html'");
@@ -372,10 +373,10 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(scenarioSpace.DIMENSION_ORDER).toEqual([
       'business', 'service', 'intent', 'urgency', 'context', 'scheduling', 'outcome',
     ]);
-    expect(scenarioSpace.COMBINATION_COUNT).toBe(38400);
+    expect(scenarioSpace.COMBINATION_COUNT).toBe(115200);
     expect(scenarioSpace.publicScenarioSpace()).toEqual(expect.objectContaining({
       contract: 'northstar_demo_scenario_space_v1',
-      combinationCount: 38400,
+      combinationCount: 115200,
       dimensions: expect.any(Array),
     }));
 
@@ -421,8 +422,19 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       ]));
       expect(graph.polaris.facts.map(fact => fact.variable)).toEqual(expect.arrayContaining([
         'businessContext', 'callerIntent', 'urgency', 'customerContext',
-        'schedulingConstraint', 'conversationOutcome',
+        'schedulingConstraint', 'conversationOutcome', 'serviceRadiusMiles',
+        'customerDistanceMiles', 'crewCount', 'pricingModel',
       ]));
+      expect(graph.scenario.businessFactors).toEqual(expect.objectContaining({
+        serviceRadiusMiles: expect.any(Number),
+        customerDistanceMiles: expect.any(Number),
+        crewCount: expect.any(Number),
+        pricingModel: expect.any(String),
+        withinServiceRadius: true,
+      }));
+      expect(graph.scenario.businessFactors.customerDistanceMiles)
+        .toBeLessThanOrEqual(graph.scenario.businessFactors.serviceRadiusMiles);
+      expect(graph.scenario.businessFactors.customerDistanceMiles).toBeGreaterThanOrEqual(1);
       expect(graph.lead).toEqual(expect.objectContaining({
         callerIntent: graph.scenario.labels.intent,
         urgency: graph.scenario.labels.urgency,

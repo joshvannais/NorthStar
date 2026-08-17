@@ -148,7 +148,7 @@
     var title = route.label === 'Polaris' ? 'Polaris' : route.label;
     document.getElementById('demoCommandTitle').textContent = title;
     document.getElementById('demoCommandDescription').textContent = DESCRIPTIONS[route.id];
-    document.getElementById('demoWorkspaceRevision').textContent = 'Revision ' + workspace.integrity.revision + ' · ' + workspace.integrity.graphCount + ' record graphs';
+    document.getElementById('demoWorkspaceRevision').textContent = 'Shared fictional workspace · ' + workspace.integrity.graphCount + ' record graphs';
     document.getElementById('demoSessionDurability').textContent = workspace.session.durable
       ? 'Durable isolated session'
       : 'Projection-only until you act';

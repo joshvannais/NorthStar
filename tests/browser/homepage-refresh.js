@@ -20,6 +20,7 @@ process.chdir(ROOT);
 const { app } = require('../../src/server');
 
 const CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
+const DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce a fictional demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
@@ -84,7 +85,7 @@ function readyStatus() {
       missing: [],
       storageRequirement: 'basic_attributes_only',
       retentionRequirementDays: 1,
-      disclosureVersion: 'attorney-gated-draft-v1',
+      disclosureVersion: 'attorney-gated-draft-v2',
     },
     transcriptPersistence: 'none',
     resultPersistence: 'browser-memory-only',
@@ -139,12 +140,18 @@ async function installPageHarness(page, origin, options = {}) {
     disclosureBeforeCreate: false,
     deleteAttempts: 0,
   };
-  await page.addInitScript((sdkStartDelayMs) => {
+  await page.addInitScript((testOptions) => {
     window.__webCallSequence = [];
     window.__spokenDisclosures = [];
     window.__homepageXss = 0;
     window.__retellStopCalls = 0;
-    window.__retellSdkStartDelayMs = sdkStartDelayMs;
+    window.__retellSdkStartDelayMs = testOptions.sdkStartDelayMs;
+    if (testOptions.maximumCallTimeoutMs > 0) {
+      const nativeSetTimeout = window.setTimeout.bind(window);
+      window.setTimeout = function (handler, delay, ...args) {
+        return nativeSetTimeout(handler, delay === 300000 ? testOptions.maximumCallTimeoutMs : delay, ...args);
+      };
+    }
     const TestUtterance = function (text) {
       this.text = text;
       this.rate = 1;
@@ -161,7 +168,10 @@ async function installPageHarness(page, origin, options = {}) {
     };
     Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: TestUtterance });
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: testSynthesis });
-  }, Number(options.sdkStartDelayMs) || 0);
+  }, {
+    sdkStartDelayMs: Number(options.sdkStartDelayMs) || 0,
+    maximumCallTimeoutMs: Number(options.maximumCallTimeoutMs) || 0,
+  });
   await page.route('**/js/vendor/retell-web-client.mjs', route => route.fulfill({
     status: 200,
     contentType: 'application/javascript; charset=utf-8',
@@ -194,6 +204,8 @@ async function installPageHarness(page, origin, options = {}) {
           purgeToken: 'signed-purge-token',
           storage: 'basic_attributes_only',
           retentionDays: 1,
+          transport: 'retell_browser_web_call_no_phone_number',
+          disclosureText: DISCLOSURE_COPY,
           verbalConsentPhrase: CONSENT_PHRASE,
         },
       }) });
@@ -210,9 +222,17 @@ async function installPageHarness(page, origin, options = {}) {
         }) });
       }
       await new Promise(resolve => setTimeout(resolve, 120));
+      const deletionData = {
+        providerDeletionVerified: true,
+        northstarPurged: true,
+        retainedContent: false,
+      };
+      if (body && body.projectionRequested === true) {
+        deletionData.verifiedPurgeReceipt = 'signed-verified-purge-receipt';
+      }
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
         success: true,
-        data: { providerDeletionVerified: true, northstarPurged: true, retainedContent: false },
+        data: deletionData,
       }) });
     }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ success: false }) });
@@ -377,8 +397,17 @@ async function runSuccessfulCase(browser, origin, selected, viewport) {
     const createBody = harness.bodies.find(entry => entry.path === '/api/demo/homepage/web-call').body;
     assert.deepStrictEqual(createBody, { consentAcknowledged: true, industry: 'Roofing' }, `${selected}/${viewport.label}: exact create body`);
     const polarisBody = harness.bodies.find(entry => entry.path.includes('/polaris/')).body;
+    const deleteBody = harness.bodies.find(entry => entry.method === 'DELETE').body;
     assert.ok(Array.isArray(polarisBody.transcript) && polarisBody.transcript.length >= 3, `${selected}/${viewport.label}: consented transcript projected once`);
     assert.ok(harness.bodies.some(entry => entry.method === 'DELETE'), `${selected}/${viewport.label}: provider deletion requested`);
+    assert.strictEqual(deleteBody.projectionRequested, true,
+      `${selected}/${viewport.label}: consented hangup requests one receipt-gated projection`);
+    assert.strictEqual(polarisBody.verifiedPurgeReceipt, 'signed-verified-purge-receipt',
+      `${selected}/${viewport.label}: exact verified-purge receipt gates projection`);
+    const deletionIndex = harness.requests.findIndex(entry => entry.method === 'DELETE');
+    const projectionIndex = harness.requests.findIndex(entry => entry.method === 'POST' && entry.path.includes('/polaris/'));
+    assert.ok(deletionIndex >= 0 && projectionIndex > deletionIndex,
+      `${selected}/${viewport.label}: verified deletion completes before Polaris request`);
     assert.deepStrictEqual(pageErrors, [], `${selected}/${viewport.label}: no page errors`);
     assert.deepStrictEqual(consoleErrors, [], `${selected}/${viewport.label}: no console errors`);
     return { viewport: viewport.label, deletionAttempts: harness.deleteAttempts, transcriptTurns: polarisBody.transcript.length };
@@ -408,6 +437,10 @@ async function runCancellationCase(browser, origin, selected) {
     await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().active === false &&
       window.NorthStarHomepageDemo.getState().deletionState === 'verified', null, { timeout: 10000 });
     assert.strictEqual(harness.deleteAttempts, 1, `${selected}: cancellation after creation verifies deletion`);
+    assert.strictEqual(harness.bodies.find(entry => entry.method === 'DELETE').body.projectionRequested, false,
+      `${selected}: cancellation permanently denies projection`);
+    assert.strictEqual(harness.requests.some(entry => entry.path.includes('/polaris/')), false,
+      `${selected}: cancellation makes no Polaris request`);
     assert.strictEqual(await page.evaluate(() => window.__webCallSequence.includes('sdk-start')), false,
       `${selected}: cancellation before microphone access never starts the SDK`);
     assert.strictEqual(await page.isVisible('#demoPostCallView'), false, `${selected}: cancelled start creates no result`);
@@ -440,10 +473,56 @@ async function runConnectionCancellationCase(browser, origin, selected) {
       state: window.NorthStarHomepageDemo.getState(),
     }));
     assert.strictEqual(harness.deleteAttempts, 1, `${selected}: connection withdrawal verifies provider deletion`);
+    assert.strictEqual(harness.bodies.find(entry => entry.method === 'DELETE').body.projectionRequested, false,
+      `${selected}: connection withdrawal permanently denies projection`);
+    assert.strictEqual(harness.requests.some(entry => entry.path.includes('/polaris/')), false,
+      `${selected}: connection withdrawal makes no Polaris request`);
     assert.strictEqual(terminal.connected, false, `${selected}: late SDK connection is stopped after withdrawal`);
     assert.ok(terminal.stopCalls >= 2, `${selected}: SDK stop is retried after its connection promise settles`);
     assert.strictEqual(terminal.state.active, false, `${selected}: late SDK events cannot reactivate the deleted call`);
     assert.strictEqual(terminal.state.resultVisible, false, `${selected}: connection withdrawal creates no result`);
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+async function runPurgeRaceCancellationCase(browser, origin, selected) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const harness = await installPageHarness(page, origin);
+  try {
+    await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForFunction(() => window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState().available);
+    await page.fill('#demoBusinessName', 'Purge Race Cancellation Test');
+    await page.selectOption('#demoIndustry', 'Roofing');
+    await page.check('#demoConsentCheckbox');
+    await page.click('#demoCallBtn');
+    await page.click('#modalCallBtn');
+    await page.waitForFunction(() => window.__retellTestClient);
+    await page.evaluate(phrase => window.__retellTestClient.pushTranscript([
+      { role: 'user', content: phrase },
+      { role: 'agent', content: 'Describe a fictional roof.' },
+      { role: 'user', content: 'It is 2000 square feet.' },
+    ]), CONSENT_PHRASE);
+    await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().consented);
+    const projectionDelete = page.waitForRequest(request => {
+      if (request.method() !== 'DELETE') return false;
+      try { return request.postDataJSON().projectionRequested === true; } catch (_error) { return false; }
+    });
+    await page.click('#demoHangupBtn');
+    await projectionDelete;
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await page.waitForTimeout(400);
+    const deleteBodies = harness.bodies
+      .filter(entry => entry.method === 'DELETE')
+      .map(entry => entry.body && entry.body.projectionRequested);
+    assert.deepStrictEqual(deleteBodies, [true, false],
+      `${selected}: pagehide commits deletion-only denial during projection-enabled purge`);
+    assert.strictEqual(harness.requests.some(entry => entry.path.includes('/polaris/')), false,
+      `${selected}: in-flight purge cancellation makes no Polaris request`);
+    assert.strictEqual(await page.isVisible('#demoPostCallView'), false,
+      `${selected}: in-flight purge cancellation renders no result`);
   } finally {
     await page.close();
     await context.close();
@@ -476,9 +555,44 @@ async function runFailureCase(browser, origin, selected) {
     assert.strictEqual(failed.deletionState, 'unverified', `${selected}: deletion state fails closed`);
     assert.strictEqual(failed.transcriptTurns, 0, `${selected}: transcript cleared on delete failure`);
     assert.strictEqual(failed.resultVisible, false, `${selected}: result cleared on delete failure`);
+    assert.strictEqual(harness.requests.some(entry => entry.path.includes('/polaris/')), false,
+      `${selected}: failed deletion makes no Polaris request`);
     await page.click('#demoRetryDeleteBtn');
     await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().active === false);
     assert.strictEqual(harness.deleteAttempts, 2, `${selected}: one deliberate retry`);
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+async function runMaximumTimeoutCase(browser, origin, selected) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const harness = await installPageHarness(page, origin, { maximumCallTimeoutMs: 80 });
+  try {
+    await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForFunction(() => window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState().available);
+    await page.fill('#demoBusinessName', 'Timeout Boundary Test');
+    await page.selectOption('#demoIndustry', 'Roofing');
+    await page.check('#demoConsentCheckbox');
+    await page.click('#demoCallBtn');
+    await page.click('#modalCallBtn');
+    await page.waitForFunction(() => window.__retellTestClient);
+    await page.evaluate(phrase => window.__retellTestClient.pushTranscript([
+      { role: 'user', content: phrase },
+      { role: 'agent', content: 'Describe a fictional roof.' },
+      { role: 'user', content: 'It is 2000 square feet.' },
+    ]), CONSENT_PHRASE);
+    await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().consented);
+    await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().active === false, null, { timeout: 10000 });
+    const timeoutState = await page.evaluate(() => window.NorthStarHomepageDemo.getState());
+    assert.strictEqual(harness.deleteAttempts, 1, `${selected}: maximum timeout verifies deletion`);
+    assert.strictEqual(harness.bodies.find(entry => entry.method === 'DELETE').body.projectionRequested, false,
+      `${selected}: maximum timeout permanently denies projection`);
+    assert.strictEqual(harness.requests.some(entry => entry.path.includes('/polaris/')), false,
+      `${selected}: maximum timeout makes no Polaris request`);
+    assert.strictEqual(timeoutState.resultVisible, false, `${selected}: maximum timeout renders no result`);
   } finally {
     await page.close();
     await context.close();
@@ -546,12 +660,16 @@ async function main() {
     for (const viewport of VIEWPORTS) evidence.cases.push(await runSuccessfulCase(browser, origin, selected, viewport));
     await runCancellationCase(browser, origin, selected);
     await runConnectionCancellationCase(browser, origin, selected);
+    await runPurgeRaceCancellationCase(browser, origin, selected);
     await runFailureCase(browser, origin, selected);
+    await runMaximumTimeoutCase(browser, origin, selected);
     await runUnavailableCase(browser, origin, selected);
     await runVendorBoundaryCase(browser, origin, selected);
     evidence.failureBoundary = 'pass';
     evidence.cancellationBoundary = 'pass';
     evidence.connectionCancellationBoundary = 'pass';
+    evidence.purgeCancellationRaceBoundary = 'pass';
+    evidence.maximumTimeoutBoundary = 'pass';
     evidence.sourceDisabledBoundary = 'pass';
     evidence.vendorLogBoundary = 'pass';
     process.stdout.write(JSON.stringify(evidence, null, 2) + '\n');

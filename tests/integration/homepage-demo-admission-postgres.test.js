@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto = require('crypto');
+const express = require('express');
+const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -11,11 +13,14 @@ realPostgres('Homepage Web Call durable admission', () => {
   let pool;
   let HomepageDemoAdmissionHousekeepingWorker;
   let HomepageDemoAdmissionRepository;
+  let HomepageWebCallService;
+  let createHomepageDemoRouter;
   let PROJECTION_CALLS_GLOBAL_PER_MINUTE;
   let PROJECTION_CALLS_PER_SOURCE_MINUTE;
   let PURGE_CALLS_GLOBAL_PER_MINUTE;
   let PURGE_CALLS_PER_SOURCE_MINUTE;
   let PURGE_ATTEMPTS_PER_CAPABILITY;
+  let signPurgeToken;
   let sourceHash;
   const originalDatabaseUrl = process.env.DATABASE_URL;
 
@@ -36,6 +41,8 @@ realPostgres('Homepage Web Call durable admission', () => {
       PURGE_ATTEMPTS_PER_CAPABILITY,
       sourceHash,
     } = require('../../src/services/homepageDemoAdmission'));
+    ({ HomepageWebCallService, signPurgeToken } = require('../../src/services/homepageWebCall'));
+    ({ createHomepageDemoRouter } = require('../../src/routes/homepageDemo'));
   }, 60000);
 
   afterAll(async () => {
@@ -151,21 +158,41 @@ realPostgres('Homepage Web Call durable admission', () => {
     const digests = Array.from({ length: 10 }, (_value, index) =>
       sourceHash('purge-replay-source-' + index, secret));
     const outcomes = await Promise.allSettled(digests.map(digest =>
-      repository.beginPurge(digest, capability, expiresAt)));
+      repository.beginPurge(digest, capability, expiresAt, true)));
     const granted = outcomes.filter(outcome => outcome.status === 'fulfilled');
     expect(granted).toHaveLength(1);
-    expect(granted[0].value).toEqual({ execute: true, verified: false, attemptCount: 1 });
+    expect(granted[0].value).toEqual({
+      execute: true,
+      verified: false,
+      attemptCount: 1,
+      projectionPermitted: true,
+    });
     const rejected = outcomes.filter(outcome => outcome.status === 'rejected');
     expect(rejected).toHaveLength(9);
     rejected.forEach(outcome => {
       expect(outcome.reason).toMatchObject({ status: 409, code: 'homepage_purge_in_progress' });
     });
-    await expect(repository.completePurge(capability, 1)).resolves.toBe(true);
-    await expect(repository.completePurge(capability, 1)).resolves.toBe(true);
-    await expect(repository.beginPurge(digests[9], capability, expiresAt)).resolves.toEqual({
+    await expect(repository.completePurge(capability, 1)).resolves.toEqual({
+      verified: true,
+      consumed: false,
+      verifiedAt: now.getTime(),
+      authorityExpiresAt: expiresAt,
+      projectionPermitted: true,
+    });
+    await expect(repository.completePurge(capability, 1)).resolves.toEqual({
+      verified: true,
+      consumed: false,
+      verifiedAt: now.getTime(),
+      authorityExpiresAt: expiresAt,
+      projectionPermitted: true,
+    });
+    await expect(repository.beginPurge(digests[9], capability, expiresAt, true)).resolves.toEqual({
       execute: false,
       verified: true,
+      consumed: false,
       attemptCount: 1,
+      verifiedAt: now.getTime(),
+      projectionPermitted: true,
     });
     await expect(repository.releasePurge(capability, 1)).resolves.toBe(false);
 
@@ -190,6 +217,305 @@ realPostgres('Homepage Web Call durable admission', () => {
     expect(operations.rows).toEqual([{ state: 'verified', attempt_count: 1 }]);
   });
 
+  test('cancellation commits projection denial while the original purge lease remains active', async () => {
+    const now = new Date('2026-08-16T14:32:00.000Z');
+    const secret = 'homepage-cancellation-race-'.padEnd(64, 'v');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const service = new HomepageWebCallService({ secret, now: () => now, retellClient: {} });
+    const callId = 'call_cancel_race_123';
+    const purgeToken = signPurgeToken(callId, secret, now, () => Buffer.alloc(16, 7));
+    const authority = service.verifyCallAuthority(callId, purgeToken);
+    const first = await repository.beginPurge(
+      sourceHash('cancellation-race-project', secret),
+      authority.capabilityHash,
+      authority.expiresAt,
+      true
+    );
+
+    await expect(repository.beginPurge(
+      sourceHash('cancellation-race-deny', secret),
+      authority.capabilityHash,
+      authority.expiresAt,
+      false
+    )).rejects.toMatchObject({ status: 409, code: 'homepage_purge_in_progress' });
+
+    expect((await pool.query(
+      `SELECT state, projection_permitted
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [authority.capabilityHash]
+    )).rows).toEqual([{ state: 'in_progress', projection_permitted: false }]);
+
+    const completed = await repository.completePurge(authority.capabilityHash, first.attemptCount);
+    expect(completed).toMatchObject({
+      verified: true,
+      consumed: false,
+      projectionPermitted: false,
+    });
+    await expect(repository.canIssueVerifiedPurgeReceipt(
+      authority.capabilityHash,
+      completed.verifiedAt
+    )).resolves.toBe(false);
+    expect(service.verifiedPurgeReceipt(
+      callId,
+      purgeToken,
+      completed.verifiedAt,
+      false
+    )).not.toHaveProperty('verifiedPurgeReceipt');
+  });
+
+  test('cancellation revokes an already-issued receipt before atomic projection consumption', async () => {
+    const now = new Date('2026-08-16T14:33:00.000Z');
+    const secret = 'homepage-issued-receipt-cancel-'.padEnd(64, 'w');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const service = new HomepageWebCallService({ secret, now: () => now, retellClient: {} });
+    const callId = 'call_issued_receipt_cancel_123';
+    const purgeToken = signPurgeToken(callId, secret, now, () => Buffer.alloc(16, 8));
+    const authority = service.verifyCallAuthority(callId, purgeToken);
+    const first = await repository.beginPurge(
+      sourceHash('issued-receipt-project', secret),
+      authority.capabilityHash,
+      authority.expiresAt,
+      true
+    );
+    const completed = await repository.completePurge(authority.capabilityHash, first.attemptCount);
+    await expect(repository.canIssueVerifiedPurgeReceipt(
+      authority.capabilityHash,
+      completed.verifiedAt
+    )).resolves.toBe(true);
+    const receipt = service.verifiedPurgeReceipt(
+      callId,
+      purgeToken,
+      completed.verifiedAt,
+      true
+    );
+    expect(receipt.verifiedPurgeReceipt).toEqual(expect.any(String));
+
+    await expect(repository.beginPurge(
+      sourceHash('issued-receipt-deny', secret),
+      authority.capabilityHash,
+      authority.expiresAt,
+      false
+    )).resolves.toMatchObject({
+      execute: false,
+      verified: true,
+      consumed: false,
+      projectionPermitted: false,
+    });
+    const projectionAuthority = service.verifyPolarisAuthority(
+      callId,
+      purgeToken,
+      receipt.verifiedPurgeReceipt
+    );
+    await expect(repository.consumeVerifiedPurgeProjection(
+      sourceHash('issued-receipt-consume', secret),
+      authority.capabilityHash,
+      projectionAuthority.verifiedPurge.verifiedAt,
+      projectionAuthority.verifiedPurge.expiresAt
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
+    expect((await pool.query(
+      `SELECT state, projection_permitted
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [authority.capabilityHash]
+    )).rows).toEqual([{ state: 'verified', projection_permitted: false }]);
+  });
+
+  test('mounted cancellation after receipt consumption prevents the paused Polaris calculation', async () => {
+    const now = new Date('2026-08-16T14:34:00.000Z');
+    const secret = 'homepage-consumed-cancellation-race-'.padEnd(64, 'z');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const service = new HomepageWebCallService({ secret, now: () => now, retellClient: {} });
+    const callId = 'call_consumed_cancellation_race_123';
+    const purgeToken = signPurgeToken(callId, secret, now, () => Buffer.alloc(16, 9));
+    const authority = service.verifyCallAuthority(callId, purgeToken);
+    const purge = await repository.beginPurge(
+      sourceHash('consumed-race-purge', secret),
+      authority.capabilityHash,
+      authority.expiresAt,
+      true
+    );
+    const completed = await repository.completePurge(authority.capabilityHash, purge.attemptCount);
+    const receipt = service.verifiedPurgeReceipt(
+      callId,
+      purgeToken,
+      completed.verifiedAt,
+      true
+    ).verifiedPurgeReceipt;
+    let consumedResolve;
+    const consumed = new Promise(resolve => { consumedResolve = resolve; });
+    let releaseResolve;
+    const release = new Promise(resolve => { releaseResolve = resolve; });
+    const gatedAdmission = {
+      beginPurge: repository.beginPurge.bind(repository),
+      completePurge: repository.completePurge.bind(repository),
+      releasePurge: repository.releasePurge.bind(repository),
+      canIssueVerifiedPurgeReceipt: repository.canIssueVerifiedPurgeReceipt.bind(repository),
+      beginVerifiedPurgeProjection(...args) {
+        return repository.beginVerifiedPurgeProjection(...args);
+      },
+      async consumeVerifiedPurgeProjection(...args) {
+        const result = await repository.consumeVerifiedPurgeProjection(...args);
+        consumedResolve();
+        await release;
+        return result;
+      },
+    };
+    service.projectPolaris = jest.fn(service.projectPolaris.bind(service));
+    const app = express();
+    app.use(express.json());
+    app.use('/api/demo/homepage', createHomepageDemoRouter({
+      service,
+      admission: gatedAdmission,
+      sourceHash: value => sourceHash(value, secret),
+    }));
+    function mutation(method, path, intent, body) {
+      return request(app)[method](path)
+        .set('Origin', 'http://127.0.0.1')
+        .set('Host', '127.0.0.1')
+        .set('Sec-Fetch-Site', 'same-origin')
+        .set('X-NorthStar-Demo-Intent', intent)
+        .send(body);
+    }
+    const projectionRequest = mutation(
+      'post',
+      '/api/demo/homepage/polaris/' + callId,
+      'calculate-homepage-polaris',
+      {
+        callDurationSeconds: 30,
+        industry: 'Roofing',
+        purgeToken,
+        transcript: [
+          { speaker: 'agent', text: 'What is the fictional roof area?' },
+          { speaker: 'customer', text: 'The fictional roof area is 1000 square feet.' },
+        ],
+        verifiedPurgeReceipt: receipt,
+      }
+    ).then(response => response);
+    await consumed;
+    const cancellationResponse = await mutation(
+      'delete',
+      '/api/demo/homepage/web-call/' + callId,
+      'delete-homepage-web-call',
+      { projectionRequested: false, purgeToken }
+    );
+    const durableRow = (await pool.query(
+      `SELECT state, projection_permitted, projection_started_at
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [authority.capabilityHash]
+    )).rows[0];
+    releaseResolve();
+    const projectionResponse = await projectionRequest;
+
+    expect(cancellationResponse.status).toBe(200);
+    expect(durableRow).toEqual({
+      state: 'consumed',
+      projection_permitted: false,
+      projection_started_at: null,
+    });
+    expect(projectionResponse.status).toBe(403);
+    expect(projectionResponse.body.error.code).toBe('homepage_verified_purge_required');
+    expect(service.projectPolaris).not.toHaveBeenCalled();
+  });
+
+  test('mounted projection start wins before cancellation can report success', async () => {
+    const now = new Date('2026-08-16T14:34:30.000Z');
+    const secret = 'homepage-projection-start-race-'.padEnd(64, 'y');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const service = new HomepageWebCallService({ secret, now: () => now, retellClient: {} });
+    const callId = 'call_projection_start_race_123';
+    const purgeToken = signPurgeToken(callId, secret, now, () => Buffer.alloc(16, 10));
+    const authority = service.verifyCallAuthority(callId, purgeToken);
+    const purge = await repository.beginPurge(
+      sourceHash('projection-start-race-purge', secret),
+      authority.capabilityHash,
+      authority.expiresAt,
+      true
+    );
+    const completed = await repository.completePurge(authority.capabilityHash, purge.attemptCount);
+    const receipt = service.verifiedPurgeReceipt(
+      callId,
+      purgeToken,
+      completed.verifiedAt,
+      true
+    ).verifiedPurgeReceipt;
+    let startedResolve;
+    const started = new Promise(resolve => { startedResolve = resolve; });
+    let releaseResolve;
+    const release = new Promise(resolve => { releaseResolve = resolve; });
+    const gatedAdmission = {
+      beginPurge: repository.beginPurge.bind(repository),
+      completePurge: repository.completePurge.bind(repository),
+      releasePurge: repository.releasePurge.bind(repository),
+      canIssueVerifiedPurgeReceipt: repository.canIssueVerifiedPurgeReceipt.bind(repository),
+      consumeVerifiedPurgeProjection: repository.consumeVerifiedPurgeProjection.bind(repository),
+      async beginVerifiedPurgeProjection(...args) {
+        const result = await repository.beginVerifiedPurgeProjection(...args);
+        startedResolve();
+        await release;
+        return result;
+      },
+    };
+    service.projectPolaris = jest.fn(service.projectPolaris.bind(service));
+    const app = express();
+    app.use(express.json());
+    app.use('/api/demo/homepage', createHomepageDemoRouter({
+      service,
+      admission: gatedAdmission,
+      sourceHash: value => sourceHash(value, secret),
+    }));
+    function mutation(method, path, intent, body) {
+      return request(app)[method](path)
+        .set('Origin', 'http://127.0.0.1')
+        .set('Host', '127.0.0.1')
+        .set('Sec-Fetch-Site', 'same-origin')
+        .set('X-NorthStar-Demo-Intent', intent)
+        .send(body);
+    }
+    const projectionRequest = mutation(
+      'post',
+      '/api/demo/homepage/polaris/' + callId,
+      'calculate-homepage-polaris',
+      {
+        callDurationSeconds: 30,
+        industry: 'Roofing',
+        purgeToken,
+        transcript: [
+          { speaker: 'agent', text: 'What is the fictional roof area?' },
+          { speaker: 'customer', text: 'The fictional roof area is 1000 square feet.' },
+        ],
+        verifiedPurgeReceipt: receipt,
+      }
+    ).then(response => response);
+    await started;
+    const cancellationResponse = await mutation(
+      'delete',
+      '/api/demo/homepage/web-call/' + callId,
+      'delete-homepage-web-call',
+      { projectionRequested: false, purgeToken }
+    );
+    const durableRow = (await pool.query(
+      `SELECT state, projection_permitted, projection_started_at
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [authority.capabilityHash]
+    )).rows[0];
+    releaseResolve();
+    const projectionResponse = await projectionRequest;
+
+    expect(cancellationResponse.status).toBe(409);
+    expect(cancellationResponse.body.error.code).toBe('homepage_projection_already_started');
+    expect(durableRow).toEqual({
+      state: 'consumed',
+      projection_permitted: true,
+      projection_started_at: now,
+    });
+    expect(projectionResponse.status).toBe(200);
+    expect(projectionResponse.body.data.contract).toBe('NorthStarHomepageCanonicalPolaris/v1');
+    expect(service.projectPolaris).toHaveBeenCalledTimes(1);
+  });
+
   test('failed purge leases retry across source changes only to the durable capability cap', async () => {
     let now = new Date('2026-08-16T14:35:00.000Z');
     const secret = 'homepage-purge-retry-'.padEnd(64, 'r');
@@ -198,13 +524,17 @@ realPostgres('Homepage Web Call durable admission', () => {
     const expiresAt = now.getTime() + (10 * 60 * 1000);
 
     await expect(repository.beginPurge(
-      sourceHash('purge-retry-source-1', secret), capability, expiresAt
-    )).resolves.toEqual({ execute: true, verified: false, attemptCount: 1 });
+      sourceHash('purge-retry-source-1', secret), capability, expiresAt, true
+    )).resolves.toEqual({
+      execute: true, verified: false, attemptCount: 1, projectionPermitted: true,
+    });
     await expect(repository.releasePurge(capability, 1)).resolves.toBe(true);
     now = new Date(now.getTime() + 1000);
     await expect(repository.beginPurge(
-      sourceHash('purge-retry-source-2', secret), capability, expiresAt
-    )).resolves.toEqual({ execute: true, verified: false, attemptCount: 2 });
+      sourceHash('purge-retry-source-2', secret), capability, expiresAt, true
+    )).resolves.toEqual({
+      execute: true, verified: false, attemptCount: 2, projectionPermitted: true,
+    });
     await expect(repository.completePurge(capability, 1)).rejects.toMatchObject({
       status: 503,
       code: 'homepage_admission_unavailable',
@@ -213,12 +543,14 @@ realPostgres('Homepage Web Call durable admission', () => {
     await expect(repository.releasePurge(capability, 2)).resolves.toBe(true);
     now = new Date(now.getTime() + 1000);
     await expect(repository.beginPurge(
-      sourceHash('purge-retry-source-3', secret), capability, expiresAt
-    )).resolves.toEqual({ execute: true, verified: false, attemptCount: 3 });
+      sourceHash('purge-retry-source-3', secret), capability, expiresAt, true
+    )).resolves.toEqual({
+      execute: true, verified: false, attemptCount: 3, projectionPermitted: true,
+    });
     await expect(repository.releasePurge(capability, 3)).resolves.toBe(true);
     now = new Date(now.getTime() + 1000);
     await expect(repository.beginPurge(
-      sourceHash('purge-retry-source-exhausted', secret), capability, expiresAt
+      sourceHash('purge-retry-source-exhausted', secret), capability, expiresAt, true
     )).rejects.toMatchObject({ status: 429, code: 'homepage_purge_retry_limit_reached' });
     const operation = await pool.query(
       `SELECT state, attempt_count
@@ -240,12 +572,14 @@ realPostgres('Homepage Web Call durable admission', () => {
     const expiresAt = now.getTime() + (10 * 60 * 1000);
     for (let index = 0; index < PURGE_CALLS_PER_SOURCE_MINUTE; index += 1) {
       const capability = crypto.createHash('sha256').update('source-capability-' + index).digest('hex');
-      await expect(repository.beginPurge(oneSource, capability, expiresAt)).resolves.toMatchObject({ execute: true });
+      await expect(repository.beginPurge(oneSource, capability, expiresAt, false))
+        .resolves.toMatchObject({ execute: true, projectionPermitted: false });
     }
     await expect(repository.beginPurge(
       oneSource,
       crypto.createHash('sha256').update('source-capability-over-limit').digest('hex'),
-      expiresAt
+      expiresAt,
+      false
     )).rejects.toMatchObject({ status: 429, code: 'homepage_web_call_rate_limited' });
 
     now = new Date('2026-08-16T14:41:00.000Z');
@@ -255,7 +589,7 @@ realPostgres('Homepage Web Call durable admission', () => {
       source: sourceHash('purge-global-source-' + index, secret),
     }));
     const outcomes = await Promise.allSettled(candidates.map(candidate =>
-      repository.beginPurge(candidate.source, candidate.capability, globalExpiresAt)));
+      repository.beginPurge(candidate.source, candidate.capability, globalExpiresAt, false)));
     expect(outcomes.filter(outcome => outcome.status === 'fulfilled'))
       .toHaveLength(PURGE_CALLS_GLOBAL_PER_MINUTE);
     expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(8);
@@ -266,6 +600,138 @@ realPostgres('Homepage Web Call durable admission', () => {
       [candidates.map(candidate => candidate.capability)]
     );
     expect(globalOperations.rows[0].count).toBe(PURGE_CALLS_GLOBAL_PER_MINUTE);
+  });
+
+  test('verified purge receipt authority is consumed once and projection quota commits atomically', async () => {
+    const now = new Date('2026-08-16T14:50:00.000Z');
+    const secret = 'homepage-projection-receipt-'.padEnd(64, 't');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const capability = crypto.createHash('sha256').update('projection-receipt-capability').digest('hex');
+    const expiresAt = now.getTime() + (10 * 60 * 1000);
+    const receiptExpiresAt = now.getTime() + (2 * 60 * 1000);
+    const purgeSource = sourceHash('projection-purge-source', secret);
+
+    await expect(repository.beginPurge(purgeSource, capability, expiresAt, true))
+      .resolves.toEqual({
+        execute: true,
+        verified: false,
+        attemptCount: 1,
+        projectionPermitted: true,
+      });
+    const completed = await repository.completePurge(capability, 1);
+    expect(completed).toEqual({
+      verified: true,
+      consumed: false,
+      verifiedAt: now.getTime(),
+      authorityExpiresAt: expiresAt,
+      projectionPermitted: true,
+    });
+
+    await expect(repository.consumeVerifiedPurgeProjection(
+      sourceHash('projection-wrong-receipt', secret),
+      capability,
+      now.getTime() - 1,
+      receiptExpiresAt
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
+
+    const projectionSources = [
+      sourceHash('projection-receipt-source-a', secret),
+      sourceHash('projection-receipt-source-b', secret),
+    ];
+    const outcomes = await Promise.allSettled(projectionSources.map(subject =>
+      repository.consumeVerifiedPurgeProjection(
+        subject,
+        capability,
+        completed.verifiedAt,
+        receiptExpiresAt
+      )));
+    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(1);
+    expect(outcomes.find(outcome => outcome.status === 'rejected').reason).toMatchObject({
+      status: 403,
+      code: 'homepage_verified_purge_required',
+    });
+
+    await expect(repository.consumeVerifiedPurgeProjection(
+      sourceHash('projection-replay-source', secret),
+      capability,
+      completed.verifiedAt,
+      receiptExpiresAt
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
+
+    const operation = await pool.query(
+      `SELECT state, projection_permitted, projection_started_at
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [capability]
+    );
+    expect(operation.rows).toEqual([{
+      state: 'consumed',
+      projection_permitted: true,
+      projection_started_at: null,
+    }]);
+    await expect(repository.beginVerifiedPurgeProjection(
+      capability,
+      completed.verifiedAt,
+      receiptExpiresAt
+    )).resolves.toBe(true);
+    await expect(repository.beginPurge(
+      sourceHash('projection-started-cancel', secret),
+      capability,
+      expiresAt,
+      false
+    )).rejects.toMatchObject({ status: 409, code: 'homepage_projection_already_started' });
+    await expect(repository.beginVerifiedPurgeProjection(
+      capability,
+      completed.verifiedAt,
+      receiptExpiresAt
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
+    expect((await pool.query(
+      `SELECT state, projection_permitted, projection_started_at
+         FROM homepage_demo_purge_operations
+        WHERE capability_hash = $1`,
+      [capability]
+    )).rows).toEqual([{
+      state: 'consumed',
+      projection_permitted: true,
+      projection_started_at: now,
+    }]);
+    const quota = await pool.query(
+      `SELECT scope, count(*)::int AS rows, sum(request_count)::int AS requests
+         FROM homepage_demo_admission_windows
+        WHERE window_start = date_trunc('minute', $1::timestamptz)
+          AND scope LIKE 'projection_%'
+        GROUP BY scope ORDER BY scope`,
+      [now]
+    );
+    expect(quota.rows).toEqual([
+      { scope: 'projection_global_minute', rows: 1, requests: 1 },
+      { scope: 'projection_source_minute', rows: 1, requests: 1 },
+    ]);
+  });
+
+  test('deletion-only purge never grants a Polaris projection', async () => {
+    const now = new Date('2026-08-16T14:55:00.000Z');
+    const secret = 'homepage-deletion-only-'.padEnd(64, 'u');
+    const repository = new HomepageDemoAdmissionRepository({ pool, now: () => now });
+    const capability = crypto.createHash('sha256').update('deletion-only-capability').digest('hex');
+    const expiresAt = now.getTime() + (10 * 60 * 1000);
+
+    await expect(repository.beginPurge(
+      sourceHash('deletion-only-purge-source', secret), capability, expiresAt, false
+    )).resolves.toMatchObject({ execute: true, projectionPermitted: false });
+    const completed = await repository.completePurge(capability, 1);
+    expect(completed).toMatchObject({
+      verified: true,
+      consumed: false,
+      projectionPermitted: false,
+    });
+    await expect(repository.consumeVerifiedPurgeProjection(
+      sourceHash('deletion-only-projection-source', secret),
+      capability,
+      completed.verifiedAt,
+      now.getTime() + (2 * 60 * 1000)
+    )).rejects.toMatchObject({ status: 403, code: 'homepage_verified_purge_required' });
   });
 
   test('housekeeping removes expired operation state without a later public mutation', async () => {

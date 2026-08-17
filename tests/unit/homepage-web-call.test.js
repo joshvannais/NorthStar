@@ -5,6 +5,7 @@ const {
   BASIC_STORAGE,
   HomepageWebCallService,
   MAX_TRANSCRIPT_TURNS,
+  VERIFIED_PURGE_RECEIPT_LIFETIME_MS,
   calculateHomepagePolaris,
   normalizeTranscript,
   verifiedPurgeReceipt,
@@ -48,7 +49,7 @@ function fakeRetell(overrides = {}) {
 
 describe('Homepage browser Web Call service', () => {
   const secret = 'homepage-test-secret-'.padEnd(64, 'x');
-  const provider = { apiKey: 'test-only-key', agentId: 'agent_homepage' };
+  const provider = { apiKey: 'test-only-key', agentId: 'agent_homepage', agentVersion: 7 };
   const fixedNow = new Date('2026-08-16T12:00:00.000Z');
 
   test('every source, legal, provider, privacy, and purge gate fails closed', () => {
@@ -96,6 +97,7 @@ describe('Homepage browser Web Call service', () => {
       'northstar_demo_disclosure',
       'northstar_demo_industry',
       'northstar_demo_mode',
+      'northstar_demo_transport',
       'northstar_demo_webhook_contract',
       'northstar_demo_sensitive_data_rule',
     ].sort());
@@ -109,6 +111,8 @@ describe('Homepage browser Web Call service', () => {
       accessToken: 'temporary-browser-token',
       storage: 'basic_attributes_only',
       retentionDays: 1,
+      transport: 'retell_browser_web_call_no_phone_number',
+      disclosureText: expect.stringMatching(/recorded temporarily by NorthStar and Retell/i),
       verbalConsentPhrase: 'I consent to this AI demo and temporary recording',
       purgeToken: expect.any(String),
     }));
@@ -149,9 +153,73 @@ describe('Homepage browser Web Call service', () => {
     });
   });
 
+  test('verified purge receipt is explicit, same-call, capability-bound, and expiring', async () => {
+    let current = new Date(fixedNow.getTime());
+    let nonce = 0;
+    const service = new HomepageWebCallService({
+      retellClient: fakeRetell(),
+      settings: readySettings(),
+      provider,
+      secret,
+      now: () => current,
+      randomBytes: () => Buffer.alloc(16, ++nonce),
+    });
+    const created = await service.create('Roofing');
+    const deletion = service.verifiedPurgeReceipt(
+      created.callId,
+      created.purgeToken,
+      fixedNow.getTime(),
+      true
+    );
+    expect(deletion).toEqual(expect.objectContaining({
+      providerDeletionVerified: true,
+      northstarPurged: true,
+      retainedContent: false,
+      verifiedPurgeReceipt: expect.any(String),
+    }));
+    expect(service.verifyPolarisAuthority(
+      created.callId,
+      created.purgeToken,
+      deletion.verifiedPurgeReceipt
+    )).toEqual(expect.objectContaining({
+      callId: created.callId,
+      verifiedPurge: expect.objectContaining({
+        verifiedAt: fixedNow.getTime(),
+        expiresAt: fixedNow.getTime() + VERIFIED_PURGE_RECEIPT_LIFETIME_MS,
+      }),
+    }));
+    expect(() => service.verifyPolarisAuthority(
+      'call_homepage_other',
+      created.purgeToken,
+      deletion.verifiedPurgeReceipt
+    )).toThrow(/temporary-call purge authorization is invalid/i);
+
+    const second = await service.create('Roofing');
+    expect(() => service.verifyPolarisAuthority(
+      second.callId,
+      second.purgeToken,
+      deletion.verifiedPurgeReceipt
+    )).toThrow(/verified-deletion receipt is required/i);
+    expect(service.verifiedPurgeReceipt(
+      created.callId,
+      created.purgeToken,
+      fixedNow.getTime(),
+      false
+    )).not.toHaveProperty('verifiedPurgeReceipt');
+
+    current = new Date(fixedNow.getTime() + VERIFIED_PURGE_RECEIPT_LIFETIME_MS + 1);
+    expect(() => service.verifyPolarisAuthority(
+      created.callId,
+      created.purgeToken,
+      deletion.verifiedPurgeReceipt
+    )).toThrow(/verified-deletion receipt is required/i);
+  });
+
   test('create rejects and never starts when the provider privacy contract differs', async () => {
     const retell = fakeRetell({
       getAgent: jest.fn(async () => ({
+        agent_id: 'agent_homepage',
+        version: 7,
         data_storage_setting: 'everything',
         data_storage_retention_days: 30,
       })),
@@ -164,7 +232,24 @@ describe('Homepage browser Web Call service', () => {
     expect(retell.createWebCall).not.toHaveBeenCalled();
   });
 
-  test('create pins the inspected agent version and verifies deletion when the created contract differs', async () => {
+  test('exact homepage agent ID and version drift fail before a Web Call is created', async () => {
+    const retell = fakeRetell({
+      getAgent: jest.fn(async () => ({
+        agent_id: 'agent_homepage',
+        version: 8,
+        data_storage_setting: 'basic_attributes_only',
+        data_storage_retention_days: 1,
+      })),
+    });
+    const service = new HomepageWebCallService({ retellClient: retell, settings: readySettings(), provider, secret });
+    await expect(service.create('Roofing')).rejects.toMatchObject({
+      status: 503,
+      code: 'homepage_provider_agent_binding_failed',
+    });
+    expect(retell.createWebCall).not.toHaveBeenCalled();
+  });
+
+  test('create pins the configured exact agent version and verifies deletion when the created contract differs', async () => {
     const retell = fakeRetell({
       createWebCall: jest.fn(async () => ({
         call_id: 'call_homepage_001',

@@ -1,5 +1,13 @@
 require('dotenv').config();
 
+function optionalNonNegativeInteger(value) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!normalized) return undefined;
+  if (!/^(0|[1-9]\d*)$/.test(normalized)) return Number.NaN;
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : Number.NaN;
+}
+
 const config = {
   port: parseInt(process.env.PORT || '3000', 10),
 
@@ -20,6 +28,8 @@ const config = {
   // Homepage browser Web Call. Every switch defaults closed. These flags are
   // an activation receipt, not a substitute for counsel or provider review.
   homepageWebCall: {
+    agentId: process.env.HOMEPAGE_RETELL_AGENT_ID,
+    agentVersion: optionalNonNegativeInteger(process.env.HOMEPAGE_RETELL_AGENT_VERSION),
     enabled: process.env.HOMEPAGE_RETELL_WEB_CALL_ENABLED === 'true',
     legalApproved: process.env.HOMEPAGE_RETELL_LEGAL_APPROVED === 'true',
     providerApproved: process.env.HOMEPAGE_RETELL_PROVIDER_APPROVED === 'true',

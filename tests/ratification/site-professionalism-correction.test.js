@@ -88,6 +88,14 @@ describe('surgical site professionalism correction', () => {
     expect(security).not.toMatch(/'script-src'[^\n]*data:/);
   });
 
+  test('the empty Command Center pipeline chart collapses to one bounded column', () => {
+    const css = read('public/css/demo-dashboard.css');
+    expect(css).toMatch(/\.command-center-chart-empty \.demo-chart-bars\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+    expect(css).toMatch(/\.command-center-chart-empty \.demo-chart-bars\s*\{[^}]*width:\s*100%/s);
+    expect(css).toMatch(/\.command-center-chart-empty \.demo-chart-bars\s*\{[^}]*padding:\s*0/s);
+    expect(css).toMatch(/\.command-center-empty-copy\s*\{[^}]*width:\s*min\(100%, 36ch\)/s);
+  });
+
   test('the shared mobile navigation has one explicit accessible open and closed state', () => {
     const navigation = read('public/js/nav-component.js');
     expect(navigation).toContain('#mobileMenu.mobile-menu[data-state="open"]');

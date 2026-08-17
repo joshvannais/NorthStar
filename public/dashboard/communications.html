@@ -488,37 +488,6 @@
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"><span style="font-size:20px;">&#128260;</span></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">AI Transfer Rate</div><div class="ds-kpi-trend"></div></div>
       </div>
     </div>
-            <div class="ds-widget ds-widget-full">
-              <div class="polaris-card" id="polarisCard">
-        <div class="polaris-header">
-          <h2 style="display:flex;align-items:center;gap:8px;">
-            <img src="/assets/logo.png" alt="NorthStar" style="height:18px;width:auto;vertical-align:middle;">
-            POLARIS™ Revenue Intelligence</h2>
-          <span class="polaris-badge">LIVE</span>
-        </div>
-        <div class="polaris-grid" id="polarisGrid">
-          <div class="polaris-item">
-            <div class="polaris-item-label">Top Opportunity</div>
-            <div class="polaris-item-value" id="polarisTopOpp">-</div>
-            <div class="polaris-item-desc" id="polarisTopOppDesc">Lead with highest potential value</div>
-            <span class="polaris-confidence high" id="polarisTopConf">High</span>
-          </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Estimated Pipeline</div>
-            <div class="polaris-item-value" id="polarisPipeline">$0</div>
-            <div class="polaris-item-desc">Total qualified lead value</div>
-            <span class="polaris-confidence medium" id="polarisPipeConf">Medium</span>
-          </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Recommended Focus</div>
-            <div class="polaris-item-value" id="polarisFocus">-</div>
-            <div class="polaris-item-desc" id="polarisFocusDesc">Highest volume service category</div>
-            <span class="polaris-confidence high" id="polarisFocusConf">High</span>
-          </div>
-        </div>
-      </div>
-              </div>
-
               <!-- Executive Filter Bar -->
                       <div class="ds-widget ds-widget-full">
                       <div class="filter-bar">
@@ -616,6 +585,7 @@
   <script src="/js/communications-engine.js"></script>
 <script src="/js/business-models.js"></script>
 <script src="/js/app-store.js"></script>
+<script src="/js/presentation-format.js"></script>
 <script src="/js/polaris-engine.js"></script>
 <script src="/js/notification-service.js"></script>
   <script src="/js/transcript-renderer.js"></script>
@@ -963,13 +933,6 @@ function applyFilters(calls) {
   return f;
 }
 
-// ===== Polaris Revenue Intelligence Card =====
-function renderPolarisCard(leads) {
-  if (typeof PolarisEngine !== 'undefined' && PolarisEngine.renderPolarisCard) {
-    PolarisEngine.renderPolarisCard(leads && leads.length > 0 ? leads : getAllCalls());
-  }
-}
-
 var currentFilteredCalls = [];
 
 function openCallCard(el) {
@@ -998,7 +961,6 @@ function renderCalls() {
     el.innerHTML = emptyMsg;
     resultsCountEl.textContent = '';
     upStats();
-    renderPolarisCard(pageCalls);
     return;
   }
 
@@ -1008,7 +970,6 @@ function renderCalls() {
   el.innerHTML = html;
   resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
   upStats();
-  renderPolarisCard(pageCalls);
 }
 function setSearch(q) {
   curSearch = q;
@@ -1047,7 +1008,7 @@ function loadKpiGrid() {
     { id:'new_leads', icon:'👤', label:'Canonical Graphs', value: total == null ? '\u2014' : total, trend: '' },
     { id:'appointments', icon:'📅', label:'Appointments', value: appointments == null ? '\u2014' : appointments, trend: '' },
     { id:'lead_conversion', icon:'📊', label:'Lead Conv.', value: '\u2014', trend: '' },
-    { id:'avg_job_value', icon:'💰', label:'Est. Revenue', value: revenue == null ? 'Not calculated' : '$'+Number(revenue).toLocaleString(), trend: '' },
+    { id:'avg_job_value', icon:'💰', label:'Est. Revenue', value: revenue == null ? 'Unavailable — no recorded estimate' : '$'+Number(revenue).toLocaleString(), trend: '' },
     { id:'missed_calls', icon:'🚫', label:'Missed Calls', value: '\u2014', trend: '' },
     { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', value: '\u2014', trend: '' },
     { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', value: '\u2014', trend: '' },

@@ -5,7 +5,6 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
-  <link rel="stylesheet" href="/css/polaris-card.css">
   <script src="/js/theme.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Integrations &mdash; NorthStar AI</title>
@@ -90,7 +89,7 @@
       display: inline-flex;
       flex: 0 0 38px;
       font-size: 11px;
-      font-weight: 750;
+      font-weight: 700;
       height: 38px;
       justify-content: center;
       letter-spacing: .04em;
@@ -154,7 +153,7 @@
       color: var(--brand-600);
       cursor: pointer;
       font-size: 13px;
-      font-weight: 650;
+      font-weight: 600;
       list-style-position: outside;
       margin-left: 16px;
     }
@@ -174,7 +173,7 @@
     .integration-detail-list dt {
       color: var(--neutral-500);
       font-size: 12px;
-      font-weight: 650;
+      font-weight: 600;
       margin: 0;
     }
     .integration-detail-list dd {
@@ -364,7 +363,7 @@
             <h2 id="integrationCatalogueHeading" tabindex="-1">Provider catalogue</h2>
             <p class="description">Status is projected by the server from reviewed tenant authority. Logos, browser state, subscriptions, provider configuration, and legacy Business Profile flags are not connection evidence.</p>
           </div>
-          <div class="integration-authority" id="integrationAuthority">Authority: northstar_integration_catalogue_v1</div>
+          <div class="integration-authority" id="integrationAuthority">NorthStar-owned read-only catalogue</div>
         </div>
         <p class="integration-boundary">No connection or provider-management action is available from this read-only catalogue. Authorization, scopes, data direction, sync, last sync, errors, reconnect, mappings, and webhook health remain unavailable unless NorthStar owns a reviewed authority for them.</p>
 
@@ -492,8 +491,6 @@
   <script src="/js/notification-service.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/command-center-contract.js"></script>
-  <script src="/js/polaris-card.js"></script>
-  <script src="/js/polaris-surface-card.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>
     (function() {

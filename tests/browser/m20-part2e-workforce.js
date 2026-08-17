@@ -311,7 +311,7 @@ async function main() {
     );
     await ownerPage.click('#crewForm button[type="submit"]');
     assert.strictEqual((await crewCreate).status(), 201, 'owner creates crew');
-    const crewCard = ownerPage.locator('#crewsList .wf-card').filter({ hasText: 'Key field-crew' });
+    const crewCard = ownerPage.locator('#crewsList .wf-card[data-crew-key="field-crew"]');
     await crewCard.waitFor();
     const profiles = await pool.query(
       `SELECT membership.user_id, profile.id FROM workforce_profiles profile
@@ -495,7 +495,7 @@ async function main() {
     await adminPage.goto(origin + '/dashboard/team', { waitUntil: 'domcontentloaded' });
     await waitReady(adminPage);
     assertSafeSnapshot(await mountedSnapshot(adminPage), 'admin-desktop-initial', 'dark');
-    const skillCard = adminPage.locator('#skillsList .wf-card').filter({ hasText: 'Key exact-skill' });
+    const skillCard = adminPage.locator('#skillsList .wf-card[data-skill-key="exact-skill"]');
     await skillCard.locator('textarea').fill(RAW_ADMIN_DESCRIPTION);
     const adminSave = adminPage.waitForResponse(response =>
       response.url().startsWith(origin + '/api/workforce/skills/') && response.request().method() === 'PUT'

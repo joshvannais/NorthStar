@@ -53,10 +53,24 @@
   }
 
   function money(value) {
+    if (value === null || value === undefined || value === '' || typeof value === 'boolean') {
+      return 'Unavailable — required pricing inputs are missing';
+    }
     var number = Number(value);
     return Number.isFinite(number)
       ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(number)
-      : 'Not calculated';
+      : 'Unavailable — required pricing inputs are missing';
+  }
+
+  function readable(value, fallback, key) {
+    var formatter = global.NorthStarPresentationFormat;
+    if (formatter && typeof formatter.describe === 'function') {
+      return formatter.describe(value, { fallback: fallback, key: key });
+    }
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    return fallback;
   }
 
   function dateTime(value) {
@@ -264,23 +278,21 @@
     var summary = element('section', 'demo-detail-grid');
     var customer = panel('Customer', graph.customer.name);
     customer.appendChild(definitionList([
-      ['Customer ID', graph.ids.customer], ['Phone', graph.customer.phone], ['Email', graph.customer.email], ['Address', graph.customer.address],
+      ['Phone', graph.customer.phone], ['Email', graph.customer.email], ['Address', graph.customer.address],
     ]));
     var lead = panel('Lead', graph.lead.serviceLabel);
     lead.appendChild(definitionList([
-      ['Lead ID', graph.ids.lead], ['Status', titleCase(graph.lead.status)], ['Summary', graph.lead.summary], ['Opportunity', money(graph.estimate.customerPrice)],
+      ['Status', titleCase(graph.lead.status)], ['Summary', graph.lead.summary], ['Opportunity', money(graph.estimate.customerPrice)],
     ]));
     var work = panel('Work', graph.work.title);
     work.appendChild(definitionList([
-      ['Work ID', graph.ids.work], ['Status', titleCase(graph.work.status)], ['Scheduled', dateTime(graph.work.scheduledStart)], ['Assigned to', graph.work.assignedTo || 'Unassigned'],
+      ['Status', titleCase(graph.work.status)], ['Scheduled', dateTime(graph.work.scheduledStart)], ['Assigned to', graph.work.assignedTo || 'Unassigned'],
     ]));
     append(summary, customer, lead, work);
     fragment.appendChild(summary);
 
     var intelligence = panel('Polaris detail', graph.polaris.snapshot.recommendedActions[0].label, 'demo-polaris-detail');
     intelligence.appendChild(definitionList([
-      ['Snapshot digest', graph.polaris.snapshotDigest],
-      ['Calculation contract', graph.polaris.calculationVersion],
       ['Confidence', graph.polaris.snapshot.confidence.score + '%'],
       ['Estimate', money(graph.polaris.snapshot.customerFacingPrice)],
       ['Preliminary range', money(graph.polaris.snapshot.preliminaryRange.low) + '–' + money(graph.polaris.snapshot.preliminaryRange.high)],
@@ -293,18 +305,17 @@
     var facts = element('div', 'demo-fact-grid');
     graph.polaris.facts.forEach(function (fact) {
       var factCard = element('article', 'demo-fact-card');
-      append(factCard, element('strong', '', titleCase(fact.variable)), element('span', '', JSON.stringify(fact.normalizedValue)), element('small', '', fact.evidenceText));
+      append(factCard, element('strong', '', titleCase(fact.variable)), element('span', '', readable(fact.normalizedValue, 'This supporting value has not been recorded.', fact.variable)), element('small', '', fact.evidenceText));
       facts.appendChild(factCard);
     });
     intelligence.appendChild(element('h3', '', 'Supporting facts'));
     intelligence.appendChild(facts);
     var limitations = element('ul', 'demo-detail-bullets');
-    graph.polaris.snapshot.notCalculated.forEach(function (item) { limitations.appendChild(element('li', '', item.field + ': ' + item.reason)); });
-    intelligence.appendChild(element('h3', '', 'Not calculated'));
+    graph.polaris.snapshot.notCalculated.forEach(function (item) {
+      limitations.appendChild(element('li', '', titleCase(item.field) + ' is unavailable because ' + readable(item.reason, 'a required input has not been recorded.', 'reason')));
+    });
+    intelligence.appendChild(element('h3', '', 'Unavailable inputs'));
     intelligence.appendChild(limitations);
-    var raw = element('details', 'demo-raw-detail');
-    append(raw, element('summary', '', 'Inspect the complete fictional Polaris snapshot'), element('pre', '', JSON.stringify(graph.polaris.snapshot, null, 2)));
-    intelligence.appendChild(raw);
     fragment.appendChild(intelligence);
     content.replaceChildren(fragment);
   }
@@ -447,7 +458,7 @@
     renderHeading();
     RENDERERS[route.id]();
     content.setAttribute('aria-busy', 'false');
-    setStatus('Demo revision ' + workspace.integrity.revision + ' is ready. All destinations share digest ' + workspace.integrity.digest.slice(0, 12) + '…', 'ready');
+    setStatus('The shared demo workspace is ready. Every destination now reflects the same simulated customer and work state.', 'ready');
     setBusy(false);
   }
 

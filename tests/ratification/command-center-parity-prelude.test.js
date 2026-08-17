@@ -21,6 +21,7 @@ const {
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const TOKEN_HASH = 'a'.repeat(64);
+const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'polaris', 'leads', 'communications']);
 const PAGE_BY_ROUTE = Object.freeze({
   'command-center': 'public/demo-dashboard.html',
   polaris: 'public/dashboard/polaris.html',
@@ -99,9 +100,15 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       expect(response.text).toBe(read(PAGE_BY_ROUTE[destination.id]));
       expect(response.text).toContain('/js/demo-runtime.js');
       expect(response.text).toContain('/js/nav-component.js');
-      expect(response.text).toContain('/css/polaris-card.css');
-      expect(response.text).toContain('/js/polaris-card.js');
-      if (destination.id !== 'command-center') {
+      if (POLARIS_PLACEMENT_ALLOWLIST.includes(destination.id)) {
+        expect(response.text).toContain('/css/polaris-card.css');
+        expect(response.text).toContain('/js/polaris-card.js');
+      } else {
+        expect(response.text).not.toContain('/css/polaris-card.css');
+        expect(response.text).not.toContain('/js/polaris-card.js');
+        expect(response.text).not.toContain('/js/polaris-surface-card.js');
+      }
+      if (POLARIS_PLACEMENT_ALLOWLIST.includes(destination.id) && destination.id !== 'command-center') {
         expect(response.text).toContain('/js/polaris-surface-card.js');
       }
       expect(destination.demoPath).toMatch(/^\/demo(?:\/|$)/);
@@ -262,7 +269,7 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
         recommendations: expect.any(Array),
         objects: expect.any(Array),
       }));
-      expect(projection.detailed).toBe(['leads', 'polaris'].includes(projection.surface));
+      expect(projection.detailed).toBe(['leads', 'polaris', 'communications'].includes(projection.surface));
       expect(projection.objects).toHaveLength(3);
       expect(projection.objects.map(entry => entry.href)).toEqual(expect.arrayContaining([
         expect.stringContaining(encodeURIComponent(added.ids.customer)),
@@ -323,6 +330,7 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       expect(paidProjection.objects.every(entry => entry.href.startsWith('/dashboard/polaris?'))).toBe(true);
       expect(JSON.stringify(paidProjection)).not.toMatch(/fictional|simulate lead|demo session/i);
     }
+    expect(projector.CARD_SURFACES).toEqual(['leads', 'polaris', 'communications']);
   });
 
   test('missing confidence remains explicitly unavailable instead of becoming a fabricated zero', () => {

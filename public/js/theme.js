@@ -115,11 +115,29 @@
       Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > -clearance;
   }
 
+  function availableThemeSlot() {
+    var slots = Array.prototype.slice.call(document.querySelectorAll('[data-northstar-theme-slot]'));
+    return slots.find(function (slot) {
+      for (var current = slot; current; current = current.parentElement) {
+        var style = global.getComputedStyle(current);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+      }
+      return true;
+    }) || null;
+  }
+
+  function mountToggle(control) {
+    var slot = availableThemeSlot();
+    if (slot && control.parentElement !== slot) slot.appendChild(control);
+    else if (!slot && control.parentElement !== document.body) document.body.appendChild(control);
+    return slot;
+  }
+
   function dockToggle() {
     var control = document.querySelector('[data-northstar-theme-control]');
     if (!control || !document.body) return;
 
-    if (control.closest('[data-northstar-theme-slot]')) {
+    if (mountToggle(control)) {
       control.style.removeProperty('--northstar-theme-control-bottom');
       return;
     }
@@ -176,7 +194,7 @@
         '<span aria-hidden="true" data-theme-icon></span>' +
         '<span class="sr-only" data-theme-label></span>' +
       '</button>';
-    var slot = document.querySelector('[data-northstar-theme-slot]');
+    var slot = availableThemeSlot();
     (slot || document.body).appendChild(control);
     control.querySelector('button').addEventListener('click', toggleTheme);
     updateToggle(currentTheme());

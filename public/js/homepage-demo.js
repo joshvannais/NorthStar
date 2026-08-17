@@ -749,7 +749,7 @@
   }
 
   function formatCurrency(value) {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not calculated';
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Unavailable — supported pricing inputs are missing';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
   }
 
@@ -824,9 +824,8 @@
     if (reasoning) {
       reasoning.replaceChildren();
       var explanation = global.document.createElement('p');
-      explanation.textContent = 'Calculation: ' + ((result.provenance && result.provenance.calculationVersion) || 'canonical') +
-        '. Business Profile: ' + ((result.profile && result.profile.version) || 'fictional demo') +
-        '. Customer contact fields and the call transcript are not included in this result.';
+      explanation.textContent = 'This result uses only the supported fictional facts shown above and the fictional demo Business Profile. ' +
+        'Customer contact fields and the call transcript are not included in this result.';
       reasoning.appendChild(explanation);
     }
     var report = byId('polarisReportContainer');

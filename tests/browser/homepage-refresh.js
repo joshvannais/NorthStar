@@ -4,7 +4,6 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
 [
   'DATABASE_URL', 'RETELL_API_KEY', 'RETELL_AGENT_ID', 'RETELL_PHONE_NUMBER',
@@ -15,9 +14,14 @@ const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 process.env.NODE_ENV = 'test';
 process.env.AUTH_ACCESS_SECRET = 'homepage-browser-test-secret-'.padEnd(64, 'x');
 
-const ROOT = path.resolve(__dirname, '..', '..');
+const ROOT = process.env.NORTHSTAR_TARGET_ROOT
+  ? path.resolve(process.env.NORTHSTAR_TARGET_ROOT)
+  : path.resolve(__dirname, '..', '..');
 process.chdir(ROOT);
-const { app } = require('../../src/server');
+const fromRoot = relative => require(path.join(ROOT, relative));
+const { resolveBrowserRuntime } = fromRoot('tests/helpers/playwright-runtime');
+const { app } = fromRoot('src/server');
+const CAPTURE_BASELINE = process.env.HOMEPAGE_CAPTURE_BASELINE_ONLY === '1';
 
 const CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
 const DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce a fictional demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
@@ -25,6 +29,7 @@ const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
 ]);
+const SUPPORTED_FONT_WEIGHTS = Object.freeze(['400', '500', '600', '700', '800']);
 const SCREENSHOT_DIR = process.env.HOMEPAGE_SCREENSHOT_DIR
   ? path.resolve(process.env.HOMEPAGE_SCREENSHOT_DIR) : null;
 
@@ -32,6 +37,59 @@ function screenshotPath(selected, viewport, state) {
   if (!SCREENSHOT_DIR) return null;
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
   return path.join(SCREENSHOT_DIR, `${selected}-${viewport.label}-${state}.png`);
+}
+
+async function assertProfessionalPresentation(page, label) {
+  await page.waitForFunction(() => /^["']?Inter["']?(?:,|$)/.test(getComputedStyle(document.body).fontFamily), null, { timeout: 10000 });
+  const snapshot = await page.evaluate(async supportedWeights => {
+    await Promise.all(supportedWeights.map(weight => document.fonts.load(weight + ' 16px Inter', 'NorthStar')));
+    await document.fonts.ready;
+    const visible = node => {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+    };
+    const nodes = Array.from(document.querySelectorAll('body, button, input, select, textarea, a, h1, h2, h3, p, li, summary'))
+      .filter(visible);
+    const normalizedWeight = value => value === 'normal' ? '400' : value === 'bold' ? '700' : value;
+    const offenders = nodes.filter(node => !/^["']?Inter["']?(?:,|$)/.test(getComputedStyle(node).fontFamily)).map(node => ({
+      tag: node.tagName,
+      id: node.id,
+      className: typeof node.className === 'string' ? node.className : '',
+      family: getComputedStyle(node).fontFamily,
+      text: (node.innerText || node.value || node.getAttribute('aria-label') || '').trim().slice(0, 120),
+    }));
+    const renderedWeights = Array.from(new Set(nodes.map(node => normalizedWeight(getComputedStyle(node).fontWeight))));
+    const bodyText = document.body.innerText.replace(/\u00a0/g, ' ');
+    const violations = [
+      ['raw object serialization', /\[object Object\]/i],
+      ['raw JSON object', /(?:^|\s)\{\s*"[A-Za-z0-9_ -]+"\s*:/m],
+      ['internal UUID', /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i],
+      ['internal long digest', /\b[0-9a-f]{40,}\b/i],
+      ['internal source key', /\b(?:snapshotDigest|canonicalDigest|calculationVersion|sourceVersion|organizationId|tenantId|canonicalSourceId|graphId)\b/i],
+      ['internal snake-case token', /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/],
+      ['unexplained calculation placeholder', /\bNot calculated\b/i],
+      ['missing whitespace', /\bpreview\.No\b/i],
+      ['malformed separator', /(?:—\s*)?\|\s*\|/],
+    ].filter(([, pattern]) => pattern.test(bodyText)).map(([name]) => name);
+    return {
+      offenders,
+      renderedWeights,
+      violations,
+      interLoaded: Array.from(document.fonts).some(face =>
+        String(face.family).replace(/["']/g, '') === 'Inter' && face.status === 'loaded'),
+      loadedWeights: supportedWeights.every(weight => document.fonts.check(weight + ' 16px Inter', 'NorthStar')),
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  }, SUPPORTED_FONT_WEIGHTS);
+  assert.strictEqual(snapshot.interLoaded, true, `${label}: source-bound Inter font loads: ${JSON.stringify(snapshot)}`);
+  assert.strictEqual(snapshot.loadedWeights, true, `${label}: every supported Inter weight loads: ${JSON.stringify(snapshot)}`);
+  assert.deepStrictEqual(snapshot.offenders, [], `${label}: every visible text/control surface uses Inter`);
+  assert.ok(snapshot.renderedWeights.every(weight => SUPPORTED_FONT_WEIGHTS.includes(weight)),
+    `${label}: visible weights stay in the source-bound 400-800 range: ${JSON.stringify(snapshot.renderedWeights)}`);
+  assert.deepStrictEqual(snapshot.violations, [], `${label}: no raw/internal/malformed user-facing content`);
+  assert.ok(snapshot.overflow <= 1, `${label}: no horizontal viewport overflow`);
+  return snapshot;
 }
 
 const FAKE_SDK = `
@@ -310,6 +368,7 @@ async function runSuccessfulCase(browser, origin, selected, viewport) {
     await page.waitForFunction(() => window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState().availabilityChecked, null, { timeout: 10000 });
     assert.strictEqual(await page.isEnabled('#demoCallBtn'), true, `${selected}/${viewport.label}: approved call button enabled`);
     await assertContainment(page, viewport, `${selected}/${viewport.label}/pre`);
+    await assertProfessionalPresentation(page, `${selected}/${viewport.label}/pre`);
     if (screenshotPath(selected, viewport, 'pre')) await page.screenshot({ path: screenshotPath(selected, viewport, 'pre'), fullPage: true });
 
     await page.fill('#demoBusinessName', '<img src=x onerror="window.__homepageXss=1"> NorthStar Test');
@@ -318,6 +377,7 @@ async function runSuccessfulCase(browser, origin, selected, viewport) {
     await page.click('#demoCallBtn');
     await page.waitForSelector('#preCallModal[aria-hidden="false"]');
     await assertContainment(page, viewport, `${selected}/${viewport.label}/modal`);
+    await assertProfessionalPresentation(page, `${selected}/${viewport.label}/modal`);
     if (screenshotPath(selected, viewport, 'modal')) await page.screenshot({ path: screenshotPath(selected, viewport, 'modal'), fullPage: false });
     assert.match(await page.textContent('#demoDisclosureCopy'), /AI demonstration[\s\S]*recorded temporarily[\s\S]*I consent to this AI demo/i,
       `${selected}/${viewport.label}: explicit audible disclosure copy`);
@@ -365,6 +425,7 @@ async function runSuccessfulCase(browser, origin, selected, viewport) {
     assert.strictEqual(live.xss, 0, `${selected}/${viewport.label}: transcript payload inert`);
     assert.deepStrictEqual(live.storage, [], `${selected}/${viewport.label}: no homepage storage`);
     await assertContainment(page, viewport, `${selected}/${viewport.label}/live`);
+    await assertProfessionalPresentation(page, `${selected}/${viewport.label}/live`);
     if (screenshotPath(selected, viewport, 'live')) await page.screenshot({ path: screenshotPath(selected, viewport, 'live'), fullPage: true });
 
     await page.click('#demoHangupBtn');
@@ -372,6 +433,7 @@ async function runSuccessfulCase(browser, origin, selected, viewport) {
     assert.strictEqual(await page.isVisible('#demoPostCallView'), false, `${selected}/${viewport.label}: result withheld before deletion response`);
     await page.waitForSelector('#demoPostCallView', { state: 'visible', timeout: 10000 });
     await assertContainment(page, viewport, `${selected}/${viewport.label}/post`);
+    await assertProfessionalPresentation(page, `${selected}/${viewport.label}/post`);
     if (screenshotPath(selected, viewport, 'post')) await page.screenshot({ path: screenshotPath(selected, viewport, 'post'), fullPage: true });
     assert.strictEqual(await page.textContent('#reportRevenue'), '$9,000', `${selected}/${viewport.label}: canonical price`);
     assert.match(await page.textContent('#reportExecBody'), /Canonical Polaris processed 2 of 4 supported estimating facts/i,
@@ -637,6 +699,93 @@ async function runVendorBoundaryCase(browser, origin, selected) {
   }
 }
 
+async function runPublicPagesCase(browser, origin, selected, viewport) {
+  const context = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height },
+    reducedMotion: 'reduce',
+    serviceWorkers: 'block',
+  });
+  const page = await context.newPage();
+  const errors = [];
+  const externalRequests = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.origin !== origin) externalRequests.push(request.url());
+  });
+  try {
+    const contactResponse = await page.goto(origin + '/contact', { waitUntil: 'networkidle', timeout: 15000 });
+    assert.ok(contactResponse && contactResponse.status() === 200, `${selected}/${viewport.label}: contact response`);
+    await assertProfessionalPresentation(page, `${selected}/${viewport.label}/contact`);
+    assert.match(await page.locator('body').innerText(), /Support@northstar-os\.ai[\s\S]*does not claim delivery until that provider confirms it/i,
+      `${selected}/${viewport.label}: contact shows the truthful delivery boundary`);
+    if (screenshotPath(selected, viewport, 'public-contact')) {
+      await page.screenshot({ path: screenshotPath(selected, viewport, 'public-contact'), fullPage: true });
+    }
+
+    const themeBefore = await page.evaluate(() => document.documentElement.dataset.theme);
+    await page.click('[data-northstar-theme-toggle]');
+    await page.waitForFunction(previous => document.documentElement.dataset.theme !== previous &&
+      !document.documentElement.hasAttribute('data-theme-switching'), themeBefore);
+    assert.strictEqual(new URL(page.url()).pathname, '/contact', `${selected}/${viewport.label}: public theme switch does not navigate`);
+
+    await Promise.all([
+      page.waitForURL(url => url.origin === origin && url.pathname === '/faq', { timeout: 15000 }),
+      page.locator('a[href="/faq"]:visible').first().click(),
+    ]);
+    await page.waitForLoadState('networkidle');
+    await assertProfessionalPresentation(page, `${selected}/${viewport.label}/faq`);
+    assert.match(await page.locator('body').innerText(), /Contractor Command Center demo[\s\S]*isolated fictional workspace/i,
+      `${selected}/${viewport.label}: FAQ retains the truthful demo boundary`);
+    if (screenshotPath(selected, viewport, 'public-faq')) {
+      await page.screenshot({ path: screenshotPath(selected, viewport, 'public-faq'), fullPage: true });
+    }
+
+    await Promise.all([
+      page.waitForURL(url => url.origin === origin && url.pathname === '/contact', { timeout: 15000 }),
+      page.locator('a[href="/contact"]:visible').first().click(),
+    ]);
+    await page.waitForLoadState('networkidle');
+    assert.deepStrictEqual(errors, [], `${selected}/${viewport.label}: public pages have no browser errors`);
+    assert.deepStrictEqual(externalRequests, [], `${selected}/${viewport.label}: public typography/pages make no external request`);
+    return { viewport: viewport.label, routes: ['/contact', '/faq'], theme: 'pass', clicks: 2 };
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+async function capturePublicBaseline(browser, origin, selected, viewport) {
+  const context = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height },
+    reducedMotion: 'reduce',
+    serviceWorkers: 'block',
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  try {
+    for (const route of [
+      { path: '/', name: 'baseline-home' },
+      { path: '/contact', name: 'baseline-contact' },
+      { path: '/faq', name: 'baseline-faq' },
+    ]) {
+      const response = await page.goto(origin + route.path, { waitUntil: 'networkidle', timeout: 15000 });
+      assert.ok(response && [200, 304].includes(response.status()), `${selected}/${viewport.label}: ${route.path} baseline response`);
+      await page.waitForTimeout(100);
+      if (screenshotPath(selected, viewport, route.name)) {
+        await page.screenshot({ path: screenshotPath(selected, viewport, route.name), fullPage: true });
+      }
+    }
+    return { viewport: viewport.label, routes: ['/', '/contact', '/faq'], browserErrors: errors };
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
 async function main() {
   const selected = process.argv[2];
   assert.ok(selected === 'chrome' || selected === 'webkit', 'usage: node homepage-refresh.js <chrome|webkit>');
@@ -657,7 +806,16 @@ async function main() {
     const origin = `http://127.0.0.1:${server.address().port}`;
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
     evidence.version = browser.version();
+    if (CAPTURE_BASELINE) {
+      evidence.targetRoot = ROOT;
+      evidence.baseline = [];
+      for (const viewport of VIEWPORTS) evidence.baseline.push(await capturePublicBaseline(browser, origin, selected, viewport));
+      process.stdout.write(JSON.stringify(evidence, null, 2) + '\n');
+      return;
+    }
     for (const viewport of VIEWPORTS) evidence.cases.push(await runSuccessfulCase(browser, origin, selected, viewport));
+    evidence.publicPages = [];
+    for (const viewport of VIEWPORTS) evidence.publicPages.push(await runPublicPagesCase(browser, origin, selected, viewport));
     await runCancellationCase(browser, origin, selected);
     await runConnectionCancellationCase(browser, origin, selected);
     await runPurgeRaceCancellationCase(browser, origin, selected);

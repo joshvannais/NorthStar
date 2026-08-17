@@ -5,7 +5,6 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
-  <link rel="stylesheet" href="/css/polaris-card.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Business Profile — NorthStar Solutions</title>
   <script src="/js/theme.js"></script>
@@ -541,7 +540,7 @@
         <div class="bp-section" id="section-notifications">
           <div class="bp-card">
             <h3>Notification Preferences</h3>
-            <div class="bp-section-desc">Operational notification delivery is controlled by the tenant-scoped PostgreSQL notification preferences authority, not by Business Profile.</div>
+            <div class="bp-section-desc">Operational notification delivery is managed in Settings, not in Business Profile.</div>
             <p id="legacyNotificationsAuthority" style="margin:0 0 16px;color:var(--neutral-500);font-size:13px;line-height:1.5;">Existing legacy notification values are preserved during unrelated profile saves and ignored as delivery preferences.</p>
             <a class="btn btn-primary" id="canonicalNotificationsLink" href="/dashboard/settings">Manage authoritative notification preferences</a>
           </div>
@@ -3398,8 +3397,6 @@
     });
   </script>
   <script src="/js/command-center-contract.js"></script>
-  <script src="/js/polaris-card.js"></script>
-  <script src="/js/polaris-surface-card.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("business-profile");</script>
 </body>

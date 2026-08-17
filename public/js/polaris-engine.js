@@ -127,6 +127,32 @@ window.PolarisEngine = (function () {
     return '$' + (round ? Math.round(value) : value).toLocaleString();
   }
 
+  function readable(value, fallback, key, depth) {
+    var formatter = window.NorthStarPresentationFormat;
+    if (formatter && typeof formatter.describe === 'function') {
+      return formatter.describe(value, { fallback: fallback, key: key });
+    }
+    var level = depth || 0;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (Array.isArray(value) && level < 3) {
+      var list = value.map(function(item) { return readable(item, '', key, level + 1); }).filter(Boolean);
+      return list.length ? list.join('; ') : fallback;
+    }
+    if (isRecord(value) && level < 3) {
+      var parts = Object.keys(value).filter(function(field) {
+        return !/(^|_)(id|uuid|digest|hash|version|contract|source|token|key)$/i.test(field);
+      }).map(function(field) {
+        var text = readable(value[field], '', field, level + 1);
+        var title = field.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ');
+        return text ? title.charAt(0).toUpperCase() + title.slice(1) + ': ' + text : '';
+      }).filter(Boolean);
+      return parts.length ? parts.join('; ') : fallback;
+    }
+    return fallback;
+  }
+
   function selectPresentation(source) {
     var values = valuesFrom(source);
     if (!validValues(values)) return null;
@@ -152,7 +178,7 @@ window.PolarisEngine = (function () {
       netProfit: values.netProfit,
       netMarginPercent: values.netMarginPercent,
       risk: values.risk,
-      riskText: JSON.stringify(values.risk),
+      riskText: readable(values.risk, 'No specific risk is supported by the current recorded inputs.', 'risk'),
       recommendations: recommendations,
       recommendedActionText: recommendationText(recommendations && recommendations[0]) || '',
     });
@@ -223,9 +249,9 @@ window.PolarisEngine = (function () {
     setText('polarisTopOppDesc', selected.customerPriceText);
     setText('polarisTopConf', selected.confidenceText);
     setText('polarisPipeline', metrics && metrics.estimatedRevenue !== null ? '$' + Number(metrics.estimatedRevenue).toLocaleString() : '\u2014');
-    setText('polarisPipeConf', item.calculationVersion);
+    setText('polarisPipeConf', 'Role-authorized values');
     setText('polarisFocus', selected.recommendedActionText || '\u2014');
-    setText('polarisFocusDesc', item.snapshotDigest);
+    setText('polarisFocusDesc', 'Based on the latest role-authorized customer and work evidence');
     setText('polarisFocusConf', selected.risk && selected.risk.emergency ? 'Emergency evidence' : 'No active emergency');
   }
 

@@ -9,6 +9,7 @@ const ENGINE_PATH = path.join(ROOT, 'public', 'js', 'polaris-engine.js');
 const UI_PATH = path.join(ROOT, 'public', 'js', 'polaris-ui.js');
 const CALENDAR_PATH = path.join(ROOT, 'public', 'js', 'calendar-engine.js');
 const CUSTOMER_DETAIL_PATH = path.join(ROOT, 'public', 'js', 'customer-detail.js');
+const PRESENTATION_FORMAT_PATH = path.join(ROOT, 'public', 'js', 'presentation-format.js');
 const TRANSCRIPT_RENDERER_PATH = path.join(ROOT, 'public', 'js', 'transcript-renderer.js');
 const LEAD_PATH = path.join(ROOT, 'public', 'dashboard', 'lead.html');
 const CANONICAL_ADDRESS = '100 Cedar Lane, Testville, NY 10001';
@@ -126,6 +127,7 @@ function createSandbox(values) {
   };
   sandbox.window.window = sandbox.window;
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(PRESENTATION_FORMAT_PATH, 'utf8'), sandbox, { filename: 'presentation-format.js' });
   vm.runInContext(fs.readFileSync(ENGINE_PATH, 'utf8'), sandbox, { filename: 'polaris-engine.js' });
   return { item: item, listeners: listeners, sandbox: sandbox };
 }
@@ -314,6 +316,7 @@ function createConsumerRuntime(source, options) {
   sandbox.window.window = sandbox.window;
   sandbox.window.document = document;
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(PRESENTATION_FORMAT_PATH, 'utf8'), sandbox, { filename: 'presentation-format.js' });
   vm.runInContext(fs.readFileSync(TRANSCRIPT_RENDERER_PATH, 'utf8'), sandbox, { filename: 'transcript-renderer.js' });
   vm.runInContext(fs.readFileSync(ENGINE_PATH, 'utf8'), sandbox, { filename: 'polaris-engine.js' });
   var productionSelector = sandbox.window.PolarisEngine.selectPresentation;
@@ -350,7 +353,6 @@ function runCalendar(source, includeEvent) {
   };
   var runtime = createConsumerRuntime(source, { records: includeEvent ? [record] : [] });
   vm.runInContext(fs.readFileSync(CALENDAR_PATH, 'utf8'), runtime.sandbox, { filename: 'calendar-engine.js' });
-  runtime.sandbox.window.calRenderer.renderPolaris();
   var events = includeEvent ? runtime.sandbox.window.syncCalendarFromAppStore() : [];
   if (includeEvent) {
     runtime.sandbox.window.calState.events = events;
@@ -360,7 +362,7 @@ function runCalendar(source, includeEvent) {
     runtime.sandbox.window.calRenderer.renderCalendarView();
   }
   return {
-    html: runtime.document.getElementById('calendarPolaris').innerHTML,
+    html: '',
     calendarView: runtime.document.getElementById('calendarGrid').innerHTML,
     events: events,
     selectorCalls: runtime.selectorCalls,
@@ -560,7 +562,7 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(selected.grossProfit).toBe(0);
     expect(selected.grossProfitText).toBe('$0');
     expect(selected.risk).toBe(values.risk);
-    expect(selected.riskText).toBe('{"emergency":false,"level":"low"}');
+    expect(selected.riskText).toBe('Emergency: No; Level: low');
     expect(selected.recommendations).toBe(values.recommendedActions);
     expect(selected.recommendedActionText).toBe('Call <owner> & confirm');
     expect(Object.isFrozen(selected)).toBe(true);
@@ -589,7 +591,7 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(selected.grossProfit).toBeNull();
     expect(selected.grossProfitText).toBe('Not calculated');
     expect(selected.risk).toBeNull();
-    expect(selected.riskText).toBe('null');
+    expect(selected.riskText).toBe('No specific risk is supported by the current recorded inputs.');
     expect(selected.recommendations).toBeNull();
     expect(selected.recommendedActionText).toBe('');
   });
@@ -725,12 +727,8 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     const source = canonicalEnvelope(dynamicValues('Dispatch <crew> & confirm'));
     const result = runCalendar(source, true);
 
-    expect(result.selectorCalls).toEqual([source, source]);
-    expect(result.html).not.toContain('Canonical intelligence unavailable');
-    expect(result.html).toContain('$0');
-    expect(result.html).toContain('0%');
-    expect(result.html).toContain('Dispatch &lt;crew&gt; &amp; confirm');
-    expect(result.html).not.toContain('Dispatch <crew>');
+    expect(result.selectorCalls).toEqual([source]);
+    expect(result.html).toBe('');
     expect(result.events).toHaveLength(1);
     expect(result.events[0].serviceType).toBe('Zero & <Service>');
     expect(result.events[0].estimatedPrice).toBe(0);
@@ -742,9 +740,8 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     const source = canonicalEnvelope(values);
     const result = runCalendar(source, true);
 
-    expect(result.selectorCalls).toEqual([source, source]);
-    expect(result.html).not.toContain('Canonical intelligence unavailable');
-    expect(result.html).toContain('Schedule the requested estimate window');
+    expect(result.selectorCalls).toEqual([source]);
+    expect(result.html).toBe('');
     expect(result.events).toHaveLength(1);
     expect(result.events[0].serviceType).toBe('roofing');
     expect(result.events[0].estimatedPrice).toBeNull();
@@ -794,8 +791,9 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
     expect(result.title.textContent).toBe('Avery <Cedar>');
     expect(result.title.innerHTML).toBe('Avery &lt;Cedar&gt;');
-    expect(result.description.textContent).toBe(JSON.stringify(values.service.scope));
-    expect(result.description.innerHTML).toContain('&quot;linearFeet&quot;:100');
+    expect(result.description.textContent).toContain('Linear Feet: 100');
+    expect(result.description.textContent).toContain('Material: cedar');
+    expect(result.description.textContent).not.toMatch(/[{}"]|\[object Object\]/);
     expect(result.summary.textContent).toBe('Persisted Profile Fence');
     expect(result.price.textContent).toBe('$37,376');
     expect(result.action.textContent).toBe('Schedule the requested estimate window');
@@ -812,7 +810,7 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     const result = await runCustomerDetail(canonicalEnvelope(values));
 
     expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
-    expect(result.description.textContent).toBe('\u2014');
+    expect(result.description.textContent).toBe('No customer or work description has been recorded.');
     expect(result.summary.textContent).toBe('Zero service');
     expect(result.action.textContent).toBe('Call <owner> & confirm');
   });
@@ -843,7 +841,7 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     const result = await runCustomerDetail(canonicalEnvelope(values));
 
     expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
-    expect(result.description.textContent).toBe('\u2014');
+    expect(result.description.textContent).toBe('No customer or work description has been recorded.');
     expect(result.summary.textContent).toBe('Zero service');
     expect(result.action.textContent).toBe('Call <owner> & confirm');
   });
@@ -858,8 +856,8 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     const result = await runCustomerDetail(canonicalEnvelope(values));
 
     expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
-    expect(result.description.textContent).toBe(JSON.stringify(scope));
-    expect(result.description.innerHTML).toBe('{&quot;note&quot;:&quot;&lt;safe&gt; &amp; clear&quot;,&quot;units&quot;:0}');
+    expect(result.description.textContent).toBe('Note: <safe> & clear; Units: 0');
+    expect(result.description.innerHTML).toBe('Note: &lt;safe&gt; &amp; clear; Units: 0');
     expect(result.summary.textContent).toBe('Zero service');
     expect(result.action.textContent).toBe('Call <owner> & confirm');
   });
@@ -871,7 +869,7 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(result.selectorCalls).toEqual([source, source]);
     expect(result.loading.innerHTML).not.toContain('Lead not found');
     expect(result.primary.textContent).toContain('Canonical Polaris');
-    expect(result.primary.textContent).toContain('Customer price: 0');
+    expect(result.primary.textContent).toContain('Customer price: $0.00');
     expect(result.primary.textContent).toContain('Dispatch <crew> & confirm');
     expect(result.primary.innerHTML).toContain('Dispatch &lt;crew&gt; &amp; confirm');
     expect(result.primary.innerHTML).not.toContain('Dispatch <crew>');
@@ -904,13 +902,12 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
       expect(result.html).not.toContain('$NaN');
     });
 
-    test('Calendar delegates dynamically and renders only unavailable state', () => {
+    test('Calendar retains canonical event projection without a standalone Polaris presentation', () => {
       const source = createSource();
       const result = runCalendar(source, false);
 
-      expect(result.selectorCalls).toEqual([source]);
-      expect(result.html).toContain('Canonical intelligence unavailable');
-      expect(result.html).not.toContain('$NaN');
+      expect(result.selectorCalls).toEqual([]);
+      expect(result.html).toBe('');
     });
 
     test('CustomerDetail delegates dynamically and renders canonical-unavailable values', async () => {
@@ -920,9 +917,9 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
       expect(result.selectorCalls[0]).toBe(source === undefined ? null : source);
       expect(result.selectorCalls).toHaveLength(2);
       expect(result.loading.innerHTML).not.toContain('Failed to load customer data');
-      expect(result.summary.textContent).toBe('Canonical intelligence unavailable.');
-      expect(result.price.textContent).toBe('\u2014');
-      expect(result.action.textContent).toBe('\u2014');
+      expect(result.summary.textContent).toBe('Polaris intelligence is unavailable because the required role-authorized inputs were not returned.');
+      expect(result.price.textContent).toBe('Unavailable — no role-authorized price is recorded.');
+      expect(result.action.textContent).toBe('Record the missing customer and work inputs before acting.');
       expect(result.summary.innerHTML).not.toContain('$NaN');
     });
 

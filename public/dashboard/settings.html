@@ -5,7 +5,6 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
-  <link rel="stylesheet" href="/css/polaris-card.css">
   <script src="/js/theme.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Settings — NorthStar AI</title>
@@ -53,7 +52,7 @@
       <!-- Notifications -->
       <div class="settings-section" id="notificationPreferencesAuthority" data-state="loading">
         <h2>Notification Preferences</h2>
-        <p class="description" id="notificationPreferencesAuthorityNote">Operational delivery preferences are stored in the tenant-scoped PostgreSQL <code>notification_preferences</code> authority.</p>
+        <p class="description" id="notificationPreferencesAuthorityNote">Operational delivery choices are stored as role-authorized workspace preferences.</p>
         <p id="settingsAccessStatus" role="status" aria-live="polite">Loading your durable account access. Editing remains disabled.</p>
         <div class="integration-card">
           <div class="icon">📧</div>
@@ -566,8 +565,6 @@
   <script src="/js/notification-service.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/command-center-contract.js"></script>
-  <script src="/js/polaris-card.js"></script>
-  <script src="/js/polaris-surface-card.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("settings");</script>
 </body>

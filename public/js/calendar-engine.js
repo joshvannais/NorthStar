@@ -129,7 +129,6 @@ class CalendarRenderer {
     this.kpiBar = document.getElementById('calendarKpiBar');
     this.eventList = document.getElementById('calendarEventList');
     this.newEventArea = document.getElementById('calendarNewEventArea');
-    this.polarisSection = document.getElementById('calendarPolaris');
     var selectEvent = event => {
       var trigger = event.target.closest('[data-calendar-event-id]');
       if (!trigger) return;
@@ -161,7 +160,6 @@ class CalendarRenderer {
     this.renderCalendarView();
     this.renderEventList();
     this.renderNewEventArea();
-    this.renderPolaris();
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -201,7 +199,9 @@ class CalendarRenderer {
     var monthValue = unavailable ? '\u2014' : monthEvents.length;
     var todayValue = unavailable ? '\u2014' : todayEvents.length;
     var totalValue = unavailable ? '\u2014' : totalEvents;
-    var pipelineText = unavailable ? '\u2014' : (pipelineValue == null ? 'Not calculated' : '$' + Number(pipelineValue).toLocaleString());
+    var pipelineText = unavailable ? '\u2014' : (pipelineValue == null
+      ? 'Unavailable — no role-authorized estimate is recorded'
+      : '$' + Number(pipelineValue).toLocaleString());
 
     this.kpiBar.innerHTML = `
       <span class="cal-kpi-pill"><span class="cal-kpi-icon">📅</span><span class="cal-kpi-num">${monthValue}</span><span class="cal-kpi-label">Appointments</span></span>
@@ -433,43 +433,6 @@ class CalendarRenderer {
     this.newEventArea.innerHTML = `<button class="cal-new-event-btn" onclick="window.openEventModal()" style="width:100%;padding:7px 14px;background:#6395ff;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:block;text-align:center;">+ New Event</button>`;
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // Polaris — uses shared polaris-card component (same as Dashboard)
-  // ═══════════════════════════════════════════════════════════════
-  renderPolaris() {
-    if (!this.polarisSection) return;
-    const canonical = window.CanonicalIntelligence && window.CanonicalIntelligence.getPresentation('calendar');
-    const presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(canonical);
-    const values = presentation && presentation.values;
-    function esc(value) {
-      return String(value == null ? '' : value).replace(/[&<>"']/g, function(character) {
-        return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character];
-      });
-    }
-    let html = '<div class="polaris-card">';
-    html += '<div class="polaris-header">';
-    html += '<h2 style="font-size:15px;font-weight:700;color:#e8eaed;display:flex;align-items:center;gap:6px;margin:0;letter-spacing:0.01em;">POLARIS<span style="font-size:9px;color:#9aa0a6;font-weight:400;vertical-align:super;">&#8482;</span> <span style="font-weight:400;font-size:13px;color:#9aa0a6;">Intelligence</span></h2>';
-    html += '<span class="cal-polaris-badge" style="background:#a67c00;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;letter-spacing:0.05em;">&#10022; CANONICAL</span>';
-    html += '</div>';
-    html += '<div class="polaris-grid" style="display:flex;flex-direction:column;gap:0;">';
-    if (this.loading) {
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Loading calendar intelligence&hellip;</span></div>';
-    } else if (!values) {
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Canonical intelligence unavailable</span></div>';
-    } else {
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Customer Price</span><span class="cal-polaris-value">' + esc(presentation.customerPriceText) + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Scope</span><span class="cal-polaris-value">' + esc(JSON.stringify(values.service && values.service.scope)) + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Labor</span><span class="cal-polaris-value">' + esc(values.laborCharge == null ? 'Not calculated' : '$' + Number(values.laborCharge).toLocaleString()) + ' / ' + esc(values.laborHours == null ? 'Not calculated' : values.laborHours + ' hours') + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Duration</span><span class="cal-polaris-value">' + esc(values.estimatedProductionDurationHours == null ? 'Not calculated' : values.estimatedProductionDurationHours + ' hours') + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Travel</span><span class="cal-polaris-value">' + esc(JSON.stringify(values.travel)) + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Gross Profit</span><span class="cal-polaris-value">' + esc(presentation.grossProfitText) + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Confidence</span><span class="cal-polaris-value">' + esc(presentation.confidenceText) + '</span></div>';
-      html += '<div class="cal-polaris-row"><span class="cal-polaris-label">Risk</span><span class="cal-polaris-value">' + esc(presentation.riskText) + '</span></div>';
-      html += '<div class="cal-polaris-row" style="border-bottom:none;"><span class="cal-polaris-label">AI Recommendation</span><span class="cal-polaris-value">' + esc(presentation.recommendedActionText || 'No recommendation recorded') + '</span></div>';
-    }
-    html += '</div></div>';
-    this.polarisSection.innerHTML = html;
-  }
 }
 
 // ================================================================

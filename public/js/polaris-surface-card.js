@@ -2,7 +2,8 @@
   'use strict';
 
   var PROJECTION_CONTRACT = 'northstar_polaris_surface_projection_v1';
-  var DETAILED_SURFACES = ['command-center', 'leads', 'polaris'];
+  var CARD_SURFACES = Object.freeze(['leads', 'polaris', 'communications']);
+  var DETAILED_SURFACES = ['command-center', 'leads', 'polaris', 'communications'];
 
   function safeString(value, fallback) {
     return typeof value === 'string' && value.trim() ? value.trim() : (fallback || '');
@@ -554,7 +555,7 @@
     var contract = global.NorthStarCommandCenterContract;
     var card = global.NorthStarPolarisCard;
     var route = contract && contract.routeForPath(global.location.pathname);
-    if (!contract || !card || !route || route.id === 'command-center') return;
+    if (!contract || !card || !route || CARD_SURFACES.indexOf(route.id) < 0) return;
     var container = mount(route.id);
     if (!container) return;
     var mode = contract.modeForPath(global.location.pathname);
@@ -569,6 +570,7 @@
   }
 
   global.NorthStarPolarisSurface = Object.freeze({
+    CARD_SURFACES: CARD_SURFACES,
     PROJECTION_CONTRACT: PROJECTION_CONTRACT,
     project: project,
   });

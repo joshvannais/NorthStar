@@ -2,7 +2,7 @@
   'use strict';
 
   var CONTRACT = 'northstar_polaris_intelligence_card_v1';
-  var DETAILED_SURFACES = Object.freeze(['command-center', 'leads', 'polaris']);
+  var DETAILED_SURFACES = Object.freeze(['command-center', 'leads', 'polaris', 'communications']);
 
   function element(tag, className, text) {
     var node = document.createElement(tag);

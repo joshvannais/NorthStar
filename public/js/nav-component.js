@@ -72,7 +72,10 @@
       '</style>' +
       '<div class="mobile-header">' +
         '<button class="hamburger-btn" id="navHamburgerBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>NorthStar</button>' +
-        '<img src="/assets/northstar-logo.png" alt="NorthStar" class="mobile-logo">' +
+        '<div class="mobile-header-actions">' +
+          '<img src="/assets/northstar-logo.png" alt="NorthStar" class="mobile-logo">' +
+          '<span class="northstar-theme-slot" data-northstar-theme-slot data-northstar-theme-location="mobile" aria-label="Theme controls"></span>' +
+        '</div>' +
       '</div>' +
       '<div class="mobile-overlay" id="mobileOverlay"></div>' +
       '<div class="mobile-menu" id="mobileMenu">' +
@@ -105,6 +108,7 @@
         '</nav>' +
         '<div class="sidebar-footer">' +
           footerLink +
+          '<span class="northstar-theme-slot" data-northstar-theme-slot data-northstar-theme-location="desktop" aria-label="Theme controls"></span>' +
         '</div>' +
       '</aside>';
   }
@@ -222,6 +226,10 @@
           root.setAttribute('data-northstar-navigation', 'denied');
           window.location.replace(mode === 'demo' ? '/demo' : '/dashboard');
           return null;
+        }
+
+        if (window.NorthStarTheme && typeof window.NorthStarTheme.refreshControlPosition === 'function') {
+          window.NorthStarTheme.refreshControlPosition();
         }
 
         var hamburger = document.getElementById('navHamburgerBtn');

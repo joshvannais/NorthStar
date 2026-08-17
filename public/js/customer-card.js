@@ -66,19 +66,26 @@ window.CustomerCard = (function() {
         if (typeof callback === 'function') callback.call(trigger, event);
       }
     });
+    document.addEventListener('keydown', function(event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      var trigger = event.target.closest('[data-customer-card-action][role="button"]');
+      if (!trigger) return;
+      event.preventDefault();
+      trigger.click();
+    });
   }
 
   installDelegatedActions();
 
   // ─── Common Formatting Helpers ─────────────────────────────────
   function fmtTime(dateVal) {
-    if (!dateVal) return '—';
+    if (!dateVal) return 'Not recorded';
     try {
       var d = new Date(dateVal);
-      if (isNaN(d.getTime())) return String(dateVal);
+      if (isNaN(d.getTime())) return 'Not recorded';
       return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
         ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    } catch(e) { return String(dateVal); }
+    } catch(e) { return 'Not recorded'; }
   }
 
   function safe(val, fallback) {
@@ -86,11 +93,11 @@ window.CustomerCard = (function() {
   }
 
   function formatName(lead) {
-    return safe(lead.caller || lead.customerName, 'Unknown');
+    return safe(lead.caller || lead.customerName, 'Customer name not recorded');
   }
 
   function formatService(lead) {
-    return safe(lead.service || lead.serviceRequested, '—');
+    return safe(lead.service || lead.serviceRequested, 'Service not recorded');
   }
 
   function formatTime(lead) {
@@ -98,7 +105,10 @@ window.CustomerCard = (function() {
   }
 
   function formatValue(lead) {
-    return lead.avgPrice ? '$' + Math.round(lead.avgPrice).toLocaleString() : '—';
+    var value = Number(lead.avgPrice);
+    return lead.avgPrice !== null && lead.avgPrice !== undefined && lead.avgPrice !== '' && Number.isFinite(value) && value >= 0
+      ? '$' + Math.round(value).toLocaleString()
+      : 'Unavailable';
   }
 
   function getInitials(lead) {
@@ -110,11 +120,13 @@ window.CustomerCard = (function() {
     if (typeof StatusPill !== 'undefined' && StatusPill.render) {
       return StatusPill.render(status, options);
     }
-    status = status || 'new';
+    status = String(status || 'new').trim().toLowerCase().replace(/_/g, '-');
     var map = { new:'answered', scheduled:'booked', contacted:'estimate', 'follow-up':'followup', completed:'completed', won:'won', lost:'lost', voicemail:'voicemail', 'no-interest':'nointerest', answered:'answered' };
-    var cls = map[status.toLowerCase()] || 'answered';
-    var label = status.charAt(0).toUpperCase() + status.slice(1);
-    return '<span class="call-status-badge ' + cls + '">' + label + '</span>';
+    var cls = map[status] || 'answered';
+    var label = status.split('-').filter(Boolean).map(function(part) {
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    }).join(' ') || 'New';
+    return '<span class="call-status-badge ' + cls + '">' + escapeMarkup(label) + '</span>';
   }
 
   // ─── Render Functions ──────────────────────────────────────────
@@ -183,6 +195,12 @@ window.CustomerCard = (function() {
     var statusOpts = {type: 'outcome', leadStatus: lead.status};
     var statusHtml = getStatusBadge(statusVal, statusOpts);
     var index = normalizedIndex(options.index);
+    var metaItems = [time, duration, svc].filter(function(value) {
+      return value && value !== '\u2014' && value !== '-' && value !== 'undefined' && value !== 'null';
+    });
+    var metaHtml = metaItems.map(function(value) {
+      return '<span class="call-meta-item">' + escapeMarkup(value) + '</span>';
+    }).join('');
 
     var pbHtml = '';
     if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
@@ -198,20 +216,17 @@ window.CustomerCard = (function() {
     }
 
     return '<div class="call-card" id="call-' + index + '">' +
-      '<div class="call-card-header" data-customer-card-action="open-call" data-lead-index="' + index + '">' +
+      '<div class="call-card-header" data-customer-card-action="open-call" data-lead-index="' + index + '" role="button" tabindex="0" aria-label="Open details for ' + escapeMarkup(name) + '">' +
         '<div class="call-caller">' +
           '<div class="call-avatar">' + escapeMarkup(inits) + '</div>' +
           '<div class="call-info">' +
             '<div class="call-name">' + escapeMarkup(name) + '</div>' +
-            '<div class="call-meta">' + escapeMarkup(time) + ' <span class="meta-sep">|</span> ' + escapeMarkup(duration) + ' <span class="meta-sep">|</span> ' + escapeMarkup(svc) + '</div>' +
+            '<div class="call-meta">' + metaHtml + '</div>' +
           '</div>' +
         '</div>' +
         statusHtml +
       '</div>' +
-      '<div class="call-card-body">' +
-        '<p style="padding:12px;text-align:center;color:var(--neutral-500);font-size:13px;">Click to view full customer details, POLARIS analysis, and transcript.</p>' +
-        pbHtml +
-      '</div>' +
+      (pbHtml ? '<div class="call-card-body">' + pbHtml + '</div>' : '') +
     '</div>';
   }
 
@@ -224,20 +239,20 @@ window.CustomerCard = (function() {
     var svc = formatService(lead);
     var time = formatTime(lead);
     var val = formatValue(lead);
-    var phone = safe(lead.phone || lead.phoneNumber, '-');
+    var phone = safe(lead.phone || lead.phoneNumber, 'Not recorded');
     var statusHtml = getStatusBadge(lead.status || 'new');
     var index = normalizedIndex(options.index);
 
     return '<tr style="cursor:pointer;" data-customer-card-action="open-lead" data-lead-index="' + index + '">' +
-      '<td><strong>' + escapeMarkup(name) + '</strong></td>' +
-      '<td>' + escapeMarkup(phone) + '</td>' +
-      '<td style="text-align:center"><span class="lead-service-badge">' + escapeMarkup(svc) + '</span></td>' +
-      '<td><strong>' + escapeMarkup(val) + '</strong></td>' +
-      '<td>' + escapeMarkup(time) + '</td>' +
-      '<td>' + statusHtml + '</td>' +
-      '<td class="lead-actions-cell">' +
+      '<td data-label="Customer"><strong>' + escapeMarkup(name) + '</strong></td>' +
+      '<td data-label="Phone">' + escapeMarkup(phone) + '</td>' +
+      '<td data-label="Service" style="text-align:center"><span class="lead-service-badge">' + escapeMarkup(svc) + '</span></td>' +
+      '<td data-label="Estimated value"><strong>' + escapeMarkup(val) + '</strong></td>' +
+      '<td data-label="Date">' + escapeMarkup(time) + '</td>' +
+      '<td data-label="Status">' + statusHtml + '</td>' +
+      '<td class="lead-actions-cell" data-label="Actions">' +
         '<div class="more-menu-container">' +
-          '<button class="more-btn" data-customer-card-action="toggle-more" title="Actions">•••</button>' +
+          '<button class="more-btn" data-customer-card-action="toggle-more" title="Actions" aria-label="Actions for ' + escapeMarkup(name) + '">•••</button>' +
           '<div class="more-dropdown">' +
             '<button class="more-dropdown-item" data-customer-card-action="view-details">👁️ View Details</button>' +
             '<button class="more-dropdown-item" data-customer-card-action="update-status" data-lead-index="' + index + '" data-lead-status="contacted">📞 Mark Contacted</button>' +

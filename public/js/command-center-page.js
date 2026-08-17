@@ -105,7 +105,7 @@
     if (demo) {
       disclosure.append(
         element('strong', '', 'This is a fictional, isolated preview.'),
-        element('span', '', 'No customer, provider, production, account, or billing data is used. Every destination reads one bounded browser session.')
+        element('span', '', ' No customer, provider, production, account, or billing data is used. Every destination reads one bounded browser session.')
       );
       disclosure.hidden = false;
     } else {

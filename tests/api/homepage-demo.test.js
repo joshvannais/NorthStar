@@ -36,6 +36,7 @@ function build(options = {}) {
     admit: jest.fn(async hash => { calls.push(hash); }),
     admitProjection: jest.fn(async hash => { calls.push(hash); }),
     consumeVerifiedPurgeProjection: jest.fn(async hash => { calls.push(hash); }),
+    canIssueVerifiedPurgeReceipt: jest.fn(async () => true),
     beginPurge: jest.fn(async (hash, _capability, _expiresAt, projectionRequested) => {
       calls.push(hash);
       return {
@@ -141,6 +142,10 @@ describe('Homepage demo route contract', () => {
     );
     expect(service.purge).toHaveBeenCalledWith('call_1', 'purge');
     expect(admission.completePurge).toHaveBeenCalledWith('b'.repeat(64), 1);
+    expect(admission.canIssueVerifiedPurgeReceipt).toHaveBeenCalledWith(
+      'b'.repeat(64),
+      Date.parse('2026-08-16T12:05:00.000Z')
+    );
     expect(service.verifyCallAuthority.mock.invocationCallOrder.at(-1))
       .toBeLessThan(admission.beginPurge.mock.invocationCallOrder[0]);
     expect(admission.beginPurge.mock.invocationCallOrder[0])
@@ -186,6 +191,7 @@ describe('Homepage demo route contract', () => {
         verifiedAt: Date.parse('2026-08-16T12:05:00.000Z'),
         projectionPermitted: true,
       })),
+      canIssueVerifiedPurgeReceipt: jest.fn(async () => true),
       completePurge: jest.fn(),
       releasePurge: jest.fn(),
     };
@@ -207,6 +213,54 @@ describe('Homepage demo route contract', () => {
     expect(service.purge).not.toHaveBeenCalled();
     expect(admission.completePurge).not.toHaveBeenCalled();
     expect(admission.releasePurge).not.toHaveBeenCalled();
+  });
+
+  test('receipt issuance rechecks durable cancellation after purge completion', async () => {
+    const admission = {
+      admit: jest.fn(),
+      consumeVerifiedPurgeProjection: jest.fn(),
+      beginPurge: jest.fn(async () => ({
+        execute: true,
+        verified: false,
+        attemptCount: 1,
+        projectionPermitted: true,
+      })),
+      completePurge: jest.fn(async () => ({
+        verified: true,
+        consumed: false,
+        verifiedAt: Date.parse('2026-08-16T12:05:00.000Z'),
+        projectionPermitted: true,
+      })),
+      canIssueVerifiedPurgeReceipt: jest.fn(async () => false),
+      releasePurge: jest.fn(),
+    };
+    const { app, service } = build({ admission });
+    const deleted = await mutation(
+      request(app),
+      'delete',
+      '/api/demo/homepage/web-call/call_1',
+      'delete-homepage-web-call',
+      { projectionRequested: true, purgeToken: 'purge' }
+    ).expect(200);
+    expect(deleted.body.data).toEqual({
+      providerDeletionVerified: true,
+      northstarPurged: true,
+      retainedContent: false,
+    });
+    expect(admission.canIssueVerifiedPurgeReceipt).toHaveBeenCalledWith(
+      'b'.repeat(64),
+      Date.parse('2026-08-16T12:05:00.000Z')
+    );
+    expect(service.verifiedPurgeReceipt).toHaveBeenCalledWith(
+      'call_1',
+      'purge',
+      Date.parse('2026-08-16T12:05:00.000Z'),
+      false
+    );
+    expect(admission.completePurge.mock.invocationCallOrder[0])
+      .toBeLessThan(admission.canIssueVerifiedPurgeReceipt.mock.invocationCallOrder[0]);
+    expect(admission.canIssueVerifiedPurgeReceipt.mock.invocationCallOrder[0])
+      .toBeLessThan(service.verifiedPurgeReceipt.mock.invocationCallOrder[0]);
   });
 
   test('failed provider deletion releases only its durable capability lease for bounded retry', async () => {

@@ -487,6 +487,48 @@ async function runConnectionCancellationCase(browser, origin, selected) {
   }
 }
 
+async function runPurgeRaceCancellationCase(browser, origin, selected) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const harness = await installPageHarness(page, origin);
+  try {
+    await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForFunction(() => window.NorthStarHomepageDemo && window.NorthStarHomepageDemo.getState().available);
+    await page.fill('#demoBusinessName', 'Purge Race Cancellation Test');
+    await page.selectOption('#demoIndustry', 'Roofing');
+    await page.check('#demoConsentCheckbox');
+    await page.click('#demoCallBtn');
+    await page.click('#modalCallBtn');
+    await page.waitForFunction(() => window.__retellTestClient);
+    await page.evaluate(phrase => window.__retellTestClient.pushTranscript([
+      { role: 'user', content: phrase },
+      { role: 'agent', content: 'Describe a fictional roof.' },
+      { role: 'user', content: 'It is 2000 square feet.' },
+    ]), CONSENT_PHRASE);
+    await page.waitForFunction(() => window.NorthStarHomepageDemo.getState().consented);
+    const projectionDelete = page.waitForRequest(request => {
+      if (request.method() !== 'DELETE') return false;
+      try { return request.postDataJSON().projectionRequested === true; } catch (_error) { return false; }
+    });
+    await page.click('#demoHangupBtn');
+    await projectionDelete;
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await page.waitForTimeout(400);
+    const deleteBodies = harness.bodies
+      .filter(entry => entry.method === 'DELETE')
+      .map(entry => entry.body && entry.body.projectionRequested);
+    assert.deepStrictEqual(deleteBodies, [true, false],
+      `${selected}: pagehide commits deletion-only denial during projection-enabled purge`);
+    assert.strictEqual(harness.requests.some(entry => entry.path.includes('/polaris/')), false,
+      `${selected}: in-flight purge cancellation makes no Polaris request`);
+    assert.strictEqual(await page.isVisible('#demoPostCallView'), false,
+      `${selected}: in-flight purge cancellation renders no result`);
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
 async function runFailureCase(browser, origin, selected) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
   const page = await context.newPage();
@@ -618,6 +660,7 @@ async function main() {
     for (const viewport of VIEWPORTS) evidence.cases.push(await runSuccessfulCase(browser, origin, selected, viewport));
     await runCancellationCase(browser, origin, selected);
     await runConnectionCancellationCase(browser, origin, selected);
+    await runPurgeRaceCancellationCase(browser, origin, selected);
     await runFailureCase(browser, origin, selected);
     await runMaximumTimeoutCase(browser, origin, selected);
     await runUnavailableCase(browser, origin, selected);
@@ -625,6 +668,7 @@ async function main() {
     evidence.failureBoundary = 'pass';
     evidence.cancellationBoundary = 'pass';
     evidence.connectionCancellationBoundary = 'pass';
+    evidence.purgeCancellationRaceBoundary = 'pass';
     evidence.maximumTimeoutBoundary = 'pass';
     evidence.sourceDisabledBoundary = 'pass';
     evidence.vendorLogBoundary = 'pass';

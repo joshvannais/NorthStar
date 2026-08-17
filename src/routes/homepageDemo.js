@@ -143,13 +143,15 @@ function createHomepageDemoRouter(options = {}) {
         req.body.projectionRequested
       );
       if (claim && claim.verified === true && claim.execute === false) {
+        const projectionPermitted = claim.projectionPermitted === true && claim.consumed !== true &&
+          await admission.canIssueVerifiedPurgeReceipt(authority.capabilityHash, claim.verifiedAt);
         return res.json({
           success: true,
           data: service.verifiedPurgeReceipt(
             req.params.callId,
             req.body.purgeToken,
             claim.verifiedAt,
-            claim.projectionPermitted === true && claim.consumed !== true
+            projectionPermitted
           ),
         });
       }
@@ -163,13 +165,15 @@ function createHomepageDemoRouter(options = {}) {
       try {
         await service.purge(req.params.callId, req.body.purgeToken);
         const completed = await admission.completePurge(authority.capabilityHash, claim.attemptCount);
+        const projectionPermitted = completed.projectionPermitted === true && completed.consumed !== true &&
+          await admission.canIssueVerifiedPurgeReceipt(authority.capabilityHash, completed.verifiedAt);
         return res.json({
           success: true,
           data: service.verifiedPurgeReceipt(
             req.params.callId,
             req.body.purgeToken,
             completed.verifiedAt,
-            completed.projectionPermitted === true && completed.consumed !== true
+            projectionPermitted
           ),
         });
       } catch (error) {

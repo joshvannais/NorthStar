@@ -253,7 +253,8 @@ class HomepageDemoAdmissionRepository {
             attemptCount > PURGE_ATTEMPTS_PER_CAPABILITY) {
           failUnavailable();
         }
-        if (operation.projection_permitted === true && projectionRequested === false) {
+        if (operation.state !== 'consumed' && operation.projection_permitted === true &&
+            projectionRequested === false) {
           const revoked = await client.query(
             `UPDATE homepage_demo_purge_operations
                 SET projection_permitted = FALSE, updated_at = $2
@@ -279,6 +280,10 @@ class HomepageDemoAdmissionRepository {
         }
         if (operation.state !== 'in_progress') failUnavailable();
         if (exactDate(operation.lease_expires_at) > now) {
+          if (projectionRequested === false) {
+            await client.query('COMMIT');
+            open = false;
+          }
           throw new HomepageWebCallError(
             409,
             'homepage_purge_in_progress',
@@ -389,6 +394,32 @@ class HomepageDemoAdmissionRepository {
         try { await client.query('ROLLBACK'); } catch (_rollbackError) {}
       }
       throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async canIssueVerifiedPurgeReceipt(capabilityHashValue, verifiedAtValue) {
+    const capabilityHash = exactHash(capabilityHashValue);
+    const now = exactDate(this.now());
+    const verifiedAt = exactDate(verifiedAtValue);
+    if (verifiedAt > now || verifiedAt.getTime() + VERIFIED_PURGE_RECEIPT_LIFETIME_MS <= now.getTime()) {
+      return false;
+    }
+    const client = await this.requirePool().connect();
+    try {
+      const result = await client.query(
+        `SELECT capability_hash
+           FROM homepage_demo_purge_operations
+          WHERE capability_hash = $1
+            AND state = 'verified'
+            AND projection_permitted = TRUE
+            AND verified_at = $2
+            AND authority_expires_at > $3
+            AND retire_at > $3`,
+        [capabilityHash, verifiedAt, now]
+      );
+      return result.rowCount === 1;
     } finally {
       client.release();
     }

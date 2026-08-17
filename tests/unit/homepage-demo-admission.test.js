@@ -307,6 +307,51 @@ describe('Homepage Web Call durable admission', () => {
       .toHaveLength(0);
   });
 
+  test('cancellation commits projection denial before reporting an active purge lease', async () => {
+    const now = new Date('2026-08-16T12:34:00.000Z');
+    const client = {
+      query: jest.fn(async sql => {
+        const text = String(sql);
+        if (text.includes('INSERT INTO homepage_demo_purge_operations')) return { rowCount: 0, rows: [] };
+        if (text.includes('SELECT state, attempt_count, lease_expires_at, authority_expires_at')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              state: 'in_progress',
+              attempt_count: 1,
+              lease_expires_at: new Date(now.getTime() + 60000),
+              authority_expires_at: new Date(now.getTime() + 600000),
+              verified_at: null,
+              projection_permitted: true,
+            }],
+          };
+        }
+        if (text.includes('SET projection_permitted = FALSE')) {
+          return { rowCount: 1, rows: [{ capability_hash: 'a'.repeat(64) }] };
+        }
+        return { rowCount: 0, rows: [] };
+      }),
+      release: jest.fn(),
+    };
+    const repository = new HomepageDemoAdmissionRepository({
+      pool: { connect: jest.fn(async () => client) },
+      now: () => now,
+    });
+    await expect(repository.beginPurge(
+      'f'.repeat(64),
+      'a'.repeat(64),
+      now.getTime() + 600000,
+      false
+    )).rejects.toMatchObject({ status: 409, code: 'homepage_purge_in_progress' });
+    const denial = client.query.mock.calls.findIndex(call =>
+      String(call[0]).includes('SET projection_permitted = FALSE'));
+    const commit = client.query.mock.calls.findIndex(call => call[0] === 'COMMIT');
+    expect(denial).toBeGreaterThanOrEqual(0);
+    expect(commit).toBeGreaterThan(denial);
+    expect(client.query).not.toHaveBeenCalledWith('ROLLBACK');
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
   test('live lease and exhausted capability both fail before quota claims', async () => {
     const now = new Date('2026-08-16T12:34:00.000Z');
     async function outcome(attemptCount, leaseExpiresAt) {

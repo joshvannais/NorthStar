@@ -60,12 +60,23 @@ describe('surgical site professionalism correction', () => {
     expect(read('public/dashboard/communications.html')).not.toContain('id="polarisCard"');
   });
 
-  test('the site preserves the deployed Inter typography site-wide', () => {
+  test('the site preserves the deployed iPhone-native typography site-wide', () => {
     expect(read('public/css/style.css').startsWith("@import url('/css/site-professionalism.css');")).toBe(true);
+    const base = read('public/css/style.css');
+    expect(base).toContain("--font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif");
+    expect(base).toContain("--font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', sans-serif");
+    expect(base).not.toContain("--font-sans: 'Inter'");
+    expect(base).not.toContain("--font-display: 'Inter'");
     const layer = read('public/css/site-professionalism.css');
-    expect(layer).toContain("font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important");
-    expect(layer).toContain("--font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
-    expect(layer).toContain('font-synthesis: none');
+    expect(layer).toContain("font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif !important");
+    expect(layer).toContain("--font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', sans-serif");
+    expect(layer).not.toContain('font-synthesis: none');
+    expect(layer).toMatch(/\.northstar-lockup img[\s\S]*?object-fit:\s*cover/);
+    expect(read('public/js/nav-component.js')).toContain('src="/assets/logo.png"');
+    expect(read('public/js/nav-component.js')).not.toContain('src="/assets/logo.svg"');
+    expect(read('public/demo-dashboard.html')).toContain('src="/assets/logo.png"');
+    expect(read('public/demo-dashboard.html')).not.toContain('src="/assets/logo.svg"');
+    expect(read('public/index.html')).not.toMatch(/font-family\s*:\s*Inter\b/);
 
     const source = allFiles(path.join(ROOT, 'public'), ['.css', '.html'])
       .map(file => fs.readFileSync(file, 'utf8')).join('\n');

@@ -74,14 +74,14 @@
       '<div class="mobile-header">' +
         '<button type="button" class="hamburger-btn" id="navHamburgerBtn" aria-controls="mobileMenu" aria-expanded="false" aria-label="Open navigation menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>NorthStar</button>' +
         '<div class="mobile-header-actions">' +
-          '<img src="/assets/logo.svg" alt="NorthStar" class="mobile-logo">' +
+          '<img src="/assets/logo.png" alt="NorthStar" class="mobile-logo">' +
           '<span class="northstar-theme-slot" data-northstar-theme-slot data-northstar-theme-location="mobile" aria-label="Theme controls"></span>' +
         '</div>' +
       '</div>' +
       '<div class="mobile-overlay" id="mobileOverlay" aria-hidden="true"></div>' +
       '<div class="mobile-menu" id="mobileMenu" data-state="closed" aria-hidden="true" inert>' +
         '<div class="mobile-menu-header">' +
-          '<a href="' + homePath + '" class="northstar-lockup"><img src="/assets/logo.svg" alt=""> NorthStar</a>' +
+          '<a href="' + homePath + '" class="northstar-lockup"><img src="/assets/logo.png" alt=""> NorthStar</a>' +
           '<button type="button" class="mobile-menu-close" id="navCloseBtn" aria-label="Close navigation menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
         '</div>' +
         '<nav class="mobile-menu-nav" aria-label="Mobile primary navigation">' +
@@ -101,7 +101,7 @@
     return '' +
       '<aside class="sidebar">' +
         '<a href="' + homePath + '" class="sidebar-logo northstar-lockup">' +
-          '<img src="/assets/logo.svg" alt="" class="logo-img">' +
+          '<img src="/assets/logo.png" alt="" class="logo-img">' +
           'NorthStar' +
         '</a>' +
         '<nav class="sidebar-nav">' +

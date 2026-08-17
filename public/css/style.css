@@ -38,8 +38,8 @@
   --warning: #92400e;
   --danger: #b91c1c;
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', sans-serif;
 
   --radius: 12px;
   --radius-sm: 8px;
@@ -1489,10 +1489,10 @@ tr:hover td { background: var(--neutral-50); }
   .stats-grid { grid-template-columns: 1fr; }
   .card { padding: 20px; }
   .settings-section { padding: 20px; }
-}/* Logo Component
-   Swap between PNG and SVG by changing the file extension on src.
-   To switch: edit src="/assets/logo.png" → src="/assets/logo.svg"
-   Both files exist in /assets/ — no layout changes needed. */
+}
+
+/* Official NorthStar logo component. Keep the approved transparent PNG; the
+   legacy SVG is not an approved customer-facing mark. */
 .logo-link {
   display: flex;
   align-items: center;

@@ -21,7 +21,7 @@
     .demo-hero p { font-size: clamp(16px, 2.5vw, 20px); color: var(--neutral-500); max-width: 640px; margin: 0 auto 32px; }
     .demo-form-card { background: var(--neutral-100); border: 1px solid var(--neutral-200); border-radius: 16px; padding: 32px; max-width: 520px; margin: 0 auto; text-align: left; }
     .demo-form-card label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--neutral-700); }
-    .demo-form-card input, .demo-form-card select { width: 100%; padding: 12px 14px; border: 1px solid var(--neutral-300); border-radius: 8px; font-size: 15px; font-family: Inter, sans-serif; margin-bottom: 16px; box-sizing: border-box; background: #fff; }
+    .demo-form-card input, .demo-form-card select { width: 100%; padding: 12px 14px; border: 1px solid var(--neutral-300); border-radius: 8px; font-size: 15px; font-family: var(--font-sans); margin-bottom: 16px; box-sizing: border-box; background: #fff; }
     .demo-form-card input:focus, .demo-form-card select:focus { outline: none; border-color: var(--brand-600); box-shadow: 0 0 0 3px rgba(212,175,55,0.15); }
     .demo-scenarios { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; justify-content: center; }
     .demo-scenario-chip { padding: 8px 14px; border: 1px solid var(--neutral-300); border-radius: 100px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--card-bg, #fff); color: var(--neutral-600); transition: all 0.15s; }
@@ -29,7 +29,7 @@
     [data-theme="dark"] .demo-scenario-chip { background: #1e1e2e; border-color: #2d2d3f; color: #e5e7eb; }
     [data-theme="dark"] .demo-scenario-chip:hover, [data-theme="dark"] .demo-scenario-chip.active { border-color: var(--brand-600); color: var(--brand-600); background: rgba(212,175,55,0.15); }
     .demo-scenario-chip.custom { border-style: dashed; }
-    .demo-btn-call { width: 100%; padding: 14px; background: var(--brand-600); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: Inter, sans-serif; transition: all 0.2s; }
+    .demo-btn-call { width: 100%; padding: 14px; background: var(--brand-600); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: var(--font-sans); transition: all 0.2s; }
     .demo-btn-call:hover { background: var(--brand-700); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.3); }
     .demo-btn-call:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
     /* ── During-call view ── */
@@ -288,7 +288,7 @@
     .demo-notification {
       position: fixed; top: 16px; left: 50%; transform: translateX(-50%) translateY(-120px);
       z-index: 20000; padding: 14px 24px; border-radius: 10px;
-      font-size: 14px; font-weight: 500; font-family: Inter, sans-serif;
+      font-size: 14px; font-weight: 500; font-family: var(--font-sans);
       max-width: 500px; width: 90vw; text-align: center;
       box-shadow: 0 8px 24px rgba(0,0,0,0.15);
       transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -333,7 +333,7 @@
     .btn-modal-call {
       display: block; width: 100%; padding: 14px;
       background: var(--brand-600); color: #fff; border: none; border-radius: 8px;
-      font-size: 16px; font-weight: 600; cursor: pointer; font-family: Inter, sans-serif;
+      font-size: 16px; font-weight: 600; cursor: pointer; font-family: var(--font-sans);
       transition: all 0.2s;
     }
     .btn-modal-call:hover { background: var(--brand-700); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.3); }

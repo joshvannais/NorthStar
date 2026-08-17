@@ -169,9 +169,9 @@ describe('authorized Homepage Refresh contracts', () => {
       start_url: '/',
       scope: '/',
       icons: [{
-        src: '/assets/logo.svg',
-        sizes: 'any',
-        type: 'image/svg+xml',
+        src: '/assets/logo.png',
+        sizes: '1024x1536',
+        type: 'image/png',
         purpose: 'any',
       }],
     });

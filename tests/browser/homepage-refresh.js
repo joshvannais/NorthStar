@@ -40,9 +40,8 @@ function screenshotPath(selected, viewport, state) {
 }
 
 async function assertProfessionalPresentation(page, label) {
-  await page.waitForFunction(() => /^["']?Inter["']?(?:,|$)/.test(getComputedStyle(document.body).fontFamily), null, { timeout: 10000 });
+  await page.waitForFunction(() => /^-apple-system(?:,|$)/.test(getComputedStyle(document.body).fontFamily), null, { timeout: 10000 });
   const snapshot = await page.evaluate(async supportedWeights => {
-    await Promise.all(supportedWeights.map(weight => document.fonts.load(weight + ' 16px Inter', 'NorthStar')));
     await document.fonts.ready;
     const visible = node => {
       const style = getComputedStyle(node);
@@ -52,7 +51,7 @@ async function assertProfessionalPresentation(page, label) {
     const nodes = Array.from(document.querySelectorAll('body, button, input, select, textarea, a, h1, h2, h3, p, li, summary'))
       .filter(visible);
     const normalizedWeight = value => value === 'normal' ? '400' : value === 'bold' ? '700' : value;
-    const offenders = nodes.filter(node => !/^["']?Inter["']?(?:,|$)/.test(getComputedStyle(node).fontFamily)).map(node => ({
+    const offenders = nodes.filter(node => !/^-apple-system(?:,|$)/.test(getComputedStyle(node).fontFamily)).map(node => ({
       tag: node.tagName,
       id: node.id,
       className: typeof node.className === 'string' ? node.className : '',
@@ -76,17 +75,12 @@ async function assertProfessionalPresentation(page, label) {
       offenders,
       renderedWeights,
       violations,
-      interLoaded: Array.from(document.fonts).some(face =>
-        String(face.family).replace(/["']/g, '') === 'Inter' && face.status === 'loaded'),
-      loadedWeights: supportedWeights.every(weight => document.fonts.check(weight + ' 16px Inter', 'NorthStar')),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   }, SUPPORTED_FONT_WEIGHTS);
-  assert.strictEqual(snapshot.interLoaded, true, `${label}: source-bound Inter font loads: ${JSON.stringify(snapshot)}`);
-  assert.strictEqual(snapshot.loadedWeights, true, `${label}: every supported Inter weight loads: ${JSON.stringify(snapshot)}`);
-  assert.deepStrictEqual(snapshot.offenders, [], `${label}: every visible text/control surface uses Inter`);
+  assert.deepStrictEqual(snapshot.offenders, [], `${label}: every visible text/control surface uses the iPhone-native font stack`);
   assert.ok(snapshot.renderedWeights.every(weight => SUPPORTED_FONT_WEIGHTS.includes(weight)),
-    `${label}: visible weights stay in the source-bound 400-800 range: ${JSON.stringify(snapshot.renderedWeights)}`);
+    `${label}: visible weights stay in the approved 400-800 range: ${JSON.stringify(snapshot.renderedWeights)}`);
   assert.deepStrictEqual(snapshot.violations, [], `${label}: no raw/internal/malformed user-facing content`);
   assert.ok(snapshot.overflow <= 1, `${label}: no horizontal viewport overflow`);
   return snapshot;

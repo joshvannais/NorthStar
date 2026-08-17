@@ -352,8 +352,9 @@ async function inspectCurrent(page, route, revision, viewport) {
       catalogueState: routeId === 'integrations' && document.getElementById('integrationCatalogueRoot').dataset.state,
       catalogueCategories: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-category').length : null,
       catalogueProviders: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-card').length : null,
-      catalogueProviderNames: routeId === 'integrations' ? Array.from(document.querySelectorAll('#integrationCategoryList .integration-card h3')).map(node => node.textContent.trim()) : [],
-      catalogueProviderNames: routeId === 'integrations' ? Array.from(document.querySelectorAll('#integrationCategoryList .integration-card h3')).map(node => node.textContent.trim()) : [],
+      catalogueProviderNames: routeId === 'integrations'
+        ? Array.from(document.querySelectorAll('#integrationCategoryList .integration-card h3')).map(node => node.textContent.trim())
+        : [],
       routeId,
       routePath,
       mobile,
@@ -679,7 +680,7 @@ async function waitPaidReady(page, route) {
   }, { timeout: 15000 });
 }
 
-async function inspectPaidCurrent(page, route, viewport) {
+async function inspectPaidCurrent(page, route, viewport, expectedLeadHref) {
   await waitPaidReady(page, route);
   await waitCatalogueTerminal(page, route);
   await inspectProfessionalPresentation(page, route.paidPath + ' ' + viewport.label);
@@ -728,6 +729,9 @@ async function inspectPaidCurrent(page, route, viewport) {
       catalogueState: routeId === 'integrations' && document.getElementById('integrationCatalogueRoot').dataset.state,
       catalogueCategories: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-category').length : null,
       catalogueProviders: routeId === 'integrations' ? document.querySelectorAll('#integrationCategoryList .integration-card').length : null,
+      catalogueProviderNames: routeId === 'integrations'
+        ? Array.from(document.querySelectorAll('#integrationCategoryList .integration-card h3')).map(node => node.textContent.trim())
+        : [],
     };
   }, { routeId: route.id, expectedPath: route.paidPath });
 
@@ -753,13 +757,10 @@ async function inspectPaidCurrent(page, route, viewport) {
     assert.strictEqual(snapshot.cardContained, true, route.paidPath + ' card content stays contained');
     assert.strictEqual(snapshot.cardDetailed, DETAILED_POLARIS_SURFACES.includes(route.id),
       route.paidPath + ' detailed-card depth');
-    assert.ok(snapshot.cardText.includes(PAID_CUSTOMER_A), route.paidPath + ' reads real tenant A data');
     assert.ok(!snapshot.cardText.includes('[object Object]') && !snapshot.cardText.includes('Not calculated'),
       route.paidPath + ' card remains human-readable');
-    assert.ok(snapshot.objectHrefs.every(href => href && href.startsWith('/dashboard')),
-      route.paidPath + ' actions remain in paid role-authorized routes');
-    assert.strictEqual(snapshot.objectHrefs.filter(href => href.startsWith('/dashboard/polaris?')).length, 1,
-      route.paidPath + ' exposes one focused complete-intelligence path instead of stacked quick links');
+    assert.deepStrictEqual(snapshot.objectHrefs, [expectedLeadHref],
+      route.paidPath + ' exposes one focused complete-intelligence path for the exact tenant A lead');
   } else {
     assert.strictEqual(snapshot.cardCount, 0, route.paidPath + ' has no misplaced standalone Polaris card');
     assert.strictEqual(snapshot.cardContract, null, route.paidPath + ' has no Polaris card contract residue');
@@ -775,7 +776,7 @@ async function inspectPaidCurrent(page, route, viewport) {
   return snapshot;
 }
 
-async function clickPaidRoute(page, origin, route, viewport) {
+async function clickPaidRoute(page, origin, route, viewport, expectedLeadHref) {
   const mobile = viewport.width <= 768;
   if (mobile) {
     const projectedRoute = { id: route.id, path: route.paidPath };
@@ -787,12 +788,12 @@ async function clickPaidRoute(page, origin, route, viewport) {
       page.click(selector),
     ]);
   }
-  const snapshot = await inspectPaidCurrent(page, route, viewport);
+  const snapshot = await inspectPaidCurrent(page, route, viewport, expectedLeadHref);
   if (mobile) assertMobileMenuClosed(await mobileMenuSnapshot(page, route.id), viewport.label + '/paid/' + route.id + '/arrival');
   return snapshot;
 }
 
-async function exercisePaidViewport(browser, origin, viewport, session, ledger) {
+async function exercisePaidViewport(browser, origin, viewport, session, ledger, expectedLeadHref) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block' });
   context.setDefaultTimeout(10000);
   await context.addCookies(Object.entries(session.cookies).map(([name, value]) => ({
@@ -814,7 +815,7 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger) 
   try {
     const entry = await page.goto(origin + ROUTES[0].paidPath, { waitUntil: 'domcontentloaded', timeout: 15000 });
     assert.ok(entry && [200, 304].includes(entry.status()), 'paid Command Center shell loads');
-    const first = await inspectPaidCurrent(page, ROUTES[0], viewport);
+    const first = await inspectPaidCurrent(page, ROUTES[0], viewport, expectedLeadHref);
     await captureEvidence(page, 'paid', ROUTES[0], viewport, 'canonical');
     await exerciseMobileMenuControls(page, viewport, 'paid');
     await exerciseTheme(page, viewport);
@@ -849,13 +850,13 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger) 
     await exercisePolarisDisclosure(page, { ...ROUTES[0], path: ROUTES[0].paidPath }, viewport);
 
     for (const route of ROUTES.slice(1)) {
-      await clickPaidRoute(page, origin, route, viewport);
+      await clickPaidRoute(page, origin, route, viewport, expectedLeadHref);
       await exercisePolarisDisclosure(page, { ...route, path: route.paidPath }, viewport);
       await captureEvidence(page, 'paid', route, viewport, 'canonical');
       console.log('PARITY_BROWSER_CHECKPOINT paid-' + viewport.label + ' route ' + route.id);
     }
 
-    await clickPaidRoute(page, origin, ROUTES[0], viewport);
+    await clickPaidRoute(page, origin, ROUTES[0], viewport, expectedLeadHref);
     const leadLink = page.locator('#commandCenterPolaris .polaris-card-primary-action').first();
     const leadHref = await leadLink.getAttribute('href');
     assert.ok(leadHref && leadHref.startsWith('/dashboard/polaris?kind=lead&id='), viewport.label + ' paid lead path');
@@ -863,7 +864,7 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger) 
       page.waitForURL(url => url.origin === origin && url.pathname + url.search === leadHref, { timeout: 15000 }),
       leadLink.click(),
     ]);
-    const detail = await inspectPaidCurrent(page, ROUTES[1], viewport);
+    const detail = await inspectPaidCurrent(page, ROUTES[1], viewport, expectedLeadHref);
     await captureEvidence(page, 'paid', ROUTES[1], viewport, 'object-detail');
     assert.strictEqual(detail.cardCount, 0, viewport.label + ' paid Polaris remains chat-centric without a duplicate surface card');
     assert.ok(!detail.body.includes(PAID_CUSTOMER_B), viewport.label + ' paid Polaris excludes tenant B');
@@ -1167,7 +1168,13 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.strictEqual(detail.polarisCardCount, 0, viewport.label + ' Polaris remains chat-centric without a duplicate surface card');
     assert.ok(detail.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph),
       viewport.label + ' Polaris reads the complete shared simulated graph');
-    assert.ok(detail.body.includes('Ask Polaris anything'), viewport.label + ' Polaris keeps the business-intelligence chat entry point');
+    const visiblePolarisPrompt = page.locator('textarea[aria-label="Ask Polaris a question"]:visible');
+    assert.strictEqual(await visiblePolarisPrompt.count(), 1,
+      viewport.label + ' Polaris exposes one visible business-intelligence chat entry point');
+    assert.strictEqual(await visiblePolarisPrompt.getAttribute('placeholder'), 'Ask Polaris anything...',
+      viewport.label + ' Polaris keeps the business-intelligence chat entry point');
+    assert.strictEqual(await visiblePolarisPrompt.isEnabled(), true,
+      viewport.label + ' Polaris business-intelligence chat entry point remains usable');
 
     for (const id of ['team', 'ai-settings', 'business-profile', 'settings', 'integrations']) {
       const route = ROUTES.find(candidate => candidate.id === id);
@@ -1364,8 +1371,9 @@ async function main() {
     const receipts = [];
     for (const viewport of selectedViewports) receipts.push(await exerciseViewport(browser, origin, viewport, ledger));
     const paidReceipts = [];
+    const paidLeadHref = '/dashboard/polaris?kind=lead&id=' + encodeURIComponent(paidA.body.ids.opportunity);
     for (const viewport of selectedViewports) {
-      paidReceipts.push(await exercisePaidViewport(browser, origin, viewport, paidSession, ledger));
+      paidReceipts.push(await exercisePaidViewport(browser, origin, viewport, paidSession, ledger, paidLeadHref));
     }
 
     const external = ledger.requests.filter(entry => new URL(entry.url).origin !== origin);

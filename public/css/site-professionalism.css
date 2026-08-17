@@ -27,17 +27,17 @@ html body input,
 html body select,
 html body textarea,
 html body option {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
 html {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 html body {
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.6;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -80,6 +80,24 @@ html body .sidebar-footer {
 
 html body .mobile-header-actions {
   margin-left: auto;
+}
+
+html body :is(.hamburger-btn, .northstar-lockup, .demo-dashboard-brand) {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-weight: 800;
+}
+
+html body .hamburger-btn {
+  gap: 10px;
+  font-size: 17px;
+}
+
+html body :is(.northstar-lockup img, .mobile-logo, .demo-dashboard-brand img) {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  object-position: center;
+  flex: 0 0 38px;
 }
 
 html body .sidebar-footer {
@@ -533,34 +551,66 @@ html body .integration-category[data-category-key="maps_navigation"] .integratio
 html body .polaris-card-status {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 4px 10px;
-  border: 1px solid rgba(254, 243, 199, .5);
-  border-radius: 999px;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: 0;
+  padding: 3px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #fef3c7;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .04em;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .08em;
+  white-space: nowrap;
   text-transform: uppercase;
 }
 
+html body .polaris-card-status::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fde68a;
+  box-shadow: 0 0 10px rgba(253, 230, 138, .65);
+  content: '';
+}
+
+html body .polaris-card-heading > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html body .polaris-card-heading h2 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
 html body .command-center-chart-controls {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(86px, 1fr));
   gap: 4px;
+  width: min(100%, 320px);
   padding: 4px;
   border: 1px solid var(--theme-border);
-  border-radius: 999px;
+  border-radius: 12px;
+  background: var(--theme-surface-soft);
 }
 
 html body .command-center-chart-control {
+  min-width: 0;
   min-height: 34px;
   padding: 6px 12px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 8px;
   background: transparent;
   color: var(--theme-muted);
   font: inherit;
   font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -620,12 +670,38 @@ html body .northstar-demo-business-summary {
 }
 
 html body .integration-provider-list .integration-card-map {
+  align-items: flex-start;
   min-height: 0;
   padding: 1rem;
+  text-align: left;
 }
 
 html body .integration-card-map .integration-card-header {
   align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+html body .integration-card-map .integration-status {
+  align-self: flex-start;
+}
+
+@media (max-width: 720px) {
+  html body .demo-revenue-panel .demo-panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  html body .demo-revenue-panel .command-center-chart-controls {
+    width: 100%;
+    max-width: none;
+  }
+
+  html body .polaris-card-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 720px) {

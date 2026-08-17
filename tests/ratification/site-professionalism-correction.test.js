@@ -60,12 +60,11 @@ describe('surgical site professionalism correction', () => {
     expect(read('public/dashboard/communications.html')).not.toContain('id="polarisCard"');
   });
 
-  test('the site uses the native platform font stack site-wide', () => {
+  test('the site preserves the deployed Inter typography site-wide', () => {
     expect(read('public/css/style.css').startsWith("@import url('/css/site-professionalism.css');")).toBe(true);
     const layer = read('public/css/site-professionalism.css');
-    expect(layer).toContain("font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif !important");
-    expect(layer).toContain("--font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif");
-    expect(layer).not.toContain("font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important");
+    expect(layer).toContain("font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important");
+    expect(layer).toContain("--font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
     expect(layer).toContain('font-synthesis: none');
 
     const source = allFiles(path.join(ROOT, 'public'), ['.css', '.html'])

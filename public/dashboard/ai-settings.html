@@ -14,6 +14,7 @@
 .ai-settings-gateway h2 { margin: 0 0 10px; color: var(--neutral-900); font-size: 22px; }
 .ai-settings-gateway p { margin: 0 0 18px; color: var(--neutral-600); line-height: 1.6; }
 .ai-settings-gateway .authority-note { padding: 12px; border-left: 3px solid var(--brand-500); background: rgba(196,155,44,0.08); font-size: 13px; }
+.ai-settings-gateway .btn { box-sizing: border-box; max-width: 100%; white-space: normal; text-align: center; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .ai-settings-gateway { margin: 16px; padding: 18px; } }
 </style>
   <script src="/js/auth-session.js"></script>
@@ -26,10 +27,10 @@
       <div><h1>AI Settings</h1><p>Configure your AI Office Manager's behavior and preferences.</p></div>
     </div>
     <section class="ai-settings-gateway" aria-labelledby="canonicalAiSettingsHeading">
-      <h2 id="canonicalAiSettingsHeading">Canonical AI Configuration</h2>
+      <h2 id="canonicalAiSettingsHeading">AI Configuration</h2>
       <p>Name, literal greeting, personality, conversation style, and ordered escalation policies are maintained in the versioned Business Profile.</p>
       <p class="authority-note">This page is a gateway, not a second settings authority. Opening the editor does not contact or configure a provider.</p>
-      <a class="btn btn-primary" id="openCanonicalAiSettings" href="/dashboard/business-profile?section=retell#voice-assistant-configuration">Open Voice &amp; Knowledge in Business Profile</a>
+      <a class="btn btn-primary" id="openCanonicalAiSettings" href="/dashboard/business-profile?section=retell#voice-assistant-configuration">Open Voice &amp; Knowledge</a>
     </section>
   </main>
 </div>

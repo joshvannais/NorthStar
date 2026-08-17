@@ -120,7 +120,7 @@
     heading.appendChild(element('span', 'polaris-card-mark', '✦'));
     var headingCopy = element('div');
     headingCopy.append(element('p', 'polaris-card-kicker', 'Polaris intelligence'), element('h2', '', value.title));
-    heading.append(headingCopy, element('span', 'polaris-card-status', value.surface === 'command-center' ? 'Current Intelligence' : 'Recorded Intelligence'));
+    heading.append(headingCopy, element('span', 'polaris-card-status', value.surface === 'command-center' ? 'Current' : 'Recorded'));
     container.append(heading, element('p', 'polaris-card-summary', value.summary));
 
     var confidence = element('div', 'polaris-card-confidence');

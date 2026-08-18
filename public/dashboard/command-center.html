@@ -197,6 +197,7 @@
   </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
 
@@ -292,7 +293,7 @@
           alerts: PolarisApi.getAlerts
         };
         var loader = loaders[label];
-        return (loader ? loader() : Promise.reject(new Error('Unsupported canonical section.'))).then(function(data) {
+        return (loader ? loader() : Promise.reject(new Error('Unsupported section.'))).then(function(data) {
           return extractor ? extractor(data) : data;
         }).catch(function(err) {
           console.warn('[CC] ' + label + ' failed:', err && err.message);

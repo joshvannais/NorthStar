@@ -5,7 +5,7 @@
   var WEB_CALL_URL = '/api/demo/homepage/web-call';
   var SDK_URL = '/js/vendor/retell-web-client.mjs';
   var CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
-  var DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce a fictional demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
+  var DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce your demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
   var CONSENT_TIMEOUT_MS = 30000;
   var CONNECTION_TIMEOUT_MS = 20000;
   var API_REQUEST_TIMEOUT_MS = 60000;
@@ -48,6 +48,23 @@
 
   function byId(id) {
     return global.document.getElementById(id);
+  }
+
+  function presentationText(value) {
+    var decoded = String(value == null ? '' : value)
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#(?:39|x27);/gi, "'")
+      .replace(/&amp;/gi, '&');
+    return decoded
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\b(?:javascript|data)\s*:/gi, '')
+      .replace(/\bon[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '')
+      .replace(/\bfictional\b/gi, '')
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   function setText(id, value) {
@@ -167,12 +184,14 @@
     var businessName = byId('demoBusinessName');
     var industry = byId('demoIndustry');
     var consent = byId('demoConsentCheckbox');
-    var name = businessName && typeof businessName.value === 'string' ? businessName.value.trim() : '';
-    if (!name || name.length > 80) {
+    var rawName = businessName && typeof businessName.value === 'string' ? businessName.value.trim() : '';
+    var name = presentationText(rawName).slice(0, 80);
+    if (!name || rawName.length > 80) {
       setNotice('Enter a business name of 80 characters or fewer. It stays only in this browser memory.', 'error');
       if (businessName) businessName.focus();
       return null;
     }
+    if (businessName) businessName.value = name;
     if (!industry || ALLOWED_INDUSTRIES.indexOf(industry.value) < 0) {
       setNotice('Choose a supported home-service industry.', 'error');
       if (industry) industry.focus();
@@ -324,6 +343,18 @@
     setText('demoLiveTimer', formatDuration(seconds));
   }
 
+  function startConnectedTimer() {
+    if (state.startedAt || state.finalizing || !state.callId) return;
+    state.startedAt = Date.now();
+    state.durationSeconds = 0;
+    updateTimer();
+    state.timerInterval = global.setInterval(updateTimer, 1000);
+    state.maximumTimeout = global.setTimeout(function () {
+      setLiveNotice('The five-minute demo limit was reached. Ending and deleting the call.', 'error');
+      finalizeCall(false);
+    }, MAX_CALL_MS);
+  }
+
   function setLiveControls(mode) {
     var hangup = byId('demoHangupBtn');
     var withdraw = byId('demoWithdrawBtn');
@@ -345,7 +376,7 @@
       var speaker = role === 'agent' || role === 'assistant' || role === 'ai' ? 'agent'
         : (role === 'user' || role === 'customer' ? 'customer' : null);
       var content = turn && (turn.content === undefined ? turn.text : turn.content);
-      var text = typeof content === 'string' ? content.trim().replace(/\s+/g, ' ') : '';
+      var text = typeof content === 'string' ? presentationText(content) : '';
       if (!speaker || !text) return null;
       return { speaker: speaker, text: text.slice(0, 600) };
     }).filter(Boolean).slice(-12);
@@ -395,7 +426,7 @@
       message.className = 'demo-msg ' + (turn.speaker === 'agent' ? 'ai' : 'customer');
       var label = global.document.createElement('div');
       label.className = 'demo-msg-label';
-      label.textContent = turn.speaker === 'agent' ? 'NorthStar AI demo' : 'You';
+      label.textContent = turn.speaker === 'agent' ? 'NorthStar' : 'You';
       var content = global.document.createElement('div');
       content.textContent = turn.text;
       message.appendChild(label);
@@ -429,11 +460,11 @@
       if (state.consentTimeout) global.clearTimeout(state.consentTimeout);
       state.consentTimeout = null;
       showCallPhase('answered');
-      setText('demoStatusLabel', 'Consented fictional conversation in progress');
-      setText('demoIntent', state.industry + ' fictional service request');
+      setText('demoStatusLabel', 'Consented conversation in progress');
+      setText('demoIntent', state.industry + ' service request');
       setText('demoQualification', 'Collecting supported job facts');
       setText('demoSummary', 'Polaris will process the consented conversation in memory after you hang up.');
-      setLiveNotice('Verbal consent confirmed. Continue with fictional job details only.', 'success');
+      setLiveNotice('Verbal consent confirmed. Continue with demo job details only.', 'success');
       absorbTurns(turns.slice(consentIndex + 1));
       renderTranscript();
       return;
@@ -447,6 +478,7 @@
       if (state.client !== client || !state.callId || state.finalizing) return;
       if (state.connectionTimeout) global.clearTimeout(state.connectionTimeout);
       state.connectionTimeout = null;
+      startConnectedTimer();
       showCallPhase('ringing');
       setText('demoStatusLabel', 'Connected — say the displayed consent phrase');
       setLiveNotice('Say “' + CONSENT_PHRASE + '” within 30 seconds. You can hang up or withdraw at any time.', 'success');
@@ -459,7 +491,8 @@
     });
     client.on('call_ready', function () {
       if (state.client !== client || !state.callId || state.finalizing) return;
-      setText('demoStatusLabel', state.consented ? 'Consented fictional conversation in progress' : 'Connected — say the displayed consent phrase');
+      startConnectedTimer();
+      setText('demoStatusLabel', state.consented ? 'Consented conversation in progress' : 'Connected — say the displayed consent phrase');
     });
     client.on('update', function (event) {
       if (state.client !== client) return;
@@ -467,11 +500,11 @@
     });
     client.on('agent_start_talking', function () {
       if (state.client !== client || !state.callId || state.finalizing) return;
-      if (state.consented) setText('demoStatusLabel', 'NorthStar AI demo is speaking');
+      if (state.consented) setText('demoStatusLabel', 'NorthStar is speaking');
     });
     client.on('agent_stop_talking', function () {
       if (state.client !== client || !state.callId || state.finalizing) return;
-      if (state.consented) setText('demoStatusLabel', 'Listening for fictional job details');
+      if (state.consented) setText('demoStatusLabel', 'Listening for job details');
     });
     client.on('call_ended', function () {
       if (state.client === client && !state.finalizing && state.callId) finalizeCall(state.consented);
@@ -497,7 +530,7 @@
     if (actions) {
       actions.replaceChildren();
       var item = global.document.createElement('li');
-      item.textContent = 'Say “' + CONSENT_PHRASE + ',” then describe a fictional job.';
+      item.textContent = 'Say “' + CONSENT_PHRASE + ',” then describe a demo job.';
       actions.appendChild(item);
     }
     state.transcript = [];
@@ -549,22 +582,21 @@
         await finalizeCall(false);
         return false;
       }
-      state.startedAt = Date.now();
+      state.startedAt = null;
       state.durationSeconds = 0;
       var client = new Client();
       state.client = client;
       attachClientEvents(client);
       state.finalizing = false;
-      updateTimer();
-      state.timerInterval = global.setInterval(updateTimer, 1000);
-      state.maximumTimeout = global.setTimeout(function () {
-        setLiveNotice('The five-minute demo limit was reached. Ending and deleting the call.', 'error');
-        finalizeCall(false);
-      }, MAX_CALL_MS);
       state.connectionTimeout = global.setTimeout(function () {
         setLiveNotice('The Web Call did not connect in time. Deletion is being verified.', 'error');
         finalizeCall(false);
       }, CONNECTION_TIMEOUT_MS);
+      // Begin the visible elapsed timer as soon as the visitor-authorized Web
+      // Call enters the SDK connection attempt. Retell may not emit the same
+      // readiness event in every supported browser, so the UI must not remain
+      // stuck at 00:00 while microphone transport is active.
+      startConnectedTimer();
       await client.startCall({ accessToken: state.accessToken });
       // The pinned SDK cannot abort Room.connect before its internal connected
       // bit is set. If withdrawal/deletion won that race, stop the exact local
@@ -715,7 +747,7 @@
       showView('pre');
       setNotice(projectionError
         ? 'The call was deleted and purged, but Polaris could not build a result: ' + errorMessage(projectionError, 'processing failed')
-        : 'The call was deleted and purged. No result was created because consented fictional job details were not captured.', 'error');
+        : 'The call was deleted and purged. No result was created because consented job details were not captured.', 'error');
       return true;
     }
     state.result = result;
@@ -810,13 +842,13 @@
       var recText = rec.querySelector('.polaris-report-rec-text');
       if (recText) recText.textContent = primaryAction;
     }
-    setText('reportExecBody', 'Canonical Polaris processed ' + (qualification.captured || 0) + ' of ' +
-      (qualification.expected || 0) + ' supported estimating facts for this consented fictional ' + state.industry +
+    setText('reportExecBody', 'Polaris processed ' + (qualification.captured || 0) + ' of ' +
+      (qualification.expected || 0) + ' supported estimating facts for this consented ' + state.industry +
       ' conversation. ' + (pricing.status === 'calculated'
-        ? 'The displayed range comes from the versioned fictional demo Business Profile and is not a quote.'
+        ? 'The displayed range comes from the versioned demo Business Profile and is not a quote.'
         : 'Pricing remains not calculated because required supported scope was not captured.'));
     renderFactRows(result.facts || []);
-    setText('reportIntent', state.industry + ' fictional request');
+    setText('reportIntent', state.industry + ' request');
     setText('reportQual', (qualification.captured || 0) + ' / ' + (qualification.expected || 0) + ' supported facts');
     setText('reportBooking', 'Not predicted');
     setList('reportActionsList', actions, 'Collect supported scope for authorized follow-up.');
@@ -824,7 +856,7 @@
     if (reasoning) {
       reasoning.replaceChildren();
       var explanation = global.document.createElement('p');
-      explanation.textContent = 'This result uses only the supported fictional facts shown above and the fictional demo Business Profile. ' +
+      explanation.textContent = 'This result uses only the supported demo facts shown above and the demo Business Profile. ' +
         'Customer contact fields and the call transcript are not included in this result.';
       reasoning.appendChild(explanation);
     }
@@ -839,7 +871,7 @@
       actionsSection.replaceChildren();
       var notice = global.document.createElement('p');
       notice.className = 'homepage-result-notice';
-      notice.textContent = (result.profile && result.profile.pricingNotice) || 'Illustrative fictional demo output; not a quote.';
+      notice.textContent = (result.profile && result.profile.pricingNotice) || 'Illustrative demo output; not a quote.';
       actionsSection.appendChild(notice);
     }
   }

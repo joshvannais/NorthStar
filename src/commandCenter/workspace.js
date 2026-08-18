@@ -450,7 +450,7 @@ function initialGraphs(tenantId, createdAt) {
       address: '48 Cedar Lane, Sample City, NC 28000', serviceKey: 'roofing', serviceLabel: 'Roof replacement',
       estimatedValue: 14800, confidence: 92, leadStatus: 'hot', workStatus: 'follow_up_due',
       scheduledStart: shift(createdAt, 26 * 60 * 60 * 1000), assignedTo: 'Crew A',
-      summary: 'Storm-damage roof estimate requested after the fictional customer call.',
+      summary: 'Storm-damage roof estimate requested after the demo customer call.',
       scope: { jobType: 'replacement', squares: 28, material: 'architectural shingle', insuranceClaim: true },
       recommendedActions: [{ code: 'fast-follow-up', label: 'Call before 10 AM', priority: 'high' }],
       reasoning: ['Urgency and insurance readiness support a fast follow-up.', 'Crew A has a compatible opening tomorrow.'],

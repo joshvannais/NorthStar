@@ -3,7 +3,7 @@ window.PolarisApi = (function () {
   'use strict';
 
   function requireClient() {
-    if (!window.CanonicalIntelligence) throw new Error('Canonical intelligence client is unavailable.');
+    if (!window.CanonicalIntelligence) throw new Error('Polaris intelligence is unavailable.');
     return window.CanonicalIntelligence;
   }
 

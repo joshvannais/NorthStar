@@ -136,24 +136,25 @@
 }
 /* === Call Card Inner Elements === */
 .call-card-header {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  text-align: center;
-  padding: 16px 20px;
+  text-align: left;
+  padding: 12px 14px;
   cursor: pointer;
-  gap: 8px;
+  gap: 12px;
 }
 .call-caller {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  width: 100%;
+  gap: 12px;
+  width: auto;
+  min-width: 0;
 }
 .call-avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: var(--brand-100, #e0e7ff);
   color: var(--brand-700, #4338ca);
@@ -165,8 +166,9 @@
   flex-shrink: 0;
 }
 .call-info {
-  text-align: center;
-  width: 100%;
+  text-align: left;
+  width: auto;
+  min-width: 0;
 }
 .call-name {
   font-size: 16px;
@@ -178,6 +180,10 @@
   font-size: 12px;
   color: var(--neutral-500);
   margin-top: 3px;
+}
+.call-card-header > .status-badge {
+  justify-self: end;
+  white-space: nowrap;
 }
 .meta-sep {
   color: var(--neutral-400);
@@ -458,6 +464,7 @@
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
 <a href="#mainContent" class="skip-link">Skip to main content</a><div class="dashboard-layout">
@@ -479,7 +486,7 @@
     <div class="ds-widget ds-widget-full" id="widget-kpi-grid">
       <div class="ds-kpi-grid" id="kpiGrid" aria-busy="true" aria-label="Communications metrics">
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Today's Communications</div><div class="ds-kpi-trend"></div></div>
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Canonical Graphs</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Connected Records</div><div class="ds-kpi-trend"></div></div>
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Appointments</div><div class="ds-kpi-trend"></div></div>
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Lead Conversion</div><div class="ds-kpi-trend"></div></div>
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Estimated Revenue</div><div class="ds-kpi-trend"></div></div>
@@ -573,7 +580,7 @@
       <span class="results-count" id="resultsCount"></span>
     </div>
 <!-- Call List -->
-    <div id="callHistoryList" style="padding:0 12px;" aria-busy="true"><div class="empty-state communications-loading-state" role="status" aria-live="polite" aria-atomic="true"><div class="empty-state-icon" aria-hidden="true">&#8230;</div><h3>Loading communications&hellip;</h3><p>Retrieving the canonical communication history.</p></div></div>
+    <div id="callHistoryList" style="padding:0 12px;" aria-busy="true"><div class="empty-state communications-loading-state" role="status" aria-live="polite" aria-atomic="true"><div class="empty-state-icon" aria-hidden="true">&#8230;</div><h3>Loading communications&hellip;</h3><p>Retrieving the communication history.</p></div></div>
   </div>
       </main>
 <!-- Drawer overlay -->
@@ -967,7 +974,7 @@ function renderCalls() {
   el.setAttribute('aria-busy', 'false');
   if (grouped.length === 0) {
     var emptyMsg = communicationsLoadState === 'error' ?
-      '<div class="empty-state"><div class="empty-state-icon" aria-hidden="true">!</div><h3>Communications unavailable</h3><p>The canonical communication history could not be loaded. Try again shortly.</p></div>' : pageCalls.length > 0 ?
+      '<div class="empty-state"><div class="empty-state-icon" aria-hidden="true">!</div><h3>Communications unavailable</h3><p>The communication history could not be loaded. Try again shortly.</p></div>' : pageCalls.length > 0 ?
       '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><h3>No matching calls</h3><p>Try adjusting your filters or search terms.</p></div>' :
       '<div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><h3>No communications yet</h3><p>Connect your phone number to start receiving calls.</p></div>';
     el.innerHTML = emptyMsg;
@@ -1018,7 +1025,7 @@ function loadKpiGrid() {
 
   var kpiDefinitions = [
     { id:'today_calls', icon:'phone', label:"Today's Communications", value: '\u2014', trend: 'Requires a recorded communication timestamp' },
-    { id:'new_leads', icon:'people', label:'Canonical Graphs', value: total == null ? '\u2014' : total, trend: total == null ? 'Not Available' : 'Role-authorized records' },
+    { id:'new_leads', icon:'people', label:'Connected Records', value: total == null ? '\u2014' : total, trend: total == null ? 'Not Available' : 'Role-authorized records' },
     { id:'appointments', icon:'calendar', label:'Appointments', value: appointments == null ? '\u2014' : appointments, trend: appointments == null ? 'Not Available' : 'Recorded appointments' },
     { id:'lead_conversion', icon:'trend', label:'Lead Conversion', value: '\u2014', trend: 'Requires qualified and won outcomes' },
     { id:'avg_job_value', icon:'dollar', label:'Estimated Revenue', value: revenue == null ? '\u2014' : '$'+Number(revenue).toLocaleString(), trend: revenue == null ? 'No recorded estimate' : 'Recorded customer estimates' },
@@ -1062,7 +1069,7 @@ function loadKpiGrid() {
 }
 
 function clearAllCalls() {
-  if (typeof NotificationService !== 'undefined') NotificationService.show('Canonical communications are read-only on this surface.', 'warning');
+  if (typeof NotificationService !== 'undefined') NotificationService.show('Communication records are read-only on this surface.', 'warning');
 }
 
 // Listen for simulation events to auto-refresh

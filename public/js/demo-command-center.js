@@ -12,11 +12,11 @@
 
   var DESCRIPTIONS = Object.freeze({
     'command-center': 'See the daily priorities, pipeline, schedule, and customer activity driven by one shared workspace.',
-    polaris: 'Open complete Polaris detail for every meaningful fictional customer, lead, and work object.',
-    leads: 'Review every fictional opportunity and follow it into the same complete Polaris record graph.',
-    communications: 'See the fictional interactions and transcripts that support each customer and lead.',
+    polaris: 'Open complete Polaris detail for every meaningful customer, lead, and work object.',
+    leads: 'Review every opportunity and follow it into the same complete Polaris record graph.',
+    communications: 'See the interactions and transcripts that support each customer and lead.',
     'my-number': 'Preview the account surface without placing calls or claiming a provider connection.',
-    calendar: 'Review work scheduled from the same fictional leads and customer records.',
+    calendar: 'Review work scheduled from the same leads and customer records.',
     team: 'See a stable, read-only example of workforce roles and crew availability.',
     'ai-settings': 'Preview provider-neutral assistant guidance without representing provider readiness.',
     'business-profile': 'Review truthful Profile Readiness guidance in a stable, read-only sample profile.',
@@ -148,7 +148,7 @@
     var title = route.label === 'Polaris' ? 'Polaris' : route.label;
     document.getElementById('demoCommandTitle').textContent = title;
     document.getElementById('demoCommandDescription').textContent = DESCRIPTIONS[route.id];
-    document.getElementById('demoWorkspaceRevision').textContent = 'Shared fictional workspace · ' + workspace.integrity.graphCount + ' record graphs';
+    document.getElementById('demoWorkspaceRevision').textContent = 'Shared demo workspace · ' + workspace.integrity.graphCount + ' connected records';
     document.getElementById('demoSessionDurability').textContent = workspace.session.durable
       ? 'Durable isolated session'
       : 'Projection-only until you act';
@@ -168,10 +168,10 @@
     var scheduled = graphs.filter(function (graph) { return Boolean(graph.work.scheduledStart); }).length;
     var customers = new Set(graphs.map(function (graph) { return graph.ids.customer; })).size;
     var kpis = element('section', 'demo-kpi-grid');
-    kpis.setAttribute('aria-label', 'Fictional business snapshot');
+    kpis.setAttribute('aria-label', 'Demo business snapshot');
     append(kpis,
-      kpi('Open leads', graphs.length, 'Same canonical session'),
-      kpi('Opportunity', money(revenue), 'Fictional estimate value'),
+      kpi('Open leads', graphs.length, 'Same demo session'),
+      kpi('Opportunity', money(revenue), 'Recorded estimate value'),
       kpi('Scheduled work', scheduled, 'Today and upcoming'),
       kpi('Customers', customers, 'Complete Polaris detail')
     );
@@ -197,7 +197,7 @@
     polaris.appendChild(element('p', 'demo-polaris-copy', best.polaris.snapshot.recommendedActions[0].label + ' for ' + best.customer.name + '.'));
     var metrics = element('div', 'demo-polaris-metrics');
     append(metrics,
-      kpi('Confidence', best.polaris.snapshot.confidence.score + '%', 'Fictional demo detail'),
+      kpi('Confidence', best.polaris.snapshot.confidence.score + '%', 'Recorded demo detail'),
       kpi('Opportunity', money(best.estimate.customerPrice), 'Preliminary sample')
     );
     append(polaris, metrics, element('p', 'demo-reasoning', best.polaris.snapshot.reasoning.join(' ')),
@@ -261,7 +261,7 @@
   function renderPolaris() {
     var graph = selectedGraph();
     if (!graph) {
-      content.replaceChildren(append(panel('Polaris intelligence', 'No fictional records yet'), element('p', '', 'Use Simulate Lead to add one.')));
+      content.replaceChildren(append(panel('Polaris intelligence', 'No demo records yet'), element('p', '', 'Use Simulate Lead to add one.')));
       return;
     }
     var fragment = document.createDocumentFragment();
@@ -272,7 +272,7 @@
       if (item.ids.graph === graph.ids.graph) choice.classList.add('active');
       choices.appendChild(choice);
     });
-    append(selector, choices, element('p', 'demo-detail-disclosure', 'All values below are fictional and belong only to this isolated demo session.'));
+    append(selector, choices, element('p', 'demo-detail-disclosure', 'All values below belong only to this isolated demo session.'));
     fragment.appendChild(selector);
 
     var summary = element('section', 'demo-detail-grid');
@@ -321,7 +321,7 @@
   }
 
   function renderLeads() {
-    var value = panel('Leads', 'Fictional opportunities from one canonical session', 'demo-leads-panel');
+    var value = panel('Leads', 'Opportunities from one isolated demo session', 'demo-leads-panel');
     value.appendChild(renderGraphTable(workspace.graphs));
     content.replaceChildren(value);
   }
@@ -329,7 +329,7 @@
   function renderCommunications() {
     var grid = element('section', 'demo-list-grid');
     workspace.graphs.forEach(function (graph) {
-      var value = panel('Inbound fictional call', graph.customer.name);
+      var value = panel('Inbound demo call', graph.customer.name);
       value.appendChild(element('p', '', graph.communication.subject));
       var transcript = element('ol', 'demo-transcript');
       (graph.communication.transcript || []).forEach(function (turn) {
@@ -364,7 +364,7 @@
 
   function renderTeam() {
     var config = workspace.configuration.workforce;
-    var value = panel('Fictional workforce', 'Roles and crews');
+    var value = panel('Demo workforce', 'Roles and crews');
     var grid = element('div', 'demo-list-grid');
     config.members.forEach(function (member) {
       var card = panel(titleCase(member.accessRole), member.name);
@@ -506,13 +506,13 @@
     mutate('/api/demo/command-center/simulations/leads', 'simulate-lead', {
       service: scenario.value,
       expectedRevision: workspace.integrity.revision,
-    }, 'Committing one fictional lead graph to this isolated demo session…');
+    }, 'Adding one lead graph to this isolated demo session…');
   });
 
   resetButton.addEventListener('click', function () {
     mutate('/api/demo/command-center/reset', 'reset', {
       expectedRevision: workspace.integrity.revision,
-    }, 'Resetting only this isolated fictional demo session…');
+    }, 'Resetting only this isolated demo session…');
   });
 
   global.NorthStarDemoCommandCenter = Object.freeze({

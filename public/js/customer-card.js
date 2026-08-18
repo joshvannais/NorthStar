@@ -202,19 +202,6 @@ window.CustomerCard = (function() {
       return '<span class="call-meta-item">' + escapeMarkup(value) + '</span>';
     }).join('');
 
-    var pbHtml = '';
-    if (lead.pricingBreakdown && Array.isArray(lead.pricingBreakdown) && lead.pricingBreakdown.length > 0) {
-      pbHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--neutral-300);max-height:80px;overflow-y:auto;">' +
-        '<div style="font-size:12px;font-weight:600;color:var(--neutral-700);margin-bottom:6px;">Pricing Breakdown</div>';
-      lead.pricingBreakdown.forEach(function(pb) {
-        pbHtml += '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--neutral-100);">' +
-          '<span>' + escapeMarkup(pb.l) + '</span>' +
-          '<span style="font-weight:' + (pb.l === 'Total' ? '700' : '400') + ';color:var(--neutral-700);">$' + Math.abs(pb.a).toLocaleString() + '</span>' +
-        '</div>';
-      });
-      pbHtml += '</div>';
-    }
-
     return '<div class="call-card" id="call-' + index + '">' +
       '<div class="call-card-header" data-customer-card-action="open-call" data-lead-index="' + index + '" role="button" tabindex="0" aria-label="Open details for ' + escapeMarkup(name) + '">' +
         '<div class="call-caller">' +
@@ -226,7 +213,6 @@ window.CustomerCard = (function() {
         '</div>' +
         statusHtml +
       '</div>' +
-      (pbHtml ? '<div class="call-card-body">' + pbHtml + '</div>' : '') +
     '</div>';
   }
 

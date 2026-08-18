@@ -98,7 +98,7 @@
       services: value.graphs.map(function (graph) { return graph.lead.serviceLabel; }).filter(function (item, index, list) {
         return list.indexOf(item) === index;
       }).join(', '),
-      companyInfo: 'Fictional, isolated home-service workspace for the NorthStar product demo.',
+      companyInfo: 'Isolated home-service workspace for the NorthStar product demo.',
       smsNumber: value.configuration.myNumber.displayNumber,
       emailAddress: 'demo@northstar.invalid',
       emailEnabled: true,
@@ -134,8 +134,8 @@
           };
         }),
         skills: [
-          { id: skillIds[0], key: 'estimates', name: 'Estimate visits', description: 'Fictional estimate-visit capability.', serviceId: 'demo-service-home' },
-          { id: skillIds[1], key: 'dispatch', name: 'Dispatch', description: 'Fictional scheduling and dispatch capability.', serviceId: null },
+          { id: skillIds[0], key: 'estimates', name: 'Estimate visits', description: 'Demo estimate-visit capability.', serviceId: 'demo-service-home' },
+          { id: skillIds[1], key: 'dispatch', name: 'Dispatch', description: 'Demo scheduling and dispatch capability.', serviceId: null },
         ],
         crews: value.configuration.workforce.crews.map(function (crew) {
           return {
@@ -196,7 +196,7 @@
         timeZone: 'America/New_York', currency: 'USD',
       },
       headquarters: { street: '', city: 'Sample City', state: 'NC', zip: '28000', country: 'US', latitude: '', longitude: '', additionalOffices: [] },
-      serviceArea: { maxRadiusMiles: 35, maxTravelMinutes: 60, primaryTerritory: 'Fictional service area', polygon: [] },
+      serviceArea: { maxRadiusMiles: 35, maxTravelMinutes: 60, primaryTerritory: 'Demo service area', polygon: [] },
       routing: { preferredProvider: 'google_maps', dispatchFrom: 'headquarters', trafficEnabled: true, useLiveTraffic: false, avoidTolls: false, avoidHighways: false, avoidFerries: false },
       hours: hours,
       policies: { customer_guidance: 'Confirm scope and appointment details before dispatch.' },
@@ -209,7 +209,7 @@
       polaris: { responseStyle: 'professional', detailLevel: 'balanced', recommendationStyle: 'actionable', showCalculations: true, showConfidence: true, showExecutiveReasoning: true, conciseMode: false, executiveMode: false },
       industry: configuration.industry,
       ownerName: 'Maria Rivera',
-      businessDescription: 'Fictional home-service contractor used only for this isolated product demo.',
+      businessDescription: 'Home-service contractor used only for this isolated product demo.',
       emergencyPolicy: 'Escalate urgent safety risks to the on-call owner.',
       customPrompt: '',
       faq: [],
@@ -352,7 +352,7 @@
         try {
           global.sessionStorage.setItem('northstarSessionId', workspace.session.id);
           global.sessionStorage.setItem('northstarDemoNotice', intent === 'reset'
-            ? 'Demo restored to its starting state.' : 'One fictional lead was added across every demo destination.');
+            ? 'Demo restored to its starting state.' : 'One demo lead was added across every demo destination.');
         } catch (_storageError) {}
         global.location.reload();
       });
@@ -376,7 +376,7 @@
     section.setAttribute('aria-label', 'Account-free demo controls');
     var copy = control('div', '', 'northstar-demo-toolbar-copy');
     copy.append(control('strong', 'Account-free demo workspace', 'northstar-demo-toolbar-title'));
-    var metadata = control('span', 'Fictional Data · Shared Across Every Demo Page', 'northstar-demo-toolbar-meta');
+    var metadata = control('span', 'Demo Data · Shared Across Every Demo Page', 'northstar-demo-toolbar-meta');
     metadata.id = 'northstarDemoRevision';
     copy.append(metadata);
     var builder = document.createElement('details');
@@ -452,10 +452,10 @@
     status.setAttribute('aria-live', 'polite');
     try {
       status.textContent = global.sessionStorage.getItem('northstarDemoNotice') ||
-        'Every destination reads this same isolated fictional workspace.';
+        'Every destination reads this same isolated demo workspace.';
       global.sessionStorage.removeItem('northstarDemoNotice');
     } catch (_storageError) {
-      status.textContent = 'Every destination reads this same isolated fictional workspace.';
+      status.textContent = 'Every destination reads this same isolated demo workspace.';
     }
     section.append(copy, builder, actions, status);
     main.insertBefore(section, main.firstChild);

@@ -868,12 +868,12 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
 
     expect(result.selectorCalls).toEqual([source, source]);
     expect(result.loading.innerHTML).not.toContain('Lead not found');
-    expect(result.primary.textContent).toContain('Canonical Polaris');
+    expect(result.primary.textContent).toContain('Polaris Intelligence');
     expect(result.primary.textContent).toContain('Customer price: $0.00');
     expect(result.primary.textContent).toContain('Dispatch <crew> & confirm');
     expect(result.primary.innerHTML).toContain('Dispatch &lt;crew&gt; &amp; confirm');
     expect(result.primary.innerHTML).not.toContain('Dispatch <crew>');
-    expect(result.customer.textContent).toContain('Canonical Polaris');
+    expect(result.customer.textContent).toContain('Polaris Intelligence');
   });
 
   test.each([
@@ -886,9 +886,9 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(result.loading.innerHTML).not.toContain('Lead not found');
     expect(result.address.textContent).toBe(CANONICAL_ADDRESS);
     expect(result.navigation.textContent).toBe('Navigation unavailable.');
-    expect(result.primary.textContent).toContain('Canonical Polaris');
+    expect(result.primary.textContent).toContain('Polaris Intelligence');
     expect(result.primary.textContent).toContain('Dispatch <crew> & confirm');
-    expect(result.customer.textContent).toContain('Canonical Polaris');
+    expect(result.customer.textContent).toContain('Polaris Intelligence');
   });
 
   describe.each(INVALID_CONSUMER_SOURCES)('fail-closed consumer DOM for %s', (_label, createSource) => {
@@ -897,7 +897,7 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
       const result = runPolarisUi(source);
 
       expect(result.selectorCalls).toEqual([source]);
-      expect(result.html).toContain('Canonical intelligence unavailable');
+      expect(result.html).toContain('Polaris intelligence unavailable');
       expect(result.html).not.toContain('data-canonical-presentation="true"');
       expect(result.html).not.toContain('$NaN');
     });
@@ -929,8 +929,8 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
 
       expect(result.selectorCalls).toHaveLength(2);
       expect(result.loading.innerHTML).not.toContain('Lead not found');
-      expect(result.primary.textContent).toBe('Canonical intelligence unavailable.');
-      expect(result.customer.textContent).toBe('Canonical intelligence unavailable.');
+      expect(result.primary.textContent).toBe('Polaris intelligence unavailable.');
+      expect(result.customer.textContent).toBe('Polaris intelligence unavailable.');
       expect(result.primary.innerHTML).not.toContain('$NaN');
     });
   });

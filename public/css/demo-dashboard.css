@@ -303,8 +303,8 @@
 .demo-schedule-list span { margin-top: 3px; font-size: 12px; }
 
 .demo-leads-panel { margin-bottom: 20px; }
-.demo-table-wrap { overflow-x: auto; }
-.demo-table-wrap table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.demo-table-wrap { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.demo-table-wrap table { width: max(100%, 760px); border-collapse: collapse; table-layout: auto; }
 .demo-table-wrap th { padding: 10px 12px; color: var(--theme-muted); border-bottom: 1px solid var(--theme-border); font-size: 11px; text-align: left; text-transform: uppercase; letter-spacing: 0.06em; }
 .demo-table-wrap td { padding: 15px 12px; color: var(--theme-text); border-bottom: 1px solid var(--theme-border); font-size: 13px; }
 .demo-table-wrap tbody tr:last-child td { border-bottom: 0; }
@@ -564,6 +564,7 @@
 }
 .command-center-record-link:hover { color: var(--brand-700); }
 .command-center-table-empty { padding-block: 28px !important; color: var(--theme-muted) !important; text-align: center; }
+.demo-count-pill { flex: 0 0 auto; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 
 .command-center-chart-empty .demo-chart-grid { display: none; }
 .command-center-chart-empty .demo-chart-bars {
@@ -580,7 +581,6 @@
 .demo-polaris-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 
 @media (max-width: 768px) {
-  .command-center-blueprint-header .demo-dashboard-header-inner,
   .command-center-blueprint-main,
   .command-center-blueprint-shell > .demo-dashboard-footer {
     width: min(calc(100% - 24px), 1400px);
@@ -590,6 +590,7 @@
   .command-center-blueprint-shell > .northstar-demo-polaris-detail {
     width: min(calc(100% - 24px), 1400px);
   }
-  .command-center-blueprint-header { top: 55px; }
+  .command-center-blueprint-header { display: none; }
   .command-center-blueprint-main { padding-top: 28px; }
+  .demo-table-wrap table { width: 760px; min-width: 760px; }
 }

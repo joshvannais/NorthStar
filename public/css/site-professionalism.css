@@ -1,4 +1,4 @@
-/*
++/*
  * Inter Latin, Google Fonts v20. SHA-256:
  * 3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62
  * Inter is distributed under the SIL Open Font License 1.1:
@@ -14,9 +14,8 @@
 
 /*
  * Reversible professionalism layer.
- * The accepted design-system authority is the native system stack used by the
- * deployed iPhone presentation. The embedded legacy Inter face above remains
- * inert so this presentation-only correction can be reverted independently.
+ * Use one licensed, bundled Inter face so iPhone, Windows, and every supported
+ * browser render the same NorthStar typography instead of platform fallbacks.
  * Keep product behavior in mounted page modules; this file only normalizes
  * typography, containment, spacing, and shared presentation components.
  */
@@ -27,12 +26,13 @@ html body input,
 html body select,
 html body textarea,
 html body option {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
+:root,
 html {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 html body {
@@ -47,13 +47,26 @@ html body :is(h1, h2, h3, h4, h5, h6, .page-title, .bp-title, .stat-label, .ds-k
 }
 
 html body :is(h1, h2, h3, h4, h5, h6, .page-title, .bp-title) {
+  font-weight: 700;
+  letter-spacing: -.02em;
   text-transform: capitalize;
 }
 
 html body .theme-toggle {
+  display: grid;
+  place-items: center;
+  padding: 0;
   line-height: 1;
   font-weight: 500;
   transform-origin: center;
+}
+
+html body .theme-toggle [data-theme-icon] {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
 }
 
 html body .theme-toggle:hover {
@@ -82,13 +95,14 @@ html body .hamburger-btn {
 }
 
 html body :is(.northstar-lockup img, .mobile-logo, .demo-dashboard-brand img) {
-  width: 52px;
-  height: 52px;
-  /* The approved portrait PNG includes generous vertical canvas. Crop only
-     that canvas inside the square lockup so the official mark stays legible. */
+  width: 42px;
+  height: 42px;
   object-fit: cover;
-  object-position: center;
-  flex: 0 0 52px;
+  object-position: 50% 43%;
+  flex: 0 0 42px;
+  align-self: center;
+  display: block;
+  border-radius: 8px;
 }
 
 html body .sidebar-footer {
@@ -104,10 +118,32 @@ html body .sidebar-footer .northstar-theme-slot {
 }
 
 html body .mobile-header .theme-toggle {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
   font-size: 17px;
+}
+
+html body .theme-toggle,
+html body .theme-toggle [data-theme-icon] {
+  text-align: center;
+  vertical-align: middle;
+}
+
+html body .theme-toggle [data-theme-icon] {
+  transform: none;
+}
+
+html body .theme-toggle [data-theme-icon] svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 @media (max-width: 768px) {
@@ -117,13 +153,29 @@ html body .mobile-header .theme-toggle {
     right: 0;
     left: 0;
     z-index: 400;
-    min-height: 57px;
+    min-height: 60px;
     flex: 0 0 auto;
+    align-items: center;
   }
 
   html body .app-layout,
   html body .dashboard-layout {
-    padding-top: 57px;
+    padding-top: 60px;
+  }
+
+  html body.homepage-refresh {
+    padding-top: calc(56px + env(safe-area-inset-top));
+  }
+
+  html body.homepage-refresh .nav {
+    position: fixed !important;
+    inset: 0 0 auto 0;
+    z-index: 500;
+  }
+
+  html body.homepage-refresh .nav-inner {
+    padding-top: env(safe-area-inset-top);
+    min-height: calc(56px + env(safe-area-inset-top));
   }
 }
 
@@ -197,6 +249,44 @@ html body :is(.demo-panel, .ds-widget, .polaris-card, .polaris-intelligence-card
 
 html body .call-card-header[data-customer-card-action] {
   cursor: pointer;
+}
+
+html body .call-card-header[data-customer-card-action] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+html body .call-card-header[data-customer-card-action] .call-caller {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: auto;
+  min-width: 0;
+}
+
+html body .call-card-header[data-customer-card-action] .call-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+html body .call-card-header[data-customer-card-action] .call-info {
+  width: auto;
+  min-width: 0;
+  text-align: left;
+}
+
+html body .call-card-header[data-customer-card-action] .call-meta {
+  justify-content: flex-start;
+}
+
+html body .call-card-header[data-customer-card-action] .status-badge {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 html body .call-card-header[data-customer-card-action]:focus-visible {
@@ -402,6 +492,25 @@ html body :is(.stat-card, .ds-kpi-card, .demo-kpi-card) {
   border-radius: 16px;
   background: var(--theme-card);
   box-shadow: var(--shadow-sm);
+}
+
+html body {
+  --kpi-today_calls-bg: rgba(236, 72, 153, .14);
+  --kpi-today_calls-color: #ec4899;
+  --kpi-new_leads-bg: rgba(139, 92, 246, .15);
+  --kpi-new_leads-color: #8b5cf6;
+  --kpi-appointments-bg: rgba(59, 130, 246, .14);
+  --kpi-appointments-color: #3b82f6;
+  --kpi-lead_conversion-bg: rgba(16, 185, 129, .14);
+  --kpi-lead_conversion-color: #10b981;
+  --kpi-avg_job_value-bg: rgba(245, 158, 11, .16);
+  --kpi-avg_job_value-color: #d99a0b;
+  --kpi-missed_calls-bg: rgba(239, 68, 68, .14);
+  --kpi-missed_calls-color: #ef4444;
+  --kpi-avg_response_time-bg: rgba(249, 115, 22, .15);
+  --kpi-avg_response_time-color: #f97316;
+  --kpi-ai_transfer_rate-bg: rgba(6, 182, 212, .14);
+  --kpi-ai_transfer_rate-color: #06b6d4;
 }
 
 html body :is(.stat-icon, .ds-kpi-icon) {
@@ -621,7 +730,7 @@ html body .demo-chart-bars button {
 
 @media (max-width: 768px) {
   html body .mobile-header {
-    padding-top: env(safe-area-inset-top);
+    padding: calc(7px + env(safe-area-inset-top)) 16px 7px !important;
     min-height: calc(57px + env(safe-area-inset-top));
   }
 
@@ -731,5 +840,158 @@ html body .integration-card-map .integration-status {
 
   html body .call-meta-item + .call-meta-item::before {
     display: none;
+  }
+}
+
+/* Final acceptance safeguards. This stylesheet is linked last on every page so
+   these shared rules remain authoritative over legacy inline page styles. */
+html body {
+  font-size: 16px !important;
+  line-height: 1.55 !important;
+}
+
+html body :is(h1, h2, h3, h4, h5, h6, .page-title, .bp-title) {
+  font-weight: 700 !important;
+  line-height: 1.18 !important;
+}
+
+html body :is(.northstar-lockup, .demo-dashboard-brand, .nav-logo, .sidebar-logo, .hamburger-btn) {
+  align-items: center !important;
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+}
+
+html body :is(.northstar-lockup img, .nav-logo .logo-img, .sidebar-logo .logo-img, .mobile-logo, .demo-dashboard-brand img) {
+  display: block !important;
+  align-self: center !important;
+  width: 42px !important;
+  min-width: 42px !important;
+  height: 42px !important;
+  object-fit: cover !important;
+  object-position: 50% 43% !important;
+  border-radius: 8px !important;
+}
+
+html body .mobile-header .mobile-logo {
+  width: 64px !important;
+  min-width: 64px !important;
+  height: 46px !important;
+}
+
+html body .theme-toggle {
+  position: relative !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+}
+
+html body .theme-toggle [data-theme-icon],
+html body .theme-toggle [data-theme-icon] svg {
+  position: static !important;
+  display: block !important;
+  width: 20px !important;
+  height: 20px !important;
+  margin: auto !important;
+  transform: none !important;
+}
+
+html body.homepage-refresh {
+  padding-top: 0 !important;
+}
+
+html body.homepage-refresh .nav {
+  position: fixed !important;
+  inset: 0 0 auto 0 !important;
+  z-index: 500 !important;
+}
+
+html body.homepage-refresh .demo-banner {
+  margin-top: 56px !important;
+}
+
+html body .call-card {
+  min-height: 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+}
+
+html body .call-card-header[data-customer-card-action] {
+  min-height: 66px !important;
+  padding: 12px 14px !important;
+  text-align: left !important;
+}
+
+html body .call-card-header[data-customer-card-action] :is(.call-name, .call-meta, .call-info) {
+  text-align: left !important;
+}
+
+html body .call-card-body {
+  display: none !important;
+}
+
+html body .polaris-card-status {
+  max-width: none !important;
+  padding: 3px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
+html body .demo-count-pill,
+html body .integration-status,
+html body .status-badge {
+  width: auto !important;
+  min-width: max-content !important;
+  max-width: 100% !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
+html body .demo-table-wrap {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+
+html body .demo-table-wrap table {
+  width: 760px !important;
+  min-width: 760px !important;
+  table-layout: auto !important;
+}
+
+html body .demo-table-wrap :is(th, td) {
+  min-width: 112px !important;
+  white-space: normal !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
+html body .demo-table-wrap th {
+  white-space: nowrap !important;
+}
+
+@media (max-width: 768px) {
+  html body .command-center-blueprint-header {
+    display: none !important;
+  }
+
+  html body.homepage-refresh .nav-inner {
+    min-height: calc(56px + env(safe-area-inset-top)) !important;
+    padding-top: env(safe-area-inset-top) !important;
+  }
+
+  html body.homepage-refresh .demo-banner {
+    margin-top: calc(56px + env(safe-area-inset-top)) !important;
+  }
+
+  html body .company-information-row {
+    row-gap: 18px;
+  }
+
+  html body .company-information-row > .form-group:first-child {
+    margin-bottom: 0;
   }
 }

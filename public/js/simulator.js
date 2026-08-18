@@ -920,7 +920,7 @@ function genTranscript(svc,s,name,phone,num,sn,st){
         avgPrice:price,jobDetail:det,
         duration:durMin+":"+(durRem<10?"0":"")+durRem,
         status:status,outcome:outcome,time:time,receivedAt:new Date().toISOString(),
-        summary:svc.name+": "+s.label+". "+det+". Canonical estimate unavailable until server processing.",
+        summary:svc.name+": "+s.label+". "+det+". Polaris estimate unavailable until server processing.",
         priceBreakdown:"",
         transcript:genTranscript(svc,s,name,phone,num,sn,st),
         pricingBreakdown:[]

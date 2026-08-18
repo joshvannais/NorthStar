@@ -256,6 +256,7 @@
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>  <div class="dashboard-layout">
     <main class="main-content">
@@ -478,7 +479,7 @@
       var total = metrics ? metrics.graphCount : null;
       var revenue = metrics ? metrics.estimatedRevenue : null;
       document.getElementById('kpiTotalLeads').textContent = total == null ? '\u2014' : total;
-      document.getElementById('kpiTotalLeadChange').textContent = total == null ? 'Not Available — No Recorded Leads' : total + ' canonical graphs';
+      document.getElementById('kpiTotalLeadChange').textContent = total == null ? 'Not Available — No Recorded Leads' : total + ' connected records';
       document.getElementById('kpiQualified').textContent = '\u2014';
       document.getElementById('kpiWon').textContent = '\u2014';
       document.getElementById('kpiRevenue').textContent = revenue == null ? '—' : '$' + Number(revenue).toLocaleString();
@@ -517,12 +518,12 @@
     // === Lead Actions (operate on page-local data) ===
     function updateLeadStatus(idx, newStatus) {
       if (!pageLeads[idx]) return;
-      showNotification('Canonical leads are read-only on this surface.', 'warning');
+      showNotification('Lead records are read-only on this surface.', 'warning');
     }
 
     function removeLead(idx) {
       if (!pageLeads[idx]) return;
-      showNotification('Canonical leads are read-only on this surface.', 'warning');
+      showNotification('Lead records are read-only on this surface.', 'warning');
     }
 
     // Initial load — fetch from canonical API, no AppStore or sessionStorage dependency

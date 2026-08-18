@@ -92,7 +92,7 @@
     var demo = mode === 'demo';
     byId('commandCenterHomeLink').href = demo ? '/demo' : '/dashboard';
     byId('commandCenterAuthority').textContent = demo
-      ? 'Fictional data · account-free'
+      ? 'Demo data · account-free'
       : 'Tenant data · role-authorized';
     var action = byId('commandCenterHeaderAction');
     action.href = demo ? '/signup' : '/dashboard/settings';
@@ -105,7 +105,7 @@
     disclosure.replaceChildren();
     if (demo) {
       disclosure.append(
-        element('strong', '', 'This is a fictional, isolated preview.'),
+        element('strong', '', 'This is an isolated account-free preview.'),
         element('span', '', ' No customer, provider, production, account, or billing data is used. Every destination reads one bounded browser session.')
       );
       disclosure.hidden = false;
@@ -257,10 +257,10 @@
     var values = graphs.map(function (graph) { return finiteNumber(graph.estimate && graph.estimate.customerPrice); }).filter(function (value) { return value !== null; });
     var total = values.reduce(function (sum, value) { return sum + value; }, 0);
     grid.append(
-      kpiCard('Canonical records', String(graphs.length), graphs.length ? 'Customer, lead, work, and Polaris graphs in this workspace.' : 'No role-authorized graphs are available.'),
+      kpiCard('Connected records', String(graphs.length), graphs.length ? 'Customer, lead, work, and Polaris records in this workspace.' : 'No role-authorized records are available.'),
       kpiCard('Needs attention', String(attention), attention ? 'Records with urgency, missing inputs, or follow-up state.' : 'No current priority signal is supported.'),
       kpiCard('Scheduled work', String(scheduled), scheduled ? 'Work items with a recorded appointment time.' : 'No appointment time is currently recorded.'),
-      kpiCard(mode === 'demo' ? 'Fictional recorded value' : 'Recorded opportunity value', values.length ? formatMoney(total) : 'Unavailable',
+      kpiCard(mode === 'demo' ? 'Recorded demo value' : 'Recorded opportunity value', values.length ? formatMoney(total) : 'Unavailable',
         values.length ? 'Sum of recorded customer-facing estimates; not recognized revenue.' : 'No role-authorized customer price is available.')
     );
   }
@@ -360,7 +360,7 @@
   function renderLeads(graphs) {
     var rows = byId('commandCenterLeadRows');
     rows.replaceChildren();
-    byId('commandCenterLeadCount').textContent = graphs.length + ' active';
+    byId('commandCenterLeadCount').textContent = graphs.length + (graphs.length === 1 ? ' active lead' : ' active leads');
     if (!graphs.length) {
       var row = document.createElement('tr');
       var cell = element('td', 'command-center-table-empty', 'No role-authorized lead records are available.');
@@ -397,7 +397,7 @@
       ? 'Isolated demo workspace is current'
       : 'Tenant workspace is current';
     byId('commandCenterWorkspaceNote').textContent = mode === 'demo'
-      ? 'The fictional session is isolated from production, provider, account, and billing data.'
+      ? 'The demo session is isolated from production, provider, account, and billing data.'
       : 'This view contains role-authorized tenant projections only; provider readiness is not inferred.';
     byId('commandCenterStatePill').replaceChildren(element('i'));
     byId('commandCenterStatePill').appendChild(document.createTextNode(mode === 'demo' ? 'Session ready' : 'Workspace ready'));

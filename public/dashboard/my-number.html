@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body><div class="dashboard-layout">
 <main class="main-content">
@@ -73,7 +74,7 @@
     function saveNumber() {
       const num = document.getElementById("businessNumber").value;
       if (num.length < 10) { showToast("Please enter a full phone number"); return; }
-      showToast("Business number changes require canonical provider provisioning.");
+      showToast("Business number changes require provider provisioning.");
     }
   </script>
 </main>

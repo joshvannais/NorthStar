@@ -50,6 +50,7 @@
   </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
   <div class="app-layout">
@@ -311,12 +312,12 @@
         if (!presentation) {
           var unavailable = document.createElement('div');
           unavailable.className = 'ci-placeholder';
-          unavailable.textContent = 'Canonical intelligence unavailable.';
+          unavailable.textContent = 'Polaris intelligence unavailable.';
           container.appendChild(unavailable);
           return;
         }
         var title = document.createElement('h2');
-        title.textContent = 'Canonical Polaris';
+        title.textContent = 'Polaris Intelligence';
         container.appendChild(title);
         var card = document.createElement('div');
         card.className = 'lead-detail-card';

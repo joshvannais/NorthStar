@@ -60,16 +60,14 @@ describe('surgical site professionalism correction', () => {
     expect(read('public/dashboard/communications.html')).not.toContain('id="polarisCard"');
   });
 
-  test('the site preserves the deployed iPhone-native typography site-wide', () => {
+  test('the site uses the same bundled typography across iPhone and Windows', () => {
     expect(read('public/css/style.css').startsWith("@import url('/css/site-professionalism.css');")).toBe(true);
-    const base = read('public/css/style.css');
-    expect(base).toContain("--font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif");
-    expect(base).toContain("--font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', sans-serif");
-    expect(base).not.toContain("--font-sans: 'Inter'");
-    expect(base).not.toContain("--font-display: 'Inter'");
     const layer = read('public/css/site-professionalism.css');
-    expect(layer).toContain("font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif !important");
-    expect(layer).toContain("--font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', sans-serif");
+    expect(layer).toContain('Inter Latin, Google Fonts v20');
+    expect(layer).toMatch(/@font-face\s*{[\s\S]*?font-family:\s*'Inter'[\s\S]*?format\('woff2'\)/);
+    expect(layer).toContain("font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important");
+    expect(layer).toContain("--font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
+    expect(layer).toContain("--font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
     expect(layer).not.toContain('font-synthesis: none');
     expect(layer).toMatch(/\.northstar-lockup img[\s\S]*?object-fit:\s*cover/);
     expect(read('public/js/nav-component.js')).toContain('src="/assets/logo.png"');

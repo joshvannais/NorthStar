@@ -450,11 +450,11 @@ class CalendarData {
         var projection = client && client.getProjection('calendar');
         var root = window.document && window.document.documentElement;
         if (!projection || !root || root.dataset.canonicalAuthority !== 'server') {
-          throw new Error('Current canonical Calendar authority is unavailable.');
+          throw new Error('Current Calendar data authority is unavailable.');
         }
         var events = window.syncCalendarFromAppStore ? window.syncCalendarFromAppStore() : [];
         if (client.getProjection('calendar') !== projection || root.dataset.canonicalAuthority !== 'server') {
-          throw new Error('Canonical Calendar authority changed during settlement.');
+          throw new Error('Calendar data authority changed during settlement.');
         }
         return Array.isArray(events) ? events : [];
       }

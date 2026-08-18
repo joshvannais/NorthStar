@@ -26,6 +26,7 @@
     [data-theme="dark"] .wf-panel,[data-theme="dark"] .wf-card{background:var(--neutral-50);border-color:var(--neutral-200)}[data-theme="dark"] .wf-readonly{background:var(--neutral-100)}
     @media(max-width:700px){.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-checks,.wf-crew-members{grid-template-columns:minmax(0,1fr)}.wf-check>label{flex:1 1 auto}.wf-check>input[type="radio"]{margin-left:auto}.wf-actions .btn{width:100%}}
   </style>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -62,11 +63,11 @@
         </section>
 
         <section class="wf-panel" aria-labelledby="skillsTitle">
-          <div class="wf-panel-head"><div><h2 id="skillsTitle">Skills</h2><p class="wf-panel-desc">Tenant skills may reference stable services from the canonical catalogue.</p></div></div>
+          <div class="wf-panel-head"><div><h2 id="skillsTitle">Skills</h2><p class="wf-panel-desc">Tenant skills may reference stable services from the service catalogue.</p></div></div>
           <form id="skillForm" class="wf-form-grid" hidden>
             <div class="form-group"><label for="skillKey">Stable key</label><input id="skillKey" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._:\-]{0,63}"></div>
             <div class="form-group"><label for="skillName">Name</label><input id="skillName" required maxlength="120"></div>
-            <div class="form-group"><label for="skillService">Canonical service</label><select id="skillService"></select></div>
+            <div class="form-group"><label for="skillService">Service</label><select id="skillService"></select></div>
             <div class="form-group"><label for="skillDescription">Description</label><textarea id="skillDescription" maxlength="4096"></textarea></div>
             <div class="wf-actions wf-span"><button class="btn btn-primary" type="submit">Add skill</button></div>
           </form>
@@ -324,7 +325,7 @@
         var name = document.createElement('input'); name.value = skill.name; name.maxLength = 120; name.disabled = !canManage(); name.id = 'skill-name-' + skill.id;
         var description = document.createElement('textarea'); description.value = skill.description; description.maxLength = 4096; description.disabled = !canManage(); description.id = 'skill-desc-' + skill.id;
         var service = document.createElement('select'); service.id = 'skill-service-' + skill.id; service.disabled = !canManage(); fillSelect(service, serviceEntries(), skill.serviceId, 'No service reference');
-        card.append(field('Name', name), field('Description', description), field('Canonical service', service));
+        card.append(field('Name', name), field('Description', description), field('Service', service));
         if (canManage()) {
           var actions = element('div', 'wf-actions');
           var save = element('button', 'btn btn-primary btn-sm', 'Save skill'); save.type = 'button';

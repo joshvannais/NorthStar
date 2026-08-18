@@ -253,7 +253,7 @@ window.CustomerDetail = (function() {
   }
 
   function fetchAll(customerId) {
-    if (!window.CanonicalIntelligence) return Promise.reject(new Error('Canonical intelligence client is unavailable.'));
+    if (!window.CanonicalIntelligence) return Promise.reject(new Error('Polaris intelligence is unavailable.'));
     var filters = { customerId: customerId };
     return Promise.all([
       window.CanonicalIntelligence.loadCompatibility('customer-detail', filters),
@@ -263,7 +263,7 @@ window.CustomerDetail = (function() {
     ]).then(function(results) {
       var digest = results[0].digest;
       if (results.some(function(projection) { return projection.digest !== digest; })) {
-        throw new Error('Canonical customer projections do not share one graph digest.');
+        throw new Error('Customer intelligence records do not share one graph digest.');
       }
       return {
         customer: results[0].records[0] || null,
@@ -431,7 +431,7 @@ window.CustomerDetail = (function() {
       action: 'Record the missing customer and work inputs before acting.', isCanonical: false
     };
     return {
-      summary: presentation.serviceText || 'Canonical service',
+      summary: presentation.serviceText || 'Recorded service',
       price: presentation.customerPriceRoundedText,
       confidenceLabel: 'Server confidence',
       confidenceClass: '',

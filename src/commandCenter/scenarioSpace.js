@@ -16,7 +16,7 @@ function option(id, label, description, material) {
 
 const DIMENSIONS = Object.freeze({
   business: Object.freeze({
-    label: 'Select Fictional Business',
+    label: 'Select Demo Business',
     options: Object.freeze([
       option('owner_operator', 'Rivera Home Services', 'Owner-operated roofing and exterior company serving a practical 28-mile radius with one estimator, a two-person crew, a material trailer, roof-access equipment, weekday scheduling, and owner-reviewed pricing.', {
         capacityLabel: 'Owner schedule', assignedTo: 'Maria Rivera', capacityRisk: 'The owner is the only estimator.',

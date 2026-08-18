@@ -85,7 +85,7 @@
 
 .polaris-card-link {
   color: inherit;
-  font-weight: 750;
+  font-weight: 700;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
@@ -100,7 +100,7 @@
 .polaris-card-details > summary {
   cursor: pointer;
   font-size: 12px;
-  font-weight: 780;
+  font-weight: 700;
   line-height: 1.45;
 }
 

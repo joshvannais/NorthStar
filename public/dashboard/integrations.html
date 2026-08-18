@@ -5,7 +5,6 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
-  <link rel="stylesheet" href="/css/polaris-card.css">
   <script src="/js/theme.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Integrations &mdash; NorthStar AI</title>
@@ -90,7 +89,7 @@
       display: inline-flex;
       flex: 0 0 38px;
       font-size: 11px;
-      font-weight: 750;
+      font-weight: 700;
       height: 38px;
       justify-content: center;
       letter-spacing: .04em;
@@ -154,7 +153,7 @@
       color: var(--brand-600);
       cursor: pointer;
       font-size: 13px;
-      font-weight: 650;
+      font-weight: 600;
       list-style-position: outside;
       margin-left: 16px;
     }
@@ -174,7 +173,7 @@
     .integration-detail-list dt {
       color: var(--neutral-500);
       font-size: 12px;
-      font-weight: 650;
+      font-weight: 600;
       margin: 0;
     }
     .integration-detail-list dd {
@@ -345,6 +344,7 @@
       .map-preference-actions .btn { width: 100%; }
     }
   </style>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -355,7 +355,7 @@
           <h1>Integrations</h1>
           <p>One read-only catalogue of provider availability and NorthStar-owned connection authority.</p>
         </div>
-        <button class="btn btn-ghost btn-sm" id="refreshIntegrationsBtn" type="button">Refresh catalogue</button>
+        <button class="btn btn-sm integration-refresh-action" id="refreshIntegrationsBtn" type="button">Refresh Catalogue</button>
       </div>
 
       <section class="settings-section" aria-labelledby="integrationCatalogueHeading">
@@ -364,7 +364,7 @@
             <h2 id="integrationCatalogueHeading" tabindex="-1">Provider catalogue</h2>
             <p class="description">Status is projected by the server from reviewed tenant authority. Logos, browser state, subscriptions, provider configuration, and legacy Business Profile flags are not connection evidence.</p>
           </div>
-          <div class="integration-authority" id="integrationAuthority">Authority: northstar_integration_catalogue_v1</div>
+          <div class="integration-authority" id="integrationAuthority">NorthStar-owned read-only catalogue</div>
         </div>
         <p class="integration-boundary">No connection or provider-management action is available from this read-only catalogue. Authorization, scopes, data direction, sync, last sync, errors, reconnect, mappings, and webhook health remain unavailable unless NorthStar owns a reviewed authority for them.</p>
 
@@ -403,11 +403,11 @@
 
         <div id="mapPreferencesRoot" data-state="loading" aria-busy="true">
           <div class="map-preference-state" id="mapPreferencesLoading" role="status">
-            <p>Loading canonical map preferences.</p>
+            <p>Loading map preferences.</p>
           </div>
 
           <div class="map-preference-state" id="mapPreferencesError" role="alert" tabindex="-1" hidden>
-            <p>Map preferences are unavailable. No preference is inferred while canonical authority cannot be loaded.</p>
+            <p>Map preferences are unavailable. No preference is inferred while account settings cannot be loaded.</p>
             <button class="btn btn-secondary btn-sm" id="mapPreferencesRetry" type="button">Try again</button>
           </div>
 
@@ -481,7 +481,7 @@
               </div>
             </section>
           </div>
-          <p class="map-preference-status" id="mapPreferencesStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Loading canonical map preferences.</p>
+          <p class="map-preference-status" id="mapPreferencesStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Loading map preferences.</p>
         </div>
       </section>
     </main>
@@ -492,8 +492,6 @@
   <script src="/js/notification-service.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/command-center-contract.js"></script>
-  <script src="/js/polaris-card.js"></script>
-  <script src="/js/polaris-surface-card.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>
     (function() {
@@ -523,19 +521,19 @@
       });
       var authorityLabels = Object.freeze({
         'canonical_business_profiles.voiceAssistant': 'Provider-neutral Business Profile voice configuration',
-        canonical_integration_ownership: 'Canonical tenant connection ownership',
+        canonical_integration_ownership: 'Tenant connection ownership',
         authority_missing: 'Not available'
       });
       var basisLabels = Object.freeze({
-        active: 'One active canonical ownership record',
-        inactive: 'Canonical ownership is explicitly inactive',
+        active: 'One active ownership record',
+        inactive: 'Connection ownership is explicitly inactive',
         ambiguous: 'Multiple active ownership records require review',
-        not_provisioned: 'No canonical ownership is provisioned',
+        not_provisioned: 'No connection ownership is provisioned',
         authority_missing: 'No reviewed connection authority exists',
         source_disabled: 'Production connection capability is source-disabled',
         provider_approval_required: 'Provider approval is required; subscriptions are separate',
         deferred_read_only_connector: 'Future read-only connector; authority is deferred',
-        catalogue_only_navigation_deferred: 'Connection catalogue only; canonical provider preferences are managed below; destination-launch/navigation actions are deferred'
+        catalogue_only_navigation_deferred: 'Connection catalogue only; provider preferences are managed below; destination-launch/navigation actions are deferred'
       });
       var capabilityLabels = Object.freeze([
         Object.freeze(['management', 'Management']),
@@ -643,16 +641,18 @@
       }
 
       function providerCard(provider) {
+        var compactMapProvider = ['google_maps', 'apple_maps', 'waze'].indexOf(provider.key) >= 0;
         var item = createElement('li', 'integration-card');
+        if (compactMapProvider) item.classList.add('integration-card-map');
         item.dataset.providerKey = provider.key;
         var header = createElement('div', 'integration-card-header');
         var mark = createElement('span', 'integration-mark', provider.mark);
         mark.setAttribute('aria-hidden', 'true');
         var copy = createElement('div', 'integration-card-copy');
         copy.append(
-          createElement('h4', '', provider.name),
-          createElement('p', 'integration-card-description', provider.description)
+          createElement('h4', '', provider.name)
         );
+        if (!compactMapProvider) copy.append(createElement('p', 'integration-card-description', provider.description));
         header.append(mark, copy);
 
         var pill = createElement('span', 'integration-status', provider.presentation.label);
@@ -669,20 +669,26 @@
           appendDetail(detailList, definition[1], capabilityValue(provider.capabilities[definition[0]]));
         });
         details.append(detailList);
-        item.append(header, pill, details);
+        item.append(header, pill);
+        if (!compactMapProvider) item.append(details);
         return item;
       }
 
       function renderCatalogue(catalogue) {
         var fragment = document.createDocumentFragment();
+        var internalProviders = ['twilio', 'openai', 'elevenlabs'];
         catalogue.categories.forEach(function(category) {
+          var visibleProviders = category.providers.filter(function(provider) {
+            return internalProviders.indexOf(provider.key) < 0;
+          });
+          if (!visibleProviders.length) return;
           var categoryItem = createElement('li', 'integration-category');
           categoryItem.dataset.categoryKey = category.key;
           var heading = createElement('h3', '', category.label);
           heading.id = 'integration-category-' + category.key;
           var providerList = createElement('ul', 'integration-provider-list');
           providerList.setAttribute('aria-labelledby', heading.id);
-          category.providers.forEach(function(provider) { providerList.append(providerCard(provider)); });
+          visibleProviders.forEach(function(provider) { providerList.append(providerCard(provider)); });
           categoryItem.append(heading, providerList);
           fragment.append(categoryItem);
         });
@@ -924,14 +930,14 @@
         mapBusy = true;
         setView('loading');
         mapRetry.disabled = true;
-        setStatus('Loading canonical map preferences.', false, false);
+        setStatus('Loading map preferences.', false, false);
         try {
           var body = await NorthStarAccountSession.json('/api/account/map-preferences', { method: 'GET' });
           var data = validProjection(body);
-          if (!data) throw new Error('Canonical map preference response is invalid.');
+          if (!data) throw new Error('Map preference response is invalid.');
           mapBusy = false;
           renderMapPreferences(data);
-          setStatus('Canonical map preferences loaded.', false, false);
+          setStatus('Map preferences loaded.', false, false);
           if (options && options.restoreFocus) mapHeading.focus();
           return data;
         } catch (_error) {
@@ -956,7 +962,7 @@
         }
         mapBusy = true;
         renderMapPreferences(mapState);
-        setStatus('Saving canonical map preferences.', false, false);
+        setStatus('Saving map preferences.', false, false);
         try {
           var body;
           if (scope === 'organization') {

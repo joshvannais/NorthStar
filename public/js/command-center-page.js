@@ -5,6 +5,7 @@
   var mode = contract && contract.modeForPath(global.location.pathname);
   var workspace = null;
   var loading = false;
+  var chartPeriod = 'daily';
 
   function byId(id) { return document.getElementById(id); }
 
@@ -91,7 +92,7 @@
     var demo = mode === 'demo';
     byId('commandCenterHomeLink').href = demo ? '/demo' : '/dashboard';
     byId('commandCenterAuthority').textContent = demo
-      ? 'Fictional data · account-free'
+      ? 'Demo data · account-free'
       : 'Tenant data · role-authorized';
     var action = byId('commandCenterHeaderAction');
     action.href = demo ? '/signup' : '/dashboard/settings';
@@ -104,8 +105,8 @@
     disclosure.replaceChildren();
     if (demo) {
       disclosure.append(
-        element('strong', '', 'This is a fictional, isolated preview.'),
-        element('span', '', 'No customer, provider, production, account, or billing data is used. Every destination reads one bounded browser session.')
+        element('strong', '', 'This is an isolated account-free preview.'),
+        element('span', '', ' No customer, provider, production, account, or billing data is used. Every destination reads one bounded browser session.')
       );
       disclosure.hidden = false;
     } else {
@@ -256,10 +257,10 @@
     var values = graphs.map(function (graph) { return finiteNumber(graph.estimate && graph.estimate.customerPrice); }).filter(function (value) { return value !== null; });
     var total = values.reduce(function (sum, value) { return sum + value; }, 0);
     grid.append(
-      kpiCard('Canonical records', String(graphs.length), graphs.length ? 'Customer, lead, work, and Polaris graphs in this workspace.' : 'No role-authorized graphs are available.'),
+      kpiCard('Connected records', String(graphs.length), graphs.length ? 'Customer, lead, work, and Polaris records in this workspace.' : 'No role-authorized records are available.'),
       kpiCard('Needs attention', String(attention), attention ? 'Records with urgency, missing inputs, or follow-up state.' : 'No current priority signal is supported.'),
       kpiCard('Scheduled work', String(scheduled), scheduled ? 'Work items with a recorded appointment time.' : 'No appointment time is currently recorded.'),
-      kpiCard(mode === 'demo' ? 'Fictional recorded value' : 'Recorded opportunity value', values.length ? formatMoney(total) : 'Unavailable',
+      kpiCard(mode === 'demo' ? 'Recorded demo value' : 'Recorded opportunity value', values.length ? formatMoney(total) : 'Unavailable',
         values.length ? 'Sum of recorded customer-facing estimates; not recognized revenue.' : 'No role-authorized customer price is available.')
     );
   }
@@ -269,8 +270,9 @@
     var summary = byId('commandCenterChartSummary');
     bars.replaceChildren();
     summary.replaceChildren();
-    var records = graphs.slice(0, 6).reverse().map(function (graph) {
-      return { graph: graph, value: finiteNumber(graph.estimate && graph.estimate.customerPrice) };
+    var records = graphs.slice(0, 8).reverse().map(function (graph) {
+      var timestamp = graph.work && graph.work.scheduledStart || graph.timestamps && graph.timestamps.createdAt;
+      return { graph: graph, value: finiteNumber(graph.estimate && graph.estimate.customerPrice), date: timestamp ? new Date(timestamp) : null };
     }).filter(function (entry) { return entry.value !== null; });
     if (!records.length) {
       byId('commandCenterChart').classList.add('command-center-chart-empty');
@@ -279,13 +281,45 @@
       return;
     }
     byId('commandCenterChart').classList.remove('command-center-chart-empty');
-    var maximum = Math.max.apply(Math, records.map(function (entry) { return entry.value; }));
-    records.forEach(function (entry, index) {
+    var grouped = [];
+    records.forEach(function (entry) {
+      var date = entry.date && Number.isFinite(entry.date.getTime()) ? new Date(entry.date) : null;
+      var key = 'undated';
+      var label = safeString(entry.graph.lead && entry.graph.lead.serviceLabel, 'Work');
+      if (date) {
+        if (chartPeriod === 'monthly') {
+          key = date.getFullYear() + '-' + date.getMonth();
+          label = date.toLocaleDateString([], { month: 'short', year: 'numeric' });
+        } else if (chartPeriod === 'weekly') {
+          date.setHours(0, 0, 0, 0);
+          date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+          key = date.toISOString().slice(0, 10);
+          label = 'Week of ' + date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        } else {
+          key = date.toISOString().slice(0, 10);
+          label = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+      }
+      var bucket = grouped.find(function (candidate) { return candidate.key === key; });
+      if (!bucket) {
+        bucket = { key: key, label: label, value: 0, graph: entry.graph, count: 0 };
+        grouped.push(bucket);
+      }
+      bucket.value += entry.value;
+      bucket.count += 1;
+    });
+    var maximum = Math.max.apply(Math, grouped.map(function (entry) { return entry.value; }));
+    grouped.forEach(function (entry) {
       var item = element('div');
       var bar = element('span');
       bar.style.setProperty('--bar-height', Math.max(12, Math.round(entry.value / maximum * 86)) + '%');
-      bar.title = safeString(entry.graph.lead && entry.graph.lead.serviceLabel, 'Recorded work') + ': ' + formatMoney(entry.value);
-      item.append(bar, element('small', '', 'R' + String(index + 1)));
+      bar.title = entry.label + ': ' + formatMoney(entry.value) + ' across ' + entry.count + ' record' + (entry.count === 1 ? '' : 's');
+      var button = element('button');
+      button.type = 'button';
+      button.setAttribute('aria-label', bar.title + '. Open complete intelligence.');
+      button.addEventListener('click', function () { global.location.href = detailHref(entry.graph); });
+      button.append(bar, element('small', '', entry.label));
+      item.append(button);
       bars.appendChild(item);
     });
     var total = records.reduce(function (sum, entry) { return sum + entry.value; }, 0);
@@ -326,7 +360,7 @@
   function renderLeads(graphs) {
     var rows = byId('commandCenterLeadRows');
     rows.replaceChildren();
-    byId('commandCenterLeadCount').textContent = graphs.length + ' active';
+    byId('commandCenterLeadCount').textContent = graphs.length + (graphs.length === 1 ? ' active lead' : ' active leads');
     if (!graphs.length) {
       var row = document.createElement('tr');
       var cell = element('td', 'command-center-table-empty', 'No role-authorized lead records are available.');
@@ -359,12 +393,11 @@
     byId('commandCenterCoach').textContent = action
       ? action.label + ' The recommendation is tied to the latest recorded evidence and should be reviewed before action.'
       : 'No prioritized recommendation is available until a role-authorized customer, lead, or work record supplies enough evidence.';
-    var revision = workspace.integrity.revision;
     byId('commandCenterWorkspaceStatus').textContent = mode === 'demo'
-      ? 'Isolated session revision ' + revision
+      ? 'Isolated demo workspace is current'
       : 'Tenant workspace is current';
     byId('commandCenterWorkspaceNote').textContent = mode === 'demo'
-      ? 'The fictional session is isolated from production, provider, account, and billing data.'
+      ? 'The demo session is isolated from production, provider, account, and billing data.'
       : 'This view contains role-authorized tenant projections only; provider readiness is not inferred.';
     byId('commandCenterStatePill').replaceChildren(element('i'));
     byId('commandCenterStatePill').appendChild(document.createTextNode(mode === 'demo' ? 'Session ready' : 'Workspace ready'));
@@ -443,6 +476,15 @@
 
   configureMode();
   byId('commandCenterRefresh').addEventListener('click', load);
+  document.querySelectorAll('[data-chart-period]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      chartPeriod = button.dataset.chartPeriod;
+      document.querySelectorAll('[data-chart-period]').forEach(function (option) {
+        option.setAttribute('aria-pressed', option === button ? 'true' : 'false');
+      });
+      if (workspace) renderChart(latestGraphs());
+    });
+  });
   global.addEventListener('northstar:demo-workspace', function (event) {
     if (mode !== 'demo' || !event.detail) return;
     try {

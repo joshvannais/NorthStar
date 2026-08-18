@@ -30,6 +30,13 @@
 .stat-card-won .stat-icon { background: #d1fae5; color: #047857; }
 .stat-card-conversion .stat-icon { background: #fef3c7; color: #b45309; }
 .stat-card-avgvalue .stat-icon { background: #f3e8ff; color: #7e22ce; }
+#kpiAvgValue {
+  font-size: 20px;
+  letter-spacing: -.02em;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
 
 [data-theme="dark"] .stat-card-qualified .stat-icon { background: rgba(30,64,175,0.2); color: #93c5fd; }
 [data-theme="dark"] .stat-card-won .stat-icon { background: rgba(4,120,87,0.2); color: #6ee7b7; }
@@ -130,7 +137,86 @@
 
 /* Responsive table improvements */
 @media (max-width: 768px) {
-  .leads-table { min-width: 400px; }
+  #leadsContent { padding: 12px; }
+  .leads-table {
+    display: block;
+    min-width: 0;
+    border-collapse: separate;
+  }
+  .leads-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .leads-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+  .leads-table tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    background: var(--theme-surface);
+    box-shadow: var(--shadow-sm);
+  }
+  .leads-table td {
+    display: grid;
+    grid-template-columns: minmax(98px, .8fr) minmax(0, 1.2fr);
+    align-items: start;
+    gap: 10px;
+    width: auto !important;
+    min-width: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .leads-table td::before {
+    content: attr(data-label);
+    color: var(--neutral-500);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    line-height: 1.5;
+    text-transform: uppercase;
+  }
+  .leads-table td:first-child {
+    display: block;
+    padding-right: 44px !important;
+    font-size: 16px;
+  }
+  .leads-table td:first-child::before,
+  .leads-table .lead-actions-cell::before {
+    display: none;
+  }
+  .leads-table .lead-service-badge {
+    justify-self: start;
+    text-align: left;
+  }
+  .leads-table .lead-actions-cell {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: block;
+  }
+  .leads-table .more-menu-container { position: static; }
+  .leads-table .more-dropdown {
+    right: 0;
+    left: auto;
+    width: min(240px, calc(100vw - 72px));
+  }
 }
 
 .drawer-polaris-grid {
@@ -170,6 +256,7 @@
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>  <div class="dashboard-layout">
     <main class="main-content">
@@ -188,41 +275,41 @@
       <!-- 6 Executive KPI Cards -->
       <div class="ds-widget ds-widget-full">
       <div class="leads-kpi-grid" id="leadsKpiGrid">
-        <div class="stat-card stat-card-calls">
+        <div class="stat-card stat-card-calls" role="link" tabindex="0" data-kpi-target="leadsContent">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
           <div class="stat-label">Total Leads</div>
           <div class="stat-value" id="kpiTotalLeads">0</div>
           <div class="stat-change up" id="kpiTotalLeadChange">All time</div>
         </div>
-        <div class="stat-card stat-card-leads">
+        <div class="stat-card stat-card-leads" role="link" tabindex="0" data-kpi-target="leadsContent">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
           <div class="stat-label">Qualified</div>
           <div class="stat-value" id="kpiQualified">0</div>
-          <div class="stat-change up">Ready for quote</div>
+          <div class="stat-change up" id="kpiQualifiedDetail">Requires a recorded qualified outcome</div>
         </div>
-        <div class="stat-card stat-card-won">
+        <div class="stat-card stat-card-won" role="link" tabindex="0" data-kpi-target="leadsContent">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg></div>
           <div class="stat-label">Won</div>
           <div class="stat-value" id="kpiWon">0</div>
-          <div class="stat-change up">Closed deals</div>
+          <div class="stat-change up" id="kpiWonDetail">Requires a recorded won outcome</div>
         </div>
-        <div class="stat-card stat-card-revenue">
+        <div class="stat-card stat-card-revenue" role="link" tabindex="0" data-kpi-target="leadsContent">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="12" x2="12" y1="1" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
           <div class="stat-label">Est. Revenue</div>
           <div class="stat-value revenue-positive" id="kpiRevenue">$0</div>
           <div class="stat-change up">From active leads</div>
         </div>
-        <div class="stat-card stat-card-conversion">
+        <div class="stat-card stat-card-conversion" role="link" tabindex="0" data-kpi-target="leadsContent">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
           <div class="stat-label">Conversion Rate</div>
           <div class="stat-value" id="kpiConversion">0%</div>
           <div class="stat-change up" id="kpiConversionDetail">Won ÷ Qualified</div>
         </div>
-        <div class="stat-card stat-card-avgvalue">
+        <div class="stat-card stat-card-avgvalue" role="link" tabindex="0" data-kpi-target="leadsContent">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
           <div class="stat-label">Avg. Lead Value</div>
           <div class="stat-value" id="kpiAvgValue">$0</div>
-          <div class="stat-change up">Per lead estimate</div>
+          <div class="stat-change up" id="kpiAvgValueDetail">Requires recorded customer estimates</div>
         </div>
       </div>
       </div>
@@ -269,6 +356,7 @@
   <script src="/js/communications-engine.js"></script>
   <script src="/js/business-models.js"></script>
   <script src="/js/app-store.js"></script>
+  <script src="/js/presentation-format.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
   <script src="/js/transcript-renderer.js"></script>
@@ -391,13 +479,13 @@
       var total = metrics ? metrics.graphCount : null;
       var revenue = metrics ? metrics.estimatedRevenue : null;
       document.getElementById('kpiTotalLeads').textContent = total == null ? '\u2014' : total;
-      document.getElementById('kpiTotalLeadChange').textContent = total == null ? 'Unavailable' : total + ' canonical graphs';
+      document.getElementById('kpiTotalLeadChange').textContent = total == null ? 'Not Available — No Recorded Leads' : total + ' connected records';
       document.getElementById('kpiQualified').textContent = '\u2014';
       document.getElementById('kpiWon').textContent = '\u2014';
-      document.getElementById('kpiRevenue').textContent = revenue == null ? 'Unavailable' : '$' + Number(revenue).toLocaleString();
+      document.getElementById('kpiRevenue').textContent = revenue == null ? '—' : '$' + Number(revenue).toLocaleString();
       document.getElementById('kpiConversion').textContent = '\u2014';
       document.getElementById('kpiConversionDetail').textContent = 'Requires recorded qualified and won outcomes';
-      document.getElementById('kpiAvgValue').textContent = 'Unavailable';
+      document.getElementById('kpiAvgValue').textContent = '—';
     }
 
     // === Leads Table ===
@@ -430,15 +518,25 @@
     // === Lead Actions (operate on page-local data) ===
     function updateLeadStatus(idx, newStatus) {
       if (!pageLeads[idx]) return;
-      showNotification('Canonical leads are read-only on this surface.', 'warning');
+      showNotification('Lead records are read-only on this surface.', 'warning');
     }
 
     function removeLead(idx) {
       if (!pageLeads[idx]) return;
-      showNotification('Canonical leads are read-only on this surface.', 'warning');
+      showNotification('Lead records are read-only on this surface.', 'warning');
     }
 
     // Initial load — fetch from canonical API, no AppStore or sessionStorage dependency
+    document.querySelectorAll('#leadsKpiGrid [data-kpi-target]').forEach(function(card) {
+      function activate(event) {
+        if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        var target = document.getElementById(card.dataset.kpiTarget);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      card.addEventListener('click', activate);
+      card.addEventListener('keydown', activate);
+    });
     loadLeads();
   </script>
 

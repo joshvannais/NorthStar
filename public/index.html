@@ -21,7 +21,7 @@
     .demo-hero p { font-size: clamp(16px, 2.5vw, 20px); color: var(--neutral-500); max-width: 640px; margin: 0 auto 32px; }
     .demo-form-card { background: var(--neutral-100); border: 1px solid var(--neutral-200); border-radius: 16px; padding: 32px; max-width: 520px; margin: 0 auto; text-align: left; }
     .demo-form-card label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--neutral-700); }
-    .demo-form-card input, .demo-form-card select { width: 100%; padding: 12px 14px; border: 1px solid var(--neutral-300); border-radius: 8px; font-size: 15px; font-family: Inter, sans-serif; margin-bottom: 16px; box-sizing: border-box; background: #fff; }
+    .demo-form-card input, .demo-form-card select { width: 100%; padding: 12px 14px; border: 1px solid var(--neutral-300); border-radius: 8px; font-size: 15px; font-family: var(--font-sans); margin-bottom: 16px; box-sizing: border-box; background: #fff; }
     .demo-form-card input:focus, .demo-form-card select:focus { outline: none; border-color: var(--brand-600); box-shadow: 0 0 0 3px rgba(212,175,55,0.15); }
     .demo-scenarios { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; justify-content: center; }
     .demo-scenario-chip { padding: 8px 14px; border: 1px solid var(--neutral-300); border-radius: 100px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--card-bg, #fff); color: var(--neutral-600); transition: all 0.15s; }
@@ -29,7 +29,7 @@
     [data-theme="dark"] .demo-scenario-chip { background: #1e1e2e; border-color: #2d2d3f; color: #e5e7eb; }
     [data-theme="dark"] .demo-scenario-chip:hover, [data-theme="dark"] .demo-scenario-chip.active { border-color: var(--brand-600); color: var(--brand-600); background: rgba(212,175,55,0.15); }
     .demo-scenario-chip.custom { border-style: dashed; }
-    .demo-btn-call { width: 100%; padding: 14px; background: var(--brand-600); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: Inter, sans-serif; transition: all 0.2s; }
+    .demo-btn-call { width: 100%; padding: 14px; background: var(--brand-600); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: var(--font-sans); transition: all 0.2s; }
     .demo-btn-call:hover { background: var(--brand-700); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.3); }
     .demo-btn-call:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
     /* ── During-call view ── */
@@ -288,7 +288,7 @@
     .demo-notification {
       position: fixed; top: 16px; left: 50%; transform: translateX(-50%) translateY(-120px);
       z-index: 20000; padding: 14px 24px; border-radius: 10px;
-      font-size: 14px; font-weight: 500; font-family: Inter, sans-serif;
+      font-size: 14px; font-weight: 500; font-family: var(--font-sans);
       max-width: 500px; width: 90vw; text-align: center;
       box-shadow: 0 8px 24px rgba(0,0,0,0.15);
       transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -333,7 +333,7 @@
     .btn-modal-call {
       display: block; width: 100%; padding: 14px;
       background: var(--brand-600); color: #fff; border: none; border-radius: 8px;
-      font-size: 16px; font-weight: 600; cursor: pointer; font-family: Inter, sans-serif;
+      font-size: 16px; font-weight: 600; cursor: pointer; font-family: var(--font-sans);
       transition: all 0.2s;
     }
     .btn-modal-call:hover { background: var(--brand-700); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(212,175,55,0.3); }
@@ -364,8 +364,6 @@
     .hero-stat-item { text-align: center; }
     .hero-stat-value { font-size: 24px; font-weight: 700; color: var(--brand-700); }
     .hero-stat-label { font-size: 13px; color: var(--neutral-500); }
-    .hero-stat-divider { width: 1px; background: var(--neutral-300); }
-
     /* ── M18M: Speaking indicator dots ── */
     .demo-speaking-indicator { display: flex; align-items: center; gap: 12px; padding: 24px; flex-direction: column; }
     .demo-speaking-dots { display: flex; gap: 8px; align-items: center; }
@@ -738,6 +736,7 @@
     [data-theme="dark"] .polaris-adj-total .polaris-adj-label { color: #a78bfa; }
     [data-theme="dark"] .polaris-adj-total .polaris-adj-value { color: #a78bfa; }
   </style>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body class="homepage-refresh">
 
@@ -785,7 +784,7 @@
       <p class="demo-hero-copy">NorthStar is an AI Office Manager and business operating system that connects calls, leads, estimates, schedules, and next actions in one role-authorized workspace—with outcome learning tied back to the work.</p>
 
       <div class="guided-preview-disclosure" id="simulationModeBanner">
-        <strong>Account-free browser Web Call.</strong> When its attorney and provider gates are approved, this visitor-initiated microphone demo uses a real Retell Web Call and mounted canonical Polaris. It never creates a customer record.
+        <strong>Account-free browser Web Call.</strong> When its attorney and provider gates are approved, this visitor-initiated microphone demo uses a real Retell Web Call and mounted Polaris intelligence. It never creates a customer record.
       </div>
 
       <div class="demo-form-card" id="demoFormCard">
@@ -807,7 +806,7 @@
 
         <label class="demo-consent-check" for="demoConsentCheckbox">
           <input type="checkbox" id="demoConsentCheckbox">
-          <span>I consent to NorthStar and Retell processing my microphone audio and temporarily recording this browser call solely to produce a fictional demo result. I will use fictional job details only, give verbal consent before continuing, and may stop or withdraw at any time.</span>
+          <span>I consent to NorthStar and Retell processing my microphone audio and temporarily recording this browser call solely to produce my demo result. I will use demo job details only, give verbal consent before continuing, and may stop or withdraw at any time.</span>
         </label>
         <div class="demo-form-notice" id="demoFormNotice" role="status" aria-live="polite"></div>
         <button type="button" class="demo-btn-call" id="demoCallBtn" onclick="showPreCallModal()">Start Browser Web Call</button>
@@ -818,10 +817,10 @@
         <div class="demo-modal-card" tabindex="-1">
           <h2 id="preCallTitle">Before Your Browser Web Call</h2>
           <p class="modal-subtitle">NorthStar will ask for microphone access only after the required audible disclosure finishes.</p>
-          <p class="modal-subtitle" id="demoDisclosureCopy"><strong>Audible disclosure:</strong> This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce a fictional demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. To continue, say “I consent to this AI demo and temporary recording.”</p>
+          <p class="modal-subtitle" id="demoDisclosureCopy"><strong>Audible disclosure:</strong> This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce your demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. To continue, say “I consent to this AI demo and temporary recording.”</p>
           <p class="modal-selected-context" id="selectedScenarioContext"></p>
           <ul class="modal-tip-list">
-            <li>Use fictional job details and speak naturally—the conversation is not scripted.</li>
+            <li>Use demo job details and speak naturally—the conversation is not scripted.</li>
             <li>You can hang up, withdraw consent, or request deletion at any time.</li>
             <li>Results appear only after Retell deletion and NorthStar purge are verified.</li>
           </ul>
@@ -837,9 +836,8 @@
           <div class="hero-stat-value">Real browser Web Call</div>
           <div class="hero-stat-label">Visitor initiated, microphone and consent gated</div>
         </div>
-        <div class="hero-stat-divider"></div>
         <div class="hero-stat-item">
-          <div class="hero-stat-value">Canonical Polaris</div>
+          <div class="hero-stat-value">Polaris Intelligence</div>
           <div class="hero-stat-label">Mounted calculation after verified deletion</div>
         </div>
       </div>
@@ -859,12 +857,12 @@
     <div class="demo-call-state demo-state-ringing" id="callStateRinging">
       <div class="state-icon">🔔</div>
       <div class="state-label">Connecting to the NorthStar AI demo...</div>
-      <div class="state-sub">Say the exact consent phrase before sharing fictional job details</div>
+      <div class="state-sub">Say the exact consent phrase before sharing demo job details</div>
     </div>
     <div class="demo-call-state" id="callStateAnswered">
       <div class="state-icon" style="font-size:28px;">✅</div>
       <div class="state-label">Consented conversation active</div>
-      <div class="state-sub">Use only fictional job details; withdraw or hang up at any time</div>
+      <div class="state-sub">Use only demo job details; withdraw or hang up at any time</div>
     </div>
     <div style="text-align:center;padding:20px 24px 12px;" id="demoLiveHeader">        
       <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
@@ -945,7 +943,7 @@
         </div>
         <div class="demo-insight-card">
           <div class="insight-label">📋 Executive Summary</div>
-          <div class="insight-value" style="font-size:13px;font-weight:400;line-height:1.5;color:var(--neutral-600);" id="demoSummary">Waiting for a consented fictional conversation.</div>
+          <div class="insight-value" style="font-size:13px;font-weight:400;line-height:1.5;color:var(--neutral-600);" id="demoSummary">Waiting for a consented conversation.</div>
         </div>
       </div>
     </div>
@@ -964,7 +962,7 @@
     <div style="text-align:center;padding:32px 24px;">
       <div style="font-size:48px;margin-bottom:12px;">✅</div>
       <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Web Call Deleted. Polaris Ready.</h2>
-      <p style="color:var(--neutral-500);margin-bottom:8px;">Retell deletion was verified before these derived fictional results were shown. The transcript and call tokens have been purged.</p>
+      <p style="color:var(--neutral-500);margin-bottom:8px;">Retell deletion was verified before these derived demo results were shown. The transcript and call tokens have been purged.</p>
       <p style="font-size:13px;color:var(--neutral-400);" id="demoCallDuration">Call length: —</p>
     </div>
 
@@ -1212,7 +1210,7 @@
   <!-- CTA -->
   <section class="section" style="text-align:center;">
     <h2 style="font-size:clamp(24px,5vw,32px);font-weight:700;margin-bottom:12px;">Bring the Work Into One Operating View</h2>
-    <p style="font-size:clamp(15px,2.5vw,18px);color:var(--neutral-500);margin-bottom:28px;max-width:580px;margin-left:auto;margin-right:auto;padding:0 8px;">Explore fictional product context without an account, or create a workspace when you are ready to use your own authorized business data.</p>
+    <p style="font-size:clamp(15px,2.5vw,18px);color:var(--neutral-500);margin-bottom:28px;max-width:580px;margin-left:auto;margin-right:auto;padding:0 8px;">Explore an isolated product demo without an account, or create a workspace when you are ready to use your own authorized business data.</p>
     <div class="modal-actions">
       <a href="/demo-dashboard" class="btn btn-secondary">Explore Account-Free Demo</a>
       <a href="/signup" class="btn btn-primary">Start Free Trial</a>
@@ -1234,7 +1232,7 @@
     </div>
     <div class="footer-trust">
       <span>User-initiated browser Web Call</span>
-      <span>Fictional demo context</span>
+      <span>Isolated demo context</span>
       <span>Verified delete before results</span>
     </div>
     <p>© 2026 NorthStar Solutions LLC. All rights reserved.</p>

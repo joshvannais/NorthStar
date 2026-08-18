@@ -2,7 +2,8 @@
   'use strict';
 
   var PROJECTION_CONTRACT = 'northstar_polaris_surface_projection_v1';
-  var DETAILED_SURFACES = ['command-center', 'leads', 'polaris'];
+  var CARD_SURFACES = Object.freeze(['leads', 'polaris', 'communications']);
+  var DETAILED_SURFACES = ['command-center', 'leads', 'polaris', 'communications'];
 
   function safeString(value, fallback) {
     return typeof value === 'string' && value.trim() ? value.trim() : (fallback || '');
@@ -193,7 +194,7 @@
     if (!graph) {
       result.title = 'No Polaris detail is available';
       result.summary = 'Polaris needs a role-authorized customer, lead, communication, work item, and supporting facts before rendering complete detail.';
-      result.missing = ['No canonical graph is present in the current workspace.'];
+      result.missing = ['No connected work record is present in the current workspace.'];
       return result;
     }
     var customer = safeString(graph.customer && graph.customer.name, 'Customer record');
@@ -281,11 +282,11 @@
     result.summary = configuration && safeString(configuration.status)
       ? configuration.status
       : 'Provider connection, routing health, and live-number readiness are not included in this role-authorized Command Center projection and are not inferred.';
-    result.evidence = captured ? [captured + ' canonical voice communication records are present in this workspace.'].concat(result.evidence.slice(0, 2)) : [];
+    result.evidence = captured ? [captured + ' voice communication records are present in this workspace.'].concat(result.evidence.slice(0, 2)) : [];
     result.missing = unique(result.missing.concat(configuration
       ? []
       : ['A reviewed provider connection and call-routing authority is required before readiness or performance can be stated.']));
-    result.risks = captured ? [] : ['No canonical voice communication record is available in the current projection.'];
+    result.risks = captured ? [] : ['No voice communication record is available in the current view.'];
     result.opportunities = captured ? ['Captured conversations can support follow-up and scheduling review.'] : [];
     result.recommendations = [{ label: 'Verify the current number and routing authority on this page before relying on call capture.', priority: 'review' }];
     return result;
@@ -326,9 +327,9 @@
     }, 0);
     result.title = 'Knowledge and configuration readiness';
     result.summary = configuration
-      ? 'The isolated demo exposes reviewed fictional voice style and escalation guidance without a provider connection claim.'
+      ? 'The isolated demo exposes reviewed voice style and escalation guidance without a provider connection claim.'
       : 'Knowledge configuration, escalation rules, and provider authority are not included in this role-authorized projection and are not inferred.';
-    result.evidence = factCount ? [factCount + ' supporting canonical facts are available across the current workspace.'] : [];
+    result.evidence = factCount ? [factCount + ' supporting facts are available across the current workspace.'] : [];
     if (configuration) {
       result.evidence.push('Voice style: ' + safeString(configuration.voiceStyle, 'not specified') + '.');
       result.evidence.push('Escalation guidance: ' + safeString(configuration.escalation, 'not specified') + '.');
@@ -366,7 +367,7 @@
         return item.label + ': ' + safeString(item.missingReason || item.recommendedReason || item.help,
           'Review this profile area before relying on it.');
       })
-      : (items.length ? [] : ['Load or complete the canonical Business Profile readiness authority.']);
+      : (items.length ? [] : ['Load or complete the Business Profile readiness review.']);
     result.risks = attention.length ? ['Incomplete profile inputs can limit scheduling, pricing, routing, and customer guidance.'] : [];
     result.opportunities = ready.length ? ['Reviewed profile facts can improve downstream Polaris recommendations.'] : [];
     result.recommendations = [{ label: attention.length ? 'Review the incomplete profile areas shown on this page.' : 'Keep reviewed profile facts current.', priority: attention.length ? 'high' : 'review' }];
@@ -386,7 +387,7 @@
     result.evidence = enabled.map(function (key) { return titleCase(key) + ' is enabled.'; });
     result.missing = unique(result.missing.concat(known
       ? []
-      : ['Load the canonical account preferences before evaluating configuration attention.']));
+      : ['Load the account preferences before evaluating configuration attention.']));
     result.risks = known && supplement.securityEmailMandatory === true && !safeString(supplement.securityEmailAddress)
       ? ['A mandatory security email destination is not present in the returned settings authority.'] : [];
     result.opportunities = known ? ['Current preferences can be reviewed against actual operating needs.'] : [];
@@ -420,7 +421,7 @@
     }).slice(0, 6).map(function (provider) {
       return safeString(provider.name, 'Provider') + ' is not represented as connected; authorization, sync, and health are not inferred.';
     });
-    if (!providers.length) result.missing.push('Load the canonical integration catalogue before evaluating provider coverage.');
+    if (!providers.length) result.missing.push('Load the integration catalogue before evaluating provider coverage.');
     result.risks = providers.length && !connected.length
       ? ['No reviewed connected provider authority is present in the returned catalogue.'] : [];
     result.opportunities = connected.length ? [connected.length + ' reviewed provider connections can support the capabilities shown by their own authorities.'] : [];
@@ -434,7 +435,7 @@
     result.title = titleCase(surface) + ' intelligence';
     result.summary = graph
       ? 'The latest role-authorized customer, lead, work, and Polaris graph informs this destination.'
-      : 'No canonical graph is available for a page-specific projection.';
+      : 'No connected work record is available for this page.';
     result.risks = riskEntries(graph);
     result.opportunities = graph ? ['Open complete Polaris detail to inspect the supporting record.'] : [];
     result.recommendations = recommendations(graph, result.objects[1] && result.objects[1].href);
@@ -554,7 +555,7 @@
     var contract = global.NorthStarCommandCenterContract;
     var card = global.NorthStarPolarisCard;
     var route = contract && contract.routeForPath(global.location.pathname);
-    if (!contract || !card || !route || route.id === 'command-center') return;
+    if (!contract || !card || !route || CARD_SURFACES.indexOf(route.id) < 0) return;
     var container = mount(route.id);
     if (!container) return;
     var mode = contract.modeForPath(global.location.pathname);
@@ -569,6 +570,7 @@
   }
 
   global.NorthStarPolarisSurface = Object.freeze({
+    CARD_SURFACES: CARD_SURFACES,
     PROJECTION_CONTRACT: PROJECTION_CONTRACT,
     project: project,
   });

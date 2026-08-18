@@ -2,7 +2,7 @@
   'use strict';
 
   var CONTRACT = 'northstar_polaris_intelligence_card_v1';
-  var DETAILED_SURFACES = Object.freeze(['command-center', 'leads', 'polaris']);
+  var DETAILED_SURFACES = Object.freeze(['command-center', 'leads', 'polaris', 'communications']);
 
   function element(tag, className, text) {
     var node = document.createElement(tag);
@@ -69,15 +69,17 @@
     var entries = Array.isArray(values) ? values : [];
     if (!entries.length) return null;
     var section = element('nav', 'polaris-card-object-links');
-    section.setAttribute('aria-label', 'Polaris object detail');
-    entries.forEach(function (entry) {
-      var label = safeText(entry && entry.label);
-      var href = safeText(entry && entry.href);
-      if (!label || !href || href.charAt(0) !== '/') return;
-      var link = element('a', 'polaris-card-link', label);
-      link.href = href;
-      section.appendChild(link);
+    section.setAttribute('aria-label', 'Open complete Polaris intelligence');
+    var primary = entries.find(function (entry) {
+      return /lead detail/i.test(safeText(entry && entry.label)) && safeText(entry && entry.href).charAt(0) === '/';
+    }) || entries.find(function (entry) {
+      return safeText(entry && entry.href).charAt(0) === '/';
     });
+    if (primary) {
+      var link = element('a', 'polaris-card-link polaris-card-primary-action', 'Explore Complete Intelligence');
+      link.href = safeText(primary.href);
+      section.appendChild(link);
+    }
     return section.childNodes.length ? section : null;
   }
 
@@ -118,7 +120,7 @@
     heading.appendChild(element('span', 'polaris-card-mark', '✦'));
     var headingCopy = element('div');
     headingCopy.append(element('p', 'polaris-card-kicker', 'Polaris intelligence'), element('h2', '', value.title));
-    heading.appendChild(headingCopy);
+    heading.append(headingCopy, element('span', 'polaris-card-status', value.surface === 'command-center' ? 'Current' : 'Recorded'));
     container.append(heading, element('p', 'polaris-card-summary', value.summary));
 
     var confidence = element('div', 'polaris-card-confidence');

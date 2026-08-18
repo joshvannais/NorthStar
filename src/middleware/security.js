@@ -11,7 +11,7 @@ function getCspDirectives() {
     'default-src': ["'self'"],
     'script-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
     'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-    'font-src': ["'self'", "https://fonts.gstatic.com"],
+    'font-src': ["'self'", 'data:', "https://fonts.gstatic.com"],
     'img-src': ["'self'", "data:", "https:"],
     // Mounted Jobber OAuth remains source-disabled until canonical token
     // persistence exists, so browsers have no Jobber connection destination.

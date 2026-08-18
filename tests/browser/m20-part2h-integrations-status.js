@@ -185,7 +185,8 @@ async function integrationSnapshot(page) {
 
 function assertIntegrationSnapshot(value, label) {
   assert.strictEqual(value.state, 'ready', label + ': status is ready');
-  assert.match(value.authority, /northstar_integration_catalogue_v1/i, label + ': catalogue authority is explicit');
+  assert.match(value.authority, /NorthStar-owned read-only catalogue/i, label + ': catalogue authority is explicit in user-facing language');
+  assert.doesNotMatch(value.authority, /northstar_integration_catalogue_v1/i, label + ': internal catalogue key stays out of user-facing copy');
   assert.deepStrictEqual([value.retellState, value.retell], ['connected', 'Connected'], label + ': Retell reflects canonical active ownership');
   assert.deepStrictEqual([value.voiceState, value.voice], ['disconnected', 'Disconnected'], label + ': voice reflects explicit canonical inactivity');
   assert.deepStrictEqual([value.jobberState, value.jobber], ['coming_soon', 'Coming soon'], label + ': source-disabled Jobber is not presented as connected or disconnected');

@@ -7,7 +7,6 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
-  <link rel="stylesheet" href="/css/polaris-card.css">
   <script src="/js/theme.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Calendar — NorthStar AI</title>
@@ -311,6 +310,7 @@ body { background: var(--neutral-50); }
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
 <a href="#mainContent" class="skip-link">Skip to main content</a><div class="dashboard-layout">
@@ -358,8 +358,6 @@ body { background: var(--neutral-50); }
       <!-- Event List + New Event — below calendar -->
       <div class="cal-event-list" id="calendarEventList"><div class="cal-event-list-header">Today&rsquo;s Schedule</div><div class="cal-event-list-empty" role="status" aria-live="polite">Loading schedule&hellip;</div></div>
       <div class="cal-new-event-area" id="calendarNewEventArea"><button class="cal-new-event-btn" type="button" disabled aria-hidden="true" style="width:100%;padding:7px 14px;background:#6395ff;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:block;text-align:center;">+ New Event</button></div>
-      <!-- Polaris — shared polaris-card component from Dashboard -->
-      <div class="cal-polaris-section ds-widget ds-widget-full" id="calendarPolaris"><div class="polaris-card"><div class="polaris-header"><h2 style="font-size:15px;font-weight:700;color:#e8eaed;display:flex;align-items:center;gap:6px;margin:0;letter-spacing:0.01em;">POLARIS<span style="font-size:9px;color:#9aa0a6;font-weight:400;vertical-align:super;">&#8482;</span> <span style="font-weight:400;font-size:13px;color:#9aa0a6;">Intelligence</span></h2><span class="cal-polaris-badge">&#10022; CANONICAL</span></div><div class="polaris-grid" style="display:flex;flex-direction:column;gap:0;"><div class="cal-polaris-row"><span class="cal-polaris-label">Status</span><span class="cal-polaris-value">Loading calendar intelligence&hellip;</span></div></div></div></div>
     </div>
   </main>
 </div>
@@ -433,8 +431,6 @@ function initCalendar() {
 }
 </script>
 <script src="/js/command-center-contract.js"></script>
-<script src="/js/polaris-card.js"></script>
-<script src="/js/polaris-surface-card.js"></script>
 <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("calendar");</script>
 </body>

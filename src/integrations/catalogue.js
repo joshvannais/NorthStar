@@ -42,14 +42,14 @@ const CATEGORY_DEFINITIONS = deepFreeze([
     providers: [
       {
         key: 'retell', name: 'Retell', mark: 'RT',
-        description: 'Canonical voice ownership exists only when NorthStar has a reviewed tenant record.',
+        description: 'Voice ownership is available only when NorthStar has a reviewed tenant record.',
         dynamicProvider: 'retell',
         configuration: 'canonical_business_profiles.voiceAssistant',
         connection: 'canonical_integration_ownership',
       },
       {
         key: 'voice', name: 'NorthStar Voice', mark: 'VO',
-        description: 'Provider-neutral voice ownership used by canonical voice sessions.',
+        description: 'Provider-neutral voice ownership used by approved voice sessions.',
         dynamicProvider: 'voice',
         configuration: 'canonical_business_profiles.voiceAssistant',
         connection: 'canonical_integration_ownership',
@@ -130,7 +130,7 @@ const CATEGORY_DEFINITIONS = deepFreeze([
       },
       {
         key: 'housecall_pro', name: 'Housecall Pro', mark: 'HP',
-        description: 'No canonical connector authority is available.',
+        description: 'No approved connector is available yet.',
         basis: 'authority_missing',
       },
       {
@@ -140,7 +140,7 @@ const CATEGORY_DEFINITIONS = deepFreeze([
       },
       {
         key: 'salesforce', name: 'Salesforce', mark: 'SF',
-        description: 'No canonical CRM connector authority is available.',
+        description: 'No approved CRM connector is available yet.',
         basis: 'authority_missing',
       },
     ],

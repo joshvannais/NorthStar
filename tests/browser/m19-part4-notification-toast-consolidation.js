@@ -31,7 +31,7 @@ const SURFACES = Object.freeze([
   Object.freeze({ label: 'Calendar', route: '/dashboard/calendar', mode: 'legacy' }),
   Object.freeze({ label: 'AI Settings', route: '/dashboard/ai-settings', mode: 'legacy' }),
   Object.freeze({ label: 'Lead Detail', route: '/dashboard/lead?id=00000000-0000-4000-8000-000000000404', mode: 'legacy' }),
-  Object.freeze({ label: 'Public Contact fallback', route: '/contact', mode: 'legacy', serviceAbsent: true }),
+  Object.freeze({ label: 'Public Contact no-toast boundary', route: '/contact', mode: 'none', serviceAbsent: true }),
 ]);
 
 function json(body, status = 200) {
@@ -152,6 +152,35 @@ async function exerciseToast(page, surface, viewport, theme) {
     clientWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
   }));
+  if (surface.serviceAbsent) {
+    const absent = await page.evaluate(payload => {
+      window.__slice4Pwned = 0;
+      return {
+        notificationService: typeof window.NotificationService,
+        legacyShowToast: typeof window.showToast,
+        notificationCount: document.querySelectorAll('#toast.show, .toast-notification').length,
+        payloadVisible: document.body.textContent.includes(payload),
+        maliciousElements: document.querySelectorAll('img[src="x"], script:not([src])').length,
+        executed: window.__slice4Pwned,
+        after: {
+          bodyX: document.body.getBoundingClientRect().x,
+          bodyWidth: document.body.getBoundingClientRect().width,
+          clientWidth: document.documentElement.clientWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+        },
+      };
+    }, PAYLOAD);
+    assert.strictEqual(absent.notificationService, 'undefined', `${surface.label}: premium notification API is not mounted`);
+    assert.strictEqual(absent.legacyShowToast, 'undefined', `${surface.label}: legacy toast API is not mounted`);
+    assert.strictEqual(absent.notificationCount, 0, `${surface.label}: no orphaned notification surface`);
+    assert.strictEqual(absent.payloadVisible, false, `${surface.label}: no synthetic notification payload is rendered`);
+    assert.strictEqual(absent.maliciousElements, 0, `${surface.label}: no payload elements`);
+    assert.strictEqual(absent.executed, 0, `${surface.label}: no payload execution`);
+    assert.deepStrictEqual(absent.after, before, `${surface.label}/${viewport}/${theme}: no page shift or overflow`);
+    assert.strictEqual(absent.after.scrollWidth, absent.after.clientWidth,
+      `${surface.label}/${viewport}/${theme}: no horizontal overflow`);
+    return;
+  }
   const observed = await page.evaluate(({ mode, payload }) => {
     window.__slice4Pwned = 0;
     if (mode === 'premium') window.NotificationService.show(payload, 'error');
@@ -203,9 +232,6 @@ async function exerciseToast(page, surface, viewport, theme) {
   assert.strictEqual(observed.role, 'alert', `${surface.label}/${viewport}/${theme}: severity role`);
   assert.strictEqual(observed.live, 'assertive', `${surface.label}/${viewport}/${theme}: live region`);
   assert.strictEqual(observed.atomic, 'true', `${surface.label}/${viewport}/${theme}: atomic announcement`);
-  if (surface.serviceAbsent) {
-    assert.strictEqual(observed.serviceAvailable, false, `${surface.label}: API fallback remains independent`);
-  }
   assert.deepStrictEqual(observed.after, before, `${surface.label}/${viewport}/${theme}: no page shift or overflow`);
   assert.strictEqual(observed.after.scrollWidth, observed.after.clientWidth, `${surface.label}/${viewport}/${theme}: no horizontal overflow`);
 

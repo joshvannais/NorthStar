@@ -5,7 +5,6 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
-  <link rel="stylesheet" href="/css/polaris-card.css">
   <script src="/js/theme.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Team — NorthStar</title>
@@ -19,14 +18,15 @@
     .wf-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.wf-card h3{font-size:16px;margin:0;overflow-wrap:anywhere}.wf-meta{font-size:12px;color:var(--neutral-500);margin:5px 0 13px;overflow-wrap:anywhere}
     .wf-badge{display:inline-flex;padding:3px 8px;border-radius:999px;background:var(--brand-50);color:var(--brand-700);font-size:11px;font-weight:700;text-transform:capitalize}.wf-badge[data-status="suspended"],.wf-badge[data-status="revoked"]{background:#fee2e2;color:#991b1b}.wf-badge[data-status="pending"],.wf-badge[data-status="expired"]{background:#fef3c7;color:#92400e}
     .wf-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.wf-form-grid .form-group{margin:0}.wf-span{grid-column:1/-1}.wf-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.wf-actions .btn{min-width:0}
-    .wf-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:7px;padding:10px;border:1px solid var(--neutral-200);border-radius:var(--radius-sm);max-height:180px;overflow:auto}.wf-check{display:flex;gap:7px;align-items:flex-start;font-size:13px}.wf-check input{margin-top:2px}
+    .wf-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:7px;padding:10px;border:1px solid var(--neutral-200);border-radius:var(--radius-sm);max-height:180px;overflow:auto}.wf-check{display:flex;gap:7px;align-items:flex-start;min-width:0;font-size:13px}.wf-check input{flex:0 0 auto;margin-top:2px}.wf-check>label{display:flex;align-items:flex-start;gap:7px;min-width:0;overflow-wrap:normal;word-break:normal}.wf-crew-members{grid-template-columns:minmax(0,1fr)}.wf-crew-member{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:18px;min-width:0;font-size:13px;padding:7px 0;border-bottom:1px solid var(--neutral-200)}.wf-crew-member:last-child{border-bottom:0}.form-group .wf-member-toggle,.form-group .wf-lead-toggle{display:flex;align-items:center;gap:7px;min-width:0;margin:0;font-size:13px}.form-group .wf-member-toggle input,.form-group .wf-lead-toggle input{width:16px;height:16px;min-width:16px;padding:0;margin:0;flex:0 0 auto}.wf-member-toggle span{min-width:0;overflow-wrap:normal;word-break:normal}.wf-lead-toggle{white-space:nowrap}.wf-card fieldset,.wf-panel fieldset{min-width:0;margin:14px 0 0;padding:0;border:0}.wf-card legend,.wf-panel legend{margin-bottom:8px;font-size:13px;font-weight:600}
     .policy-enabled{-webkit-appearance:none;appearance:none;width:16px;height:16px;border:2px solid var(--neutral-600);border-radius:3px;background:var(--neutral-50)}.policy-enabled:checked{background:var(--brand-700);box-shadow:inset 0 0 0 3px var(--neutral-50)}.policy-enabled:disabled{opacity:1}.policy-enabled:focus-visible{outline:3px solid var(--theme-focus,var(--brand-500));outline-offset:2px}
     .wf-empty,.wf-loading,.wf-error{padding:24px;border:1px dashed var(--neutral-300);border-radius:var(--radius-md);color:var(--neutral-500);text-align:center}.wf-error{color:var(--danger);border-color:var(--danger)}
     .wf-status{min-height:22px;font-size:13px;font-weight:600;margin-top:8px}.wf-status[data-state="success"]{color:var(--success)}.wf-status[data-state="error"]{color:var(--danger)}
-    .wf-readonly{padding:10px 12px;border-radius:var(--radius-sm);background:var(--neutral-50);font-size:12px;color:var(--neutral-500);margin-bottom:14px}.wf-id{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--neutral-400);overflow-wrap:anywhere}
+    .wf-readonly{padding:10px 12px;border-radius:var(--radius-sm);background:var(--neutral-50);font-size:12px;color:var(--neutral-500);margin-bottom:14px}
     [data-theme="dark"] .wf-panel,[data-theme="dark"] .wf-card{background:var(--neutral-50);border-color:var(--neutral-200)}[data-theme="dark"] .wf-readonly{background:var(--neutral-100)}
-    @media(max-width:700px){.wf-shell{padding-right:56px}.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-actions .btn{width:100%}}
+    @media(max-width:700px){.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-checks,.wf-crew-members{grid-template-columns:minmax(0,1fr)}.wf-check>label{flex:1 1 auto}.wf-check>input[type="radio"]{margin-left:auto}.wf-actions .btn{width:100%}}
   </style>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -34,7 +34,7 @@
     <main class="main-content" id="mainContent" tabindex="-1">
       <div class="page-header">
         <div><h1>Team</h1><p>Individual access, job roles, skills, crews, locations, and workforce policies.</p></div>
-        <span class="wf-badge" id="workforceAuthority">PostgreSQL authority</span>
+        <span class="wf-badge" id="workforceAuthority">Role-authorized workspace</span>
       </div>
       <p id="workforceStatus" class="wf-status" role="status" aria-live="polite" aria-atomic="true"></p>
       <div class="wf-shell" id="workforceShell" aria-busy="true">
@@ -63,11 +63,11 @@
         </section>
 
         <section class="wf-panel" aria-labelledby="skillsTitle">
-          <div class="wf-panel-head"><div><h2 id="skillsTitle">Skills</h2><p class="wf-panel-desc">Tenant skills may reference stable services from the canonical catalogue.</p></div></div>
+          <div class="wf-panel-head"><div><h2 id="skillsTitle">Skills</h2><p class="wf-panel-desc">Tenant skills may reference stable services from the service catalogue.</p></div></div>
           <form id="skillForm" class="wf-form-grid" hidden>
             <div class="form-group"><label for="skillKey">Stable key</label><input id="skillKey" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._:\-]{0,63}"></div>
             <div class="form-group"><label for="skillName">Name</label><input id="skillName" required maxlength="120"></div>
-            <div class="form-group"><label for="skillService">Canonical service</label><select id="skillService"></select></div>
+            <div class="form-group"><label for="skillService">Service</label><select id="skillService"></select></div>
             <div class="form-group"><label for="skillDescription">Description</label><textarea id="skillDescription" maxlength="4096"></textarea></div>
             <div class="wf-actions wf-span"><button class="btn btn-primary" type="submit">Add skill</button></div>
           </form>
@@ -95,8 +95,6 @@
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/js/command-center-contract.js"></script>
-  <script src="/js/polaris-card.js"></script>
-  <script src="/js/polaris-surface-card.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>
   (function () {
@@ -226,7 +224,6 @@
         badge.dataset.status = invitation.status;
         head.appendChild(badge);
         card.append(head, element('p', 'wf-meta', invitation.email + (invitation.phone ? ' Â· ' + invitation.phone : '')));
-        card.appendChild(element('p', 'wf-id', 'Invitation ' + invitation.invitationId));
         card.appendChild(element('p', 'wf-meta',
           'Access: ' + invitation.accessRole + ' Â· Job role: ' +
           labelFor(operationalRoles, invitation.operationalRole, invitation.operationalRole) + ' Â· Location: ' +
@@ -264,7 +261,6 @@
         badge.dataset.status = member.membershipStatus;
         head.appendChild(badge);
         card.append(head, element('p', 'wf-meta', member.email + (member.phone ? ' · ' + member.phone : '')));
-        card.appendChild(element('p', 'wf-id', 'Profile ' + member.profileId));
         var grid = element('div', 'wf-form-grid');
         var role = roleSelect('member-role-' + member.profileId, member.operationalRole, !canManage());
         var location = locationSelect('member-location-' + member.profileId, member.homeLocationId, !canManage());
@@ -325,10 +321,11 @@
       if (!state.data.skills.length) { empty(root, 'No skills configured.'); return; }
       state.data.skills.forEach(function (skill) {
         var card = element('article', 'wf-card');
+        card.dataset.skillKey = skill.key;
         var name = document.createElement('input'); name.value = skill.name; name.maxLength = 120; name.disabled = !canManage(); name.id = 'skill-name-' + skill.id;
         var description = document.createElement('textarea'); description.value = skill.description; description.maxLength = 4096; description.disabled = !canManage(); description.id = 'skill-desc-' + skill.id;
         var service = document.createElement('select'); service.id = 'skill-service-' + skill.id; service.disabled = !canManage(); fillSelect(service, serviceEntries(), skill.serviceId, 'No service reference');
-        card.append(element('p', 'wf-id', 'Key ' + skill.key), field('Name', name), field('Description', description), field('Canonical service', service));
+        card.append(field('Name', name), field('Description', description), field('Service', service));
         if (canManage()) {
           var actions = element('div', 'wf-actions');
           var save = element('button', 'btn btn-primary btn-sm', 'Save skill'); save.type = 'button';
@@ -339,15 +336,16 @@
       });
     }
     function crewMemberEditor(crew, disabled) {
-      var wrapper = element('div', 'wf-checks');
+      var wrapper = element('div', 'wf-checks wf-crew-members');
       var selected = new Map((crew.members || []).map(function (member) { return [member.profileId, member.role]; }));
       state.data.members.filter(function (member) { return member.membershipStatus !== 'revoked'; }).forEach(function (member) {
-        var row = element('div', 'wf-check');
+        var row = element('div', 'wf-crew-member');
         var check = document.createElement('input'); check.type = 'checkbox'; check.value = member.profileId; check.checked = selected.has(member.profileId); check.disabled = disabled;
-        var label = element('label', '', member.name); label.prepend(check);
+        var label = element('label', 'wf-member-toggle'); label.append(check, element('span', '', member.name));
         var lead = document.createElement('input'); lead.type = 'radio'; lead.name = 'crew-lead-' + crew.id; lead.value = member.profileId; lead.checked = selected.get(member.profileId) === 'lead'; lead.disabled = disabled;
         lead.setAttribute('aria-label', 'Crew lead ' + member.name);
-        row.append(label, lead, document.createTextNode(' Lead'));
+        var leadLabel = element('label', 'wf-lead-toggle'); leadLabel.append(lead, element('span', '', 'Crew lead'));
+        row.append(label, document.createTextNode(' '), leadLabel);
         wrapper.appendChild(row);
       });
       return wrapper;
@@ -363,10 +361,11 @@
       if (!state.data.crews.length) { empty(root, 'No crews configured.'); return; }
       state.data.crews.forEach(function (crew) {
         var card = element('article', 'wf-card');
+        card.dataset.crewKey = crew.key;
         var name = document.createElement('input'); name.value = crew.name; name.maxLength = 120; name.disabled = !canManage(); name.id = 'crew-name-' + crew.id;
         var location = locationSelect('crew-location-' + crew.id, crew.homeLocationId, !canManage());
         var members = crewMemberEditor(crew, !canManage());
-        card.append(element('p', 'wf-id', 'Key ' + crew.key), field('Name', name), field('Home location', location));
+        card.append(field('Name', name), field('Home location', location));
         var group = element('fieldset', 'form-group'); group.append(element('legend', '', 'Members and lead'), members); card.appendChild(group);
         if (canManage()) {
           var actions = element('div', 'wf-actions'); var save = element('button', 'btn btn-primary btn-sm', 'Save crew'); save.type = 'button';
@@ -378,7 +377,6 @@
     }
     function policyCard(policy) {
       var card = element('article', 'wf-card'); card.dataset.policyId = policy.id;
-      card.appendChild(element('p', 'wf-id', 'Policy ' + policy.id));
       var name = document.createElement('input'); name.className = 'policy-name'; name.value = policy.name; name.maxLength = 120; name.disabled = !canManage();
       var description = document.createElement('textarea'); description.className = 'policy-description'; description.value = policy.description; description.maxLength = 4096; description.disabled = !canManage();
       var enabled = document.createElement('input'); enabled.className = 'policy-enabled'; enabled.type = 'checkbox'; enabled.checked = policy.enabled; enabled.disabled = !canManage();

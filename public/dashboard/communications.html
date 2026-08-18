@@ -136,24 +136,25 @@
 }
 /* === Call Card Inner Elements === */
 .call-card-header {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  text-align: center;
-  padding: 16px 20px;
+  text-align: left;
+  padding: 12px 14px;
   cursor: pointer;
-  gap: 8px;
+  gap: 12px;
 }
 .call-caller {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  width: 100%;
+  gap: 12px;
+  width: auto;
+  min-width: 0;
 }
 .call-avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: var(--brand-100, #e0e7ff);
   color: var(--brand-700, #4338ca);
@@ -165,8 +166,9 @@
   flex-shrink: 0;
 }
 .call-info {
-  text-align: center;
-  width: 100%;
+  text-align: left;
+  width: auto;
+  min-width: 0;
 }
 .call-name {
   font-size: 16px;
@@ -178,6 +180,10 @@
   font-size: 12px;
   color: var(--neutral-500);
   margin-top: 3px;
+}
+.call-card-header > .status-badge {
+  justify-self: end;
+  white-space: nowrap;
 }
 .meta-sep {
   color: var(--neutral-400);
@@ -458,6 +464,7 @@
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
 <a href="#mainContent" class="skip-link">Skip to main content</a><div class="dashboard-layout">
@@ -478,47 +485,16 @@
 <!-- KPI Grid (Dashboard Design System) -->
     <div class="ds-widget ds-widget-full" id="widget-kpi-grid">
       <div class="ds-kpi-grid" id="kpiGrid" aria-busy="true" aria-label="Communications metrics">
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"><span style="font-size:20px;">&#128222;</span></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Today's Communications</div><div class="ds-kpi-trend"></div></div>
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"><span style="font-size:20px;">&#128100;</span></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Canonical Graphs</div><div class="ds-kpi-trend"></div></div>
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"><span style="font-size:20px;">&#128197;</span></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Appointments</div><div class="ds-kpi-trend"></div></div>
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"><span style="font-size:20px;">&#128202;</span></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Lead Conv.</div><div class="ds-kpi-trend"></div></div>
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"><span style="font-size:20px;">&#128176;</span></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Est. Revenue</div><div class="ds-kpi-trend"></div></div>
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"><span style="font-size:20px;">&#128683;</span></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Missed Calls</div><div class="ds-kpi-trend"></div></div>
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"><span style="font-size:20px;">&#9889;</span></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Avg Response Time</div><div class="ds-kpi-trend"></div></div>
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"><span style="font-size:20px;">&#128260;</span></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">AI Transfer Rate</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Today's Communications</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Connected Records</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Appointments</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Lead Conversion</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Estimated Revenue</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Missed Calls</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Average Response Time</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">AI Transfer Rate</div><div class="ds-kpi-trend"></div></div>
       </div>
     </div>
-            <div class="ds-widget ds-widget-full">
-              <div class="polaris-card" id="polarisCard">
-        <div class="polaris-header">
-          <h2 style="display:flex;align-items:center;gap:8px;">
-            <img src="/assets/logo.png" alt="NorthStar" style="height:18px;width:auto;vertical-align:middle;">
-            POLARIS™ Revenue Intelligence</h2>
-          <span class="polaris-badge">LIVE</span>
-        </div>
-        <div class="polaris-grid" id="polarisGrid">
-          <div class="polaris-item">
-            <div class="polaris-item-label">Top Opportunity</div>
-            <div class="polaris-item-value" id="polarisTopOpp">-</div>
-            <div class="polaris-item-desc" id="polarisTopOppDesc">Lead with highest potential value</div>
-            <span class="polaris-confidence high" id="polarisTopConf">High</span>
-          </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Estimated Pipeline</div>
-            <div class="polaris-item-value" id="polarisPipeline">$0</div>
-            <div class="polaris-item-desc">Total qualified lead value</div>
-            <span class="polaris-confidence medium" id="polarisPipeConf">Medium</span>
-          </div>
-          <div class="polaris-item">
-            <div class="polaris-item-label">Recommended Focus</div>
-            <div class="polaris-item-value" id="polarisFocus">-</div>
-            <div class="polaris-item-desc" id="polarisFocusDesc">Highest volume service category</div>
-            <span class="polaris-confidence high" id="polarisFocusConf">High</span>
-          </div>
-        </div>
-      </div>
-              </div>
-
               <!-- Executive Filter Bar -->
                       <div class="ds-widget ds-widget-full">
                       <div class="filter-bar">
@@ -604,7 +580,7 @@
       <span class="results-count" id="resultsCount"></span>
     </div>
 <!-- Call List -->
-    <div id="callHistoryList" style="padding:0 12px;" aria-busy="true"><div class="empty-state communications-loading-state" role="status" aria-live="polite" aria-atomic="true"><div class="empty-state-icon" aria-hidden="true">&#8230;</div><h3>Loading communications&hellip;</h3><p>Retrieving the canonical communication history.</p></div></div>
+    <div id="callHistoryList" style="padding:0 12px;" aria-busy="true"><div class="empty-state communications-loading-state" role="status" aria-live="polite" aria-atomic="true"><div class="empty-state-icon" aria-hidden="true">&#8230;</div><h3>Loading communications&hellip;</h3><p>Retrieving the communication history.</p></div></div>
   </div>
       </main>
 <!-- Drawer overlay -->
@@ -616,6 +592,7 @@
   <script src="/js/communications-engine.js"></script>
 <script src="/js/business-models.js"></script>
 <script src="/js/app-store.js"></script>
+<script src="/js/presentation-format.js"></script>
 <script src="/js/polaris-engine.js"></script>
 <script src="/js/notification-service.js"></script>
   <script src="/js/transcript-renderer.js"></script>
@@ -963,13 +940,6 @@ function applyFilters(calls) {
   return f;
 }
 
-// ===== Polaris Revenue Intelligence Card =====
-function renderPolarisCard(leads) {
-  if (typeof PolarisEngine !== 'undefined' && PolarisEngine.renderPolarisCard) {
-    PolarisEngine.renderPolarisCard(leads && leads.length > 0 ? leads : getAllCalls());
-  }
-}
-
 var currentFilteredCalls = [];
 
 function openCallCard(el) {
@@ -986,29 +956,40 @@ function renderCalls() {
   if (curSort) {
     f = sortCalls(f, curSort);
   }
-  currentFilteredCalls = f;
+  var grouped = [];
+  var groupIndex = Object.create(null);
+  f.forEach(function(call) {
+    var key = call.customerId || call.phone || String(call.caller || '').trim().toLowerCase();
+    if (!key) key = 'communication-' + grouped.length;
+    if (groupIndex[key] === undefined) {
+      groupIndex[key] = grouped.length;
+      grouped.push(Object.assign({}, call, { communicationCount: 1 }));
+    } else {
+      grouped[groupIndex[key]].communicationCount += 1;
+    }
+  });
+  currentFilteredCalls = grouped;
   var el = document.getElementById("callHistoryList");
   var resultsCountEl = document.getElementById("resultsCount");
   el.setAttribute('aria-busy', 'false');
-  if (f.length === 0) {
+  if (grouped.length === 0) {
     var emptyMsg = communicationsLoadState === 'error' ?
-      '<div class="empty-state"><div class="empty-state-icon" aria-hidden="true">!</div><h3>Communications unavailable</h3><p>The canonical communication history could not be loaded. Try again shortly.</p></div>' : pageCalls.length > 0 ?
+      '<div class="empty-state"><div class="empty-state-icon" aria-hidden="true">!</div><h3>Communications unavailable</h3><p>The communication history could not be loaded. Try again shortly.</p></div>' : pageCalls.length > 0 ?
       '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><h3>No matching calls</h3><p>Try adjusting your filters or search terms.</p></div>' :
       '<div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><h3>No communications yet</h3><p>Connect your phone number to start receiving calls.</p></div>';
     el.innerHTML = emptyMsg;
     resultsCountEl.textContent = '';
     upStats();
-    renderPolarisCard(pageCalls);
     return;
   }
 
-  var html = f.map(function(c, i) {
+  var html = grouped.map(function(c, i) {
+    if (c.communicationCount > 1) c.duration = c.communicationCount + ' communications';
     return CustomerCard.render(c, { layout: 'call', index: i, outcome: c.outcome });
   }).join('');
   el.innerHTML = html;
-  resultsCountEl.textContent = f.length + ' result' + (f.length !== 1 ? 's' : '');
+  resultsCountEl.textContent = grouped.length + ' customer' + (grouped.length !== 1 ? 's' : '') + ' · ' + f.length + ' communication' + (f.length !== 1 ? 's' : '');
   upStats();
-  renderPolarisCard(pageCalls);
 }
 function setSearch(q) {
   curSearch = q;
@@ -1043,20 +1024,30 @@ function loadKpiGrid() {
   var revenue = metrics ? metrics.estimatedRevenue : null;
 
   var kpiDefinitions = [
-    { id:'today_calls', icon:'📞', label:"Today's Communications", value: '\u2014', trend: '' },
-    { id:'new_leads', icon:'👤', label:'Canonical Graphs', value: total == null ? '\u2014' : total, trend: '' },
-    { id:'appointments', icon:'📅', label:'Appointments', value: appointments == null ? '\u2014' : appointments, trend: '' },
-    { id:'lead_conversion', icon:'📊', label:'Lead Conv.', value: '\u2014', trend: '' },
-    { id:'avg_job_value', icon:'💰', label:'Est. Revenue', value: revenue == null ? 'Not calculated' : '$'+Number(revenue).toLocaleString(), trend: '' },
-    { id:'missed_calls', icon:'🚫', label:'Missed Calls', value: '\u2014', trend: '' },
-    { id:'avg_response_time', icon:'⚡', label:'Avg Response Time', value: '\u2014', trend: '' },
-    { id:'ai_transfer_rate', icon:'🔄', label:'AI Transfer Rate', value: '\u2014', trend: '' },
+    { id:'today_calls', icon:'phone', label:"Today's Communications", value: '\u2014', trend: 'Requires a recorded communication timestamp' },
+    { id:'new_leads', icon:'people', label:'Connected Records', value: total == null ? '\u2014' : total, trend: total == null ? 'Not Available' : 'Role-authorized records' },
+    { id:'appointments', icon:'calendar', label:'Appointments', value: appointments == null ? '\u2014' : appointments, trend: appointments == null ? 'Not Available' : 'Recorded appointments' },
+    { id:'lead_conversion', icon:'trend', label:'Lead Conversion', value: '\u2014', trend: 'Requires qualified and won outcomes' },
+    { id:'avg_job_value', icon:'dollar', label:'Estimated Revenue', value: revenue == null ? '\u2014' : '$'+Number(revenue).toLocaleString(), trend: revenue == null ? 'No recorded estimate' : 'Recorded customer estimates' },
+    { id:'missed_calls', icon:'blocked', label:'Missed Calls', value: '\u2014', trend: 'Requires call outcome records' },
+    { id:'avg_response_time', icon:'bolt', label:'Average Response Time', value: '\u2014', trend: 'Requires response timestamps' },
+    { id:'ai_transfer_rate', icon:'transfer', label:'AI Transfer Rate', value: '\u2014', trend: 'Requires transfer outcomes' },
   ];
+  var icons = {
+    phone:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3.1 5.18 2 2 0 0 1 5.09 3h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L9 10.73a16 16 0 0 0 4.27 4.27l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z"/></svg>',
+    people:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    calendar:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+    trend:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 16l4-5 4 3 5-7"/></svg>',
+    dollar:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+    blocked:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M6 6l12 12"/></svg>',
+    bolt:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>',
+    transfer:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l4 4-4 4M3 7h18M7 21l-4-4 4-4M21 17H3"/></svg>'
+  };
   var html = '';
   kpiDefinitions.forEach(function(kpi) {
-    html += '<div class="ds-kpi-card">' +
+    html += '<div class="ds-kpi-card" role="link" tabindex="0" data-kpi-target="callHistoryList">' +
       '<div class="ds-kpi-icon" style="background:var(--kpi-' + kpi.id + '-bg,var(--neutral-50));color:var(--kpi-' + kpi.id + '-color,var(--neutral-500));">' +
-        '<span style="font-size:20px;">' + kpi.icon + '</span>' +
+        icons[kpi.icon] +
       '</div>' +
       '<div class="ds-kpi-value">' + kpi.value + '</div>' +
       '<div class="ds-kpi-label">' + kpi.label + '</div>' +
@@ -1064,11 +1055,21 @@ function loadKpiGrid() {
     '</div>';
   });
   grid.innerHTML = html;
+  grid.querySelectorAll('[data-kpi-target]').forEach(function(card) {
+    function activate(event) {
+      if (event && event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+      if (event) event.preventDefault();
+      var target = document.getElementById(card.dataset.kpiTarget);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    card.addEventListener('click', activate);
+    card.addEventListener('keydown', activate);
+  });
   grid.setAttribute('aria-busy', 'false');
 }
 
 function clearAllCalls() {
-  if (typeof NotificationService !== 'undefined') NotificationService.show('Canonical communications are read-only on this surface.', 'warning');
+  if (typeof NotificationService !== 'undefined') NotificationService.show('Communication records are read-only on this surface.', 'warning');
 }
 
 // Listen for simulation events to auto-refresh

@@ -18,10 +18,26 @@ window.CustomerDetail = (function() {
   var _drawerEl = null;
   var _injected = false;
   var _commIdToTranscript = {};
+  var _returnFocus = null;
 
   // ── Helpers ──
 
   function $(id) { return document.getElementById(id); }
+
+  function presentationFormat() {
+    return window.NorthStarPresentationFormat || null;
+  }
+
+  function describe(value, fallback, key) {
+    var formatter = presentationFormat();
+    if (formatter && typeof formatter.describe === 'function') {
+      return formatter.describe(value, { fallback: fallback, key: key });
+    }
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    return fallback;
+  }
 
   function escapeText(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
@@ -30,12 +46,14 @@ window.CustomerDetail = (function() {
   }
 
   function fmtCurrency(n) {
-    if (n == null || isNaN(n)) return 'Not calculated';
-    return '$' + Math.round(n).toLocaleString();
+    if (n == null || n === '' || typeof n === 'boolean' || !Number.isFinite(Number(n))) {
+      return 'Unavailable — no role-authorized amount is recorded.';
+    }
+    return '$' + Math.round(Number(n)).toLocaleString();
   }
 
   function fmtDate(val) {
-    if (!val) return '\u2014';
+    if (!val) return 'Unavailable — no interaction date is recorded.';
     try {
       var d = new Date(val);
       if (isNaN(d.getTime())) return String(val);
@@ -49,16 +67,17 @@ window.CustomerDetail = (function() {
   }
 
   function displayDescription(value) {
-    if (typeof value === 'string') return capitalizeFirst(value);
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return '\u2014';
-    var prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) return '\u2014';
-    try {
-      var serialized = JSON.stringify(value);
-      return typeof serialized === 'string' ? serialized : '\u2014';
-    } catch (error) {
-      return '\u2014';
+    var formatter = presentationFormat();
+    var validRecord = formatter && typeof formatter.isRecord === 'function'
+      ? formatter.isRecord(value)
+      : Boolean(value && typeof value === 'object' && !Array.isArray(value) &&
+        (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null));
+    if (typeof value !== 'string' && !validRecord) return 'No customer or work description has been recorded.';
+    if (formatter && typeof formatter.hasCycle === 'function' && formatter.hasCycle(value)) {
+      return 'No customer or work description has been recorded.';
     }
+    var text = describe(value, 'No customer or work description has been recorded.', 'description');
+    return typeof value === 'string' ? capitalizeFirst(text) : text;
   }
 
   function stageLabel(stage) {
@@ -98,10 +117,10 @@ window.CustomerDetail = (function() {
     if (_injected) return;
     var html = '';
     html += '<div class="drawer-overlay" id="cdDrawerOverlay"></div>';
-    html += '<div class="customer-drawer" id="cdCustomerDrawer">';
+    html += '<div class="customer-drawer" id="cdCustomerDrawer" role="dialog" aria-modal="true" aria-labelledby="cdDrawerTitle" tabindex="-1">';
     html += '  <div class="drawer-header">';
     html += '    <h2 id="cdDrawerTitle">Customer Details</h2>';
-    html += '    <button class="drawer-close-btn" id="cdDrawerClose">&times;</button>';
+    html += '    <button class="drawer-close drawer-close-btn" id="cdDrawerClose" type="button" aria-label="Close customer details">&times;</button>';
     html += '  </div>';
     html += '  <div class="drawer-body" id="cdDrawerBody">';
     // Loading state
@@ -135,10 +154,18 @@ window.CustomerDetail = (function() {
     html += '      <div class="drawer-section">';
     html += '        <h3>Job Details</h3>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="cdService">\u2014</span></div>';
-    html += '        <div class="drawer-detail-row drawer-description-row"><span class="drawer-detail-label">Description</span><span class="drawer-detail-value" id="cdDescription">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Estimated Value</span><span class="drawer-detail-value" id="cdEstValue">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Opportunity Stage</span><span class="drawer-detail-value" id="cdStage">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Close Probability</span><span class="drawer-detail-value" id="cdProb">\u2014</span></div>';
+    html += '        <div class="drawer-work-details" aria-label="Readable customer and work details">';
+    html += '          <section class="drawer-work-detail"><h4>Description</h4><p id="cdDescription">No customer or work description has been recorded.</p></section>';
+    html += '          <section class="drawer-work-detail"><h4>Gates and missing information</h4><p id="cdWorkGates">No missing-input guidance is recorded.</p></section>';
+    html += '          <section class="drawer-work-detail"><h4>Materials</h4><p id="cdWorkMaterials">Material requirements are unavailable because they have not been recorded.</p></section>';
+    html += '          <section class="drawer-work-detail"><h4>Equipment</h4><p id="cdWorkEquipment">Equipment requirements are unavailable because they have not been recorded.</p></section>';
+    html += '          <section class="drawer-work-detail"><h4>Scheduling</h4><p id="cdWorkScheduling">Scheduling inputs are unavailable because they have not been recorded.</p></section>';
+    html += '          <section class="drawer-work-detail"><h4>Pricing</h4><p id="cdWorkPricing">Pricing is unavailable because a role-authorized estimate has not been recorded.</p></section>';
+    html += '          <section class="drawer-work-detail"><h4>Risk</h4><p id="cdWorkRisk">No specific risk is supported by the current recorded inputs.</p></section>';
+    html += '        </div>';
     html += '      </div>';
 
     // POLARIS\u2122 Intelligence
@@ -152,13 +179,11 @@ window.CustomerDetail = (function() {
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Revenue Opportunity</div><div class="drawer-polaris-item-value" id="cdPolRevenue">\u2014</div></div>';
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Recommended Action</div><div class="drawer-polaris-item-value" id="cdPolAction">\u2014</div></div>';
     html += '          </div>';
+    html += '          <details class="drawer-polaris-pricing">';
+    html += '            <summary>Pricing Breakdown And Supporting Factors</summary>';
+    html += '            <div id="cdPricingBreakdown"><p>No role-authorized estimate factors are available.</p></div>';
+    html += '          </details>';
     html += '        </div>';
-    html += '      </div>';
-
-    // Pricing Breakdown
-    html += '      <div class="drawer-section">';
-    html += '        <h3>Pricing Breakdown</h3>';
-    html += '        <div id="cdPricingBreakdown"><p style="font-size:13px;color:var(--neutral-500);">No estimate data available.</p></div>';
     html += '      </div>';
 
     // Call Transcript
@@ -228,7 +253,7 @@ window.CustomerDetail = (function() {
   }
 
   function fetchAll(customerId) {
-    if (!window.CanonicalIntelligence) return Promise.reject(new Error('Canonical intelligence client is unavailable.'));
+    if (!window.CanonicalIntelligence) return Promise.reject(new Error('Polaris intelligence is unavailable.'));
     var filters = { customerId: customerId };
     return Promise.all([
       window.CanonicalIntelligence.loadCompatibility('customer-detail', filters),
@@ -238,7 +263,7 @@ window.CustomerDetail = (function() {
     ]).then(function(results) {
       var digest = results[0].digest;
       if (results.some(function(projection) { return projection.digest !== digest; })) {
-        throw new Error('Canonical customer projections do not share one graph digest.');
+        throw new Error('Customer intelligence records do not share one graph digest.');
       }
       return {
         customer: results[0].records[0] || null,
@@ -332,14 +357,81 @@ window.CustomerDetail = (function() {
     return data;
   }
 
+  function lineItemSummary(values, category, emptyMessage) {
+    var lines = values && Array.isArray(values.pricingLineItems) ? values.pricingLineItems : [];
+    var matches = lines.filter(function(item) {
+      return item && String(item.category || '').toLowerCase().indexOf(category.replace(/s$/, '')) === 0;
+    }).map(function(item) {
+      var label = describe(item.label || item.code, 'Recorded ' + category, 'label');
+      return label + (item.customerCharge == null ? '' : ': ' + fmtCurrency(item.customerCharge));
+    });
+    return matches.length ? matches.join('; ') : emptyMessage;
+  }
+
+  function gateSummary(values) {
+    var entries = [];
+    (values && Array.isArray(values.missingInformation) ? values.missingInformation : []).forEach(function(item) {
+      var value = describe(item, '', 'missingInformation');
+      if (value) entries.push(value);
+    });
+    (values && Array.isArray(values.notCalculated) ? values.notCalculated : []).forEach(function(item) {
+      if (!item || typeof item !== 'object') return;
+      var formatter = presentationFormat();
+      var field = formatter && formatter.label ? formatter.label(item.field || 'Input') : capitalizeFirst(String(item.field || 'Input'));
+      var reason = describe(item.reason, 'a required input has not been recorded', 'reason');
+      entries.push(field + ' is unavailable because ' + reason.replace(/[.\s]+$/, '') + '.');
+    });
+    return entries.length ? entries.join(' ') : 'No missing-input gate is recorded for this customer or work item.';
+  }
+
+  function workPresentation(data) {
+    var values = data.intelligence || {};
+    var service = values.service && typeof values.service === 'object' ? values.service : {};
+    var scope = service.scope;
+    var scheduling = {
+      constraint: scope && typeof scope === 'object' ? scope.schedulingConstraint : null,
+      estimatedDurationHours: values.estimatedProductionDurationHours,
+      travel: values.travel,
+    };
+    var pricing = {
+      customerPrice: values.customerFacingPrice,
+      preliminaryRange: values.preliminaryRange,
+      tax: values.taxDisposition,
+    };
+    var materialText = lineItemSummary(values, 'materials', 'Material requirements are unavailable because no material line item has been recorded.');
+    if (materialText.indexOf('unavailable') >= 0 && values.materialsCharge != null) {
+      materialText = 'Recorded materials charge: ' + fmtCurrency(values.materialsCharge) + '.';
+    }
+    var equipmentText = lineItemSummary(values, 'equipment', 'Equipment requirements are unavailable because no equipment line item has been recorded.');
+    if (equipmentText.indexOf('unavailable') >= 0 && values.equipmentCharge != null) {
+      equipmentText = 'Recorded equipment charge: ' + fmtCurrency(values.equipmentCharge) + '.';
+    }
+    return {
+      description: displayDescription(scope),
+      gates: gateSummary(values),
+      materials: materialText,
+      equipment: equipmentText,
+      scheduling: describe(scheduling, 'Scheduling inputs are unavailable because they have not been recorded.', 'scheduling'),
+      pricing: describe(pricing, 'Pricing is unavailable because a role-authorized estimate has not been recorded.', 'pricing'),
+      risk: describe(values.risk, 'No specific risk is supported by the current recorded inputs.', 'risk'),
+    };
+  }
+
   // ── POLARIS Intelligence ──
 
   function generatePolarisIntel(data) {
     var canon = data.intelligence;
     var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(canon);
-    if (!presentation) return { summary: 'Canonical intelligence unavailable.', price: '\u2014', confidenceLabel: 'Not calculated', confidenceClass: '', confidencePct: '\u2014', revenue: '\u2014', action: '\u2014', isCanonical: false };
+    if (!presentation) return {
+      summary: 'Polaris intelligence is unavailable because the required role-authorized inputs were not returned.',
+      price: 'Unavailable — no role-authorized price is recorded.',
+      confidenceLabel: 'Confidence unavailable', confidenceClass: '',
+      confidencePct: 'supporting inputs are incomplete',
+      revenue: 'Unavailable — no role-authorized revenue amount is recorded.',
+      action: 'Record the missing customer and work inputs before acting.', isCanonical: false
+    };
     return {
-      summary: presentation.serviceText || 'Canonical service',
+      summary: presentation.serviceText || 'Recorded service',
       price: presentation.customerPriceRoundedText,
       confidenceLabel: 'Server confidence',
       confidenceClass: '',
@@ -354,7 +446,7 @@ window.CustomerDetail = (function() {
 
   function renderPricingBreakdown(estimates) {
     if (!estimates || estimates.length === 0) {
-      return '<p style="font-size:13px;color:var(--neutral-500);">No estimate data available.</p>';
+      return '<p>Pricing factors are not available because no role-authorized estimate has been recorded.</p>';
     }
     var est = estimates[0];
     var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(est.canonical);
@@ -364,21 +456,21 @@ window.CustomerDetail = (function() {
       values.pricingLineItems.forEach(function(item) {
         var amt = item.customerCharge;
         var label = item.label || item.code || 'Item';
-        html += '<div class="drawer-pricing-item"><span>' + label + '</span><span>' + fmtCurrency(amt) + '</span></div>';
+        html += '<div class="drawer-pricing-item"><span>' + escapeText(label) + '</span> <span>' + escapeText(fmtCurrency(amt)) + '</span></div>';
       });
-      html += '<div class="drawer-pricing-item"><span><strong>Subtotal</strong></span><span><strong>' + fmtCurrency(values.subtotalBeforeTax) + '</strong></span></div>';
+      html += '<div class="drawer-pricing-item"><span><strong>Subtotal</strong></span> <span><strong>' + fmtCurrency(values.subtotalBeforeTax) + '</strong></span></div>';
       if (values.taxDisposition && values.taxDisposition.status === 'calculated') {
-        html += '<div class="drawer-pricing-item"><span>Tax</span><span>' + fmtCurrency(values.tax) + '</span></div>';
-        html += '<div class="drawer-pricing-item"><span><strong>Total</strong></span><span><strong>' + fmtCurrency(values.totalIncludingTax) + '</strong></span></div>';
+        html += '<div class="drawer-pricing-item"><span>Tax</span> <span>' + fmtCurrency(values.tax) + '</span></div>';
+        html += '<div class="drawer-pricing-item"><span><strong>Total</strong></span> <span><strong>' + fmtCurrency(values.totalIncludingTax) + '</strong></span></div>';
       } else {
-        html += '<div class="drawer-pricing-item"><span>Tax</span><span>Not calculated (' + escapeText(values.taxDisposition && values.taxDisposition.reason || 'tax_configuration_unavailable') + ')</span></div>';
+        html += '<div class="drawer-pricing-item"><span>Tax</span> <span>Unavailable because ' + escapeText(describe(values.taxDisposition && values.taxDisposition.reason, 'tax configuration has not been recorded', 'reason').toLowerCase()) + '.</span></div>';
       }
       return html;
     }
     if (presentation && presentation.customerPrice !== null) {
-      return '<p style="font-size:13px;color:var(--neutral-500);">Est. value: ' + presentation.customerPriceRoundedText + '</p>';
+      return '<p>Recorded Customer Estimate: <strong>' + presentation.customerPriceRoundedText + '</strong>. A more detailed factor breakdown requires recorded labor, material, equipment, travel, tax, and margin inputs.</p>';
     }
-    return '<p style="font-size:13px;color:var(--neutral-500);">Estimate pending.</p>';
+    return '<p>Pricing factors are not available because the required estimate inputs have not been recorded.</p>';
   }
 
   // ── Public API ──
@@ -388,6 +480,8 @@ window.CustomerDetail = (function() {
 
     // Ensure drawer HTML is injected
     injectDrawerHTML();
+    _returnFocus = document.activeElement && typeof document.activeElement.focus === 'function'
+      ? document.activeElement : null;
 
     // Show loading
     _overlayEl.classList.add('open');
@@ -396,6 +490,7 @@ window.CustomerDetail = (function() {
     $('cdDrawerContent').style.display = 'none';
     $('cdDrawerLoading').style.display = '';
     $('cdDrawerTitle').textContent = 'Loading\u2026';
+    if (typeof $('cdDrawerClose').focus === 'function') $('cdDrawerClose').focus();
 
     // Fetch all data
     fetchAll(customerId).then(function(raw) {
@@ -414,9 +509,9 @@ window.CustomerDetail = (function() {
     $('cdDrawerTitle').textContent = data.name || 'Customer Details';
 
     // Contact Information
-    $('cdName').textContent = data.name || '\u2014';
-    $('cdPhone').textContent = data.phone || '\u2014';
-    $('cdEmail').textContent = data.email || '\u2014';
+    $('cdName').textContent = data.name || 'Unavailable — no customer name is recorded.';
+    $('cdPhone').textContent = data.phone || 'Unavailable — no phone number is recorded.';
+    $('cdEmail').textContent = data.email || 'Unavailable — no email address is recorded.';
     var canonicalAddress = typeof data.address === 'string' && data.address.trim()
       ? data.address
       : null;
@@ -445,22 +540,33 @@ window.CustomerDetail = (function() {
 
     // Customer Profile
     $('cdProfileStatus').innerHTML = getStatusBadge(data.status || 'active');
-    $('cdProfileJobs').textContent = data.totalJobs == null ? '\u2014' : data.totalJobs;
+    $('cdProfileJobs').textContent = data.totalJobs == null
+      ? 'Unavailable — no completed-job count is recorded.'
+      : data.totalJobs;
     $('cdProfileRevenue').textContent = fmtCurrency(data.totalRevenue);
     $('cdProfileLastInteraction').textContent = fmtDate(data.lastInteraction);
 
     // Job Details
-    $('cdService').textContent = data.service || '\u2014';
-    $('cdDescription').textContent = displayDescription(data.description);
+    $('cdService').textContent = data.service || 'Unavailable — no service is recorded.';
+    var work = workPresentation(data);
+    $('cdDescription').textContent = work.description;
+    $('cdWorkGates').textContent = work.gates;
+    $('cdWorkMaterials').textContent = work.materials;
+    $('cdWorkEquipment').textContent = work.equipment;
+    $('cdWorkScheduling').textContent = work.scheduling;
+    $('cdWorkPricing').textContent = work.pricing;
+    $('cdWorkRisk').textContent = work.risk;
     $('cdEstValue').textContent = fmtCurrency(data.estimatedValue);
     $('cdStage').textContent = stageLabel(data.stage);
-    $('cdProb').textContent = (data.closeProbability != null ? data.closeProbability + '%' : '\u2014');
+    $('cdProb').textContent = data.closeProbability != null
+      ? data.closeProbability + '%'
+      : 'Unavailable — no role-authorized probability is recorded.';
 
     // POLARIS Intelligence
     var intel = generatePolarisIntel(data);
     $('cdPolSummary').textContent = intel.summary;
     $('cdPolPrice').textContent = intel.price;
-    $('cdPolConfidence').innerHTML = '<span class="polaris-confidence ' + intel.confidenceClass + '">' + intel.confidenceLabel + ' (' + intel.confidencePct + ')</span>';
+    $('cdPolConfidence').textContent = intel.confidenceLabel + ' (' + intel.confidencePct + ')';
     $('cdPolRevenue').textContent = intel.revenue;
     $('cdPolAction').textContent = intel.action;
 
@@ -476,6 +582,8 @@ window.CustomerDetail = (function() {
     if (_drawerEl) _drawerEl.classList.remove('open');
     document.body.style.overflow = '';
     _currentData = null;
+    if (_returnFocus && typeof document.contains === 'function' && document.contains(_returnFocus)) _returnFocus.focus();
+    _returnFocus = null;
   }
 
   function selectTranscript(commId) {

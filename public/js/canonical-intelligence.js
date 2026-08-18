@@ -152,73 +152,73 @@
   }
 
   function validateAuthority(authority, context) {
-    if (!authority || typeof authority !== 'object') throw new Error('Canonical response has no authority attestation.');
+    if (!authority || typeof authority !== 'object') throw new Error('Polaris response has no authority attestation.');
     if (!authority.organizationId || !authority.userId || !authority.sessionId) {
-      throw new Error('Canonical response authority is incomplete.');
+      throw new Error('Polaris response authority is incomplete.');
     }
-    if (String(authority.userId) !== context.userId) throw new Error('Canonical response user does not match the active user.');
+    if (String(authority.userId) !== context.userId) throw new Error('Polaris response user does not match the active user.');
     if (context.organizationId && String(authority.organizationId) !== context.organizationId) {
-      throw new Error('Canonical response organization does not match the active organization.');
+      throw new Error('Polaris response organization does not match the active organization.');
     }
     if (context.sessionId && String(authority.sessionId) !== context.sessionId) {
-      throw new Error('Canonical response session does not match the active session.');
+      throw new Error('Polaris response session does not match the active session.');
     }
   }
 
   function validateItem(item) {
     if (!item || typeof item !== 'object' || !item.ids || typeof item.ids !== 'object') {
-      throw new Error('Canonical item is malformed.');
+      throw new Error('Polaris record is malformed.');
     }
     var artifactIds = ['operation', 'graph', 'customer', 'transcript', 'communication', 'opportunity', 'estimate', 'appointment', 'polarisSnapshot'];
     if (artifactIds.some(function (key) { return !UUID.test(String(item.ids[key] || '')); })) {
-      throw new Error('Canonical artifact identity is malformed.');
+      throw new Error('Polaris artifact identity is malformed.');
     }
     if (!Array.isArray(item.ids.facts) || item.ids.facts.some(function (id) { return !UUID.test(String(id || '')); })) {
-      throw new Error('Canonical fact identity is malformed.');
+      throw new Error('Polaris fact identity is malformed.');
     }
     if (!item.calculationVersion || !DIGEST.test(String(item.snapshotDigest || '')) ||
         !DIGEST.test(String(item.projectionDigest || '')) || !DIGEST.test(String(item.normalizedInputFingerprint || '')) ||
         !item.values || typeof item.values !== 'object' || Array.isArray(item.values)) {
-      throw new Error('Canonical snapshot metadata is malformed.');
+      throw new Error('Polaris snapshot metadata is malformed.');
     }
     if (!item.source || typeof item.source !== 'object' || !item.source.type || !item.source.version) {
-      throw new Error('Canonical source metadata is malformed.');
+      throw new Error('Polaris source metadata is malformed.');
     }
     if (!item.businessProfile || !UUID.test(String(item.businessProfile.id || '')) ||
         !item.businessProfile.version || !DIGEST.test(String(item.businessProfile.hash || ''))) {
-      throw new Error('Canonical Business Profile authority is malformed.');
+      throw new Error('Business Profile authority is malformed.');
     }
     if (!Array.isArray(item.supportingTranscriptFactIds) || item.supportingTranscriptFactIds.some(function (id) {
       return !UUID.test(String(id || '')) || item.ids.facts.indexOf(id) === -1;
     })) {
-      throw new Error('Canonical supporting fact identity is malformed.');
+      throw new Error('Supporting fact identity is malformed.');
     }
     if (!Array.isArray(item.facts) || item.facts.length !== item.ids.facts.length || item.facts.some(function (fact, index) {
       return !fact || fact.id !== item.ids.facts[index] || !UUID.test(String(fact.id || '')) ||
         Number(fact.ordinal) !== index || !fact.variable || !fact.evidenceText || !fact.speaker ||
         !DIGEST.test(String(fact.factFingerprint || '')) || Number.isNaN(new Date(fact.createdAt).valueOf());
     })) {
-      throw new Error('Canonical persisted facts are malformed.');
+      throw new Error('Persisted Polaris facts are malformed.');
     }
     var timestamps = item.timestamps;
     var requiredTimestamps = ['operationCreatedAt', 'operationCompletedAt', 'transcriptCreatedAt', 'estimateCreatedAt', 'snapshotCreatedAt'];
     if (!timestamps || typeof timestamps !== 'object' || requiredTimestamps.some(function (key) {
       return typeof timestamps[key] !== 'string' || !timestamps[key] || Number.isNaN(new Date(timestamps[key]).valueOf());
     }) || item.snapshotCreatedAt !== timestamps.snapshotCreatedAt) {
-      throw new Error('Canonical persisted timestamps are malformed.');
+      throw new Error('Persisted timestamps are malformed.');
     }
     if (!item.metadata || item.metadata.operationState !== 'completed' ||
         !DIGEST.test(String(item.metadata.operationPayloadFingerprint || '')) ||
         !DIGEST.test(String(item.metadata.transcriptFingerprint || ''))) {
-      throw new Error('Canonical operation metadata is malformed.');
+      throw new Error('Polaris operation metadata is malformed.');
     }
     return clone(item);
   }
 
   function validateProjection(surface, data, context) {
-    if (!data || typeof data !== 'object' || data.surface !== surface) throw new Error('Canonical surface does not match the request.');
+    if (!data || typeof data !== 'object' || data.surface !== surface) throw new Error('Polaris surface does not match the request.');
     if (data.readModelVersion !== READ_MODEL_VERSION || !DIGEST.test(String(data.digest || '')) || !Array.isArray(data.items)) {
-      throw new Error('Canonical projection envelope is malformed.');
+      throw new Error('Polaris response envelope is malformed.');
     }
     validateAuthority(data.authority, context);
     var byGraph = Object.create(null);
@@ -250,7 +250,7 @@
   }
 
   function request(surface, compatibility, filters) {
-    if (!ALLOWED_SURFACES[surface]) return Promise.reject(new Error('Unsupported canonical surface.'));
+    if (!ALLOWED_SURFACES[surface]) return Promise.reject(new Error('Unsupported Polaris surface.'));
     var context = synchronizeAuthority();
     if (!context.userId) {
       clear('authentication-required');
@@ -277,13 +277,13 @@
       credentials: 'same-origin',
       cache: 'no-store',
     }).then(function (response) {
-      if (!response.ok) throw new Error('Canonical request rejected with HTTP ' + response.status + '.');
+      if (!response.ok) throw new Error('Polaris request rejected with HTTP ' + response.status + '.');
       return response.json();
     }).then(function (body) {
-      if (!body || body.success !== true) throw new Error('Canonical request was rejected.');
+      if (!body || body.success !== true) throw new Error('Polaris request was rejected.');
       var current = synchronizeAuthority();
       if (generation !== state.generation || initialKey !== contextKey(current) || state.requestVersions[requestKey] !== version) {
-        throw new Error('Stale canonical response rejected.');
+        throw new Error('Stale Polaris response rejected.');
       }
       var projection = validateProjection(surface, body.data, current);
       state.projections[requestKey] = projection;

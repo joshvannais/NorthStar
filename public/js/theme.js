@@ -49,7 +49,11 @@
     button.setAttribute('title', 'Switch to ' + next + ' theme');
     var icon = button.querySelector('[data-theme-icon]');
     var label = button.querySelector('[data-theme-label]');
-    if (icon) icon.textContent = dark ? '\u2600\uFE0F' : '\uD83C\uDF19';
+    if (icon) {
+      icon.innerHTML = dark
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.4 15.1A8.5 8.5 0 0 1 8.9 3.6 8.5 8.5 0 1 0 20.4 15.1Z"/></svg>';
+    }
     if (label) label.textContent = dark ? 'Use light theme' : 'Use dark theme';
   }
 
@@ -115,11 +119,29 @@
       Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > -clearance;
   }
 
+  function availableThemeSlot() {
+    var slots = Array.prototype.slice.call(document.querySelectorAll('[data-northstar-theme-slot]'));
+    return slots.find(function (slot) {
+      for (var current = slot; current; current = current.parentElement) {
+        var style = global.getComputedStyle(current);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+      }
+      return true;
+    }) || null;
+  }
+
+  function mountToggle(control) {
+    var slot = availableThemeSlot();
+    if (slot && control.parentElement !== slot) slot.appendChild(control);
+    else if (!slot && control.parentElement !== document.body) document.body.appendChild(control);
+    return slot;
+  }
+
   function dockToggle() {
     var control = document.querySelector('[data-northstar-theme-control]');
     if (!control || !document.body) return;
 
-    if (control.closest('[data-northstar-theme-slot]')) {
+    if (mountToggle(control)) {
       control.style.removeProperty('--northstar-theme-control-bottom');
       return;
     }
@@ -176,7 +198,7 @@
         '<span aria-hidden="true" data-theme-icon></span>' +
         '<span class="sr-only" data-theme-label></span>' +
       '</button>';
-    var slot = document.querySelector('[data-northstar-theme-slot]');
+    var slot = availableThemeSlot();
     (slot || document.body).appendChild(control);
     control.querySelector('button').addEventListener('click', toggleTheme);
     updateToggle(currentTheme());

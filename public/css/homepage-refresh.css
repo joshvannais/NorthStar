@@ -137,7 +137,7 @@
   color: var(--theme-muted);
   background: var(--theme-surface-soft);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .homepage-refresh .truth-band .stats-bar-value {

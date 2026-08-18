@@ -64,7 +64,7 @@
   color: var(--theme-muted);
   background: var(--theme-surface-soft);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -210,7 +210,7 @@
   color: var(--brand-800);
   background: var(--brand-100);
   font-size: 13px;
-  font-weight: 850;
+  font-weight: 800;
 }
 
 .demo-priority-badge,
@@ -303,15 +303,15 @@
 .demo-schedule-list span { margin-top: 3px; font-size: 12px; }
 
 .demo-leads-panel { margin-bottom: 20px; }
-.demo-table-wrap { overflow-x: auto; }
-.demo-table-wrap table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.demo-table-wrap { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.demo-table-wrap table { width: max(100%, 760px); border-collapse: collapse; table-layout: auto; }
 .demo-table-wrap th { padding: 10px 12px; color: var(--theme-muted); border-bottom: 1px solid var(--theme-border); font-size: 11px; text-align: left; text-transform: uppercase; letter-spacing: 0.06em; }
 .demo-table-wrap td { padding: 15px 12px; color: var(--theme-text); border-bottom: 1px solid var(--theme-border); font-size: 13px; }
 .demo-table-wrap tbody tr:last-child td { border-bottom: 0; }
 .demo-table-wrap td strong, .demo-table-wrap td span { display: block; }
 .demo-table-wrap td span { margin-top: 2px; font-size: 11px; }
 
-.demo-status { display: inline-flex !important; width: fit-content; margin: 0 !important; padding: 5px 8px; border-radius: 999px; color: var(--theme-muted) !important; background: var(--theme-surface-soft); font-size: 11px !important; font-weight: 750; }
+.demo-status { display: inline-flex !important; width: fit-content; margin: 0 !important; padding: 5px 8px; border-radius: 999px; color: var(--theme-muted) !important; background: var(--theme-surface-soft); font-size: 11px !important; font-weight: 700; }
 .demo-status-hot { color: #991b1b !important; background: #fef2f2; }
 .demo-status-booked { color: #065f46 !important; background: #ecfdf5; }
 
@@ -423,7 +423,7 @@
   border-radius: 9px;
   color: var(--theme-muted);
   font-size: 13px;
-  font-weight: 720;
+  font-weight: 700;
   text-decoration: none;
 }
 .demo-command-nav-link:hover { color: var(--theme-text); background: var(--theme-surface-soft); }
@@ -455,7 +455,7 @@
 .demo-command-controls h2 { margin: 4px 0 8px; color: var(--theme-text); font-size: 20px; }
 .demo-command-controls p { margin: 0; color: var(--theme-muted); font-size: 13px; line-height: 1.6; }
 .demo-command-control-actions { display: grid; gap: 8px; }
-.demo-command-control-actions label { color: var(--theme-text); font-size: 12px; font-weight: 760; }
+.demo-command-control-actions label { color: var(--theme-text); font-size: 12px; font-weight: 700; }
 .demo-command-control-actions select { width: 100%; min-height: 44px; padding: 9px 12px; border: 1px solid var(--theme-border); border-radius: 9px; color: var(--theme-text); background: var(--theme-surface); font: inherit; }
 .demo-command-buttons { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 3px; }
 .demo-command-buttons .btn { flex: 1 1 150px; }
@@ -469,23 +469,23 @@
 .demo-command-content .demo-panel h2 { margin-top: 4px; }
 .demo-command-content .demo-kpi-card small { display: block; margin-top: 7px; color: var(--theme-muted); font-size: 10px; }
 
-.demo-object-link { color: var(--northstar-brand-gold); font-weight: 760; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.demo-object-link { color: var(--northstar-brand-gold); font-weight: 700; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .demo-detail-disclosure { color: var(--theme-muted); font-size: 12px; line-height: 1.6; }
 .demo-list-grid, .demo-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .demo-detail-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .demo-detail-list { display: grid; grid-template-columns: minmax(100px, 0.38fr) minmax(0, 1fr); gap: 9px 14px; margin: 16px 0 0; }
-.demo-detail-list dt { color: var(--theme-muted); font-size: 11px; font-weight: 760; }
+.demo-detail-list dt { color: var(--theme-muted); font-size: 11px; font-weight: 700; }
 .demo-detail-list dd { min-width: 0; margin: 0; color: var(--theme-text); font-size: 12px; overflow-wrap: anywhere; }
 .demo-detail-bullets, .demo-transcript { display: grid; gap: 8px; margin: 10px 0 18px; padding-left: 20px; color: var(--theme-muted); font-size: 12px; line-height: 1.55; }
 .demo-record-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.demo-record-choice { padding: 8px 10px; border: 1px solid var(--theme-border); border-radius: 999px; color: var(--theme-muted); font-size: 11px; font-weight: 720; text-decoration: none; }
+.demo-record-choice { padding: 8px 10px; border: 1px solid var(--theme-border); border-radius: 999px; color: var(--theme-muted); font-size: 11px; font-weight: 700; text-decoration: none; }
 .demo-record-choice.active { color: var(--northstar-brand-gold); border-color: currentColor; background: var(--theme-surface-soft); }
 .demo-fact-grid, .demo-integration-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 10px 0 18px; }
 .demo-fact-card, .demo-integration-card { display: grid; gap: 5px; min-width: 0; padding: 12px; border: 1px solid var(--theme-border); border-radius: 10px; background: var(--theme-surface-soft); }
 .demo-fact-card span, .demo-fact-card small, .demo-integration-card p { color: var(--theme-muted); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 .demo-integration-card .demo-status { margin: 0 !important; }
 .demo-raw-detail { margin-top: 18px; padding: 12px; border: 1px solid var(--theme-border); border-radius: 10px; }
-.demo-raw-detail summary { cursor: pointer; color: var(--theme-text); font-size: 12px; font-weight: 760; }
+.demo-raw-detail summary { cursor: pointer; color: var(--theme-text); font-size: 12px; font-weight: 700; }
 .demo-raw-detail pre { max-height: 420px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 8px; color: var(--theme-text); background: var(--theme-page); font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .demo-readiness-list { display: grid; gap: 8px; margin-top: 16px; }
 .demo-readiness-item { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid var(--theme-border); border-radius: 9px; }
@@ -557,22 +557,30 @@
 
 .command-center-record-link {
   color: var(--theme-text);
-  font-weight: 760;
+  font-weight: 700;
   text-decoration-color: color-mix(in srgb, var(--brand-500) 68%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
 .command-center-record-link:hover { color: var(--brand-700); }
 .command-center-table-empty { padding-block: 28px !important; color: var(--theme-muted) !important; text-align: center; }
+.demo-count-pill { flex: 0 0 auto; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 
 .command-center-chart-empty .demo-chart-grid { display: none; }
-.command-center-chart-empty .demo-chart-bars { position: static; display: grid; place-items: center; height: 100%; }
-.command-center-empty-copy { max-width: 36ch; margin: 0; color: var(--theme-muted); text-align: center; }
+.command-center-chart-empty .demo-chart-bars {
+  position: static;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+.command-center-empty-copy { width: min(100%, 36ch); max-width: none; margin: 0; color: var(--theme-muted); text-align: center; }
 
 .demo-polaris-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 
 @media (max-width: 768px) {
-  .command-center-blueprint-header .demo-dashboard-header-inner,
   .command-center-blueprint-main,
   .command-center-blueprint-shell > .demo-dashboard-footer {
     width: min(calc(100% - 24px), 1400px);
@@ -582,6 +590,7 @@
   .command-center-blueprint-shell > .northstar-demo-polaris-detail {
     width: min(calc(100% - 24px), 1400px);
   }
-  .command-center-blueprint-header { top: 55px; }
+  .command-center-blueprint-header { display: none; }
   .command-center-blueprint-main { padding-top: 28px; }
+  .demo-table-wrap table { width: 760px; min-width: 760px; }
 }

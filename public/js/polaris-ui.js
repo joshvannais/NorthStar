@@ -10,12 +10,12 @@ window.PolarisUI = (function () {
     if (!container) return;
     var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(data);
     if (!presentation || !presentation.service) {
-      container.innerHTML = '<div class="polaris-card"><div class="polaris-section-heading">Canonical intelligence unavailable</div></div>';
+      container.innerHTML = '<div class="polaris-card"><div class="polaris-section-heading">Polaris intelligence unavailable</div></div>';
       return;
     }
     var recommendation = presentation.recommendedActionText || 'No recommendation recorded';
     container.innerHTML = '<div class="polaris-card" data-canonical-presentation="true">' +
-      '<div class="polaris-section-heading">POLARIS&trade; Canonical Intelligence</div>' +
+      '<div class="polaris-section-heading">POLARIS&trade; Intelligence</div>' +
       '<div class="polaris-grid">' +
         '<div><div class="polaris-metric-label">Service</div><div class="polaris-metric-value">' + escapeHtml(presentation.serviceText) + '</div></div>' +
         '<div><div class="polaris-metric-label">Customer Price</div><div class="polaris-metric-value gold">' + escapeHtml(presentation.customerPriceText) + '</div></div>' +

@@ -158,7 +158,7 @@ window.AppStore = (function () {
   function loadFromServer() {
     if (!window.CanonicalIntelligence) {
       clearCanonical('canonical-client-unavailable');
-      return Promise.reject(new Error('Canonical client is unavailable.'));
+      return Promise.reject(new Error('Polaris client is unavailable.'));
     }
     if (activeLoad) return activeLoad;
     activeLoad = window.CanonicalIntelligence.loadCompatibility('leads').then(function (projection) {

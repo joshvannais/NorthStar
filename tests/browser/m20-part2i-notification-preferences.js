@@ -185,7 +185,8 @@ async function settingsSnapshot(page) {
 function assertSettingsSnapshot(snapshot, input, lifecycle) {
   const label = `${input.role}/${input.viewportLabel}/${input.theme}/${lifecycle}`;
   assert.strictEqual(snapshot.state, 'ready', label + ': canonical preferences are ready');
-  assert.match(snapshot.authority, /notification_preferences/i, label + ': PostgreSQL authority is explicit');
+  assert.match(snapshot.authority, /role-authorized workspace preferences/i, label + ': workspace authority is explicit without exposing an internal table name');
+  assert.doesNotMatch(snapshot.authority, /notification_preferences|postgresql/i, label + ': internal storage details stay out of user-facing copy');
   assert.match(snapshot.access, input.canEdit ? /can edit/i : /read.only/i, label + ': role presentation is explicit');
   assert.deepStrictEqual(snapshot.values, INITIAL, label + ': all seven canonical values are exact');
   assert.strictEqual(snapshot.canonicalControlCount, 7, label + ': complete canonical field set');

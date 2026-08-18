@@ -16,19 +16,55 @@ function option(id, label, description, material) {
 
 const DIMENSIONS = Object.freeze({
   business: Object.freeze({
-    label: 'Business operating context',
+    label: 'Select Demo Business',
     options: Object.freeze([
-      option('owner_operator', 'Owner-operator', 'One owner is balancing calls, estimates, and field work.', {
-        capacityLabel: 'Owner schedule', assignedTo: 'Maria Rivera', capacityRisk: 'The owner is the only estimator.'
+      option('owner_operator', 'Rivera Home Services', 'Owner-operated roofing and exterior company serving a practical 28-mile radius with one estimator, a two-person crew, a material trailer, roof-access equipment, weekday scheduling, and owner-reviewed pricing.', {
+        capacityLabel: 'Owner schedule', assignedTo: 'Maria Rivera', capacityRisk: 'The owner is the only estimator.',
+        serviceRadiusMiles: 28, crewCount: 1, pricingModel: 'Owner-reviewed scope and material pricing'
       }),
-      option('growing_residential', 'Growing residential team', 'A dispatcher and one crew are coordinating residential work.', {
-        capacityLabel: 'Crew A', assignedTo: 'Alex Johnson', capacityRisk: 'Estimate and crew handoff need coordination.'
+      option('growing_residential', 'Pine & Peak Residential', 'Growing residential service company covering a realistic 35-mile radius with a dispatcher, two field crews, stocked service vehicles, common repair materials, estimate visits, and capacity-aware scheduling.', {
+        capacityLabel: 'Crew A', assignedTo: 'Alex Johnson', capacityRisk: 'Estimate and crew handoff need coordination.',
+        serviceRadiusMiles: 35, crewCount: 2, pricingModel: 'Recorded labor, material, travel, and margin inputs'
       }),
-      option('mixed_service', 'Mixed residential and light commercial', 'The team is balancing different property and access requirements.', {
-        capacityLabel: 'Dispatch review', assignedTo: 'Sam Lee', capacityRisk: 'Property type and site access affect assignment.'
+      option('mixed_service', 'Harborlight Mechanical', 'Mixed residential and light-commercial operator within a 42-mile radius, with licensed technicians, diagnostic equipment, replacement inventory, access constraints, permit review, and separate repair and replacement pricing.', {
+        capacityLabel: 'Dispatch review', assignedTo: 'Sam Lee', capacityRisk: 'Property type and site access affect assignment.',
+        serviceRadiusMiles: 42, crewCount: 3, pricingModel: 'Diagnostic, equipment, permit, labor, and replacement pricing'
       }),
-      option('multi_crew', 'Multi-crew service company', 'Several crews are available, but dispatch ownership must be explicit.', {
-        capacityLabel: 'Next qualified crew', assignedTo: null, capacityRisk: 'Skill and territory matching remain required.'
+      option('multi_crew', 'Summit Multi-Trade Services', 'Multi-crew regional contractor operating inside a 55-mile radius with skill-matched crews, fleet and equipment constraints, zone-based travel, material staging, emergency capacity, and dispatcher-controlled schedules.', {
+        capacityLabel: 'Next qualified crew', assignedTo: null, capacityRisk: 'Skill and territory matching remain required.',
+        serviceRadiusMiles: 55, crewCount: 6, pricingModel: 'Trade, crew, equipment, material, travel-zone, and urgency inputs'
+      }),
+      option('urban_exteriors', 'Copperline Exteriors', 'Urban roofing and exterior specialist serving a dense 18-mile radius with two compact crews, restricted-access equipment, municipal permit planning, parking constraints, supplier delivery windows, and documented change-order pricing.', {
+        capacityLabel: 'Urban Crew 2', assignedTo: 'Jordan Bell', capacityRisk: 'Access, parking, and permit windows affect the visit.',
+        serviceRadiusMiles: 18, crewCount: 2, pricingModel: 'Scope, access, permit, delivery, labor, and change-order inputs'
+      }),
+      option('rural_service', 'Red Oak Rural Services', 'Rural home-service company covering a practical 72-mile territory with one lead technician, two service vehicles, longer travel allowances, stocked repair parts, weather-dependent routes, and mileage-aware scheduling.', {
+        capacityLabel: 'Rural route', assignedTo: 'Taylor Brooks', capacityRisk: 'Travel time and weather reduce same-day capacity.',
+        serviceRadiusMiles: 72, crewCount: 2, pricingModel: 'Labor, material, mileage, equipment, and weather-window inputs'
+      }),
+      option('premium_remodel', 'Stonegate Home Projects', 'Premium residential project company within a 30-mile radius with an estimator, project manager, specialty subcontractors, finish-material allowances, homeowner approval gates, and milestone-based pricing.', {
+        capacityLabel: 'Project intake', assignedTo: 'Morgan Chen', capacityRisk: 'Selections and subcontractor availability must be confirmed.',
+        serviceRadiusMiles: 30, crewCount: 4, pricingModel: 'Design, allowance, labor, subcontractor, permit, and milestone inputs'
+      }),
+      option('commercial_facilities', 'Keystone Facility Response', 'Light-commercial maintenance operator serving a 48-mile radius with dispatch coverage, licensed trades, lift and diagnostic equipment, site-access requirements, purchase-order controls, and after-hours service rates.', {
+        capacityLabel: 'Commercial dispatch', assignedTo: null, capacityRisk: 'Site authority and equipment access determine assignment.',
+        serviceRadiusMiles: 48, crewCount: 5, pricingModel: 'Trade, equipment, access, purchase-order, labor, and after-hours inputs'
+      }),
+      option('coastal_service', 'Seabrook Property Care', 'Coastal property-service business covering a 33-mile radius with salt-weather material considerations, storm-response capacity, elevated-access equipment, seasonal demand, and inspection-first estimating.', {
+        capacityLabel: 'Coastal Crew', assignedTo: 'Avery James', capacityRisk: 'Weather and storm-response demand can change capacity.',
+        serviceRadiusMiles: 33, crewCount: 3, pricingModel: 'Inspection, coastal material, access, labor, travel, and urgency inputs'
+      }),
+      option('suburban_growth', 'Maple Ridge Service Group', 'Fast-growing suburban contractor within a 40-mile radius with three field crews, a call coordinator, warehouse stock, financing conversations, permit tracking, and territory-balanced scheduling.', {
+        capacityLabel: 'Territory queue', assignedTo: null, capacityRisk: 'Crew territory and financing follow-up require coordination.',
+        serviceRadiusMiles: 40, crewCount: 3, pricingModel: 'Labor, warehouse material, permit, travel, financing, and margin inputs'
+      }),
+      option('specialty_electrical', 'Bright Harbor Electric', 'Licensed electrical specialist serving a 26-mile radius with two electricians, testing equipment, panel and fixture inventory, utility coordination, permit inspections, and safety-priority dispatch.', {
+        capacityLabel: 'Licensed electrician', assignedTo: 'Cameron Price', capacityRisk: 'Licensing, utility coordination, and inspection timing affect assignment.',
+        serviceRadiusMiles: 26, crewCount: 2, pricingModel: 'Diagnostic, equipment, material, permit, utility, and labor inputs'
+      }),
+      option('seasonal_hvac', 'Four Seasons Comfort', 'Residential HVAC operator covering a 38-mile radius with four technicians, diagnostic tools, replacement equipment access, maintenance-plan customers, seasonal surge capacity, and comfort-priority scheduling.', {
+        capacityLabel: 'HVAC dispatch', assignedTo: null, capacityRisk: 'Seasonal demand and equipment availability affect response time.',
+        serviceRadiusMiles: 38, crewCount: 4, pricingModel: 'Diagnostic, equipment, warranty, labor, maintenance-plan, and urgency inputs'
       }),
     ]),
   }),

@@ -9,6 +9,22 @@
  * For the drawer context, use StatusPill.renderDrawer(status) which uses badge-* classes.
  */
 window.StatusPill = (function() {
+  function statusKey(value) {
+    return String(value || 'new').trim().toLowerCase().replace(/_/g, '-');
+  }
+
+  function statusLabel(value) {
+    return statusKey(value).split('-').filter(Boolean).map(function(part) {
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    }).join(' ') || 'New';
+  }
+
+  function escapeMarkup(value) {
+    return String(value).replace(/[&<>"']/g, function(character) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character];
+    });
+  }
+
   // Status → CSS class mapping (call-status-badge system)
   var classMap = {
     'new': 'answered',
@@ -97,24 +113,24 @@ window.StatusPill = (function() {
    * @returns {string} HTML string for the status pill span
    */
   function render(status, options) {
-    status = status || 'new';
+    var key = statusKey(status);
     options = options || {};
     var type = options.type || 'status';
 
     // Communications page: use leadStatus for voicemail override
-    if (type === 'outcome' && options.leadStatus === 'voicemail') {
+    if (type === 'outcome' && statusKey(options.leadStatus) === 'voicemail') {
       return '<span class="call-status-badge voicemail">Voicemail</span>';
     }
 
     var cls, label;
     if (type === 'outcome') {
-      cls = outcomeClassMap[status.toLowerCase()] || 'answered';
-      label = outcomeLabelMap[status.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/-/g, ' ');
+      cls = outcomeClassMap[key] || 'answered';
+      label = outcomeLabelMap[key] || statusLabel(key);
     } else {
-      cls = classMap[status.toLowerCase()] || 'answered';
-      label = labelMap[status.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1);
+      cls = classMap[key] || 'answered';
+      label = labelMap[key] || statusLabel(key);
     }
-    return '<span class="call-status-badge ' + cls + '">' + label + '</span>';
+    return '<span class="call-status-badge ' + cls + '">' + escapeMarkup(label) + '</span>';
   }
 
   /**
@@ -124,10 +140,10 @@ window.StatusPill = (function() {
    * @returns {string} HTML string for the drawer status pill span
    */
   function renderDrawer(status) {
-    status = status || 'new';
-    var cls = drawerClassMap[status.toLowerCase()] || 'badge-new';
-    var label = drawerLabelMap[status.toLowerCase()] || 'New';
-    return '<span class="badge ' + cls + '">' + label + '</span>';
+    var key = statusKey(status);
+    var cls = drawerClassMap[key] || 'badge-new';
+    var label = drawerLabelMap[key] || statusLabel(key);
+    return '<span class="badge ' + cls + '">' + escapeMarkup(label) + '</span>';
   }
 
   /**
@@ -135,8 +151,7 @@ window.StatusPill = (function() {
    * Useful when building custom HTML that includes a status pill.
    */
   function getClass(status) {
-    status = status || 'new';
-    return classMap[status.toLowerCase()] || 'answered';
+    return classMap[statusKey(status)] || 'answered';
   }
 
   /**
@@ -144,8 +159,8 @@ window.StatusPill = (function() {
    * Useful when building custom HTML that includes a status pill.
    */
   function getLabel(status) {
-    status = status || 'new';
-    return labelMap[status.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1);
+    var key = statusKey(status);
+    return labelMap[key] || statusLabel(key);
   }
 
   return {

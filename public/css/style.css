@@ -1,3 +1,5 @@
+@import url('/css/site-professionalism.css');
+
 /* ============================================
    Northstar Solutions — Main Stylesheet v2
    ============================================ */
@@ -36,8 +38,8 @@
   --warning: #92400e;
   --danger: #b91c1c;
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', sans-serif;
 
   --radius: 12px;
   --radius-sm: 8px;
@@ -299,7 +301,7 @@ textarea:focus-visible {
 .auth-recovery-link {
   color: var(--brand-700);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
@@ -343,7 +345,7 @@ textarea:focus-visible {
   gap: 10px;
   color: var(--brand-700);
   font-size: 18px;
-  font-weight: 750;
+  font-weight: 700;
   text-decoration: none;
   letter-spacing: 0.01em;
 }
@@ -416,7 +418,7 @@ textarea:focus-visible {
   margin-bottom: 8px;
   color: var(--brand-700);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -492,7 +494,7 @@ textarea:focus-visible {
   gap: 10px;
   color: var(--northstar-brand-gold);
   font-size: 18px;
-  font-weight: 750;
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -528,7 +530,7 @@ textarea:focus-visible {
   margin-bottom: 8px;
   color: var(--brand-600);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -552,7 +554,7 @@ textarea:focus-visible {
 
 .account-auth-form { display: grid; gap: 18px; margin-top: 26px; }
 .account-auth-field { display: grid; gap: 7px; }
-.account-auth-field label { color: var(--theme-text); font-size: 14px; font-weight: 650; }
+.account-auth-field label { color: var(--theme-text); font-size: 14px; font-weight: 600; }
 .account-auth-field input {
   width: 100%;
   min-height: 48px;
@@ -580,7 +582,7 @@ textarea:focus-visible {
   background: var(--theme-surface);
   border: 1px solid var(--theme-border);
   border-radius: 6px;
-  font: 650 12px/1 var(--font-sans);
+  font: 600 12px/1 var(--font-sans);
   cursor: pointer;
 }
 .password-visibility-toggle:hover { color: var(--brand-800); background: var(--theme-surface-soft); }
@@ -611,14 +613,14 @@ textarea:focus-visible {
 .account-auth-return a {
   color: var(--brand-700);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
 [data-theme="dark"] .account-auth-return a { color: var(--brand-200); }
 
 .standalone-card .btn { margin-top: 22px; }
-.standalone-identity { margin-top: 16px; color: var(--theme-text); font-weight: 650; overflow-wrap: anywhere; }
+.standalone-identity { margin-top: 16px; color: var(--theme-text); font-weight: 600; overflow-wrap: anywhere; }
 
 .theme-preview-hero {
   min-height: 100vh;
@@ -1487,10 +1489,10 @@ tr:hover td { background: var(--neutral-50); }
   .stats-grid { grid-template-columns: 1fr; }
   .card { padding: 20px; }
   .settings-section { padding: 20px; }
-}/* Logo Component
-   Swap between PNG and SVG by changing the file extension on src.
-   To switch: edit src="/assets/logo.png" → src="/assets/logo.svg"
-   Both files exist in /assets/ — no layout changes needed. */
+}
+
+/* Official NorthStar logo component. Keep the approved transparent PNG; the
+   legacy SVG is not an approved customer-facing mark. */
 .logo-link {
   display: flex;
   align-items: center;
@@ -3523,11 +3525,15 @@ svg.icon-sm, svg.icon-md, svg.icon-lg { fill: currentColor; stroke: currentColor
 .drawer-pricing-item {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
   padding: 5px 0;
   font-size: 13px;
   color: var(--neutral-700);
   border-bottom: 1px solid var(--neutral-100);
 }
+.drawer-pricing-item > span:first-child { flex: 0 0 auto; }
+.drawer-pricing-item > span:last-child { min-width: 0; text-align: right; overflow-wrap: anywhere; }
 .drawer-pricing-item:last-child { border-bottom: none; font-weight: 600; color: var(--neutral-900); }
 [data-theme="dark"] .drawer-pricing-item { border-bottom-color: var(--neutral-200); }
 [data-theme="dark"] .drawer-pricing-item:last-child { color: var(--neutral-800); }
@@ -3987,7 +3993,7 @@ textarea:disabled {
   background: var(--neutral-50);
   color: var(--neutral-800);
   font: inherit;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
 }

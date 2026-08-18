@@ -5,13 +5,13 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
-  <link rel="stylesheet" href="/css/polaris-card.css">
   <script src="/js/theme.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Number — NorthStar AI</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body><div class="dashboard-layout">
 <main class="main-content">
@@ -74,7 +74,7 @@
     function saveNumber() {
       const num = document.getElementById("businessNumber").value;
       if (num.length < 10) { showToast("Please enter a full phone number"); return; }
-      showToast("Business number changes require canonical provider provisioning.");
+      showToast("Business number changes require provider provisioning.");
     }
   </script>
 </main>
@@ -83,8 +83,6 @@
 <script src="/js/notification-service.js"></script>
 <script src="/js/api.js"></script>
   <script src="/js/command-center-contract.js"></script>
-  <script src="/js/polaris-card.js"></script>
-  <script src="/js/polaris-surface-card.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("my-number");</script>
 </body>

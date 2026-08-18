@@ -7,14 +7,6 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const INTEGRATIONS_PATH = path.join(ROOT, 'public', 'dashboard', 'integrations.html');
 const SETTINGS_PATH = path.join(ROOT, 'public', 'dashboard', 'settings.html');
 
-function settingsIntegrationsSection(html) {
-  const start = html.indexOf('<!-- Integrations Section -->');
-  const end = html.indexOf('</main>', start);
-  expect(start).toBeGreaterThanOrEqual(0);
-  expect(end).toBeGreaterThan(start);
-  return html.slice(start, end);
-}
-
 function catalogueScript(html) {
   const authority = html.indexOf("authority: 'northstar_integration_catalogue_v1'");
   const start = html.lastIndexOf('<script>', authority);
@@ -90,16 +82,13 @@ describe('Mission 20 Phase 6C integration catalogue presentation contract', () =
     expect(integrations).not.toMatch(/statusLabels\[provider\.authority\./);
   });
 
-  test('Settings preserves accepted IDs/toast while retiring decorative connection claims', () => {
-    const section = settingsIntegrationsSection(settings);
+  test('Settings defers integration discovery to the dedicated catalogue page', () => {
     for (const id of [
       'integration-twilio', 'integration-openai', 'integration-elevenlabs',
       'integration-stripe', 'integration-google-cal', 'integration-email',
-    ]) expect(section).toContain(`id="${id}"`);
-    expect(section).toContain('id="settingsIntegrationsLink"');
-    expect(section).toContain('href="/dashboard/integrations"');
-    expect(section).toContain("showToast('Twilio integration coming soon')");
-    expect(section).not.toMatch(/status-dot|Not connected|>Connected<|OpenAI is active|>Connect<|>Configure</);
-    expect(section).toMatch(/Authoritative status is shown in Integrations/g);
+    ]) expect(settings).not.toContain(`id="${id}"`);
+    expect(settings).not.toContain('id="settingsIntegrationsLink"');
+    expect(settings).not.toContain("showToast('Twilio integration coming soon')");
+    expect(settings).not.toContain('<!-- Integrations Section -->');
   });
 });

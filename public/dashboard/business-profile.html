@@ -5,7 +5,6 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
-  <link rel="stylesheet" href="/css/polaris-card.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Business Profile — NorthStar Solutions</title>
   <script src="/js/theme.js"></script>
@@ -15,11 +14,11 @@
     body { font-family: var(--font-sans); color: inherit; background: inherit; }
     .bp-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
     .bp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-    .bp-header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .bp-header-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
     .bp-title { font-size: 24px; font-weight: 700; color: var(--neutral-900); }
     .bp-subtitle { font-size: 14px; color: var(--neutral-500); margin-top: 4px; }
-    .bp-nav { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 24px; padding: 4px; background: var(--neutral-100); border-radius: var(--radius); }
-    .bp-nav-btn { padding: 8px 14px; border-radius: var(--radius-sm); border: none; background: transparent; color: var(--neutral-600); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    .bp-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; margin-bottom: 24px; padding: 8px; background: var(--neutral-100); border-radius: var(--radius); }
+    .bp-nav-btn { padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--neutral-200); background: transparent; color: var(--neutral-600); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; transition: all 0.15s; }
     .bp-nav-btn:hover { background: var(--neutral-200); color: var(--neutral-800); }
     .bp-nav-btn.active { background: var(--neutral-50); color: var(--neutral-900); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .bp-section { display: none; }
@@ -107,7 +106,7 @@
     .bp-readiness-list { display: grid; gap: 10px; margin-top: 16px; }
     .bp-readiness-row { min-width: 0; padding: 14px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); background: var(--neutral-50); }
     .bp-readiness-row-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
-    .bp-readiness-row h3 { margin: 0; color: var(--neutral-800); font-size: 14px; text-transform: none; letter-spacing: 0; }
+    .bp-readiness-row h3 { margin: 0; color: var(--neutral-800); font-size: 14px; text-transform: capitalize; letter-spacing: 0; }
     .bp-readiness-help, .bp-readiness-reason, .bp-readiness-reviewed, .bp-readiness-pending { margin-top: 6px; color: var(--neutral-600); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
     .bp-readiness-reason { color: var(--neutral-700); }
     .bp-readiness-pending { font-weight: 600; color: var(--brand-700); }
@@ -135,6 +134,7 @@
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
   <script src="/js/notification-service.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -251,7 +251,7 @@
               <div class="bp-field"><label>Max Service Radius (miles)</label><input id="sa-maxRadiusMiles" type="number" min="1" max="500" placeholder="50"></div>
               <div class="bp-field"><label>Max Travel Time (minutes)</label><input id="sa-maxTravelMinutes" type="number" min="1" max="240" placeholder="60"></div>
               <div class="bp-field bp-full"><label>Primary Territory</label><textarea id="sa-primaryTerritory" rows="2" placeholder="e.g., Greater Phoenix Metropolitan Area"></textarea></div>
-              <div class="bp-field bp-full"><label>Boundary Polygon (JSON)</label><textarea id="sa-polygon" rows="4" placeholder="[[33.4,-112.2],[33.7,-112.2],[33.7,-111.8]]"></textarea><span class="help-text">Empty array or at least three [latitude, longitude] points. Values remain canonical profile data; no mapping provider is contacted.</span></div>
+              <div class="bp-field bp-full"><label>Boundary Polygon (JSON)</label><textarea id="sa-polygon" rows="4" placeholder="[[33.4,-112.2],[33.7,-112.2],[33.7,-111.8]]"></textarea><span class="help-text">Empty array or at least three [latitude, longitude] points. Values remain Business Profile data; no mapping provider is contacted.</span></div>
             </div>
           </div>
         </div>
@@ -357,7 +357,7 @@
         <div class="bp-section" id="section-services">
           <div class="bp-card">
             <h3>Service Catalog</h3>
-            <div class="bp-section-desc">Maintain stable service identities and the exact pricing-rule contract consumed by canonical Polaris calculations.</div>
+            <div class="bp-section-desc">Maintain stable service identities and the exact pricing-rule contract used by Polaris calculations.</div>
             <div class="bp-authority-note">Existing IDs are immutable in this editor. Pricing rules use the versioned Business Profile contract: fixed, perUnit, perUnitByValue, and perItemByValue. Blank pricing JSON means the service is intentionally unpriced.</div>
             <div class="bp-service-actions"><button id="addServiceButton" class="bp-add-btn" type="button">Add service</button></div>
             <div id="servicesContainer" class="bp-repeat-list"></div>
@@ -368,23 +368,23 @@
         <!-- Section: Financial -->
         <div class="bp-section" id="section-financial">
           <div class="bp-card">
-            <h3 id="financialConfigurationHeading">Canonical Pricing &amp; Cost Authority</h3>
+            <h3 id="financialConfigurationHeading">Pricing &amp; Cost Authority</h3>
             <div class="bp-section-desc">Tenant-scoped pricing philosophy, cost inputs, rates, and preliminary advisory-range preferences. Mission 24 owns estimate execution and authorized customer pricing.</div>
             <div class="bp-authority-note" id="canonicalAuthorityNote" role="status" aria-live="polite">Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.</div>
             <div class="bp-grid">
-              <div class="bp-field"><label for="fin-customerMarkupPercent">Customer Markup (%)</label><input id="fin-customerMarkupPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="customerMarkupPercent" type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.customerMarkupPercent</span></div>
-              <div class="bp-field"><label for="fin-taxRatePercent">Tax Rate (%)</label><input id="fin-taxRatePercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="taxRatePercent" type="number" step="0.01" min="0" max="100"><span class="help-text">canonicalPricing.taxRatePercent</span></div>
-              <div class="bp-field"><label for="fin-emergencyMultiplier">Emergency Multiplier</label><input id="fin-emergencyMultiplier" data-financial-control data-financial-section="canonicalPricing" data-financial-field="emergencyMultiplier" type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.emergencyMultiplier</span></div>
-              <div class="bp-field"><label for="fin-travelCustomerChargePerMile">Customer Travel Charge ($/mile)</label><input id="fin-travelCustomerChargePerMile" data-financial-control data-financial-section="canonicalPricing" data-financial-field="travelCustomerChargePerMile" type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.travelCustomerChargePerMile</span></div>
-              <div class="bp-field"><label for="fin-minimumJobPrice">Minimum Job Price ($)</label><input id="fin-minimumJobPrice" data-financial-control data-financial-section="canonicalPricing" data-financial-field="minimumJobPrice" type="number" step="0.01" min="0"><span class="help-text">canonicalPricing.minimumJobPrice</span></div>
+              <div class="bp-field"><label for="fin-customerMarkupPercent">Customer Markup (%)</label><input id="fin-customerMarkupPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="customerMarkupPercent" type="number" step="0.01" min="0"><span class="help-text">Markup applied to supported pricing calculations.</span></div>
+              <div class="bp-field"><label for="fin-taxRatePercent">Tax Rate (%)</label><input id="fin-taxRatePercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="taxRatePercent" type="number" step="0.01" min="0" max="100"><span class="help-text">Tax rate applied when configured.</span></div>
+              <div class="bp-field"><label for="fin-emergencyMultiplier">Emergency Multiplier</label><input id="fin-emergencyMultiplier" data-financial-control data-financial-section="canonicalPricing" data-financial-field="emergencyMultiplier" type="number" step="0.01" min="0"><span class="help-text">Multiplier applied to supported emergency work.</span></div>
+              <div class="bp-field"><label for="fin-travelCustomerChargePerMile">Customer Travel Charge ($/mile)</label><input id="fin-travelCustomerChargePerMile" data-financial-control data-financial-section="canonicalPricing" data-financial-field="travelCustomerChargePerMile" type="number" step="0.01" min="0"><span class="help-text">Customer-facing travel charge per mile.</span></div>
+              <div class="bp-field"><label for="fin-minimumJobPrice">Minimum Job Price ($)</label><input id="fin-minimumJobPrice" data-financial-control data-financial-section="canonicalPricing" data-financial-field="minimumJobPrice" type="number" step="0.01" min="0"><span class="help-text">Minimum supported customer price.</span></div>
               <div class="bp-field"><label for="fin-desiredGrossMarginPercent">Desired Gross Margin (%)</label><input id="fin-desiredGrossMarginPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="desiredGrossMarginPercent" type="number" step="0.01" min="0" max="100"></div>
               <div class="bp-field"><label for="fin-desiredNetMarginPercent">Desired Net Margin (%)</label><input id="fin-desiredNetMarginPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="desiredNetMarginPercent" type="number" step="0.01" min="0" max="100"></div>
               <div class="bp-field"><label for="fin-maximumDiscountPercent">Maximum Discount (%)</label><input id="fin-maximumDiscountPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="maximumDiscountPercent" type="number" step="0.01" min="0" max="100"></div>
               <div class="bp-field"><label for="fin-defaultRangePercent">Default Preliminary Range (%)</label><input id="fin-defaultRangePercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="defaultRangePercent" type="number" step="0.01" min="0" max="100"><span class="help-text">Fallback only when a service has no valid explicit rangePercent.</span></div>
-              <div class="bp-field"><label for="cost-overheadPercent">Overhead (%)</label><input id="cost-overheadPercent" data-financial-control data-financial-section="canonicalCosts" data-financial-field="overheadPercent" type="number" step="0.01" min="0"><span class="help-text">canonicalCosts.overheadPercent</span></div>
-              <div class="bp-field"><label for="cost-travelCostPerMile">Internal Travel Cost ($/mile)</label><input id="cost-travelCostPerMile" data-financial-control data-financial-section="canonicalCosts" data-financial-field="travelCostPerMile" type="number" step="0.01" min="0"><span class="help-text">canonicalCosts.travelCostPerMile</span></div>
-              <div class="bp-field bp-full"><label for="cost-materialCostByService">Material Cost by Service (JSON)</label><textarea id="cost-materialCostByService" data-financial-control data-financial-section="canonicalCosts" data-financial-field="materialCostByService" data-financial-map rows="3" placeholder='{"fence:cedar": 120}'></textarea><span class="help-text">canonicalCosts.materialCostByService; values must be non-negative numbers.</span></div>
-              <div class="bp-field bp-full"><label for="cost-equipmentCostByReference">Equipment Cost by Reference (JSON)</label><textarea id="cost-equipmentCostByReference" data-financial-control data-financial-section="canonicalCosts" data-financial-field="equipmentCostByReference" data-financial-map rows="3" placeholder='{"mini-excavator": 350}'></textarea><span class="help-text">canonicalCosts.equipmentCostByReference; values must be non-negative numbers.</span></div>
+              <div class="bp-field"><label for="cost-overheadPercent">Overhead (%)</label><input id="cost-overheadPercent" data-financial-control data-financial-section="canonicalCosts" data-financial-field="overheadPercent" type="number" step="0.01" min="0"><span class="help-text">Internal overhead percentage.</span></div>
+              <div class="bp-field"><label for="cost-travelCostPerMile">Internal Travel Cost ($/mile)</label><input id="cost-travelCostPerMile" data-financial-control data-financial-section="canonicalCosts" data-financial-field="travelCostPerMile" type="number" step="0.01" min="0"><span class="help-text">Internal travel cost per mile.</span></div>
+              <div class="bp-field bp-full"><label for="cost-materialCostByService">Material Cost by Service (JSON)</label><textarea id="cost-materialCostByService" data-financial-control data-financial-section="canonicalCosts" data-financial-field="materialCostByService" data-financial-map rows="3" placeholder='{"fence:cedar": 120}'></textarea><span class="help-text">Material-cost values must be non-negative numbers.</span></div>
+              <div class="bp-field bp-full"><label for="cost-equipmentCostByReference">Equipment Cost by Reference (JSON)</label><textarea id="cost-equipmentCostByReference" data-financial-control data-financial-section="canonicalCosts" data-financial-field="equipmentCostByReference" data-financial-map rows="3" placeholder='{"mini-excavator": 350}'></textarea><span class="help-text">Equipment-cost values must be non-negative numbers.</span></div>
               <div class="bp-field"><label for="crew-averageHourlyRate">Average Hourly Rate ($/hr)</label><input id="crew-averageHourlyRate" data-financial-control data-financial-section="crew" data-financial-field="averageHourlyRate" type="number" step="0.5" min="0"></div>
               <div class="bp-field"><label for="crew-overtimeMultiplier">Overtime Multiplier</label><input id="crew-overtimeMultiplier" data-financial-control data-financial-section="crew" data-financial-field="overtimeMultiplier" type="number" step="0.1" min="1"></div>
               <div class="bp-field"><label for="crew-travelPay">Travel Pay ($/trip)</label><input id="crew-travelPay" data-financial-control data-financial-section="crew" data-financial-field="travelPay" type="number" step="0.5" min="0"></div>
@@ -444,7 +444,7 @@
           <div class="bp-card" id="providerNeutralKnowledge">
             <h3>Business Knowledge</h3>
             <div class="bp-section-desc">Maintain tenant-authored facts and guidance used by NorthStar's provider-neutral voice mapping.</div>
-            <div class="bp-authority-note" id="providerNeutralAuthority">These provider-neutral Business Profile values are canonical tenant authority. Saving them does not connect to or configure a voice provider.</div>
+            <div class="bp-authority-note" id="providerNeutralAuthority">These provider-neutral Business Profile values are the tenant authority. Saving them does not connect to or configure a voice provider.</div>
             <div class="bp-grid">
               <div class="bp-field"><label for="profile-industry">Industry</label><input id="profile-industry" autocomplete="organization-title"></div>
               <div class="bp-field"><label for="profile-ownerName">Owner or Primary Contact</label><input id="profile-ownerName" autocomplete="name"></div>
@@ -541,7 +541,7 @@
         <div class="bp-section" id="section-notifications">
           <div class="bp-card">
             <h3>Notification Preferences</h3>
-            <div class="bp-section-desc">Operational notification delivery is controlled by the tenant-scoped PostgreSQL notification preferences authority, not by Business Profile.</div>
+            <div class="bp-section-desc">Operational notification delivery is managed in Settings, not in Business Profile.</div>
             <p id="legacyNotificationsAuthority" style="margin:0 0 16px;color:var(--neutral-500);font-size:13px;line-height:1.5;">Existing legacy notification values are preserved during unrelated profile saves and ignored as delivery preferences.</p>
             <a class="btn btn-primary" id="canonicalNotificationsLink" href="/dashboard/settings">Manage authoritative notification preferences</a>
           </div>
@@ -696,10 +696,11 @@
       var saveButton = document.getElementById('saveBtn');
       if (!saveButton) return;
       saveButton.disabled = !editable || generalProfileConflicted;
-      saveButton.textContent = generalProfileConflicted ? 'Reload page before saving'
+      saveButton.hidden = !profileCanEdit;
+      saveButton.textContent = generalProfileConflicted ? 'Reload Page Before Saving'
         : editable ? '💾 Save Profile'
         : state === 'loading' ? 'Loading profile…'
-        : profileCanEdit ? 'Profile unavailable' : 'Read-only profile';
+        : 'Profile Unavailable';
     }
 
     function latchGeneralProfileConflict() {
@@ -819,6 +820,10 @@
       });
     }
 
+    function titleCaseLabel(value) {
+      return String(value || '').replace(/\b\w/g, function(letter) { return letter.toUpperCase(); });
+    }
+
     function appendProfileReadinessAction(container, item, action) {
       var button = document.createElement('button');
       button.type = 'button';
@@ -852,7 +857,7 @@
         header.className = 'bp-readiness-row-header';
         var heading = document.createElement('h3');
         heading.id = 'profile-readiness-item-' + item.id;
-        heading.textContent = item.label;
+        heading.textContent = titleCaseLabel(item.label);
         var state = document.createElement('span');
         state.className = 'bp-readiness-state';
         state.dataset.state = item.state;
@@ -918,9 +923,9 @@
       var save = document.getElementById('saveProfileReadinessBtn');
       if (save) {
         save.disabled = !interactive || !profileCanEdit || profileReadinessPendingCount() === 0;
-        save.textContent = profileReadinessSaving ? 'Saving readiness…'
-          : profileReadinessConflicted ? 'Reload before saving'
-          : profileCanEdit ? 'Save readiness' : 'Read-only readiness';
+        save.textContent = profileReadinessSaving ? 'Saving Readiness…'
+          : profileReadinessConflicted ? 'Reload Before Saving'
+          : 'Save Readiness';
       }
     }
 
@@ -1051,6 +1056,13 @@
     function applyProfileAccess(account) {
       var role = account && account.membership ? account.membership.role : '';
       profileCanEdit = role === 'owner' || role === 'admin';
+      [
+        'saveOperationalConfigurationBtn', 'saveBtn', 'reloadProfileReadinessBtn',
+        'saveProfileReadinessBtn', 'saveFinancialConfigurationBtn', 'saveVoiceAssistantBtn'
+      ].forEach(function(id) {
+        var button = document.getElementById(id);
+        if (button) button.hidden = !profileCanEdit;
+      });
     }
 
     function loadProfile() {
@@ -1068,8 +1080,8 @@
             renderProfile(profileData);
             associateProfileLabels(document);
             setProfileInteractionState('ready', profileCanEdit
-              ? 'Your durable account membership can edit this Business Profile.'
-              : 'Read-only: local form changes cannot be saved by your durable account membership.');
+              ? 'Your account role can edit this Business Profile.'
+              : 'This Business Profile is protected by your account role.');
           } else {
             setProfileInteractionState('error', 'Business Profile authority is unavailable. Editing remains disabled.');
             showToast('Failed to load profile', 'error');
@@ -1166,7 +1178,7 @@
       if (services.length === 0) {
         var empty = document.createElement('span');
         empty.className = 'help-text';
-        empty.textContent = 'No canonical Business Profile services are configured.';
+        empty.textContent = 'No Business Profile services are configured.';
         options.appendChild(empty);
       } else {
         services.forEach(function(service) {
@@ -1308,7 +1320,7 @@
       assetCatalogueData = data;
       var authority = document.getElementById('assetCatalogueAuthority');
       if (authority) {
-        authority.textContent = 'PostgreSQL is the canonical tenant asset identity authority. Business Profile displays this catalogue without copying it into profile JSON.';
+        authority.textContent = 'The tenant asset catalogue is authoritative. Business Profile displays it without copying it into profile JSON.';
       }
       var add = document.getElementById('addAssetButton');
       if (add) add.hidden = !data.canManage;
@@ -1502,8 +1514,8 @@
       if (saveButton) {
         saveButton.disabled = !editable || !operationalConfigurationDirty ||
           operationalConfigurationSaving || operationalConfigurationConflicted;
-        saveButton.textContent = operationalConfigurationSaving ? 'Saving operational policies...'
-          : profileCanEdit ? 'Save operational policies' : 'Read-only operational policies';
+        saveButton.textContent = operationalConfigurationSaving ? 'Saving Operational Policies...'
+          : 'Save Operational Policies';
       }
       var reloadButton = document.getElementById('reloadOperationalConfigurationBtn');
       if (reloadButton) {
@@ -1727,8 +1739,8 @@
       if (saveButton) {
         saveButton.disabled = !editable || !financialConfigurationDirty ||
           financialConfigurationSaving || financialConfigurationConflicted;
-        saveButton.textContent = financialConfigurationSaving ? 'Saving financial configuration...'
-          : profileCanEdit ? 'Save financial configuration' : 'Read-only financial configuration';
+        saveButton.textContent = financialConfigurationSaving ? 'Saving Financial Configuration...'
+          : 'Save Financial Configuration';
       }
       var reloadButton = document.getElementById('reloadFinancialConfigurationBtn');
       if (reloadButton) {
@@ -1838,7 +1850,7 @@
       var migration = profile && profile.canonicalAuthority && profile.canonicalAuthority.legacyMigration;
       var note = document.getElementById('canonicalAuthorityNote');
       if (note) note.textContent = migration && migration.pending
-        ? 'Legacy margin or discount values are shown for one-way migration. Canonical values take precedence, and legacy bytes remain unchanged.'
+        ? 'Legacy margin or discount values are shown for one-way migration. Current values take precedence, and legacy bytes remain unchanged.'
         : 'Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.';
       financialConfigurationSaving = false;
       financialConfigurationConflicted = false;
@@ -1983,7 +1995,7 @@
       if (saveButton) {
         saveButton.disabled = !canAct || (!voiceAssistantDirty && voiceAssistantHasAuthority);
         saveButton.textContent = voiceAssistantSaving ? 'Saving AI Configuration...'
-          : profileCanEdit ? 'Save AI Configuration' : 'Read-only AI Configuration';
+          : 'Save AI Configuration';
       }
       var reloadButton = document.getElementById('reloadVoiceAssistantBtn');
       if (reloadButton) {
@@ -2195,7 +2207,7 @@
 
       var status = document.getElementById('voiceAssistantAuthorityStatus');
       if (status) status.textContent = voiceAssistantHasAuthority
-        ? 'This versioned provider-neutral configuration is canonical. Optional blank selections remain not configured.'
+        ? 'This versioned provider-neutral configuration is authoritative. Optional blank selections remain not configured.'
         : 'Provider-neutral AI configuration is absent. Legacy compatibility remains in effect. Only Save AI Configuration creates neutral authority; unrelated Profile saves preserve this state.';
       clearVoiceAssistantError();
       updateVoiceCountersAndPreview();
@@ -3000,7 +3012,7 @@
       grid.className = 'bp-grid';
       appendServiceField(grid, 'Stable service ID', 'svc-id', service.id || '', {
         readOnly: !isNew,
-        help: isNew ? 'Choose once; it becomes immutable after Save.' : 'Immutable identity used by canonical consumers.',
+        help: isNew ? 'Choose once; it becomes immutable after Save.' : 'Immutable identity used by connected NorthStar services.',
       });
       var name = appendServiceField(grid, 'Service name', 'svc-name', service.name || '', {});
       name.addEventListener('input', function() { title.textContent = name.value || 'New service'; });
@@ -3015,7 +3027,7 @@
       });
       appendServiceField(
         grid,
-        'Canonical pricing rules (JSON)',
+        'Pricing Rules (JSON)',
         'svc-pricing',
         Object.prototype.hasOwnProperty.call(service, 'canonicalPricing')
           ? JSON.stringify(service.canonicalPricing, null, 2) : '',
@@ -3398,8 +3410,6 @@
     });
   </script>
   <script src="/js/command-center-contract.js"></script>
-  <script src="/js/polaris-card.js"></script>
-  <script src="/js/polaris-surface-card.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("business-profile");</script>
 </body>

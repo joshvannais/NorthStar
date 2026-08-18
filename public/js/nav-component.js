@@ -12,6 +12,7 @@
   'use strict';
 
   var ACTIVE_PAGE = '';
+  var bodyOverflowBeforeMenu = '';
 
   var NAV_ITEMS = [
     { id: 'command-center',   href: '/dashboard',                  label: 'Command Center',   svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' },
@@ -64,23 +65,26 @@
       : '<a href="/login" id="navSignOut" data-account-logout><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>';
     return '' +
       '<style id="nav-critical-css">' +
-        '.mobile-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;}' +
-        '.mobile-overlay.open{display:block;}' +
-        '.mobile-menu{position:fixed;top:0;left:0;height:100vh;width:280px;z-index:1001;transform:translateX(-100%);transition:transform 0.25s ease;background:var(--neutral-50);overflow-y:auto;box-shadow:2px 0 12px rgba(0,0,0,0.15);}' +
-        '.mobile-menu.open{transform:translateX(0);}' +
+        '#mobileOverlay.mobile-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;}' +
+        '#mobileOverlay.mobile-overlay.open{display:block;}' +
+        '#mobileMenu.mobile-menu{position:fixed;top:0;left:0;height:100vh;width:280px;z-index:1001;transform:translate3d(-100%,0,0);transition:transform 0.25s ease,visibility 0s linear 0.25s;background:var(--neutral-50);overflow-y:auto;overscroll-behavior:contain;box-shadow:2px 0 12px rgba(0,0,0,0.15);visibility:hidden;pointer-events:none;}' +
+        '#mobileMenu.mobile-menu.open,#mobileMenu.mobile-menu[data-state="open"]{transform:translate3d(0,0,0);transition-delay:0s;visibility:visible;pointer-events:auto;}' +
         '[data-theme="dark"] .mobile-menu{background:var(--neutral-50);}' +
       '</style>' +
       '<div class="mobile-header">' +
-        '<button class="hamburger-btn" id="navHamburgerBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>NorthStar</button>' +
-        '<img src="/assets/northstar-logo.png" alt="NorthStar" class="mobile-logo">' +
+        '<button type="button" class="hamburger-btn" id="navHamburgerBtn" aria-controls="mobileMenu" aria-expanded="false" aria-label="Open navigation menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>NorthStar</button>' +
+        '<div class="mobile-header-actions">' +
+          '<img src="/assets/logo.png" alt="NorthStar" class="mobile-logo">' +
+          '<span class="northstar-theme-slot" data-northstar-theme-slot data-northstar-theme-location="mobile" aria-label="Theme controls"></span>' +
+        '</div>' +
       '</div>' +
-      '<div class="mobile-overlay" id="mobileOverlay"></div>' +
-      '<div class="mobile-menu" id="mobileMenu">' +
+      '<div class="mobile-overlay" id="mobileOverlay" aria-hidden="true"></div>' +
+      '<div class="mobile-menu" id="mobileMenu" data-state="closed" aria-hidden="true" inert>' +
         '<div class="mobile-menu-header">' +
           '<a href="' + homePath + '" class="northstar-lockup"><img src="/assets/logo.png" alt=""> NorthStar</a>' +
-          '<button class="mobile-menu-close" id="navCloseBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+          '<button type="button" class="mobile-menu-close" id="navCloseBtn" aria-label="Close navigation menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
         '</div>' +
-        '<nav class="mobile-menu-nav">' +
+        '<nav class="mobile-menu-nav" aria-label="Mobile primary navigation">' +
           makeNavLinks(true, items) +
         '</nav>' +
         '<div class="mobile-menu-footer">' +
@@ -105,6 +109,7 @@
         '</nav>' +
         '<div class="sidebar-footer">' +
           footerLink +
+          '<span class="northstar-theme-slot" data-northstar-theme-slot data-northstar-theme-location="desktop" aria-label="Theme controls"></span>' +
         '</div>' +
       '</aside>';
   }
@@ -165,22 +170,53 @@
   window.toggleMobileMenu = function() {
     var overlay = document.getElementById('mobileOverlay');
     var menu = document.getElementById('mobileMenu');
+    var hamburger = document.getElementById('navHamburgerBtn');
     var isOpen = menu && menu.classList.contains('open');
     if (isOpen) {
       closeMenu();
     } else {
-      if (overlay) overlay.classList.add('open');
-      if (menu) menu.classList.add('open');
+      bodyOverflowBeforeMenu = document.body.style.overflow;
+      if (overlay) {
+        overlay.classList.add('open');
+        overlay.setAttribute('aria-hidden', 'false');
+      }
+      if (menu) {
+        menu.removeAttribute('inert');
+        menu.setAttribute('aria-hidden', 'false');
+        menu.setAttribute('data-state', 'open');
+        menu.classList.add('open');
+      }
+      if (hamburger) {
+        hamburger.setAttribute('aria-expanded', 'true');
+        hamburger.setAttribute('aria-label', 'Close navigation menu');
+      }
       document.body.style.overflow = 'hidden';
+      var closeButton = document.getElementById('navCloseBtn');
+      if (closeButton) closeButton.focus({ preventScroll: true });
     }
   };
 
-  function closeMenu() {
+  function closeMenu(restoreFocus) {
     var overlay = document.getElementById('mobileOverlay');
     var menu = document.getElementById('mobileMenu');
-    if (overlay) overlay.classList.remove('open');
-    if (menu) menu.classList.remove('open');
-    document.body.style.overflow = '';
+    var hamburger = document.getElementById('navHamburgerBtn');
+    var wasOpen = Boolean(menu && menu.classList.contains('open'));
+    if (overlay) {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+    if (menu) {
+      menu.classList.remove('open');
+      menu.setAttribute('data-state', 'closed');
+      menu.setAttribute('aria-hidden', 'true');
+      menu.setAttribute('inert', '');
+    }
+    if (hamburger) {
+      hamburger.setAttribute('aria-expanded', 'false');
+      hamburger.setAttribute('aria-label', 'Open navigation menu');
+    }
+    document.body.style.overflow = bodyOverflowBeforeMenu;
+    if (restoreFocus !== false && wasOpen && hamburger) hamburger.focus({ preventScroll: true });
   }
 
   window.NavComponent = {
@@ -224,6 +260,10 @@
           return null;
         }
 
+        if (window.NorthStarTheme && typeof window.NorthStarTheme.refreshControlPosition === 'function') {
+          window.NorthStarTheme.refreshControlPosition();
+        }
+
         var hamburger = document.getElementById('navHamburgerBtn');
         var closeBtn = document.getElementById('navCloseBtn');
         var overlay = document.getElementById('mobileOverlay');
@@ -236,14 +276,30 @@
         if (root.getAttribute('data-northstar-navigation-keyboard-bound') !== 'true') {
           root.setAttribute('data-northstar-navigation-keyboard-bound', 'true');
           document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closeMenu();
+            var menu = document.getElementById('mobileMenu');
+            var isOpen = menu && menu.classList.contains('open');
+            if (!isOpen) return;
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              closeMenu();
+              return;
+            }
+            if (e.key !== 'Tab') return;
+            var focusable = Array.prototype.slice.call(menu.querySelectorAll('a[href],button:not([disabled])'));
+            if (!focusable.length) return;
+            var currentIndex = focusable.indexOf(document.activeElement);
+            var nextIndex = e.shiftKey
+              ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+              : (currentIndex < 0 || currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+            e.preventDefault();
+            focusable[nextIndex].focus();
           });
         }
 
         var navLinks = document.querySelectorAll('.mobile-menu-nav a');
         for (var i = 0; i < navLinks.length; i++) {
           navLinks[i].addEventListener('click', function() {
-            setTimeout(closeMenu, 150);
+            closeMenu(false);
           });
         }
 

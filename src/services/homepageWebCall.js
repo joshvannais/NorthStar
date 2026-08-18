@@ -15,7 +15,7 @@ const MAX_TRANSCRIPT_TURNS = 48;
 const MAX_TURN_BYTES = 600;
 const MAX_TRANSCRIPT_BYTES = 16 * 1024;
 const CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
-const DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce a fictional demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say I consent to this AI demo and temporary recording to continue, or hang up to withdraw.';
+const DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce your demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say I consent to this AI demo and temporary recording to continue, or hang up to withdraw.';
 const HOMEPAGE_WEBHOOK_CONTRACT = 'homepage-ephemeral-web-call-v1';
 
 const INDUSTRY_PROFILE = Object.freeze({
@@ -207,6 +207,23 @@ function verifiedPurgeReceipt() {
   };
 }
 
+function presentationText(value) {
+  const decoded = String(value == null ? '' : value)
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#(?:39|x27);/gi, "'")
+    .replace(/&amp;/gi, '&');
+  return decoded
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\b(?:javascript|data)\s*:/gi, '')
+    .replace(/\bon[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '')
+    .replace(/\bfictional\b/gi, '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function normalizeTranscript(value) {
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_TRANSCRIPT_TURNS) {
     fail(422, 'homepage_transcript_invalid', 'The temporary transcript is missing or too large.');
@@ -215,7 +232,7 @@ function normalizeTranscript(value) {
   const turns = value.map(function (turn, index) {
     const speaker = turn && (turn.speaker === 'agent' || turn.speaker === 'ai') ? 'agent'
       : (turn && (turn.speaker === 'customer' || turn.speaker === 'user') ? 'customer' : null);
-    const text = turn && typeof turn.text === 'string' ? turn.text.trim() : '';
+    const text = turn && typeof turn.text === 'string' ? presentationText(turn.text) : '';
     const bytes = Buffer.byteLength(text, 'utf8');
     if (!speaker || !text || bytes > MAX_TURN_BYTES) {
       fail(422, 'homepage_transcript_invalid', 'The temporary transcript contains an invalid turn.');
@@ -233,7 +250,7 @@ function publicBusinessProfile(industry) {
   const definition = INDUSTRY_PROFILE[industry];
   return {
     version: 'homepage-fictional-profile-v1',
-    company: { name: 'NorthStar Fictional Demo Contractor', currency: 'USD' },
+    company: { name: 'NorthStar Demo Contractor', currency: 'USD' },
     crew: { defaultCrewSize: 2, averageHourlyRate: 42, overtimeMultiplier: 1.5 },
     canonicalPricing: {
       customerMarkupPercent: 0,
@@ -250,14 +267,14 @@ function publicBusinessProfile(industry) {
     },
     services: [{
       id: definition.key,
-      name: definition.label + ' fictional demo service',
+      name: definition.label + ' demo service',
       crewSize: 2,
       canonicalPricing: {
         requiredScope: ['quantity'],
         rangePercent: 15,
         lineItems: [{
           code: 'fictional-demo-quantity',
-          label: 'Fictional profile quantity',
+          label: 'Demo profile quantity',
           category: 'serviceCharge',
           type: 'perUnit',
           quantityField: 'quantity',
@@ -325,7 +342,7 @@ function calculateHomepagePolaris(industryValue, transcriptValue, callDurationSe
       kind: 'fictional-demo-business-profile',
       version: profile.version,
       hash: profileHash,
-      pricingNotice: 'Illustrative output from a fictional demo Business Profile; not a quote.',
+      pricingNotice: 'Illustrative output from a demo Business Profile; not a quote.',
     },
     service: calculation.service,
     pricing: {

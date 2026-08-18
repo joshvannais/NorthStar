@@ -141,7 +141,13 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect(created.body.data.integrity).toEqual(expect.objectContaining({ revision: 2, graphCount: 4 }));
     expect(created.body.data.session).toEqual(expect.objectContaining({ durable: true, simulationCount: 1 }));
     expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(1);
-    expect(created.body.data.configuration).toEqual(beforeConfiguration);
+    expect(created.body.data.configuration.businessProfile)
+      .toEqual(created.body.data.graphs[0].businessProfile);
+    expect(created.body.data.configuration.businessProfile)
+      .not.toEqual(beforeConfiguration.businessProfile);
+    expect(created.body.data.configuration.scenarioSpace).toEqual(beforeConfiguration.scenarioSpace);
+    expect(created.body.data.configuration.workforce).toEqual(beforeConfiguration.workforce);
+    expect(created.body.data.configuration.integrations).toEqual(beforeConfiguration.integrations);
     const admissionRows = (await pool.query(
       `SELECT scope, trim(subject_hash) AS subject_hash, request_count
          FROM demo_command_center_admission_windows
@@ -273,9 +279,10 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect((await pool.query('SELECT count(*)::int AS count FROM audit_logs')).rows[0].count).toBe(0);
   });
 
-  test('reset is isolated, CAS-fenced, and leaves stable configuration untouched', async () => {
+  test('reset is isolated, CAS-fenced, and restores the default Business Profile authority', async () => {
     const first = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
     const cookie = cookieFrom(first);
+    const initialConfiguration = first.body.data.configuration;
     const created = await mutation(request(app), cookie, '/api/demo/command-center/simulations/leads', 'simulate-lead', 'reset-seed-00000000000000000000001', {
       service: 'plumbing', expectedRevision: 1,
     }).expect(201);
@@ -284,7 +291,9 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     }).expect(200);
     expect(reset.body.data.integrity).toEqual(expect.objectContaining({ revision: 3, graphCount: 3 }));
     expect(reset.body.data.session.simulationCount).toBe(0);
-    expect(reset.body.data.configuration).toEqual(created.body.data.configuration);
+    expect(reset.body.data.configuration).toEqual(initialConfiguration);
+    expect(reset.body.data.configuration.businessProfile)
+      .not.toEqual(created.body.data.configuration.businessProfile);
 
     const stale = await mutation(request(app), cookie, '/api/demo/command-center/reset', 'reset', 'stale-reset-0000000000000000000001', {
       expectedRevision: 2,

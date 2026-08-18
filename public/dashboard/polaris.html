@@ -8,7 +8,6 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
-  <link rel="stylesheet" href="/css/polaris-card.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POLARIS™ — NorthStar Solutions</title>
   <script src="/js/theme.js"></script>
@@ -461,6 +460,7 @@
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>  <script src="/js/event-bus.js"></script>
 <div class="app-layout">
@@ -891,11 +891,65 @@
 
       // ── Send / Retry ──
 
-      function respondToAccountFreeDemoChat() {
+      function currency(value) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+          .format(Number(value) || 0);
+      }
+
+      function demoPolarisResponse(message) {
+        var workspace = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.getWorkspace();
+        var graphs = workspace && Array.isArray(workspace.graphs) ? workspace.graphs : [];
+        if (!graphs.length) return 'The demo workspace has no recorded customer or work data yet. Simulate a lead from Command Center, then ask again.';
+        var normalized = String(message || '').toLowerCase();
+        var total = graphs.reduce(function(sum, graph) {
+          return sum + Number(graph.estimate && graph.estimate.customerPrice || 0);
+        }, 0);
+        var attention = graphs.filter(function(graph) {
+          return ['hot', 'follow_up', 'needs_information'].indexOf(graph.lead && graph.lead.status) >= 0;
+        });
+        var scheduled = graphs.filter(function(graph) { return graph.work && graph.work.scheduledStart; });
+        var latest = graphs[0];
+        var top = graphs.slice().sort(function(a, b) {
+          return Number(b.estimate && b.estimate.customerPrice || 0) - Number(a.estimate && a.estimate.customerPrice || 0);
+        })[0];
+
+        if (/profit|margin/.test(normalized)) {
+          return 'The demo workspace has ' + currency(total) + ' in recorded customer-facing estimates. Profit is not calculated because authoritative labor, material, overhead, and tax inputs are intentionally absent; Polaris will not invent them.';
+        }
+        if (/pipeline|revenue|value/.test(normalized)) {
+          return 'The current demo pipeline contains ' + graphs.length + ' role-authorized records totaling ' + currency(total) + '. The largest recorded opportunity is ' + top.customer.name + ' — ' + top.lead.serviceLabel + ' at ' + currency(top.estimate.customerPrice) + '.';
+        }
+        if (/attention|urgent|follow.?up/.test(normalized)) {
+          if (!attention.length) return 'No current demo lead is marked hot, follow-up, or needs-information.';
+          return attention.length + ' demo lead' + (attention.length === 1 ? ' needs' : 's need') + ' attention: ' + attention.map(function(graph) {
+            var action = graph.polaris.snapshot.recommendedActions[0];
+            return graph.customer.name + ' — ' + graph.lead.serviceLabel + ': ' + (action && action.label || 'review the latest record');
+          }).join('; ') + '.';
+        }
+        if (/schedule|appointment|today/.test(normalized)) {
+          if (!scheduled.length) return 'No demo appointments currently have a recorded start time.';
+          return scheduled.length + ' demo appointment' + (scheduled.length === 1 ? ' is' : 's are') + ' scheduled. Next: ' + scheduled.slice().sort(function(a, b) {
+            return new Date(a.work.scheduledStart) - new Date(b.work.scheduledStart);
+          }).map(function(graph) {
+            return graph.customer.name + ' — ' + graph.lead.serviceLabel + ' at ' + new Date(graph.work.scheduledStart).toLocaleString();
+          }).join('; ') + '.';
+        }
+        if (/behind|job|work/.test(normalized)) {
+          return graphs.map(function(graph) {
+            return graph.customer.name + ' — ' + graph.lead.serviceLabel + ' is ' + String(graph.work.status || 'not recorded').replace(/_/g, ' ');
+          }).join('; ') + '.';
+        }
+        if (/customer|contact|recent/.test(normalized)) {
+          return 'The demo customer record set contains ' + graphs.length + ' customers. The most recent recorded interaction is ' + latest.customer.name + ' — ' + latest.lead.serviceLabel + '. Open the matching customer detail from Leads or Communications for the complete record.';
+        }
+        return 'Based on the current demo workspace: ' + graphs.length + ' customer/work records, ' + currency(total) + ' in recorded estimates, ' + attention.length + ' needing attention, and ' + scheduled.length + ' scheduled. Ask about pipeline, leads needing attention, schedules, customers, work status, or profit inputs for a more specific answer.';
+      }
+
+      function respondToAccountFreeDemoChat(message) {
         if (!window.NorthStarDemoRuntime || window.NorthStarDemoRuntime.active !== true) return false;
         addMessage(
           'assistant',
-          'Live Polaris chat is not available in the account-free demo. Explore the canonical Polaris results on this page; no request was sent.',
+          demoPolarisResponse(message) + ' This answer was calculated locally from the isolated demo session; no live provider request was sent.',
           'sent'
         );
         input.focus();
@@ -913,7 +967,7 @@
 
         // Demo pages preserve the canonical presentation without invoking the
         // retired paid-only chat transport or creating a server audit record.
-        if (respondToAccountFreeDemoChat()) return;
+        if (respondToAccountFreeDemoChat(message)) return;
 
         // Show typing indicator
         showTyping();
@@ -964,7 +1018,7 @@
 
         // Defensive parity with Send: a legacy retry must also stay entirely
         // inside the browser when this paid shell is mounted at /demo/polaris.
-        if (respondToAccountFreeDemoChat()) return;
+        if (respondToAccountFreeDemoChat(text)) return;
 
         // Remove last error message
         if (messages.length > 0) {
@@ -1131,8 +1185,6 @@
     })();
   </script>
 <script src="/js/command-center-contract.js"></script>
-<script src="/js/polaris-card.js"></script>
-<script src="/js/polaris-surface-card.js"></script>
 <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("polaris");</script>
 </body>

@@ -108,7 +108,12 @@ function pendingColor(theme) {
 describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
   test('renders the exact Polaris guidance directly beneath the Business Profile heading', () => {
     const guidance = 'Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile. The more relevant detail you provide, the better Polaris can tailor its recommendations to your business.';
-    expect(HTML).toContain('<h1 class="bp-title">⚙️ Business Profile</h1>\n            <p id="polarisProfileGuidance" class="bp-guidance">' + guidance + '</p>');
+    expect(HTML).toMatch(new RegExp(
+      '<h1 class="bp-title">⚙️ Business Profile</h1>\\s*' +
+      '<p id="polarisProfileGuidance" class="bp-guidance">' +
+      guidance.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+      '</p>'
+    ));
     expect(HTML.match(new RegExp(guidance.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))).toHaveLength(1);
   });
 
@@ -146,7 +151,8 @@ describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
     expect(HTML).toContain('.bp-readiness-state[data-state="missing"], .bp-readiness-state[data-state="authority_unavailable"] { color: #991b1b; }');
     expect(HTML).toContain('.bp-readiness-state[data-state="recommended"], .bp-readiness-state[data-state="needs_review"] { color: #8a5a00; }');
     expect(HTML).toContain('.bp-readiness-state[data-state="reviewed"] { color: #047857; }');
-    expect(HTML).toContain('\n    .bp-readiness-pending { font-weight: 600; color: var(--brand-700); }\n');
+    expect(declarationValue(declarationsFor(HTML, '\n    .bp-readiness-pending {'), 'font-weight')).toBe('600');
+    expect(declarationValue(declarationsFor(HTML, '\n    .bp-readiness-pending {'), 'color')).toBe('var(--brand-700)');
     expect(declarationValue(declarationsFor(HTML, '.bp-validation-error {'), 'color')).toBe('#991b1b');
 
     for (const theme of ['light', 'dark']) {
@@ -186,7 +192,7 @@ describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
     const start = HTML.indexOf('function renderProfileReadiness');
     const end = HTML.indexOf('function updateProfileReadinessActionState', start);
     const render = HTML.slice(start, end);
-    expect(render).toContain('heading.textContent = item.label');
+    expect(render).toContain('heading.textContent = titleCaseLabel(item.label)');
     expect(render).toContain('help.textContent = item.help');
     expect(render).toContain('reason.textContent = reasonText');
     expect(render).toContain('list.replaceChildren(fragment)');
@@ -197,10 +203,11 @@ describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
     expect(HTML).not.toMatch(/body:\s*JSON\.stringify\(\{\s*expectedVersion:[^}]*reviewedValueHash/);
   });
 
-  test('keeps owner and admin controls separate from member and viewer read-only rendering', () => {
+  test('keeps owner and admin controls separate while hiding member and viewer mutation actions', () => {
     expect(HTML).toMatch(/profileCanEdit = role === 'owner' \|\| role === 'admin'/);
     expect(HTML).toMatch(/button\.disabled = !interactive \|\| !profileCanEdit/);
-    expect(HTML).toContain("profileCanEdit ? 'Save readiness' : 'Read-only readiness'");
+    expect(HTML).toContain("button.hidden = !profileCanEdit");
+    expect(HTML).not.toContain("'Read-only readiness'");
     expect(HTML).toContain('Business Profile changed. Your pending readiness choices remain visible');
     expect(HTML).toContain("reload.focus()");
   });

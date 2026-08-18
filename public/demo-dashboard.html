@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <link rel="stylesheet" href="/css/polaris-card.css">
   <link rel="icon" href="/assets/logo.png">
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body class="demo-dashboard-page command-center-blueprint-page">
   <a class="skip-link" href="#commandCenterMain">Skip to Command Center</a>
@@ -39,9 +40,13 @@
       </header>
 
       <div class="demo-dashboard-main command-center-blueprint-main">
+        <div class="page-header">
+          <div>
+            <h1>Command Center</h1>
+          </div>
+        </div>
         <section class="demo-dashboard-intro" aria-labelledby="commandCenterTitle">
           <div>
-            <p class="demo-eyebrow">Contractor Command Center</p>
             <h1 id="commandCenterTitle">One operating view for the day ahead.</h1>
             <p class="demo-intro-copy" id="commandCenterIntro">NorthStar connects calls, leads, appointments, and work activity into one prioritized daily view.</p>
           </div>
@@ -92,7 +97,11 @@
                   <p class="demo-panel-kicker">Qualified pipeline</p>
                   <h2>Recorded opportunity value</h2>
                 </div>
-                <span class="demo-positive" id="commandCenterPipelineLabel">Current records</span>
+                <div class="command-center-chart-controls" aria-label="Pipeline chart period">
+                  <button class="command-center-chart-control" type="button" data-chart-period="daily" aria-pressed="true">Daily</button>
+                  <button class="command-center-chart-control" type="button" data-chart-period="weekly" aria-pressed="false">Weekly</button>
+                  <button class="command-center-chart-control" type="button" data-chart-period="monthly" aria-pressed="false">Monthly</button>
+                </div>
               </div>
               <div class="demo-chart" id="commandCenterChart" role="img" aria-label="Recorded opportunity values by recent work item">
                 <div class="demo-chart-grid" aria-hidden="true"><span></span><span></span><span></span><span></span></div>

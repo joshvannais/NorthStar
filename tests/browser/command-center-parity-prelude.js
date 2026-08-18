@@ -977,7 +977,16 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.strictEqual(simulated.session.simulationCount, 1, viewport.label + ' simulation count');
     assert.strictEqual(simulated.graphs.length, 4, viewport.label + ' one added graph');
     assert.notStrictEqual(simulated.integrity.digest, initialDigest, viewport.label + ' state digest advances');
-    assert.deepStrictEqual(simulated.configuration, initialConfiguration, viewport.label + ' configuration remains stable');
+    assert.deepStrictEqual(simulated.configuration.businessProfile, simulated.graphs[0].businessProfile,
+      viewport.label + ' selected Business Profile owns the simulated graph');
+    assert.notDeepStrictEqual(simulated.configuration.businessProfile, initialConfiguration.businessProfile,
+      viewport.label + ' selected Business Profile replaces the default authority');
+    assert.deepStrictEqual(simulated.configuration.scenarioSpace, initialConfiguration.scenarioSpace,
+      viewport.label + ' scenario space remains stable');
+    assert.deepStrictEqual(simulated.configuration.workforce, initialConfiguration.workforce,
+      viewport.label + ' workforce remains stable');
+    assert.deepStrictEqual(simulated.configuration.integrations, initialConfiguration.integrations,
+      viewport.label + ' integrations remain stable');
     assert.deepStrictEqual(simulated.navigation, initialNavigation, viewport.label + ' navigation remains stable');
     const added = simulated.graphs[0];
     assert.strictEqual(added.lead.serviceType, 'roofing', viewport.label + ' selected service');
@@ -1179,7 +1188,8 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     for (const id of ['team', 'ai-settings', 'business-profile', 'settings', 'integrations']) {
       const route = ROUTES.find(candidate => candidate.id === id);
       const snapshot = await clickRoute(page, origin, route, 2, viewport);
-      assert.deepStrictEqual(snapshot.workspace.configuration, initialConfiguration, route.path + ' configuration stability');
+      assert.deepStrictEqual(snapshot.workspace.configuration, simulated.configuration,
+        route.path + ' reads the selected Business Profile configuration');
       assert.strictEqual(snapshot.polarisCardCount, 0, route.path + ' has no misplaced Polaris card after simulation');
       assert.ok(snapshot.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph),
         route.path + ' retains the one canonical simulated state without a standalone Polaris projection');

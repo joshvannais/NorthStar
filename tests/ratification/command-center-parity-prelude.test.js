@@ -8,6 +8,7 @@ const { app } = require('../../src/server');
 const contract = require('../../public/js/command-center-contract');
 const permissions = require('../../src/auth/permissions');
 const { paidRequestContext } = require('../../src/routes/commandCenter');
+const { sha256 } = require('../../src/services/businessProfileAdapter');
 const scenarioSpace = require('../../src/commandCenter/scenarioSpace');
 const {
   buildDemoWorkspace,
@@ -449,7 +450,7 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     }
   });
 
-  test('one canonical demo state updates meaningful surfaces while configuration remains stable', () => {
+  test('one canonical demo state updates meaningful surfaces and binds the selected business authority', () => {
     const tenantId = tenantIdFromTokenHash(TOKEN_HASH);
     const createdAt = new Date('2026-08-15T20:00:00.000Z');
     const initial = createInitialDemoState(tenantId, createdAt);
@@ -480,7 +481,16 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
 
     expect(after.graphs).toHaveLength(before.graphs.length + 1);
     expect(after.integrity.digest).not.toBe(before.integrity.digest);
-    expect(after.configuration).toEqual(before.configuration);
+    expect(before.tenant).toEqual(expect.objectContaining({
+      name: 'Rivera Home Services', businessProfileKey: 'owner_operator',
+    }));
+    expect(after.tenant).toEqual(expect.objectContaining({
+      name: 'Pine & Peak Residential', businessProfileKey: 'growing_residential',
+    }));
+    expect(after.configuration.businessProfile).toEqual(graph.businessProfile);
+    expect(after.configuration.scenarioSpace).toEqual(before.configuration.scenarioSpace);
+    expect(after.configuration.workforce).toEqual(before.configuration.workforce);
+    expect(after.configuration.integrations).toEqual(before.configuration.integrations);
     expect(after.navigation).toEqual(before.navigation);
     expect(graph.ids).toEqual(expect.objectContaining({ customer: expect.any(String), lead: expect.any(String), work: expect.any(String) }));
     expect(graph.polaris).toEqual(expect.objectContaining({ completeDetail: true, snapshotDigest: expect.stringMatching(/^[0-9a-f]{64}$/) }));
@@ -505,6 +515,75 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       businessProfileAuthorityId: expect.stringMatching(/^[0-9a-f-]{36}$/),
       projectionDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
     }));
+    expect(canonical[0].businessProfileInputHash).toBe(sha256(graph.businessProfile));
+  });
+
+  test('every selectable business owns its demo profile and configuration facts never impersonate transcript evidence', () => {
+    const tenantId = tenantIdFromTokenHash('d'.repeat(64));
+    const createdAt = new Date('2026-08-16T12:00:00.000Z');
+    const initial = createInitialDemoState(tenantId, createdAt);
+    const authorityIds = new Set();
+
+    for (const business of scenarioSpace.DIMENSIONS.business.options) {
+      const scenarioSelection = { ...scenarioSpace.DEFAULT_SELECTION, business: business.id };
+      const graph = buildSimulatedGraph({
+        tenantId,
+        key: 'business-authority-' + business.id,
+        scenarioSelection,
+        createdAt,
+      });
+      const workspace = buildDemoWorkspace({
+        tenantId,
+        sessionId: '00000000-0000-4000-8000-000000000021',
+        state: { ...initial, graphs: [graph, ...initial.graphs] },
+        revision: 2,
+        simulationCount: 1,
+        persisted: true,
+        expiresAt: new Date('2026-08-17T12:00:00.000Z'),
+      });
+      const canonical = demoCanonicalItems(workspace)[0];
+      const factsByVariable = new Map(graph.polaris.facts.map(fact => [fact.variable, fact]));
+      const profileFactVariables = ['businessContext', 'serviceRadiusMiles', 'crewCount', 'pricingModel'];
+      const transcriptFacts = graph.polaris.facts.filter(fact => fact.evidenceSource === 'transcript');
+
+      expect(workspace.tenant).toEqual(expect.objectContaining({
+        name: business.label,
+        businessProfileKey: business.id,
+      }));
+      expect(workspace.configuration.businessProfile).toEqual(expect.objectContaining({
+        businessKey: business.id,
+        company: business.label,
+        serviceRadiusMiles: business.material.serviceRadiusMiles,
+        crewCount: business.material.crewCount,
+        pricingModel: business.material.pricingModel,
+      }));
+      expect(graph.businessProfile).toEqual(workspace.configuration.businessProfile);
+      expect(canonical.businessProfileInputHash).toBe(sha256(graph.businessProfile));
+      expect(canonical.businessProfileAuthorityId).toMatch(/^[0-9a-f-]{36}$/);
+      authorityIds.add(canonical.businessProfileAuthorityId);
+
+      for (const variable of profileFactVariables) {
+        expect(factsByVariable.get(variable)).toEqual(expect.objectContaining({
+          evidenceSource: 'business_profile',
+          speaker: 'system',
+        }));
+        expect(graph.polaris.snapshot.supportingTranscriptFactIds)
+          .not.toContain(factsByVariable.get(variable).id);
+      }
+      expect(factsByVariable.get('customerDistanceMiles')).toEqual(expect.objectContaining({
+        evidenceSource: 'calculation',
+        speaker: 'system',
+      }));
+      expect(graph.polaris.snapshot.supportingTranscriptFactIds)
+        .not.toContain(factsByVariable.get('customerDistanceMiles').id);
+      expect(transcriptFacts.length).toBeGreaterThan(0);
+      expect(transcriptFacts.every(fact => fact.speaker === 'customer')).toBe(true);
+      expect(graph.polaris.snapshot.supportingTranscriptFactIds)
+        .toEqual(transcriptFacts.map(fact => fact.id));
+      expect(canonical.supportingTranscriptFactIds).toHaveLength(transcriptFacts.length);
+    }
+
+    expect(authorityIds.size).toBe(scenarioSpace.DIMENSIONS.business.options.length);
   });
 
   test('accepted readiness, integration, branding, and map-preference language is reused without readiness invention', () => {

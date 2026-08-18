@@ -24,7 +24,7 @@ const { app } = fromRoot('src/server');
 const CAPTURE_BASELINE = process.env.HOMEPAGE_CAPTURE_BASELINE_ONLY === '1';
 
 const CONSENT_PHRASE = 'I consent to this AI demo and temporary recording';
-const DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce a fictional demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
+const DISCLOSURE_COPY = 'This is a NorthStar AI demonstration powered by Retell. If you continue, your microphone audio will be processed and this browser call will be recorded temporarily by NorthStar and Retell solely to produce your demo result. Do not share sensitive or real customer information. You may stop, withdraw consent, or request deletion at any time. Say ' + CONSENT_PHRASE + ' to continue, or hang up to withdraw.';
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
@@ -430,7 +430,7 @@ async function runSuccessfulCase(browser, origin, selected, viewport) {
     await assertProfessionalPresentation(page, `${selected}/${viewport.label}/post`);
     if (screenshotPath(selected, viewport, 'post')) await page.screenshot({ path: screenshotPath(selected, viewport, 'post'), fullPage: true });
     assert.strictEqual(await page.textContent('#reportRevenue'), '$9,000', `${selected}/${viewport.label}: canonical price`);
-    assert.match(await page.textContent('#reportExecBody'), /Canonical Polaris processed 2 of 4 supported estimating facts/i,
+    assert.match(await page.textContent('#reportExecBody'), /Polaris processed 2 of 4 supported estimating facts/i,
       `${selected}/${viewport.label}: mounted canonical result`);
     assert.match(await page.textContent('#demoPurgeReceipt'), /Verified deletion complete[\s\S]*transcript, token/i,
       `${selected}/${viewport.label}: verified purge receipt`);
@@ -730,7 +730,7 @@ async function runPublicPagesCase(browser, origin, selected, viewport) {
     ]);
     await page.waitForLoadState('networkidle');
     await assertProfessionalPresentation(page, `${selected}/${viewport.label}/faq`);
-    assert.match(await page.locator('body').innerText(), /Contractor Command Center demo[\s\S]*isolated fictional workspace/i,
+    assert.match(await page.locator('body').innerText(), /Command Center demo[\s\S]*isolated workspace/i,
       `${selected}/${viewport.label}: FAQ retains the truthful demo boundary`);
     if (screenshotPath(selected, viewport, 'public-faq')) {
       await page.screenshot({ path: screenshotPath(selected, viewport, 'public-faq'), fullPage: true });

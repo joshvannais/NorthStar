@@ -68,31 +68,44 @@ function demoIntegrationCatalogue() {
   });
 }
 
-function demoConfiguration() {
+function demoBusinessProfile(selectionValue) {
+  const fallbackSelection = { ...DEFAULT_SELECTION, business: 'owner_operator' };
+  const selection = normalizeSelection(selectionValue || fallbackSelection) || fallbackSelection;
+  const profile = selectionProfile(selection);
+  const business = profile.business;
   return stableValue({
-    immutableAcrossSimulation: true,
-    scenarioSpace: publicScenarioSpace(),
-    businessProfile: {
-      mode: 'fictional_read_only',
-      company: 'Rivera Home Services',
-      industry: 'Home services',
-      serviceArea: 'A fictional 35-mile service area',
-      hours: 'Monday-Friday, 8:00 AM-5:00 PM',
-      readiness: {
-        state: 'needs_review',
-        label: 'Review needed',
-        guidance: 'Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile.',
-        separation: 'Profile Readiness is separate from integration status and uses clear categories for recognized details.',
-        items: [
-          { label: 'Dispatch origin', state: 'reviewed' },
-          { label: 'Service area', state: 'reviewed' },
-          { label: 'Operating hours', state: 'reviewed' },
-          { label: 'Customer guidance', state: 'needs_review' },
-          { label: 'Financial configuration', state: 'needs_review' },
-          { label: 'Voice assistant configuration', state: 'needs_review' },
-        ],
-      },
+    mode: 'fictional_read_only',
+    businessKey: business.id,
+    company: business.label,
+    industry: 'Home services',
+    description: business.description,
+    serviceArea: 'A demo ' + business.material.serviceRadiusMiles + '-mile service area',
+    serviceRadiusMiles: business.material.serviceRadiusMiles,
+    crewCount: business.material.crewCount,
+    pricingModel: business.material.pricingModel,
+    hours: 'Monday-Friday, 8:00 AM-5:00 PM',
+    readiness: {
+      state: 'needs_review',
+      label: 'Review needed',
+      guidance: 'Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile.',
+      separation: 'Profile Readiness is separate from integration status and uses clear categories for recognized details.',
+      items: [
+        { label: 'Dispatch origin', state: 'reviewed' },
+        { label: 'Service area', state: 'reviewed' },
+        { label: 'Operating hours', state: 'reviewed' },
+        { label: 'Customer guidance', state: 'needs_review' },
+        { label: 'Financial configuration', state: 'needs_review' },
+        { label: 'Voice assistant configuration', state: 'needs_review' },
+      ],
     },
+  });
+}
+
+function demoConfiguration(selectionValue) {
+  return stableValue({
+    immutableAcrossSimulation: false,
+    scenarioSpace: publicScenarioSpace(),
+    businessProfile: demoBusinessProfile(selectionValue),
     workforce: {
       mode: 'fictional_read_only',
       members: [
@@ -132,8 +145,9 @@ function normalizeFacts(scope, prefix) {
     variable: field,
     status: 'collected',
     normalizedValue: stableValue(scope[field]),
-    evidenceText: 'Fictional demo detail collected for ' + field + '.',
-    speaker: 'customer',
+    evidenceText: 'Demo record detail collected for ' + field + '.',
+    speaker: 'system',
+    evidenceSource: 'demo_record',
     confidence: 1,
   }));
 }
@@ -204,8 +218,9 @@ function demoCanonicalItem(tenantId, graph, configuration) {
     });
     return canonicalFact;
   });
-  const businessProfile = configuration && configuration.businessProfile || {};
-  const businessProfileAuthorityId = id(tenantId, 'demo-business-profile');
+  const businessProfile = graph.businessProfile || configuration && configuration.businessProfile || {};
+  const businessProfileKey = String(businessProfile.businessKey || 'owner_operator');
+  const businessProfileAuthorityId = id(tenantId, 'demo-business-profile:' + businessProfileKey);
   const businessProfileInputHash = sha256(businessProfile);
   const transcriptText = demoTranscriptText(graph.communication && graph.communication.transcript);
   const timestamps = {
@@ -295,7 +310,9 @@ function demoCanonicalItem(tenantId, graph, configuration) {
     businessProfileInputVersion: '1',
     businessProfileInputHash,
     businessProfileAuthorityId,
-    supportingTranscriptFactIds: facts.map(function (fact) { return fact.id; }),
+    supportingTranscriptFactIds: facts.filter(function (_fact, index) {
+      return rawFacts[index] && rawFacts[index].evidenceSource === 'transcript';
+    }).map(function (fact) { return fact.id; }),
     snapshotDigest: graph.polaris.snapshotDigest,
     snapshot: stableValue(graph.polaris.snapshot),
     snapshotCreatedAt: createdAt,
@@ -373,7 +390,7 @@ function buildDemoGraph(input) {
       { field: 'knownDirectCosts', reason: 'The account-free demo does not represent a contractor\'s authoritative cost configuration.' },
       { field: 'netProfit', reason: 'Profit requires complete tenant-authored cost and overhead authority.' },
     ],
-    supportingTranscriptFactIds: facts.map(fact => fact.id),
+    supportingTranscriptFactIds: facts.filter(fact => fact.evidenceSource === 'transcript').map(fact => fact.id),
   };
   const snapshotDigest = sha256(snapshot);
   const graph = {
@@ -422,6 +439,7 @@ function buildDemoGraph(input) {
       fictional: true,
     },
     scenario: stableValue(input.scenario || null),
+    businessProfile: stableValue(input.businessProfile || demoBusinessProfile()),
     polaris: {
       id: ids.polarisSnapshot,
       calculationVersion: DEMO_CALCULATION_VERSION,
@@ -546,27 +564,35 @@ function buildSimulatedGraph(input) {
   });
   const evidence = {
     ...(prepared.extracted.evidence || {}),
-    businessContext: profile.business.description,
+    businessContext: 'Business Profile: ' + profile.business.description,
     callerIntent: profile.intent.material.customerLine,
     urgency: profile.urgency.material.customerLine,
     customerContext: profile.context.description,
     schedulingConstraint: profile.scheduling.material.customerLine,
     conversationOutcome: profile.outcome.material.customerLine,
-    serviceRadiusMiles: profile.business.label + ' serves customers within ' + serviceRadiusMiles + ' miles.',
-    customerDistanceMiles: 'This fictional customer is ' + customerDistanceMiles + ' miles from the selected business origin.',
-    crewCount: profile.business.label + ' has ' + profile.business.material.crewCount + ' available fictional field crew' +
+    serviceRadiusMiles: 'Business Profile service radius: ' + serviceRadiusMiles + ' miles.',
+    customerDistanceMiles: 'Calculated distance from the selected business origin: ' + customerDistanceMiles + ' miles.',
+    crewCount: 'Business Profile field crew count: ' + profile.business.material.crewCount + ' crew' +
       (profile.business.material.crewCount === 1 ? '.' : 's.'),
-    pricingModel: profile.business.material.pricingModel,
+    pricingModel: 'Business Profile pricing model: ' + profile.business.material.pricingModel + '.',
   };
-  const facts = Object.keys(scope).filter(field => evidence[field]).sort().map((field, index) => ({
-    id: input.key + '-fact-' + String(index + 1),
-    variable: field,
-    status: 'collected',
-    normalizedValue: stableValue(scope[field]),
-    evidenceText: String(evidence[field]),
-    speaker: 'customer',
-    confidence: 1,
-  }));
+  const businessProfileFields = new Set(['businessContext', 'serviceRadiusMiles', 'crewCount', 'pricingModel']);
+  const calculatedFields = new Set(['customerDistanceMiles']);
+  const facts = Object.keys(scope).filter(field => evidence[field]).sort().map((field, index) => {
+    const evidenceSource = businessProfileFields.has(field)
+      ? 'business_profile'
+      : calculatedFields.has(field) ? 'calculation' : 'transcript';
+    return {
+      id: input.key + '-fact-' + String(index + 1),
+      variable: field,
+      status: 'collected',
+      normalizedValue: stableValue(scope[field]),
+      evidenceText: String(evidence[field]),
+      speaker: evidenceSource === 'transcript' ? 'customer' : 'system',
+      evidenceSource,
+      confidence: 1,
+    };
+  });
   const createdAt = iso(input.createdAt);
   const visitOffset = Math.min(
     profile.urgency.material.hoursUntilVisit,
@@ -626,6 +652,7 @@ function buildSimulatedGraph(input) {
     urgency: profile.urgency.label,
     outcome: profile.outcome.label,
     schedulingConstraint: profile.scheduling.label,
+    businessProfile: demoBusinessProfile(selection),
     scenario: {
       contract: 'northstar_demo_scenario_selection_v1',
       signature: profile.signature,
@@ -684,12 +711,22 @@ function workspaceBase(mode, tenant, graphs, revision, configuration) {
 }
 
 function buildDemoWorkspace(input) {
+  const activeScenarioGraph = input.state.graphs.find(graph =>
+    graph && graph.scenario && graph.scenario.selection && normalizeSelection(graph.scenario.selection));
+  const activeSelection = activeScenarioGraph ? activeScenarioGraph.scenario.selection : null;
+  const configuration = demoConfiguration(activeSelection);
   const workspace = workspaceBase(
     'demo',
-    { id: input.tenantId, name: 'Rivera Home Services', fictional: true, isolated: true },
+    {
+      id: input.tenantId,
+      name: configuration.businessProfile.company,
+      businessProfileKey: configuration.businessProfile.businessKey,
+      fictional: true,
+      isolated: true,
+    },
     input.state.graphs,
     input.revision,
-    demoConfiguration()
+    configuration
   );
   workspace.session = {
     id: input.sessionId,

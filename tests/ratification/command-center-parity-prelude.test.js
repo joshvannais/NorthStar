@@ -355,7 +355,7 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
   test('Command Center numeric normalization preserves absence and legitimate recorded zero', () => {
     const script = read('public/js/command-center-page.js');
     const start = script.indexOf('function finiteNumber(value) {');
-    const end = script.indexOf('\n\n  function formatMoney', start);
+    const end = script.indexOf('function formatMoney', start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
     const finiteNumber = vm.runInNewContext('(' + script.slice(start, end).trim() + ')', { Number });

@@ -938,7 +938,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         await prompt.fill("What's my pipeline health?");
         await send.click();
         await page.waitForFunction(() => Array.from(document.querySelectorAll('.polaris-chat-message')).some(node =>
-          node.textContent.includes('The current fictional pipeline contains') &&
+          node.textContent.includes('The current demo pipeline contains') &&
           node.textContent.includes('no live provider request was sent')
         ));
         const chatRequests = ledger.requests.slice(requestOffset).filter(entry =>

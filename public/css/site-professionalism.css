@@ -14,8 +14,8 @@
 
 /*
  * Reversible professionalism layer.
- * Use one licensed, bundled Inter face so iPhone, Windows, and every supported
- * browser render the same NorthStar typography instead of platform fallbacks.
+ * Use the native Apple-first system stack approved for NorthStar so iPhone,
+ * Windows, and every supported browser preserve the intended visual hierarchy.
  * Keep product behavior in mounted page modules; this file only normalizes
  * typography, containment, spacing, and shared presentation components.
  */
@@ -26,13 +26,13 @@ html body input,
 html body select,
 html body textarea,
 html body option {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
 :root,
 html {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 html body {

@@ -628,14 +628,18 @@ html body .bp-field :is(input, select, textarea) {
 }
 
 html body .integration-refresh-action {
-  border: 1px solid var(--brand-500) !important;
+  border: 1px solid var(--brand-700) !important;
   background: transparent !important;
-  color: var(--brand-500) !important;
+  color: var(--brand-700) !important;
+}
+
+html[data-theme="dark"] body .integration-refresh-action {
+  border-color: var(--brand-300) !important;
+  color: var(--brand-300) !important;
 }
 
 html body .integration-refresh-action:hover {
-  background: var(--brand-500) !important;
-  color: #111827 !important;
+  background: color-mix(in srgb, currentColor 10%, transparent) !important;
 }
 
 html body .integration-category[data-category-key="maps_navigation"] .integration-card-description,

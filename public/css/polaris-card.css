@@ -74,7 +74,7 @@
 }
 
 .polaris-card-confidence strong { font-size: 14px; }
-.polaris-card-confidence span { font-size: 11px; line-height: 1.5; opacity: .82; }
+.polaris-card-confidence span { font-size: 11px; line-height: 1.5; opacity: 1; }
 
 .polaris-card-object-links {
   display: flex;

@@ -922,11 +922,41 @@ async function runAccessibilityAuditNegativeControl(engine) {
       true,
       'intermediate or settled transition failure is sampled'
     );
+
+    await page.setContent(`<!doctype html><html><head><style>
+      .mobile-header { position:fixed; inset:0 0 auto; height:64px; z-index:400; background:#0b0d17; }
+      .mobile-header-actions { position:absolute; inset:0 0 auto auto; width:96px; height:64px; }
+    </style></head><body style="margin:0;background:#0b0d17;color:#f1f2f6;min-height:100vh">
+      <button id="occludedDocumentAction" aria-label="Occluded document action" style="position:fixed;right:10px;top:10px;width:60px;height:44px">D</button>
+      <header class="mobile-header">
+        <div class="mobile-header-actions">
+          <button id="sameHeaderOverlap" aria-label="Overlapping header action" style="position:absolute;right:10px;top:10px;width:60px;height:44px">H</button>
+          <span class="northstar-theme-slot">
+            <div data-northstar-theme-control style="position:absolute;right:10px;top:10px">
+              <button data-northstar-theme-toggle aria-label="Fixture mobile theme" style="width:44px;height:44px">T</button>
+            </div>
+          </span>
+        </div>
+      </header>
+    </body></html>`);
+    const mobileHeaderAudit = await auditMountedAccessibility(page);
+    assert.strictEqual(
+      mobileHeaderAudit.overlaps.some(overlap => overlap.path === '#sameHeaderOverlap'),
+      true,
+      'same-mobile-header collisions remain detectable'
+    );
+    assert.strictEqual(
+      mobileHeaderAudit.overlaps.some(overlap => overlap.path === '#occludedDocumentAction'),
+      false,
+      'document controls occluded beneath the fixed mobile header are excluded'
+    );
     return {
       engine,
       inheritedBackgroundContrast: true,
       componentBoundary: true,
       exactToggleOverlap: true,
+      sameHeaderOverlap: true,
+      occludedDocumentControlExcluded: true,
       contextualControls: {
         contexts: interaction.visibleControlContexts,
         failures: contextualFailures.length,

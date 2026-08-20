@@ -59,6 +59,22 @@
       font-size: 16px;
       margin: 0 0 10px;
     }
+    .integration-category-details > summary {
+      align-items: center;
+      color: var(--neutral-900);
+      cursor: pointer;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      list-style-position: inside;
+      padding: 2px 0 10px;
+    }
+    .integration-category-details > summary h3 { display: inline; margin: 0; }
+    .integration-category-count {
+      color: var(--neutral-500);
+      font-size: 12px;
+      font-weight: 600;
+    }
     .integration-provider-list,
     .integration-loading-list {
       display: grid;
@@ -689,7 +705,23 @@
           var providerList = createElement('ul', 'integration-provider-list');
           providerList.setAttribute('aria-labelledby', heading.id);
           visibleProviders.forEach(function(provider) { providerList.append(providerCard(provider)); });
-          categoryItem.append(heading, providerList);
+          var plannedOnly = visibleProviders.every(function(provider) {
+            return provider.presentation.state === 'coming_soon';
+          });
+          if (plannedOnly) {
+            var categoryDetails = createElement('details', 'integration-category-details');
+            var categorySummary = createElement('summary', '');
+            var count = createElement(
+              'span',
+              'integration-category-count',
+              String(visibleProviders.length) + (visibleProviders.length === 1 ? ' planned provider' : ' planned providers')
+            );
+            categorySummary.append(heading, count);
+            categoryDetails.append(categorySummary, providerList);
+            categoryItem.append(categoryDetails);
+          } else {
+            categoryItem.append(heading, providerList);
+          }
           fragment.append(categoryItem);
         });
         list.replaceChildren(fragment);

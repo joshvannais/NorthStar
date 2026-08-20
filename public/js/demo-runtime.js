@@ -16,6 +16,8 @@
   var readonlyMessage = 'This account-free demo is read-only outside Simulate Lead and Reset demo.';
   var TOOLBAR_EXCLUDED_PATHS = Object.freeze([
     '/demo/polaris',
+    '/demo/team',
+    '/demo/ai-settings',
     '/demo/business-profile',
     '/demo/settings',
     '/demo/integrations',
@@ -381,8 +383,7 @@
     copy.append(metadata);
     var builder = document.createElement('details');
     builder.className = 'northstar-demo-scenario-builder';
-    builder.open = (path === '/demo' || path === '/demo-dashboard') &&
-      global.matchMedia && global.matchMedia('(min-width: 769px)').matches;
+    builder.open = false;
     var summary = control('summary', scenarioReady
       ? 'Build a lead scenario · ' + Number(scenarioSpace.combinationCount).toLocaleString() + ' material combinations'
       : 'Scenario builder unavailable');

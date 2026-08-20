@@ -275,37 +275,37 @@
       <!-- 6 Executive KPI Cards -->
       <div class="ds-widget ds-widget-full">
       <div class="leads-kpi-grid" id="leadsKpiGrid">
-        <div class="stat-card stat-card-calls" role="link" tabindex="0" data-kpi-target="leadsContent">
+        <div class="stat-card stat-card-calls">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
           <div class="stat-label">Total Leads</div>
           <div class="stat-value" id="kpiTotalLeads">0</div>
           <div class="stat-change up" id="kpiTotalLeadChange">All time</div>
         </div>
-        <div class="stat-card stat-card-leads" role="link" tabindex="0" data-kpi-target="leadsContent">
+        <div class="stat-card stat-card-leads">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
           <div class="stat-label">Qualified</div>
           <div class="stat-value" id="kpiQualified">0</div>
           <div class="stat-change up" id="kpiQualifiedDetail">Requires a recorded qualified outcome</div>
         </div>
-        <div class="stat-card stat-card-won" role="link" tabindex="0" data-kpi-target="leadsContent">
+        <div class="stat-card stat-card-won">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg></div>
           <div class="stat-label">Won</div>
           <div class="stat-value" id="kpiWon">0</div>
           <div class="stat-change up" id="kpiWonDetail">Requires a recorded won outcome</div>
         </div>
-        <div class="stat-card stat-card-revenue" role="link" tabindex="0" data-kpi-target="leadsContent">
+        <div class="stat-card stat-card-revenue">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="12" x2="12" y1="1" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
           <div class="stat-label">Est. Revenue</div>
           <div class="stat-value revenue-positive" id="kpiRevenue">$0</div>
           <div class="stat-change up">From active leads</div>
         </div>
-        <div class="stat-card stat-card-conversion" role="link" tabindex="0" data-kpi-target="leadsContent">
+        <div class="stat-card stat-card-conversion">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
           <div class="stat-label">Conversion Rate</div>
           <div class="stat-value" id="kpiConversion">0%</div>
           <div class="stat-change up" id="kpiConversionDetail">Won ÷ Qualified</div>
         </div>
-        <div class="stat-card stat-card-avgvalue" role="link" tabindex="0" data-kpi-target="leadsContent">
+        <div class="stat-card stat-card-avgvalue">
           <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
           <div class="stat-label">Avg. Lead Value</div>
           <div class="stat-value" id="kpiAvgValue">$0</div>
@@ -472,6 +472,35 @@
       });
     }
 
+    function csvCell(value) {
+      var text = value == null ? '' : String(value);
+      return '"' + text.replace(/"/g, '""') + '"';
+    }
+
+    function exportLeadsCSV() {
+      var columns = [
+        ['Customer', 'callerName'],
+        ['Phone', 'phone'],
+        ['Service', 'service'],
+        ['Estimated Value', 'estimatedPrice'],
+        ['Created At', 'createdAt'],
+        ['Status', 'status']
+      ];
+      var rows = [columns.map(function(column) { return csvCell(column[0]); }).join(',')];
+      pageLeads.forEach(function(lead) {
+        rows.push(columns.map(function(column) { return csvCell(lead[column[1]]); }).join(','));
+      });
+      var blob = new Blob(['\ufeff' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = 'northstar-leads.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function() { URL.revokeObjectURL(url); }, 0);
+    }
+
     // === 6 Executive KPI Cards (computed directly from canonical page data) ===
     function renderKpiCards(leads) {
       var projection = CanonicalIntelligence.getProjection('leads');
@@ -526,17 +555,7 @@
       showNotification('Lead records are read-only on this surface.', 'warning');
     }
 
-    // Initial load — fetch from canonical API, no AppStore or sessionStorage dependency
-    document.querySelectorAll('#leadsKpiGrid [data-kpi-target]').forEach(function(card) {
-      function activate(event) {
-        if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        var target = document.getElementById(card.dataset.kpiTarget);
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-      card.addEventListener('click', activate);
-      card.addEventListener('keydown', activate);
-    });
+    // Initial load — fetch from the page authority; KPI summaries remain non-interactive.
     loadLeads();
   </script>
 

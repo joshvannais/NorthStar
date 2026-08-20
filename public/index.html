@@ -746,7 +746,7 @@
   <!-- Try Before You Buy — Isolated Demo Dashboard -->
   <div class="demo-banner">
     ⚡ No credit card needed —
-    <a href="/demo-dashboard">Explore the account-free demo dashboard</a>
+    <a href="/demo">Explore the account-free demo dashboard</a>
     — sample data only, no sign-in required
   </div>
 
@@ -761,9 +761,9 @@
         <a href="#how-it-works">How It Works</a>
         <a href="#pricing">Pricing</a>
         <a href="/faq">FAQ</a>
-        <a href="/demo-dashboard">Demo Dashboard</a>
+        <a href="/demo" class="btn btn-primary btn-sm">Explore Demo</a>
         <a href="/login" class="btn btn-ghost btn-sm">Sign In</a>
-        <a href="/signup" class="btn btn-primary btn-sm">Start Free Trial</a>
+        <a href="/signup">Start Free Trial</a>
       </div>
       <span class="northstar-theme-slot" data-northstar-theme-slot aria-label="Theme controls"></span>
     </div>
@@ -780,11 +780,21 @@
   <section class="demo-container" id="demoPreCallView">
     <div class="demo-hero fade-in">
       <p class="demo-eyebrow">Built for home service businesses</p>
-      <h1>Your <span>AI Office Manager</span> for the work between every call and outcome</h1>
-      <p class="demo-hero-copy">NorthStar is an AI Office Manager and business operating system that connects calls, leads, estimates, schedules, and next actions in one role-authorized workspace—with outcome learning tied back to the work.</p>
+       <h1><span>Answer every call</span>, capture every lead, and see what needs attention</h1>
+       <p class="demo-hero-copy">NorthStar connects calls, leads, estimates, schedules, and next actions in one operating view for home service businesses.</p>
+
+       <div class="demo-hero-actions" aria-label="Explore NorthStar">
+         <a href="/demo" class="btn btn-primary">Explore the Account-Free Demo</a>
+         <a href="/signup" class="btn btn-secondary">Start Free Trial</a>
+       </div>
 
       <div class="guided-preview-disclosure" id="simulationModeBanner">
-        <strong>Account-free browser Web Call.</strong> When its attorney and provider gates are approved, this visitor-initiated microphone demo uses a real Retell Web Call and mounted Polaris intelligence. It never creates a customer record.
+        <strong>Browser Web Call readiness.</strong> This optional microphone demonstration appears only when its attorney and provider approvals are active. The working account-free dashboard is available now.
+      </div>
+
+      <div class="demo-web-call-pending" id="demoWebCallPending" role="status">
+        <strong>Account-free browser Web Call: awaiting approval</strong>
+        <span>Explore the dashboard now; this optional demonstration will appear when its legal and provider gates are approved.</span>
       </div>
 
       <div class="demo-form-card" id="demoFormCard">
@@ -833,12 +843,12 @@
 
       <div class="hero-stats">
         <div class="hero-stat-item">
-          <div class="hero-stat-value">Real browser Web Call</div>
-          <div class="hero-stat-label">Visitor initiated, microphone and consent gated</div>
+          <div class="hero-stat-value">Account-Free Dashboard</div>
+          <div class="hero-stat-label">Available now with shared demo data</div>
         </div>
         <div class="hero-stat-item">
           <div class="hero-stat-value">Polaris Intelligence</div>
-          <div class="hero-stat-label">Mounted calculation after verified deletion</div>
+          <div class="hero-stat-label">Explainable recommendations from the demo workspace</div>
         </div>
       </div>
     </div>
@@ -950,7 +960,7 @@
     <div class="guided-preview-notice" id="guidedPreviewNotice" role="status" aria-live="polite"></div>
     <div class="guided-preview-actions" id="guidedPreviewActions" hidden>
       <button type="button" class="btn btn-secondary" id="guidedTryAnother">Start Another Web Call</button>
-      <a href="/demo-dashboard" class="btn btn-primary">Explore the Account-Free Dashboard</a>
+      <a href="/demo" class="btn btn-primary">Explore the Account-Free Dashboard</a>
     </div>
   </section>
 
@@ -1064,7 +1074,7 @@
     <div class="demo-post-actions">
       <button class="btn btn-secondary" onclick="resetDemo()">Start Another Web Call</button>
       <button class="btn btn-ghost" id="demoDeleteResultsBtn">Delete Browser Results</button>
-      <a href="/demo-dashboard" class="btn btn-primary">Explore the Account-Free Dashboard</a>
+      <a href="/demo" class="btn btn-primary">Explore the Account-Free Dashboard</a>
     </div>
 
     <!-- Start a fresh variable conversation -->
@@ -1122,7 +1132,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0l-.77.78-.77-.78a5.4 5.4 0 0 0-7.65 0C1.46 6.7 1.33 10.28 4 13l8 8 8-8c2.67-2.72 2.54-6.3.42-8.42z"/></svg>
         </div>
         <h3>Outcome Learning</h3>
-        <p>Tie completed work and business outcomes back to the original context so recommendations can improve without crossing tenant boundaries.</p>
+        <p>Use outcome learning to tie completed work and business results back to the original context so recommendations can improve without crossing tenant boundaries.</p>
       </div>
     </div>
   </section>
@@ -1212,7 +1222,7 @@
     <h2 style="font-size:clamp(24px,5vw,32px);font-weight:700;margin-bottom:12px;">Bring the Work Into One Operating View</h2>
     <p style="font-size:clamp(15px,2.5vw,18px);color:var(--neutral-500);margin-bottom:28px;max-width:580px;margin-left:auto;margin-right:auto;padding:0 8px;">Explore an isolated product demo without an account, or create a workspace when you are ready to use your own authorized business data.</p>
     <div class="modal-actions">
-      <a href="/demo-dashboard" class="btn btn-secondary">Explore Account-Free Demo</a>
+      <a href="/demo" class="btn btn-secondary">Explore Account-Free Demo</a>
       <a href="/signup" class="btn btn-primary">Start Free Trial</a>
     </div>
   </section>

@@ -40,6 +40,7 @@ body { background: var(--neutral-50); }
   border-radius: 10px;
 }
 .cal-header-left { display: flex; align-items: center; gap: 10px; }
+.cal-period-label { min-width: 150px; color: var(--neutral-700); font-size: 13px; font-weight: 700; }
 .cal-title { font-size: 17px; font-weight: 700; color: var(--neutral-800); margin: 0; white-space: nowrap; }
 .cal-nav-btns { display: flex; align-items: center; gap: 2px; }
 .cal-nav-btn {
@@ -261,6 +262,8 @@ body { background: var(--neutral-50); }
 .cal-modal-close:hover { color: var(--neutral-400); }
 .cal-modal-body { padding: 16px 18px; }
 .cal-modal-field { margin-bottom: 12px; }
+.cal-modal-field { border: 0; padding: 0; }
+.cal-modal-field legend,
 .cal-modal-field label { display: block; font-size: 11px; font-weight: 600; color: var(--neutral-400); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
 .cal-modal-field input, .cal-modal-field textarea { width: 100%; padding: 7px 10px; border: 1px solid var(--neutral-200); border-radius: 6px; font-size: 13px; color: var(--neutral-800); background: var(--neutral-100); box-sizing: border-box; }
 .cal-modal-field input:focus, .cal-modal-field textarea:focus { outline: none; border-color: #6395ff; }
@@ -283,6 +286,7 @@ body { background: var(--neutral-50); }
 @media (max-width: 768px) {
   .cal-header { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px; }
   .cal-header-left { justify-content: space-between; }
+  .cal-period-label { order: 3; width: 100%; text-align: center; }
   .cal-header-right { width: 100%; }
   .cal-view-tabs { width: 100%; }
   .cal-view-tab { flex: 1; text-align: center; padding: 6px 4px; min-height: 44px; font-size: 12px; }

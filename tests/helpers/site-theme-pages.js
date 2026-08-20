@@ -4,7 +4,6 @@ const commandCenterContract = require('../../public/js/command-center-contract')
 
 const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/', file: 'public/index.html', surface: 'public' },
-  { route: '/demo-dashboard', file: 'public/demo-dashboard.html', surface: 'public-demo' },
   ...commandCenterContract.ROUTES.map(destination => ({
     route: destination.demoPath,
     file: 'public/demo-dashboard.html',
@@ -42,6 +41,7 @@ const MOUNTED_THEME_PAGES = Object.freeze([
 ]);
 
 const MOUNTED_REDIRECTS = Object.freeze([
+  '/demo-dashboard',
   '/dashboard/calls',
   '/dashboard/legacy',
   '/demo-login',

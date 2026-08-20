@@ -77,7 +77,6 @@ app.get('/site.webmanifest', (_req, res) => {
 // Frontend page routes
 const pages = {
   '/': 'public/index.html',
-  '/demo-dashboard': 'public/demo-dashboard.html',
   '/login': 'public/login.html',
   '/signup': 'public/signup.html',
   '/verify-email': 'public/verify-email.html',
@@ -137,6 +136,11 @@ app.get('/dashboard/calls', (req, res) => {
 // The standalone Contractor Command Center is the only paid dashboard shell.
 app.get('/dashboard/legacy', (_req, res) => {
   res.redirect(301, '/dashboard');
+});
+
+// Preserve old bookmarks while keeping one canonical account-free Command Center URL.
+app.get('/demo-dashboard', (_req, res) => {
+  res.redirect(301, '/demo');
 });
 
 Object.entries(pages).forEach(([route, file]) => {

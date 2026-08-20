@@ -134,9 +134,14 @@
 
   function setButtonAvailability() {
     var button = byId('demoCallBtn');
-    if (!button) return;
-    button.disabled = !state.available || state.finalizing;
-    button.textContent = state.available ? 'Start Browser Web Call' : 'Web Call Awaiting Approval';
+    var form = byId('demoFormCard');
+    var pending = byId('demoWebCallPending');
+    if (button) {
+      button.disabled = !state.available || state.finalizing;
+      button.textContent = state.available ? 'Start Browser Web Call' : 'Web Call Awaiting Approval';
+    }
+    if (form) form.hidden = !state.available;
+    if (pending) pending.hidden = state.available;
   }
 
   async function refreshAvailability() {

@@ -114,7 +114,9 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       }
       expect(destination.demoPath).toMatch(/^\/demo(?:\/|$)/);
     }
-    expect((await request(app).get('/demo-dashboard').expect(200)).text)
+    const legacy = await request(app).get('/demo-dashboard').expect(301);
+    expect(legacy.headers.location).toBe('/demo');
+    expect((await request(app).get('/demo').expect(200)).text)
       .toBe(read(PAGE_BY_ROUTE['command-center']));
 
     const leadsPage = read(PAGE_BY_ROUTE.leads);

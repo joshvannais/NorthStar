@@ -37,7 +37,7 @@ const VIEWPORTS = Object.freeze([
 const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'leads', 'communications']);
 const DETAILED_POLARIS_SURFACES = Object.freeze(['command-center', 'leads', 'communications']);
 const DEMO_TOOLBAR_ALLOWLIST = Object.freeze([
-  'command-center', 'leads', 'communications', 'my-number', 'calendar', 'team', 'ai-settings',
+  'command-center', 'leads', 'communications', 'my-number', 'calendar',
 ]);
 const SUPPORTED_FONT_WEIGHTS = Object.freeze(['400', '500', '600', '700', '800']);
 const PROVIDER_ENVIRONMENT = Object.freeze([
@@ -1007,6 +1007,18 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     await page.waitForFunction(name => Array.from(document.querySelectorAll('#leadsContent tr'))
       .some(row => row.textContent.includes(name)), added.customer.name, { timeout: 10000 });
     assert.ok(leads.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph), 'Leads reads the committed graph');
+    const [csvDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('#leadsExportBtn'),
+    ]);
+    assert.strictEqual(csvDownload.suggestedFilename(), 'northstar-leads.csv',
+      viewport.label + ' Leads export provides the promised CSV filename');
+    const csvPath = await csvDownload.path();
+    const csvText = fs.readFileSync(csvPath, 'utf8');
+    assert.ok(csvText.includes('"Customer","Phone","Service","Estimated Value","Created At","Status"'),
+      viewport.label + ' Leads export contains the documented columns');
+    assert.ok(csvText.includes(added.customer.name),
+      viewport.label + ' Leads export contains the newly simulated customer');
     const rowTarget = await page.evaluate(async name => {
       const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate => candidate.textContent.includes(name));
       if (!row) return null;
@@ -1117,6 +1129,28 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       pricingSeparated: true, pricingTextSeparated: true,
     },
       viewport.label + ' canonical scope text remains contained and wrapped');
+    await page.waitForFunction(() => {
+      const launcher = document.querySelector('#cdCustomerDrawer .navigation-launcher');
+      return launcher && launcher.dataset.state === 'ready';
+    }, null, { timeout: 10000 });
+    const mapsChooser = page.locator('#cdCustomerDrawer [data-navigation-chooser]');
+    assert.strictEqual(await mapsChooser.isVisible(), true,
+      viewport.label + ' customer detail exposes the alternate maps chooser');
+    await mapsChooser.click();
+    const mapMenu = page.locator('#cdCustomerDrawer .navigation-launcher__menu');
+    assert.strictEqual(await mapMenu.isVisible(), true,
+      viewport.label + ' alternate map menu opens inside the customer detail');
+    const mapOptions = await mapMenu.locator('[data-navigation-provider]').allTextContents();
+    assert.ok(mapOptions.some(value => value.includes('Apple Maps')) && mapOptions.some(value => value.includes('Waze')),
+      viewport.label + ' alternate map menu exposes Apple Maps and Waze: ' + JSON.stringify(mapOptions));
+    const mapContainment = await mapMenu.evaluate(node => {
+      const menu = node.getBoundingClientRect();
+      const drawer = document.getElementById('cdCustomerDrawer').getBoundingClientRect();
+      return menu.left >= drawer.left - 1 && menu.right <= drawer.right + 1;
+    });
+    assert.strictEqual(mapContainment, true,
+      viewport.label + ' alternate map menu remains contained in the customer detail');
+    await mapsChooser.click();
     await captureEvidence(page, 'demo', leadsRoute, viewport, 'customer-detail-open');
     const drawerScroll = await page.evaluate(async () => {
       const body = document.getElementById('cdDrawerBody');
@@ -1140,15 +1174,93 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       const style = getComputedStyle(drawer);
       return !drawer.classList.contains('open') && Number.parseFloat(style.opacity) === 0 && style.pointerEvents === 'none';
     });
+    assert.strictEqual(await page.locator('#cdCustomerDrawer').getAttribute('aria-hidden'), 'true',
+      viewport.label + ' close button restores hidden dialog semantics');
+    await page.locator('#leadsContent tr', { hasText: added.customer.name }).click();
+    await page.waitForFunction(name => {
+      const drawer = document.getElementById('cdCustomerDrawer');
+      return drawer && !drawer.hidden && drawer.getAttribute('aria-hidden') === 'false' && drawer.textContent.includes(name);
+    }, added.customer.name, { timeout: 10000 });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+      const drawer = document.getElementById('cdCustomerDrawer');
+      return drawer && drawer.hidden && drawer.getAttribute('aria-hidden') === 'true';
+    });
     await captureEvidence(page, 'demo', leadsRoute, viewport, 'simulated');
+    await page.locator('#leadsContent tr', { hasText: added.customer.name }).click();
+    await page.waitForFunction(name => {
+      const drawer = document.getElementById('cdCustomerDrawer');
+      return drawer && !drawer.hidden && drawer.textContent.includes(name) &&
+        getComputedStyle(document.getElementById('cdDrawerContent')).display !== 'none';
+    }, added.customer.name, { timeout: 10000 });
+    await Promise.all([
+      page.waitForURL(url => url.origin === origin && url.pathname === '/demo/calendar', { timeout: 15000 }),
+      page.click('#cdBtnSchedule'),
+    ]);
+    const scheduledUrl = new URL(page.url());
+    assert.strictEqual(scheduledUrl.searchParams.get('customerId'), added.ids.customer,
+      viewport.label + ' Schedule preserves exact customer context');
+    assert.strictEqual(scheduledUrl.searchParams.get('leadId'), added.ids.lead,
+      viewport.label + ' Schedule preserves exact lead context');
 
     for (const id of ['communications', 'my-number', 'calendar', 'command-center']) {
       const route = ROUTES.find(candidate => candidate.id === id);
       const snapshot = await clickRoute(page, origin, route, 2, viewport);
+      if (id === 'communications') {
+        const initialResults = await page.locator('#resultsCount').innerText();
+        await page.locator('#callSearchInput').fill(added.customer.name);
+        await page.waitForFunction(name => {
+          const results = document.getElementById('resultsCount');
+          return results && results.textContent.startsWith('1 customer') && document.body.textContent.includes(name);
+        }, added.customer.name);
+        await page.locator('#callSearchInput').fill('');
+        await page.waitForFunction(expected => document.getElementById('resultsCount').textContent === expected,
+          initialResults);
+        await page.locator('#callSearchInput').fill(added.customer.name);
+        await page.locator('.filter-btn-danger', { hasText: 'Clear Filters' }).click();
+        await page.waitForFunction(expected => {
+          const search = document.getElementById('callSearchInput');
+          const results = document.getElementById('resultsCount');
+          return search && search.value === '' && results && results.textContent === expected;
+        }, initialResults);
+      }
       if (id === 'calendar') {
+        assert.strictEqual(await page.locator('.cal-nav-btn[aria-label^="Previous"]').count(), 1,
+          viewport.label + ' Calendar exposes one descriptive previous-period control');
+        assert.strictEqual(await page.locator('.cal-nav-btn[aria-label^="Next"]').count(), 1,
+          viewport.label + ' Calendar exposes one descriptive next-period control');
+        await page.locator('.cal-view-tab', { hasText: 'Day' }).click();
+        await page.waitForFunction(() => window.calState && window.calState.view === 'day');
+        await page.locator('.cal-today-btn').click();
+        const calendarToday = await page.evaluate(() => ({
+          expected: window.calState._formatDate(new Date()),
+          selected: window.calState.selectedDate,
+          title: document.querySelector('.cal-day-title').textContent,
+        }));
+        assert.strictEqual(calendarToday.selected, calendarToday.expected,
+          viewport.label + ' Calendar Day view and Today action use the same local date');
+        assert.ok(calendarToday.title.includes('Today'),
+          viewport.label + ' Calendar Day view marks the selected local date as Today');
         const agendaButton = page.locator('.cal-view-tab', { hasText: 'Agenda' });
         await agendaButton.click();
         await page.waitForFunction(() => window.calState && window.calState.view === 'agenda');
+        const agendaConsistency = await page.evaluate(() => ({
+          expected: window.calState._formatDate(new Date()),
+          todayEvents: window.calState.getTodayEvents().length,
+          todayLabels: Array.from(document.querySelectorAll('.cal-agenda-date-today')).map(node => node.textContent),
+        }));
+        if (agendaConsistency.todayEvents > 0) {
+          assert.ok(agendaConsistency.todayLabels.length > 0 && agendaConsistency.todayLabels.every(label => label.includes('Today')),
+            viewport.label + ' Calendar Agenda uses the same Today classification as Day view');
+        }
+        await page.locator('.cal-new-event-btn').click();
+        assert.strictEqual(await page.locator('.cal-modal[role="dialog"][aria-modal="true"]').isVisible(), true,
+          viewport.label + ' New Event opens as an accessible modal dialog');
+        assert.ok(await page.locator('.cal-modal label[for]').count() >= 4,
+          viewport.label + ' New Event dialog associates visible labels with its controls');
+        await page.keyboard.press('Escape');
+        assert.strictEqual(await page.locator('#calModalOverlay').count(), 0,
+          viewport.label + ' Escape closes the New Event dialog');
       }
       if (id !== 'my-number') {
         await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
@@ -1177,6 +1289,15 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.strictEqual(detail.polarisCardCount, 0, viewport.label + ' Polaris remains chat-centric without a duplicate surface card');
     assert.ok(detail.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph),
       viewport.label + ' Polaris reads the complete shared simulated graph');
+    await page.waitForFunction(({ customer, service }) => {
+      const context = document.getElementById('polarisSelectedContext');
+      return context && !context.hidden && context.textContent.includes(customer) && context.textContent.includes(service);
+    }, { customer: added.customer.name, service: added.lead.serviceLabel }, { timeout: 10000 });
+    const selectedContext = await page.locator('#polarisSelectedContext').innerText();
+    const normalizedSelectedContext = selectedContext.toLocaleLowerCase('en-US');
+    assert.ok(normalizedSelectedContext.includes(added.customer.name.toLocaleLowerCase('en-US')) &&
+      normalizedSelectedContext.includes(added.lead.serviceLabel.toLocaleLowerCase('en-US')),
+      viewport.label + ' record-specific Polaris navigation visibly preserves the selected customer and work context');
     const visiblePolarisPrompt = page.locator('textarea[aria-label="Ask Polaris a question"]:visible');
     assert.strictEqual(await visiblePolarisPrompt.count(), 1,
       viewport.label + ' Polaris exposes one visible business-intelligence chat entry point');

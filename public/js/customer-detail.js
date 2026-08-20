@@ -116,8 +116,8 @@ window.CustomerDetail = (function() {
   function injectDrawerHTML() {
     if (_injected) return;
     var html = '';
-    html += '<div class="drawer-overlay" id="cdDrawerOverlay"></div>';
-    html += '<div class="customer-drawer" id="cdCustomerDrawer" role="dialog" aria-modal="true" aria-labelledby="cdDrawerTitle" tabindex="-1">';
+    html += '<div class="drawer-overlay" id="cdDrawerOverlay" hidden></div>';
+    html += '<div class="customer-drawer" id="cdCustomerDrawer" role="dialog" aria-modal="true" aria-labelledby="cdDrawerTitle" aria-hidden="true" tabindex="-1" hidden>';
     html += '  <div class="drawer-header">';
     html += '    <h2 id="cdDrawerTitle">Customer Details</h2>';
     html += '    <button class="drawer-close drawer-close-btn" id="cdDrawerClose" type="button" aria-label="Close customer details">&times;</button>';
@@ -216,10 +216,26 @@ window.CustomerDetail = (function() {
     _drawerEl = $('cdCustomerDrawer');
 
     // Event bindings
-    _overlayEl.addEventListener('click', close);
-    $('cdDrawerClose').addEventListener('click', close);
+    _overlayEl.addEventListener('click', function(event) { event.preventDefault(); close(); });
+    $('cdDrawerClose').addEventListener('click', function(event) { event.preventDefault(); event.stopPropagation(); close(); });
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') close();
+    });
+    $('cdBtnSchedule').addEventListener('click', function() {
+      if (!_currentData) return;
+      var prefix = window.location.pathname.indexOf('/demo') === 0 ? '/demo' : '/dashboard';
+      var query = new URLSearchParams();
+      if (_currentData.customerId) query.set('customerId', _currentData.customerId);
+      if (_currentData.leadId) query.set('leadId', _currentData.leadId);
+      window.location.assign(prefix + '/calendar' + (query.toString() ? '?' + query.toString() : ''));
+    });
+    $('cdBtnAskPolaris').disabled = false;
+    $('cdBtnAskPolaris').addEventListener('click', function() {
+      if (!_currentData) return;
+      var prefix = window.location.pathname.indexOf('/demo') === 0 ? '/demo' : '/dashboard';
+      var identifier = _currentData.leadId || _currentData.customerId;
+      var kind = _currentData.leadId ? 'lead' : 'customer';
+      window.location.assign(prefix + '/polaris?kind=' + encodeURIComponent(kind) + '&id=' + encodeURIComponent(identifier));
     });
 
     _injected = true;
@@ -280,6 +296,7 @@ window.CustomerDetail = (function() {
     var data = {};
 
     if (raw.customer) {
+      data.customerId = raw.customer.id || null;
       data.name = raw.customer.name || '';
       data.phone = raw.customer.phone || '';
       data.email = raw.customer.email || '';
@@ -292,6 +309,7 @@ window.CustomerDetail = (function() {
 
     var primaryOpp = raw.opportunity;
     if (primaryOpp) {
+      data.leadId = primaryOpp.id || null;
       data.stage = primaryOpp.status || null;
     }
 
@@ -486,6 +504,9 @@ window.CustomerDetail = (function() {
     // Show loading
     _overlayEl.classList.add('open');
     _drawerEl.classList.add('open');
+    _overlayEl.hidden = false;
+    _drawerEl.hidden = false;
+    _drawerEl.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
     $('cdDrawerContent').style.display = 'none';
     $('cdDrawerLoading').style.display = '';
@@ -580,6 +601,11 @@ window.CustomerDetail = (function() {
   function close() {
     if (_overlayEl) _overlayEl.classList.remove('open');
     if (_drawerEl) _drawerEl.classList.remove('open');
+    if (_overlayEl) _overlayEl.hidden = true;
+    if (_drawerEl) {
+      _drawerEl.hidden = true;
+      _drawerEl.setAttribute('aria-hidden', 'true');
+    }
     document.body.style.overflow = '';
     _currentData = null;
     if (_returnFocus && typeof document.contains === 'function' && document.contains(_returnFocus)) _returnFocus.focus();

@@ -73,7 +73,7 @@ describe('mounted site-wide theme inventory', () => {
     expect(mountedGetRoutes()).toEqual(expectedRoutes);
     expect(new Set(MOUNTED_THEME_PAGES.map(page => page.route)).size).toBe(MOUNTED_THEME_PAGES.length);
     const demoPages = MOUNTED_THEME_PAGES.filter(page => page.surface === 'public-demo');
-    expect(demoPages).toHaveLength(12);
+    expect(demoPages).toHaveLength(11);
     expect(new Set(demoPages.map(page => page.file))).toEqual(new Set(['public/demo-dashboard.html']));
 
     const expectedHtml = [

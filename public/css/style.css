@@ -4040,12 +4040,11 @@ textarea:disabled {
 }
 
 .navigation-launcher__menu {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% - 24px);
-  left: 0;
+  position: relative;
+  z-index: 1;
+  margin-top: 8px;
   display: grid;
-  width: min(260px, 100%);
+  width: 100%;
   padding: 6px;
   gap: 4px;
   border: 1px solid var(--theme-field-border);

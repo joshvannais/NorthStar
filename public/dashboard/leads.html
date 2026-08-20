@@ -474,7 +474,7 @@
 
     function csvCell(value) {
       var text = value == null ? '' : String(value);
-      if (/^[\t\r\n ]*[=+\-@]/.test(text)) {
+      if (/^[\p{White_Space}\p{Cc}\p{Cf}]*[=+\-@]/u.test(text)) {
         text = "'" + text;
       }
       return '"' + text.replace(/"/g, '""') + '"';

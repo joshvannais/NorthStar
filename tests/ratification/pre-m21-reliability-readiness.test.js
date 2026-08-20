@@ -23,11 +23,19 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     expect(helper).not.toBeNull();
     const csvCell = Function(helper[0] + '; return csvCell;')();
 
-    expect(csvCell('=2+2')).toBe('"\'=2+2"');
-    expect(csvCell(' +SUM(A1:A2)')).toBe('"\' +SUM(A1:A2)"');
-    expect(csvCell('-1+2')).toBe('"\'-1+2"');
-    expect(csvCell('\t@IMPORTDATA("https://example.invalid")'))
-      .toBe('"\'\t@IMPORTDATA(""https://example.invalid"")"');
+    const prefixes = [
+      '', ' ', '\t', '\r', '\n',
+      '\u0000', '\u0001', '\u000B', '\u001F',
+      '\u007F', '\u0085', '\u009F',
+      '\u00A0', '\u1680', '\u2003', '\u2028', '\u2029', '\u202F', '\u205F', '\u3000',
+      '\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF'
+    ];
+    for (const prefix of prefixes) {
+      for (const marker of ['=', '+', '-', '@']) {
+        const input = prefix + marker + 'FORMULA';
+        expect(csvCell(input)).toBe('"\'' + input + '"');
+      }
+    }
     expect(csvCell('Ordinary customer')).toBe('"Ordinary customer"');
     expect(csvCell('Quoted "customer"')).toBe('"Quoted ""customer"""');
   });

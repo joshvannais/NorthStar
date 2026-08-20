@@ -1036,6 +1036,40 @@ async function runAccessibilityAuditNegativeControl(engine) {
       true,
       'higher-layer controls outside the mobile header remain detectable'
     );
+
+    await page.setContent(`<!doctype html><html><head><style>
+      .nav { position:fixed; inset:0 0 auto; height:64px; z-index:500; background:#0b0d17; }
+      .nav-inner { position:relative; height:64px; }
+    </style></head><body class="homepage-refresh" style="margin:0;background:#0b0d17;color:#f1f2f6;min-height:100vh">
+      <button id="homepageOccludedAction" aria-label="Occluded homepage action" style="position:fixed;right:10px;top:10px;width:60px;height:44px">D</button>
+      <button id="homepageAboveNavAction" aria-label="Higher-layer homepage action" style="position:fixed;right:10px;top:10px;width:60px;height:44px;z-index:501">A</button>
+      <nav class="nav">
+        <div class="nav-inner">
+          <button id="homepageSameNavAction" aria-label="Overlapping homepage navigation action" style="position:absolute;right:10px;top:10px;width:60px;height:44px">H</button>
+          <span class="northstar-theme-slot">
+            <div data-northstar-theme-control style="position:absolute;right:10px;top:10px">
+              <button data-northstar-theme-toggle aria-label="Fixture homepage theme" style="width:44px;height:44px">T</button>
+            </div>
+          </span>
+        </div>
+      </nav>
+    </body></html>`);
+    const homepageNavAudit = await auditMountedAccessibility(page);
+    assert.strictEqual(
+      homepageNavAudit.overlaps.some(overlap => overlap.path === '#homepageSameNavAction'),
+      true,
+      'same-homepage-navigation collisions remain detectable'
+    );
+    assert.strictEqual(
+      homepageNavAudit.overlaps.some(overlap => overlap.path === '#homepageOccludedAction'),
+      false,
+      'document controls occluded beneath the fixed homepage navigation are excluded'
+    );
+    assert.strictEqual(
+      homepageNavAudit.overlaps.some(overlap => overlap.path === '#homepageAboveNavAction'),
+      true,
+      'higher-layer controls outside the homepage navigation remain detectable'
+    );
     return {
       engine,
       inheritedBackgroundContrast: true,
@@ -1044,6 +1078,9 @@ async function runAccessibilityAuditNegativeControl(engine) {
       sameHeaderOverlap: true,
       occludedDocumentControlExcluded: true,
       aboveHeaderOverlap: true,
+      homepageSameNavOverlap: true,
+      homepageOccludedDocumentControlExcluded: true,
+      homepageAboveNavOverlap: true,
       contextualControls: {
         contexts: interaction.visibleControlContexts,
         failures: contextualFailures.length,

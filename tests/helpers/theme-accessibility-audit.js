@@ -258,9 +258,18 @@ async function auditMountedAccessibility(page) {
       }
     }
 
+    function fixedHeaderBoundary(element) {
+      for (let current = element && element.parentElement; current; current = current.parentElement) {
+        if (current.matches('[data-northstar-fixed-header]')) return current;
+        const isSemanticHeader = current.matches('header, nav, [role="banner"]');
+        if (isSemanticHeader && getComputedStyle(current).position === 'fixed') return current;
+      }
+      return null;
+    }
+
     const toggle = document.querySelector('[data-northstar-theme-toggle]');
     const toggleRect = toggle && toggle.getBoundingClientRect();
-    const toggleHeader = toggle && toggle.closest('.mobile-header');
+    const toggleHeader = fixedHeaderBoundary(toggle);
     const overlaps = [];
     const clipped = [];
     const seenOverlaps = new Set();
@@ -274,8 +283,8 @@ async function auditMountedAccessibility(page) {
         const width = Math.min(rect.right, toggleRect.right) - Math.max(rect.left, toggleRect.left);
         const height = Math.min(rect.bottom, toggleRect.bottom) - Math.max(rect.top, toggleRect.top);
         if (width > 0.5 && height > 0.5) {
-          // A fixed mobile header intentionally occludes document content as it
-          // scrolls beneath it. Exclude an outside-header control only when
+          // A fixed navigation/header intentionally occludes document content
+          // as it scrolls beneath it. Exclude an outside-header control only when
           // browser hit-testing proves it remains below the header throughout
           // the sampled intersection. Higher-layer controls still fail.
           if (toggleHeader && !toggleHeader.contains(element)) {

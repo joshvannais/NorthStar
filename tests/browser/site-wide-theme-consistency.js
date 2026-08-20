@@ -322,9 +322,9 @@ async function settleFiniteDocumentAnimations(page) {
 }
 
 async function assertDashboardQuickActionTimeline(page, label) {
-  const actions = page.locator('.cc-action-btn');
+  const actions = page.locator('a[data-command-destination]');
   const count = await actions.count();
-  assert.strictEqual(count, 6, `${label} quick-action count`);
+  assert.strictEqual(count, 4, `${label} Command Center action count`);
   const hrefs = [];
   const samples = [];
   for (let index = 0; index < count; index += 1) {
@@ -350,7 +350,11 @@ async function assertDashboardQuickActionTimeline(page, label) {
     samples.push(actionSamples);
     await releaseInteractiveState(page, action);
   }
-  assert.strictEqual(new Set(hrefs).size, 6, `${label} every quick-action destination exercised`);
+  assert.deepStrictEqual(
+    hrefs.slice().sort(),
+    ['/dashboard/calendar', '/dashboard/leads', '/dashboard/leads', '/dashboard/polaris'],
+    `${label} canonical Command Center destinations exercised`
+  );
   return {
     actions: count,
     frames: samples.reduce((total, actionSamples) => total + actionSamples.length, 0),

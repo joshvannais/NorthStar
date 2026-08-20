@@ -255,6 +255,7 @@ async function auditMountedAccessibility(page) {
 
     const toggle = document.querySelector('[data-northstar-theme-toggle]');
     const toggleRect = toggle && toggle.getBoundingClientRect();
+    const toggleHeader = toggle && toggle.closest('.mobile-header');
     const overlaps = [];
     const clipped = [];
     const seenOverlaps = new Set();
@@ -268,6 +269,11 @@ async function auditMountedAccessibility(page) {
         const width = Math.min(rect.right, toggleRect.right) - Math.max(rect.left, toggleRect.left);
         const height = Math.min(rect.bottom, toggleRect.bottom) - Math.max(rect.top, toggleRect.top);
         if (width > 0.5 && height > 0.5) {
+          // A fixed mobile header intentionally occludes document content as it
+          // scrolls beneath it. Only compare its theme control with controls in
+          // that same header; the floating/desktop control keeps the full-page
+          // overlap check below.
+          if (toggleHeader && !toggleHeader.contains(element)) continue;
           const key = pathFor(element);
           if (!seenOverlaps.has(key)) {
             seenOverlaps.add(key);

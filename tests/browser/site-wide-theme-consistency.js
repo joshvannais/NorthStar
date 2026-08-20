@@ -928,6 +928,7 @@ async function runAccessibilityAuditNegativeControl(engine) {
       .mobile-header-actions { position:absolute; inset:0 0 auto auto; width:96px; height:64px; }
     </style></head><body style="margin:0;background:#0b0d17;color:#f1f2f6;min-height:100vh">
       <button id="occludedDocumentAction" aria-label="Occluded document action" style="position:fixed;right:10px;top:10px;width:60px;height:44px">D</button>
+      <button id="aboveHeaderOverlap" aria-label="Higher-layer document action" style="position:fixed;right:10px;top:10px;width:60px;height:44px;z-index:401">A</button>
       <header class="mobile-header">
         <div class="mobile-header-actions">
           <button id="sameHeaderOverlap" aria-label="Overlapping header action" style="position:absolute;right:10px;top:10px;width:60px;height:44px">H</button>
@@ -950,6 +951,11 @@ async function runAccessibilityAuditNegativeControl(engine) {
       false,
       'document controls occluded beneath the fixed mobile header are excluded'
     );
+    assert.strictEqual(
+      mobileHeaderAudit.overlaps.some(overlap => overlap.path === '#aboveHeaderOverlap'),
+      true,
+      'higher-layer controls outside the mobile header remain detectable'
+    );
     return {
       engine,
       inheritedBackgroundContrast: true,
@@ -957,6 +963,7 @@ async function runAccessibilityAuditNegativeControl(engine) {
       exactToggleOverlap: true,
       sameHeaderOverlap: true,
       occludedDocumentControlExcluded: true,
+      aboveHeaderOverlap: true,
       contextualControls: {
         contexts: interaction.visibleControlContexts,
         failures: contextualFailures.length,

@@ -270,10 +270,29 @@ async function auditMountedAccessibility(page) {
         const height = Math.min(rect.bottom, toggleRect.bottom) - Math.max(rect.top, toggleRect.top);
         if (width > 0.5 && height > 0.5) {
           // A fixed mobile header intentionally occludes document content as it
-          // scrolls beneath it. Only compare its theme control with controls in
-          // that same header; the floating/desktop control keeps the full-page
-          // overlap check below.
-          if (toggleHeader && !toggleHeader.contains(element)) continue;
+          // scrolls beneath it. Exclude an outside-header control only when
+          // browser hit-testing proves it remains below the header throughout
+          // the sampled intersection. Higher-layer controls still fail.
+          if (toggleHeader && !toggleHeader.contains(element)) {
+            const left = Math.max(rect.left, toggleRect.left);
+            const right = Math.min(rect.right, toggleRect.right);
+            const top = Math.max(rect.top, toggleRect.top);
+            const bottom = Math.min(rect.bottom, toggleRect.bottom);
+            const insetX = Math.min(1, width / 4);
+            const insetY = Math.min(1, height / 4);
+            const points = [
+              [(left + right) / 2, (top + bottom) / 2],
+              [left + insetX, top + insetY],
+              [right - insetX, top + insetY],
+              [left + insetX, bottom - insetY],
+              [right - insetX, bottom - insetY],
+            ];
+            const ownsIntersection = points.some(([x, y]) => {
+              const topmost = document.elementFromPoint(x, y);
+              return topmost && (topmost === element || element.contains(topmost));
+            });
+            if (!ownsIntersection) continue;
+          }
           const key = pathFor(element);
           if (!seenOverlaps.has(key)) {
             seenOverlaps.add(key);

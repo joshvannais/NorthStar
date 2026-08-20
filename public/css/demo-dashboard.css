@@ -562,7 +562,8 @@
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
-.command-center-record-link:hover { color: var(--brand-700); }
+.command-center-record-link:hover,
+.command-center-record-link:focus-visible { color: var(--northstar-brand-gold); }
 .command-center-table-empty { padding-block: 28px !important; color: var(--theme-muted) !important; text-align: center; }
 .demo-count-pill { flex: 0 0 auto; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 

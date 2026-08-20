@@ -128,6 +128,11 @@ async function auditMountedAccessibility(page) {
 
     function isVisible(element) {
       if (element.matches('.skip-link') && !element.matches(':focus')) return false;
+      const closedDetails = element.closest('details:not([open])');
+      if (closedDetails) {
+        const summary = closedDetails.querySelector(':scope > summary');
+        if (!summary || (element !== summary && !summary.contains(element))) return false;
+      }
       for (let current = element; current; current = current.parentElement) {
         const ancestorStyle = getComputedStyle(current);
         if (ancestorStyle.display === 'none' || ancestorStyle.visibility === 'hidden' || Number(ancestorStyle.opacity) <= 0) return false;
@@ -448,6 +453,11 @@ async function auditInteractiveStates(page) {
     elements.forEach((element, index) => {
       const rect = element.getBoundingClientRect();
       let visible = rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < innerWidth;
+      const closedDetails = element.closest('details:not([open])');
+      if (closedDetails) {
+        const summary = closedDetails.querySelector(':scope > summary');
+        if (!summary || (element !== summary && !summary.contains(element))) visible = false;
+      }
       for (let current = element; visible && current; current = current.parentElement) {
         const style = getComputedStyle(current);
         if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) <= 0) visible = false;
@@ -496,6 +506,33 @@ async function auditInteractiveStates(page) {
   for (const context of contexts) {
     const locator = all.nth(context.index);
     await locator.scrollIntoViewIfNeeded();
+    await locator.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const hoverGeometry = await locator.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return {
+        tag: element.tagName,
+        id: element.id || '',
+        className: typeof element.className === 'string' ? element.className : '',
+        containingDetailsOpen: element.closest('details')?.open ?? null,
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        viewportWidth: innerWidth,
+        viewportHeight: innerHeight,
+        scrollX,
+        scrollY,
+      };
+    });
+    assert.ok(
+      hoverGeometry.right > 0 && hoverGeometry.bottom > 0
+        && hoverGeometry.left < hoverGeometry.viewportWidth
+        && hoverGeometry.top < hoverGeometry.viewportHeight,
+      `interactive control moved outside the viewport: ${JSON.stringify({ context, hoverGeometry })}`
+    );
     await locator.hover({ force: true });
     const hoverFractions = await interactiveTransitionFractions(locator);
     for (const fraction of hoverFractions) {
@@ -550,6 +587,7 @@ async function auditInteractiveStates(page) {
   return {
     groups: contexts.length,
     visibleControlContexts: contexts.length,
+    contextSignatures: contexts.map(context => context.signature),
     hoverFrames,
     focusFrames,
     hoverFailures,

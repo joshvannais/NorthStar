@@ -2,6 +2,10 @@
 
 const assert = require('assert');
 const { app } = require('../../src/server');
+const {
+  buildDemoWorkspace,
+  createInitialDemoState,
+} = require('../../src/commandCenter/workspace');
 const { navigationFixture } = require('../helpers/navigation-fixture');
 const { MOUNTED_THEME_PAGES } = require('../helpers/site-theme-pages');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
@@ -25,6 +29,20 @@ const COMMUNICATIONS_EXPECTED_REQUESTS = Object.freeze([
   Object.freeze({ method: 'GET', pathname: '/api/v1/canonical/compat/communications', search: '' }),
   Object.freeze({ method: 'GET', pathname: '/api/v1/canonical/compat/communications', search: '?limit=50' }),
 ]);
+const DEMO_THEME_TENANT_ID = '00000000-0000-4000-8000-000000000301';
+const DEMO_THEME_SESSION_ID = '00000000-0000-4000-8000-000000000302';
+
+function demoWorkspaceFixture() {
+  return buildDemoWorkspace({
+    tenantId: DEMO_THEME_TENANT_ID,
+    sessionId: DEMO_THEME_SESSION_ID,
+    state: createInitialDemoState(DEMO_THEME_TENANT_ID, new Date('2026-08-03T12:00:00.000Z')),
+    revision: 1,
+    simulationCount: 0,
+    persisted: false,
+    expiresAt: new Date('2099-08-04T12:00:00.000Z'),
+  });
+}
 
 function jsonResponse(body, status = 200) {
   return {
@@ -202,6 +220,14 @@ async function installLocalApiBoundary(context, origin, evidence, options = {}) 
       && url.pathname === '/api/v1/canonical/compat/communications') {
       await options.communicationsGate.hold(request);
       return route.fulfill(jsonResponse(canonicalFixture(request, 'communications')));
+    }
+
+    if (request.method() === 'GET' && url.pathname === '/api/demo/command-center') {
+      return route.fulfill(jsonResponse({ success: true, data: demoWorkspaceFixture() }));
+    }
+    const demoCompatibility = url.pathname.match(/^\/api\/demo\/command-center\/canonical\/compat\/([^/]+)$/);
+    if (request.method() === 'GET' && demoCompatibility) {
+      return route.fulfill(jsonResponse(canonicalFixture(request, decodeURIComponent(demoCompatibility[1]))));
     }
 
     if (request.method() === 'POST' && options.recovery === true) {
@@ -511,6 +537,7 @@ async function auditCommunicationsReadiness(page, gate, label) {
 }
 
 async function assertMountedTheme(page, route, expectedTheme, options = {}) {
+  const expectedPath = new URL(route).pathname;
   await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 10000 });
   await page.locator('[data-northstar-theme-toggle]').waitFor({ state: 'visible', timeout: 5000 })
     .catch(async error => {
@@ -568,6 +595,17 @@ async function assertMountedTheme(page, route, expectedTheme, options = {}) {
     }).catch(() => ({ unavailable: true }));
     throw new Error(`${route} ${expectedTheme} body theme unavailable: ${error.message} ${JSON.stringify(diagnostic)}`);
   });
+  if (expectedPath === '/demo' || expectedPath.startsWith('/demo/')) {
+    await page.waitForFunction(() => (
+      document.documentElement.dataset.demoWorkspace === 'ready'
+        && document.documentElement.dataset.northstarNavigation === 'ready'
+    ), null, { timeout: 5000 });
+  }
+  if (expectedPath === '/demo') {
+    await page.waitForFunction(() => (
+      document.getElementById('commandCenterContent')?.getAttribute('aria-busy') === 'false'
+    ), null, { timeout: 5000 });
+  }
   const result = await page.evaluate(({ expected, forbiddenSource }) => {
     const toggle = document.querySelector('[data-northstar-theme-toggle]');
     const bounds = toggle.getBoundingClientRect();
@@ -631,10 +669,40 @@ async function assertMountedTheme(page, route, expectedTheme, options = {}) {
     accessibility = await auditMountedAccessibility(page);
   }
   const interactiveStates = await auditInteractiveStates(page);
+  assert.strictEqual(
+    new URL(page.url()).pathname,
+    expectedPath,
+    `${route} must remain mounted throughout its interaction audit`
+  );
 
   const toggledTheme = expectedTheme === 'dark' ? 'light' : 'dark';
+  await page.evaluate(() => {
+    window.__northstarThemeClickDiagnostic = { clicks: 0, changes: [] };
+    const button = document.querySelector('[data-northstar-theme-toggle]');
+    button?.addEventListener('click', () => { window.__northstarThemeClickDiagnostic.clicks += 1; });
+    window.addEventListener('northstar:themechange', event => {
+      window.__northstarThemeClickDiagnostic.changes.push(event.detail || null);
+    });
+  });
   await page.locator('[data-northstar-theme-toggle]').click();
-  assert.strictEqual(await page.evaluate(() => NorthStarTheme.getTheme()), toggledTheme);
+  assert.strictEqual(
+    new URL(page.url()).pathname,
+    expectedPath,
+    `${route} must remain mounted after its theme transition`
+  );
+  const actualToggledTheme = await page.evaluate(() => NorthStarTheme.getTheme());
+  if (actualToggledTheme !== toggledTheme) {
+    const diagnostic = await page.evaluate(() => ({
+      theme: NorthStarTheme.getTheme(),
+      clicks: window.__northstarThemeClickDiagnostic?.clicks || 0,
+      changes: window.__northstarThemeClickDiagnostic?.changes || [],
+      toggleCount: document.querySelectorAll('[data-northstar-theme-toggle]').length,
+      controlCount: document.querySelectorAll('[data-northstar-theme-control]').length,
+      connected: Boolean(document.querySelector('[data-northstar-theme-toggle]')?.isConnected),
+      ariaPressed: document.querySelector('[data-northstar-theme-toggle]')?.getAttribute('aria-pressed') || null,
+    }));
+    assert.fail(`${route} theme toggle must transition from ${expectedTheme} to ${toggledTheme}: ${JSON.stringify(diagnostic)}`);
+  }
   assert.strictEqual(
     await page.locator('[data-northstar-theme-toggle]').getAttribute('aria-pressed'),
     toggledTheme === 'dark' ? 'true' : 'false'
@@ -899,6 +967,8 @@ async function runAccessibilityAuditNegativeControl(engine) {
       <div class="context-dark" style="background:#0b0d17"><button class="context-action">Context action</button></div>
       <div class="context-light" style="background:#f8fafc"><button class="context-action">Context action</button></div>
       <button class="timing">Transition action</button>
+      <details><summary>Closed fixture</summary><button id="closedDetailsAction">Closed action</button></details>
+      <details open><summary>Open fixture</summary><button id="openDetailsAction">Open action</button></details>
       <div data-northstar-theme-control style="position:fixed;right:10px;bottom:10px"><button data-northstar-theme-toggle aria-label="Fixture theme" style="width:44px;height:44px">T</button></div>
     </body></html>`);
     const audit = await auditMountedAccessibility(page);
@@ -916,6 +986,16 @@ async function runAccessibilityAuditNegativeControl(engine) {
       && failure.contrastFailures.some(item => item.path.includes('timing'))
     );
     assert.strictEqual(interaction.visibleControlContexts >= 6, true, 'every visible fixture context is exercised');
+    assert.strictEqual(
+      interaction.contextSignatures.some(signature => signature.includes('closedDetailsAction')),
+      false,
+      'controls inside a closed details panel are not treated as visible'
+    );
+    assert.strictEqual(
+      interaction.contextSignatures.some(signature => signature.includes('openDetailsAction')),
+      true,
+      'controls inside an open details panel remain in the interactive audit'
+    );
     assert.strictEqual(contextualFailures.some(failure => failure.signature.includes('context-light')), true, 'effective light background failure is retained');
     assert.strictEqual(
       timingFailures.some(failure => failure.phase !== 'hover-0'),

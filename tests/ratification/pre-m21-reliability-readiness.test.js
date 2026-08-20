@@ -17,6 +17,21 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     expect(leads).not.toMatch(/class="stat-card[^"]*"[^>]*role="link"/);
   });
 
+  test('lead export neutralizes spreadsheet formulas before RFC-4180 quoting', () => {
+    const leads = read('public/dashboard/leads.html');
+    const helper = leads.match(/function csvCell\(value\) \{[\s\S]*?\n    \}/);
+    expect(helper).not.toBeNull();
+    const csvCell = Function(helper[0] + '; return csvCell;')();
+
+    expect(csvCell('=2+2')).toBe('"\'=2+2"');
+    expect(csvCell(' +SUM(A1:A2)')).toBe('"\' +SUM(A1:A2)"');
+    expect(csvCell('-1+2')).toBe('"\'-1+2"');
+    expect(csvCell('\t@IMPORTDATA("https://example.invalid")'))
+      .toBe('"\'\t@IMPORTDATA(""https://example.invalid"")"');
+    expect(csvCell('Ordinary customer')).toBe('"Ordinary customer"');
+    expect(csvCell('Quoted "customer"')).toBe('"Quoted ""customer"""');
+  });
+
   test('shared customer details dismiss reliably and preserve Schedule and Polaris context', () => {
     const detail = read('public/js/customer-detail.js');
     expect(detail).toContain("_drawerEl.setAttribute('aria-hidden', 'false')");

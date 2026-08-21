@@ -203,9 +203,9 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
       .toEqual(['public/site.webmanifest']);
   });
 
-  test('the real package entrypoint mounts all 41 canonical pages and retires legacy and direct/deep asset URLs', async () => {
+  test('the real package entrypoint mounts all 37 canonical pages and retires legacy and direct/deep asset URLs', async () => {
     const mounted = mountedRoutePaths();
-    expect(MOUNTED_THEME_PAGES).toHaveLength(41);
+    expect(MOUNTED_THEME_PAGES).toHaveLength(37);
     for (const page of MOUNTED_THEME_PAGES) expect(mounted).toContain(page.route);
     for (const route of MOUNTED_REDIRECTS) expect(mounted).toContain(route);
 
@@ -224,8 +224,12 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
 
     const redirectExpectations = Object.freeze({
       '/demo-dashboard': { status: 301, location: '/demo' },
+      '/demo/ai-settings': { status: 301, location: '/demo/settings#ai-settings' },
+      '/demo/my-number': { status: 301, location: '/demo/business-profile?section=company#business-number' },
       '/dashboard/calls': { status: 301, location: '/dashboard/communications' },
+      '/dashboard/ai-settings': { status: 301, location: '/dashboard/settings#ai-settings' },
       '/dashboard/legacy': { status: 301, location: '/dashboard' },
+      '/dashboard/my-number': { status: 301, location: '/dashboard/business-profile?section=company#business-number' },
       '/demo-login': { status: 302, location: '/login?demo=retired' },
     });
     for (const route of MOUNTED_REDIRECTS) {

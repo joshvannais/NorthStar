@@ -20,10 +20,8 @@ const ROUTES = Object.freeze([
   Object.freeze({ id: 'polaris', path: '/demo/polaris', paidPath: '/dashboard/polaris', marker: 'POLARIS', surface: '.polaris-workspace' }),
   Object.freeze({ id: 'leads', path: '/demo/leads', paidPath: '/dashboard/leads', marker: 'All Leads', surface: '.leads-kpi-grid' }),
   Object.freeze({ id: 'communications', path: '/demo/communications', paidPath: '/dashboard/communications', marker: 'Communications', surface: '#kpiGrid' }),
-  Object.freeze({ id: 'my-number', path: '/demo/my-number', paidPath: '/dashboard/my-number', marker: 'My Number', surface: '.settings-section' }),
   Object.freeze({ id: 'calendar', path: '/demo/calendar', paidPath: '/dashboard/calendar', marker: 'Calendar', surface: '#calendarGrid' }),
   Object.freeze({ id: 'team', path: '/demo/team', paidPath: '/dashboard/team', marker: 'Team', surface: '.wf-shell' }),
-  Object.freeze({ id: 'ai-settings', path: '/demo/ai-settings', paidPath: '/dashboard/ai-settings', marker: 'AI Settings', surface: '.ai-settings-gateway' }),
   Object.freeze({ id: 'business-profile', path: '/demo/business-profile', paidPath: '/dashboard/business-profile', marker: 'Business Profile', surface: '#businessProfileRoot' }),
   Object.freeze({ id: 'settings', path: '/demo/settings', paidPath: '/dashboard/settings', marker: 'Settings', surface: '.settings-section' }),
   Object.freeze({ id: 'integrations', path: '/demo/integrations', paidPath: '/dashboard/integrations', marker: 'Integrations', surface: '#integrationAuthority' }),
@@ -37,7 +35,7 @@ const VIEWPORTS = Object.freeze([
 const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'leads', 'communications']);
 const DETAILED_POLARIS_SURFACES = Object.freeze(['command-center', 'leads', 'communications']);
 const DEMO_TOOLBAR_ALLOWLIST = Object.freeze([
-  'command-center', 'leads', 'communications', 'my-number', 'calendar',
+  'command-center', 'leads', 'communications', 'calendar',
 ]);
 const SUPPORTED_FONT_WEIGHTS = Object.freeze(['400', '500', '600', '700', '800']);
 const PROVIDER_ENVIRONMENT = Object.freeze([
@@ -1209,7 +1207,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.strictEqual(scheduledUrl.searchParams.get('leadId'), added.ids.lead,
       viewport.label + ' Schedule preserves exact lead context');
 
-    for (const id of ['communications', 'my-number', 'calendar', 'command-center']) {
+    for (const id of ['communications', 'calendar', 'command-center']) {
       const route = ROUTES.find(candidate => candidate.id === id);
       const snapshot = await clickRoute(page, origin, route, 2, viewport);
       if (id === 'communications') {
@@ -1268,12 +1266,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         assert.strictEqual(await page.locator('#calModalOverlay').count(), 0,
           viewport.label + ' Escape closes the New Event dialog');
       }
-      if (id !== 'my-number') {
-        await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
-      } else {
-        assert.ok(snapshot.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph),
-          route.path + ' reads the shared canonical workspace without inventing customer calling data');
-      }
+      await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
       if (!hasPolarisSurface(id)) {
         assert.strictEqual(snapshot.polarisCardCount, 0, route.path + ' retains canonical state without a misplaced Polaris card');
       }
@@ -1312,7 +1305,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.strictEqual(await visiblePolarisPrompt.isEnabled(), true,
       viewport.label + ' Polaris business-intelligence chat entry point remains usable');
 
-    for (const id of ['team', 'ai-settings', 'business-profile', 'settings', 'integrations']) {
+    for (const id of ['team', 'business-profile', 'settings', 'integrations']) {
       const route = ROUTES.find(candidate => candidate.id === id);
       const snapshot = await clickRoute(page, origin, route, 2, viewport);
       assert.deepStrictEqual(snapshot.workspace.configuration, simulated.configuration,

@@ -12,10 +12,8 @@ const PAGE_BY_ROUTE = Object.freeze({
   polaris: 'public/dashboard/polaris.html',
   leads: 'public/dashboard/leads.html',
   communications: 'public/dashboard/communications.html',
-  'my-number': 'public/dashboard/my-number.html',
   calendar: 'public/dashboard/calendar.html',
   team: 'public/dashboard/team.html',
-  'ai-settings': 'public/dashboard/ai-settings.html',
   'business-profile': 'public/dashboard/business-profile.html',
   settings: 'public/dashboard/settings.html',
   integrations: 'public/dashboard/integrations.html',
@@ -38,7 +36,7 @@ function allFiles(root, suffixes) {
 
 describe('surgical site professionalism correction', () => {
   test('Polaris placement is an exact shared paid/demo allowlist', () => {
-    expect(contract.ROUTES.map(route => route.id)).toHaveLength(11);
+    expect(contract.ROUTES.map(route => route.id)).toHaveLength(9);
     for (const route of contract.ROUTES) {
       const html = read(PAGE_BY_ROUTE[route.id]);
       if (ALLOWLIST.includes(route.id)) {
@@ -93,6 +91,20 @@ describe('surgical site professionalism correction', () => {
     expect(css).toMatch(/\.command-center-chart-empty \.demo-chart-bars\s*\{[^}]*width:\s*100%/s);
     expect(css).toMatch(/\.command-center-chart-empty \.demo-chart-bars\s*\{[^}]*padding:\s*0/s);
     expect(css).toMatch(/\.command-center-empty-copy\s*\{[^}]*width:\s*min\(100%, 36ch\)/s);
+  });
+
+  test('the mobile homepage and Calendar remain fully bounded inside the viewport', () => {
+    const homepage = read('public/css/site-professionalism.css');
+    const calendar = read('public/dashboard/calendar.html');
+    const demoRuntime = read('public/css/demo-runtime.css');
+
+    expect(homepage).toMatch(/\.homepage-header-stack\s*\{[^}]*position:\s*sticky/s);
+    expect(homepage).toMatch(/html body\.homepage-refresh \.fade-in\s*\{[^}]*animation:\s*none !important[^}]*opacity:\s*1 !important/s);
+    expect(calendar).toMatch(/\.cal-layout\s*\{[^}]*box-sizing:\s*border-box[^}]*width:\s*100%[^}]*min-width:\s*0/s);
+    expect(calendar).toMatch(/@media \(min-width: 769px\) and \(max-width: 1100px\)[\s\S]*?\.cal-period-label\s*\{[^}]*min-width:\s*80px[^}]*}[\s\S]*?\.cal-header-right\s*\{[^}]*flex:\s*0 0 auto/s);
+    expect(calendar).toMatch(/@media \(max-width: 768px\)[\s\S]*?\.main-content\s*\{\s*padding:\s*12px;/s);
+    expect(calendar).toMatch(/@media \(max-width: 480px\)[\s\S]*?\.cal-layout\s*\{\s*padding:\s*0;/s);
+    expect(demoRuntime).toMatch(/@media \(max-width: 768px\)[\s\S]*?\.northstar-demo-toolbar-actions \.btn\s*\{[^}]*min-width:\s*0[^}]*width:\s*100%/s);
   });
 
   test('the shared mobile navigation has one explicit accessible open and closed state', () => {

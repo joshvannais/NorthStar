@@ -94,9 +94,11 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     const runtime = read('public/js/demo-runtime.js');
     expect(server).toContain("app.get('/demo-dashboard'");
     expect(server).toContain("res.redirect(301, '/demo')");
-    for (const route of ['/demo/polaris', '/demo/team', '/demo/ai-settings', '/demo/business-profile', '/demo/settings', '/demo/integrations']) {
+    for (const route of ['/demo/polaris', '/demo/team', '/demo/business-profile', '/demo/settings', '/demo/integrations']) {
       expect(runtime).toContain("'" + route + "'");
     }
+    expect(server).toContain("res.redirect(301, '/demo/settings#ai-settings')");
+    expect(server).toContain("res.redirect(301, '/demo/business-profile?section=company#business-number')");
   });
 
   test('public trust copy avoids unsupported certification, SLA, and annual-refund claims', () => {

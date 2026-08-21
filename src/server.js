@@ -90,9 +90,7 @@ const pages = {
   '/dashboard/communications': 'public/dashboard/communications.html',
   '/dashboard/calendar': 'public/dashboard/calendar.html',
   '/dashboard/team': 'public/dashboard/team.html',
-  '/dashboard/ai-settings': 'public/dashboard/ai-settings.html',
   '/dashboard/business-profile': 'public/dashboard/business-profile.html',
-  '/dashboard/my-number': 'public/dashboard/my-number.html',
   '/dashboard/settings': 'public/dashboard/settings.html',
   '/dashboard/integrations': 'public/dashboard/integrations.html',
   '/dashboard/lead': 'public/dashboard/lead.html',
@@ -116,10 +114,8 @@ const demoPageFiles = Object.freeze({
   polaris: 'public/dashboard/polaris.html',
   leads: 'public/dashboard/leads.html',
   communications: 'public/dashboard/communications.html',
-  'my-number': 'public/dashboard/my-number.html',
   calendar: 'public/dashboard/calendar.html',
   team: 'public/dashboard/team.html',
-  'ai-settings': 'public/dashboard/ai-settings.html',
   'business-profile': 'public/dashboard/business-profile.html',
   settings: 'public/dashboard/settings.html',
   integrations: 'public/dashboard/integrations.html',
@@ -141,6 +137,21 @@ app.get('/dashboard/legacy', (_req, res) => {
 // Preserve old bookmarks while keeping one canonical account-free Command Center URL.
 app.get('/demo-dashboard', (_req, res) => {
   res.redirect(301, '/demo');
+});
+
+// Preserve old bookmarks while keeping AI and phone configuration in their
+// single canonical editors.
+app.get('/dashboard/ai-settings', (_req, res) => {
+  res.redirect(301, '/dashboard/settings#ai-settings');
+});
+app.get('/demo/ai-settings', (_req, res) => {
+  res.redirect(301, '/demo/settings#ai-settings');
+});
+app.get('/dashboard/my-number', (_req, res) => {
+  res.redirect(301, '/dashboard/business-profile?section=company#business-number');
+});
+app.get('/demo/my-number', (_req, res) => {
+  res.redirect(301, '/demo/business-profile?section=company#business-number');
 });
 
 Object.entries(pages).forEach(([route, file]) => {

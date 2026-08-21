@@ -17,7 +17,6 @@
   var TOOLBAR_EXCLUDED_PATHS = Object.freeze([
     '/demo/polaris',
     '/demo/team',
-    '/demo/ai-settings',
     '/demo/business-profile',
     '/demo/settings',
     '/demo/integrations',

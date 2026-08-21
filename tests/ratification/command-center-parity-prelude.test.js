@@ -28,10 +28,8 @@ const PAGE_BY_ROUTE = Object.freeze({
   polaris: 'public/dashboard/polaris.html',
   leads: 'public/dashboard/leads.html',
   communications: 'public/dashboard/communications.html',
-  'my-number': 'public/dashboard/my-number.html',
   calendar: 'public/dashboard/calendar.html',
   team: 'public/dashboard/team.html',
-  'ai-settings': 'public/dashboard/ai-settings.html',
   'business-profile': 'public/dashboard/business-profile.html',
   settings: 'public/dashboard/settings.html',
   integrations: 'public/dashboard/integrations.html',
@@ -89,11 +87,11 @@ function renderedText(node) {
 }
 
 describe('Demo/Paid Command Center Parity Prelude contracts', () => {
-  test('one shared route manifest binds all eleven paid destinations to account-free counterparts', async () => {
-    expect(contract.ROUTES).toHaveLength(11);
+  test('one shared route manifest binds all nine paid destinations to account-free counterparts', async () => {
+    expect(contract.ROUTES).toHaveLength(9);
     expect(contract.ROUTES.map(route => route.id)).toEqual(permissions.NAVIGATION_DESTINATIONS.map(route => route.id));
     expect(contract.ROUTES.map(route => route.paidPath)).toEqual(permissions.NAVIGATION_DESTINATIONS.map(route => route.href));
-    expect(new Set(contract.ROUTES.map(route => route.demoPath)).size).toBe(11);
+    expect(new Set(contract.ROUTES.map(route => route.demoPath)).size).toBe(9);
     expect(contract.routeForPath('/demo-dashboard').id).toBe('command-center');
 
     for (const destination of contract.ROUTES) {

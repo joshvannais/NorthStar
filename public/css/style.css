@@ -1376,6 +1376,7 @@ tr:hover td { background: var(--neutral-50); }
   font-weight: 500;
   color: #92400e;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .demo-banner a {

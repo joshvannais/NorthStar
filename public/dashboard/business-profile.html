@@ -203,7 +203,6 @@
               <div class="bp-field"><label>Company Name</label><input id="company-name" placeholder="NorthStar Solutions"></div>
               <div class="bp-field"><label>DBA (Doing Business As)</label><input id="company-dba" placeholder="Optional"></div>
               <div class="bp-field"><label>Business Email</label><input id="company-email" type="email" placeholder="contact@example.com"></div>
-              <div class="bp-field"><label>Business Phone</label><input id="company-phone" type="tel" placeholder="(555) 000-0000"></div>
               <div class="bp-field"><label>Website</label><input id="company-website" type="url" placeholder="https://"></div>
               <div class="bp-field"><label>Logo URL</label><input id="company-logo" type="url" placeholder="https://example.com/logo.svg"></div>
               <div class="bp-field"><label>Tax ID (EIN)</label><input id="company-taxId" placeholder="XX-XXXXXXX"></div>
@@ -211,6 +210,19 @@
                 <select id="company-timeZone"><option value="">Not configured</option><option value="America/New_York">Eastern (ET)</option><option value="America/Chicago">Central (CT)</option><option value="America/Denver">Mountain (MT)</option><option value="America/Phoenix">Arizona (MST)</option><option value="America/Los_Angeles">Pacific (PT)</option><option value="America/Anchorage">Alaska (AKT)</option><option value="Pacific/Honolulu">Hawaii (HT)</option></select></div>
               <div class="bp-field"><label>Currency</label>
                 <select id="company-currency"><option value="USD">USD ($)</option><option value="CAD">CAD (C$)</option><option value="EUR">EUR (€)</option></select></div>
+            </div>
+          </div>
+          <div class="bp-card" id="business-number" tabindex="-1">
+            <h3>My Number</h3>
+            <div class="bp-section-desc">Enter the business number NorthStar should support. Activation requires provider setup and approval.</div>
+            <p class="bp-authority-note">Saving this Business Profile preference does not activate, provision, forward, or connect the number.</p>
+            <div class="bp-grid">
+              <div class="bp-field bp-full"><label for="company-phone">Business Phone</label><input id="company-phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(555) 000-0000"></div>
+            </div>
+            <div class="bp-grid" style="margin-top:16px;">
+              <div class="bp-repeat-card"><strong>Keep Your Number</strong><div class="bp-section-desc" style="margin:6px 0 0;">Customers continue using the business number they already know.</div></div>
+              <div class="bp-repeat-card"><strong>Provider Setup</strong><div class="bp-section-desc" style="margin:6px 0 0;">An approved provider connection is required before NorthStar can answer calls.</div></div>
+              <div class="bp-repeat-card bp-full"><strong>Operational Context</strong><div class="bp-section-desc" style="margin:6px 0 0;">Approved calls can supply lead, scheduling, and follow-up context to the workspace.</div></div>
             </div>
           </div>
         </div>
@@ -1082,6 +1094,7 @@
             setProfileInteractionState('ready', profileCanEdit
               ? 'Your account role can edit this Business Profile.'
               : 'This Business Profile is protected by your account role.');
+            activateRequestedProfileSection();
           } else {
             setProfileInteractionState('error', 'Business Profile authority is unavailable. Editing remains disabled.');
             showToast('Failed to load profile', 'error');
@@ -3351,13 +3364,22 @@
       });
     }
 
-    function activateRequestedVoiceSection() {
+    function activateRequestedProfileSection() {
       var requested = new URLSearchParams(window.location.search).get('section');
-      if (requested !== 'retell' && window.location.hash !== '#voice-assistant-configuration') return;
-      switchSection('retell');
+      var targetId = window.location.hash ? window.location.hash.slice(1) : '';
+      if (targetId === 'voice-assistant-configuration') requested = 'retell';
+      if (targetId === 'business-number') requested = 'company';
+      var validSections = Array.prototype.map.call(document.querySelectorAll('.bp-nav-btn[data-section]'), function(button) {
+        return button.dataset.section;
+      });
+      if (!requested || validSections.indexOf(requested) < 0) return;
+      switchSection(requested);
       window.setTimeout(function() {
-        var heading = document.getElementById('voice-assistant-configuration');
-        if (heading) heading.focus();
+        var target = targetId ? document.getElementById(targetId) : null;
+        if (target) {
+          target.focus();
+          target.scrollIntoView({ block: 'start' });
+        }
       }, 0);
     }
 
@@ -3404,7 +3426,7 @@
           refreshFinancialConfigurationDirty();
         });
       });
-      activateRequestedVoiceSection();
+      activateRequestedProfileSection();
       loadProfile();
       loadAssetCatalogue();
     });

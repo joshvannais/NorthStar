@@ -23,13 +23,11 @@ const THEMES = Object.freeze(['light', 'dark']);
 const PAYLOAD = '<img src=x onerror="window.__slice4Pwned=1"><script>window.__slice4Pwned=2</script>';
 const SURFACES = Object.freeze([
   Object.freeze({ label: 'Business Profile', route: '/dashboard/business-profile', mode: 'bp' }),
-  Object.freeze({ label: 'My Number', route: '/dashboard/my-number', mode: 'legacy', natural: 'my-number', expected: 'Please enter a full phone number' }),
   Object.freeze({ label: 'Settings', route: '/dashboard/settings', mode: 'legacy', natural: 'settings', expected: 'Twilio integration coming soon' }),
   Object.freeze({ label: 'Integrations', route: '/dashboard/integrations', mode: 'legacy' }),
   Object.freeze({ label: 'Leads', route: '/dashboard/leads', mode: 'premium' }),
   Object.freeze({ label: 'Communications', route: '/dashboard/communications', mode: 'premium' }),
   Object.freeze({ label: 'Calendar', route: '/dashboard/calendar', mode: 'legacy' }),
-  Object.freeze({ label: 'AI Settings', route: '/dashboard/ai-settings', mode: 'legacy' }),
   Object.freeze({ label: 'Lead Detail', route: '/dashboard/lead?id=00000000-0000-4000-8000-000000000404', mode: 'legacy' }),
   Object.freeze({ label: 'Public Contact no-toast boundary', route: '/contact', mode: 'none', serviceAbsent: true }),
 ]);
@@ -126,12 +124,7 @@ async function installBoundaries(context, origin, evidence) {
 
 async function triggerNatural(page, surface) {
   if (!surface.natural) return;
-  if (surface.natural === 'my-number') {
-    await page.evaluate(() => {
-      document.getElementById('businessNumber').value = '';
-      window.saveNumber();
-    });
-  } else if (surface.natural === 'settings') {
+  if (surface.natural === 'settings') {
     await page.locator('#integration-twilio button').click();
   }
   await page.waitForFunction(expected => {

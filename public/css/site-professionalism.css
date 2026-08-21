@@ -180,16 +180,32 @@ html body .theme-toggle [data-theme-icon] svg {
 }
 
 @media (min-width: 769px) {
+  html:root,
+  html body {
+    overflow-x: clip;
+  }
+
+  html body .app-layout,
+  html body .dashboard-layout {
+    overflow-x: clip;
+  }
+
   html body .sidebar {
     position: sticky;
     top: 0;
     align-self: flex-start;
     height: 100vh;
     max-height: 100vh;
+    overflow: clip;
+  }
+
+  html body .sidebar-nav {
+    min-height: 0;
     overflow-y: auto;
   }
 
   html body .sidebar-footer {
+    flex: 0 0 auto;
     margin-top: auto;
     padding-top: 12px;
   }

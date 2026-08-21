@@ -109,6 +109,15 @@ describe('surgical site professionalism correction', () => {
     expect(navigation).toContain("if (e.key !== 'Tab') return");
   });
 
+  test('the desktop theme control remains stationary while only sidebar navigation scrolls', () => {
+    const layer = read('public/css/site-professionalism.css');
+    expect(layer).toMatch(/@media \(min-width: 769px\)\s*\{[\s\S]*?html:root,[\s\S]*?html body\s*\{[^}]*overflow-x:\s*clip/s);
+    expect(layer).toMatch(/html body \.app-layout,[\s\S]*?html body \.dashboard-layout\s*\{[^}]*overflow-x:\s*clip/s);
+    expect(layer).toMatch(/html body \.sidebar\s*\{[^}]*position:\s*sticky[^}]*overflow:\s*clip/s);
+    expect(layer).toMatch(/html body \.sidebar-nav\s*\{[^}]*min-height:\s*0[^}]*overflow-y:\s*auto/s);
+    expect(layer).toMatch(/html body \.sidebar-footer\s*\{[^}]*flex:\s*0 0 auto/s);
+  });
+
   test('shared presentation formatting hides internal identifiers and renders structured values as prose', () => {
     const sandbox = { window: {}, Intl };
     sandbox.window.window = sandbox.window;

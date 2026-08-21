@@ -1154,15 +1154,21 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     await captureEvidence(page, 'demo', leadsRoute, viewport, 'customer-detail-open');
     const drawerScroll = await page.evaluate(async () => {
       const body = document.getElementById('cdDrawerBody');
-      const drawer = document.getElementById('cdCustomerDrawer').getBoundingClientRect();
       const polarisNode = document.querySelector('#cdCustomerDrawer .drawer-polaris-insight');
-      polarisNode.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'instant' });
+      const bodyBefore = body.getBoundingClientRect();
+      const polarisBefore = polarisNode.getBoundingClientRect();
+      const target = Math.min(
+        body.scrollHeight - body.clientHeight,
+        Math.max(0, body.scrollTop + polarisBefore.top - bodyBefore.top - 8)
+      );
+      body.scrollTop = target;
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const bodyAfter = body.getBoundingClientRect();
       const polaris = polarisNode.getBoundingClientRect();
       return {
         scrollTop: body.scrollTop,
         scrollableDistance: body.scrollHeight - body.clientHeight,
-        polarisVisible: polaris.bottom > drawer.top && polaris.top < drawer.bottom,
+        polarisVisible: polaris.bottom > bodyAfter.top && polaris.top < bodyAfter.bottom,
       };
     });
     assert.ok((drawerScroll.scrollableDistance <= 1 || drawerScroll.scrollTop > 0) && drawerScroll.polarisVisible,

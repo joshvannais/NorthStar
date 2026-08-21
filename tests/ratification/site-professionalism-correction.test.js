@@ -97,6 +97,7 @@ describe('surgical site professionalism correction', () => {
 
   test('the shared mobile navigation has one explicit accessible open and closed state', () => {
     const navigation = read('public/js/nav-component.js');
+    expect(navigation).toContain('<div class="mobile-header" data-northstar-fixed-header>');
     expect(navigation).toContain('#mobileMenu.mobile-menu[data-state="open"]');
     expect(navigation).toContain('aria-controls="mobileMenu" aria-expanded="false"');
     expect(navigation).toContain('data-state="closed" aria-hidden="true" inert');

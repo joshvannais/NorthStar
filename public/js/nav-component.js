@@ -71,7 +71,7 @@
         '#mobileMenu.mobile-menu.open,#mobileMenu.mobile-menu[data-state="open"]{transform:translate3d(0,0,0);transition-delay:0s;visibility:visible;pointer-events:auto;}' +
         '[data-theme="dark"] .mobile-menu{background:var(--neutral-50);}' +
       '</style>' +
-      '<div class="mobile-header">' +
+      '<div class="mobile-header" data-northstar-fixed-header>' +
         '<button type="button" class="hamburger-btn" id="navHamburgerBtn" aria-controls="mobileMenu" aria-expanded="false" aria-label="Open navigation menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>NorthStar</button>' +
         '<div class="mobile-header-actions">' +
           '<img src="/assets/logo.png" alt="NorthStar" class="mobile-logo">' +

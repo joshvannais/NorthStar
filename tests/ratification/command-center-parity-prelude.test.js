@@ -190,6 +190,12 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(client).toContain('/api/demo/command-center/simulations/leads');
     expect(client).toContain('scenario: selected');
     expect(client).toContain('scenarioSpace.dimensions.forEach');
+    expect(client).toContain("var SCENARIO_PREFERENCES_KEY = 'northstarDemoScenarioPreferences'");
+    expect(client).toContain("var RETURN_TO_TOOLBAR_KEY = 'northstarDemoReturnToToolbar'");
+    expect(client).toContain("stored.sessionId !== value.session.id");
+    expect(client).toContain("definition.id === rememberedValue");
+    expect(client).toContain("global.history.scrollRestoration = 'manual'");
+    expect(client).toContain("global.scrollTo({ top: 0, left: 0, behavior: 'auto' })");
     expect(client).toContain("'X-NorthStar-Demo-Intent': intent");
     expect(client).not.toMatch(/\.innerHTML\s*=|insertAdjacentHTML|document\.write|eval\s*\(/);
     expect(client).not.toContain('northstarDemoPolarisDetail');

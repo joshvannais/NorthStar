@@ -969,6 +969,18 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       page.click('#demoSimulateLead'),
     ]);
     await waitReady(page, ROUTES[0], 2);
+    const postSimulationControls = await page.evaluate(() => ({
+      selection: Object.fromEntries(Array.from(document.querySelectorAll('[data-scenario-dimension]'))
+        .map(control => [control.dataset.scenarioDimension, control.value])),
+      builderOpen: document.querySelector('.northstar-demo-scenario-builder').open,
+      scrollY: window.scrollY,
+    }));
+    assert.deepStrictEqual(postSimulationControls.selection, scenarioSelection,
+      viewport.label + ' manually selected scenario survives simulation reload');
+    assert.strictEqual(postSimulationControls.builderOpen, true,
+      viewport.label + ' scenario builder remains open for a back-to-back lead');
+    assert.ok(postSimulationControls.scrollY <= 1,
+      viewport.label + ' simulation reload returns to the top controls');
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' simulated');
     const simulated = await page.evaluate(() => window.NorthStarDemoRuntime.getWorkspace());
     assert.strictEqual(simulated.session.durable, true, viewport.label + ' explicit mutation creates durable session');

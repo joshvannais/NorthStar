@@ -4,7 +4,6 @@ const commandCenterContract = require('../../public/js/command-center-contract')
 
 const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/', file: 'public/index.html', surface: 'public' },
-  { route: '/demo-dashboard', file: 'public/demo-dashboard.html', surface: 'public-demo' },
   ...commandCenterContract.ROUTES.map(destination => ({
     route: destination.demoPath,
     file: 'public/demo-dashboard.html',
@@ -23,9 +22,7 @@ const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/dashboard/communications', file: 'public/dashboard/communications.html', surface: 'dashboard' },
   { route: '/dashboard/calendar', file: 'public/dashboard/calendar.html', surface: 'dashboard' },
   { route: '/dashboard/team', file: 'public/dashboard/team.html', surface: 'dashboard' },
-  { route: '/dashboard/ai-settings', file: 'public/dashboard/ai-settings.html', surface: 'dashboard' },
   { route: '/dashboard/business-profile', file: 'public/dashboard/business-profile.html', surface: 'dashboard' },
-  { route: '/dashboard/my-number', file: 'public/dashboard/my-number.html', surface: 'dashboard' },
   { route: '/dashboard/settings', file: 'public/dashboard/settings.html', surface: 'dashboard' },
   { route: '/dashboard/integrations', file: 'public/dashboard/integrations.html', surface: 'dashboard' },
   { route: '/dashboard/lead', file: 'public/dashboard/lead.html', surface: 'dashboard' },
@@ -42,8 +39,13 @@ const MOUNTED_THEME_PAGES = Object.freeze([
 ]);
 
 const MOUNTED_REDIRECTS = Object.freeze([
+  '/demo-dashboard',
+  '/demo/ai-settings',
+  '/demo/my-number',
   '/dashboard/calls',
+  '/dashboard/ai-settings',
   '/dashboard/legacy',
+  '/dashboard/my-number',
   '/demo-login',
 ]);
 

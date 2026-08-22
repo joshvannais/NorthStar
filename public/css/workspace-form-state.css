@@ -1,0 +1,8 @@
+.northstar-sticky-save {
+  align-items: center; background: var(--neutral-50); border: 1px solid var(--neutral-300); border-radius: 14px;
+  bottom: 18px; box-shadow: 0 12px 34px rgba(2, 6, 23, .24); color: var(--neutral-800); display: flex;
+  font-size: 14px; font-weight: 700; gap: 18px; justify-content: space-between; left: 50%; max-width: min(92vw, 520px);
+  padding: 10px 12px 10px 16px; position: fixed; transform: translateX(-50%); width: calc(100% - 32px); z-index: 950;
+}
+.northstar-sticky-save[hidden] { display: none; }
+@media (min-width: 769px) { .northstar-sticky-save { left: calc(50% + 120px); } }

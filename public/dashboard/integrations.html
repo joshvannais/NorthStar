@@ -48,6 +48,33 @@
       gap: 18px;
       margin-top: 18px;
     }
+    .integration-availability {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-top: 16px;
+    }
+    .integration-availability button {
+      align-items: flex-start;
+      background: var(--neutral-50);
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-md);
+      color: var(--neutral-700);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+      padding: 12px 14px;
+      text-align: left;
+    }
+    .integration-availability button[aria-pressed="true"] {
+      border-color: var(--brand-500);
+      box-shadow: 0 0 0 2px rgba(202, 162, 39, .18);
+      color: var(--neutral-900);
+    }
+    .integration-availability strong { color: inherit; font-size: 14px; }
+    .integration-availability span { color: var(--neutral-500); font-size: 12px; }
     .integration-category {
       border-top: 1px solid var(--neutral-200);
       min-width: 0;
@@ -58,6 +85,22 @@
       color: var(--neutral-900);
       font-size: 16px;
       margin: 0 0 10px;
+    }
+    .integration-category-details > summary {
+      align-items: center;
+      color: var(--neutral-900);
+      cursor: pointer;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      list-style-position: inside;
+      padding: 2px 0 10px;
+    }
+    .integration-category-details > summary h3 { display: inline; margin: 0; }
+    .integration-category-count {
+      color: var(--neutral-500);
+      font-size: 12px;
+      font-weight: 600;
     }
     .integration-provider-list,
     .integration-loading-list {
@@ -337,6 +380,7 @@
       .main-content { min-width: 0; padding-left: 16px; padding-right: 16px; }
       .integration-toolbar { align-items: stretch; flex-direction: column; }
       .integration-toolbar .btn { align-self: flex-start; }
+      .integration-availability { grid-template-columns: 1fr 1fr; }
       .integration-detail-list { grid-template-columns: 1fr; gap: 3px; }
       .integration-detail-list dd { margin-bottom: 7px; }
       .map-preferences-grid { grid-template-columns: 1fr; }
@@ -367,6 +411,8 @@
           <div class="integration-authority" id="integrationAuthority">NorthStar-owned read-only catalogue</div>
         </div>
         <p class="integration-boundary">No connection or provider-management action is available from this read-only catalogue. Authorization, scopes, data direction, sync, last sync, errors, reconnect, mappings, and webhook health remain unavailable unless NorthStar owns a reviewed authority for them.</p>
+
+        <div class="integration-availability" id="integrationAvailability" aria-label="Filter integrations by availability" hidden></div>
 
         <div id="integrationCatalogueRoot" data-state="loading" aria-busy="true">
           <div id="integrationLoadingState" aria-label="Loading integration catalogue">
@@ -556,6 +602,14 @@
       var empty = document.getElementById('integrationEmptyState');
       var error = document.getElementById('integrationErrorState');
       var statusMessage = document.getElementById('integrationStatusMessage');
+      var availability = document.getElementById('integrationAvailability');
+      var activeAvailability = 'all';
+      var availabilityDefinitions = Object.freeze([
+        Object.freeze({ key: 'connected', label: 'Connected', states: Object.freeze(['connected', 'syncing']) }),
+        Object.freeze({ key: 'available', label: 'Available to configure', states: Object.freeze(['available', 'disconnected']) }),
+        Object.freeze({ key: 'approval', label: 'Requires approval', states: Object.freeze(['requires_provider_approval', 'needs_attention']) }),
+        Object.freeze({ key: 'planned', label: 'Planned', states: Object.freeze(['coming_soon']) })
+      ]);
 
       function exactKeys(value, expected) {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -645,6 +699,10 @@
         var item = createElement('li', 'integration-card');
         if (compactMapProvider) item.classList.add('integration-card-map');
         item.dataset.providerKey = provider.key;
+        var group = availabilityDefinitions.find(function(definition) {
+          return definition.states.indexOf(provider.presentation.state) >= 0;
+        });
+        item.dataset.availability = group ? group.key : 'approval';
         var header = createElement('div', 'integration-card-header');
         var mark = createElement('span', 'integration-mark', provider.mark);
         mark.setAttribute('aria-hidden', 'true');
@@ -677,6 +735,7 @@
       function renderCatalogue(catalogue) {
         var fragment = document.createDocumentFragment();
         var internalProviders = ['twilio', 'openai', 'elevenlabs'];
+        var counts = { connected: 0, available: 0, approval: 0, planned: 0 };
         catalogue.categories.forEach(function(category) {
           var visibleProviders = category.providers.filter(function(provider) {
             return internalProviders.indexOf(provider.key) < 0;
@@ -688,11 +747,77 @@
           heading.id = 'integration-category-' + category.key;
           var providerList = createElement('ul', 'integration-provider-list');
           providerList.setAttribute('aria-labelledby', heading.id);
-          visibleProviders.forEach(function(provider) { providerList.append(providerCard(provider)); });
-          categoryItem.append(heading, providerList);
+          visibleProviders.forEach(function(provider) {
+            var card = providerCard(provider);
+            counts[card.dataset.availability] += 1;
+            providerList.append(card);
+          });
+          var plannedOnly = visibleProviders.every(function(provider) {
+            return provider.presentation.state === 'coming_soon';
+          });
+          if (plannedOnly) {
+            var categoryDetails = createElement('details', 'integration-category-details');
+            var categorySummary = createElement('summary', '');
+            var count = createElement(
+              'span',
+              'integration-category-count',
+              String(visibleProviders.length) + (visibleProviders.length === 1 ? ' planned provider' : ' planned providers')
+            );
+            categorySummary.append(heading, count);
+            categoryDetails.append(categorySummary, providerList);
+            categoryItem.append(categoryDetails);
+          } else {
+            categoryItem.append(heading, providerList);
+          }
           fragment.append(categoryItem);
         });
         list.replaceChildren(fragment);
+        renderAvailability(counts);
+        applyAvailability(activeAvailability);
+      }
+
+      function renderAvailability(counts) {
+        var fragment = document.createDocumentFragment();
+        var total = Object.keys(counts).reduce(function(sum, key) { return sum + counts[key]; }, 0);
+        [{ key: 'all', label: 'All customer-facing', count: total }].concat(
+          availabilityDefinitions.map(function(definition) {
+            return { key: definition.key, label: definition.label, count: counts[definition.key] };
+          })
+        ).forEach(function(definition) {
+          var button = createElement('button', '', '');
+          button.type = 'button';
+          button.dataset.integrationFilter = definition.key;
+          button.setAttribute('aria-pressed', activeAvailability === definition.key ? 'true' : 'false');
+          button.append(
+            createElement('strong', '', definition.label),
+            createElement('span', '', String(definition.count) + (definition.count === 1 ? ' provider' : ' providers'))
+          );
+          button.addEventListener('click', function() { applyAvailability(definition.key); });
+          fragment.append(button);
+        });
+        availability.replaceChildren(fragment);
+        availability.hidden = false;
+      }
+
+      function applyAvailability(filter) {
+        activeAvailability = filter;
+        availability.querySelectorAll('[data-integration-filter]').forEach(function(button) {
+          button.setAttribute('aria-pressed', button.dataset.integrationFilter === filter ? 'true' : 'false');
+        });
+        list.querySelectorAll('.integration-category').forEach(function(category) {
+          var visible = 0;
+          category.querySelectorAll('.integration-card').forEach(function(card) {
+            card.hidden = filter !== 'all' && card.dataset.availability !== filter;
+            if (!card.hidden) visible += 1;
+          });
+          category.hidden = visible === 0;
+          var details = category.querySelector('.integration-category-details');
+          if (details && filter !== 'all' && visible > 0) details.open = true;
+        });
+        if (filter !== 'all') {
+          var definition = availabilityDefinitions.find(function(item) { return item.key === filter; });
+          statusMessage.textContent = 'Showing ' + (definition ? definition.label.toLowerCase() : filter) + ' providers.';
+        }
       }
 
       function setState(state) {
@@ -701,6 +826,7 @@
         empty.hidden = state !== 'empty';
         error.hidden = state !== 'error';
         list.hidden = state !== 'ready';
+        if (state !== 'ready') availability.hidden = true;
       }
 
       async function loadCatalogue(options) {

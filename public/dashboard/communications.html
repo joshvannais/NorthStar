@@ -478,7 +478,8 @@
             <div class="call-search-bar">
       <div style="position:relative;display:flex;align-items:center;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:12px;width:16px;height:16px;color:var(--neutral-400);pointer-events:none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="callSearchInput" placeholder="Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)">
+        <label class="sr-only" for="callSearchInput">Search communications</label>
+        <input type="search" id="callSearchInput" placeholder="Search by name, phone, address, service, or transcript..." oninput="setSearch(this.value)">
       </div>
     </div>
         </div>
@@ -499,7 +500,7 @@
                       <div class="ds-widget ds-widget-full">
                       <div class="filter-bar">
       <div class="filter-btn-wrapper">
-        <button class="filter-btn" id="filterToggleBtn" onclick="toggleFilterDropdown()">
+        <button class="filter-btn" id="filterToggleBtn" onclick="toggleFilterDropdown()" aria-expanded="false" aria-controls="filterDropdown">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
           Filters
           <span class="filter-badge" id="filterCountBadge" style="display:none;">0</span>
@@ -543,7 +544,7 @@
           <!-- AI-Related Calls Toggle -->
           <div class="filter-section">
             <div class="filter-toggle-row">
-              <span class="filter-toggle-label">🤖 AI-Related Calls Only</span>
+              <label class="filter-toggle-label" for="filterAiToggle">AI-Related Calls Only</label>
               <label class="filter-toggle">
                 <input type="checkbox" id="filterAiToggle" onchange="toggleAiFilter(this.checked)">
                 <span class="filter-toggle-slider"></span>
@@ -555,8 +556,10 @@
           <div class="filter-section">
             <div class="filter-section-title">Revenue Range</div>
             <div class="filter-range-row">
+              <label class="sr-only" for="filterRevenueMin">Minimum recorded revenue</label>
               <input type="number" class="filter-range-input" id="filterRevenueMin" placeholder="Min $" min="0" onchange="setFilterRevenue()">
               <span class="filter-range-sep">to</span>
+              <label class="sr-only" for="filterRevenueMax">Maximum recorded revenue</label>
               <input type="number" class="filter-range-input" id="filterRevenueMax" placeholder="Max $" min="0" onchange="setFilterRevenue()">
             </div>
           </div>
@@ -576,7 +579,7 @@
           <button class="filter-reset-btn" onclick="resetAllFilters()">↺ Reset All Filters</button>
         </div>
       </div>
-      <button class="filter-btn-danger" onclick="clearAllCalls()">🗑 Clear All</button>
+      <button class="filter-btn-danger" onclick="resetAllFilters()">Clear Filters</button>
       <span class="results-count" id="resultsCount"></span>
     </div>
 <!-- Call List -->
@@ -638,12 +641,14 @@ var communicationsLoadState = 'loading';
 function toggleFilterDropdown() {
   var dd = document.getElementById('filterDropdown');
   dd.classList.toggle('open');
+  document.getElementById('filterToggleBtn').setAttribute('aria-expanded', String(dd.classList.contains('open')));
   if (dd.classList.contains('open') && document.querySelectorAll('#filterServiceOptions .filter-option-btn[data-service]').length <= 1) {
     populateServiceTypes();
   }
 }
 function closeFilterDropdown() {
   document.getElementById('filterDropdown').classList.remove('open');
+  document.getElementById('filterToggleBtn').setAttribute('aria-expanded', 'false');
 }
 document.addEventListener('click', function(e) {
   var wrapper = document.querySelector('.filter-btn-wrapper');
@@ -749,6 +754,7 @@ function resetAllFilters() {
   filterState.aiOnly = false;
   filterState.revenueMin = null;
   filterState.revenueMax = null;
+  curSearch = '';
   updateStatusUI();
   document.querySelectorAll('#filterDateOptions .filter-option-btn').forEach(function(b) {
     b.classList.toggle('selected', b.dataset.range === 'all');
@@ -759,6 +765,7 @@ function resetAllFilters() {
   document.getElementById('filterAiToggle').checked = false;
   document.getElementById('filterRevenueMin').value = '';
   document.getElementById('filterRevenueMax').value = '';
+  document.getElementById('callSearchInput').value = '';
   updateFilterUI();
   renderCalls();
 }
@@ -1045,7 +1052,7 @@ function loadKpiGrid() {
   };
   var html = '';
   kpiDefinitions.forEach(function(kpi) {
-    html += '<div class="ds-kpi-card" role="link" tabindex="0" data-kpi-target="callHistoryList">' +
+    html += '<div class="ds-kpi-card">' +
       '<div class="ds-kpi-icon" style="background:var(--kpi-' + kpi.id + '-bg,var(--neutral-50));color:var(--kpi-' + kpi.id + '-color,var(--neutral-500));">' +
         icons[kpi.icon] +
       '</div>' +
@@ -1055,16 +1062,6 @@ function loadKpiGrid() {
     '</div>';
   });
   grid.innerHTML = html;
-  grid.querySelectorAll('[data-kpi-target]').forEach(function(card) {
-    function activate(event) {
-      if (event && event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
-      if (event) event.preventDefault();
-      var target = document.getElementById(card.dataset.kpiTarget);
-      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    card.addEventListener('click', activate);
-    card.addEventListener('keydown', activate);
-  });
   grid.setAttribute('aria-busy', 'false');
 }
 

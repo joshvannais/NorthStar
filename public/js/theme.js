@@ -9,6 +9,7 @@
   var initialized = false;
   var dockingObserver = null;
   var themeSwitchToken = 0;
+  var telemetryRequested = false;
 
   var INTERACTIVE_SELECTOR = 'a[href], button, input:not([type="hidden"]), select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])';
 
@@ -235,6 +236,13 @@
     }
     updateToggle(currentTheme());
     scheduleDocking();
+    if (!telemetryRequested) {
+      telemetryRequested = true;
+      var telemetry = document.createElement('script');
+      telemetry.src = '/js/product-telemetry.js';
+      telemetry.defer = true;
+      document.head.appendChild(telemetry);
+    }
   }
 
   global.NorthStarTheme = Object.freeze({

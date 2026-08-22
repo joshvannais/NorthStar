@@ -12,6 +12,29 @@
   max-width: 760px;
 }
 
+.homepage-refresh .demo-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 24px auto;
+}
+
+.homepage-refresh .demo-web-call-pending {
+  display: grid;
+  gap: 5px;
+  max-width: 620px;
+  margin: 18px auto;
+  padding: 16px 18px;
+  border: 1px solid var(--neutral-200);
+  border-radius: 12px;
+  background: var(--neutral-100);
+  color: var(--neutral-600);
+  text-align: left;
+}
+
+.homepage-refresh .demo-web-call-pending[hidden] { display: none; }
+
 .demo-eyebrow,
 .demo-panel-kicker {
   color: var(--northstar-brand-gold);

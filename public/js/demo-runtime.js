@@ -14,8 +14,18 @@
   var workspaceRequest = null;
   var accountRequest = null;
   var readonlyMessage = 'This account-free demo is read-only outside Simulate Lead and Reset demo.';
+  var SCENARIO_PREFERENCES_KEY = 'northstarDemoScenarioPreferences';
+  var RETURN_TO_TOOLBAR_KEY = 'northstarDemoReturnToToolbar';
+  var returnToToolbarRequested = false;
+  try {
+    returnToToolbarRequested = Boolean(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY));
+    if (returnToToolbarRequested && global.history && 'scrollRestoration' in global.history) {
+      global.history.scrollRestoration = 'manual';
+    }
+  } catch (_storageError) {}
   var TOOLBAR_EXCLUDED_PATHS = Object.freeze([
     '/demo/polaris',
+    '/demo/team',
     '/demo/business-profile',
     '/demo/settings',
     '/demo/integrations',
@@ -338,6 +348,77 @@
     };
   }
 
+  function readScenarioPreferences(value) {
+    try {
+      var stored = JSON.parse(global.sessionStorage.getItem(SCENARIO_PREFERENCES_KEY) || 'null');
+      if (!stored || !value || !value.session || stored.sessionId !== value.session.id ||
+          !stored.selection || typeof stored.selection !== 'object' || Array.isArray(stored.selection)) {
+        return null;
+      }
+      return stored;
+    } catch (_storageError) {
+      return null;
+    }
+  }
+
+  function writeScenarioPreferences(value, selection, open) {
+    if (!value || !value.session || !value.session.id) return;
+    try {
+      global.sessionStorage.setItem(SCENARIO_PREFERENCES_KEY, JSON.stringify({
+        sessionId: value.session.id,
+        selection: selection,
+        open: Boolean(open),
+      }));
+    } catch (_storageError) {}
+  }
+
+  function clearScenarioPreferences() {
+    try { global.sessionStorage.removeItem(SCENARIO_PREFERENCES_KEY); } catch (_storageError) {}
+  }
+
+  function requestToolbarReturn(value) {
+    try {
+      global.sessionStorage.setItem(RETURN_TO_TOOLBAR_KEY, JSON.stringify({
+        sessionId: value && value.session && value.session.id,
+      }));
+    } catch (_storageError) {}
+  }
+
+  function returnToToolbar(value) {
+    if (!returnToToolbarRequested) return;
+    var matchesSession = false;
+    try {
+      var requested = JSON.parse(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY) || 'null');
+      matchesSession = Boolean(requested && value && value.session && requested.sessionId === value.session.id);
+      global.sessionStorage.removeItem(RETURN_TO_TOOLBAR_KEY);
+    } catch (_storageError) {}
+    returnToToolbarRequested = false;
+    if (!matchesSession) return;
+    var root = document.documentElement;
+    var previousInlineScrollBehavior = root && root.style.scrollBehavior || '';
+    if (root) root.style.scrollBehavior = 'auto';
+    var scrollToTop = function () {
+      global.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      if (root) root.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    };
+    scrollToTop();
+    if (typeof global.requestAnimationFrame === 'function') {
+      global.requestAnimationFrame(function () {
+        scrollToTop();
+        global.requestAnimationFrame(scrollToTop);
+      });
+    }
+    global.setTimeout(scrollToTop, 50);
+    global.setTimeout(scrollToTop, 150);
+    global.setTimeout(scrollToTop, 300);
+    global.addEventListener('load', scrollToTop, { once: true });
+    global.addEventListener('pageshow', scrollToTop, { once: true });
+    global.setTimeout(function () {
+      if (root) root.style.scrollBehavior = previousInlineScrollBehavior;
+    }, 600);
+  }
+
   function performMutation(endpoint, intent, body, button, status) {
     button.disabled = true;
     status.textContent = 'Updating the isolated demo workspace…';
@@ -353,12 +434,23 @@
           global.sessionStorage.setItem('northstarSessionId', workspace.session.id);
           global.sessionStorage.setItem('northstarDemoNotice', intent === 'reset'
             ? 'Demo restored to its starting state.' : 'One demo lead was added across every demo destination.');
+          if (intent === 'simulate-lead') {
+            global.sessionStorage.setItem('northstarOnboardingSimulated', 'true');
+            requestToolbarReturn(workspace);
+          }
+          if (intent === 'reset') clearScenarioPreferences();
         } catch (_storageError) {}
+        var action = intent === 'reset' ? 'demo_reset' : 'demo_simulate_lead';
+        global.dispatchEvent(new CustomEvent('northstar:interaction-complete', { detail: { action: action } }));
+        if (intent === 'simulate-lead') global.dispatchEvent(new CustomEvent('northstar:demo-simulated'));
         global.location.reload();
       });
     }).catch(function (error) {
       status.textContent = error.message || 'The demo action could not be completed.';
       button.disabled = false;
+      global.dispatchEvent(new CustomEvent('northstar:interaction-complete', {
+        detail: { action: intent === 'reset' ? 'demo_reset' : 'demo_simulate_lead' },
+      }));
     });
   }
 
@@ -381,8 +473,8 @@
     copy.append(metadata);
     var builder = document.createElement('details');
     builder.className = 'northstar-demo-scenario-builder';
-    builder.open = (path === '/demo' || path === '/demo-dashboard') &&
-      global.matchMedia && global.matchMedia('(min-width: 769px)').matches;
+    var rememberedPreferences = readScenarioPreferences(value);
+    builder.open = Boolean(rememberedPreferences && rememberedPreferences.open);
     var summary = control('summary', scenarioReady
       ? 'Build a lead scenario · ' + Number(scenarioSpace.combinationCount).toLocaleString() + ' material combinations'
       : 'Scenario builder unavailable');
@@ -391,6 +483,14 @@
     var scenarioGrid = control('div', '', 'northstar-demo-scenario-grid');
     var businessSummary = control('p', '', 'northstar-demo-business-summary');
     businessSummary.id = 'northstarDemoBusinessSummary';
+    var guidedPresets = control('div', '', 'northstar-demo-presets');
+    guidedPresets.setAttribute('aria-label', 'Guided demo scenarios');
+    guidedPresets.appendChild(control('span', 'Quick scenarios', 'northstar-demo-presets-label'));
+    var presetDefinitions = [
+      { id: 'missed-call', label: 'Urgent missed-call recovery', selection: { business: 'growing_residential', service: 'plumbing', intent: 'repair_request', urgency: 'within_24_hours', context: 'new_customer', scheduling: 'flexible', outcome: 'follow_up' } },
+      { id: 'high-value', label: 'High-value estimate', selection: { business: 'owner_operator', service: 'roofing', intent: 'new_estimate', urgency: 'planning', context: 'new_customer', scheduling: 'weekday_morning', outcome: 'estimate_ready' } },
+      { id: 'schedule-conflict', label: 'Schedule conflict and follow-up', selection: { business: 'multi_crew', service: 'hvac', intent: 'repair_request', urgency: 'this_week', context: 'returning_customer', scheduling: 'after_hours', outcome: 'needs_information' } }
+    ];
     if (scenarioReady) {
       scenarioSpace.dimensions.forEach(function (dimension, dimensionIndex) {
         if (!dimension || typeof dimension.id !== 'string' || typeof dimension.label !== 'string' ||
@@ -415,6 +515,12 @@
           }
           select.appendChild(option);
         });
+        var rememberedValue = rememberedPreferences && rememberedPreferences.selection[dimension.id];
+        if (typeof rememberedValue === 'string' && dimension.options.some(function (definition) {
+          return definition.id === rememberedValue;
+        })) {
+          select.value = rememberedValue;
+        }
         selections[dimension.id] = select;
         field.append(label, select);
         scenarioGrid.appendChild(field);
@@ -434,17 +540,42 @@
       : 'The shared scenario contract could not be verified. No demo mutation is available.',
     'northstar-demo-scenario-help');
     scenarioHelp.id = 'northstarDemoScenarioHelp';
-    builder.append(scenarioGrid, businessSummary, scenarioHelp);
+    if (scenarioReady) {
+      presetDefinitions.forEach(function (preset) {
+        var button = control('button', preset.label, 'northstar-demo-preset');
+        button.type = 'button';
+        button.dataset.preset = preset.id;
+        button.addEventListener('click', function () {
+          Object.keys(preset.selection).forEach(function (dimension) {
+            if (!selections[dimension]) return;
+            selections[dimension].value = preset.selection[dimension];
+            selections[dimension].dispatchEvent(new Event('change', { bubbles: true }));
+          });
+          builder.open = true;
+          writeScenarioPreferences(value, preset.selection, true);
+          scenarioHelp.textContent = preset.label + ' is ready. Review any field, then simulate the lead.';
+          var firstSelect = scenarioGrid.querySelector('select');
+          if (firstSelect) firstSelect.focus();
+        });
+        guidedPresets.appendChild(button);
+      });
+    }
+    builder.append(guidedPresets, scenarioGrid, businessSummary, scenarioHelp);
     var actions = control('div', '', 'northstar-demo-toolbar-actions');
     var simulate = control('button', 'Simulate Lead', 'btn btn-primary');
     simulate.id = 'demoSimulateLead';
     simulate.type = 'button';
+    simulate.dataset.telemetryAction = 'demo_simulate_lead';
+    simulate.setAttribute('data-telemetry-dead-click', '');
     simulate.disabled = !scenarioReady;
     var reset = control('button', 'Reset Demo', 'btn btn-secondary');
     reset.id = 'demoReset';
     reset.type = 'button';
+    reset.dataset.telemetryAction = 'demo_reset';
+    reset.setAttribute('data-telemetry-dead-click', '');
     var exit = control('a', 'Exit Demo', 'btn btn-ghost');
     exit.href = '/';
+    exit.dataset.telemetryAction = 'demo_exit';
     actions.append(simulate, reset, exit);
     var status = control('p', '', 'northstar-demo-toolbar-status');
     status.id = 'northstarDemoStatus';
@@ -459,9 +590,22 @@
     }
     section.append(copy, builder, actions, status);
     main.insertBefore(section, main.firstChild);
-    simulate.addEventListener('click', function () {
+    returnToToolbar(value);
+    var selectedScenario = function () {
       var selected = {};
       Object.keys(selections).forEach(function (dimension) { selected[dimension] = selections[dimension].value; });
+      return selected;
+    };
+    var persistScenarioPreferences = function () {
+      writeScenarioPreferences(value, selectedScenario(), builder.open);
+    };
+    builder.addEventListener('toggle', persistScenarioPreferences);
+    Object.keys(selections).forEach(function (dimension) {
+      selections[dimension].addEventListener('change', persistScenarioPreferences);
+    });
+    simulate.addEventListener('click', function () {
+      var selected = selectedScenario();
+      writeScenarioPreferences(value, selected, builder.open);
       performMutation('/api/demo/command-center/simulations/leads', 'simulate-lead', {
         scenario: selected, expectedRevision: workspace.integrity.revision,
       }, simulate, status);

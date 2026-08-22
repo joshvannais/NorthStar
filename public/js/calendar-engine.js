@@ -46,7 +46,7 @@ class CalendarState {
   getEventsForMonth() {
     return this.events.filter(e => {
       if (!e.date) return false;
-      const d = new Date(e.date);
+      const d = new Date(e.date + 'T12:00:00');
       return d.getMonth() === this.month && d.getFullYear() === this.year;
     });
   }
@@ -57,7 +57,21 @@ class CalendarState {
   }
 
   navigate(delta) {
-    this.currentDate.setMonth(this.currentDate.getMonth() + delta);
+    if (this.view === 'day') {
+      this.navigateDay(delta);
+      return;
+    }
+    if (this.view === 'week') {
+      const anchor = this.selectedDate
+        ? new Date(this.selectedDate + 'T12:00:00')
+        : new Date(this.currentDate);
+      anchor.setDate(anchor.getDate() + (delta * 7));
+      this.currentDate = anchor;
+      this.selectedDate = this._formatDate(anchor);
+      this._notify();
+      return;
+    }
+    this.currentDate = new Date(this.year, this.month + delta, 1);
     this.selectedDate = null;
     this._notify();
   }
@@ -86,7 +100,7 @@ class CalendarState {
     // Sync currentDate so week/day views use the selected date
     if (d) {
       const dt = d instanceof Date ? new Date(d) : new Date(d + 'T12:00:00');
-      this.currentDate = new Date(dt.getFullYear(), dt.getMonth(), 1);
+      this.currentDate = dt;
     }
     this._notify();
   }
@@ -95,7 +109,7 @@ class CalendarState {
     const d = this.selectedDate instanceof Date ? new Date(this.selectedDate) : new Date(this.selectedDate + 'T12:00:00');
     d.setDate(d.getDate() + delta);
     this.selectedDate = this._formatDate(d);
-    this.currentDate = new Date(d.getFullYear(), d.getMonth(), 1);
+    this.currentDate = d;
     this._notify();
   }
   selectEvent(e) { this.selectedEvent = e; this._notify(); }
@@ -169,18 +183,23 @@ class CalendarRenderer {
     if (!this.header) return;
     const s = this.state;
     const views = ['month','week','day','agenda'];
+    const periodLabel = s.view === 'day'
+      ? new Date((s.selectedDate || s._formatDate(s.currentDate)) + 'T12:00:00').toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })
+      : s.getMonthLabel();
+    const unit = s.view === 'day' ? 'day' : (s.view === 'week' ? 'week' : (s.view === 'agenda' ? 'period' : 'month'));
     this.header.innerHTML = `
       <div class="cal-header-left">
         <h1 class="cal-title">Calendar</h1>
         <div class="cal-nav-btns">
-          <button class="cal-nav-btn" onclick="window.calState.navigate(-1)">‹</button>
-          <button class="cal-nav-btn" onclick="window.calState.navigate(1)">›</button>
+          <button class="cal-nav-btn" onclick="window.calState.navigate(-1)" aria-label="Previous ${unit}">‹</button>
+          <button class="cal-nav-btn" onclick="window.calState.navigate(1)" aria-label="Next ${unit}">›</button>
           <button class="cal-today-btn" onclick="window.calState.goToday()">Today</button>
         </div>
+        <div class="cal-period-label" aria-live="polite">${escapeCalendarMarkup(periodLabel)}</div>
       </div>
       <div class="cal-header-right">
         <div class="cal-view-tabs">${views.map(v =>
-          `<button class="cal-view-tab${v === s.view ? ' active' : ''}" onclick="window.calState.setView('${v}')">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`
+           `<button class="cal-view-tab${v === s.view ? ' active' : ''}" onclick="window.calState.setView('${v}')" aria-pressed="${v === s.view}">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`
         ).join('')}</div>
       </div>`;
   }
@@ -374,7 +393,7 @@ class CalendarRenderer {
         if (!e.date) return;
         if (e.date !== lastDate) {
           lastDate = e.date;
-          const d = new Date(e.date);
+          const d = new Date(e.date + 'T12:00:00');
           const dateLabel = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
           const isToday = e.date === todayStr;
           html += `<div class="cal-agenda-date ${isToday ? 'cal-agenda-date-today' : ''}">${dateLabel}${isToday ? ' — Today' : ''}</div>`;
@@ -513,24 +532,24 @@ class CalendarModal {
   _formatDate(date) { const y=date.getFullYear(); const m=String(date.getMonth()+1).padStart(2,'0'); const d=String(date.getDate()).padStart(2,'0'); return `${y}-${m}-${d}`; }
 
   openCreateEvent(date) {
-    const dateStr = date ? this._formatDate(date) : new Date().toISOString().split('T')[0];
+    const dateStr = date ? this._formatDate(date) : this._formatDate(new Date());
     const html = `
       <div class="cal-modal-overlay" id="calModalOverlay" onclick="window.calModal.close()">
-        <div class="cal-modal" onclick="event.stopPropagation()">
-          <div class="cal-modal-header"><h2>New Event</h2><button class="cal-modal-close" onclick="window.calModal.close()">×</button></div>
+        <div class="cal-modal" role="dialog" aria-modal="true" aria-labelledby="calModalTitle" onclick="event.stopPropagation()">
+          <div class="cal-modal-header"><h2 id="calModalTitle">New Event</h2><button class="cal-modal-close" onclick="window.calModal.close()" aria-label="Close new event dialog">×</button></div>
           <div class="cal-modal-body">
-            <div class="cal-modal-field"><label>Title</label><input type="text" id="calEventTitle" placeholder="Event title"></div>
-            <div class="cal-modal-field"><label>Date</label><input type="date" id="calEventDate" value="${dateStr}"></div>
+            <div class="cal-modal-field"><label for="calEventTitle">Title</label><input type="text" id="calEventTitle" placeholder="Event title" required></div>
+            <div class="cal-modal-field"><label for="calEventDate">Date</label><input type="date" id="calEventDate" value="${dateStr}" required></div>
             <div class="cal-modal-row">
-              <div class="cal-modal-field"><label>Start Time</label><input type="time" id="calEventTime" value="09:00"></div>
-              <div class="cal-modal-field"><label>End Time</label><input type="time" id="calEventEndTime" value="10:00"></div>
+              <div class="cal-modal-field"><label for="calEventTime">Start Time</label><input type="time" id="calEventTime" value="09:00"></div>
+              <div class="cal-modal-field"><label for="calEventEndTime">End Time</label><input type="time" id="calEventEndTime" value="10:00"></div>
             </div>
-            <div class="cal-modal-field"><label>Description</label><textarea id="calEventDescription" rows="3" placeholder="Event description"></textarea></div>
-            <div class="cal-modal-field"><label>Color</label><div class="cal-color-picker">
+            <div class="cal-modal-field"><label for="calEventDescription">Description</label><textarea id="calEventDescription" rows="3" placeholder="Event description"></textarea></div>
+            <fieldset class="cal-modal-field"><legend>Color</legend><div class="cal-color-picker">
               ${['#6395ff','#22c55e','#f59e0b','#ef4444','#a855f7','#14b8a6'].map(c =>
-                `<div class="cal-color-option" style="background:${c}" data-color="${c}" onclick="document.querySelectorAll('.cal-color-option').forEach(el=>el.classList.remove('selected')); this.classList.add('selected');"></div>`
+                `<button type="button" class="cal-color-option" aria-label="Select ${c} event color" style="background:${c}" data-color="${c}" onclick="document.querySelectorAll('.cal-color-option').forEach(el=>el.classList.remove('selected')); this.classList.add('selected');"></button>`
               ).join('')}
-            </div></div>
+            </div></fieldset>
           </div>
           <div class="cal-modal-footer">
             <button class="cal-modal-btn cal-modal-cancel" onclick="window.calModal.close()">Cancel</button>
@@ -544,21 +563,21 @@ class CalendarModal {
   openEditEvent(event) {
     const html = `
       <div class="cal-modal-overlay" id="calModalOverlay" onclick="window.calModal.close()">
-        <div class="cal-modal" onclick="event.stopPropagation()">
-          <div class="cal-modal-header"><h2>Edit Event</h2><button class="cal-modal-close" onclick="window.calModal.close()">×</button></div>
+        <div class="cal-modal" role="dialog" aria-modal="true" aria-labelledby="calModalTitle" onclick="event.stopPropagation()">
+          <div class="cal-modal-header"><h2 id="calModalTitle">Edit Event</h2><button class="cal-modal-close" onclick="window.calModal.close()" aria-label="Close edit event dialog">×</button></div>
           <div class="cal-modal-body">
-            <div class="cal-modal-field"><label>Title</label><input type="text" id="calEventTitle" value="${event.title || ''}"></div>
-            <div class="cal-modal-field"><label>Date</label><input type="date" id="calEventDate" value="${event.date || ''}"></div>
+            <div class="cal-modal-field"><label for="calEventTitle">Title</label><input type="text" id="calEventTitle" value="${escapeCalendarMarkup(event.title || '')}" required></div>
+            <div class="cal-modal-field"><label for="calEventDate">Date</label><input type="date" id="calEventDate" value="${escapeCalendarMarkup(event.date || '')}" required></div>
             <div class="cal-modal-row">
-              <div class="cal-modal-field"><label>Start Time</label><input type="time" id="calEventTime" value="${event.time || '09:00'}"></div>
-              <div class="cal-modal-field"><label>End Time</label><input type="time" id="calEventEndTime" value="${event.endTime || '10:00'}"></div>
+              <div class="cal-modal-field"><label for="calEventTime">Start Time</label><input type="time" id="calEventTime" value="${escapeCalendarMarkup(event.time || '09:00')}"></div>
+              <div class="cal-modal-field"><label for="calEventEndTime">End Time</label><input type="time" id="calEventEndTime" value="${escapeCalendarMarkup(event.endTime || '10:00')}"></div>
             </div>
-            <div class="cal-modal-field"><label>Description</label><textarea id="calEventDescription" rows="3">${event.description || ''}</textarea></div>
-            <div class="cal-modal-field"><label>Color</label><div class="cal-color-picker">
+            <div class="cal-modal-field"><label for="calEventDescription">Description</label><textarea id="calEventDescription" rows="3">${escapeCalendarMarkup(event.description || '')}</textarea></div>
+            <fieldset class="cal-modal-field"><legend>Color</legend><div class="cal-color-picker">
               ${['#6395ff','#22c55e','#f59e0b','#ef4444','#a855f7','#14b8a6'].map(c =>
-                `<div class="cal-color-option ${c === (event.color || '#6395ff') ? 'selected' : ''}" style="background:${c}" data-color="${c}" onclick="document.querySelectorAll('.cal-color-option').forEach(el=>el.classList.remove('selected')); this.classList.add('selected');"></div>`
+                `<button type="button" class="cal-color-option ${c === (event.color || '#6395ff') ? 'selected' : ''}" aria-label="Select ${c} event color" style="background:${c}" data-color="${c}" onclick="document.querySelectorAll('.cal-color-option').forEach(el=>el.classList.remove('selected')); this.classList.add('selected');"></button>`
               ).join('')}
-            </div></div>
+            </div></fieldset>
           </div>
           <div class="cal-modal-footer">
             <button class="cal-modal-btn cal-modal-delete" onclick="window.calModal.deleteEvent('${event.id}')">Delete</button>
@@ -572,14 +591,44 @@ class CalendarModal {
 
   _show(html) {
     this.close();
+    this.previouslyFocused = document.activeElement;
     const div = document.createElement('div');
     div.innerHTML = html;
     document.body.appendChild(div.firstElementChild);
     const opts = document.querySelectorAll('.cal-color-option');
     if (opts.length > 0 && !document.querySelector('.cal-color-option.selected')) opts[0].classList.add('selected');
+    this.boundKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        this.close();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const dialog = document.querySelector('.cal-modal[role="dialog"]');
+      if (!dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', this.boundKeyDown);
+    document.getElementById('calEventTitle')?.focus();
   }
 
-  close() { const o = document.getElementById('calModalOverlay'); if (o) o.remove(); }
+  close() {
+    const o = document.getElementById('calModalOverlay');
+    if (o) o.remove();
+    if (this.boundKeyDown) document.removeEventListener('keydown', this.boundKeyDown);
+    this.boundKeyDown = null;
+    if (this.previouslyFocused && document.contains(this.previouslyFocused)) this.previouslyFocused.focus();
+    this.previouslyFocused = null;
+  }
 
   _getFormData() {
     const title = document.getElementById('calEventTitle')?.value;
@@ -624,7 +673,12 @@ window.calRenderer = calRenderer;
 window.calData = calData;
 window.calModal = calModal;
 
-window.openEventModal = function() { calModal.openCreateEvent(calState.selectedDate || new Date()); };
+window.openEventModal = function() {
+  const selected = calState.selectedDate
+    ? new Date(calState.selectedDate + 'T12:00:00')
+    : new Date();
+  calModal.openCreateEvent(selected);
+};
 
 // Present authoritative calendar records. The historical function name is
 // retained for the PR #68 readiness contract; it no longer synthesizes events.

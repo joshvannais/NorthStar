@@ -78,6 +78,39 @@
   padding: 4px 13px 12px;
 }
 
+.northstar-demo-presets {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+
+.northstar-demo-presets-label {
+  color: var(--neutral-500);
+  flex: 0 0 100%;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.northstar-demo-preset {
+  background: var(--neutral-50);
+  border: 1px solid var(--neutral-300);
+  border-radius: 999px;
+  color: var(--neutral-700);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 38px;
+  padding: 7px 12px;
+}
+
+.northstar-demo-preset:hover { border-color: var(--brand-500); color: var(--brand-700); }
+.northstar-demo-preset:focus-visible { outline: 3px solid rgba(217, 169, 34, .42); outline-offset: 2px; }
+
 .northstar-demo-scenario-field {
   display: grid;
   min-width: 0;
@@ -175,6 +208,7 @@
 @media (max-width: 768px) {
   .northstar-demo-toolbar {
     grid-template-columns: 1fr;
+    min-width: 0;
     margin-bottom: 18px;
     padding: 14px;
   }
@@ -188,7 +222,10 @@
   .northstar-demo-scenario-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .northstar-demo-toolbar-actions .btn {
+    box-sizing: border-box;
+    min-width: 0;
     width: 100%;
+    padding-inline: 12px;
     justify-content: center;
   }
 
@@ -203,6 +240,7 @@
 
 @media (max-width: 420px) {
   .northstar-demo-scenario-grid { grid-template-columns: 1fr; }
+  .northstar-demo-preset { flex: 1 1 100%; text-align: left; }
 
   .northstar-demo-detail-grid {
     grid-template-columns: 1fr;

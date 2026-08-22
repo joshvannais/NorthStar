@@ -26,6 +26,11 @@ const memoryStore = new Map();
 function getLimitConfig(group, plan = 'starter') {
   const configs = {
     'public-api': { starter: 100, professional: 300, enterprise: 1000 },
+    // Product telemetry is a best-effort, privacy-bounded aggregate stream.
+    // A normal multi-page product tour emits both view and exit events, so it
+    // needs an isolated allowance instead of consuming the customer-facing
+    // public API budget or surfacing background 429 errors in the browser.
+    'product-telemetry': { starter: 1000, professional: 1000, enterprise: 1000 },
     'internal-api': { starter: 1000, professional: 1000, enterprise: 1000 },
     'auth': { default: 5, window: 15 * 60 * 1000 }, // 5 attempts per 15 min
     'auth-total': { default: 20, window: 15 * 60 * 1000 } // 20 total per 15 min

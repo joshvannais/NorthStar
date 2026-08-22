@@ -12,6 +12,7 @@
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
   <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/workspace-form-state.css">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -132,13 +133,13 @@
       </div>
 
       <!-- AI Office Manager -->
-      <div class="settings-section">
-        <h2>AI Configuration</h2>
+      <div class="settings-section" id="ai-settings">
+        <h2>AI Settings</h2>
         <p class="description">Business Profile is the single editor for provider-neutral receptionist configuration.</p>
         <div class="integration-card">
           <div class="icon" aria-hidden="true">⚙️</div>
           <div class="info">
-            <h4>Voice &amp; Knowledge</h4>
+            <h4>AI Configuration: Voice &amp; Knowledge</h4>
             <p>Manage the name, literal greeting, personality, conversation style, and escalation policies in the versioned Business Profile.</p>
           </div>
           <a class="btn btn-primary btn-sm" id="canonicalAiConfigurationLink" href="/dashboard/business-profile?section=retell#voice-assistant-configuration">Open Business Profile Editor</a>
@@ -316,6 +317,7 @@
         });
         settingsState = saved.preferences || settings;
         renderSettingsState();
+        window.dispatchEvent(new CustomEvent('northstar:form-saved'));
         showToast('✅ Settings saved successfully!');
       } catch (error) {
         showToast(error.message || 'Settings could not be saved.', 'error');
@@ -440,6 +442,8 @@
   <script src="/js/api.js"></script>
   <script src="/js/command-center-contract.js"></script>
   <script src="/js/nav-component.js"></script>
+  <script src="/js/workspace-form-state.js"></script>
+  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn' });</script>
   <script>NavComponent.init("settings");</script>
 </body>
 </html>

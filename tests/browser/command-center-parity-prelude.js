@@ -20,10 +20,8 @@ const ROUTES = Object.freeze([
   Object.freeze({ id: 'polaris', path: '/demo/polaris', paidPath: '/dashboard/polaris', marker: 'POLARIS', surface: '.polaris-workspace' }),
   Object.freeze({ id: 'leads', path: '/demo/leads', paidPath: '/dashboard/leads', marker: 'All Leads', surface: '.leads-kpi-grid' }),
   Object.freeze({ id: 'communications', path: '/demo/communications', paidPath: '/dashboard/communications', marker: 'Communications', surface: '#kpiGrid' }),
-  Object.freeze({ id: 'my-number', path: '/demo/my-number', paidPath: '/dashboard/my-number', marker: 'My Number', surface: '.settings-section' }),
   Object.freeze({ id: 'calendar', path: '/demo/calendar', paidPath: '/dashboard/calendar', marker: 'Calendar', surface: '#calendarGrid' }),
   Object.freeze({ id: 'team', path: '/demo/team', paidPath: '/dashboard/team', marker: 'Team', surface: '.wf-shell' }),
-  Object.freeze({ id: 'ai-settings', path: '/demo/ai-settings', paidPath: '/dashboard/ai-settings', marker: 'AI Settings', surface: '.ai-settings-gateway' }),
   Object.freeze({ id: 'business-profile', path: '/demo/business-profile', paidPath: '/dashboard/business-profile', marker: 'Business Profile', surface: '#businessProfileRoot' }),
   Object.freeze({ id: 'settings', path: '/demo/settings', paidPath: '/dashboard/settings', marker: 'Settings', surface: '.settings-section' }),
   Object.freeze({ id: 'integrations', path: '/demo/integrations', paidPath: '/dashboard/integrations', marker: 'Integrations', surface: '#integrationAuthority' }),
@@ -37,7 +35,7 @@ const VIEWPORTS = Object.freeze([
 const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'leads', 'communications']);
 const DETAILED_POLARIS_SURFACES = Object.freeze(['command-center', 'leads', 'communications']);
 const DEMO_TOOLBAR_ALLOWLIST = Object.freeze([
-  'command-center', 'leads', 'communications', 'my-number', 'calendar', 'team', 'ai-settings',
+  'command-center', 'leads', 'communications', 'calendar',
 ]);
 const SUPPORTED_FONT_WEIGHTS = Object.freeze(['400', '500', '600', '700', '800']);
 const PROVIDER_ENVIRONMENT = Object.freeze([
@@ -258,6 +256,7 @@ async function inspectCurrent(page, route, revision, viewport) {
     const mainStyle = getComputedStyle(main);
     const mainRect = rect(main);
     const toolbarRect = rect(toolbar);
+    const mobileHeaderRect = rect(document.querySelector('.mobile-header'));
     const contentLeft = mainRect.left + parseFloat(mainStyle.paddingLeft || '0');
     const contentRight = mainRect.right - parseFloat(mainStyle.paddingRight || '0');
     const nextSurface = Array.from(main.children).find(node => node !== toolbar && visible(node));
@@ -291,7 +290,23 @@ async function inspectCurrent(page, route, revision, viewport) {
       const itemRect = rect(node);
       return itemRect.left >= polarisCardRect.left - 1 && itemRect.right <= polarisCardRect.right + 1;
     });
-    const teamCrewLayout = routeId === 'team' ? Array.from(document.querySelectorAll('.wf-crew-member')).map(row => {
+    const demoTeamSummaryLayout = routeId === 'team' && location.pathname.startsWith('/demo/')
+      ? Array.from(document.querySelectorAll('#crewsList .wf-card')).map(card => {
+        const cardRect = card.getBoundingClientRect();
+        const summary = card.querySelector('.wf-summary');
+        const summaryRect = summary && summary.getBoundingClientRect();
+        const rows = summary ? Array.from(summary.querySelectorAll('.wf-summary-row')) : [];
+        return {
+          contained: Boolean(summaryRect) && summaryRect.left >= cardRect.left - 1 && summaryRect.right <= cardRect.right + 1,
+          contentFits: card.scrollWidth <= card.clientWidth + 1 && (!summary || summary.scrollWidth <= summary.clientWidth + 1),
+          noEditorControls: card.querySelectorAll('input, select, textarea, .wf-crew-member').length === 0,
+          semanticRows: rows.length >= 2 && rows.every(row =>
+            row.querySelector('.wf-summary-label')?.textContent.trim() && row.querySelector('.wf-summary-value')?.textContent.trim()),
+          labels: rows.map(row => row.querySelector('.wf-summary-label')?.textContent.trim()),
+        };
+      }) : null;
+    const teamCrewLayout = routeId === 'team' && !location.pathname.startsWith('/demo/')
+      ? Array.from(document.querySelectorAll('.wf-crew-member')).map(row => {
       const rowRect = row.getBoundingClientRect();
       const wrapperRect = row.parentElement.getBoundingClientRect();
       const wrapperStyle = getComputedStyle(row.parentElement);
@@ -310,7 +325,7 @@ async function inspectCurrent(page, route, revision, viewport) {
         semanticWhitespace: /\S\s+Crew lead$/.test(row.textContent),
         label: row.textContent.trim(),
       };
-    }) : null;
+      }) : null;
     const averageLeadValue = routeId === 'leads' ? document.getElementById('kpiAvgValue') : null;
     return {
       pathname: location.pathname,
@@ -322,6 +337,7 @@ async function inspectCurrent(page, route, revision, viewport) {
       sidebarVisible: visible(document.querySelector('.sidebar')),
       mobileHeaderVisible: visible(document.querySelector('.mobile-header')),
       mobileHeaderPosition: document.querySelector('.mobile-header') && getComputedStyle(document.querySelector('.mobile-header')).position,
+      mobileHeaderRect,
       activeSidebar: sidebarLinks.filter(item => item.current === 'page').map(item => item.id),
       activeMobile: mobileLinks.filter(item => item.current === 'page').map(item => item.id),
       genericShells: document.querySelectorAll('.demo-command-layout, .demo-command-nav-link, #demoCommandContent').length,
@@ -339,6 +355,7 @@ async function inspectCurrent(page, route, revision, viewport) {
         document.querySelector('[data-northstar-theme-control]').parentElement.dataset.northstarThemeLocation,
       polarisGridOverflow: polarisGrid ? polarisGrid.scrollWidth - polarisGrid.clientWidth : null,
       polarisItemsContained,
+      demoTeamSummaryLayout,
       teamCrewLayout,
       averageLeadValueContained: !averageLeadValue || averageLeadValue.scrollWidth <= averageLeadValue.clientWidth + 1,
       polarisCardCount: document.querySelectorAll('[data-polaris-card="northstar_polaris_intelligence_card_v1"]').length,
@@ -382,6 +399,13 @@ async function inspectCurrent(page, route, revision, viewport) {
     if (snapshot.nextSurfaceRect) {
       assert.ok(snapshot.nextSurfaceRect.top - snapshot.toolbarRect.bottom >= 8, route.path + ' demo controls do not touch canonical surface');
     }
+    if (viewport.width <= 768) {
+      assert.ok(snapshot.toolbarRect.top - snapshot.mobileHeaderRect.bottom >= 10,
+        route.path + ' simulation controls clear the fixed mobile header: ' + JSON.stringify({
+          header: snapshot.mobileHeaderRect,
+          toolbar: snapshot.toolbarRect,
+        }));
+    }
   } else {
     assert.strictEqual(snapshot.toolbarRect, null, route.path + ' intentionally omits the simulation box');
   }
@@ -412,9 +436,17 @@ async function inspectCurrent(page, route, revision, viewport) {
       route.path + ' hides internal platform providers from the customer catalogue');
   }
   if (route.id === 'team') {
-    assert.ok(snapshot.teamCrewLayout.length > 0 && snapshot.teamCrewLayout.every(row =>
-      row.contained && row.separated && row.fullWidth && row.contentFits && row.compactControls && row.semanticWhitespace),
-      route.path + ' crew membership and lead controls remain contained and distinct: ' + JSON.stringify(snapshot.teamCrewLayout));
+    if (snapshot.pathname.startsWith('/demo/')) {
+      assert.ok(snapshot.demoTeamSummaryLayout.length > 0 && snapshot.demoTeamSummaryLayout.every(card =>
+        card.contained && card.contentFits && card.noEditorControls && card.semanticRows &&
+        card.labels.includes('Home location') && card.labels.includes('Members')),
+      route.path + ' demo crews render contained semantic summaries without editor controls: ' +
+        JSON.stringify(snapshot.demoTeamSummaryLayout));
+    } else {
+      assert.ok(snapshot.teamCrewLayout.length > 0 && snapshot.teamCrewLayout.every(row =>
+        row.contained && row.separated && row.fullWidth && row.contentFits && row.compactControls && row.semanticWhitespace),
+      route.path + ' paid crew membership and lead controls remain contained and distinct: ' + JSON.stringify(snapshot.teamCrewLayout));
+    }
   }
   if (route.id === 'leads') {
     assert.strictEqual(snapshot.averageLeadValueContained, true, route.path + ' unavailable average value never wraps mid-word');
@@ -971,6 +1003,18 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       page.click('#demoSimulateLead'),
     ]);
     await waitReady(page, ROUTES[0], 2);
+    const postSimulationControls = await page.evaluate(() => ({
+      selection: Object.fromEntries(Array.from(document.querySelectorAll('[data-scenario-dimension]'))
+        .map(control => [control.dataset.scenarioDimension, control.value])),
+      builderOpen: document.querySelector('.northstar-demo-scenario-builder').open,
+      scrollY: window.scrollY,
+    }));
+    assert.deepStrictEqual(postSimulationControls.selection, scenarioSelection,
+      viewport.label + ' manually selected scenario survives simulation reload');
+    assert.strictEqual(postSimulationControls.builderOpen, true,
+      viewport.label + ' scenario builder remains open for a back-to-back lead');
+    assert.ok(postSimulationControls.scrollY <= 1,
+      viewport.label + ' simulation reload returns to the top controls');
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' simulated');
     const simulated = await page.evaluate(() => window.NorthStarDemoRuntime.getWorkspace());
     assert.strictEqual(simulated.session.durable, true, viewport.label + ' explicit mutation creates durable session');
@@ -1004,11 +1048,27 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     const leadsRoute = ROUTES.find(route => route.id === 'leads');
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' leads-revisit-start');
     const leads = await clickRoute(page, origin, leadsRoute, 2, viewport);
-    await page.waitForFunction(name => Array.from(document.querySelectorAll('#leadsContent tr'))
-      .some(row => row.textContent.includes(name)), added.customer.name, { timeout: 10000 });
+    await page.waitForFunction(expected => Array.from(document.querySelectorAll('#leadsContent tr'))
+      .some(row => row.textContent.includes(expected.name) && row.textContent.includes(expected.service)), {
+      name: added.customer.name,
+      service: added.lead.serviceLabel,
+    }, { timeout: 10000 });
     assert.ok(leads.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph), 'Leads reads the committed graph');
-    const rowTarget = await page.evaluate(async name => {
-      const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate => candidate.textContent.includes(name));
+    const [csvDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('#leadsExportBtn'),
+    ]);
+    assert.strictEqual(csvDownload.suggestedFilename(), 'northstar-leads.csv',
+      viewport.label + ' Leads export provides the promised CSV filename');
+    const csvPath = await csvDownload.path();
+    const csvText = fs.readFileSync(csvPath, 'utf8');
+    assert.ok(csvText.includes('"Customer","Phone","Service","Estimated Value","Created At","Status"'),
+      viewport.label + ' Leads export contains the documented columns');
+    assert.ok(csvText.includes(added.customer.name),
+      viewport.label + ' Leads export contains the newly simulated customer');
+    const rowTarget = await page.evaluate(async expected => {
+      const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate =>
+        candidate.textContent.includes(expected.name) && candidate.textContent.includes(expected.service));
       if (!row) return null;
       row.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -1034,12 +1094,13 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         hitClass: hit && hit.className,
         exactHit: Boolean(hit && hit.closest('#leadsContent tr') === row),
       };
-    }, added.customer.name);
+    }, { name: added.customer.name, service: added.lead.serviceLabel });
     assert.ok(rowTarget && rowTarget.width > 0 && rowTarget.height > 0 && rowTarget.exactHit,
       viewport.label + ' newly rendered lead row is unobstructed and actionable: ' + JSON.stringify(rowTarget));
     if (viewport.width <= 768) {
-      const mobileLeadLayout = await page.evaluate(name => {
-        const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate => candidate.textContent.includes(name));
+      const mobileLeadLayout = await page.evaluate(expected => {
+        const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate =>
+          candidate.textContent.includes(expected.name) && candidate.textContent.includes(expected.service));
         const cells = row ? Array.from(row.querySelectorAll('td')) : [];
         return {
           rowDisplay: row && getComputedStyle(row).display,
@@ -1047,7 +1108,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
           labels: cells.map(cell => cell.dataset.label),
           narrowestCell: cells.length ? Math.min.apply(null, cells.slice(0, -1).map(cell => cell.getBoundingClientRect().width)) : 0,
         };
-      }, added.customer.name);
+      }, { name: added.customer.name, service: added.lead.serviceLabel });
       assert.strictEqual(mobileLeadLayout.rowDisplay, 'grid', 'mobile Leads renders each customer as a readable card');
       assert.ok(mobileLeadLayout.overflow <= 1, 'mobile Leads cards do not require horizontal scrolling');
       assert.deepStrictEqual(mobileLeadLayout.labels,
@@ -1064,10 +1125,14 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       return drawer && drawer.classList.contains('open') && content && getComputedStyle(content).display !== 'none' &&
         drawer.textContent.includes(name) && drawer.textContent.includes('POLARIS');
     }, added.customer.name, { timeout: 10000 });
-    const drawerText = await page.locator('#cdCustomerDrawer').innerText();
+    const drawerText = await page.locator('#cdCustomerDrawer').textContent();
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' drawer-ready');
     assert.ok(drawerText.includes(added.customer.name), viewport.label + ' clicked customer opens canonical detail');
-    assert.ok(drawerText.includes(added.lead.serviceLabel), viewport.label + ' detail retains canonical service');
+    assert.ok(drawerText.includes(added.lead.serviceLabel), viewport.label + ' detail retains canonical service: ' + JSON.stringify({
+      customer: added.customer.name,
+      expectedService: added.lead.serviceLabel,
+      drawerText,
+    }));
     assert.ok(drawerText.includes('POLARIS'), viewport.label + ' detail contains Polaris intelligence');
     for (const heading of [
       'Contact Information', 'Customer Profile', 'Job Details', 'Description',
@@ -1117,18 +1182,46 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       pricingSeparated: true, pricingTextSeparated: true,
     },
       viewport.label + ' canonical scope text remains contained and wrapped');
+    await page.waitForFunction(() => {
+      const launcher = document.querySelector('#cdCustomerDrawer .navigation-launcher');
+      return launcher && launcher.dataset.state === 'ready';
+    }, null, { timeout: 10000 });
+    const mapsChooser = page.locator('#cdCustomerDrawer [data-navigation-chooser]');
+    assert.strictEqual(await mapsChooser.isVisible(), true,
+      viewport.label + ' customer detail exposes the alternate maps chooser');
+    await mapsChooser.click();
+    const mapMenu = page.locator('#cdCustomerDrawer .navigation-launcher__menu');
+    assert.strictEqual(await mapMenu.isVisible(), true,
+      viewport.label + ' alternate map menu opens inside the customer detail');
+    const mapOptions = await mapMenu.locator('[data-navigation-provider]').allTextContents();
+    assert.ok(mapOptions.some(value => value.includes('Apple Maps')) && mapOptions.some(value => value.includes('Waze')),
+      viewport.label + ' alternate map menu exposes Apple Maps and Waze: ' + JSON.stringify(mapOptions));
+    const mapContainment = await mapMenu.evaluate(node => {
+      const menu = node.getBoundingClientRect();
+      const drawer = document.getElementById('cdCustomerDrawer').getBoundingClientRect();
+      return menu.left >= drawer.left - 1 && menu.right <= drawer.right + 1;
+    });
+    assert.strictEqual(mapContainment, true,
+      viewport.label + ' alternate map menu remains contained in the customer detail');
+    await mapsChooser.click();
     await captureEvidence(page, 'demo', leadsRoute, viewport, 'customer-detail-open');
     const drawerScroll = await page.evaluate(async () => {
       const body = document.getElementById('cdDrawerBody');
-      const drawer = document.getElementById('cdCustomerDrawer').getBoundingClientRect();
       const polarisNode = document.querySelector('#cdCustomerDrawer .drawer-polaris-insight');
-      polarisNode.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'instant' });
+      const bodyBefore = body.getBoundingClientRect();
+      const polarisBefore = polarisNode.getBoundingClientRect();
+      const target = Math.min(
+        body.scrollHeight - body.clientHeight,
+        Math.max(0, body.scrollTop + polarisBefore.top - bodyBefore.top - 8)
+      );
+      body.scrollTo({ top: target, behavior: 'instant' });
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const bodyAfter = body.getBoundingClientRect();
       const polaris = polarisNode.getBoundingClientRect();
       return {
         scrollTop: body.scrollTop,
         scrollableDistance: body.scrollHeight - body.clientHeight,
-        polarisVisible: polaris.bottom > drawer.top && polaris.top < drawer.bottom,
+        polarisVisible: polaris.bottom > bodyAfter.top && polaris.top < bodyAfter.bottom,
       };
     });
     assert.ok((drawerScroll.scrollableDistance <= 1 || drawerScroll.scrollTop > 0) && drawerScroll.polarisVisible,
@@ -1140,22 +1233,95 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       const style = getComputedStyle(drawer);
       return !drawer.classList.contains('open') && Number.parseFloat(style.opacity) === 0 && style.pointerEvents === 'none';
     });
+    assert.strictEqual(await page.locator('#cdCustomerDrawer').getAttribute('aria-hidden'), 'true',
+      viewport.label + ' close button restores hidden dialog semantics');
+    await page.locator('#leadsContent tr', { hasText: added.customer.name }).click();
+    await page.waitForFunction(name => {
+      const drawer = document.getElementById('cdCustomerDrawer');
+      return drawer && !drawer.hidden && drawer.getAttribute('aria-hidden') === 'false' && drawer.textContent.includes(name);
+    }, added.customer.name, { timeout: 10000 });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+      const drawer = document.getElementById('cdCustomerDrawer');
+      return drawer && drawer.hidden && drawer.getAttribute('aria-hidden') === 'true';
+    });
     await captureEvidence(page, 'demo', leadsRoute, viewport, 'simulated');
+    await page.locator('#leadsContent tr', { hasText: added.customer.name }).click();
+    await page.waitForFunction(name => {
+      const drawer = document.getElementById('cdCustomerDrawer');
+      return drawer && !drawer.hidden && drawer.textContent.includes(name) &&
+        getComputedStyle(document.getElementById('cdDrawerContent')).display !== 'none';
+    }, added.customer.name, { timeout: 10000 });
+    await Promise.all([
+      page.waitForURL(url => url.origin === origin && url.pathname === '/demo/calendar', { timeout: 15000 }),
+      page.click('#cdBtnSchedule'),
+    ]);
+    const scheduledUrl = new URL(page.url());
+    assert.strictEqual(scheduledUrl.searchParams.get('customerId'), added.ids.customer,
+      viewport.label + ' Schedule preserves exact customer context');
+    assert.strictEqual(scheduledUrl.searchParams.get('leadId'), added.ids.lead,
+      viewport.label + ' Schedule preserves exact lead context');
 
-    for (const id of ['communications', 'my-number', 'calendar', 'command-center']) {
+    for (const id of ['communications', 'calendar', 'command-center']) {
       const route = ROUTES.find(candidate => candidate.id === id);
       const snapshot = await clickRoute(page, origin, route, 2, viewport);
+      if (id === 'communications') {
+        const initialResults = await page.locator('#resultsCount').innerText();
+        await page.locator('#callSearchInput').fill(added.customer.name);
+        await page.waitForFunction(name => {
+          const results = document.getElementById('resultsCount');
+          return results && results.textContent.startsWith('1 customer') && document.body.textContent.includes(name);
+        }, added.customer.name);
+        await page.locator('#callSearchInput').fill('');
+        await page.waitForFunction(expected => document.getElementById('resultsCount').textContent === expected,
+          initialResults);
+        await page.locator('#callSearchInput').fill(added.customer.name);
+        await page.locator('.filter-btn-danger', { hasText: 'Clear Filters' }).click();
+        await page.waitForFunction(expected => {
+          const search = document.getElementById('callSearchInput');
+          const results = document.getElementById('resultsCount');
+          return search && search.value === '' && results && results.textContent === expected;
+        }, initialResults);
+      }
       if (id === 'calendar') {
+        assert.strictEqual(await page.locator('.cal-nav-btn[aria-label^="Previous"]').count(), 1,
+          viewport.label + ' Calendar exposes one descriptive previous-period control');
+        assert.strictEqual(await page.locator('.cal-nav-btn[aria-label^="Next"]').count(), 1,
+          viewport.label + ' Calendar exposes one descriptive next-period control');
+        await page.locator('.cal-view-tab', { hasText: 'Day' }).click();
+        await page.waitForFunction(() => window.calState && window.calState.view === 'day');
+        await page.locator('.cal-today-btn').click();
+        const calendarToday = await page.evaluate(() => ({
+          expected: window.calState._formatDate(new Date()),
+          selected: window.calState.selectedDate,
+          title: document.querySelector('.cal-day-title').textContent,
+        }));
+        assert.strictEqual(calendarToday.selected, calendarToday.expected,
+          viewport.label + ' Calendar Day view and Today action use the same local date');
+        assert.ok(calendarToday.title.includes('Today'),
+          viewport.label + ' Calendar Day view marks the selected local date as Today');
         const agendaButton = page.locator('.cal-view-tab', { hasText: 'Agenda' });
         await agendaButton.click();
         await page.waitForFunction(() => window.calState && window.calState.view === 'agenda');
+        const agendaConsistency = await page.evaluate(() => ({
+          expected: window.calState._formatDate(new Date()),
+          todayEvents: window.calState.getTodayEvents().length,
+          todayLabels: Array.from(document.querySelectorAll('.cal-agenda-date-today')).map(node => node.textContent),
+        }));
+        if (agendaConsistency.todayEvents > 0) {
+          assert.ok(agendaConsistency.todayLabels.length > 0 && agendaConsistency.todayLabels.every(label => label.includes('Today')),
+            viewport.label + ' Calendar Agenda uses the same Today classification as Day view');
+        }
+        await page.locator('.cal-new-event-btn').click();
+        assert.strictEqual(await page.locator('.cal-modal[role="dialog"][aria-modal="true"]').isVisible(), true,
+          viewport.label + ' New Event opens as an accessible modal dialog');
+        assert.ok(await page.locator('.cal-modal label[for]').count() >= 4,
+          viewport.label + ' New Event dialog associates visible labels with its controls');
+        await page.keyboard.press('Escape');
+        assert.strictEqual(await page.locator('#calModalOverlay').count(), 0,
+          viewport.label + ' Escape closes the New Event dialog');
       }
-      if (id !== 'my-number') {
-        await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
-      } else {
-        assert.ok(snapshot.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph),
-          route.path + ' reads the shared canonical workspace without inventing customer calling data');
-      }
+      await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
       if (!hasPolarisSurface(id)) {
         assert.strictEqual(snapshot.polarisCardCount, 0, route.path + ' retains canonical state without a misplaced Polaris card');
       }
@@ -1177,6 +1343,15 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.strictEqual(detail.polarisCardCount, 0, viewport.label + ' Polaris remains chat-centric without a duplicate surface card');
     assert.ok(detail.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph),
       viewport.label + ' Polaris reads the complete shared simulated graph');
+    await page.waitForFunction(({ customer, service }) => {
+      const context = document.getElementById('polarisSelectedContext');
+      return context && !context.hidden && context.textContent.includes(customer) && context.textContent.includes(service);
+    }, { customer: added.customer.name, service: added.lead.serviceLabel }, { timeout: 10000 });
+    const selectedContext = await page.locator('#polarisSelectedContext').innerText();
+    const normalizedSelectedContext = selectedContext.toLocaleLowerCase('en-US');
+    assert.ok(normalizedSelectedContext.includes(added.customer.name.toLocaleLowerCase('en-US')) &&
+      normalizedSelectedContext.includes(added.lead.serviceLabel.toLocaleLowerCase('en-US')),
+      viewport.label + ' record-specific Polaris navigation visibly preserves the selected customer and work context');
     const visiblePolarisPrompt = page.locator('textarea[aria-label="Ask Polaris a question"]:visible');
     assert.strictEqual(await visiblePolarisPrompt.count(), 1,
       viewport.label + ' Polaris exposes one visible business-intelligence chat entry point');
@@ -1185,7 +1360,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.strictEqual(await visiblePolarisPrompt.isEnabled(), true,
       viewport.label + ' Polaris business-intelligence chat entry point remains usable');
 
-    for (const id of ['team', 'ai-settings', 'business-profile', 'settings', 'integrations']) {
+    for (const id of ['team', 'business-profile', 'settings', 'integrations']) {
       const route = ROUTES.find(candidate => candidate.id === id);
       const snapshot = await clickRoute(page, origin, route, 2, viewport);
       assert.deepStrictEqual(snapshot.workspace.configuration, simulated.configuration,
@@ -1387,8 +1562,12 @@ async function main() {
     }
 
     const external = ledger.requests.filter(entry => new URL(entry.url).origin !== origin);
-    const mutations = ledger.requests.filter(entry => entry.method !== 'GET' && entry.method !== 'HEAD' && entry.method !== 'OPTIONS');
+    const writes = ledger.requests.filter(entry => entry.method !== 'GET' && entry.method !== 'HEAD' && entry.method !== 'OPTIONS');
+    const telemetryRequests = writes.filter(entry => new URL(entry.url).pathname === '/api/telemetry');
+    const mutations = writes.filter(entry => new URL(entry.url).pathname !== '/api/telemetry');
     assert.deepStrictEqual(external, [], 'all browser traffic remains on the disposable loopback origin');
+    assert.ok(telemetryRequests.length > 0, 'privacy-bounded product telemetry is exercised');
+    assert.ok(telemetryRequests.every(entry => entry.method === 'POST'), 'telemetry uses only the bounded POST envelope');
     assert.strictEqual(mutations.length, selectedViewports.length * 2, 'one simulate and one reset per viewport');
     assert.ok(mutations.every(entry => {
       const pathname = new URL(entry.url).pathname;
@@ -1424,6 +1603,7 @@ async function main() {
       paidReceipts,
       requests: ledger.requests.length,
       mutations: mutations.length,
+      telemetryRequests: telemetryRequests.length,
       externalRequests: external.length,
       httpErrors: ledger.httpErrors.length,
       warnings: ledger.warnings.length,

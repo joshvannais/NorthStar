@@ -354,6 +354,9 @@ html body .customer-drawer .drawer-close-btn {
 }
 
 html body .customer-drawer .drawer-body {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
   overscroll-behavior: contain;
   padding: 20px clamp(18px, 3vw, 28px) 32px;
   scrollbar-gutter: stable;
@@ -756,7 +759,7 @@ html body .demo-chart-bars button {
 
   html body .app-layout,
   html body .dashboard-layout {
-    padding-top: calc(57px + env(safe-area-inset-top));
+    padding-top: calc(73px + env(safe-area-inset-top));
   }
 
   html body :is(h1, .page-title, .bp-title) {

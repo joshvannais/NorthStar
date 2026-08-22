@@ -256,6 +256,7 @@ async function inspectCurrent(page, route, revision, viewport) {
     const mainStyle = getComputedStyle(main);
     const mainRect = rect(main);
     const toolbarRect = rect(toolbar);
+    const mobileHeaderRect = rect(document.querySelector('.mobile-header'));
     const contentLeft = mainRect.left + parseFloat(mainStyle.paddingLeft || '0');
     const contentRight = mainRect.right - parseFloat(mainStyle.paddingRight || '0');
     const nextSurface = Array.from(main.children).find(node => node !== toolbar && visible(node));
@@ -336,6 +337,7 @@ async function inspectCurrent(page, route, revision, viewport) {
       sidebarVisible: visible(document.querySelector('.sidebar')),
       mobileHeaderVisible: visible(document.querySelector('.mobile-header')),
       mobileHeaderPosition: document.querySelector('.mobile-header') && getComputedStyle(document.querySelector('.mobile-header')).position,
+      mobileHeaderRect,
       activeSidebar: sidebarLinks.filter(item => item.current === 'page').map(item => item.id),
       activeMobile: mobileLinks.filter(item => item.current === 'page').map(item => item.id),
       genericShells: document.querySelectorAll('.demo-command-layout, .demo-command-nav-link, #demoCommandContent').length,
@@ -396,6 +398,13 @@ async function inspectCurrent(page, route, revision, viewport) {
       route.path + ' demo controls stay within content gutters');
     if (snapshot.nextSurfaceRect) {
       assert.ok(snapshot.nextSurfaceRect.top - snapshot.toolbarRect.bottom >= 8, route.path + ' demo controls do not touch canonical surface');
+    }
+    if (viewport.width <= 768) {
+      assert.ok(snapshot.toolbarRect.top - snapshot.mobileHeaderRect.bottom >= 10,
+        route.path + ' simulation controls clear the fixed mobile header: ' + JSON.stringify({
+          header: snapshot.mobileHeaderRect,
+          toolbar: snapshot.toolbarRect,
+        }));
     }
   } else {
     assert.strictEqual(snapshot.toolbarRect, null, route.path + ' intentionally omits the simulation box');
@@ -1039,8 +1048,11 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     const leadsRoute = ROUTES.find(route => route.id === 'leads');
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' leads-revisit-start');
     const leads = await clickRoute(page, origin, leadsRoute, 2, viewport);
-    await page.waitForFunction(name => Array.from(document.querySelectorAll('#leadsContent tr'))
-      .some(row => row.textContent.includes(name)), added.customer.name, { timeout: 10000 });
+    await page.waitForFunction(expected => Array.from(document.querySelectorAll('#leadsContent tr'))
+      .some(row => row.textContent.includes(expected.name) && row.textContent.includes(expected.service)), {
+      name: added.customer.name,
+      service: added.lead.serviceLabel,
+    }, { timeout: 10000 });
     assert.ok(leads.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph), 'Leads reads the committed graph');
     const [csvDownload] = await Promise.all([
       page.waitForEvent('download'),
@@ -1054,8 +1066,9 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       viewport.label + ' Leads export contains the documented columns');
     assert.ok(csvText.includes(added.customer.name),
       viewport.label + ' Leads export contains the newly simulated customer');
-    const rowTarget = await page.evaluate(async name => {
-      const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate => candidate.textContent.includes(name));
+    const rowTarget = await page.evaluate(async expected => {
+      const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate =>
+        candidate.textContent.includes(expected.name) && candidate.textContent.includes(expected.service));
       if (!row) return null;
       row.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -1081,12 +1094,13 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         hitClass: hit && hit.className,
         exactHit: Boolean(hit && hit.closest('#leadsContent tr') === row),
       };
-    }, added.customer.name);
+    }, { name: added.customer.name, service: added.lead.serviceLabel });
     assert.ok(rowTarget && rowTarget.width > 0 && rowTarget.height > 0 && rowTarget.exactHit,
       viewport.label + ' newly rendered lead row is unobstructed and actionable: ' + JSON.stringify(rowTarget));
     if (viewport.width <= 768) {
-      const mobileLeadLayout = await page.evaluate(name => {
-        const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate => candidate.textContent.includes(name));
+      const mobileLeadLayout = await page.evaluate(expected => {
+        const row = Array.from(document.querySelectorAll('#leadsContent tr')).find(candidate =>
+          candidate.textContent.includes(expected.name) && candidate.textContent.includes(expected.service));
         const cells = row ? Array.from(row.querySelectorAll('td')) : [];
         return {
           rowDisplay: row && getComputedStyle(row).display,
@@ -1094,7 +1108,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
           labels: cells.map(cell => cell.dataset.label),
           narrowestCell: cells.length ? Math.min.apply(null, cells.slice(0, -1).map(cell => cell.getBoundingClientRect().width)) : 0,
         };
-      }, added.customer.name);
+      }, { name: added.customer.name, service: added.lead.serviceLabel });
       assert.strictEqual(mobileLeadLayout.rowDisplay, 'grid', 'mobile Leads renders each customer as a readable card');
       assert.ok(mobileLeadLayout.overflow <= 1, 'mobile Leads cards do not require horizontal scrolling');
       assert.deepStrictEqual(mobileLeadLayout.labels,
@@ -1111,10 +1125,14 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       return drawer && drawer.classList.contains('open') && content && getComputedStyle(content).display !== 'none' &&
         drawer.textContent.includes(name) && drawer.textContent.includes('POLARIS');
     }, added.customer.name, { timeout: 10000 });
-    const drawerText = await page.locator('#cdCustomerDrawer').innerText();
+    const drawerText = await page.locator('#cdCustomerDrawer').textContent();
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' drawer-ready');
     assert.ok(drawerText.includes(added.customer.name), viewport.label + ' clicked customer opens canonical detail');
-    assert.ok(drawerText.includes(added.lead.serviceLabel), viewport.label + ' detail retains canonical service');
+    assert.ok(drawerText.includes(added.lead.serviceLabel), viewport.label + ' detail retains canonical service: ' + JSON.stringify({
+      customer: added.customer.name,
+      expectedService: added.lead.serviceLabel,
+      drawerText,
+    }));
     assert.ok(drawerText.includes('POLARIS'), viewport.label + ' detail contains Polaris intelligence');
     for (const heading of [
       'Contact Information', 'Customer Profile', 'Job Details', 'Description',
@@ -1196,7 +1214,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         body.scrollHeight - body.clientHeight,
         Math.max(0, body.scrollTop + polarisBefore.top - bodyBefore.top - 8)
       );
-      body.scrollTop = target;
+      body.scrollTo({ top: target, behavior: 'instant' });
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const bodyAfter = body.getBoundingClientRect();
       const polaris = polarisNode.getBoundingClientRect();

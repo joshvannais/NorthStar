@@ -105,6 +105,12 @@ describe('surgical site professionalism correction', () => {
     expect(calendar).toMatch(/@media \(max-width: 768px\)[\s\S]*?\.main-content\s*\{\s*padding:\s*12px;/s);
     expect(calendar).toMatch(/@media \(max-width: 480px\)[\s\S]*?\.cal-layout\s*\{\s*padding:\s*0;/s);
     expect(demoRuntime).toMatch(/@media \(max-width: 768px\)[\s\S]*?\.northstar-demo-toolbar-actions \.btn\s*\{[^}]*min-width:\s*0[^}]*width:\s*100%/s);
+    expect(homepage).toMatch(/html body \.app-layout,[\s\S]*?html body \.dashboard-layout\s*\{[^}]*padding-top:\s*calc\(73px \+ env\(safe-area-inset-top\)\)/s);
+  });
+
+  test('the customer drawer keeps one WebKit-compatible bounded scroll owner', () => {
+    const layer = read('public/css/site-professionalism.css');
+    expect(layer).toMatch(/\.customer-drawer \.drawer-body\s*\{[^}]*flex:\s*1 1 0[^}]*min-width:\s*0[^}]*min-height:\s*0/s);
   });
 
   test('the shared mobile navigation has one explicit accessible open and closed state', () => {

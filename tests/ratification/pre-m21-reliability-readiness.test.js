@@ -130,8 +130,23 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     expect(nav).toContain('/js/workspace-guidance.js');
     expect(profile).toContain('Services &amp; Pricing');
     expect(profile).toContain('Schedule &amp; Area');
+    expect(profile).toContain('id="businessProfileSectionSearch"');
+    expect(profile).toContain('function filterProfileSections(value)');
     expect(profile).toContain('/js/workspace-form-state.js');
     expect(settings).toContain('/js/workspace-form-state.js');
+  });
+
+  test('account-free Team uses readable summaries and Polaris omits empty placeholder panels', () => {
+    const team = read('public/dashboard/team.html');
+    const polaris = read('public/dashboard/polaris.html');
+    expect(team).toContain("function isDemoMode() { return window.location.pathname.startsWith('/demo/'); }");
+    expect(team).toContain("element('dl', 'wf-summary')");
+    expect(team).toContain("['Job role'");
+    expect(team).toContain("['Members'");
+    expect(team).toContain("['Guidance'");
+    expect(polaris).not.toContain('Activity feed will appear here');
+    expect(polaris).not.toContain('Pinned insights will appear here');
+    expect(polaris).not.toContain('Dynamic suggestions will appear here');
   });
 
   test('public readiness, signup, integration filters, and analytics remain truthful and bounded', () => {

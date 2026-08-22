@@ -24,6 +24,11 @@
     .bp-nav-btn { padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--neutral-200); background: transparent; color: var(--neutral-600); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; transition: all 0.15s; }
     .bp-nav-btn:hover { background: var(--neutral-200); color: var(--neutral-800); }
     .bp-nav-btn.active { background: var(--neutral-50); color: var(--neutral-900); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .bp-section-search { margin-bottom: 12px; }
+    .bp-section-search label { display: block; margin-bottom: 6px; color: var(--neutral-600); font-size: 12px; font-weight: 700; }
+    .bp-section-search input { width: 100%; padding: 10px 12px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); background: var(--neutral-50); color: var(--neutral-800); font: inherit; }
+    .bp-section-search input:focus { outline: 3px solid var(--theme-focus, var(--brand-500)); outline-offset: 2px; }
+    .bp-section-search-status { min-height: 18px; margin: 5px 0 0; color: var(--neutral-500); font-size: 11px; }
     .bp-section { display: none; }
     .bp-section.active { display: block; }
     .bp-card { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
@@ -179,6 +184,11 @@
         </section>
 
         <!-- Navigation Tabs -->
+        <div class="bp-section-search">
+          <label for="businessProfileSectionSearch">Find a setup section</label>
+          <input id="businessProfileSectionSearch" type="search" autocomplete="off" placeholder="Search services, hours, crews, voice, notifications…">
+          <p id="businessProfileSectionSearchStatus" class="bp-section-search-status" role="status" aria-live="polite"></p>
+        </div>
         <div class="bp-nav" id="bpNav" role="tablist" aria-label="Business Profile sections">
           <div class="bp-nav-group"><span class="bp-nav-group-title">Business</span><button class="bp-nav-btn active" data-section="company" onclick="switchSection('company')">🏢 Company</button><button class="bp-nav-btn" data-section="headquarters" onclick="switchSection('headquarters')">📍 Headquarters</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Services &amp; Pricing</span><button class="bp-nav-btn" data-section="services" onclick="switchSection('services')">📋 Services</button><button class="bp-nav-btn" data-section="financial" onclick="switchSection('financial')">💰 Financial</button></div>
@@ -656,7 +666,7 @@
 
     function handleProfileTabKeydown(event) {
       if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
-      var tabs = Array.from(document.querySelectorAll('.bp-nav-btn'));
+      var tabs = Array.from(document.querySelectorAll('.bp-nav-btn')).filter(function(tab) { return !tab.hidden; });
       var current = tabs.indexOf(event.currentTarget);
       if (current === -1) return;
       var next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
@@ -665,6 +675,29 @@
       event.preventDefault();
       switchSection(tabs[next].dataset.section);
       tabs[next].focus();
+    }
+
+    function filterProfileSections(value) {
+      var query = String(value || '').trim().toLocaleLowerCase();
+      var groups = Array.from(document.querySelectorAll('.bp-nav-group'));
+      var visibleTabs = [];
+      groups.forEach(function(group) {
+        var title = group.querySelector('.bp-nav-group-title');
+        var groupMatches = Boolean(query && title && title.textContent.toLocaleLowerCase().includes(query));
+        var groupTabs = Array.from(group.querySelectorAll('.bp-nav-btn'));
+        groupTabs.forEach(function(tab) {
+          var visible = !query || groupMatches || tab.textContent.toLocaleLowerCase().includes(query);
+          tab.hidden = !visible;
+          if (visible) visibleTabs.push(tab);
+        });
+        group.hidden = !groupTabs.some(function(tab) { return !tab.hidden; });
+      });
+      var statusNode = document.getElementById('businessProfileSectionSearchStatus');
+      statusNode.textContent = query
+        ? visibleTabs.length + (visibleTabs.length === 1 ? ' matching section' : ' matching sections')
+        : 'All setup sections are shown.';
+      var active = document.querySelector('.bp-nav-btn.active');
+      if (visibleTabs.length && active && active.hidden) switchSection(visibleTabs[0].dataset.section);
     }
 
     function associateProfileLabels(root) {
@@ -692,6 +725,10 @@
         panel.hidden = index !== 0;
       });
       associateProfileLabels(document);
+      var search = document.getElementById('businessProfileSectionSearch');
+      search.addEventListener('input', function(event) { filterProfileSections(event.target.value); });
+      search.addEventListener('search', function(event) { filterProfileSections(event.target.value); });
+      filterProfileSections(search.value);
     }
 
     function updateGeneralProfileActionState(profileAvailable) {

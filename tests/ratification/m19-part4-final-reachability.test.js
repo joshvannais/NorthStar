@@ -44,8 +44,11 @@ const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/polaris-card.js',
   'public/js/polaris-surface-card.js',
   'public/js/presentation-format.js',
+  'public/js/product-telemetry.js',
   'public/js/transcript-renderer.js',
   'public/js/vendor/retell-web-client.mjs',
+  'public/js/workspace-form-state.js',
+  'public/js/workspace-guidance.js',
 ]);
 const { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS } = require('../helpers/site-theme-pages');
 const packageMetadata = require('../../package.json');

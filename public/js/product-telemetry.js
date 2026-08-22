@@ -53,9 +53,6 @@
       action: action || 'none',
       elapsedBucket: elapsedBucket(),
     });
-    if (keepalive && typeof global.navigator.sendBeacon === 'function') {
-      return global.navigator.sendBeacon('/api/telemetry', new Blob([payload], { type: 'application/json' }));
-    }
     global.fetch('/api/telemetry', {
       method: 'POST', credentials: 'same-origin', keepalive: Boolean(keepalive),
       headers: { 'Content-Type': 'application/json' }, body: payload,

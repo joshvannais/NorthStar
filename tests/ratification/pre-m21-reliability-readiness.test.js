@@ -166,6 +166,10 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     expect(integrations).toContain('All customer-facing');
     expect(telemetry).toContain('globalPrivacyControl');
     expect(telemetry).toContain('navigator.doNotTrack');
+    expect(telemetry).toContain("global.fetch('/api/telemetry'");
+    expect(telemetry).toContain('keepalive: Boolean(keepalive)');
+    expect(telemetry).not.toContain('navigator.sendBeacon');
+    expect(telemetry).not.toContain("new Blob([payload]");
     expect(telemetry).not.toContain('referrer');
     expect(telemetry).not.toContain('searchParams');
   });

@@ -111,6 +111,12 @@ async function installBoundaries(context, origin, role, evidence, navigation) {
     const request = route.request();
     const url = new URL(request.url());
     evidence.api.push({ method: request.method(), path: url.pathname });
+    if (url.pathname === '/api/telemetry') {
+      let body = null;
+      try { body = JSON.parse(request.postData() || ''); } catch (_error) {}
+      evidence.telemetry.push({ method: request.method(), path: url.pathname, body });
+      return route.fulfill(json({ accepted: true }, request.method() === 'POST' ? 202 : 405));
+    }
     if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
       evidence.mutations.push({ method: request.method(), path: url.pathname });
       return route.fulfill(json({ error: 'mutations blocked by navigation browser boundary' }, 405));
@@ -261,7 +267,8 @@ async function main() {
   const selected = process.argv[2] || 'chrome';
   const runtime = resolveBrowserRuntime(selected);
   const evidence = {
-    pages: [], requests: [], api: [], external: [], mutations: [], pageErrors: [], consoleErrors: [], failures: [],
+    pages: [], requests: [], api: [], telemetry: [], external: [], mutations: [],
+    pageErrors: [], consoleErrors: [], failures: [],
   };
   let server;
   let browser;
@@ -300,6 +307,18 @@ async function main() {
 
     record(evidence, evidence.external.length === 0, 'no external traffic', evidence.external);
     record(evidence, evidence.mutations.length === 0, 'no provider or business mutation', evidence.mutations);
+    record(evidence, evidence.telemetry.length > 0, 'bounded product telemetry is exercised');
+    record(evidence, evidence.telemetry.every(item => {
+      const body = item.body;
+      if (item.method !== 'POST' || !body || Array.isArray(body)) return false;
+      const keys = Object.keys(body).sort().join('|');
+      return keys === 'action|elapsedBucket|event|routeClass|surface'
+        && ['page_view', 'page_exit'].includes(body.event)
+        && ['public', 'demo', 'paid'].includes(body.surface)
+        && typeof body.routeClass === 'string'
+        && body.action === 'none'
+        && ['under_15s', '15s_to_60s', '1m_to_5m', 'over_5m'].includes(body.elapsedBucket);
+    }), 'telemetry remains a closed anonymous POST envelope', evidence.telemetry);
     record(evidence, evidence.pageErrors.length === 0, 'no page errors', evidence.pageErrors);
     record(evidence, evidence.consoleErrors.length === 0, 'no console errors', evidence.consoleErrors);
 
@@ -315,6 +334,7 @@ async function main() {
       pages: PAGES.map(item => item.label),
       loopbackRequests: evidence.requests.length,
       interceptedApiReads: evidence.api.length,
+      telemetryPosts: evidence.telemetry.length,
       externalRequests: evidence.external.length,
       mutations: evidence.mutations.length,
       providerActions: 0,

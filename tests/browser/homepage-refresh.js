@@ -708,9 +708,18 @@ async function runPublicPagesCase(browser, origin, selected, viewport) {
     const url = new URL(request.url());
     if (url.origin !== origin) externalRequests.push(request.url());
   });
+  const waitForPublicPageReady = async () => {
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForFunction(async () => {
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      return document.readyState !== 'loading' &&
+        !document.documentElement.hasAttribute('data-theme-switching');
+    });
+  };
   try {
-    const contactResponse = await page.goto(origin + '/contact', { waitUntil: 'networkidle', timeout: 15000 });
+    const contactResponse = await page.goto(origin + '/contact', { waitUntil: 'domcontentloaded', timeout: 15000 });
     assert.ok(contactResponse && contactResponse.status() === 200, `${selected}/${viewport.label}: contact response`);
+    await waitForPublicPageReady();
     await assertProfessionalPresentation(page, `${selected}/${viewport.label}/contact`);
     assert.match(await page.locator('body').innerText(), /Support@northstar-os\.ai[\s\S]*does not claim delivery until that provider confirms it/i,
       `${selected}/${viewport.label}: contact shows the truthful delivery boundary`);
@@ -728,9 +737,12 @@ async function runPublicPagesCase(browser, origin, selected, viewport) {
       page.waitForURL(url => url.origin === origin && url.pathname === '/faq', { timeout: 15000 }),
       page.locator('a[href="/faq"]:visible').first().click(),
     ]);
-    await page.waitForLoadState('networkidle');
+    await waitForPublicPageReady();
     await assertProfessionalPresentation(page, `${selected}/${viewport.label}/faq`);
-    assert.match(await page.locator('body').innerText(), /Command Center demo[\s\S]*isolated workspace/i,
+    await page.locator('#account-free-demo > summary').click();
+    assert.strictEqual(await page.locator('#account-free-demo').getAttribute('open'), '',
+      `${selected}/${viewport.label}: FAQ account-free answer expands`);
+    assert.match(await page.locator('#account-free-demo').innerText(), /Command Center demo[\s\S]*isolated workspace/i,
       `${selected}/${viewport.label}: FAQ retains the truthful demo boundary`);
     if (screenshotPath(selected, viewport, 'public-faq')) {
       await page.screenshot({ path: screenshotPath(selected, viewport, 'public-faq'), fullPage: true });
@@ -740,7 +752,7 @@ async function runPublicPagesCase(browser, origin, selected, viewport) {
       page.waitForURL(url => url.origin === origin && url.pathname === '/contact', { timeout: 15000 }),
       page.locator('a[href="/contact"]:visible').first().click(),
     ]);
-    await page.waitForLoadState('networkidle');
+    await waitForPublicPageReady();
     assert.deepStrictEqual(errors, [], `${selected}/${viewport.label}: public pages have no browser errors`);
     assert.deepStrictEqual(externalRequests, [], `${selected}/${viewport.label}: public typography/pages make no external request`);
     return { viewport: viewport.label, routes: ['/contact', '/faq'], theme: 'pass', clicks: 2 };

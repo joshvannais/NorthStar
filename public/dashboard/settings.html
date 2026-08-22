@@ -12,6 +12,7 @@
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
   <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/workspace-form-state.css">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -316,6 +317,7 @@
         });
         settingsState = saved.preferences || settings;
         renderSettingsState();
+        window.dispatchEvent(new CustomEvent('northstar:form-saved'));
         showToast('✅ Settings saved successfully!');
       } catch (error) {
         showToast(error.message || 'Settings could not be saved.', 'error');
@@ -440,6 +442,8 @@
   <script src="/js/api.js"></script>
   <script src="/js/command-center-contract.js"></script>
   <script src="/js/nav-component.js"></script>
+  <script src="/js/workspace-form-state.js"></script>
+  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn' });</script>
   <script>NavComponent.init("settings");</script>
 </body>
 </html>

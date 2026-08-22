@@ -394,10 +394,29 @@
     } catch (_storageError) {}
     returnToToolbarRequested = false;
     if (!matchesSession) return;
-    var scrollToTop = function () { global.scrollTo({ top: 0, left: 0, behavior: 'auto' }); };
+    var root = document.documentElement;
+    var previousInlineScrollBehavior = root && root.style.scrollBehavior || '';
+    if (root) root.style.scrollBehavior = 'auto';
+    var scrollToTop = function () {
+      global.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      if (root) root.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    };
     scrollToTop();
-    if (typeof global.requestAnimationFrame === 'function') global.requestAnimationFrame(scrollToTop);
+    if (typeof global.requestAnimationFrame === 'function') {
+      global.requestAnimationFrame(function () {
+        scrollToTop();
+        global.requestAnimationFrame(scrollToTop);
+      });
+    }
     global.setTimeout(scrollToTop, 50);
+    global.setTimeout(scrollToTop, 150);
+    global.setTimeout(scrollToTop, 300);
+    global.addEventListener('load', scrollToTop, { once: true });
+    global.addEventListener('pageshow', scrollToTop, { once: true });
+    global.setTimeout(function () {
+      if (root) root.style.scrollBehavior = previousInlineScrollBehavior;
+    }, 600);
   }
 
   function performMutation(endpoint, intent, body, button, status) {
@@ -415,14 +434,23 @@
           global.sessionStorage.setItem('northstarSessionId', workspace.session.id);
           global.sessionStorage.setItem('northstarDemoNotice', intent === 'reset'
             ? 'Demo restored to its starting state.' : 'One demo lead was added across every demo destination.');
-          if (intent === 'simulate-lead') requestToolbarReturn(workspace);
+          if (intent === 'simulate-lead') {
+            global.sessionStorage.setItem('northstarOnboardingSimulated', 'true');
+            requestToolbarReturn(workspace);
+          }
           if (intent === 'reset') clearScenarioPreferences();
         } catch (_storageError) {}
+        var action = intent === 'reset' ? 'demo_reset' : 'demo_simulate_lead';
+        global.dispatchEvent(new CustomEvent('northstar:interaction-complete', { detail: { action: action } }));
+        if (intent === 'simulate-lead') global.dispatchEvent(new CustomEvent('northstar:demo-simulated'));
         global.location.reload();
       });
     }).catch(function (error) {
       status.textContent = error.message || 'The demo action could not be completed.';
       button.disabled = false;
+      global.dispatchEvent(new CustomEvent('northstar:interaction-complete', {
+        detail: { action: intent === 'reset' ? 'demo_reset' : 'demo_simulate_lead' },
+      }));
     });
   }
 
@@ -455,6 +483,14 @@
     var scenarioGrid = control('div', '', 'northstar-demo-scenario-grid');
     var businessSummary = control('p', '', 'northstar-demo-business-summary');
     businessSummary.id = 'northstarDemoBusinessSummary';
+    var guidedPresets = control('div', '', 'northstar-demo-presets');
+    guidedPresets.setAttribute('aria-label', 'Guided demo scenarios');
+    guidedPresets.appendChild(control('span', 'Quick scenarios', 'northstar-demo-presets-label'));
+    var presetDefinitions = [
+      { id: 'missed-call', label: 'Urgent missed-call recovery', selection: { business: 'growing_residential', service: 'plumbing', intent: 'repair_request', urgency: 'within_24_hours', context: 'new_customer', scheduling: 'flexible', outcome: 'follow_up' } },
+      { id: 'high-value', label: 'High-value estimate', selection: { business: 'owner_operator', service: 'roofing', intent: 'new_estimate', urgency: 'planning', context: 'new_customer', scheduling: 'weekday_morning', outcome: 'estimate_ready' } },
+      { id: 'schedule-conflict', label: 'Schedule conflict and follow-up', selection: { business: 'multi_crew', service: 'hvac', intent: 'repair_request', urgency: 'this_week', context: 'returning_customer', scheduling: 'after_hours', outcome: 'needs_information' } }
+    ];
     if (scenarioReady) {
       scenarioSpace.dimensions.forEach(function (dimension, dimensionIndex) {
         if (!dimension || typeof dimension.id !== 'string' || typeof dimension.label !== 'string' ||
@@ -504,17 +540,42 @@
       : 'The shared scenario contract could not be verified. No demo mutation is available.',
     'northstar-demo-scenario-help');
     scenarioHelp.id = 'northstarDemoScenarioHelp';
-    builder.append(scenarioGrid, businessSummary, scenarioHelp);
+    if (scenarioReady) {
+      presetDefinitions.forEach(function (preset) {
+        var button = control('button', preset.label, 'northstar-demo-preset');
+        button.type = 'button';
+        button.dataset.preset = preset.id;
+        button.addEventListener('click', function () {
+          Object.keys(preset.selection).forEach(function (dimension) {
+            if (!selections[dimension]) return;
+            selections[dimension].value = preset.selection[dimension];
+            selections[dimension].dispatchEvent(new Event('change', { bubbles: true }));
+          });
+          builder.open = true;
+          writeScenarioPreferences(value, preset.selection, true);
+          scenarioHelp.textContent = preset.label + ' is ready. Review any field, then simulate the lead.';
+          var firstSelect = scenarioGrid.querySelector('select');
+          if (firstSelect) firstSelect.focus();
+        });
+        guidedPresets.appendChild(button);
+      });
+    }
+    builder.append(guidedPresets, scenarioGrid, businessSummary, scenarioHelp);
     var actions = control('div', '', 'northstar-demo-toolbar-actions');
     var simulate = control('button', 'Simulate Lead', 'btn btn-primary');
     simulate.id = 'demoSimulateLead';
     simulate.type = 'button';
+    simulate.dataset.telemetryAction = 'demo_simulate_lead';
+    simulate.setAttribute('data-telemetry-dead-click', '');
     simulate.disabled = !scenarioReady;
     var reset = control('button', 'Reset Demo', 'btn btn-secondary');
     reset.id = 'demoReset';
     reset.type = 'button';
+    reset.dataset.telemetryAction = 'demo_reset';
+    reset.setAttribute('data-telemetry-dead-click', '');
     var exit = control('a', 'Exit Demo', 'btn btn-ghost');
     exit.href = '/';
+    exit.dataset.telemetryAction = 'demo_exit';
     actions.append(simulate, reset, exit);
     var status = control('p', '', 'northstar-demo-toolbar-status');
     status.id = 'northstarDemoStatus';

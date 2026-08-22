@@ -21,7 +21,10 @@
     .faq-contents a { color: var(--brand-700); font-weight: 600; }
     [data-theme="dark"] .faq-contents a { color: var(--brand-300); }
     .faq-item { padding: clamp(20px, 5vw, 28px); background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-lg); }
-    .faq-item h2 { margin-bottom: 8px; color: var(--theme-text); font-size: 19px; }
+    .faq-item summary { cursor: pointer; color: var(--theme-text); list-style-position: outside; }
+    .faq-item summary::marker { color: var(--brand-600); }
+    .faq-item h2 { display: inline; margin: 0; color: var(--theme-text); font-size: 19px; }
+    .faq-item[open] summary { margin-bottom: 10px; }
     .faq-item p { color: var(--theme-muted); line-height: 1.7; }
     .faq-item a { color: var(--brand-700); font-weight: 600; }
     [data-theme="dark"] .faq-item a { color: var(--brand-300); }
@@ -69,6 +72,7 @@
         <li><a href="#browser-web-call">Browser Web Call</a></li>
         <li><a href="#polaris-results">Polaris results</a></li>
         <li><a href="#pricing-plans">Pricing</a></li>
+        <li><a href="#readiness-language">Readiness language</a></li>
         <li><a href="#integration-readiness">Integrations</a></li>
         <li><a href="#map-preferences">Map preferences</a></li>
         <li><a href="#support">Support</a></li>
@@ -76,42 +80,46 @@
     </nav>
 
     <div class="faq-list">
-      <section class="faq-item" id="about-northstar">
-        <h2>What is NorthStar?</h2>
+      <details class="faq-item" id="about-northstar" open>
+        <summary><h2>What is NorthStar?</h2></summary>
         <p>NorthStar is an AI Office Manager and business operating system for home-service businesses. It connects calls, leads, customers, work, estimates, schedules, next actions, and outcomes in one role-authorized operating view.</p>
-      </section>
-      <section class="faq-item" id="account-free-demo">
-        <h2>What can I explore without an account?</h2>
+      </details>
+      <details class="faq-item" id="account-free-demo">
+        <summary><h2>What can I explore without an account?</h2></summary>
         <p>The <a href="/demo">Command Center demo</a> is an isolated workspace. Its mounted destinations share one durable demo session, while configuration destinations remain truthful, stable, and read-only.</p>
-      </section>
-      <section class="faq-item" id="browser-web-call">
-        <h2>Does the Homepage call my phone?</h2>
+      </details>
+      <details class="faq-item" id="browser-web-call">
+        <summary><h2>Does the Homepage call my phone?</h2></summary>
         <p>No. The designed experience is a visitor-initiated browser Web Call, not an outbound callback. It requests no phone number. Production activation remains unavailable until final attorney wording, Retell privacy settings, temporary-processing isolation, and verified deletion are independently approved.</p>
-      </section>
-      <section class="faq-item">
-        <h2>What happens to a browser Web Call?</h2>
+      </details>
+      <details class="faq-item">
+        <summary><h2>What happens to a browser Web Call?</h2></summary>
         <p>When approved and enabled, the page requires a checked microphone/temporary-processing notice, plays an audible AI-demo and temporary-recording disclosure, and requires affirmative verbal consent. Hang-up or withdrawal begins Retell Delete Call verification and NorthStar purge. Polaris results remain hidden if deletion cannot be verified, and any visible result stays in browser memory only.</p>
-      </section>
-      <section class="faq-item" id="polaris-results">
-        <h2>Are the Polaris results a quote?</h2>
+      </details>
+      <details class="faq-item" id="polaris-results">
+        <summary><h2>Are the Polaris results a quote?</h2></summary>
         <p>No. The public result uses a versioned demo Business Profile and mounted Polaris intelligence. It demonstrates how supported job facts can become an estimate range and next action; it is not a contractor quote or a promise of availability.</p>
-      </section>
-      <section class="faq-item" id="pricing-plans">
-        <h2>What are the published prices?</h2>
+      </details>
+      <details class="faq-item" id="pricing-plans">
+        <summary><h2>What are the published prices?</h2></summary>
         <p>The queued monthly list prices are Starter $149, Growth $299, and Complete $499. Plan contents, allowances, provider readiness, taxes, discounts, and other commercial terms are not inferred or promised on the public site.</p>
-      </section>
-      <section class="faq-item" id="integration-readiness">
-        <h2>Are listed integrations connected?</h2>
+      </details>
+      <details class="faq-item" id="readiness-language">
+        <summary><h2>What do NorthStar readiness labels mean?</h2></summary>
+        <p><strong>Available now</strong> is usable in the stated environment. <strong>Available in the account-free demo</strong> is isolated demonstration behavior. <strong>Requires setup</strong> needs tenant configuration. <strong>Coming soon</strong> is planned but unavailable. <strong>Awaiting approval</strong> remains disabled until the named provider or legal gate is complete.</p>
+      </details>
+      <details class="faq-item" id="integration-readiness">
+        <summary><h2>Are listed integrations connected?</h2></summary>
         <p>Not by appearing in the catalogue. Each entry states whether provider approval or future work is required. A catalogue entry does not establish authorization, synchronization, tenant readiness, or live provider configuration.</p>
-      </section>
-      <section class="faq-item" id="map-preferences">
-        <h2>How do map preferences work?</h2>
+      </details>
+      <details class="faq-item" id="map-preferences">
+        <summary><h2>How do map preferences work?</h2></summary>
         <p>Authorized users can choose Apple Maps, Google Maps, or Waze as a navigation preference. NorthStar launches the selected provider with the available destination; it does not claim the provider accepted, routed, or completed the trip.</p>
-      </section>
-      <section class="faq-item" id="support">
-        <h2>How do I get support?</h2>
+      </details>
+      <details class="faq-item" id="support">
+        <summary><h2>How do I get support?</h2></summary>
         <p>Email <a href="mailto:Support@northstar-os.ai">Support@northstar-os.ai</a>. The <a href="/contact">contact page</a> explains the email-provider delivery boundary and does not pretend a retired website form sent a message.</p>
-      </section>
+      </details>
     </div>
 
     <div class="faq-actions">

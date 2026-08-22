@@ -1519,8 +1519,12 @@ async function main() {
     }
 
     const external = ledger.requests.filter(entry => new URL(entry.url).origin !== origin);
-    const mutations = ledger.requests.filter(entry => entry.method !== 'GET' && entry.method !== 'HEAD' && entry.method !== 'OPTIONS');
+    const writes = ledger.requests.filter(entry => entry.method !== 'GET' && entry.method !== 'HEAD' && entry.method !== 'OPTIONS');
+    const telemetryRequests = writes.filter(entry => new URL(entry.url).pathname === '/api/telemetry');
+    const mutations = writes.filter(entry => new URL(entry.url).pathname !== '/api/telemetry');
     assert.deepStrictEqual(external, [], 'all browser traffic remains on the disposable loopback origin');
+    assert.ok(telemetryRequests.length > 0, 'privacy-bounded product telemetry is exercised');
+    assert.ok(telemetryRequests.every(entry => entry.method === 'POST'), 'telemetry uses only the bounded POST envelope');
     assert.strictEqual(mutations.length, selectedViewports.length * 2, 'one simulate and one reset per viewport');
     assert.ok(mutations.every(entry => {
       const pathname = new URL(entry.url).pathname;
@@ -1556,6 +1560,7 @@ async function main() {
       paidReceipts,
       requests: ledger.requests.length,
       mutations: mutations.length,
+      telemetryRequests: telemetryRequests.length,
       externalRequests: external.length,
       httpErrors: ledger.httpErrors.length,
       warnings: ledger.warnings.length,

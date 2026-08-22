@@ -225,6 +225,9 @@ async function installLocalApiBoundary(context, origin, evidence, options = {}) 
     if (request.method() === 'GET' && url.pathname === '/api/demo/command-center') {
       return route.fulfill(jsonResponse({ success: true, data: demoWorkspaceFixture() }));
     }
+    if (request.method() === 'POST' && url.pathname === '/api/telemetry') {
+      return route.fulfill(jsonResponse({ accepted: true }, 202));
+    }
     const demoCompatibility = url.pathname.match(/^\/api\/demo\/command-center\/canonical\/compat\/([^/]+)$/);
     if (request.method() === 'GET' && demoCompatibility) {
       return route.fulfill(jsonResponse(canonicalFixture(request, decodeURIComponent(demoCompatibility[1]))));
@@ -825,8 +828,8 @@ async function runMountedMatrix(engine, viewport, origin) {
         }
         assert.deepStrictEqual(pageErrors, []);
         assert.deepStrictEqual(consoleErrors, []);
-        assert.strictEqual(inventory.requests.some(item => !['GET'].includes(item.method)), false);
-        assert.strictEqual(inventory.api.some(item => item.method !== 'GET'), false);
+        assert.strictEqual(inventory.requests.some(item => item.method !== 'GET' && item.path !== '/api/telemetry'), false);
+        assert.strictEqual(inventory.api.some(item => item.method !== 'GET' && item.path !== '/api/telemetry'), false);
       } finally {
         communicationsGate.cancel();
         await context.close();
@@ -1070,6 +1073,38 @@ async function runAccessibilityAuditNegativeControl(engine) {
       true,
       'higher-layer controls outside the homepage navigation remain detectable'
     );
+
+    await page.setContent(`<!doctype html><html><head><style>
+      .homepage-header-stack { position:sticky; inset:0 0 auto; height:64px; z-index:500; background:#0b0d17; }
+      .nav-inner { position:relative; height:64px; }
+    </style></head><body class="homepage-refresh" style="margin:0;background:#0b0d17;color:#f1f2f6;min-height:180vh">
+      <button id="stickyOccludedAction" aria-label="Occluded sticky action" style="position:absolute;right:10px;top:10px;width:60px;height:44px">D</button>
+      <button id="stickyAboveNavAction" aria-label="Higher-layer sticky action" style="position:fixed;right:10px;top:10px;width:60px;height:44px;z-index:501">A</button>
+      <header class="homepage-header-stack">
+        <div class="nav-inner">
+          <button id="stickySameHeaderAction" aria-label="Overlapping sticky header action" style="position:absolute;right:10px;top:10px;width:60px;height:44px">H</button>
+          <span data-northstar-theme-control style="position:absolute;right:10px;top:10px">
+            <button data-northstar-theme-toggle aria-label="Fixture sticky theme" style="width:44px;height:44px">T</button>
+          </span>
+        </div>
+      </header>
+    </body></html>`);
+    const stickyHomepageAudit = await auditMountedAccessibility(page);
+    assert.strictEqual(
+      stickyHomepageAudit.overlaps.some(overlap => overlap.path === '#stickySameHeaderAction'),
+      true,
+      'same-sticky-header collisions remain detectable'
+    );
+    assert.strictEqual(
+      stickyHomepageAudit.overlaps.some(overlap => overlap.path === '#stickyOccludedAction'),
+      false,
+      'document controls occluded beneath sticky homepage navigation are excluded'
+    );
+    assert.strictEqual(
+      stickyHomepageAudit.overlaps.some(overlap => overlap.path === '#stickyAboveNavAction'),
+      true,
+      'higher-layer controls outside sticky homepage navigation remain detectable'
+    );
     return {
       engine,
       inheritedBackgroundContrast: true,
@@ -1081,6 +1116,9 @@ async function runAccessibilityAuditNegativeControl(engine) {
       homepageSameNavOverlap: true,
       homepageOccludedDocumentControlExcluded: true,
       homepageAboveNavOverlap: true,
+      homepageStickySameHeaderOverlap: true,
+      homepageStickyOccludedDocumentControlExcluded: true,
+      homepageStickyAboveNavOverlap: true,
       contextualControls: {
         contexts: interaction.visibleControlContexts,
         failures: contextualFailures.length,

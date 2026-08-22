@@ -761,9 +761,9 @@
           <a href="#how-it-works">How It Works</a>
           <a href="#pricing">Pricing</a>
           <a href="/faq">FAQ</a>
-          <a href="/demo" class="btn btn-primary btn-sm">Explore Demo</a>
+          <a href="/demo" class="btn btn-primary btn-sm" data-telemetry-action="homepage_explore_demo">Explore Demo</a>
           <a href="/login" class="btn btn-ghost btn-sm">Sign In</a>
-          <a href="/signup">Start Free Trial</a>
+          <a href="/signup" data-telemetry-action="homepage_start_trial">Start Free Trial</a>
         </div>
         <span class="northstar-theme-slot" data-northstar-theme-slot aria-label="Theme controls"></span>
       </div>
@@ -785,8 +785,8 @@
        <p class="demo-hero-copy">NorthStar connects calls, leads, estimates, schedules, and next actions in one operating view for home service businesses.</p>
 
        <div class="demo-hero-actions" aria-label="Explore NorthStar">
-         <a href="/demo" class="btn btn-primary">Explore the Account-Free Demo</a>
-         <a href="/signup" class="btn btn-secondary">Start Free Trial</a>
+         <a data-telemetry-action="homepage_explore_demo" href="/demo" class="btn btn-primary">Explore the Account-Free Demo</a>
+         <a data-telemetry-action="homepage_start_trial" href="/signup" class="btn btn-secondary">Start Free Trial</a>
        </div>
 
       <div class="guided-preview-disclosure" id="simulationModeBanner">
@@ -1188,6 +1188,21 @@
         <p class="pricing-note">Monthly list price. Plan details are finalized before launch.</p>
         <a href="/signup" class="btn btn-secondary" style="width:100%">Start Free Trial</a>
       </div>
+    </div>
+    <div class="pricing-readiness" aria-labelledby="pricingComparisonHeading">
+      <h3 id="pricingComparisonHeading">Compare what is published today</h3>
+      <div class="pricing-table-scroll" tabindex="0" aria-label="Scrollable pricing readiness comparison">
+        <table class="pricing-comparison">
+          <thead><tr><th scope="col">Published detail</th><th scope="col">Starter</th><th scope="col">Growth</th><th scope="col">Complete</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Monthly list price</th><td>$149</td><td>$299</td><td>$499</td></tr>
+            <tr><th scope="row">Account-free product demo</th><td>Available</td><td>Available</td><td>Available</td></tr>
+            <tr><th scope="row">Provider activation</th><td>Separate setup and approval</td><td>Separate setup and approval</td><td>Separate setup and approval</td></tr>
+            <tr><th scope="row">Plan features and limits</th><td>Not yet published</td><td>Not yet published</td><td>Not yet published</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>NorthStar will publish included outcomes, plan limits, taxes, discounts, and complete commercial terms before asking a customer to choose between plans.</p>
     </div>
   </section>
 

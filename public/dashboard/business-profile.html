@@ -9,6 +9,7 @@
   <title>Business Profile — NorthStar Solutions</title>
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/workspace-form-state.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: var(--font-sans); color: inherit; background: inherit; }
@@ -18,6 +19,8 @@
     .bp-title { font-size: 24px; font-weight: 700; color: var(--neutral-900); }
     .bp-subtitle { font-size: 14px; color: var(--neutral-500); margin-top: 4px; }
     .bp-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; margin-bottom: 24px; padding: 8px; background: var(--neutral-100); border-radius: var(--radius); }
+    .bp-nav-group { border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); display: grid; gap: 6px; min-width: 0; padding: 8px; }
+    .bp-nav-group-title { color: var(--neutral-500); font-size: 11px; font-weight: 800; letter-spacing: .06em; margin: 2px 5px; text-transform: uppercase; }
     .bp-nav-btn { padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--neutral-200); background: transparent; color: var(--neutral-600); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; transition: all 0.15s; }
     .bp-nav-btn:hover { background: var(--neutral-200); color: var(--neutral-800); }
     .bp-nav-btn.active { background: var(--neutral-50); color: var(--neutral-900); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -26,7 +29,7 @@
     .bp-card { background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
     .bp-card h3 { font-size: 13px; font-weight: 600; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
     .bp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 640px) { .bp-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 640px) { .bp-grid { grid-template-columns: 1fr; } .bp-nav { grid-template-columns: 1fr 1fr; } .bp-nav-group { align-content: start; } }
     .bp-field { display: flex; flex-direction: column; gap: 4px; }
     .bp-field label { font-size: 12px; font-weight: 600; color: var(--neutral-600); text-transform: uppercase; letter-spacing: 0.5px; }
     .bp-field input, .bp-field select, .bp-field textarea { padding: 8px 12px; border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); font-size: 14px; font-family: var(--font-sans); color: var(--neutral-800); background: var(--neutral-50); transition: border-color 0.15s; }
@@ -177,21 +180,12 @@
 
         <!-- Navigation Tabs -->
         <div class="bp-nav" id="bpNav" role="tablist" aria-label="Business Profile sections">
-          <button class="bp-nav-btn active" data-section="company" onclick="switchSection('company')">🏢 Company</button>
-          <button class="bp-nav-btn" data-section="headquarters" onclick="switchSection('headquarters')">📍 HQ</button>
-          <button class="bp-nav-btn" data-section="serviceArea" onclick="switchSection('serviceArea')">🗺️ Service Area</button>
-          <button class="bp-nav-btn" data-section="routing" onclick="switchSection('routing')">🧭 Routing</button>
-          <button class="bp-nav-btn" data-section="hours" onclick="switchSection('hours')">🕐 Hours</button>
-          <button class="bp-nav-btn" data-section="policies" onclick="switchSection('policies')">📜 Policies</button>
-          <button class="bp-nav-btn" data-section="crew" onclick="switchSection('crew')">👥 Crews</button>
-          <button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Assets &amp; Fleet</button>
-          <button class="bp-nav-btn" data-section="services" onclick="switchSection('services')">📋 Services</button>
-          <button class="bp-nav-btn" data-section="financial" onclick="switchSection('financial')">💰 Financial</button>
-          <button class="bp-nav-btn" data-section="scheduling" onclick="switchSection('scheduling')">📅 Scheduling</button>
-          <button class="bp-nav-btn" data-section="polaris" onclick="switchSection('polaris')">🤖 Polaris</button>
-          <button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">☎️ Voice &amp; Knowledge</button>
-          <button class="bp-nav-btn" data-section="notifications" onclick="switchSection('notifications')">🔔 Notifications</button>
-          <button class="bp-nav-btn" data-section="integrations" onclick="switchSection('integrations')">🔗 Integrations</button>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">Business</span><button class="bp-nav-btn active" data-section="company" onclick="switchSection('company')">🏢 Company</button><button class="bp-nav-btn" data-section="headquarters" onclick="switchSection('headquarters')">📍 Headquarters</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">Services &amp; Pricing</span><button class="bp-nav-btn" data-section="services" onclick="switchSection('services')">📋 Services</button><button class="bp-nav-btn" data-section="financial" onclick="switchSection('financial')">💰 Financial</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">Schedule &amp; Area</span><button class="bp-nav-btn" data-section="serviceArea" onclick="switchSection('serviceArea')">🗺️ Service Area</button><button class="bp-nav-btn" data-section="hours" onclick="switchSection('hours')">🕐 Hours</button><button class="bp-nav-btn" data-section="routing" onclick="switchSection('routing')">🧭 Routing</button><button class="bp-nav-btn" data-section="scheduling" onclick="switchSection('scheduling')">📅 Scheduling</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">Team &amp; Assets</span><button class="bp-nav-btn" data-section="crew" onclick="switchSection('crew')">👥 Crews</button><button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Assets &amp; Fleet</button><button class="bp-nav-btn" data-section="policies" onclick="switchSection('policies')">📜 Policies</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">AI &amp; Voice</span><button class="bp-nav-btn" data-section="polaris" onclick="switchSection('polaris')">🤖 Polaris</button><button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">☎️ Voice &amp; Knowledge</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">Notifications &amp; Apps</span><button class="bp-nav-btn" data-section="notifications" onclick="switchSection('notifications')">🔔 Notifications</button><button class="bp-nav-btn" data-section="integrations" onclick="switchSection('integrations')">🔗 Integrations</button></div>
         </div>
 
         <!-- Section: Company -->
@@ -1031,6 +1025,7 @@
         var live = document.getElementById('profileReadinessLive');
         if (live) live.textContent = 'Profile Readiness saved.';
         showToast('Profile Readiness saved successfully', 'success');
+        window.dispatchEvent(new CustomEvent('northstar:form-saved'));
       } catch (error) {
         showProfileReadinessError(error.message || 'Profile Readiness could not be saved.', true);
       } finally {
@@ -1687,6 +1682,7 @@
         renderOperationalConfiguration(profileData);
         refreshProfileReadinessAfterPreservedWrite();
         showToast('Operational planning policies saved successfully', 'success');
+        window.dispatchEvent(new CustomEvent('northstar:form-saved'));
       } catch (error) {
         showOperationalConfigurationError(error.message || 'Operational policies could not be saved.', true);
       } finally {
@@ -1935,6 +1931,7 @@
         renderFinancialConfiguration(profileData);
         refreshProfileReadinessAfterPreservedWrite();
         showToast('Financial Configuration saved successfully', 'success');
+        window.dispatchEvent(new CustomEvent('northstar:form-saved'));
       } catch (error) {
         showCanonicalError(error.message || 'Financial Configuration could not be saved.');
         var alert = document.getElementById('canonicalFinancialError');
@@ -2330,6 +2327,7 @@
         renderVoiceAssistant(profileData);
         refreshProfileReadinessAfterPreservedWrite();
         showToast('AI configuration saved successfully', 'success');
+        window.dispatchEvent(new CustomEvent('northstar:form-saved'));
       } catch (error) {
         showVoiceAssistantError(error.message || 'AI configuration could not be saved.', true);
       } finally {
@@ -3335,6 +3333,7 @@
             profileData = resp.data;
             renderProfile(profileData);
             refreshProfileReadinessAfterPreservedWrite();
+            window.dispatchEvent(new CustomEvent('northstar:form-saved'));
             showToast('✅ Profile saved successfully', 'success');
           } else {
             var versionConflict = result.status === 409 && resp.error && resp.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT';
@@ -3433,6 +3432,8 @@
   </script>
   <script src="/js/command-center-contract.js"></script>
   <script src="/js/nav-component.js"></script>
+  <script src="/js/workspace-form-state.js"></script>
+  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveBtn, #saveOperationalConfigurationBtn, #saveFinancialConfigurationBtn, #saveVoiceAssistantBtn, #saveProfileReadinessBtn' });</script>
   <script>NavComponent.init("business-profile");</script>
 </body>
 </html>

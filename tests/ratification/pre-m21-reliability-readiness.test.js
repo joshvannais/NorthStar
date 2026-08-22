@@ -117,4 +117,49 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     expect(integrations).toContain("provider.presentation.state === 'coming_soon'");
     expect(integrations).toContain("createElement('details', 'integration-category-details')");
   });
+
+  test('first-time experience has guided presets, quick start, active saves, and grouped setup', () => {
+    const runtime = read('public/js/demo-runtime.js');
+    const nav = read('public/js/nav-component.js');
+    const profile = read('public/dashboard/business-profile.html');
+    const settings = read('public/dashboard/settings.html');
+    expect(runtime).toContain('Urgent missed-call recovery');
+    expect(runtime).toContain('High-value estimate');
+    expect(runtime).toContain('Schedule conflict and follow-up');
+    expect(runtime).toContain("global.sessionStorage.setItem('northstarOnboardingSimulated', 'true')");
+    expect(nav).toContain('/js/workspace-guidance.js');
+    expect(profile).toContain('Services &amp; Pricing');
+    expect(profile).toContain('Schedule &amp; Area');
+    expect(profile).toContain('/js/workspace-form-state.js');
+    expect(settings).toContain('/js/workspace-form-state.js');
+  });
+
+  test('public readiness, signup, integration filters, and analytics remain truthful and bounded', () => {
+    const home = read('public/index.html');
+    const signup = read('public/signup.html');
+    const integrations = read('public/dashboard/integrations.html');
+    const telemetry = read('public/js/product-telemetry.js');
+    expect(home).toContain('Compare what is published today');
+    expect(home).toContain('Plan features and limits');
+    expect(signup).not.toContain('id="phone"');
+    expect(signup).toContain('during guided setup');
+    expect(integrations).toContain('Available to configure');
+    expect(integrations).toContain('Requires approval');
+    expect(integrations).toContain('All customer-facing');
+    expect(telemetry).toContain('globalPrivacyControl');
+    expect(telemetry).toContain('navigator.doNotTrack');
+    expect(telemetry).not.toContain('referrer');
+    expect(telemetry).not.toContain('searchParams');
+  });
+
+  test('FAQ is compact and readiness vocabulary is explained while Mission 32 stays future-only', () => {
+    const faq = read('public/faq.html');
+    const mission32 = read('docs/roadmap/MISSION_32_SCENARIO_CALCULATOR.md');
+    expect(faq).toContain('<details class="faq-item"');
+    expect(faq).toContain('Available now');
+    expect(faq).toContain('Awaiting approval');
+    expect(mission32).toContain('Future mission');
+    expect(mission32).toContain('not a customer, lead, job, appointment, invoice, or binding estimate');
+    expect(mission32).toContain('versioned assumptions');
+  });
 });

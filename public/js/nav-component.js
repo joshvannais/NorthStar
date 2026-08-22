@@ -302,6 +302,26 @@
         }
 
         root.setAttribute('data-northstar-navigation', 'ready');
+        if (!document.querySelector('link[data-northstar-workspace-guidance]')) {
+          var guidanceStyles = document.createElement('link');
+          guidanceStyles.rel = 'stylesheet';
+          guidanceStyles.href = '/css/workspace-guidance.css';
+          guidanceStyles.dataset.northstarWorkspaceGuidance = 'true';
+          document.head.appendChild(guidanceStyles);
+        }
+        var startGuidance = function () {
+          if (window.NorthStarWorkspaceGuidance) {
+            window.NorthStarWorkspaceGuidance.init({ mode: mode, activePage: ACTIVE_PAGE });
+          }
+        };
+        if (window.NorthStarWorkspaceGuidance) startGuidance();
+        else if (!document.querySelector('script[data-northstar-workspace-guidance]')) {
+          var guidanceScript = document.createElement('script');
+          guidanceScript.src = '/js/workspace-guidance.js';
+          guidanceScript.dataset.northstarWorkspaceGuidance = 'true';
+          guidanceScript.addEventListener('load', startGuidance, { once: true });
+          document.head.appendChild(guidanceScript);
+        }
         window.dispatchEvent(new CustomEvent('northstar:navigation-ready', {
           detail: Object.freeze({ activePage: ACTIVE_PAGE })
         }));

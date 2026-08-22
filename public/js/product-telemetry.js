@@ -6,6 +6,7 @@
   var signupDirty = false;
   var signupSubmitted = false;
   var pendingDeadClicks = Object.create(null);
+  var pendingExitKey = 'northstar:product-telemetry:pending-exit:v1';
 
   function privacyOptOut() {
     var dnt = String(global.navigator.doNotTrack || global.doNotTrack || '').toLowerCase();
@@ -43,21 +44,74 @@
     return 'over_5m';
   }
 
-  function send(event, action, keepalive) {
-    if (privacyOptOut()) return false;
+  function envelope(event, action) {
     var context = routeContext();
-    var payload = JSON.stringify({
+    return {
       event: event,
       surface: context.surface,
       routeClass: context.routeClass,
       action: action || 'none',
       elapsedBucket: elapsedBucket(),
-    });
-    global.fetch('/api/telemetry', {
-      method: 'POST', credentials: 'same-origin', keepalive: Boolean(keepalive),
-      headers: { 'Content-Type': 'application/json' }, body: payload,
-    }).catch(function () {});
+    };
+  }
+
+  function postEnvelope(value) {
+    try {
+      global.fetch('/api/telemetry', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value),
+      }).catch(function () {});
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function send(event, action) {
+    if (privacyOptOut()) return false;
+    postEnvelope(envelope(event, action));
     return true;
+  }
+
+  function validPendingExit(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    var keys = Object.keys(value).sort().join('|');
+    if (keys !== 'action|elapsedBucket|event|routeClass|surface') return false;
+    if (value.event !== 'page_exit' && value.event !== 'signup_abandonment') return false;
+    if (value.action !== 'none') return false;
+    if (value.surface !== 'public' && value.surface !== 'demo' && value.surface !== 'paid') return false;
+    if (!/^(?:home|faq|contact|login|signup|forgot_password|privacy|terms|refunds|legal|other_public|(?:demo|paid)_(?:command_center|polaris|leads|communications|calendar|business_profile|settings|integrations))$/.test(value.routeClass)) return false;
+    return /^(?:under_15s|15s_to_60s|1m_to_5m|over_5m)$/.test(value.elapsedBucket);
+  }
+
+  function clearPendingExit() {
+    try { global.sessionStorage.removeItem(pendingExitKey); } catch (_) {}
+  }
+
+  function queuePendingExit(values) {
+    if (privacyOptOut()) {
+      clearPendingExit();
+      return;
+    }
+    try {
+      global.sessionStorage.setItem(pendingExitKey, JSON.stringify(values.slice(0, 2)));
+    } catch (_) {}
+  }
+
+  function flushPendingExit() {
+    var raw = '';
+    try {
+      raw = global.sessionStorage.getItem(pendingExitKey) || '';
+      global.sessionStorage.removeItem(pendingExitKey);
+    } catch (_) {
+      return;
+    }
+    if (!raw || raw.length > 4096 || privacyOptOut()) return;
+    try {
+      var values = JSON.parse(raw);
+      if (!Array.isArray(values) || values.length > 2) return;
+      values.filter(validPendingExit).forEach(postEnvelope);
+    } catch (_) {}
   }
 
   function actionFor(element) {
@@ -92,16 +146,23 @@
   }
 
   function initialize() {
-    if (privacyOptOut()) return;
+    if (privacyOptOut()) {
+      clearPendingExit();
+      return;
+    }
     document.addEventListener('click', onClick);
     global.addEventListener('northstar:interaction-complete', completeInteraction);
-    global.addEventListener('northstar:demo-simulated', function () { send('demo_completion', 'demo_simulate_lead', true); });
+    global.addEventListener('northstar:demo-simulated', function () { send('demo_completion', 'demo_simulate_lead'); });
     global.addEventListener('pagehide', function () {
-      if (signupDirty && !signupSubmitted) send('signup_abandonment', 'none', true);
-      send('page_exit', 'none', true);
+      var pending = [];
+      if (signupDirty && !signupSubmitted) pending.push(envelope('signup_abandonment', 'none'));
+      pending.push(envelope('page_exit', 'none'));
+      queuePendingExit(pending);
     });
+    global.addEventListener('pageshow', flushPendingExit);
     initializeSignupAbandonment();
-    send('page_view', 'none', false);
+    flushPendingExit();
+    send('page_view', 'none');
   }
 
   global.NorthStarProductTelemetry = Object.freeze({ send: send });

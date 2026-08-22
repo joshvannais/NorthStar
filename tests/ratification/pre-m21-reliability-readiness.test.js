@@ -167,7 +167,12 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     expect(telemetry).toContain('globalPrivacyControl');
     expect(telemetry).toContain('navigator.doNotTrack');
     expect(telemetry).toContain("global.fetch('/api/telemetry'");
-    expect(telemetry).toContain('keepalive: Boolean(keepalive)');
+    expect(telemetry).toContain("global.addEventListener('pagehide'");
+    expect(telemetry).toContain('queuePendingExit(pending)');
+    expect(telemetry).toContain("global.addEventListener('pageshow', flushPendingExit)");
+    expect(telemetry).toContain('global.sessionStorage.setItem(pendingExitKey');
+    expect(telemetry).not.toContain('global.localStorage.setItem(pendingExitKey');
+    expect(telemetry).not.toContain('keepalive:');
     expect(telemetry).not.toContain('navigator.sendBeacon');
     expect(telemetry).not.toContain("new Blob([payload]");
     expect(telemetry).not.toContain('referrer');

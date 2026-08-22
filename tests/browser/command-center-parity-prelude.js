@@ -289,7 +289,23 @@ async function inspectCurrent(page, route, revision, viewport) {
       const itemRect = rect(node);
       return itemRect.left >= polarisCardRect.left - 1 && itemRect.right <= polarisCardRect.right + 1;
     });
-    const teamCrewLayout = routeId === 'team' ? Array.from(document.querySelectorAll('.wf-crew-member')).map(row => {
+    const demoTeamSummaryLayout = routeId === 'team' && location.pathname.startsWith('/demo/')
+      ? Array.from(document.querySelectorAll('#crewsList .wf-card')).map(card => {
+        const cardRect = card.getBoundingClientRect();
+        const summary = card.querySelector('.wf-summary');
+        const summaryRect = summary && summary.getBoundingClientRect();
+        const rows = summary ? Array.from(summary.querySelectorAll('.wf-summary-row')) : [];
+        return {
+          contained: Boolean(summaryRect) && summaryRect.left >= cardRect.left - 1 && summaryRect.right <= cardRect.right + 1,
+          contentFits: card.scrollWidth <= card.clientWidth + 1 && (!summary || summary.scrollWidth <= summary.clientWidth + 1),
+          noEditorControls: card.querySelectorAll('input, select, textarea, .wf-crew-member').length === 0,
+          semanticRows: rows.length >= 2 && rows.every(row =>
+            row.querySelector('.wf-summary-label')?.textContent.trim() && row.querySelector('.wf-summary-value')?.textContent.trim()),
+          labels: rows.map(row => row.querySelector('.wf-summary-label')?.textContent.trim()),
+        };
+      }) : null;
+    const teamCrewLayout = routeId === 'team' && !location.pathname.startsWith('/demo/')
+      ? Array.from(document.querySelectorAll('.wf-crew-member')).map(row => {
       const rowRect = row.getBoundingClientRect();
       const wrapperRect = row.parentElement.getBoundingClientRect();
       const wrapperStyle = getComputedStyle(row.parentElement);
@@ -308,7 +324,7 @@ async function inspectCurrent(page, route, revision, viewport) {
         semanticWhitespace: /\S\s+Crew lead$/.test(row.textContent),
         label: row.textContent.trim(),
       };
-    }) : null;
+      }) : null;
     const averageLeadValue = routeId === 'leads' ? document.getElementById('kpiAvgValue') : null;
     return {
       pathname: location.pathname,
@@ -337,6 +353,7 @@ async function inspectCurrent(page, route, revision, viewport) {
         document.querySelector('[data-northstar-theme-control]').parentElement.dataset.northstarThemeLocation,
       polarisGridOverflow: polarisGrid ? polarisGrid.scrollWidth - polarisGrid.clientWidth : null,
       polarisItemsContained,
+      demoTeamSummaryLayout,
       teamCrewLayout,
       averageLeadValueContained: !averageLeadValue || averageLeadValue.scrollWidth <= averageLeadValue.clientWidth + 1,
       polarisCardCount: document.querySelectorAll('[data-polaris-card="northstar_polaris_intelligence_card_v1"]').length,
@@ -410,9 +427,17 @@ async function inspectCurrent(page, route, revision, viewport) {
       route.path + ' hides internal platform providers from the customer catalogue');
   }
   if (route.id === 'team') {
-    assert.ok(snapshot.teamCrewLayout.length > 0 && snapshot.teamCrewLayout.every(row =>
-      row.contained && row.separated && row.fullWidth && row.contentFits && row.compactControls && row.semanticWhitespace),
-      route.path + ' crew membership and lead controls remain contained and distinct: ' + JSON.stringify(snapshot.teamCrewLayout));
+    if (snapshot.pathname.startsWith('/demo/')) {
+      assert.ok(snapshot.demoTeamSummaryLayout.length > 0 && snapshot.demoTeamSummaryLayout.every(card =>
+        card.contained && card.contentFits && card.noEditorControls && card.semanticRows &&
+        card.labels.includes('Home location') && card.labels.includes('Members')),
+      route.path + ' demo crews render contained semantic summaries without editor controls: ' +
+        JSON.stringify(snapshot.demoTeamSummaryLayout));
+    } else {
+      assert.ok(snapshot.teamCrewLayout.length > 0 && snapshot.teamCrewLayout.every(row =>
+        row.contained && row.separated && row.fullWidth && row.contentFits && row.compactControls && row.semanticWhitespace),
+      route.path + ' paid crew membership and lead controls remain contained and distinct: ' + JSON.stringify(snapshot.teamCrewLayout));
+    }
   }
   if (route.id === 'leads') {
     assert.strictEqual(snapshot.averageLeadValueContained, true, route.path + ' unavailable average value never wraps mid-word');

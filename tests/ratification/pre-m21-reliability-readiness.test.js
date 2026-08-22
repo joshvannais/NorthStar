@@ -139,11 +139,14 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
   test('account-free Team uses readable summaries and Polaris omits empty placeholder panels', () => {
     const team = read('public/dashboard/team.html');
     const polaris = read('public/dashboard/polaris.html');
+    const parity = read('tests/browser/command-center-parity-prelude.js');
     expect(team).toContain("function isDemoMode() { return window.location.pathname.startsWith('/demo/'); }");
     expect(team).toContain("element('dl', 'wf-summary')");
     expect(team).toContain("['Job role'");
     expect(team).toContain("['Members'");
     expect(team).toContain("['Guidance'");
+    expect(parity).toContain("demo crews render contained semantic summaries without editor controls");
+    expect(parity).toContain("paid crew membership and lead controls remain contained and distinct");
     expect(polaris).not.toContain('Activity feed will appear here');
     expect(polaris).not.toContain('Pinned insights will appear here');
     expect(polaris).not.toContain('Dynamic suggestions will appear here');

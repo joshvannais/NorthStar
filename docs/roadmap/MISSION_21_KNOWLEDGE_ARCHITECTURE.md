@@ -66,3 +66,30 @@ Part 1 is complete only when all of the following are true:
   high-risk, and attorney-gated content requires an active owner or administrator.
 - No HTTP route, browser control, provider transport, publication pointer, generated content,
   or external synchronization is introduced in Part 1.
+
+## Part 2 acceptance contract
+
+Part 2 is complete only when all of the following are true:
+
+- Generation begins only after an active owner or administrator membership is authorized;
+  source rows are then read inside the same serializable transaction that commits the drafts.
+- The exact active canonical Business Profile row is pinned by ID, version, normalized-profile
+  hash, and a digest of the complete raw/normalized snapshot. Its embedded and stored normalized
+  hashes are independently recomputed before any draft write.
+- Normalized workforce and asset-catalogue snapshots include only the bounded capability fields
+  needed for knowledge generation. Personal contact data, asset serial numbers, VINs, provider
+  credentials, and live operational state are not copied into generated knowledge.
+- Generation has one versioned, digest-bound contract and an explicit precedence order. A raw
+  configured Business Profile fact must agree with its same-version normalized projection before
+  it is promoted. Missing, conflicting, orphaned, malformed, or oversized evidence fails closed or
+  is represented as deterministic `needs_review`; no default or fact is invented.
+- The same source snapshot produces the same seven sorted canonical draft documents and digests:
+  identity, availability, services, customer/workforce guidance, financial constraints,
+  operational capabilities, and provider-neutral voice guidance.
+- Every generated version includes exact Business Profile/workforce/asset/system-generation
+  provenance as applicable. The seven entry/version/provenance/audit graphs commit atomically; a
+  duplicate key, source-integrity failure, authorization failure, or serialization conflict leaves
+  no partial batch.
+- Financial and operational-capability drafts are restricted and high-risk. Customer/workforce
+  policy and voice-guidance drafts require high-risk review. Part 2 does not approve, publish,
+  retrieve for consumers, authorize tools, call a provider, expose an HTTP route, or add UI.

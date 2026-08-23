@@ -1,6 +1,7 @@
 'use strict';
 
 const { normalizeInitialDraft, normalizeUuid } = require('./contract');
+const { generateInitialKnowledgeDrafts } = require('./generator');
 
 class KnowledgeRepositoryError extends Error {
   constructor(code, message, status) {
@@ -26,7 +27,7 @@ async function requireMembership(client, organizationId, actorUserId, allowedRol
       WHERE organization_id = $1
         AND user_id = $2
         AND status = 'active'
-      FOR KEY SHARE`,
+      FOR SHARE`,
     [organizationId, actorUserId]
   );
   if (result.rowCount !== 1 || (allowedRoles && !allowedRoles.includes(result.rows[0].role))) {
@@ -93,70 +94,186 @@ function mapVersion(entry, version, provenance) {
   };
 }
 
+async function insertInitialDraft(client, draft) {
+  const entryResult = await client.query(
+    `INSERT INTO canonical_knowledge_entries
+       (organization_id, canonical_key, entry_type, created_by_user_id)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [draft.organizationId, draft.canonicalKey, draft.entryType, draft.actorUserId]
+  );
+  const entry = entryResult.rows[0];
+  const versionResult = await client.query(
+    `INSERT INTO canonical_knowledge_versions
+       (organization_id, entry_id, version_number, schema_version, canonical_key,
+        entry_type, content_origin, label, sensitivity, review_requirement,
+        applicability, document, canonical_document, canonical_digest,
+        parent_version_id, created_by_user_id, reason)
+     VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, $8,
+             $9::jsonb, $10::jsonb, $11, $12, NULL, $13, $14)
+     RETURNING *`,
+    [
+      draft.organizationId, entry.id, draft.canonicalKey, draft.entryType,
+      draft.origin, draft.label, draft.sensitivity, draft.reviewRequirement,
+      JSON.stringify(draft.applicability), draft.canonicalDocument,
+      draft.canonicalDocument, draft.canonicalDigest, draft.actorUserId, draft.reason,
+    ]
+  );
+  const version = versionResult.rows[0];
+  const provenance = [];
+  for (const link of draft.provenance) {
+    const stored = await client.query(
+      `INSERT INTO canonical_knowledge_provenance
+         (organization_id, version_id, ordinal, source_type, source_record_id,
+          source_version, source_digest, json_pointer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        draft.organizationId, version.id, link.ordinal, link.sourceType,
+        link.sourceRecordId, link.sourceVersion, link.sourceDigest, link.jsonPointer,
+      ]
+    );
+    provenance.push(stored.rows[0]);
+  }
+  await client.query(
+    `INSERT INTO canonical_knowledge_audit_events
+     (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+     VALUES ($1, $2, $3, $4, 'entry_draft_created', $5,
+             jsonb_build_object('canonicalDigest', $6::text, 'versionNumber', 1))`,
+    [
+      draft.organizationId, entry.id, version.id, draft.actorUserId,
+      draft.reason, draft.canonicalDigest,
+    ]
+  );
+  return mapVersion(entry, version, provenance);
+}
+
+function mapWriteError(error) {
+  if (error && error.code === '23505' && error.constraint === 'canonical_knowledge_entries_key_unique') {
+    return new KnowledgeRepositoryError(
+      'knowledge_key_conflict', 'A knowledge entry already uses this canonical key', 409
+    );
+  }
+  if (error && error.code === '40001') {
+    return new KnowledgeRepositoryError(
+      'knowledge_generation_conflict',
+      'Authoritative inputs changed during knowledge generation; retry from a fresh snapshot',
+      409
+    );
+  }
+  return error;
+}
+
 async function createInitialKnowledgeDraft(pool, input) {
   const draft = normalizeInitialDraft(input);
   try {
     return await withTransaction(pool, async client => {
       await requireMembership(client, draft.organizationId, draft.actorUserId, ['owner', 'admin']);
-      const entryResult = await client.query(
-        `INSERT INTO canonical_knowledge_entries
-           (organization_id, canonical_key, entry_type, created_by_user_id)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
-        [draft.organizationId, draft.canonicalKey, draft.entryType, draft.actorUserId]
-      );
-      const entry = entryResult.rows[0];
-      const versionResult = await client.query(
-        `INSERT INTO canonical_knowledge_versions
-           (organization_id, entry_id, version_number, schema_version, canonical_key,
-            entry_type, content_origin, label, sensitivity, review_requirement,
-            applicability, document, canonical_document, canonical_digest,
-            parent_version_id, created_by_user_id, reason)
-         VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, $8,
-                 $9::jsonb, $10::jsonb, $11, $12, NULL, $13, $14)
-         RETURNING *`,
-        [
-          draft.organizationId, entry.id, draft.canonicalKey, draft.entryType,
-          draft.origin, draft.label, draft.sensitivity, draft.reviewRequirement,
-          JSON.stringify(draft.applicability), draft.canonicalDocument,
-          draft.canonicalDocument, draft.canonicalDigest, draft.actorUserId, draft.reason,
-        ]
-      );
-      const version = versionResult.rows[0];
-      const provenance = [];
-      for (const link of draft.provenance) {
-        const stored = await client.query(
-          `INSERT INTO canonical_knowledge_provenance
-             (organization_id, version_id, ordinal, source_type, source_record_id,
-              source_version, source_digest, json_pointer)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           RETURNING *`,
-          [
-            draft.organizationId, version.id, link.ordinal, link.sourceType,
-            link.sourceRecordId, link.sourceVersion, link.sourceDigest, link.jsonPointer,
-          ]
-        );
-        provenance.push(stored.rows[0]);
-      }
-      await client.query(
-        `INSERT INTO canonical_knowledge_audit_events
-         (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
-         VALUES ($1, $2, $3, $4, 'entry_draft_created', $5,
-                 jsonb_build_object('canonicalDigest', $6::text, 'versionNumber', 1))`,
-        [
-          draft.organizationId, entry.id, version.id, draft.actorUserId,
-          draft.reason, draft.canonicalDigest,
-        ]
-      );
-      return mapVersion(entry, version, provenance);
+      return insertInitialDraft(client, draft);
     });
   } catch (error) {
-    if (error && error.code === '23505' && error.constraint === 'canonical_knowledge_entries_key_unique') {
-      throw new KnowledgeRepositoryError(
-        'knowledge_key_conflict', 'A knowledge entry already uses this canonical key', 409
-      );
-    }
-    throw error;
+    throw mapWriteError(error);
+  }
+}
+
+async function loadGenerationAuthorities(client, organizationId) {
+  const organization = await client.query(
+    'SELECT id FROM organizations WHERE id = $1 FOR SHARE',
+    [organizationId]
+  );
+  if (organization.rowCount !== 1) {
+    throw new KnowledgeRepositoryError('knowledge_organization_not_found', 'Organization was not found', 404);
+  }
+  const profileResult = await client.query(
+    `SELECT id, organization_id, version_number, version_label, raw_profile,
+            normalized_profile, normalized_profile_hash
+       FROM canonical_business_profiles
+      WHERE organization_id = $1 AND is_active = TRUE
+      FOR SHARE`,
+    [organizationId]
+  );
+  if (profileResult.rowCount !== 1) {
+    throw new KnowledgeRepositoryError(
+      'knowledge_business_profile_required',
+      'Exactly one active canonical Business Profile is required',
+      409
+    );
+  }
+  const profile = profileResult.rows[0];
+  const skills = (await client.query(
+    `SELECT id, skill_key AS "skillKey", name, description, service_id AS "serviceId"
+       FROM workforce_skills
+      WHERE organization_id = $1
+      FOR SHARE`,
+    [organizationId]
+  )).rows;
+  const crews = (await client.query(
+    `SELECT id, crew_key AS "crewKey", name, home_location_id AS "homeLocationId"
+       FROM workforce_crews
+      WHERE organization_id = $1
+      FOR SHARE`,
+    [organizationId]
+  )).rows;
+  const crewMembers = (await client.query(
+    `SELECT crew_id AS "crewId", profile_id AS "profileId", crew_role AS "crewRole"
+       FROM workforce_crew_members
+      WHERE organization_id = $1
+      FOR SHARE`,
+    [organizationId]
+  )).rows;
+  const items = (await client.query(
+    `SELECT id, category, name, internal_reference AS "internalReference",
+            manufacturer, model, model_year AS "modelYear", configuration,
+            home_location_id AS "homeLocationId", catalogue_state AS "catalogueState",
+            version
+       FROM tenant_assets
+      WHERE organization_id = $1
+      FOR SHARE`,
+    [organizationId]
+  )).rows.map(row => ({ ...row, version: Number(row.version) }));
+  const capabilities = (await client.query(
+    `SELECT asset_id AS "assetId", service_id AS "serviceId"
+       FROM tenant_asset_service_capabilities
+      WHERE organization_id = $1
+      FOR SHARE`,
+    [organizationId]
+  )).rows;
+  return {
+    profile: {
+      id: profile.id,
+      organizationId: profile.organization_id,
+      versionNumber: Number(profile.version_number),
+      versionLabel: profile.version_label,
+      profileHash: String(profile.normalized_profile_hash).trim(),
+      rawProfile: profile.raw_profile,
+      normalizedProfile: profile.normalized_profile,
+    },
+    workforce: { skills, crews, crewMembers },
+    assets: { items, capabilities },
+  };
+}
+
+async function generateInitialKnowledgeFromAuthorities(pool, input) {
+  const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
+  const actorUserId = normalizeUuid(input && input.actorUserId, 'actorUserId');
+  try {
+    return await withTransaction(pool, async client => {
+      await requireMembership(client, organizationId, actorUserId, ['owner', 'admin']);
+      const authorities = await loadGenerationAuthorities(client, organizationId);
+      const generation = generateInitialKnowledgeDrafts({
+        organizationId,
+        actorUserId,
+        authorities,
+      });
+      const entries = [];
+      for (const draft of generation.drafts) entries.push(await insertInitialDraft(client, draft));
+      return {
+        authority: generation.authority,
+        entries,
+      };
+    });
+  } catch (error) {
+    throw mapWriteError(error);
   }
 }
 
@@ -236,5 +353,6 @@ async function getKnowledgeVersion(pool, input) {
 module.exports = {
   KnowledgeRepositoryError,
   createInitialKnowledgeDraft,
+  generateInitialKnowledgeFromAuthorities,
   getKnowledgeVersion,
 };

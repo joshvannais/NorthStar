@@ -2,6 +2,10 @@
 
 const assert = require('assert');
 const { app } = require('../../src/server');
+const {
+  buildDemoWorkspace,
+  createInitialDemoState,
+} = require('../../src/commandCenter/workspace');
 const { navigationFixture } = require('../helpers/navigation-fixture');
 const { MOUNTED_THEME_PAGES } = require('../helpers/site-theme-pages');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
@@ -25,6 +29,20 @@ const COMMUNICATIONS_EXPECTED_REQUESTS = Object.freeze([
   Object.freeze({ method: 'GET', pathname: '/api/v1/canonical/compat/communications', search: '' }),
   Object.freeze({ method: 'GET', pathname: '/api/v1/canonical/compat/communications', search: '?limit=50' }),
 ]);
+const DEMO_THEME_TENANT_ID = '00000000-0000-4000-8000-000000000301';
+const DEMO_THEME_SESSION_ID = '00000000-0000-4000-8000-000000000302';
+
+function demoWorkspaceFixture() {
+  return buildDemoWorkspace({
+    tenantId: DEMO_THEME_TENANT_ID,
+    sessionId: DEMO_THEME_SESSION_ID,
+    state: createInitialDemoState(DEMO_THEME_TENANT_ID, new Date('2026-08-03T12:00:00.000Z')),
+    revision: 1,
+    simulationCount: 0,
+    persisted: false,
+    expiresAt: new Date('2099-08-04T12:00:00.000Z'),
+  });
+}
 
 function jsonResponse(body, status = 200) {
   return {
@@ -204,6 +222,17 @@ async function installLocalApiBoundary(context, origin, evidence, options = {}) 
       return route.fulfill(jsonResponse(canonicalFixture(request, 'communications')));
     }
 
+    if (request.method() === 'GET' && url.pathname === '/api/demo/command-center') {
+      return route.fulfill(jsonResponse({ success: true, data: demoWorkspaceFixture() }));
+    }
+    if (request.method() === 'POST' && url.pathname === '/api/telemetry') {
+      return route.fulfill(jsonResponse({ accepted: true }, 202));
+    }
+    const demoCompatibility = url.pathname.match(/^\/api\/demo\/command-center\/canonical\/compat\/([^/]+)$/);
+    if (request.method() === 'GET' && demoCompatibility) {
+      return route.fulfill(jsonResponse(canonicalFixture(request, decodeURIComponent(demoCompatibility[1]))));
+    }
+
     if (request.method() === 'POST' && options.recovery === true) {
       const outcomes = options.outcomes || {};
       await new Promise(resolve => setTimeout(resolve, options.delayMs || 80));
@@ -322,9 +351,9 @@ async function settleFiniteDocumentAnimations(page) {
 }
 
 async function assertDashboardQuickActionTimeline(page, label) {
-  const actions = page.locator('.cc-action-btn');
+  const actions = page.locator('a[data-command-destination]');
   const count = await actions.count();
-  assert.strictEqual(count, 6, `${label} quick-action count`);
+  assert.strictEqual(count, 4, `${label} Command Center action count`);
   const hrefs = [];
   const samples = [];
   for (let index = 0; index < count; index += 1) {
@@ -350,7 +379,11 @@ async function assertDashboardQuickActionTimeline(page, label) {
     samples.push(actionSamples);
     await releaseInteractiveState(page, action);
   }
-  assert.strictEqual(new Set(hrefs).size, 6, `${label} every quick-action destination exercised`);
+  assert.deepStrictEqual(
+    hrefs.slice().sort(),
+    ['/dashboard/calendar', '/dashboard/leads', '/dashboard/leads', '/dashboard/polaris'],
+    `${label} canonical Command Center destinations exercised`
+  );
   return {
     actions: count,
     frames: samples.reduce((total, actionSamples) => total + actionSamples.length, 0),
@@ -507,6 +540,7 @@ async function auditCommunicationsReadiness(page, gate, label) {
 }
 
 async function assertMountedTheme(page, route, expectedTheme, options = {}) {
+  const expectedPath = new URL(route).pathname;
   await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 10000 });
   await page.locator('[data-northstar-theme-toggle]').waitFor({ state: 'visible', timeout: 5000 })
     .catch(async error => {
@@ -564,6 +598,17 @@ async function assertMountedTheme(page, route, expectedTheme, options = {}) {
     }).catch(() => ({ unavailable: true }));
     throw new Error(`${route} ${expectedTheme} body theme unavailable: ${error.message} ${JSON.stringify(diagnostic)}`);
   });
+  if (expectedPath === '/demo' || expectedPath.startsWith('/demo/')) {
+    await page.waitForFunction(() => (
+      document.documentElement.dataset.demoWorkspace === 'ready'
+        && document.documentElement.dataset.northstarNavigation === 'ready'
+    ), null, { timeout: 5000 });
+  }
+  if (expectedPath === '/demo') {
+    await page.waitForFunction(() => (
+      document.getElementById('commandCenterContent')?.getAttribute('aria-busy') === 'false'
+    ), null, { timeout: 5000 });
+  }
   const result = await page.evaluate(({ expected, forbiddenSource }) => {
     const toggle = document.querySelector('[data-northstar-theme-toggle]');
     const bounds = toggle.getBoundingClientRect();
@@ -627,10 +672,40 @@ async function assertMountedTheme(page, route, expectedTheme, options = {}) {
     accessibility = await auditMountedAccessibility(page);
   }
   const interactiveStates = await auditInteractiveStates(page);
+  assert.strictEqual(
+    new URL(page.url()).pathname,
+    expectedPath,
+    `${route} must remain mounted throughout its interaction audit`
+  );
 
   const toggledTheme = expectedTheme === 'dark' ? 'light' : 'dark';
+  await page.evaluate(() => {
+    window.__northstarThemeClickDiagnostic = { clicks: 0, changes: [] };
+    const button = document.querySelector('[data-northstar-theme-toggle]');
+    button?.addEventListener('click', () => { window.__northstarThemeClickDiagnostic.clicks += 1; });
+    window.addEventListener('northstar:themechange', event => {
+      window.__northstarThemeClickDiagnostic.changes.push(event.detail || null);
+    });
+  });
   await page.locator('[data-northstar-theme-toggle]').click();
-  assert.strictEqual(await page.evaluate(() => NorthStarTheme.getTheme()), toggledTheme);
+  assert.strictEqual(
+    new URL(page.url()).pathname,
+    expectedPath,
+    `${route} must remain mounted after its theme transition`
+  );
+  const actualToggledTheme = await page.evaluate(() => NorthStarTheme.getTheme());
+  if (actualToggledTheme !== toggledTheme) {
+    const diagnostic = await page.evaluate(() => ({
+      theme: NorthStarTheme.getTheme(),
+      clicks: window.__northstarThemeClickDiagnostic?.clicks || 0,
+      changes: window.__northstarThemeClickDiagnostic?.changes || [],
+      toggleCount: document.querySelectorAll('[data-northstar-theme-toggle]').length,
+      controlCount: document.querySelectorAll('[data-northstar-theme-control]').length,
+      connected: Boolean(document.querySelector('[data-northstar-theme-toggle]')?.isConnected),
+      ariaPressed: document.querySelector('[data-northstar-theme-toggle]')?.getAttribute('aria-pressed') || null,
+    }));
+    assert.fail(`${route} theme toggle must transition from ${expectedTheme} to ${toggledTheme}: ${JSON.stringify(diagnostic)}`);
+  }
   assert.strictEqual(
     await page.locator('[data-northstar-theme-toggle]').getAttribute('aria-pressed'),
     toggledTheme === 'dark' ? 'true' : 'false'
@@ -753,8 +828,8 @@ async function runMountedMatrix(engine, viewport, origin) {
         }
         assert.deepStrictEqual(pageErrors, []);
         assert.deepStrictEqual(consoleErrors, []);
-        assert.strictEqual(inventory.requests.some(item => !['GET'].includes(item.method)), false);
-        assert.strictEqual(inventory.api.some(item => item.method !== 'GET'), false);
+        assert.strictEqual(inventory.requests.some(item => item.method !== 'GET' && item.path !== '/api/telemetry'), false);
+        assert.strictEqual(inventory.api.some(item => item.method !== 'GET' && item.path !== '/api/telemetry'), false);
       } finally {
         communicationsGate.cancel();
         await context.close();
@@ -895,6 +970,8 @@ async function runAccessibilityAuditNegativeControl(engine) {
       <div class="context-dark" style="background:#0b0d17"><button class="context-action">Context action</button></div>
       <div class="context-light" style="background:#f8fafc"><button class="context-action">Context action</button></div>
       <button class="timing">Transition action</button>
+      <details><summary>Closed fixture</summary><button id="closedDetailsAction">Closed action</button></details>
+      <details open><summary>Open fixture</summary><button id="openDetailsAction">Open action</button></details>
       <div data-northstar-theme-control style="position:fixed;right:10px;bottom:10px"><button data-northstar-theme-toggle aria-label="Fixture theme" style="width:44px;height:44px">T</button></div>
     </body></html>`);
     const audit = await auditMountedAccessibility(page);
@@ -912,17 +989,136 @@ async function runAccessibilityAuditNegativeControl(engine) {
       && failure.contrastFailures.some(item => item.path.includes('timing'))
     );
     assert.strictEqual(interaction.visibleControlContexts >= 6, true, 'every visible fixture context is exercised');
+    assert.strictEqual(
+      interaction.contextSignatures.some(signature => signature.includes('closedDetailsAction')),
+      false,
+      'controls inside a closed details panel are not treated as visible'
+    );
+    assert.strictEqual(
+      interaction.contextSignatures.some(signature => signature.includes('openDetailsAction')),
+      true,
+      'controls inside an open details panel remain in the interactive audit'
+    );
     assert.strictEqual(contextualFailures.some(failure => failure.signature.includes('context-light')), true, 'effective light background failure is retained');
     assert.strictEqual(
       timingFailures.some(failure => failure.phase !== 'hover-0'),
       true,
       'intermediate or settled transition failure is sampled'
     );
+
+    await page.setContent(`<!doctype html><html><head><style>
+      .mobile-header { position:fixed; inset:0 0 auto; height:64px; z-index:400; background:#0b0d17; }
+      .mobile-header-actions { position:absolute; inset:0 0 auto auto; width:96px; height:64px; }
+    </style></head><body style="margin:0;background:#0b0d17;color:#f1f2f6;min-height:100vh">
+      <button id="occludedDocumentAction" aria-label="Occluded document action" style="position:fixed;right:10px;top:10px;width:60px;height:44px">D</button>
+      <button id="aboveHeaderOverlap" aria-label="Higher-layer document action" style="position:fixed;right:10px;top:10px;width:60px;height:44px;z-index:401">A</button>
+      <header class="mobile-header">
+        <div class="mobile-header-actions">
+          <button id="sameHeaderOverlap" aria-label="Overlapping header action" style="position:absolute;right:10px;top:10px;width:60px;height:44px">H</button>
+          <span class="northstar-theme-slot">
+            <div data-northstar-theme-control style="position:absolute;right:10px;top:10px">
+              <button data-northstar-theme-toggle aria-label="Fixture mobile theme" style="width:44px;height:44px">T</button>
+            </div>
+          </span>
+        </div>
+      </header>
+    </body></html>`);
+    const mobileHeaderAudit = await auditMountedAccessibility(page);
+    assert.strictEqual(
+      mobileHeaderAudit.overlaps.some(overlap => overlap.path === '#sameHeaderOverlap'),
+      true,
+      'same-mobile-header collisions remain detectable'
+    );
+    assert.strictEqual(
+      mobileHeaderAudit.overlaps.some(overlap => overlap.path === '#occludedDocumentAction'),
+      false,
+      'document controls occluded beneath the fixed mobile header are excluded'
+    );
+    assert.strictEqual(
+      mobileHeaderAudit.overlaps.some(overlap => overlap.path === '#aboveHeaderOverlap'),
+      true,
+      'higher-layer controls outside the mobile header remain detectable'
+    );
+
+    await page.setContent(`<!doctype html><html><head><style>
+      .nav { position:fixed; inset:0 0 auto; height:64px; z-index:500; background:#0b0d17; }
+      .nav-inner { position:relative; height:64px; }
+    </style></head><body class="homepage-refresh" style="margin:0;background:#0b0d17;color:#f1f2f6;min-height:100vh">
+      <button id="homepageOccludedAction" aria-label="Occluded homepage action" style="position:fixed;right:10px;top:10px;width:60px;height:44px">D</button>
+      <button id="homepageAboveNavAction" aria-label="Higher-layer homepage action" style="position:fixed;right:10px;top:10px;width:60px;height:44px;z-index:501">A</button>
+      <nav class="nav">
+        <div class="nav-inner">
+          <button id="homepageSameNavAction" aria-label="Overlapping homepage navigation action" style="position:absolute;right:10px;top:10px;width:60px;height:44px">H</button>
+          <span class="northstar-theme-slot">
+            <div data-northstar-theme-control style="position:absolute;right:10px;top:10px">
+              <button data-northstar-theme-toggle aria-label="Fixture homepage theme" style="width:44px;height:44px">T</button>
+            </div>
+          </span>
+        </div>
+      </nav>
+    </body></html>`);
+    const homepageNavAudit = await auditMountedAccessibility(page);
+    assert.strictEqual(
+      homepageNavAudit.overlaps.some(overlap => overlap.path === '#homepageSameNavAction'),
+      true,
+      'same-homepage-navigation collisions remain detectable'
+    );
+    assert.strictEqual(
+      homepageNavAudit.overlaps.some(overlap => overlap.path === '#homepageOccludedAction'),
+      false,
+      'document controls occluded beneath the fixed homepage navigation are excluded'
+    );
+    assert.strictEqual(
+      homepageNavAudit.overlaps.some(overlap => overlap.path === '#homepageAboveNavAction'),
+      true,
+      'higher-layer controls outside the homepage navigation remain detectable'
+    );
+
+    await page.setContent(`<!doctype html><html><head><style>
+      .homepage-header-stack { position:sticky; inset:0 0 auto; height:64px; z-index:500; background:#0b0d17; }
+      .nav-inner { position:relative; height:64px; }
+    </style></head><body class="homepage-refresh" style="margin:0;background:#0b0d17;color:#f1f2f6;min-height:180vh">
+      <button id="stickyOccludedAction" aria-label="Occluded sticky action" style="position:absolute;right:10px;top:10px;width:60px;height:44px">D</button>
+      <button id="stickyAboveNavAction" aria-label="Higher-layer sticky action" style="position:fixed;right:10px;top:10px;width:60px;height:44px;z-index:501">A</button>
+      <header class="homepage-header-stack">
+        <div class="nav-inner">
+          <button id="stickySameHeaderAction" aria-label="Overlapping sticky header action" style="position:absolute;right:10px;top:10px;width:60px;height:44px">H</button>
+          <span data-northstar-theme-control style="position:absolute;right:10px;top:10px">
+            <button data-northstar-theme-toggle aria-label="Fixture sticky theme" style="width:44px;height:44px">T</button>
+          </span>
+        </div>
+      </header>
+    </body></html>`);
+    const stickyHomepageAudit = await auditMountedAccessibility(page);
+    assert.strictEqual(
+      stickyHomepageAudit.overlaps.some(overlap => overlap.path === '#stickySameHeaderAction'),
+      true,
+      'same-sticky-header collisions remain detectable'
+    );
+    assert.strictEqual(
+      stickyHomepageAudit.overlaps.some(overlap => overlap.path === '#stickyOccludedAction'),
+      false,
+      'document controls occluded beneath sticky homepage navigation are excluded'
+    );
+    assert.strictEqual(
+      stickyHomepageAudit.overlaps.some(overlap => overlap.path === '#stickyAboveNavAction'),
+      true,
+      'higher-layer controls outside sticky homepage navigation remain detectable'
+    );
     return {
       engine,
       inheritedBackgroundContrast: true,
       componentBoundary: true,
       exactToggleOverlap: true,
+      sameHeaderOverlap: true,
+      occludedDocumentControlExcluded: true,
+      aboveHeaderOverlap: true,
+      homepageSameNavOverlap: true,
+      homepageOccludedDocumentControlExcluded: true,
+      homepageAboveNavOverlap: true,
+      homepageStickySameHeaderOverlap: true,
+      homepageStickyOccludedDocumentControlExcluded: true,
+      homepageStickyAboveNavOverlap: true,
       contextualControls: {
         contexts: interaction.visibleControlContexts,
         failures: contextualFailures.length,

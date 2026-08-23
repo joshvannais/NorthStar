@@ -836,7 +836,7 @@ textarea:focus-visible {
 .steps {
   display: flex;
   gap: 20px;
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
   width: 100%;
   padding: 0 4px;
@@ -885,7 +885,7 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 20px;
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
   width: 100%;
   padding: 0 4px;
@@ -961,6 +961,24 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
+.pricing-readiness {
+  background: var(--theme-surface, #fff);
+  border: 1px solid var(--theme-border, var(--neutral-200));
+  border-radius: var(--radius-lg);
+  margin: 28px auto 0;
+  max-width: 980px;
+  padding: clamp(18px, 3vw, 28px);
+}
+.pricing-readiness h3 { margin: 0 0 14px; text-align: center; }
+.pricing-readiness > p { color: var(--theme-muted, var(--neutral-500)); font-size: 13px; line-height: 1.6; margin: 14px 0 0; text-align: center; }
+.pricing-table-scroll { overflow-x: auto; }
+.pricing-table-scroll:focus-visible { outline: 3px solid rgba(202, 162, 39, .35); outline-offset: 4px; }
+.pricing-comparison { border-collapse: collapse; min-width: 680px; width: 100%; }
+.pricing-comparison th, .pricing-comparison td { border-bottom: 1px solid var(--theme-border, var(--neutral-200)); padding: 12px 14px; text-align: left; vertical-align: top; }
+.pricing-comparison thead th { color: var(--theme-text, var(--neutral-900)); font-size: 13px; }
+.pricing-comparison tbody th { color: var(--theme-text, var(--neutral-800)); font-size: 13px; width: 28%; }
+.pricing-comparison td { color: var(--theme-muted, var(--neutral-600)); font-size: 13px; }
+
 /* Footer */
 .footer {
   border-top: 1px solid var(--neutral-200);
@@ -973,6 +991,28 @@ textarea:focus-visible {
 .footer p {
   font-size: 13px;
   color: var(--neutral-500);
+}
+
+.footer.northstar-site-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 0;
+  margin-top: clamp(32px, 6vw, 64px);
+  padding: 32px 16px;
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 72px));
+  text-align: center;
+}
+
+.footer.northstar-site-footer .footer-links {
+  width: min(100%, 1100px);
+  margin: 0 auto;
+}
+
+.footer.northstar-site-footer p {
+  margin: 0;
 }
 
 /* === Dashboard Styles === */
@@ -1376,6 +1416,7 @@ tr:hover td { background: var(--neutral-50); }
   font-weight: 500;
   color: #92400e;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .demo-banner a {
@@ -1439,10 +1480,10 @@ tr:hover td { background: var(--neutral-50); }
   .grid-3, .grid-4, .grid-2 { grid-template-columns: 1fr; }
   .grid { gap: 16px; }
 
-  .steps { flex-direction: column; gap: 20px; padding: 0; }
-  .step { max-width: 400px; margin: 0 auto; }
+  .steps { flex-direction: column; gap: 20px; padding: 0 4px; }
+  .step { width: 100%; max-width: none; margin: 0; }
 
-  .pricing-grid { grid-template-columns: 1fr; max-width: 380px; }
+  .pricing-grid { grid-template-columns: 1fr; max-width: 1100px; }
 
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
   .stat-card { padding: 16px; }
@@ -4040,12 +4081,11 @@ textarea:disabled {
 }
 
 .navigation-launcher__menu {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% - 24px);
-  left: 0;
+  position: relative;
+  z-index: 1;
+  margin-top: 8px;
   display: grid;
-  width: min(260px, 100%);
+  width: 100%;
   padding: 6px;
   gap: 4px;
   border: 1px solid var(--theme-field-border);

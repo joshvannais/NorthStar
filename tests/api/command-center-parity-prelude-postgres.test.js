@@ -98,7 +98,7 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
       integrity: expect.objectContaining({ revision: 1, graphCount: 3 }),
       session: expect.objectContaining({ durable: false, simulationCount: 0 }),
     }));
-    expect(first.body.data.navigation).toHaveLength(11);
+    expect(first.body.data.navigation).toHaveLength(9);
     expect(first.body.data.graphs).toHaveLength(3);
     expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_sessions')).rows[0].count).toBe(0);
     expect((await pool.query('SELECT count(*)::int AS count FROM demo_command_center_admission_windows')).rows[0].count).toBe(0);

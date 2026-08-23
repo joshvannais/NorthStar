@@ -20,12 +20,24 @@ const { requirePermission } = require('../auth/permissions');
 const { createCanonicalVoiceCall } = require('../services/canonicalVoiceSessionCreation');
 const { getDataRoot, dataPath } = require('../services/dataRoot');
 const safeLogger = require('../observability/safeLogger');
+const { rateLimit } = require('../middleware/rateLimit');
+const { recordProductEvent } = require('../observability/productTelemetry');
 
 const router = express.Router();
 
 // ══════════════════════════════════════════════
 // PUBLIC ROUTES — no authentication required
 // ══════════════════════════════════════════════
+
+router.post('/telemetry', rateLimit('product-telemetry', req => `telemetry:${req.ip}`), (req, res) => {
+  const rawBytes = Buffer.byteLength(typeof req.rawBody === 'string' ? req.rawBody : '', 'utf8');
+  if (rawBytes < 1 || rawBytes > 1024) {
+    return res.status(413).json({ error: 'Telemetry envelope is too large' });
+  }
+  const accepted = recordProductEvent(req.body);
+  if (!accepted) return res.status(400).json({ error: 'Invalid telemetry envelope' });
+  return res.status(202).json({ accepted: true });
+});
 
 /**
  * GET /api/health

@@ -9,6 +9,19 @@
   var initialized = false;
   var dockingObserver = null;
   var themeSwitchToken = 0;
+  var telemetryRequested = false;
+
+  var SHARED_FOOTER_LINKS = [
+    { label: 'Home', href: '/' },
+    { label: 'How It Works', href: '/#how-it-works' },
+    { label: 'Pricing', href: '/#pricing' },
+    { label: 'FAQ', href: '/faq' },
+    { label: 'Contact', href: '/contact' },
+    { label: 'Privacy', href: '/privacy' },
+    { label: 'Terms', href: '/terms' },
+    { label: 'Refunds', href: '/refund' },
+    { label: 'Legal', href: '/legal' },
+  ];
 
   var INTERACTIVE_SELECTOR = 'a[href], button, input:not([type="hidden"]), select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])';
 
@@ -216,9 +229,49 @@
     applyTheme(explicitChoice || systemTheme(), explicitChoice ? 'saved' : 'system');
   }
 
+  function shouldInstallSharedFooter() {
+    var pathname = global.location && global.location.pathname ? global.location.pathname : '/';
+    return pathname.indexOf('/admin') !== 0 &&
+      pathname.indexOf('/previews') !== 0 &&
+      pathname.indexOf('/design-system') !== 0;
+  }
+
+  function installSharedFooter() {
+    if (!shouldInstallSharedFooter() || !document.body) return;
+
+    var footer = document.querySelector('[data-northstar-site-footer], footer.footer, footer.demo-dashboard-footer');
+    var created = !footer;
+    if (!footer) footer = document.createElement('footer');
+    footer.classList.add('footer', 'northstar-site-footer');
+    footer.setAttribute('data-northstar-site-footer', '');
+
+    while (footer.firstChild) footer.removeChild(footer.firstChild);
+
+    var navigation = document.createElement('nav');
+    navigation.className = 'footer-links';
+    navigation.setAttribute('aria-label', 'NorthStar information');
+    SHARED_FOOTER_LINKS.forEach(function (item) {
+      var link = document.createElement('a');
+      link.href = item.href;
+      link.textContent = item.label;
+      navigation.appendChild(link);
+    });
+
+    var copyright = document.createElement('p');
+    copyright.textContent = '© 2026 NorthStar Solutions LLC. All rights reserved.';
+    footer.appendChild(navigation);
+    footer.appendChild(copyright);
+
+    if (created) {
+      var dashboardMain = document.querySelector('.main-content');
+      (dashboardMain || document.body).appendChild(footer);
+    }
+  }
+
   function initialize() {
     if (initialized) return;
     initialized = true;
+    installSharedFooter();
     createToggle();
     try {
       if (!media && typeof global.matchMedia === 'function') media = global.matchMedia(DARK_QUERY);
@@ -235,6 +288,13 @@
     }
     updateToggle(currentTheme());
     scheduleDocking();
+    if (!telemetryRequested) {
+      telemetryRequested = true;
+      var telemetry = document.createElement('script');
+      telemetry.src = '/js/product-telemetry.js';
+      telemetry.defer = true;
+      document.head.appendChild(telemetry);
+    }
   }
 
   global.NorthStarTheme = Object.freeze({

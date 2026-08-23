@@ -23,8 +23,9 @@
     .wf-empty,.wf-loading,.wf-error{padding:24px;border:1px dashed var(--neutral-300);border-radius:var(--radius-md);color:var(--neutral-500);text-align:center}.wf-error{color:var(--danger);border-color:var(--danger)}
     .wf-status{min-height:22px;font-size:13px;font-weight:600;margin-top:8px}.wf-status[data-state="success"]{color:var(--success)}.wf-status[data-state="error"]{color:var(--danger)}
     .wf-readonly{padding:10px 12px;border-radius:var(--radius-sm);background:var(--neutral-50);font-size:12px;color:var(--neutral-500);margin-bottom:14px}
+    .wf-summary{display:grid;gap:10px;margin-top:14px}.wf-summary-row{display:grid;grid-template-columns:minmax(110px,.45fr) minmax(0,1fr);gap:12px;padding-top:10px;border-top:1px solid var(--neutral-200)}.wf-summary-label{color:var(--neutral-500);font-size:12px;font-weight:700;margin:0}.wf-summary-value{color:var(--neutral-800);font-size:13px;overflow-wrap:anywhere;margin:0}
     [data-theme="dark"] .wf-panel,[data-theme="dark"] .wf-card{background:var(--neutral-50);border-color:var(--neutral-200)}[data-theme="dark"] .wf-readonly{background:var(--neutral-100)}
-    @media(max-width:700px){.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-checks,.wf-crew-members{grid-template-columns:minmax(0,1fr)}.wf-check>label{flex:1 1 auto}.wf-check>input[type="radio"]{margin-left:auto}.wf-actions .btn{width:100%}}
+    @media(max-width:700px){.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-checks,.wf-crew-members{grid-template-columns:minmax(0,1fr)}.wf-check>label{flex:1 1 auto}.wf-check>input[type="radio"]{margin-left:auto}.wf-actions .btn{width:100%}.wf-summary-row{grid-template-columns:1fr;gap:4px}}
   </style>
   <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
@@ -75,7 +76,7 @@
         </section>
 
         <section class="wf-panel" aria-labelledby="crewsTitle">
-          <div class="wf-panel-head"><div><h2 id="crewsTitle">Crews</h2><p class="wf-panel-desc">Structural crew membership only. Assignments, schedules, routes, and dispatch remain outside Mission 20.</p></div></div>
+          <div class="wf-panel-head"><div><h2 id="crewsTitle">Crews</h2><p class="wf-panel-desc">Review crew membership here. Assignments, schedules, routes, and dispatch are managed in their dedicated workspaces.</p></div></div>
           <form id="crewForm" class="wf-form-grid" hidden>
             <div class="form-group"><label for="crewKey">Stable key</label><input id="crewKey" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._:\-]{0,63}"></div>
             <div class="form-group"><label for="crewName">Name</label><input id="crewName" required maxlength="120"></div>
@@ -130,8 +131,9 @@
     function body(method, value) {
       return { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) };
     }
-    function canManage() { return state.account && ['owner','admin'].includes(state.account.membership.role); }
-    function isOwner() { return state.account && state.account.membership.role === 'owner'; }
+    function isDemoMode() { return window.location.pathname.startsWith('/demo/'); }
+    function canManage() { return !isDemoMode() && state.account && ['owner','admin'].includes(state.account.membership.role); }
+    function isOwner() { return !isDemoMode() && state.account && state.account.membership.role === 'owner'; }
     function fillSelect(select, entries, selected, emptyLabel) {
       select.replaceChildren();
       if (emptyLabel) select.appendChild(option(null, emptyLabel, selected));
@@ -197,6 +199,15 @@
       var match = entries.find(function (entry) { return entry[0] === selected; });
       return match ? match[1] : fallback;
     }
+    function summaryRows(entries) {
+      var root = element('dl', 'wf-summary');
+      entries.forEach(function (entry) {
+        var row = element('div', 'wf-summary-row');
+        row.append(element('dt', 'wf-summary-label', entry[0]), element('dd', 'wf-summary-value', entry[1] || 'Not recorded'));
+        root.appendChild(row);
+      });
+      return root;
+    }
     async function mutate(url, options, success) {
       status('Saving…');
       try {
@@ -261,6 +272,17 @@
         badge.dataset.status = member.membershipStatus;
         head.appendChild(badge);
         card.append(head, element('p', 'wf-meta', member.email + (member.phone ? ' · ' + member.phone : '')));
+        if (isDemoMode()) {
+          var memberSkills = state.data.skills.filter(function (skill) { return member.skillIds.includes(skill.id); })
+            .map(function (skill) { return skill.name; });
+          card.appendChild(summaryRows([
+            ['Job role', labelFor(operationalRoles, member.operationalRole, member.operationalRole)],
+            ['Home location', labelFor(locationEntries(), member.homeLocationId, 'Not assigned')],
+            ['Skills', memberSkills.length ? memberSkills.join(', ') : 'None recorded']
+          ]));
+          root.appendChild(card);
+          return;
+        }
         var grid = element('div', 'wf-form-grid');
         var role = roleSelect('member-role-' + member.profileId, member.operationalRole, !canManage());
         var location = locationSelect('member-location-' + member.profileId, member.homeLocationId, !canManage());
@@ -322,6 +344,14 @@
       state.data.skills.forEach(function (skill) {
         var card = element('article', 'wf-card');
         card.dataset.skillKey = skill.key;
+        if (isDemoMode()) {
+          card.append(element('h3', '', skill.name), summaryRows([
+            ['Description', skill.description || 'No description recorded'],
+            ['Service', labelFor(serviceEntries(), skill.serviceId, 'No service reference')]
+          ]));
+          root.appendChild(card);
+          return;
+        }
         var name = document.createElement('input'); name.value = skill.name; name.maxLength = 120; name.disabled = !canManage(); name.id = 'skill-name-' + skill.id;
         var description = document.createElement('textarea'); description.value = skill.description; description.maxLength = 4096; description.disabled = !canManage(); description.id = 'skill-desc-' + skill.id;
         var service = document.createElement('select'); service.id = 'skill-service-' + skill.id; service.disabled = !canManage(); fillSelect(service, serviceEntries(), skill.serviceId, 'No service reference');
@@ -362,6 +392,19 @@
       state.data.crews.forEach(function (crew) {
         var card = element('article', 'wf-card');
         card.dataset.crewKey = crew.key;
+        if (isDemoMode()) {
+          var crewMembers = (crew.members || []).map(function (crewMember) {
+            var profile = state.data.members.find(function (member) { return member.profileId === crewMember.profileId; });
+            var memberName = profile ? profile.name : 'Unknown member';
+            return crewMember.role === 'lead' ? memberName + ' (lead)' : memberName;
+          });
+          card.append(element('h3', '', crew.name), summaryRows([
+            ['Home location', labelFor(locationEntries(), crew.homeLocationId, 'Not assigned')],
+            ['Members', crewMembers.length ? crewMembers.join(', ') : 'None assigned']
+          ]));
+          root.appendChild(card);
+          return;
+        }
         var name = document.createElement('input'); name.value = crew.name; name.maxLength = 120; name.disabled = !canManage(); name.id = 'crew-name-' + crew.id;
         var location = locationSelect('crew-location-' + crew.id, crew.homeLocationId, !canManage());
         var members = crewMemberEditor(crew, !canManage());
@@ -387,7 +430,16 @@
     function renderPolicies() {
       var root = document.getElementById('policiesList'); root.replaceChildren();
       if (!state.policies.length) { empty(root, 'No workforce policies configured.'); return; }
-      state.policies.forEach(function (policy) { root.appendChild(policyCard(policy)); });
+      state.policies.forEach(function (policy) {
+        if (!isDemoMode()) { root.appendChild(policyCard(policy)); return; }
+        var card = element('article', 'wf-card');
+        card.dataset.policyId = policy.id;
+        card.append(element('h3', '', policy.name), summaryRows([
+          ['Status', policy.enabled ? 'Enabled' : 'Disabled'],
+          ['Guidance', policy.description || 'No guidance recorded']
+        ]));
+        root.appendChild(card);
+      });
     }
     function renderForms() {
       document.getElementById('invitePanel').hidden = !isOwner();

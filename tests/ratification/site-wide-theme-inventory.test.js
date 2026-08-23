@@ -73,12 +73,14 @@ describe('mounted site-wide theme inventory', () => {
     expect(mountedGetRoutes()).toEqual(expectedRoutes);
     expect(new Set(MOUNTED_THEME_PAGES.map(page => page.route)).size).toBe(MOUNTED_THEME_PAGES.length);
     const demoPages = MOUNTED_THEME_PAGES.filter(page => page.surface === 'public-demo');
-    expect(demoPages).toHaveLength(12);
+    expect(demoPages).toHaveLength(9);
     expect(new Set(demoPages.map(page => page.file))).toEqual(new Set(['public/demo-dashboard.html']));
 
     const expectedHtml = [
       ...new Set(MOUNTED_THEME_PAGES.map(page => page.file)),
+      'public/dashboard/ai-settings.html', // Preserved unmounted redirect-target provenance.
       'public/dashboard.html', // Preserved unmounted legacy simulation-harness provenance.
+      'public/dashboard/my-number.html', // Preserved unmounted redirect-target provenance.
       'public/design-system.html', // Deliberately unmounted internal design reference.
     ].sort();
     expect(htmlFiles(path.join(ROOT, 'public')).sort()).toEqual(expectedHtml);

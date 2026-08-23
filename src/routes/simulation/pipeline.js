@@ -98,7 +98,8 @@ function generateScenario(requestedService, customerName) {
 
   // Build plausible customer contact with nationwide diversity
   const loc = _randomLocation();
-  const phone = `(${loc.areaCode}) ${_rand(200,900)}-${_rand(1000,9999)}`;
+  // Keep all generated demo contact data unmistakably reserved and non-routable.
+  const phone = `(555) 01${_rand(0,9)}-${_rand(1000,9999)}`;
   const streets = ['Oak Creek', 'Maple', 'Hilltop', 'Breeze', 'Elm', 'Cedar', 'Pine', 'Willow'];
   const suffix = ['Drive', 'Lane', 'Way', 'Court', 'Circle', 'Avenue'];
   const address = `${_rand(100,9999)} ${_pickRandom(streets)} ${_pickRandom(suffix)}, ${loc.city}, ${loc.abbr} ${loc.zip}`;
@@ -109,7 +110,7 @@ function generateScenario(requestedService, customerName) {
       name: customerName,
       firstName,
       phone,
-      email: firstName.toLowerCase().replace(/[^a-z]/g, '') + '@email.com',
+      email: firstName.toLowerCase().replace(/[^a-z]/g, '') + '@example.com',
       address,
     },
     job: {

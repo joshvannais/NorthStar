@@ -47,7 +47,7 @@ async function seedDemoData(userId) {
     const receivedAt = randDate(30);
     const lead = addLead({
       customerName: name, phoneNumber: randPhone(),
-      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@email.com`,
+      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@example.com`,
       address: `${rand(100,9999)} ${STREETS[rand(0,STREETS.length-1)]}, ${CITIES[rand(0,CITIES.length-1)]}`,
       serviceRequested: service, preferredTime: ['Morning','Afternoon','Anytime'][rand(0,2)],
       notes: `Demo call about ${service}`, callOutcome: outcome, estimatedPrice: price,

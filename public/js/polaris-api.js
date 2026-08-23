@@ -153,6 +153,12 @@ window.PolarisApi = (function () {
       jobDetail: values.service && values.service.scope,
       status: record.status,
       transcript: record.transcript && record.transcript.text,
+      email: customer.email || null,
+      createdAt: record.canonical.timestamps && (
+        record.canonical.timestamps.opportunityCreatedAt ||
+        record.canonical.timestamps.customerCreatedAt ||
+        record.canonical.timestamps.operationCreatedAt
+      ),
       calculationVersion: record.canonical.calculationVersion,
       snapshotDigest: record.canonical.snapshotDigest,
       canonical: record.canonical,

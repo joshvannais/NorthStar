@@ -180,16 +180,32 @@ html body .theme-toggle [data-theme-icon] svg {
 }
 
 @media (min-width: 769px) {
+  html:root,
+  html body {
+    overflow-x: clip;
+  }
+
+  html body .app-layout,
+  html body .dashboard-layout {
+    overflow-x: clip;
+  }
+
   html body .sidebar {
     position: sticky;
     top: 0;
     align-self: flex-start;
     height: 100vh;
     max-height: 100vh;
+    overflow: clip;
+  }
+
+  html body .sidebar-nav {
+    min-height: 0;
     overflow-y: auto;
   }
 
   html body .sidebar-footer {
+    flex: 0 0 auto;
     margin-top: auto;
     padding-top: 12px;
   }
@@ -338,6 +354,9 @@ html body .customer-drawer .drawer-close-btn {
 }
 
 html body .customer-drawer .drawer-body {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
   overscroll-behavior: contain;
   padding: 20px clamp(18px, 3vw, 28px) 32px;
   scrollbar-gutter: stable;
@@ -628,14 +647,18 @@ html body .bp-field :is(input, select, textarea) {
 }
 
 html body .integration-refresh-action {
-  border: 1px solid var(--brand-500) !important;
+  border: 1px solid var(--brand-700) !important;
   background: transparent !important;
-  color: var(--brand-500) !important;
+  color: var(--brand-700) !important;
+}
+
+html[data-theme="dark"] body .integration-refresh-action {
+  border-color: var(--brand-300) !important;
+  color: var(--brand-300) !important;
 }
 
 html body .integration-refresh-action:hover {
-  background: var(--brand-500) !important;
-  color: #111827 !important;
+  background: color-mix(in srgb, currentColor 10%, transparent) !important;
 }
 
 html body .integration-category[data-category-key="maps_navigation"] .integration-card-description,
@@ -736,7 +759,7 @@ html body .demo-chart-bars button {
 
   html body .app-layout,
   html body .dashboard-layout {
-    padding-top: calc(57px + env(safe-area-inset-top));
+    padding-top: calc(73px + env(safe-area-inset-top));
   }
 
   html body :is(h1, .page-title, .bp-title) {
@@ -899,14 +922,26 @@ html body.homepage-refresh {
   padding-top: 0 !important;
 }
 
-html body.homepage-refresh .nav {
-  position: fixed !important;
-  inset: 0 0 auto 0 !important;
+html body.homepage-refresh .homepage-header-stack {
+  position: sticky;
+  top: 0;
   z-index: 500 !important;
+  width: 100%;
 }
 
-html body.homepage-refresh .demo-banner {
-  margin-top: 56px !important;
+html body.homepage-refresh .homepage-header-stack .nav {
+  position: relative !important;
+  inset: auto !important;
+}
+
+html body.homepage-refresh .homepage-header-stack .demo-banner {
+  margin-top: 0 !important;
+}
+
+html body.homepage-refresh .fade-in {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
 }
 
 html body .call-card {
@@ -979,12 +1014,13 @@ html body .demo-table-wrap th {
   }
 
   html body.homepage-refresh .nav-inner {
-    min-height: calc(56px + env(safe-area-inset-top)) !important;
-    padding-top: env(safe-area-inset-top) !important;
+    min-height: calc(64px + env(safe-area-inset-top)) !important;
+    padding-top: max(8px, env(safe-area-inset-top)) !important;
+    padding-bottom: 8px !important;
   }
 
-  html body.homepage-refresh .demo-banner {
-    margin-top: calc(56px + env(safe-area-inset-top)) !important;
+  html body.homepage-refresh .homepage-header-stack .demo-banner {
+    margin-top: 0 !important;
   }
 
   html body .company-information-row {

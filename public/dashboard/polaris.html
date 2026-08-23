@@ -99,6 +99,25 @@
       flex-direction: column;
       align-items: flex-start;
     }
+    .polaris-selected-context {
+      width: min(100%, 720px);
+      align-self: center;
+      margin: 0 0 20px;
+      padding: 16px 18px;
+      border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--neutral-200));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--accent) 8%, var(--neutral-50));
+    }
+    .polaris-selected-context[hidden] { display: none; }
+    .polaris-selected-context-label {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .polaris-selected-context h2 { margin: 6px 0; font-size: 18px; }
+    .polaris-selected-context p { margin: 0; color: var(--neutral-600); line-height: 1.5; }
 
     /* Welcome state */
     .polaris-welcome {
@@ -466,6 +485,7 @@
 <div class="app-layout">
     <main class="main-content" id="mainContent">
       <div class="polaris-workspace">
+        <h1 class="sr-only">Polaris Intelligence Workspace</h1>
         <!-- Inline Polaris brand header (minimal, inherits shell) -->
         <div class="polaris-inline-header">
           <div class="polaris-inline-brand">
@@ -487,6 +507,11 @@
               </button>
             </div>
             <div class="polaris-conversation-body">
+              <section class="polaris-selected-context" id="polarisSelectedContext" aria-live="polite" hidden>
+                <div class="polaris-selected-context-label">Selected Record</div>
+                <h2 id="polarisSelectedContextTitle"></h2>
+                <p id="polarisSelectedContextSummary"></p>
+              </section>
               <div class="polaris-welcome">
                 <div class="polaris-welcome-icon">✦</div>
                 <div class="polaris-welcome-title">Welcome to POLARIS™</div>
@@ -540,34 +565,20 @@
               <div class="polaris-sidebar-heading">System Status</div>
               <div class="polaris-sidebar-item">
                 <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>All systems operational</span>
+                <span>Account-free demo data ready</span>
               </div>
               <div class="polaris-sidebar-item">
                 <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>Polaris Engine</span>
-                <span class="polaris-sidebar-status-label">Online</span>
+                <span>Polaris demo projection</span>
+                <span class="polaris-sidebar-status-label">Available</span>
               </div>
               <div class="polaris-sidebar-item">
                 <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>Intelligence API</span>
-                <span class="polaris-sidebar-status-label">Connected</span>
+                <span>Live provider requests</span>
+                <span class="polaris-sidebar-status-label">Not used</span>
               </div>
             </div>
 
-            <div class="polaris-sidebar-section">
-              <div class="polaris-sidebar-heading">Recent Activity</div>
-              <div class="polaris-placeholder-card">Activity feed will appear here</div>
-            </div>
-
-            <div class="polaris-sidebar-section">
-              <div class="polaris-sidebar-heading">Pinned Insights</div>
-              <div class="polaris-placeholder-card">Pinned insights will appear here</div>
-            </div>
-
-            <div class="polaris-sidebar-section">
-              <div class="polaris-sidebar-heading">Suggested Questions</div>
-              <div class="polaris-placeholder-card">Dynamic suggestions will appear here</div>
-            </div>
           </div>
         </div>
 
@@ -658,34 +669,20 @@
               <div class="polaris-sidebar-heading">System Status</div>
               <div class="polaris-sidebar-item">
                 <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>All systems operational</span>
+                <span>Workspace data ready</span>
               </div>
               <div class="polaris-sidebar-item">
                 <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>Polaris Engine</span>
-                <span class="polaris-sidebar-status-label">Online</span>
+                <span>Polaris calculation</span>
+                <span class="polaris-sidebar-status-label">Available</span>
               </div>
               <div class="polaris-sidebar-item">
                 <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>Intelligence API</span>
-                <span class="polaris-sidebar-status-label">Connected</span>
+                <span>Live provider requests</span>
+                <span class="polaris-sidebar-status-label">Not inferred</span>
               </div>
             </div>
 
-            <div class="polaris-sidebar-section">
-              <div class="polaris-sidebar-heading">Recent Activity</div>
-              <div class="polaris-placeholder-card">Activity feed will appear here</div>
-            </div>
-
-            <div class="polaris-sidebar-section">
-              <div class="polaris-sidebar-heading">Pinned Insights</div>
-              <div class="polaris-placeholder-card">Pinned insights will appear here</div>
-            </div>
-
-            <div class="polaris-sidebar-section">
-              <div class="polaris-sidebar-heading">Suggested Questions</div>
-              <div class="polaris-placeholder-card">Dynamic suggestions will appear here</div>
-            </div>
           </div>
         </div>
 
@@ -737,12 +734,59 @@
                 // ── Page Context ──
                 function getPageContext() {
                   var ctx = { page: 'polaris' };
-                  // Check URL for lead/customer context
-                  var match = window.location.search.match(/[?&]leadId=([^&]+)/);
-                  if (match) ctx.leadId = decodeURIComponent(match[1]);
+                  var query = new URLSearchParams(window.location.search);
+                  var kind = query.get('kind') || (query.get('leadId') ? 'lead' : '');
+                  var identifier = query.get('id') || query.get('leadId');
+                  if (kind && identifier && ['customer', 'lead', 'work'].indexOf(kind) >= 0) {
+                    ctx.selectedObject = { kind: kind, id: identifier };
+                    if (kind === 'lead') ctx.leadId = identifier;
+                    if (kind === 'customer') ctx.customerId = identifier;
+                    if (kind === 'work') ctx.workId = identifier;
+                  }
                   // Include live business context when available
                   if (_businessContext) ctx.business = _businessContext;
                   return ctx;
+                }
+
+                function selectedQuery() {
+                  var query = new URLSearchParams(window.location.search);
+                  var kind = query.get('kind') || (query.get('leadId') ? 'lead' : '');
+                  var identifier = query.get('id') || query.get('leadId');
+                  return kind && identifier ? { kind: kind, identifier: identifier } : null;
+                }
+
+                function findSelectedGraph(workspace, selection) {
+                  var graphs = workspace && Array.isArray(workspace.graphs) ? workspace.graphs : [];
+                  var key = selection.kind === 'lead' ? 'lead' : selection.kind;
+                  return graphs.find(function(graph) {
+                    return graph && graph.ids && (graph.ids[key] === selection.identifier ||
+                      (key === 'lead' && graph.ids.opportunity === selection.identifier) ||
+                      (key === 'work' && graph.ids.appointment === selection.identifier));
+                  }) || null;
+                }
+
+                function renderSelectedContext() {
+                  var selection = selectedQuery();
+                  var section = document.getElementById('polarisSelectedContext');
+                  if (!selection || !section || !window.NorthStarDemoRuntime ||
+                      typeof window.NorthStarDemoRuntime.loadWorkspace !== 'function') return;
+                  window.NorthStarDemoRuntime.loadWorkspace(false).then(function(workspace) {
+                    var graph = findSelectedGraph(workspace, selection);
+                    var title = document.getElementById('polarisSelectedContextTitle');
+                    var summary = document.getElementById('polarisSelectedContextSummary');
+                    if (!graph) {
+                      title.textContent = 'Selected record unavailable';
+                      summary.textContent = 'This record is not present in the current demo workspace. No fallback record is shown.';
+                    } else {
+                      title.textContent = (graph.customer && graph.customer.name || 'Customer') + ' · ' +
+                        (graph.lead && (graph.lead.serviceLabel || graph.lead.serviceType) || 'Requested work');
+                      summary.textContent = graph.lead && graph.lead.summary ||
+                        'Polaris is ready to answer questions about this selected customer, lead, and work record.';
+                    }
+                    section.hidden = false;
+                  }).catch(function() {
+                    section.hidden = true;
+                  });
                 }
 
       // ── Utilities ──
@@ -1167,12 +1211,14 @@
 
                 // ── Preload business context for AI conversations ──
                 preloadBusinessContext();
+                renderSelectedContext();
 
                 // ── Refresh context when a simulation completes elsewhere ──
                 if (window.EventBus) {
                   window.EventBus.on('simulation:completed', function() {
                     console.log('[Polaris] simulation:completed received — refreshing business context');
                     preloadBusinessContext();
+                    renderSelectedContext();
                   });
                 }
 

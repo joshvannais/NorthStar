@@ -405,7 +405,7 @@ router.get('/dashboard/coach', requireAuth, async function(req, res, next) {
       recommendations.push({ id: 'follow-up-leads', title: unpaidLeads + ' leads need follow-up', description: 'You have ' + unpaidLeads + ' new leads waiting for a call back. Following up within 24 hours doubles your close rate.', actionLabel: 'View Leads', actionUrl: '/dashboard/leads', priority: 'high' });
     }
     if (callsToday === 0 && leadsToday === 0) {
-      recommendations.push({ id: 'check-forwarding', title: 'Verify your phone forwarding', description: "You haven't received any calls today. Make sure your business number is forwarded to NorthStar.", actionLabel: 'Check Settings', actionUrl: '/dashboard/my-number', priority: 'medium' });
+      recommendations.push({ id: 'check-forwarding', title: 'Verify your phone forwarding', description: "You haven't received any calls today. Make sure your business number is forwarded to NorthStar.", actionLabel: 'Check Settings', actionUrl: '/dashboard/business-profile?section=company#business-number', priority: 'medium' });
     } else if (callsToday > 0) {
       recommendations.push({ id: 'review-calls', title: 'Review ' + callsToday + ' call(s) handled today', description: 'NorthStar handled ' + callsToday + ' call(s) and captured ' + leadsToday + ' lead(s). Review the call summaries to stay informed.', actionLabel: 'View Communications', actionUrl: '/dashboard/communications', priority: 'low' });
     }

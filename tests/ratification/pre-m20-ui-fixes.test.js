@@ -38,15 +38,21 @@ describe('pre-Mission 20 public UI corrections', () => {
 
   test('the homepage is explicitly centered and exposes the account-free dashboard entry', () => {
     expect(homepage).toMatch(/\.demo-container\s*\{[^}]*width\s*:\s*min\(calc\(100% - 32px\), 1100px\)[^}]*margin-inline\s*:\s*auto/si);
-    expect(homepage.match(/href=["']\/demo-dashboard["']/g).length).toBeGreaterThanOrEqual(2);
+    expect(homepage.match(/href=["']\/demo["']/g).length).toBeGreaterThanOrEqual(2);
+    expect(homepage).not.toMatch(/href=["']\/demo-dashboard["']/i);
     expect(homepage).not.toMatch(/href=["']\/demo-login["']/i);
     expect(homepage).toContain('Explore the account-free demo dashboard');
     expect(homepage).toContain('sample data only, no sign-in required');
   });
 
-  test('the account-free dashboard is a mounted public HTML document', async () => {
-    const response = await request(app)
+  test('the account-free dashboard has one canonical public route and a compatibility redirect', async () => {
+    const legacy = await request(app)
       .get('/demo-dashboard')
+      .expect(301);
+    expect(legacy.headers.location).toBe('/demo');
+
+    const response = await request(app)
+      .get('/demo')
       .expect(200)
       .expect('Content-Type', /html/);
 

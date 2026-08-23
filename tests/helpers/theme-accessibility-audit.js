@@ -128,6 +128,11 @@ async function auditMountedAccessibility(page) {
 
     function isVisible(element) {
       if (element.matches('.skip-link') && !element.matches(':focus')) return false;
+      const closedDetails = element.closest('details:not([open])');
+      if (closedDetails) {
+        const summary = closedDetails.querySelector(':scope > summary');
+        if (!summary || (element !== summary && !summary.contains(element))) return false;
+      }
       for (let current = element; current; current = current.parentElement) {
         const ancestorStyle = getComputedStyle(current);
         if (ancestorStyle.display === 'none' || ancestorStyle.visibility === 'hidden' || Number(ancestorStyle.opacity) <= 0) return false;
@@ -253,8 +258,19 @@ async function auditMountedAccessibility(page) {
       }
     }
 
+    function fixedHeaderBoundary(element) {
+      for (let current = element && element.parentElement; current; current = current.parentElement) {
+        if (current.matches('[data-northstar-fixed-header]')) return current;
+        const isSemanticHeader = current.matches('header, nav, [role="banner"]');
+        const position = getComputedStyle(current).position;
+        if (isSemanticHeader && (position === 'fixed' || position === 'sticky')) return current;
+      }
+      return null;
+    }
+
     const toggle = document.querySelector('[data-northstar-theme-toggle]');
     const toggleRect = toggle && toggle.getBoundingClientRect();
+    const toggleHeader = fixedHeaderBoundary(toggle);
     const overlaps = [];
     const clipped = [];
     const seenOverlaps = new Set();
@@ -268,6 +284,30 @@ async function auditMountedAccessibility(page) {
         const width = Math.min(rect.right, toggleRect.right) - Math.max(rect.left, toggleRect.left);
         const height = Math.min(rect.bottom, toggleRect.bottom) - Math.max(rect.top, toggleRect.top);
         if (width > 0.5 && height > 0.5) {
+          // A fixed or sticky navigation/header intentionally occludes document content
+          // as it scrolls beneath it. Exclude an outside-header control only when
+          // browser hit-testing proves it remains below the header throughout
+          // the sampled intersection. Higher-layer controls still fail.
+          if (toggleHeader && !toggleHeader.contains(element)) {
+            const left = Math.max(rect.left, toggleRect.left);
+            const right = Math.min(rect.right, toggleRect.right);
+            const top = Math.max(rect.top, toggleRect.top);
+            const bottom = Math.min(rect.bottom, toggleRect.bottom);
+            const insetX = Math.min(1, width / 4);
+            const insetY = Math.min(1, height / 4);
+            const points = [
+              [(left + right) / 2, (top + bottom) / 2],
+              [left + insetX, top + insetY],
+              [right - insetX, top + insetY],
+              [left + insetX, bottom - insetY],
+              [right - insetX, bottom - insetY],
+            ];
+            const ownsIntersection = points.some(([x, y]) => {
+              const topmost = document.elementFromPoint(x, y);
+              return topmost && (topmost === element || element.contains(topmost));
+            });
+            if (!ownsIntersection) continue;
+          }
           const key = pathFor(element);
           if (!seenOverlaps.has(key)) {
             seenOverlaps.add(key);
@@ -423,6 +463,11 @@ async function auditInteractiveStates(page) {
     elements.forEach((element, index) => {
       const rect = element.getBoundingClientRect();
       let visible = rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < innerWidth;
+      const closedDetails = element.closest('details:not([open])');
+      if (closedDetails) {
+        const summary = closedDetails.querySelector(':scope > summary');
+        if (!summary || (element !== summary && !summary.contains(element))) visible = false;
+      }
       for (let current = element; visible && current; current = current.parentElement) {
         const style = getComputedStyle(current);
         if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) <= 0) visible = false;
@@ -471,6 +516,33 @@ async function auditInteractiveStates(page) {
   for (const context of contexts) {
     const locator = all.nth(context.index);
     await locator.scrollIntoViewIfNeeded();
+    await locator.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const hoverGeometry = await locator.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return {
+        tag: element.tagName,
+        id: element.id || '',
+        className: typeof element.className === 'string' ? element.className : '',
+        containingDetailsOpen: element.closest('details')?.open ?? null,
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        viewportWidth: innerWidth,
+        viewportHeight: innerHeight,
+        scrollX,
+        scrollY,
+      };
+    });
+    assert.ok(
+      hoverGeometry.right > 0 && hoverGeometry.bottom > 0
+        && hoverGeometry.left < hoverGeometry.viewportWidth
+        && hoverGeometry.top < hoverGeometry.viewportHeight,
+      `interactive control moved outside the viewport: ${JSON.stringify({ context, hoverGeometry })}`
+    );
     await locator.hover({ force: true });
     const hoverFractions = await interactiveTransitionFractions(locator);
     for (const fraction of hoverFractions) {
@@ -525,6 +597,7 @@ async function auditInteractiveStates(page) {
   return {
     groups: contexts.length,
     visibleControlContexts: contexts.length,
+    contextSignatures: contexts.map(context => context.signature),
     hoverFrames,
     focusFrames,
     hoverFailures,

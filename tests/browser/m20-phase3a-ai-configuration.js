@@ -312,9 +312,11 @@ async function main() {
 
     await ownerPage.goto(origin + '/dashboard/ai-settings', { waitUntil: 'domcontentloaded' });
     await ownerPage.waitForFunction(() => document.documentElement.getAttribute('data-northstar-navigation') === 'ready');
-    assert.strictEqual(await ownerPage.locator('#mainContent input,#mainContent select,#mainContent textarea').count(), 0);
+    assert.match(ownerPage.url(), /\/dashboard\/settings#ai-settings$/);
+    assert.strictEqual(await ownerPage.locator('#ai-settings h2').textContent(), 'AI Settings');
+    assert.strictEqual(await ownerPage.locator('#voice-assistant-greeting').count(), 0);
     assert.strictEqual((await ownerPage.locator('body').textContent()).includes('Coming Soon'), false);
-    await ownerPage.locator('#openCanonicalAiSettings').focus();
+    await ownerPage.locator('#canonicalAiConfigurationLink').focus();
     await ownerPage.keyboard.press('Enter');
     await ownerPage.waitForURL(/\/dashboard\/business-profile\?section=retell#voice-assistant-configuration/);
     await ownerPage.waitForFunction(() => document.getElementById('section-retell').classList.contains('active'));

@@ -153,7 +153,6 @@ describe('Mission 20 Phase 3A provider-neutral AI configuration contract', () =>
 
   test('the mounted UI has one canonical editor, literal preview, and gateway-only secondary surfaces', () => {
     const businessProfile = source('public/dashboard/business-profile.html');
-    const aiSettings = source('public/dashboard/ai-settings.html');
     const settings = source('public/dashboard/settings.html');
 
     expect(businessProfile).toContain("profileRequest('/api/v1/business-profile/voiceAssistant'");
@@ -168,8 +167,8 @@ describe('Mission 20 Phase 3A provider-neutral AI configuration contract', () =>
     expect(businessProfile).toMatch(/function renderVoiceAssistant\(profile\)[\s\S]*hasOwn\(profile, 'voiceAssistant'\)/);
     expect(businessProfile).not.toMatch(/recording disclosure|AI identity/i);
 
-    expect(aiSettings).toContain('/dashboard/business-profile?section=retell#voice-assistant-configuration');
-    expect(aiSettings).not.toMatch(/<input|<select|<textarea|Coming Soon|simulator\.js/);
+    expect(settings).toContain('id="ai-settings"');
+    expect(settings).toContain('<h2>AI Settings</h2>');
     expect(settings).toContain('/dashboard/business-profile?section=retell#voice-assistant-configuration');
     expect(settings).not.toMatch(/id=["']greeting["']|Rachel \(|1 voice/);
     expect(settings).toMatch(/const settings = writableSettings\(settingsState\);/);

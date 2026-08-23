@@ -8,25 +8,34 @@
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/assets/logo.png">
   <link rel="stylesheet" href="/css/site-professionalism.css">
+  <style>
+    .legal-contents { background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-lg); margin: 22px 0 30px; padding: 18px 20px; }
+    .legal-contents strong { display: block; margin-bottom: 10px; }
+    .legal-contents ul { display: grid; gap: 8px 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding-left: 20px; }
+    .legal-contents a { color: var(--brand-700); font-weight: 600; }
+    [data-theme="dark"] .legal-contents a { color: var(--brand-300); }
+    @media (max-width: 560px) { .legal-contents ul { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
   <nav class="nav"><div class="nav-inner"><a href="/" class="nav-logo"><img src="/assets/logo.png" alt="NorthStar" class="logo-img"> NorthStar</a><div class="nav-links"><a href="/">Home</a><a href="/#pricing">Pricing</a><a href="/faq">FAQ</a><a href="/contact">Contact</a><a href="/login" class="btn btn-ghost btn-sm">Sign In</a><a href="/signup" class="btn btn-primary btn-sm">Start Free Trial</a></div></div></nav>
   <main class="legal-content">
     <h1>Legal Information</h1>
     <p class="last-updated">Last updated: August 16, 2026</p>
-    <h2>Business Information</h2>
+    <nav class="legal-contents" aria-label="Legal information topics"><strong>On this page</strong><ul><li><a href="#business-information">Business Information</a></li><li><a href="#disclaimer">Disclaimer</a></li><li><a href="#compliance">Compliance</a></li><li><a href="#service-availability">Service Availability</a></li><li><a href="#acceptable-use">Acceptable Use</a></li><li><a href="#governing-documents">Governing Documents</a></li></ul></nav>
+    <h2 id="business-information">Business Information</h2>
     <p><strong>NorthStar Solutions LLC</strong> — Connecticut-based company.</p>
-    <h2>Disclaimer</h2>
+    <h2 id="disclaimer">Disclaimer</h2>
     <p>The AI may occasionally misinterpret callers. Always review AI summaries. We don't guarantee specific business outcomes.</p>
-    <h2>Compliance</h2>
+    <h2 id="compliance">Compliance</h2>
     <p>You're responsible for complying with TCPA, CAN-SPAM, call recording consent laws, GDPR, and CCPA as applicable.</p>
-    <h2>Service Level Agreement</h2>
-    <p>We aim for 99.9% uptime. Service credits available for verified downtime exceeding 0.1% in a month.</p>
-    <h2>Acceptable Use</h2>
+    <h2 id="service-availability">Service Availability</h2>
+    <p>No public uptime guarantee or service-credit commitment is offered on this page. Any applicable service level will be stated in the customer&rsquo;s governing agreement.</p>
+    <h2 id="acceptable-use">Acceptable Use</h2>
     <p>Don't use our platform for deceptive, fraudulent, or abusive purposes. Report violations to Support@northstar-os.ai.</p>
-    <h2>Governing Documents</h2>
+    <h2 id="governing-documents">Governing Documents</h2>
     <p>See our <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>.</p>
   </main>
-  <footer class="footer"><div class="footer-links"><a href="/">Home</a><a href="/#pricing">Pricing</a><a href="/faq">FAQ</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/legal">Legal</a></div><div class="footer-trust"><span>🔒 SSL Secured</span><span>🛡️ Data Encrypted</span><span>✅ SOC 2 Compliant</span></div><p>© 2026 NorthStar Solutions LLC. All rights reserved.</p></footer>
+  <footer class="footer"><div class="footer-links"><a href="/">Home</a><a href="/#pricing">Pricing</a><a href="/faq">FAQ</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/legal">Legal</a></div><div class="footer-trust"><span>Secure connection</span><span>Encrypted transport</span></div><p>© 2026 NorthStar Solutions LLC. All rights reserved.</p></footer>
 </body>
 </html>

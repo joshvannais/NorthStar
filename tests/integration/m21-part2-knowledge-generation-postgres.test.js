@@ -18,6 +18,10 @@ const OWNER_B = 'b2000000-0000-4000-8000-000000000004';
 const MEMBER_B = 'b2000000-0000-4000-8000-000000000005';
 const ORG_C = 'b1000000-0000-4000-8000-000000000003';
 const OWNER_C = 'b2000000-0000-4000-8000-000000000006';
+const ORG_D = 'b1000000-0000-4000-8000-000000000004';
+const OWNER_D = 'b2000000-0000-4000-8000-000000000007';
+const ORG_E = 'b1000000-0000-4000-8000-000000000005';
+const OWNER_E = 'b2000000-0000-4000-8000-000000000008';
 
 function profile() {
   return {
@@ -105,6 +109,8 @@ realPostgres('Mission 21 Part 2 knowledge generation with mounted PostgreSQL', (
     await seedActor(pool, ORG_B, OWNER_B, 'owner', 'owner-b');
     await seedActor(pool, ORG_B, MEMBER_B, 'member', 'member-b');
     await seedActor(pool, ORG_C, OWNER_C, 'owner', 'owner-c');
+    await seedActor(pool, ORG_D, OWNER_D, 'owner', 'owner-d');
+    await seedActor(pool, ORG_E, OWNER_E, 'owner', 'owner-e');
     await seedProfile(
       pool, ORG_A, OWNER_A, 'b3000000-0000-4000-8000-000000000001'
     );
@@ -115,6 +121,20 @@ realPostgres('Mission 21 Part 2 knowledge generation with mounted PostgreSQL', (
       'b3000000-0000-4000-8000-000000000003',
       profile(),
       { profileHash: 'f'.repeat(64) }
+    );
+    await seedProfile(
+      pool,
+      ORG_D,
+      OWNER_D,
+      'b3000000-0000-4000-8000-000000000004',
+      { company: { name: 123 } }
+    );
+    await seedProfile(
+      pool,
+      ORG_E,
+      OWNER_E,
+      'b3000000-0000-4000-8000-000000000005',
+      { company: { name: 'Example Service' }, companyValues: [], faq: [] }
     );
 
     await pool.query(
@@ -262,6 +282,39 @@ realPostgres('Mission 21 Part 2 knowledge generation with mounted PostgreSQL', (
       'SELECT count(*)::int AS count FROM canonical_knowledge_entries WHERE organization_id = $1',
       [ORG_C]
     )).rows).toEqual([{ count: 0 }]);
+  });
+
+  test('fails malformed nested evidence closed and persists empty collections only as missing review', async () => {
+    const { generateInitialKnowledgeFromAuthorities } = require('../../src/knowledge/repository');
+    await expect(generateInitialKnowledgeFromAuthorities(pool, {
+      organizationId: ORG_D,
+      actorUserId: OWNER_D,
+    })).rejects.toMatchObject({ code: 'knowledge_profile_invalid', status: 503 });
+    expect((await pool.query(
+      'SELECT count(*)::int AS count FROM canonical_knowledge_entries WHERE organization_id = $1',
+      [ORG_D]
+    )).rows).toEqual([{ count: 0 }]);
+
+    await generateInitialKnowledgeFromAuthorities(pool, {
+      organizationId: ORG_E,
+      actorUserId: OWNER_E,
+    });
+    const guidance = (await pool.query(
+      `SELECT version.document
+         FROM canonical_knowledge_entries entry
+         JOIN canonical_knowledge_versions version
+           ON version.organization_id = entry.organization_id
+          AND version.entry_id = entry.id
+        WHERE entry.organization_id = $1
+          AND entry.canonical_key = 'organization.customer-guidance'`,
+      [ORG_E]
+    )).rows[0].document.content;
+    expect(guidance.state).toBe('needs_review');
+    expect(guidance.facts).not.toHaveProperty('companyValues');
+    expect(guidance.facts).not.toHaveProperty('faq');
+    expect(guidance.needsReview).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'missing_authoritative_section' }),
+    ]));
   });
 
   test('rolls a repeated generation attempt back without partial entries or evidence', async () => {

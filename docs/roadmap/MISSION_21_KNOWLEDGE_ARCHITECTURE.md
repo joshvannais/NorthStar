@@ -83,6 +83,14 @@ Part 2 is complete only when all of the following are true:
   configured Business Profile fact must agree with its same-version normalized projection before
   it is promoted. Missing, conflicting, orphaned, malformed, or oversized evidence fails closed or
   is represented as deterministic `needs_review`; no default or fact is invented.
+- Generic JSON shape validation is followed by the complete operational and canonical Business
+  Profile semantic validators before any dependency digest or draft is created. Empty arrays and
+  objects are missing evidence unless a future versioned field contract explicitly defines an
+  empty collection as meaningful.
+- Dependency digests recursively normalize source keys and strings to NFC. The exact stored and
+  embedded Business Profile hash is verified first; the knowledge dependency bytes then include
+  the complete canonical raw profile and normalized projection with its derived `hash` field
+  replaced by a canonical projection digest, so equivalent Unicode cannot change draft identity.
 - The same source snapshot produces the same seven sorted canonical draft documents and digests:
   identity, availability, services, customer/workforce guidance, financial constraints,
   operational capabilities, and provider-neutral voice guidance.

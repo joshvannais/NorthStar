@@ -215,6 +215,53 @@ describe('Mission 21 Part 2 deterministic knowledge generation', () => {
     ]));
   });
 
+  test('rejects malformed nested profile evidence and treats empty collections as missing', () => {
+    expect(() => generate(authorities({
+      profile: profileAuthority({ company: { name: 123 } }, 1),
+      workforce: { skills: [], crews: [], crewMembers: [] },
+      assets: { items: [], capabilities: [] },
+    }))).toThrow(expect.objectContaining({
+      code: 'knowledge_profile_invalid',
+      status: 503,
+    }));
+
+    const result = generate(authorities({
+      profile: profileAuthority({
+        company: { name: 'Example Service' },
+        companyValues: [],
+        faq: [],
+      }, 1),
+      workforce: { skills: [], crews: [], crewMembers: [] },
+      assets: { items: [], capabilities: [] },
+    }));
+    const guidance = byKey(result, 'organization.customer-guidance').document.content;
+    expect(guidance.state).toBe('needs_review');
+    expect(guidance.facts).not.toHaveProperty('companyValues');
+    expect(guidance.facts).not.toHaveProperty('faq');
+    expect(guidance.needsReview).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'missing_authoritative_section',
+        path: '/rawProfile/policies',
+      }),
+    ]));
+  });
+
+  test('produces identical source and draft digests for NFC-equivalent authority text', () => {
+    const decomposed = rawProfile();
+    decomposed.company.name = 'Cafe\u0301 Tree Care';
+    const precomposed = rawProfile();
+    precomposed.company.name = 'Caf\u00e9 Tree Care';
+
+    const first = generate(authorities({ profile: profileAuthority(decomposed) }));
+    const second = generate(authorities({ profile: profileAuthority(precomposed) }));
+
+    expect(first.authority.businessProfileDigest).toBe(second.authority.businessProfileDigest);
+    expect(first.drafts.map(draft => draft.canonicalDocument))
+      .toEqual(second.drafts.map(draft => draft.canonicalDocument));
+    expect(first.drafts.map(draft => draft.canonicalDigest))
+      .toEqual(second.drafts.map(draft => draft.canonicalDigest));
+  });
+
   test('turns a same-version raw/normalized disagreement into needs review and omits the disputed fact', () => {
     const profile = profileAuthority();
     const normalized = JSON.parse(JSON.stringify(profile.normalizedProfile));

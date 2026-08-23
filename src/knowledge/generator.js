@@ -8,6 +8,8 @@ const {
 } = require('./contract');
 const {
   sha256: businessProfileHash,
+  validateCanonicalBusinessProfile,
+  validateOperationalBusinessProfile,
   validateRawBusinessProfile,
 } = require('../services/businessProfileAdapter');
 
@@ -64,7 +66,9 @@ function hasOwn(value, key) {
 }
 
 function canonicalDigest(value) {
-  return crypto.createHash('sha256').update(canonicalStringify(value), 'utf8').digest('hex');
+  return crypto.createHash('sha256')
+    .update(canonicalStringify(canonicalSourceValue(value)), 'utf8')
+    .digest('hex');
 }
 
 function compareCanonical(left, right) {
@@ -78,9 +82,43 @@ function canonicalCopy(value) {
   return JSON.parse(canonicalStringify(value));
 }
 
+function canonicalSourceValue(value) {
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      fail('knowledge_source_invalid', 'Knowledge source numbers must be finite.', 503);
+    }
+    return Object.is(value, -0) ? 0 : value;
+  }
+  if (typeof value === 'string') return value.normalize('NFC');
+  if (Array.isArray(value)) return value.map(canonicalSourceValue);
+  if (!plainObject(value)) {
+    fail('knowledge_source_invalid', 'Knowledge sources must contain JSON-compatible values.', 503);
+  }
+  const output = Object.create(null);
+  const keys = new Set();
+  for (const originalKey of Object.keys(value)) {
+    const key = originalKey.normalize('NFC');
+    if (keys.has(key)) {
+      fail(
+        'knowledge_source_conflict',
+        'Knowledge source keys collide after Unicode normalization.',
+        409,
+        [key]
+      );
+    }
+    keys.add(key);
+    output[key] = canonicalSourceValue(value[originalKey]);
+  }
+  return output;
+}
+
 function configured(value) {
   if (value === undefined || value === null) return false;
-  return typeof value !== 'string' || value.trim().length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (plainObject(value)) return Object.keys(value).length > 0;
+  return true;
 }
 
 function pointer(parts) {
@@ -166,12 +204,18 @@ function verifyProfileAuthority(profile) {
     fail('knowledge_profile_invalid', 'Canonical Business Profile digest evidence is invalid.', 503);
   }
   const profileErrors = validateRawBusinessProfile(profile.rawProfile);
-  if (profileErrors.length > 0) {
+  const semanticErrors = profileErrors.length === 0
+    ? [
+        ...validateOperationalBusinessProfile(profile.rawProfile),
+        ...validateCanonicalBusinessProfile(profile.rawProfile),
+      ]
+    : [];
+  if (profileErrors.length > 0 || semanticErrors.length > 0) {
     fail(
       'knowledge_profile_invalid',
       'Canonical Business Profile content does not satisfy its source contract.',
       503,
-      profileErrors
+      [...profileErrors, ...semanticErrors]
     );
   }
   const normalized = canonicalCopy(profile.normalizedProfile);
@@ -264,12 +308,14 @@ function normalizeAuthorities(input) {
     ),
     capabilities: stableRelations(assets.capabilities || [], ['assetId', 'serviceId']),
   };
+  const normalizedProfileContent = canonicalSourceValue(profile.normalizedProfile);
+  delete normalizedProfileContent.hash;
   const profileRecord = {
     id: profile.id,
     organizationId: profile.organizationId,
-    profileHash: profile.profileHash,
     rawProfile: profile.rawProfile,
-    normalizedProfile: profile.normalizedProfile,
+    normalizedProfile: normalizedProfileContent,
+    normalizedProfileDigest: canonicalDigest(normalizedProfileContent),
     versionLabel: profile.versionLabel,
     versionNumber: profile.versionNumber,
   };

@@ -2,6 +2,13 @@
 
 const { normalizeInitialDraft, normalizeUuid } = require('./contract');
 const { generateInitialKnowledgeDrafts } = require('./generator');
+const {
+  approvalActionForRequirement,
+  buildKnowledgeDiff,
+  normalizeAttorneyReviewEvidence,
+  normalizePublicationTarget,
+  normalizeWorkflowTarget,
+} = require('./workflow');
 
 class KnowledgeRepositoryError extends Error {
   constructor(code, message, status) {
@@ -277,6 +284,478 @@ async function generateInitialKnowledgeFromAuthorities(pool, input) {
   }
 }
 
+function workflowError(code, message, status = 409) {
+  return new KnowledgeRepositoryError(code, message, status);
+}
+
+function normalizeStoredDigest(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function mapReviewSnapshot(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    entryId: row.entry_id,
+    versionId: row.version_id,
+    baseVersionId: row.base_version_id,
+    versionDigest: normalizeStoredDigest(row.version_digest),
+    diff: JSON.parse(row.canonical_diff),
+    canonicalDiff: row.canonical_diff,
+    diffDigest: normalizeStoredDigest(row.diff_digest),
+    submittedByUserId: row.submitted_by_user_id,
+    reason: row.reason,
+    createdAt: row.created_at,
+  };
+}
+
+function mapReviewEvent(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    entryId: row.entry_id,
+    versionId: row.version_id,
+    snapshotId: row.snapshot_id,
+    sequence: row.event_sequence,
+    actorUserId: row.actor_user_id,
+    action: row.action,
+    versionDigest: normalizeStoredDigest(row.version_digest),
+    reason: row.reason,
+    details: row.details,
+    createdAt: row.created_at,
+  };
+}
+
+function mapAttorneyEvidence(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    entryId: row.entry_id,
+    versionId: row.version_id,
+    snapshotId: row.snapshot_id,
+    recordedByUserId: row.recorded_by_user_id,
+    reviewReference: row.review_reference,
+    evidenceDigest: normalizeStoredDigest(row.evidence_digest),
+    reviewedAt: row.reviewed_at,
+    recordedAt: row.recorded_at,
+  };
+}
+
+function mapPublication(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    entryId: row.entry_id,
+    versionId: row.version_id,
+    number: row.publication_number,
+    canonicalDigest: normalizeStoredDigest(row.canonical_digest),
+    reviewEventId: row.review_event_id,
+    previousPublicationId: row.previous_publication_id,
+    publishedByUserId: row.published_by_user_id,
+    reason: row.reason,
+    publishedAt: row.published_at,
+  };
+}
+
+async function lockWorkflowTarget(client, target) {
+  await requireMembership(client, target.organizationId, target.actorUserId, ['owner', 'admin']);
+  const entryResult = await client.query(
+    `SELECT *
+       FROM canonical_knowledge_entries
+      WHERE organization_id = $1 AND id = $2
+      FOR UPDATE`,
+    [target.organizationId, target.entryId]
+  );
+  if (entryResult.rowCount !== 1) {
+    throw workflowError('knowledge_not_found', 'Knowledge entry was not found', 404);
+  }
+  const versionResult = await client.query(
+    `SELECT *
+       FROM canonical_knowledge_versions
+      WHERE organization_id = $1 AND entry_id = $2
+      ORDER BY version_number DESC
+      LIMIT 1
+      FOR SHARE`,
+    [target.organizationId, target.entryId]
+  );
+  if (versionResult.rowCount !== 1) {
+    throw workflowError('knowledge_not_found', 'Knowledge version was not found', 404);
+  }
+  const version = versionResult.rows[0];
+  if (version.id !== target.versionId || Number(version.version_number) !== target.versionNumber ||
+      normalizeStoredDigest(version.canonical_digest) !== target.canonicalDigest) {
+    throw workflowError(
+      'knowledge_stale_version',
+      'The knowledge version changed; reload the exact latest version before continuing'
+    );
+  }
+  return { entry: entryResult.rows[0], version };
+}
+
+async function latestReviewEvent(client, organizationId, entryId, versionId) {
+  const result = await client.query(
+    `SELECT *
+       FROM canonical_knowledge_review_events
+      WHERE organization_id = $1 AND entry_id = $2 AND version_id = $3
+      ORDER BY event_sequence DESC
+      LIMIT 1`,
+    [organizationId, entryId, versionId]
+  );
+  return result.rows[0] || null;
+}
+
+async function latestPublication(client, organizationId, entryId) {
+  const result = await client.query(
+    `SELECT *
+       FROM canonical_knowledge_publications
+      WHERE organization_id = $1 AND entry_id = $2
+      ORDER BY publication_number DESC
+      LIMIT 1`,
+    [organizationId, entryId]
+  );
+  return result.rows[0] || null;
+}
+
+function requireExpectedReviewEvent(actual, expected) {
+  const actualId = actual ? actual.id : null;
+  if (actualId !== expected) {
+    throw workflowError(
+      'knowledge_stale_review',
+      'The knowledge review state changed; reload it before continuing'
+    );
+  }
+}
+
+async function loadReviewSnapshot(client, target) {
+  const result = await client.query(
+    `SELECT *
+       FROM canonical_knowledge_review_snapshots
+      WHERE organization_id = $1 AND entry_id = $2 AND version_id = $3`,
+    [target.organizationId, target.entryId, target.versionId]
+  );
+  if (result.rowCount !== 1) {
+    throw workflowError('knowledge_review_required', 'Submit the exact version for review first');
+  }
+  return result.rows[0];
+}
+
+async function insertWorkflowAudit(client, target, action, versionId, details) {
+  await client.query(
+    `INSERT INTO canonical_knowledge_audit_events
+       (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+    [
+      target.organizationId, target.entryId, versionId, target.actorUserId,
+      action, target.reason, JSON.stringify(details),
+    ]
+  );
+}
+
+async function insertReviewEvent(client, target, snapshot, sequence, action, details) {
+  const result = await client.query(
+    `INSERT INTO canonical_knowledge_review_events
+       (organization_id, entry_id, version_id, snapshot_id, event_sequence,
+        actor_user_id, action, version_digest, reason, details)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+     RETURNING *`,
+    [
+      target.organizationId, target.entryId, target.versionId, snapshot.id, sequence,
+      target.actorUserId, action, target.canonicalDigest, target.reason, JSON.stringify(details),
+    ]
+  );
+  const event = result.rows[0];
+  await insertWorkflowAudit(client, target, action, target.versionId, {
+    ...details,
+    canonicalDigest: target.canonicalDigest,
+    reviewEventId: event.id,
+    snapshotId: snapshot.id,
+  });
+  return event;
+}
+
+function mapWorkflowWriteError(error) {
+  if (error && error.code === '40001') {
+    return workflowError(
+      'knowledge_workflow_conflict',
+      'The knowledge workflow changed concurrently; reload it before continuing'
+    );
+  }
+  if (error && error.code === '42501') return authorizationError();
+  if (error && error.code === '23505' &&
+      error.constraint === 'canonical_knowledge_review_snapshots_version_unique') {
+    return workflowError('knowledge_review_already_submitted', 'This exact version is already in review');
+  }
+  if (error && error.code === '23505' &&
+      error.constraint === 'canonical_knowledge_publications_version_unique') {
+    return workflowError('knowledge_already_published', 'This exact version is already published');
+  }
+  return error;
+}
+
+async function submitKnowledgeVersionForReview(pool, input) {
+  const target = normalizeWorkflowTarget(input);
+  try {
+    return await withTransaction(pool, async client => {
+      const { version } = await lockWorkflowTarget(client, target);
+      const latestEvent = await latestReviewEvent(
+        client, target.organizationId, target.entryId, target.versionId
+      );
+      requireExpectedReviewEvent(latestEvent, target.expectedReviewEventId);
+      if (latestEvent) {
+        throw workflowError('knowledge_review_already_submitted', 'This exact version is already in review');
+      }
+      const publication = await latestPublication(client, target.organizationId, target.entryId);
+      let baseDocument = null;
+      if (publication) {
+        const baseResult = await client.query(
+          `SELECT canonical_document
+             FROM canonical_knowledge_versions
+            WHERE organization_id = $1 AND entry_id = $2 AND id = $3`,
+          [target.organizationId, target.entryId, publication.version_id]
+        );
+        if (baseResult.rowCount !== 1) {
+          throw workflowError('knowledge_publication_invalid', 'Published review base is unavailable', 503);
+        }
+        baseDocument = JSON.parse(baseResult.rows[0].canonical_document);
+      }
+      const diff = buildKnowledgeDiff(baseDocument, JSON.parse(version.canonical_document));
+      const snapshotResult = await client.query(
+        `INSERT INTO canonical_knowledge_review_snapshots
+           (organization_id, entry_id, version_id, base_version_id, version_digest,
+            diff, canonical_diff, diff_digest, submitted_by_user_id, reason)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
+         RETURNING *`,
+        [
+          target.organizationId, target.entryId, target.versionId,
+          publication ? publication.version_id : null, target.canonicalDigest,
+          diff.canonicalDiff, diff.canonicalDiff, diff.diffDigest,
+          target.actorUserId, target.reason,
+        ]
+      );
+      const snapshot = snapshotResult.rows[0];
+      const event = await insertReviewEvent(client, target, snapshot, 1, 'review_submitted', {
+        diffDigest: diff.diffDigest,
+        reviewRequirement: version.review_requirement,
+      });
+      return { snapshot: mapReviewSnapshot(snapshot), event: mapReviewEvent(event) };
+    });
+  } catch (error) {
+    throw mapWorkflowWriteError(error);
+  }
+}
+
+async function requestKnowledgeChanges(pool, input) {
+  const target = normalizeWorkflowTarget(input);
+  try {
+    return await withTransaction(pool, async client => {
+      await lockWorkflowTarget(client, target);
+      const latestEvent = await latestReviewEvent(
+        client, target.organizationId, target.entryId, target.versionId
+      );
+      requireExpectedReviewEvent(latestEvent, target.expectedReviewEventId);
+      if (!latestEvent || latestEvent.action !== 'review_submitted') {
+        throw workflowError('knowledge_review_state_invalid', 'Only a submitted version can request changes');
+      }
+      const snapshot = await loadReviewSnapshot(client, target);
+      const event = await insertReviewEvent(
+        client, target, snapshot, Number(latestEvent.event_sequence) + 1,
+        'changes_requested', { priorReviewEventId: latestEvent.id }
+      );
+      return { snapshot: mapReviewSnapshot(snapshot), event: mapReviewEvent(event) };
+    });
+  } catch (error) {
+    throw mapWorkflowWriteError(error);
+  }
+}
+
+async function approveKnowledgeVersion(pool, input) {
+  const target = normalizeWorkflowTarget(input);
+  try {
+    return await withTransaction(pool, async client => {
+      const { version } = await lockWorkflowTarget(client, target);
+      const latestEvent = await latestReviewEvent(
+        client, target.organizationId, target.entryId, target.versionId
+      );
+      requireExpectedReviewEvent(latestEvent, target.expectedReviewEventId);
+      if (!latestEvent || latestEvent.action !== 'review_submitted') {
+        throw workflowError('knowledge_review_state_invalid', 'Only a submitted version can be approved');
+      }
+      const document = JSON.parse(version.canonical_document);
+      if (document.content && document.content.state === 'needs_review') {
+        throw workflowError(
+          'knowledge_unresolved_evidence',
+          'Resolve missing or conflicting authority before approval'
+        );
+      }
+      const snapshot = await loadReviewSnapshot(client, target);
+      const approvalAction = approvalActionForRequirement(version.review_requirement);
+      let evidence = null;
+      if (version.review_requirement === 'attorney_gated') {
+        const normalizedEvidence = normalizeAttorneyReviewEvidence(input && input.attorneyReview);
+        const evidenceResult = await client.query(
+          `INSERT INTO canonical_knowledge_attorney_review_evidence
+             (organization_id, entry_id, version_id, snapshot_id, recorded_by_user_id,
+              review_reference, evidence_digest, reviewed_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz)
+           RETURNING *`,
+          [
+            target.organizationId, target.entryId, target.versionId, snapshot.id,
+            target.actorUserId, normalizedEvidence.reviewReference,
+            normalizedEvidence.evidenceDigest, normalizedEvidence.reviewedAt,
+          ]
+        );
+        evidence = evidenceResult.rows[0];
+        await insertWorkflowAudit(
+          client, target, 'attorney_review_evidence_recorded', target.versionId,
+          {
+            attorneyEvidenceId: evidence.id,
+            evidenceDigest: normalizedEvidence.evidenceDigest,
+            snapshotId: snapshot.id,
+          }
+        );
+      } else if (input && input.attorneyReview !== undefined) {
+        throw workflowError(
+          'knowledge_attorney_review_unexpected',
+          'Attorney-review evidence is accepted only for attorney-gated content',
+          400
+        );
+      }
+      const details = {
+        priorReviewEventId: latestEvent.id,
+        reviewRequirement: version.review_requirement,
+      };
+      if (evidence) details.attorneyEvidenceId = evidence.id;
+      const event = await insertReviewEvent(
+        client, target, snapshot, Number(latestEvent.event_sequence) + 1,
+        approvalAction, details
+      );
+      return {
+        snapshot: mapReviewSnapshot(snapshot),
+        event: mapReviewEvent(event),
+        attorneyReview: mapAttorneyEvidence(evidence),
+      };
+    });
+  } catch (error) {
+    throw mapWorkflowWriteError(error);
+  }
+}
+
+async function publishKnowledgeVersion(pool, input) {
+  const target = normalizePublicationTarget(input);
+  try {
+    return await withTransaction(pool, async client => {
+      const { version } = await lockWorkflowTarget(client, target);
+      const latestEvent = await latestReviewEvent(
+        client, target.organizationId, target.entryId, target.versionId
+      );
+      requireExpectedReviewEvent(latestEvent, target.expectedReviewEventId);
+      const expectedApproval = approvalActionForRequirement(version.review_requirement);
+      if (!latestEvent || latestEvent.action !== expectedApproval) {
+        throw workflowError('knowledge_approval_required', 'The exact latest version is not approved');
+      }
+      const publication = await latestPublication(client, target.organizationId, target.entryId);
+      const actualPublicationId = publication ? publication.id : null;
+      const actualPublicationNumber = publication ? Number(publication.publication_number) : 0;
+      if (actualPublicationId !== target.expectedPublicationId ||
+          actualPublicationNumber !== target.expectedPublicationNumber) {
+        throw workflowError(
+          'knowledge_stale_publication',
+          'The published version changed; reload it before publishing'
+        );
+      }
+      const result = await client.query(
+        `INSERT INTO canonical_knowledge_publications
+           (organization_id, entry_id, version_id, publication_number,
+            canonical_digest, review_event_id, previous_publication_id,
+            published_by_user_id, reason)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          target.organizationId, target.entryId, target.versionId,
+          actualPublicationNumber + 1, target.canonicalDigest, latestEvent.id,
+          actualPublicationId, target.actorUserId, target.reason,
+        ]
+      );
+      const stored = result.rows[0];
+      await insertWorkflowAudit(client, target, 'version_published', target.versionId, {
+        canonicalDigest: target.canonicalDigest,
+        publicationId: stored.id,
+        publicationNumber: Number(stored.publication_number),
+        reviewEventId: latestEvent.id,
+      });
+      return mapPublication(stored);
+    });
+  } catch (error) {
+    throw mapWorkflowWriteError(error);
+  }
+}
+
+async function getKnowledgeWorkflowState(pool, input) {
+  const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
+  const actorUserId = normalizeUuid(input && input.actorUserId, 'actorUserId');
+  const entryId = normalizeUuid(input && input.entryId, 'entryId');
+  return withTransaction(pool, async client => {
+    await requireMembership(client, organizationId, actorUserId, ['owner', 'admin']);
+    const entryResult = await client.query(
+      `SELECT * FROM canonical_knowledge_entries
+        WHERE organization_id = $1 AND id = $2`,
+      [organizationId, entryId]
+    );
+    if (entryResult.rowCount !== 1) {
+      throw workflowError('knowledge_not_found', 'Knowledge entry was not found', 404);
+    }
+    const versionResult = await client.query(
+      `SELECT * FROM canonical_knowledge_versions
+        WHERE organization_id = $1 AND entry_id = $2
+        ORDER BY version_number DESC LIMIT 1`,
+      [organizationId, entryId]
+    );
+    const version = versionResult.rows[0];
+    if (!version) throw workflowError('knowledge_not_found', 'Knowledge version was not found', 404);
+    const snapshotResult = await client.query(
+      `SELECT * FROM canonical_knowledge_review_snapshots
+        WHERE organization_id = $1 AND entry_id = $2 AND version_id = $3`,
+      [organizationId, entryId, version.id]
+    );
+    const eventsResult = await client.query(
+      `SELECT * FROM canonical_knowledge_review_events
+        WHERE organization_id = $1 AND entry_id = $2 AND version_id = $3
+        ORDER BY event_sequence`,
+      [organizationId, entryId, version.id]
+    );
+    const evidenceResult = await client.query(
+      `SELECT * FROM canonical_knowledge_attorney_review_evidence
+        WHERE organization_id = $1 AND entry_id = $2 AND version_id = $3`,
+      [organizationId, entryId, version.id]
+    );
+    const publicationsResult = await client.query(
+      `SELECT * FROM canonical_knowledge_publications
+        WHERE organization_id = $1 AND entry_id = $2
+        ORDER BY publication_number`,
+      [organizationId, entryId]
+    );
+    return {
+      organizationId,
+      entryId,
+      version: {
+        id: version.id,
+        number: Number(version.version_number),
+        canonicalDigest: normalizeStoredDigest(version.canonical_digest),
+        reviewRequirement: version.review_requirement,
+        sensitivity: version.sensitivity,
+      },
+      snapshot: mapReviewSnapshot(snapshotResult.rows[0]),
+      events: eventsResult.rows.map(mapReviewEvent),
+      attorneyReview: mapAttorneyEvidence(evidenceResult.rows[0]),
+      publications: publicationsResult.rows.map(mapPublication),
+    };
+  });
+}
+
 async function getKnowledgeVersion(pool, input) {
   const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
   const actorUserId = normalizeUuid(input && input.actorUserId, 'actorUserId');
@@ -352,7 +831,12 @@ async function getKnowledgeVersion(pool, input) {
 
 module.exports = {
   KnowledgeRepositoryError,
+  approveKnowledgeVersion,
   createInitialKnowledgeDraft,
   generateInitialKnowledgeFromAuthorities,
+  getKnowledgeWorkflowState,
   getKnowledgeVersion,
+  publishKnowledgeVersion,
+  requestKnowledgeChanges,
+  submitKnowledgeVersionForReview,
 };

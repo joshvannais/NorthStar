@@ -101,3 +101,28 @@ Part 2 is complete only when all of the following are true:
 - Financial and operational-capability drafts are restricted and high-risk. Customer/workforce
   policy and voice-guidance drafts require high-risk review. Part 2 does not approve, publish,
   retrieve for consumers, authorize tools, call a provider, expose an HTTP route, or add UI.
+
+## Part 3 acceptance contract
+
+Part 3 is complete only when all of the following are true:
+
+- Review and publication writes require an active individual owner or administrator membership;
+  browser roles, request claims, provider state, and shared credentials never authorize them.
+- Submission pins the latest exact entry/version number, immutable version ID, canonical digest,
+  current publication base, deterministic canonical diff, actor, reason, and time. An expected
+  review-event ID protects every decision from stale or repeated writes.
+- Review snapshots, review decisions, external attorney-review evidence records, publications,
+  and their audit evidence are append-only and tenant-scoped. Every direct database write must
+  satisfy the same exact-version, state-transition, membership, digest, and audit constraints.
+- Standard, high-risk, and attorney-gated versions use distinct approval actions. Attorney-gated
+  approval additionally requires a bounded reference, timestamp, and SHA-256 digest for external
+  attorney-review evidence; NorthStar records that evidence but does not make a legal conclusion
+  or store the legal document in canonical knowledge.
+- A generated document whose content state is `needs_review` cannot be approved or published.
+  A changes-requested or otherwise terminal review cannot be bypassed for the same immutable
+  version; correction requires a later version under the Part 4 lifecycle contract.
+- Publication is one serializable transaction that pins the latest exact approval event, version,
+  digest, reviewed diff base, previous publication, publication number, actor, reason, and audit
+  event. The publication record is append-only; no provider projection or synchronization occurs.
+- Part 3 adds no HTTP route, browser UI, provider mapping/call, tool authorization, scheduling,
+  pricing decision, recording/AI-identity language, credential, or production configuration.

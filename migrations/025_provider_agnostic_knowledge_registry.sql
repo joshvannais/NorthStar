@@ -34,6 +34,41 @@ CREATE TABLE canonical_knowledge_entries (
 CREATE INDEX canonical_knowledge_entries_tenant_type
   ON canonical_knowledge_entries(organization_id, entry_type, canonical_key, id);
 
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_render_jsonb(input JSONB)
+RETURNS TEXT AS $$
+DECLARE
+  kind TEXT := jsonb_typeof(input);
+  rendered TEXT;
+BEGIN
+  IF kind = 'object' THEN
+    SELECT '{' || COALESCE(
+      string_agg(
+        to_json(object_item.key)::text || ':' ||
+          public.canonical_knowledge_render_jsonb(object_item.value),
+        ',' ORDER BY object_item.key COLLATE "C"
+      ),
+      ''
+    ) || '}'
+      INTO rendered
+      FROM jsonb_each(input) AS object_item;
+    RETURN rendered;
+  ELSIF kind = 'array' THEN
+    SELECT '[' || COALESCE(
+      string_agg(
+        public.canonical_knowledge_render_jsonb(array_item.value),
+        ',' ORDER BY array_item.ordinality
+      ),
+      ''
+    ) || ']'
+      INTO rendered
+      FROM jsonb_array_elements(input) WITH ORDINALITY AS array_item(value, ordinality);
+    RETURN rendered;
+  END IF;
+  RETURN input::text;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE
+   SET search_path = pg_catalog;
+
 CREATE TABLE canonical_knowledge_versions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -119,6 +154,7 @@ CREATE TABLE canonical_knowledge_versions (
   CONSTRAINT canonical_knowledge_versions_canonical_check CHECK ((
     octet_length(canonical_document) <= 65536
     AND canonical_document::jsonb = document
+    AND canonical_document = public.canonical_knowledge_render_jsonb(document)
   ) IS TRUE),
   CONSTRAINT canonical_knowledge_versions_digest_check CHECK ((
     canonical_digest ~ '^[0-9a-f]{64}$'
@@ -242,6 +278,12 @@ BEGIN
      WHERE audit_event.organization_id = NEW.organization_id
        AND audit_event.entry_id = NEW.entry_id
        AND audit_event.version_id = NEW.id
+       AND NEW.version_number = 1
+       AND audit_event.actor_user_id = NEW.created_by_user_id
+       AND audit_event.action = 'entry_draft_created'
+       AND audit_event.reason = NEW.reason
+       AND audit_event.details->>'canonicalDigest' = rtrim(NEW.canonical_digest)
+       AND audit_event.details->>'versionNumber' = NEW.version_number::text
   ) THEN
     RAISE EXCEPTION 'Canonical knowledge version requires provenance and audit evidence'
       USING ERRCODE = '23514',

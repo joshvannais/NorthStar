@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const {
   KnowledgeContractError,
   canonicalObject,
+  canonicalStringify,
   normalizeInitialDraft,
 } = require('../../src/knowledge/contract');
 
@@ -111,5 +112,27 @@ describe('Mission 21 Part 1 knowledge contract', () => {
     const collision = { '\u00e9': 1, 'e\u0301': 2 };
     expect(() => canonicalObject(collision, 'content', 1024))
       .toThrow(expect.objectContaining({ code: 'knowledge_duplicate_key' }));
+  });
+
+  test('uses PostgreSQL-compatible UTF-8 key order and non-exponential number bytes', () => {
+    const canonical = canonicalObject({
+      '\ufffd': 2,
+      '\ud83d\ude00': 1,
+      10: 'ten',
+      2: 'two',
+      tiny: 1e-7,
+      huge: 1e21,
+    }, 'content', 4096);
+    expect(canonicalStringify(canonical)).toBe(
+      '{"10":"ten","2":"two","huge":1000000000000000000000,"tiny":0.0000001,"�":2,"😀":1}'
+    );
+  });
+
+  test.each([
+    ['null character', `bad\u0000value`],
+    ['unpaired surrogate', String.fromCharCode(0xd800)],
+  ])('rejects %s before PostgreSQL JSONB ingestion', (_label, value) => {
+    expect(() => normalizeInitialDraft(draft({ content: { value } })))
+      .toThrow(expect.objectContaining({ code: 'knowledge_invalid_string' }));
   });
 });

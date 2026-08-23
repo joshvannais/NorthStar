@@ -54,9 +54,10 @@ Part 1 is complete only when all of the following are true:
   authorities; it does not copy or infer knowledge from legacy text or Business Profile.
 - Entry keys and types are stable and tenant-unique.
 - Version documents are deterministic, bounded, top-level objects whose SHA-256 digest is
-  derived from and database-bound to one canonical UTF-8 representation; missing required
-  fields fail closed.
-- Every committed version has at least one linked provenance row and one matching audit event.
+  derived from and database-bound to one recursively rendered, UTF-8 byte-ordered canonical
+  representation; alternate equivalent JSON bytes and missing required fields fail closed.
+- Every committed Part 1 version has at least one linked provenance row and an initial-draft
+  audit event whose actor, reason, digest, and version number match the version row.
 - Version, provenance, audit, and entry identity rows reject update and delete operations.
 - Initial draft creation requires an active owner or administrator membership and writes the
   entry, version, provenance, and audit record atomically.

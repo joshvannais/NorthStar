@@ -218,6 +218,30 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
       organizationId: ORG_A, actorUserId: MEMBER_A, entryId: standardInternal.id, versionNumber: 1,
     })).toEqual(standardInternal);
 
+    const canonicalEdge = await createInitialKnowledgeDraft(freshPool, initialDraft(ORG_A, OWNER_A, {
+      canonicalKey: 'facts.canonical-byte-order',
+      entryType: 'fact',
+      label: 'Canonical byte-order fixture',
+      reviewRequirement: 'standard',
+      content: {
+        '\ufffd': 2,
+        '\ud83d\ude00': 1,
+        10: 'ten',
+        2: 'two',
+        tiny: 1e-7,
+        huge: 1e21,
+      },
+    }));
+    expect(canonicalEdge.version.canonicalDocument).toContain(
+      '"10":"ten","2":"two","huge":1000000000000000000000,"tiny":0.0000001,"�":2,"😀":1'
+    );
+    expect((await freshPool.query(
+      `SELECT canonical_document = public.canonical_knowledge_render_jsonb(document) AS canonical
+         FROM canonical_knowledge_versions
+        WHERE organization_id = $1 AND id = $2`,
+      [ORG_A, canonicalEdge.version.id]
+    )).rows).toEqual([{ canonical: true }]);
+
     await expect(getKnowledgeVersion(freshPool, {
       organizationId: ORG_B, actorUserId: OWNER_B, entryId: created.id, versionNumber: 1,
     })).rejects.toMatchObject({ code: 'knowledge_not_found', status: 404 });
@@ -289,8 +313,8 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
           created_by_user_id, reason)
        VALUES ($1, $2, 2, 1, 'policies.estimates.deposit-disclosure', 'policy',
                'human', 'Different column label', 'internal', 'standard', '{}',
-               $3::jsonb, $3::text,
-               encode(sha256(convert_to($3::text, 'UTF8')), 'hex'),
+               $3::jsonb, public.canonical_knowledge_render_jsonb($3::jsonb),
+               encode(sha256(convert_to(public.canonical_knowledge_render_jsonb($3::jsonb), 'UTF8')), 'hex'),
                $4, 'Invalid direct write')`,
       [ORG_A, entry.id, badDocument, OWNER_A]
     )).rejects.toMatchObject({ code: '23514', constraint: 'canonical_knowledge_versions_document_check' });
@@ -324,6 +348,24 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
       [ORG_A, version.id]
     )).rejects.toMatchObject({ code: '23514', constraint: 'canonical_knowledge_versions_digest_check' });
 
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_versions
+         (organization_id, entry_id, version_number, schema_version, canonical_key,
+          entry_type, content_origin, label, sensitivity, review_requirement,
+          applicability, document, canonical_document, canonical_digest,
+          parent_version_id, created_by_user_id, reason)
+       SELECT organization_id, entry_id, 2, schema_version, canonical_key,
+              entry_type, content_origin, label, sensitivity, review_requirement,
+              applicability, document, jsonb_pretty(document),
+              encode(sha256(convert_to(jsonb_pretty(document), 'UTF8')), 'hex'),
+              id, created_by_user_id, 'Reject alternate equivalent JSON bytes'
+         FROM canonical_knowledge_versions
+        WHERE organization_id = $1 AND id = $2`,
+      [ORG_A, version.id]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_knowledge_versions_canonical_check',
+    });
+
     const orphanClient = await freshPool.connect();
     try {
       await orphanClient.query('BEGIN');
@@ -352,6 +394,67 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
       'SELECT count(*)::int AS count FROM canonical_knowledge_versions WHERE organization_id = $1 AND entry_id = $2',
       [ORG_A, entry.id]
     )).rows).toEqual([{ count: 1 }]);
+
+    const { normalizeInitialDraft } = require('../../src/knowledge/contract');
+    const misleadingDraft = normalizeInitialDraft(initialDraft(ORG_A, OWNER_A, {
+      canonicalKey: 'facts.misleading-audit-evidence',
+      entryType: 'fact',
+      label: 'Misleading audit evidence fixture',
+      reviewRequirement: 'standard',
+    }));
+    const misleadingClient = await freshPool.connect();
+    try {
+      await misleadingClient.query('BEGIN');
+      const misleadingEntry = (await misleadingClient.query(
+        `INSERT INTO canonical_knowledge_entries
+           (organization_id, canonical_key, entry_type, created_by_user_id)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id`,
+        [ORG_A, misleadingDraft.canonicalKey, misleadingDraft.entryType, OWNER_A]
+      )).rows[0];
+      const misleadingVersion = (await misleadingClient.query(
+        `INSERT INTO canonical_knowledge_versions
+           (organization_id, entry_id, version_number, schema_version, canonical_key,
+            entry_type, content_origin, label, sensitivity, review_requirement,
+            applicability, document, canonical_document, canonical_digest,
+            created_by_user_id, reason)
+         VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb,
+                 $11, $12, $13, $14)
+         RETURNING id`,
+        [
+          ORG_A, misleadingEntry.id, misleadingDraft.canonicalKey, misleadingDraft.entryType,
+          misleadingDraft.origin, misleadingDraft.label, misleadingDraft.sensitivity,
+          misleadingDraft.reviewRequirement, JSON.stringify(misleadingDraft.applicability),
+          misleadingDraft.canonicalDocument, misleadingDraft.canonicalDocument,
+          misleadingDraft.canonicalDigest, OWNER_A, misleadingDraft.reason,
+        ]
+      )).rows[0];
+      const source = misleadingDraft.provenance[0];
+      await misleadingClient.query(
+        `INSERT INTO canonical_knowledge_provenance
+           (organization_id, version_id, ordinal, source_type, source_record_id,
+            source_version, source_digest, json_pointer)
+         VALUES ($1, $2, 1, $3, $4, $5, $6, $7)`,
+        [ORG_A, misleadingVersion.id, source.sourceType, source.sourceRecordId,
+          source.sourceVersion, source.sourceDigest, source.jsonPointer]
+      );
+      await misleadingClient.query(
+        `INSERT INTO canonical_knowledge_audit_events
+           (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+         VALUES ($1, $2, $3, $4, 'knowledge_viewed', $5, '{}'::jsonb)`,
+        [ORG_A, misleadingEntry.id, misleadingVersion.id, OWNER_A, misleadingDraft.reason]
+      );
+      await expect(misleadingClient.query('COMMIT')).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_versions_evidence_required',
+      });
+    } finally {
+      await misleadingClient.query('ROLLBACK').catch(() => {});
+      misleadingClient.release();
+    }
+    expect((await freshPool.query(
+      'SELECT count(*)::int AS count FROM canonical_knowledge_entries WHERE organization_id = $1 AND canonical_key = $2',
+      [ORG_A, misleadingDraft.canonicalKey]
+    )).rows).toEqual([{ count: 0 }]);
 
     const otherEntry = (await freshPool.query(
       `SELECT id FROM canonical_knowledge_entries

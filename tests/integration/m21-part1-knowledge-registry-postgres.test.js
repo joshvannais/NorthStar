@@ -185,10 +185,38 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
       details: { canonicalDigest: created.version.canonicalDigest, versionNumber: 1 },
     }]);
 
-    const read = await getKnowledgeVersion(freshPool, {
-      organizationId: ORG_A, actorUserId: MEMBER_A, entryId: created.id, versionNumber: 1,
+    const ownerRead = await getKnowledgeVersion(freshPool, {
+      organizationId: ORG_A, actorUserId: OWNER_A, entryId: created.id, versionNumber: 1,
     });
-    expect(read).toEqual(created);
+    expect(ownerRead).toEqual(created);
+    await expect(getKnowledgeVersion(freshPool, {
+      organizationId: ORG_A, actorUserId: MEMBER_A, entryId: created.id, versionNumber: 1,
+    })).rejects.toMatchObject({ code: 'knowledge_not_found', status: 404 });
+
+    const legal = await createInitialKnowledgeDraft(freshPool, initialDraft(ORG_A, OWNER_A, {
+      canonicalKey: 'disclosures.attorney-only',
+      entryType: 'disclosure',
+      label: 'Attorney-approved disclosure draft',
+      sensitivity: 'legal',
+      reviewRequirement: 'attorney_gated',
+      content: { statement: 'Protected legal review content.' },
+    }));
+    await expect(getKnowledgeVersion(freshPool, {
+      organizationId: ORG_A, actorUserId: MEMBER_A, entryId: legal.id, versionNumber: 1,
+    })).rejects.toMatchObject({ code: 'knowledge_not_found', status: 404 });
+    expect(await getKnowledgeVersion(freshPool, {
+      organizationId: ORG_A, actorUserId: OWNER_A, entryId: legal.id, versionNumber: 1,
+    })).toEqual(legal);
+
+    const standardInternal = await createInitialKnowledgeDraft(freshPool, initialDraft(ORG_A, OWNER_A, {
+      canonicalKey: 'facts.member-readable',
+      entryType: 'fact',
+      label: 'Member-readable internal fact',
+      reviewRequirement: 'standard',
+    }));
+    expect(await getKnowledgeVersion(freshPool, {
+      organizationId: ORG_A, actorUserId: MEMBER_A, entryId: standardInternal.id, versionNumber: 1,
+    })).toEqual(standardInternal);
 
     await expect(getKnowledgeVersion(freshPool, {
       organizationId: ORG_B, actorUserId: OWNER_B, entryId: created.id, versionNumber: 1,
@@ -214,7 +242,7 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
     )).rows).toEqual([{ count: 2 }]);
   });
 
-  test('database authority rejects mismatched documents and every mutation or deletion', async () => {
+  test('database authority rejects malformed bytes, false digests, orphan versions and every mutation', async () => {
     const { createInitialKnowledgeDraft } = require('../../src/knowledge/repository');
     await createInitialKnowledgeDraft(freshPool, initialDraft(ORG_A, OWNER_A, {
       canonicalKey: 'facts.audit-pair',
@@ -261,9 +289,69 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
           created_by_user_id, reason)
        VALUES ($1, $2, 2, 1, 'policies.estimates.deposit-disclosure', 'policy',
                'human', 'Different column label', 'internal', 'standard', '{}',
-               $3::jsonb, $3, $4, $5, 'Invalid direct write')`,
-      [ORG_A, entry.id, badDocument, digest(badDocument), OWNER_A]
+               $3::jsonb, $3::text,
+               encode(sha256(convert_to($3::text, 'UTF8')), 'hex'),
+               $4, 'Invalid direct write')`,
+      [ORG_A, entry.id, badDocument, OWNER_A]
     )).rejects.toMatchObject({ code: '23514', constraint: 'canonical_knowledge_versions_document_check' });
+
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_versions
+         (organization_id, entry_id, version_number, schema_version, canonical_key,
+          entry_type, content_origin, label, sensitivity, review_requirement,
+          applicability, document, canonical_document, canonical_digest,
+          created_by_user_id, reason)
+       VALUES ($1, $2, 2, 1, 'policies.estimates.deposit-disclosure', 'policy',
+               'human', 'Different column label', 'internal', 'standard', '{}',
+               '{}'::jsonb, '{}',
+               encode(sha256(convert_to('{}', 'UTF8')), 'hex'),
+               $3, 'Reject empty document')`,
+      [ORG_A, entry.id, OWNER_A]
+    )).rejects.toMatchObject({ code: '23514', constraint: 'canonical_knowledge_versions_document_check' });
+
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_versions
+         (organization_id, entry_id, version_number, schema_version, canonical_key,
+          entry_type, content_origin, label, sensitivity, review_requirement,
+          applicability, document, canonical_document, canonical_digest,
+          parent_version_id, created_by_user_id, reason)
+       SELECT organization_id, entry_id, 2, schema_version, canonical_key,
+              entry_type, content_origin, label, sensitivity, review_requirement,
+              applicability, document, canonical_document, repeat('1', 64),
+              id, created_by_user_id, 'Reject false digest'
+         FROM canonical_knowledge_versions
+        WHERE organization_id = $1 AND id = $2`,
+      [ORG_A, version.id]
+    )).rejects.toMatchObject({ code: '23514', constraint: 'canonical_knowledge_versions_digest_check' });
+
+    const orphanClient = await freshPool.connect();
+    try {
+      await orphanClient.query('BEGIN');
+      await orphanClient.query(
+        `INSERT INTO canonical_knowledge_versions
+           (organization_id, entry_id, version_number, schema_version, canonical_key,
+            entry_type, content_origin, label, sensitivity, review_requirement,
+            applicability, document, canonical_document, canonical_digest,
+            parent_version_id, created_by_user_id, reason)
+         SELECT organization_id, entry_id, 2, schema_version, canonical_key,
+                entry_type, content_origin, label, sensitivity, review_requirement,
+                applicability, document, canonical_document, canonical_digest,
+                id, created_by_user_id, 'Reject missing evidence'
+           FROM canonical_knowledge_versions
+          WHERE organization_id = $1 AND id = $2`,
+        [ORG_A, version.id]
+      );
+      await expect(orphanClient.query('COMMIT')).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_versions_evidence_required',
+      });
+    } finally {
+      await orphanClient.query('ROLLBACK').catch(() => {});
+      orphanClient.release();
+    }
+    expect((await freshPool.query(
+      'SELECT count(*)::int AS count FROM canonical_knowledge_versions WHERE organization_id = $1 AND entry_id = $2',
+      [ORG_A, entry.id]
+    )).rows).toEqual([{ count: 1 }]);
 
     const otherEntry = (await freshPool.query(
       `SELECT id FROM canonical_knowledge_entries

@@ -169,7 +169,8 @@ async function getKnowledgeVersion(pool, input) {
     throw new KnowledgeRepositoryError('knowledge_invalid_version', 'versionNumber must be positive', 400);
   }
   return withTransaction(pool, async client => {
-    await requireMembership(client, organizationId, actorUserId, null);
+    const role = await requireMembership(client, organizationId, actorUserId, null);
+    const canReadProtected = role === 'owner' || role === 'admin';
     const result = await client.query(
       `SELECT entry.*, version.id AS version_id, version.version_number,
               version.schema_version, version.content_origin, version.label,
@@ -183,8 +184,15 @@ async function getKnowledgeVersion(pool, input) {
           AND version.entry_id = entry.id
         WHERE entry.organization_id = $1
           AND entry.id = $2
-          AND version.version_number = $3`,
-      [organizationId, entryId, versionNumber]
+          AND version.version_number = $3
+          AND (
+            $4::boolean
+            OR (
+              version.sensitivity IN ('public', 'internal')
+              AND version.review_requirement = 'standard'
+            )
+          )`,
+      [organizationId, entryId, versionNumber, canReadProtected]
     );
     if (result.rowCount !== 1) {
       throw new KnowledgeRepositoryError('knowledge_not_found', 'Knowledge version was not found', 404);

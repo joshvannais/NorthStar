@@ -103,7 +103,7 @@ CREATE TABLE canonical_knowledge_versions (
     jsonb_typeof(applicability) = 'object'
     AND octet_length(applicability::text) <= 8192
   ),
-  CONSTRAINT canonical_knowledge_versions_document_check CHECK (
+  CONSTRAINT canonical_knowledge_versions_document_check CHECK ((
     jsonb_typeof(document) = 'object'
     AND jsonb_typeof(document->'content') = 'object'
     AND octet_length(document::text) <= 65536
@@ -115,14 +115,15 @@ CREATE TABLE canonical_knowledge_versions (
     AND document->>'reviewRequirement' = review_requirement
     AND document->>'origin' = content_origin
     AND document->'applicability' = applicability
-  ),
-  CONSTRAINT canonical_knowledge_versions_canonical_check CHECK (
+  ) IS TRUE),
+  CONSTRAINT canonical_knowledge_versions_canonical_check CHECK ((
     octet_length(canonical_document) <= 65536
     AND canonical_document::jsonb = document
-  ),
-  CONSTRAINT canonical_knowledge_versions_digest_check CHECK (
+  ) IS TRUE),
+  CONSTRAINT canonical_knowledge_versions_digest_check CHECK ((
     canonical_digest ~ '^[0-9a-f]{64}$'
-  ),
+    AND encode(sha256(convert_to(canonical_document, 'UTF8')), 'hex') = canonical_digest
+  ) IS TRUE),
   CONSTRAINT canonical_knowledge_versions_parent_check CHECK (
     parent_version_id IS NULL OR parent_version_id <> id
   ),
@@ -226,6 +227,34 @@ CREATE TABLE canonical_knowledge_audit_events (
 
 CREATE INDEX canonical_knowledge_audit_events_tenant_time
   ON canonical_knowledge_audit_events(organization_id, created_at DESC, id);
+
+CREATE OR REPLACE FUNCTION canonical_knowledge_require_version_evidence()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM canonical_knowledge_provenance provenance
+     WHERE provenance.organization_id = NEW.organization_id
+       AND provenance.version_id = NEW.id
+  ) OR NOT EXISTS (
+    SELECT 1
+      FROM canonical_knowledge_audit_events audit_event
+     WHERE audit_event.organization_id = NEW.organization_id
+       AND audit_event.entry_id = NEW.entry_id
+       AND audit_event.version_id = NEW.id
+  ) THEN
+    RAISE EXCEPTION 'Canonical knowledge version requires provenance and audit evidence'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_versions_evidence_required';
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER canonical_knowledge_versions_evidence_required
+  AFTER INSERT ON canonical_knowledge_versions
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION canonical_knowledge_require_version_evidence();
 
 CREATE OR REPLACE FUNCTION canonical_knowledge_reject_mutation()
 RETURNS TRIGGER AS $$

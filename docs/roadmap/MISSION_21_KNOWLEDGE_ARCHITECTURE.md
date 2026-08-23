@@ -54,10 +54,14 @@ Part 1 is complete only when all of the following are true:
   authorities; it does not copy or infer knowledge from legacy text or Business Profile.
 - Entry keys and types are stable and tenant-unique.
 - Version documents are deterministic, bounded, top-level objects whose SHA-256 digest is
-  derived from one canonical UTF-8 representation.
+  derived from and database-bound to one canonical UTF-8 representation; missing required
+  fields fail closed.
+- Every committed version has at least one linked provenance row and one matching audit event.
 - Version, provenance, audit, and entry identity rows reject update and delete operations.
 - Initial draft creation requires an active owner or administrator membership and writes the
   entry, version, provenance, and audit record atomically.
 - Reads require an active tenant membership and cannot reveal another tenant's records.
+  Members and viewers may retrieve only standard public/internal versions; protected,
+  high-risk, and attorney-gated content requires an active owner or administrator.
 - No HTTP route, browser control, provider transport, publication pointer, generated content,
   or external synchronization is introduced in Part 1.

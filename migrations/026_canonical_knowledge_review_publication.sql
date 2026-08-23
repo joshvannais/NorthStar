@@ -765,6 +765,7 @@ BEGIN
        AND audit_event.actor_user_id = NEW.actor_user_id
        AND audit_event.action = NEW.action
        AND audit_event.reason = NEW.reason
+       AND audit_event.created_at = NEW.created_at
        AND audit_event.details->>'reviewEventId' = NEW.id::text
        AND audit_event.details->>'snapshotId' = NEW.snapshot_id::text
        AND audit_event.details->>'canonicalDigest' = rtrim(NEW.version_digest)
@@ -813,6 +814,7 @@ BEGIN
        AND audit_event.actor_user_id = NEW.published_by_user_id
        AND audit_event.action = 'version_published'
        AND audit_event.reason = NEW.reason
+       AND audit_event.created_at = NEW.published_at
        AND audit_event.details->>'publicationId' = NEW.id::text
        AND audit_event.details->>'reviewEventId' = NEW.review_event_id::text
        AND audit_event.details->>'canonicalDigest' = rtrim(NEW.canonical_digest)
@@ -826,6 +828,88 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql
    SET search_path = pg_catalog;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_require_review_submission()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.canonical_knowledge_review_events review_event
+      JOIN public.canonical_knowledge_versions version
+        ON version.organization_id = review_event.organization_id
+       AND version.entry_id = review_event.entry_id
+       AND version.id = review_event.version_id
+      JOIN public.canonical_knowledge_audit_events audit_event
+        ON audit_event.organization_id = review_event.organization_id
+       AND audit_event.entry_id = review_event.entry_id
+       AND audit_event.version_id = review_event.version_id
+       AND audit_event.actor_user_id = review_event.actor_user_id
+       AND audit_event.action = review_event.action
+       AND audit_event.reason = review_event.reason
+       AND audit_event.created_at = review_event.created_at
+       AND audit_event.details->>'reviewEventId' = review_event.id::text
+       AND audit_event.details->>'snapshotId' = NEW.id::text
+       AND audit_event.details->>'canonicalDigest' = rtrim(NEW.version_digest)
+       AND audit_event.details->>'diffDigest' = rtrim(NEW.diff_digest)
+       AND audit_event.details->>'reviewRequirement' = version.review_requirement
+     WHERE review_event.organization_id = NEW.organization_id
+       AND review_event.entry_id = NEW.entry_id
+       AND review_event.version_id = NEW.version_id
+       AND review_event.snapshot_id = NEW.id
+       AND review_event.event_sequence = 1
+       AND review_event.action = 'review_submitted'
+       AND review_event.actor_user_id = NEW.submitted_by_user_id
+       AND review_event.version_digest = NEW.version_digest
+       AND review_event.reason = NEW.reason
+       AND review_event.created_at = NEW.created_at
+       AND review_event.details->>'diffDigest' = rtrim(NEW.diff_digest)
+       AND review_event.details->>'reviewRequirement' = version.review_requirement
+  ) THEN
+    RAISE EXCEPTION 'Review snapshot requires exact submission event and audit evidence'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_review_snapshot_submission_required';
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql
+   SET search_path = pg_catalog;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_set_database_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  CASE TG_TABLE_NAME
+    WHEN 'canonical_knowledge_review_snapshots' THEN
+      NEW.created_at := transaction_timestamp();
+    WHEN 'canonical_knowledge_review_events' THEN
+      NEW.created_at := transaction_timestamp();
+    WHEN 'canonical_knowledge_audit_events' THEN
+      NEW.created_at := transaction_timestamp();
+    WHEN 'canonical_knowledge_publications' THEN
+      NEW.published_at := transaction_timestamp();
+    ELSE
+      RAISE EXCEPTION 'Unsupported canonical knowledge timestamp target: %', TG_TABLE_NAME
+        USING ERRCODE = '55000';
+  END CASE;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql
+   SET search_path = pg_catalog;
+
+CREATE TRIGGER canonical_knowledge_review_snapshots_database_timestamp
+  BEFORE INSERT ON canonical_knowledge_review_snapshots
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_set_database_timestamp();
+
+CREATE TRIGGER canonical_knowledge_review_events_database_timestamp
+  BEFORE INSERT ON canonical_knowledge_review_events
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_set_database_timestamp();
+
+CREATE TRIGGER canonical_knowledge_publications_database_timestamp
+  BEFORE INSERT ON canonical_knowledge_publications
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_set_database_timestamp();
+
+CREATE TRIGGER canonical_knowledge_audit_events_database_timestamp
+  BEFORE INSERT ON canonical_knowledge_audit_events
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_set_database_timestamp();
 
 CREATE TRIGGER canonical_knowledge_review_snapshots_validate
   BEFORE INSERT ON canonical_knowledge_review_snapshots
@@ -857,6 +941,11 @@ CREATE CONSTRAINT TRIGGER canonical_knowledge_publication_audit_required
   AFTER INSERT ON canonical_knowledge_publications
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_require_publication_audit();
+
+CREATE CONSTRAINT TRIGGER canonical_knowledge_review_snapshot_submission_required
+  AFTER INSERT ON canonical_knowledge_review_snapshots
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_require_review_submission();
 
 CREATE TRIGGER canonical_knowledge_review_snapshots_immutable
   BEFORE UPDATE OR DELETE ON canonical_knowledge_review_snapshots

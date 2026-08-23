@@ -600,6 +600,273 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
     }
   });
 
+  test('rejects an orphan direct review snapshot without poisoning normal submission', async () => {
+    const repository = require('../../src/knowledge/repository');
+    const { buildKnowledgeDiff } = require('../../src/knowledge/workflow');
+    const created = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.orphan-snapshot')
+    );
+    const diff = buildKnowledgeDiff(null, created.version.document);
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_review_snapshots
+         (organization_id, entry_id, version_id, base_version_id, version_digest,
+          diff, canonical_diff, diff_digest, submitted_by_user_id, reason)
+       VALUES ($1, $2, $3, NULL, $4, $5::text::jsonb, $5::text, $6, $7, $8)`,
+      [ORG_A, created.id, created.version.id, created.version.canonicalDigest,
+        diff.canonicalDiff, diff.diffDigest, OWNER_A,
+        'Do not allow an orphan direct review snapshot.']
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_knowledge_review_snapshot_submission_required',
+    });
+    expect((await freshPool.query(
+      `SELECT
+         (SELECT count(*)::int FROM canonical_knowledge_review_snapshots
+           WHERE entry_id = $1) AS snapshots,
+         (SELECT count(*)::int FROM canonical_knowledge_review_events
+           WHERE entry_id = $1) AS events`,
+      [created.id]
+    )).rows).toEqual([{ snapshots: 0, events: 0 }]);
+
+    const submitted = await repository.submitKnowledgeVersionForReview(
+      freshPool, workflowTarget(created, OWNER_A, 'Submit after rejecting the orphan snapshot.')
+    );
+    expect(submitted.event).toMatchObject({ action: 'review_submitted', sequence: 1 });
+  });
+
+  test('rejects incomplete and mismatched direct review-submission graphs atomically', async () => {
+    const repository = require('../../src/knowledge/repository');
+    const { buildKnowledgeDiff } = require('../../src/knowledge/workflow');
+    const created = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.incomplete-submission')
+    );
+    const diff = buildKnowledgeDiff(null, created.version.document);
+    const snapshotReason = 'Require an exact direct review-submission graph.';
+
+    const incomplete = await freshPool.connect();
+    try {
+      await incomplete.query('BEGIN');
+      const snapshot = (await incomplete.query(
+        `INSERT INTO canonical_knowledge_review_snapshots
+           (organization_id, entry_id, version_id, base_version_id, version_digest,
+            diff, canonical_diff, diff_digest, submitted_by_user_id, reason)
+         VALUES ($1, $2, $3, NULL, $4, $5::text::jsonb, $5::text, $6, $7, $8)
+         RETURNING id`,
+        [ORG_A, created.id, created.version.id, created.version.canonicalDigest,
+          diff.canonicalDiff, diff.diffDigest, OWNER_A, snapshotReason]
+      )).rows[0];
+      await incomplete.query(
+        `INSERT INTO canonical_knowledge_review_events
+           (organization_id, entry_id, version_id, snapshot_id, event_sequence,
+            actor_user_id, action, version_digest, reason, details)
+         VALUES ($1, $2, $3, $4, 1, $5, 'review_submitted', $6, $7, $8::jsonb)`,
+        [ORG_A, created.id, created.version.id, snapshot.id, OWNER_A,
+          created.version.canonicalDigest, snapshotReason, JSON.stringify({
+            diffDigest: diff.diffDigest, reviewRequirement: 'standard',
+          })]
+      );
+      await expect(incomplete.query('COMMIT')).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_review_snapshot_submission_required',
+      });
+    } finally {
+      await incomplete.query('ROLLBACK').catch(() => {});
+      incomplete.release();
+    }
+    expect((await freshPool.query(
+      `SELECT
+         (SELECT count(*)::int FROM canonical_knowledge_review_snapshots
+           WHERE entry_id = $1) AS snapshots,
+         (SELECT count(*)::int FROM canonical_knowledge_review_events
+           WHERE entry_id = $1) AS events`,
+      [created.id]
+    )).rows).toEqual([{ snapshots: 0, events: 0 }]);
+
+    const mismatched = await freshPool.connect();
+    try {
+      await mismatched.query('BEGIN');
+      const snapshot = (await mismatched.query(
+        `INSERT INTO canonical_knowledge_review_snapshots
+           (organization_id, entry_id, version_id, base_version_id, version_digest,
+            diff, canonical_diff, diff_digest, submitted_by_user_id, reason)
+         VALUES ($1, $2, $3, NULL, $4, $5::text::jsonb, $5::text, $6, $7, $8)
+         RETURNING id`,
+        [ORG_A, created.id, created.version.id, created.version.canonicalDigest,
+          diff.canonicalDiff, diff.diffDigest, OWNER_A, snapshotReason]
+      )).rows[0];
+      const eventReason = 'A different authorized actor and reason must not bind the snapshot.';
+      const event = (await mismatched.query(
+        `INSERT INTO canonical_knowledge_review_events
+           (organization_id, entry_id, version_id, snapshot_id, event_sequence,
+            actor_user_id, action, version_digest, reason, details)
+         VALUES ($1, $2, $3, $4, 1, $5, 'review_submitted', $6, $7, $8::jsonb)
+         RETURNING id`,
+        [ORG_A, created.id, created.version.id, snapshot.id, ADMIN_A,
+          created.version.canonicalDigest, eventReason, JSON.stringify({
+            diffDigest: diff.diffDigest, reviewRequirement: 'standard',
+          })]
+      )).rows[0];
+      await mismatched.query(
+        `INSERT INTO canonical_knowledge_audit_events
+           (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+         VALUES ($1, $2, $3, $4, 'review_submitted', $5, $6::jsonb)`,
+        [ORG_A, created.id, created.version.id, ADMIN_A, eventReason, JSON.stringify({
+          canonicalDigest: created.version.canonicalDigest,
+          diffDigest: diff.diffDigest,
+          reviewEventId: event.id,
+          reviewRequirement: 'standard',
+          snapshotId: snapshot.id,
+        })]
+      );
+      await expect(mismatched.query('COMMIT')).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_review_snapshot_submission_required',
+      });
+    } finally {
+      await mismatched.query('ROLLBACK').catch(() => {});
+      mismatched.release();
+    }
+    expect((await freshPool.query(
+      `SELECT
+         (SELECT count(*)::int FROM canonical_knowledge_review_snapshots
+           WHERE entry_id = $1) AS snapshots,
+         (SELECT count(*)::int FROM canonical_knowledge_review_events
+           WHERE entry_id = $1) AS events,
+         (SELECT count(*)::int FROM canonical_knowledge_audit_events
+           WHERE entry_id = $1 AND action = 'review_submitted') AS audits`,
+      [created.id]
+    )).rows).toEqual([{ snapshots: 0, events: 0, audits: 0 }]);
+  });
+
+  test('overwrites direct future workflow and audit times with one database transaction time', async () => {
+    const repository = require('../../src/knowledge/repository');
+    const { buildKnowledgeDiff } = require('../../src/knowledge/workflow');
+    const created = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.database-time')
+    );
+    const diff = buildKnowledgeDiff(null, created.version.document);
+    const future = '2099-12-31T23:59:00.000Z';
+    const submissionReason = 'Pin direct workflow time to the database transaction.';
+    let snapshotId;
+    let submissionEventId;
+
+    const submission = await freshPool.connect();
+    try {
+      await submission.query('BEGIN');
+      snapshotId = (await submission.query(
+        `INSERT INTO canonical_knowledge_review_snapshots
+           (organization_id, entry_id, version_id, base_version_id, version_digest,
+            diff, canonical_diff, diff_digest, submitted_by_user_id, reason, created_at)
+         VALUES ($1, $2, $3, NULL, $4, $5::text::jsonb, $5::text, $6, $7, $8,
+                 $9::timestamptz)
+         RETURNING id`,
+        [ORG_A, created.id, created.version.id, created.version.canonicalDigest,
+          diff.canonicalDiff, diff.diffDigest, OWNER_A, submissionReason, future]
+      )).rows[0].id;
+      submissionEventId = (await submission.query(
+        `INSERT INTO canonical_knowledge_review_events
+           (organization_id, entry_id, version_id, snapshot_id, event_sequence,
+            actor_user_id, action, version_digest, reason, details, created_at)
+         VALUES ($1, $2, $3, $4, 1, $5, 'review_submitted', $6, $7, $8::jsonb,
+                 $9::timestamptz)
+         RETURNING id`,
+        [ORG_A, created.id, created.version.id, snapshotId, OWNER_A,
+          created.version.canonicalDigest, submissionReason, JSON.stringify({
+            diffDigest: diff.diffDigest, reviewRequirement: 'standard',
+          }), future]
+      )).rows[0].id;
+      await submission.query(
+        `INSERT INTO canonical_knowledge_audit_events
+           (organization_id, entry_id, version_id, actor_user_id, action, reason,
+            details, created_at)
+         VALUES ($1, $2, $3, $4, 'review_submitted', $5, $6::jsonb,
+                 $7::timestamptz)`,
+        [ORG_A, created.id, created.version.id, OWNER_A, submissionReason, JSON.stringify({
+          canonicalDigest: created.version.canonicalDigest,
+          diffDigest: diff.diffDigest,
+          reviewEventId: submissionEventId,
+          reviewRequirement: 'standard',
+          snapshotId,
+        }), future]
+      );
+      await submission.query('COMMIT');
+    } finally {
+      await submission.query('ROLLBACK').catch(() => {});
+      submission.release();
+    }
+
+    expect((await freshPool.query(
+      `SELECT snapshot.created_at = review_event.created_at AS snapshot_event_equal,
+              review_event.created_at = audit_event.created_at AS event_audit_equal,
+              snapshot.created_at <> $2::timestamptz AS caller_time_rejected,
+              abs(extract(epoch FROM (clock_timestamp() - snapshot.created_at))) < 30
+                AS database_current
+         FROM canonical_knowledge_review_snapshots snapshot
+         JOIN canonical_knowledge_review_events review_event
+           ON review_event.snapshot_id = snapshot.id AND review_event.event_sequence = 1
+         JOIN canonical_knowledge_audit_events audit_event
+           ON audit_event.details->>'reviewEventId' = review_event.id::text
+        WHERE snapshot.id = $1`,
+      [snapshotId, future]
+    )).rows).toEqual([{
+      snapshot_event_equal: true,
+      event_audit_equal: true,
+      caller_time_rejected: true,
+      database_current: true,
+    }]);
+
+    const approved = await repository.approveKnowledgeVersion(freshPool, workflowTarget(
+      created, ADMIN_A, 'Approve the database-time fixture.', {
+        expectedReviewEventId: submissionEventId,
+      }
+    ));
+    const publicationReason = 'Pin direct publication time to the database transaction.';
+    let publicationId;
+    const publication = await freshPool.connect();
+    try {
+      await publication.query('BEGIN');
+      publicationId = (await publication.query(
+        `INSERT INTO canonical_knowledge_publications
+           (organization_id, entry_id, version_id, publication_number,
+            canonical_digest, review_event_id, previous_publication_id,
+            published_by_user_id, reason, published_at)
+         VALUES ($1, $2, $3, 1, $4, $5, NULL, $6, $7, $8::timestamptz)
+         RETURNING id`,
+        [ORG_A, created.id, created.version.id, created.version.canonicalDigest,
+          approved.event.id, OWNER_A, publicationReason, future]
+      )).rows[0].id;
+      await publication.query(
+        `INSERT INTO canonical_knowledge_audit_events
+           (organization_id, entry_id, version_id, actor_user_id, action, reason,
+            details, created_at)
+         VALUES ($1, $2, $3, $4, 'version_published', $5, $6::jsonb,
+                 $7::timestamptz)`,
+        [ORG_A, created.id, created.version.id, OWNER_A, publicationReason, JSON.stringify({
+          canonicalDigest: created.version.canonicalDigest,
+          publicationId,
+          publicationNumber: 1,
+          reviewEventId: approved.event.id,
+        }), future]
+      );
+      await publication.query('COMMIT');
+    } finally {
+      await publication.query('ROLLBACK').catch(() => {});
+      publication.release();
+    }
+    expect((await freshPool.query(
+      `SELECT publication.published_at = audit_event.created_at AS publication_audit_equal,
+              publication.published_at <> $2::timestamptz AS caller_time_rejected,
+              abs(extract(epoch FROM (clock_timestamp() - publication.published_at))) < 30
+                AS database_current
+         FROM canonical_knowledge_publications publication
+         JOIN canonical_knowledge_audit_events audit_event
+           ON audit_event.details->>'publicationId' = publication.id::text
+        WHERE publication.id = $1`,
+      [publicationId, future]
+    )).rows).toEqual([{
+      publication_audit_equal: true,
+      caller_time_rejected: true,
+      database_current: true,
+    }]);
+  });
+
   test('migration bytes are LF canonical, checksum-recorded and idempotent', async () => {
     const bytes = fs.readFileSync(path.join(MIGRATIONS, WORKFLOW_MIGRATION));
     expect(bytes.includes(0x0d)).toBe(false);

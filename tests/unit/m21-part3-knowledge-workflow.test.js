@@ -140,6 +140,18 @@ describe('Mission 21 Part 3 knowledge review workflow contract', () => {
     expect(() => normalizeAttorneyReviewEvidence({
       reviewReference: 'matter', evidenceDigest: DIGEST, reviewedAt: 'not-a-date',
     })).toThrow(expect.objectContaining({ code: 'knowledge_attorney_review_invalid' }));
+    expect(normalizeAttorneyReviewEvidence({
+      reviewReference: '\uFEFF\u00a0Cafe\u0301\u3000',
+      evidenceDigest: DIGEST,
+      reviewedAt: '2026-08-23T19:00:00.000Z',
+    }).reviewReference).toBe('Caf\u00e9');
+    for (const reviewReference of ['counsel\u200bmatter', 'counsel\u00admatter']) {
+      expect(() => normalizeAttorneyReviewEvidence({
+        reviewReference,
+        evidenceDigest: DIGEST,
+        reviewedAt: '2026-08-23T19:00:00.000Z',
+      })).toThrow(expect.objectContaining({ code: 'knowledge_workflow_invalid_text' }));
+    }
   });
 
   test('uses distinct approval actions for every review class', () => {

@@ -398,6 +398,66 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
       [futureLegal.id]
     )).rows).toEqual([{ count: 0 }]);
 
+    const directLegal = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('disclosures.workflow.direct-evidence-boundary', 'attorney_gated')
+    );
+    const directSubmitted = await repository.submitKnowledgeVersionForReview(
+      freshPool, workflowTarget(directLegal, OWNER_A, 'Submit direct evidence boundary guard.')
+    );
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_attorney_review_evidence
+         (organization_id, entry_id, version_id, snapshot_id, recorded_by_user_id,
+          review_reference, evidence_digest, reviewed_at, recorded_at)
+       VALUES ($1, $2, $3, $4, $5, 'future-direct-evidence', $6,
+               '2099-01-01T00:00:00.000Z'::timestamptz,
+               '2099-01-01T00:00:00.000Z'::timestamptz)`,
+      [ORG_A, directLegal.id, directLegal.version.id, directSubmitted.snapshot.id,
+        ADMIN_A, digest('future-direct-evidence')]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_knowledge_attorney_evidence_time_check',
+    });
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_attorney_review_evidence
+         (organization_id, entry_id, version_id, snapshot_id, recorded_by_user_id,
+          review_reference, evidence_digest, reviewed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp())`,
+      [ORG_A, directLegal.id, directLegal.version.id, directSubmitted.snapshot.id,
+        ADMIN_A, 'counsel\u200bmatter', digest('format-character-evidence')]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_knowledge_attorney_evidence_reference_check',
+    });
+    const directClient = await freshPool.connect();
+    try {
+      await directClient.query('BEGIN');
+      const normalizedDirect = await directClient.query(
+        `INSERT INTO canonical_knowledge_attorney_review_evidence
+           (organization_id, entry_id, version_id, snapshot_id, recorded_by_user_id,
+            review_reference, evidence_digest, reviewed_at, recorded_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(),
+                 '2099-01-01T00:00:00.000Z'::timestamptz)
+         RETURNING review_reference, recorded_at,
+                   abs(extract(epoch FROM (clock_timestamp() - recorded_at))) < 5 AS database_timed`,
+        [ORG_A, directLegal.id, directLegal.version.id, directSubmitted.snapshot.id,
+          ADMIN_A, '\uFEFF\u00a0Cafe\u0301\u3000', digest('normalized-direct-evidence')]
+      );
+      expect(normalizedDirect.rows).toEqual([expect.objectContaining({
+        review_reference: 'Caf\u00e9', database_timed: true,
+      })]);
+    } finally {
+      await directClient.query('ROLLBACK').catch(() => {});
+      directClient.release();
+    }
+    expect((await freshPool.query(
+      `SELECT
+         (SELECT count(*)::int FROM canonical_knowledge_attorney_review_evidence
+           WHERE entry_id = $1) AS evidence,
+         (SELECT count(*)::int FROM canonical_knowledge_review_events
+           WHERE entry_id = $1 AND action = 'attorney_gated_approved') AS approvals,
+         (SELECT count(*)::int FROM canonical_knowledge_publications
+           WHERE entry_id = $1) AS publications`,
+      [directLegal.id]
+    )).rows).toEqual([{ evidence: 0, approvals: 0, publications: 0 }]);
+
     const unresolved = await repository.createInitialKnowledgeDraft(freshPool, initialDraft(
       'policies.workflow.unresolved', 'high_risk', {
         content: {

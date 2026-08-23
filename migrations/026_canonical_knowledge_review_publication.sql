@@ -2,6 +2,79 @@
 -- Additive only. This migration does not create routes, UI, provider mappings,
 -- provider calls, synchronization, tool authority, or legal conclusions.
 
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_is_js_trim_codepoint(input INTEGER)
+RETURNS BOOLEAN AS $$
+  SELECT input BETWEEN 9 AND 13
+      OR input IN (
+        32, 160, 5760, 8192, 8193, 8194, 8195, 8196, 8197, 8198,
+        8199, 8200, 8201, 8202, 8232, 8233, 8239, 8287, 12288, 65279
+      );
+$$ LANGUAGE sql
+   IMMUTABLE STRICT PARALLEL SAFE
+   SET search_path = pg_catalog;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_trim_js_whitespace(input TEXT)
+RETURNS TEXT AS $$
+DECLARE
+  first_index INTEGER := 1;
+  last_index INTEGER := char_length(input);
+BEGIN
+  WHILE first_index <= last_index
+    AND public.canonical_knowledge_is_js_trim_codepoint(
+      ascii(substr(input, first_index, 1))
+    )
+  LOOP
+    first_index := first_index + 1;
+  END LOOP;
+  WHILE last_index >= first_index
+    AND public.canonical_knowledge_is_js_trim_codepoint(
+      ascii(substr(input, last_index, 1))
+    )
+  LOOP
+    last_index := last_index - 1;
+  END LOOP;
+  RETURN substr(input, first_index, last_index - first_index + 1);
+END;
+$$ LANGUAGE plpgsql
+   IMMUTABLE STRICT PARALLEL SAFE
+   SET search_path = pg_catalog;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_contains_control_or_format(input TEXT)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM generate_series(1, char_length(input)) AS char_pos(position_index)
+     CROSS JOIN LATERAL (
+       SELECT ascii(substr(input, char_pos.position_index, 1)) AS codepoint
+     ) AS unicode
+     WHERE unicode.codepoint BETWEEN 0 AND 31
+        OR unicode.codepoint BETWEEN 127 AND 159
+        OR unicode.codepoint = 173
+        OR unicode.codepoint BETWEEN 1536 AND 1541
+        OR unicode.codepoint = 1564
+        OR unicode.codepoint = 1757
+        OR unicode.codepoint = 1807
+        OR unicode.codepoint BETWEEN 2192 AND 2193
+        OR unicode.codepoint = 2274
+        OR unicode.codepoint = 6158
+        OR unicode.codepoint BETWEEN 8203 AND 8207
+        OR unicode.codepoint BETWEEN 8234 AND 8238
+        OR unicode.codepoint BETWEEN 8288 AND 8292
+        OR unicode.codepoint BETWEEN 8294 AND 8303
+        OR unicode.codepoint = 65279
+        OR unicode.codepoint BETWEEN 65529 AND 65531
+        OR unicode.codepoint = 69821
+        OR unicode.codepoint = 69837
+        OR unicode.codepoint BETWEEN 78896 AND 78911
+        OR unicode.codepoint BETWEEN 113824 AND 113827
+        OR unicode.codepoint BETWEEN 119155 AND 119162
+        OR unicode.codepoint = 917505
+        OR unicode.codepoint BETWEEN 917536 AND 917631
+  );
+$$ LANGUAGE sql
+   IMMUTABLE STRICT PARALLEL SAFE
+   SET search_path = pg_catalog;
+
 CREATE TABLE canonical_knowledge_review_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -147,9 +220,11 @@ CREATE TABLE canonical_knowledge_attorney_review_evidence (
     REFERENCES organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT canonical_knowledge_attorney_evidence_reference_check CHECK (
     length(review_reference) BETWEEN 1 AND 128
-    AND length(btrim(review_reference)) >= 1
     AND octet_length(review_reference) <= 512
-    AND review_reference !~ '[[:cntrl:]]'
+    AND review_reference = public.canonical_knowledge_trim_js_whitespace(
+      normalize(review_reference, NFC)
+    )
+    AND NOT public.canonical_knowledge_contains_control_or_format(review_reference)
   ),
   CONSTRAINT canonical_knowledge_attorney_evidence_digest_check CHECK (
     evidence_digest ~ '^[0-9a-f]{64}$'
@@ -439,6 +514,10 @@ BEGIN
   PERFORM public.canonical_knowledge_require_workflow_actor(
     NEW.organization_id, NEW.recorded_by_user_id
   );
+  NEW.review_reference := public.canonical_knowledge_trim_js_whitespace(
+    normalize(NEW.review_reference, NFC)
+  );
+  NEW.recorded_at := clock_timestamp();
   SELECT version.review_requirement, version.version_number
     INTO target_requirement, target_number
     FROM public.canonical_knowledge_versions version

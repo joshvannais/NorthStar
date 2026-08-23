@@ -26,6 +26,12 @@ async function run() {
   app.use('/css', express.static(path.join(publicRoot, 'css')));
   app.use('/js', express.static(path.join(publicRoot, 'js')));
   app.use('/assets', express.static(path.join(publicRoot, 'assets')));
+  app.get('/', (_req, res) => {
+    res.sendFile(path.join(publicRoot, 'index.html'));
+  });
+  app.get('/demo', (_req, res) => {
+    res.sendFile(path.join(publicRoot, 'demo-dashboard.html'));
+  });
   app.get('/demo/business-profile', (_req, res) => {
     res.sendFile(path.join(publicRoot, 'dashboard', 'business-profile.html'));
   });
@@ -81,6 +87,36 @@ async function run() {
     assert.match(teamSummary.text, /Job role/i);
     assert.match(teamSummary.text, /Skills/i);
 
+    await page.goto(`http://127.0.0.1:${port}/`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.locator('[data-northstar-site-footer]').waitFor({ state: 'visible' });
+    const homepageGeometry = await page.evaluate(() => {
+      const rect = selector => {
+        const value = document.querySelector(selector).getBoundingClientRect();
+        return { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width };
+      };
+      const banner = rect('.demo-banner');
+      const toggle = rect('[data-northstar-theme-toggle]');
+      const feature = rect('#features .card');
+      const step = rect('#how-it-works .step');
+      const pricing = rect('#pricing .pricing-card');
+      return {
+        toggleClearance: toggle.top - banner.bottom,
+        cards: [feature, step, pricing],
+      };
+    });
+    assert.ok(homepageGeometry.toggleClearance >= 7,
+      `mobile theme toggle needs breathing room below the demo banner: ${homepageGeometry.toggleClearance}`);
+    const cardLefts = homepageGeometry.cards.map(card => card.left);
+    const cardRights = homepageGeometry.cards.map(card => card.right);
+    assert.ok(Math.max(...cardLefts) - Math.min(...cardLefts) <= 1,
+      `homepage card left edges must align: ${JSON.stringify(homepageGeometry.cards)}`);
+    assert.ok(Math.max(...cardRights) - Math.min(...cardRights) <= 1,
+      `homepage card right edges must align: ${JSON.stringify(homepageGeometry.cards)}`);
+    const footerLabels = await page.locator('[data-northstar-site-footer] .footer-links a').allTextContents();
+    assert.deepStrictEqual(footerLabels, ['Home', 'How It Works', 'Pricing', 'FAQ', 'Contact', 'Privacy', 'Terms', 'Refunds', 'Legal']);
+
     await page.goto(`http://127.0.0.1:${port}/demo/polaris`, {
       waitUntil: 'domcontentloaded',
     });
@@ -93,6 +129,9 @@ async function run() {
       browser: browserName,
       businessProfileSearch: 'pass',
       teamDemoSummaries: 'pass',
+      homepageSharedWidths: 'pass',
+      homepageMobileHeaderClearance: 'pass',
+      sharedFooter: 'pass',
       polarisPlaceholderCleanup: 'pass',
     }));
   } finally {

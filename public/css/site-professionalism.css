@@ -1014,8 +1014,9 @@ html body .demo-table-wrap th {
   }
 
   html body.homepage-refresh .nav-inner {
-    min-height: calc(56px + env(safe-area-inset-top)) !important;
-    padding-top: env(safe-area-inset-top) !important;
+    min-height: calc(64px + env(safe-area-inset-top)) !important;
+    padding-top: max(8px, env(safe-area-inset-top)) !important;
+    padding-bottom: 8px !important;
   }
 
   html body.homepage-refresh .homepage-header-stack .demo-banner {

@@ -179,6 +179,31 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     expect(telemetry).not.toContain('searchParams');
   });
 
+  test('homepage cards share one width and every customer-facing page receives one common footer', () => {
+    const home = read('public/index.html');
+    const profile = read('public/dashboard/business-profile.html');
+    const style = read('public/css/style.css');
+    const professionalism = read('public/css/site-professionalism.css');
+    const theme = read('public/js/theme.js');
+
+    expect(style).toMatch(/\.grid\s*\{[^}]*max-width:\s*1100px/s);
+    expect(style).toMatch(/\.steps\s*\{[^}]*max-width:\s*1100px/s);
+    expect(style).toMatch(/\.pricing-grid\s*\{[^}]*max-width:\s*1100px/s);
+    expect(style).toMatch(/@media \(max-width: 768px\)[\s\S]*?\.step\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s);
+    expect(professionalism).toMatch(/html body\.homepage-refresh \.nav-inner\s*\{[^}]*min-height:\s*calc\(64px \+ env\(safe-area-inset-top\)\)[^}]*padding-top:\s*max\(8px, env\(safe-area-inset-top\)\)[^}]*padding-bottom:\s*8px/s);
+
+    for (const label of ['Home', 'How It Works', 'Pricing', 'FAQ', 'Contact', 'Privacy', 'Terms', 'Refunds', 'Legal']) {
+      expect(theme).toContain("label: '" + label + "'");
+    }
+    expect(theme).toContain("footer.setAttribute('data-northstar-site-footer', '')");
+    expect(theme).toContain("document.querySelector('.main-content')");
+    expect(home).not.toContain('User-initiated browser Web Call');
+    expect(home).not.toContain('Isolated demo context');
+    expect(home).not.toContain('Verified delete before results');
+    expect(profile).not.toContain('Business Profile v1.0');
+    expect(profile).not.toContain('Single source of truth for NorthStar operations');
+  });
+
   test('FAQ is compact and readiness vocabulary is explained while Mission 32 stays future-only', () => {
     const faq = read('public/faq.html');
     const mission32 = read('docs/roadmap/MISSION_32_SCENARIO_CALCULATOR.md');

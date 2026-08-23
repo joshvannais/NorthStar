@@ -836,7 +836,7 @@ textarea:focus-visible {
 .steps {
   display: flex;
   gap: 20px;
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
   width: 100%;
   padding: 0 4px;
@@ -885,7 +885,7 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 20px;
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
   width: 100%;
   padding: 0 4px;
@@ -991,6 +991,28 @@ textarea:focus-visible {
 .footer p {
   font-size: 13px;
   color: var(--neutral-500);
+}
+
+.footer.northstar-site-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 0;
+  margin-top: clamp(32px, 6vw, 64px);
+  padding: 32px 16px;
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 72px));
+  text-align: center;
+}
+
+.footer.northstar-site-footer .footer-links {
+  width: min(100%, 1100px);
+  margin: 0 auto;
+}
+
+.footer.northstar-site-footer p {
+  margin: 0;
 }
 
 /* === Dashboard Styles === */
@@ -1458,10 +1480,10 @@ tr:hover td { background: var(--neutral-50); }
   .grid-3, .grid-4, .grid-2 { grid-template-columns: 1fr; }
   .grid { gap: 16px; }
 
-  .steps { flex-direction: column; gap: 20px; padding: 0; }
-  .step { max-width: 400px; margin: 0 auto; }
+  .steps { flex-direction: column; gap: 20px; padding: 0 4px; }
+  .step { width: 100%; max-width: none; margin: 0; }
 
-  .pricing-grid { grid-template-columns: 1fr; max-width: 380px; }
+  .pricing-grid { grid-template-columns: 1fr; max-width: 1100px; }
 
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
   .stat-card { padding: 16px; }

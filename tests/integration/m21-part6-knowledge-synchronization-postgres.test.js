@@ -195,6 +195,36 @@ async function completeKnowledge(knowledge, pool, actors, suffix, hostile = '') 
   return { identity, identityPublication, services, servicesPublication };
 }
 
+async function expectTransactionRejected(pool, statements, expectedFailure) {
+  const client = await pool.connect();
+  let failure = null;
+  try {
+    await client.query('BEGIN');
+    for (const statement of statements) {
+      await client.query(statement.text, statement.values || []);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    failure = error;
+    await client.query('ROLLBACK').catch(() => {});
+  } finally {
+    client.release();
+  }
+  if (!failure
+    || failure.code !== expectedFailure.code
+    || failure.constraint !== expectedFailure.constraint) {
+    throw new Error(`unexpected rejection: ${failure && failure.code} ${failure && failure.constraint} ${failure && failure.message}`);
+  }
+  expect(failure && {
+    code: failure.code,
+    constraint: failure.constraint,
+    message: failure.message,
+  }).toEqual({
+    ...expectedFailure,
+    message: expect.any(String),
+  });
+}
+
 realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
   let db;
   let knowledge;
@@ -643,6 +673,303 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     });
   }, 120000);
 
+  test('enforces the exact bidirectional outbox, attempt, and observed-state outcome matrix', async () => {
+    const actors = await seedActors(freshPool, 'attempt-matrix');
+    const sync = new SyncRepository(freshPool);
+    const configured = await sync.configureTarget(targetInput(actors));
+    await completeKnowledge(knowledge, freshPool, actors, 'attempt-matrix');
+    const claimed = (await sync.claimJobs({ batchSize: 25, leaseSeconds: 30 }))
+      .find(job => job.targetId === configured.target.id);
+    expect(claimed).toBeDefined();
+
+    function attemptStatement(outcome, diagnosticCategory, observedProjectionDigest) {
+      return {
+        text: `UPDATE canonical_knowledge_sync_attempts
+                  SET outcome = $3, diagnostic_category = $4,
+                      observed_projection_digest = $5,
+                      completed_at = statement_timestamp()
+                WHERE outbox_id = $1 AND claim_token = $2 AND outcome IS NULL`,
+        values: [
+          claimed.id, claimed.claimToken, outcome,
+          diagnosticCategory, observedProjectionDigest,
+        ],
+      };
+    }
+
+    function outboxStatement(state, diagnosticCategory, observedProjectionDigest, options = {}) {
+      return {
+        text: `UPDATE canonical_knowledge_sync_outbox
+                  SET state = $2::varchar,
+                      reconciliation_generation = reconciliation_generation + $5,
+                      claim_token = NULL, claimed_at = NULL, lease_expires_at = NULL,
+                      observed_projection_digest = $3,
+                      diagnostic_category = $4,
+                      available_at = CASE WHEN $2::varchar = 'retry'
+                        THEN statement_timestamp() + ($6::text || ' seconds')::interval
+                        ELSE available_at END,
+                      succeeded_at = CASE WHEN $2::varchar = 'succeeded'
+                        THEN statement_timestamp() ELSE NULL END,
+                      dead_at = CASE WHEN $2::varchar = 'dead'
+                        THEN statement_timestamp() ELSE NULL END
+                WHERE id = $1`,
+        values: [
+          claimed.id, state, observedProjectionDigest, diagnosticCategory,
+          options.generationDelta || 0,
+          options.retrySeconds === undefined ? 30 : options.retrySeconds,
+        ],
+      };
+    }
+
+    const exactMatrixFailure = {
+      code: '23514', constraint: 'canonical_knowledge_sync_attempt_state_exact',
+    };
+    const siblings = [
+      {
+        name: 'attempt retry evidence without its matching outbox transition',
+        statements: [attemptStatement('retry', 'provider_failure', null)],
+        failure: exactMatrixFailure,
+      },
+      {
+        name: 'outbox success without closed attempt evidence',
+        statements: [outboxStatement('succeeded', null, claimed.projectionDigest)],
+        failure: {
+          code: '23514',
+          constraint: 'canonical_knowledge_sync_outbox_attempt_closed_required',
+        },
+      },
+      {
+        name: 'outbox success with retry evidence',
+        statements: [
+          attemptStatement('retry', 'provider_failure', null),
+          outboxStatement('succeeded', null, claimed.projectionDigest),
+        ],
+        failure: exactMatrixFailure,
+      },
+      {
+        name: 'premature dead letter with retry evidence',
+        statements: [
+          attemptStatement('retry', 'provider_failure', null),
+          outboxStatement('dead', 'provider_failure', null),
+        ],
+        failure: exactMatrixFailure,
+      },
+      {
+        name: 'retry outbox with false successful attempt evidence',
+        statements: [
+          attemptStatement('succeeded', null, claimed.projectionDigest),
+          outboxStatement('retry', 'provider_failure', null),
+        ],
+        failure: exactMatrixFailure,
+      },
+      {
+        name: 'success with a non-matching acknowledgement digest',
+        statements: [
+          attemptStatement('succeeded', null, 'f'.repeat(64)),
+          outboxStatement('succeeded', null, claimed.projectionDigest),
+        ],
+        failure: exactMatrixFailure,
+      },
+      {
+        name: 'retry with contradictory diagnostics',
+        statements: [
+          attemptStatement('retry', 'provider_failure', null),
+          outboxStatement('retry', 'provider_timeout', null),
+        ],
+        failure: exactMatrixFailure,
+      },
+      {
+        name: 'retry without a future availability boundary',
+        statements: [
+          attemptStatement('retry', 'provider_failure', null),
+          outboxStatement('retry', 'provider_failure', null, { retrySeconds: -1 }),
+        ],
+        failure: exactMatrixFailure,
+      },
+      {
+        name: 'provider retry impersonating an internal recovery diagnostic',
+        statements: [
+          attemptStatement('retry', 'claim_expired', null),
+        ],
+        failure: {
+          code: '23514',
+          constraint: 'canonical_knowledge_sync_attempts_outcome_shape_check',
+        },
+      },
+      {
+        name: 'finalization crossing reconciliation generations',
+        statements: [
+          attemptStatement('retry', 'provider_failure', null),
+          outboxStatement('retry', 'provider_failure', null, { generationDelta: 1 }),
+        ],
+        failure: {
+          code: '23514',
+          constraint: 'canonical_knowledge_sync_outbox_finalize_transition',
+        },
+      },
+      {
+        name: 'attempt evidence crossing target identity',
+        statements: [{
+          text: `UPDATE canonical_knowledge_sync_attempts
+                    SET target_id = $3, outcome = 'retry',
+                        diagnostic_category = 'provider_failure',
+                        completed_at = statement_timestamp()
+                  WHERE outbox_id = $1 AND claim_token = $2 AND outcome IS NULL`,
+          values: [claimed.id, claimed.claimToken, crypto.randomUUID()],
+        }],
+        failure: {
+          code: '55000', constraint: 'canonical_knowledge_sync_attempts_transition',
+        },
+      },
+      {
+        name: 'current event crossing publication identity',
+        statements: [{
+          text: `UPDATE canonical_knowledge_sync_outbox
+                    SET trigger_publication_id = $2
+                  WHERE id = $1`,
+          values: [claimed.id, crypto.randomUUID()],
+        }],
+        failure: {
+          code: '55000', constraint: 'canonical_knowledge_sync_outbox_desired_immutable',
+        },
+      },
+    ];
+
+    for (const sibling of siblings) {
+      await expectTransactionRejected(freshPool, sibling.statements, sibling.failure);
+      expect((await freshPool.query(
+        `SELECT outbox.state, outbox.claim_token, attempt.outcome
+           FROM canonical_knowledge_sync_outbox outbox
+           JOIN canonical_knowledge_sync_attempts attempt
+             ON attempt.organization_id = outbox.organization_id
+            AND attempt.target_id = outbox.target_id
+            AND attempt.outbox_id = outbox.id
+          WHERE outbox.id = $1`,
+        [claimed.id]
+      )).rows).toEqual([{
+        state: 'claimed', claim_token: claimed.claimToken, outcome: null,
+      }]);
+    }
+
+    const retried = await sync.finalizeJob({
+      organizationId: claimed.organizationId,
+      id: claimed.id,
+      claimToken: claimed.claimToken,
+      accepted: false,
+      diagnosticCategory: 'claim_expired',
+      observedProjectionDigest: 'f'.repeat(64),
+    });
+    expect(retried).toMatchObject({ state: 'retry', exactSuccess: false, drift: false });
+    expect((await freshPool.query(
+      `SELECT outbox.state, outbox.diagnostic_category,
+              outbox.observed_projection_digest,
+              attempt.outcome, attempt.diagnostic_category AS attempt_diagnostic,
+              attempt.observed_projection_digest AS attempt_observed_digest,
+              state.status, state.diagnostic_category AS state_diagnostic
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id
+          AND attempt.outbox_id = outbox.id
+          AND attempt.reconciliation_generation = outbox.reconciliation_generation
+          AND attempt.attempt_number = outbox.attempt_count
+         JOIN canonical_knowledge_sync_states state
+           ON state.organization_id = outbox.organization_id
+          AND state.target_id = outbox.target_id
+        WHERE outbox.id = $1`,
+      [claimed.id]
+    )).rows).toEqual([{
+      state: 'retry', diagnostic_category: 'provider_failure',
+      observed_projection_digest: null,
+      outcome: 'retry', attempt_diagnostic: 'provider_failure',
+      attempt_observed_digest: null,
+      status: 'retry', state_diagnostic: 'provider_failure',
+    }]);
+
+    await freshPool.query(
+      `UPDATE canonical_knowledge_sync_outbox SET available_at = statement_timestamp()
+        WHERE id = $1`,
+      [claimed.id]
+    );
+    const reclaimed = (await sync.claimJobs({ batchSize: 25, leaseSeconds: 30 }))
+      .find(job => job.id === claimed.id);
+    expect(reclaimed).toBeDefined();
+    await expect(sync.finalizeJob({
+      organizationId: reclaimed.organizationId,
+      id: reclaimed.id,
+      claimToken: reclaimed.claimToken,
+      accepted: true,
+      observedProjectionDigest: reclaimed.projectionDigest,
+    })).resolves.toMatchObject({ state: 'succeeded', exactSuccess: true });
+
+    expect((await freshPool.query(
+      `SELECT outbox.state, outbox.attempt_count,
+              outbox.observed_projection_digest = outbox.projection_digest AS exact_ack,
+              attempt.outcome, attempt.diagnostic_category,
+              state.status, state.observed_event_id = outbox.id AS exact_observed,
+              state.last_known_good_event_id = outbox.id AS exact_lkg
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id
+          AND attempt.outbox_id = outbox.id
+          AND attempt.reconciliation_generation = outbox.reconciliation_generation
+          AND attempt.attempt_number = outbox.attempt_count
+         JOIN canonical_knowledge_sync_states state
+           ON state.organization_id = outbox.organization_id
+          AND state.target_id = outbox.target_id
+        WHERE outbox.id = $1`,
+      [claimed.id]
+    )).rows).toEqual([{
+      state: 'succeeded', attempt_count: 2, exact_ack: true,
+      outcome: 'succeeded', diagnostic_category: null,
+      status: 'in_sync', exact_observed: true, exact_lkg: true,
+    }]);
+
+    await expectTransactionRejected(freshPool, [{
+      text: `UPDATE canonical_knowledge_sync_states
+                SET status = 'retry', diagnostic_category = 'provider_failure'
+              WHERE organization_id = $1 AND target_id = $2`,
+      values: [actors.organizationId, configured.target.id],
+    }], exactMatrixFailure);
+
+    await freshPool.query(
+      `UPDATE canonical_knowledge_sync_states
+          SET last_observed_at = statement_timestamp() - interval '301 seconds'
+        WHERE organization_id = $1 AND target_id = $2`,
+      [actors.organizationId, configured.target.id]
+    );
+    expect(await sync.reconcileStaleTargets({ batchSize: 25 })).toBeGreaterThanOrEqual(1);
+    expect((await freshPool.query(
+      `SELECT outbox.state, outbox.reconciliation_generation,
+              outbox.attempt_count, outbox.diagnostic_category,
+              state.status, state.diagnostic_category AS state_diagnostic,
+              count(attempt.*)::int AS current_attempts
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_states state
+           ON state.organization_id = outbox.organization_id
+          AND state.target_id = outbox.target_id
+         LEFT JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id
+          AND attempt.outbox_id = outbox.id
+          AND attempt.reconciliation_generation = outbox.reconciliation_generation
+        WHERE outbox.id = $1
+        GROUP BY outbox.id, state.organization_id, state.target_id`,
+      [claimed.id]
+    )).rows).toEqual([{
+      state: 'retry', reconciliation_generation: 2, attempt_count: 0,
+      diagnostic_category: 'stale_observation', status: 'stale',
+      state_diagnostic: 'stale_observation', current_attempts: 0,
+    }]);
+    await expect(sync.configureTarget(targetInput(actors, {
+      expectedTargetRevision: configured.target.targetRevision,
+      status: 'suspended',
+    }))).resolves.toMatchObject({
+      target: { status: 'suspended' },
+      state: { status: 'suspended', diagnosticCategory: 'target_suspended' },
+    });
+  }, 120000);
+
   test('enforces ordered claims, stable retry identity, bounded dead-letter, stale claims, and drift', async () => {
     const actors = await seedActors(freshPool, 'retries');
     const sync = new SyncRepository(freshPool);
@@ -709,6 +1036,26 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
          FROM canonical_knowledge_sync_attempts WHERE outbox_id = $1`,
       [first[0].id]
     )).rows).toEqual([{ count: 5, keys: 1 }]);
+    expect((await freshPool.query(
+      `SELECT outbox.state, outbox.attempt_count,
+              outbox.reconciliation_generation = attempt.reconciliation_generation AS exact_generation,
+              outbox.attempt_count = attempt.attempt_number AS exact_attempt,
+              outbox.diagnostic_category = attempt.diagnostic_category AS exact_diagnostic,
+              attempt.outcome, attempt.observed_projection_digest
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id
+          AND attempt.outbox_id = outbox.id
+          AND attempt.reconciliation_generation = outbox.reconciliation_generation
+          AND attempt.attempt_number = outbox.attempt_count
+        WHERE outbox.id = $1`,
+      [first[0].id]
+    )).rows).toEqual([{
+      state: 'dead', attempt_count: 5, exact_generation: true,
+      exact_attempt: true, exact_diagnostic: true,
+      outcome: 'dead', observed_projection_digest: null,
+    }]);
 
     const revised = await knowledge.createKnowledgeRevision(
       freshPool,

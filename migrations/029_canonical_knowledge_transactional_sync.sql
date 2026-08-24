@@ -362,6 +362,33 @@ CREATE TABLE public.canonical_knowledge_sync_attempts (
       AND diagnostic_category IS NULL AND observed_projection_digest IS NULL)
     OR
     (outcome IS NOT NULL AND completed_at IS NOT NULL)
+  ),
+  CONSTRAINT canonical_knowledge_sync_attempts_outcome_shape_check CHECK (
+    outcome IS NULL
+    OR
+    (outcome = 'succeeded'
+      AND diagnostic_category IS NULL
+      AND observed_projection_digest IS NOT NULL)
+    OR
+    (outcome = 'drift'
+      AND diagnostic_category = 'projection_digest_mismatch'
+      AND observed_projection_digest IS NOT NULL)
+    OR
+    (outcome = 'claim_expired'
+      AND diagnostic_category = 'claim_expired'
+      AND observed_projection_digest IS NULL)
+    OR
+    (outcome = 'ownership_lost'
+      AND diagnostic_category = 'ownership_lost'
+      AND observed_projection_digest IS NULL)
+    OR
+    (outcome IN ('retry', 'dead')
+      AND diagnostic_category IS NOT NULL
+      AND diagnostic_category NOT IN (
+        'claim_expired', 'ownership_lost', 'projection_digest_mismatch',
+        'reconciliation_requested', 'stale_observation'
+      )
+      AND observed_projection_digest IS NULL)
   )
 );
 
@@ -1435,35 +1462,235 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
 
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_sync_attempt_state_matches(
+  outbox_id_value UUID
+) RETURNS BOOLEAN AS $$
+DECLARE
+  outbox_record public.canonical_knowledge_sync_outbox%ROWTYPE;
+  attempt_record public.canonical_knowledge_sync_attempts%ROWTYPE;
+  state_record public.canonical_knowledge_sync_states%ROWTYPE;
+  target_status TEXT;
+  attempt_matches BOOLEAN := FALSE;
+  state_matches BOOLEAN := TRUE;
+BEGIN
+  SELECT * INTO outbox_record
+    FROM public.canonical_knowledge_sync_outbox outbox
+   WHERE outbox.id = outbox_id_value;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+
+  SELECT * INTO state_record
+    FROM public.canonical_knowledge_sync_states state
+   WHERE state.organization_id = outbox_record.organization_id
+     AND state.target_id = outbox_record.target_id;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+  SELECT target.status INTO target_status
+    FROM public.canonical_knowledge_sync_targets target
+   WHERE target.organization_id = outbox_record.organization_id
+     AND target.id = outbox_record.target_id;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+
+  IF outbox_record.state IN ('pending', 'blocked') THEN
+    attempt_matches := outbox_record.reconciliation_generation = 1
+      AND outbox_record.attempt_count = 0
+      AND NOT EXISTS (
+        SELECT 1 FROM public.canonical_knowledge_sync_attempts attempt
+         WHERE attempt.organization_id = outbox_record.organization_id
+           AND attempt.target_id = outbox_record.target_id
+           AND attempt.outbox_id = outbox_record.id
+      );
+  ELSIF outbox_record.state = 'claimed' THEN
+    SELECT * INTO attempt_record
+      FROM public.canonical_knowledge_sync_attempts attempt
+     WHERE attempt.organization_id = outbox_record.organization_id
+       AND attempt.target_id = outbox_record.target_id
+       AND attempt.outbox_id = outbox_record.id
+       AND attempt.reconciliation_generation = outbox_record.reconciliation_generation
+       AND attempt.attempt_number = outbox_record.attempt_count;
+    attempt_matches := FOUND
+      AND attempt_record.claim_token = outbox_record.claim_token
+      AND rtrim(attempt_record.idempotency_key) = rtrim(outbox_record.idempotency_key)
+      AND attempt_record.outcome IS NULL;
+  ELSIF outbox_record.state = 'retry' AND outbox_record.attempt_count = 0 THEN
+    attempt_matches := outbox_record.reconciliation_generation > 1
+      AND outbox_record.diagnostic_category IN (
+        'reconciliation_requested', 'stale_observation'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.canonical_knowledge_sync_attempts attempt
+         WHERE attempt.organization_id = outbox_record.organization_id
+           AND attempt.target_id = outbox_record.target_id
+           AND attempt.outbox_id = outbox_record.id
+           AND attempt.reconciliation_generation = outbox_record.reconciliation_generation
+      );
+  ELSE
+    SELECT * INTO attempt_record
+      FROM public.canonical_knowledge_sync_attempts attempt
+     WHERE attempt.organization_id = outbox_record.organization_id
+       AND attempt.target_id = outbox_record.target_id
+       AND attempt.outbox_id = outbox_record.id
+       AND attempt.reconciliation_generation = outbox_record.reconciliation_generation
+       AND attempt.attempt_number = outbox_record.attempt_count;
+    IF FOUND THEN
+      attempt_matches := rtrim(attempt_record.idempotency_key) =
+          rtrim(outbox_record.idempotency_key)
+        AND attempt_record.diagnostic_category IS NOT DISTINCT FROM
+          outbox_record.diagnostic_category
+        AND rtrim(attempt_record.observed_projection_digest) IS NOT DISTINCT FROM
+          rtrim(outbox_record.observed_projection_digest)
+        AND (
+          (outbox_record.state = 'succeeded'
+            AND attempt_record.outcome = 'succeeded'
+            AND attempt_record.diagnostic_category IS NULL
+            AND rtrim(attempt_record.observed_projection_digest) =
+              rtrim(outbox_record.projection_digest))
+          OR
+          (outbox_record.state = 'retry'
+            AND outbox_record.attempt_count < 5
+            AND attempt_record.outcome IN (
+              'retry', 'drift', 'claim_expired', 'ownership_lost'
+            )
+            AND outbox_record.available_at > attempt_record.completed_at)
+          OR
+          (outbox_record.state = 'dead'
+            AND outbox_record.attempt_count = 5
+            AND attempt_record.outcome IN (
+              'dead', 'drift', 'claim_expired', 'ownership_lost'
+            ))
+        );
+    END IF;
+  END IF;
+
+  IF NOT attempt_matches THEN RETURN FALSE; END IF;
+  IF target_status = 'suspended'
+     OR state_record.desired_event_id IS DISTINCT FROM outbox_record.id THEN
+    RETURN TRUE;
+  END IF;
+
+  IF outbox_record.state = 'blocked' THEN
+    state_matches := state_record.status = 'blocked'
+      AND state_record.diagnostic_category IS NOT DISTINCT FROM
+        outbox_record.diagnostic_category;
+  ELSIF outbox_record.state = 'pending' THEN
+    state_matches := state_record.status = 'pending';
+  ELSIF outbox_record.state = 'retry' AND outbox_record.attempt_count = 0 THEN
+    state_matches := state_record.diagnostic_category = outbox_record.diagnostic_category
+      AND state_record.status = CASE outbox_record.diagnostic_category
+        WHEN 'stale_observation' THEN 'stale' ELSE 'retry' END;
+  ELSIF outbox_record.state = 'retry' THEN
+    state_matches := state_record.diagnostic_category = outbox_record.diagnostic_category
+      AND state_record.status = CASE attempt_record.outcome
+        WHEN 'drift' THEN 'drift' ELSE 'retry' END
+      AND (
+        attempt_record.outcome <> 'drift'
+        OR (
+          state_record.observed_event_id = outbox_record.id
+          AND state_record.observed_sequence = outbox_record.target_sequence
+          AND rtrim(state_record.observed_projection_digest) =
+            rtrim(outbox_record.observed_projection_digest)
+        )
+      );
+  ELSIF outbox_record.state = 'succeeded' THEN
+    state_matches := state_record.status = 'in_sync'
+      AND state_record.diagnostic_category IS NULL
+      AND state_record.observed_event_id = outbox_record.id
+      AND state_record.observed_sequence = outbox_record.target_sequence
+      AND rtrim(state_record.observed_projection_digest) = rtrim(outbox_record.projection_digest)
+      AND state_record.last_known_good_event_id = outbox_record.id
+      AND state_record.last_known_good_sequence = outbox_record.target_sequence
+      AND rtrim(state_record.last_known_good_projection_digest) =
+        rtrim(outbox_record.projection_digest);
+  ELSIF outbox_record.state = 'dead' THEN
+    state_matches := state_record.diagnostic_category = outbox_record.diagnostic_category
+      AND state_record.status = CASE attempt_record.outcome
+        WHEN 'drift' THEN 'drift' ELSE 'dead' END
+      AND (
+        attempt_record.outcome <> 'drift'
+        OR (
+          state_record.observed_event_id = outbox_record.id
+          AND state_record.observed_sequence = outbox_record.target_sequence
+          AND rtrim(state_record.observed_projection_digest) =
+            rtrim(outbox_record.observed_projection_digest)
+        )
+      );
+  END IF;
+  RETURN state_matches;
+END;
+$$ LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public;
+
 CREATE OR REPLACE FUNCTION public.canonical_knowledge_require_sync_attempt_transition()
 RETURNS TRIGGER AS $$
+DECLARE
+  attempt_record public.canonical_knowledge_sync_attempts%ROWTYPE;
 BEGIN
-  IF NEW.state = 'claimed' AND (
-    NOT EXISTS (
-      SELECT 1 FROM public.canonical_knowledge_sync_attempts attempt
-       WHERE attempt.organization_id = NEW.organization_id
-         AND attempt.target_id = NEW.target_id AND attempt.outbox_id = NEW.id
-         AND attempt.reconciliation_generation = NEW.reconciliation_generation
-         AND attempt.attempt_number = NEW.attempt_count
-         AND attempt.claim_token = NEW.claim_token AND attempt.outcome IS NULL
-    )
-  ) THEN
-    RAISE EXCEPTION 'Synchronization claim is missing attempt evidence'
+  IF TG_OP = 'UPDATE' AND NEW.state = 'claimed' THEN
+    SELECT * INTO attempt_record
+      FROM public.canonical_knowledge_sync_attempts attempt
+     WHERE attempt.organization_id = NEW.organization_id
+       AND attempt.target_id = NEW.target_id AND attempt.outbox_id = NEW.id
+       AND attempt.reconciliation_generation = NEW.reconciliation_generation
+       AND attempt.attempt_number = NEW.attempt_count
+       AND attempt.claim_token = NEW.claim_token
+       AND rtrim(attempt.idempotency_key) = rtrim(NEW.idempotency_key)
+       AND attempt.outcome IS NULL;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Synchronization claim is missing exact open attempt evidence'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_outbox_attempt_open_required';
+    END IF;
+  ELSIF TG_OP = 'UPDATE' AND OLD.state = 'claimed' AND NEW.state <> 'claimed' THEN
+    SELECT * INTO attempt_record
+      FROM public.canonical_knowledge_sync_attempts attempt
+     WHERE attempt.organization_id = OLD.organization_id
+       AND attempt.target_id = OLD.target_id AND attempt.outbox_id = OLD.id
+       AND attempt.reconciliation_generation = OLD.reconciliation_generation
+       AND attempt.attempt_number = OLD.attempt_count
+       AND attempt.claim_token = OLD.claim_token
+       AND rtrim(attempt.idempotency_key) = rtrim(OLD.idempotency_key)
+       AND attempt.outcome IS NOT NULL;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Synchronization finalization is missing exact closed attempt evidence'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_outbox_attempt_closed_required';
+    END IF;
+  END IF;
+
+  IF NOT public.canonical_knowledge_sync_attempt_state_matches(NEW.id) THEN
+    RAISE EXCEPTION 'Synchronization outbox, attempt, and observed state are inconsistent'
       USING ERRCODE = '23514',
-            CONSTRAINT = 'canonical_knowledge_sync_outbox_attempt_open_required';
-  ELSIF OLD.state = 'claimed' AND NEW.state <> 'claimed' AND (
-    NOT EXISTS (
-      SELECT 1 FROM public.canonical_knowledge_sync_attempts attempt
-       WHERE attempt.organization_id = NEW.organization_id
-         AND attempt.target_id = NEW.target_id AND attempt.outbox_id = NEW.id
-         AND attempt.reconciliation_generation = OLD.reconciliation_generation
-         AND attempt.attempt_number = OLD.attempt_count
-         AND attempt.claim_token = OLD.claim_token AND attempt.outcome IS NOT NULL
-    )
-  ) THEN
-    RAISE EXCEPTION 'Synchronization finalization is missing attempt evidence'
+            CONSTRAINT = 'canonical_knowledge_sync_attempt_state_exact';
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_require_sync_attempt_outbox()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT public.canonical_knowledge_sync_attempt_state_matches(NEW.outbox_id) THEN
+    RAISE EXCEPTION 'Synchronization attempt evidence contradicts current outbox state'
       USING ERRCODE = '23514',
-            CONSTRAINT = 'canonical_knowledge_sync_outbox_attempt_closed_required';
+            CONSTRAINT = 'canonical_knowledge_sync_attempt_state_exact';
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_require_sync_state_matrix()
+RETURNS TRIGGER AS $$
+DECLARE
+  current_state public.canonical_knowledge_sync_states%ROWTYPE;
+BEGIN
+  SELECT * INTO current_state
+    FROM public.canonical_knowledge_sync_states state
+   WHERE state.organization_id = NEW.organization_id
+     AND state.target_id = NEW.target_id;
+  IF current_state.desired_event_id IS NOT NULL
+     AND NOT public.canonical_knowledge_sync_attempt_state_matches(
+       current_state.desired_event_id
+     ) THEN
+    RAISE EXCEPTION 'Synchronization observed state contradicts current outbox evidence'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_attempt_state_exact';
   END IF;
   RETURN NULL;
 END;
@@ -1598,6 +1825,16 @@ CREATE CONSTRAINT TRIGGER canonical_knowledge_sync_outbox_require_state_pointer
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_require_sync_state_pointer();
 
 CREATE CONSTRAINT TRIGGER canonical_knowledge_sync_outbox_require_attempt_transition
-  AFTER UPDATE ON public.canonical_knowledge_sync_outbox
+  AFTER INSERT OR UPDATE ON public.canonical_knowledge_sync_outbox
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_require_sync_attempt_transition();
+
+CREATE CONSTRAINT TRIGGER canonical_knowledge_sync_attempts_require_outbox
+  AFTER INSERT OR UPDATE ON public.canonical_knowledge_sync_attempts
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_require_sync_attempt_outbox();
+
+CREATE CONSTRAINT TRIGGER canonical_knowledge_sync_states_require_matrix
+  AFTER INSERT OR UPDATE ON public.canonical_knowledge_sync_states
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_require_sync_state_matrix();

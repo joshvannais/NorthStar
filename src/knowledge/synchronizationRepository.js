@@ -20,6 +20,13 @@ const {
 const { canonicalStringify, normalizeUuid } = require('./contract');
 
 const SHA256 = /^[0-9a-f]{64}$/;
+const INTERNAL_DIAGNOSTIC_CATEGORIES = new Set([
+  'claim_expired',
+  'ownership_lost',
+  'projection_digest_mismatch',
+  'reconciliation_requested',
+  'stale_observation',
+]);
 
 function fail(code, message, status = 409) {
   throw new KnowledgeSynchronizationError(code, message, status);
@@ -29,6 +36,11 @@ function normalizeDigest(value, field) {
   const normalized = typeof value === 'string' ? value.toLowerCase().trim() : '';
   if (!SHA256.test(normalized)) fail('knowledge_sync_invalid_digest', `${field} is invalid`, 400);
   return normalized;
+}
+
+function providerDiagnosticCategory(value) {
+  const category = normalizeDiagnosticCategory(value);
+  return INTERNAL_DIAGNOSTIC_CATEGORIES.has(category) ? 'provider_failure' : category;
 }
 
 function positiveInteger(value, field, maximum = Number.MAX_SAFE_INTEGER) {
@@ -794,8 +806,12 @@ class KnowledgeSynchronizationRepository {
     const id = normalizeUuid(input && input.id, 'id');
     const claimToken = normalizeUuid(input && input.claimToken, 'claimToken');
     const accepted = input && input.accepted === true;
-    const observedDigest = normalizeObservedDigest(input && input.observedProjectionDigest, accepted);
-    const requestedCategory = accepted ? null : normalizeDiagnosticCategory(
+    const acknowledgedDigest = normalizeObservedDigest(
+      input && input.observedProjectionDigest,
+      accepted
+    );
+    const observedDigest = accepted ? acknowledgedDigest : null;
+    const requestedCategory = accepted ? null : providerDiagnosticCategory(
       input && input.diagnosticCategory
     );
     try {
@@ -833,7 +849,7 @@ class KnowledgeSynchronizationRepository {
         );
         if (updated.rowCount !== 1) return null;
         const outcome = exactSuccess ? 'succeeded' : (drift ? 'drift' : nextState);
-        await client.query(
+        const attemptUpdate = await client.query(
           `UPDATE canonical_knowledge_sync_attempts
               SET outcome = $7, diagnostic_category = $8,
                   observed_projection_digest = $9, completed_at = statement_timestamp()
@@ -846,6 +862,13 @@ class KnowledgeSynchronizationRepository {
             outcome, category, observedDigest,
           ]
         );
+        if (attemptUpdate.rowCount !== 1) {
+          fail(
+            'knowledge_sync_attempt_authority_lost',
+            'Synchronization attempt evidence no longer matches the current claim',
+            409
+          );
+        }
         const state = await client.query(
           `SELECT * FROM canonical_knowledge_sync_states
             WHERE organization_id = $1 AND target_id = $2
@@ -925,7 +948,7 @@ class KnowledgeSynchronizationRepository {
           [job.organization_id, job.id, nextState, delay, job.claim_token]
         );
         if (recovered.rowCount !== 1) continue;
-        await client.query(
+        const attemptUpdate = await client.query(
           `UPDATE canonical_knowledge_sync_attempts
               SET outcome = 'claim_expired', diagnostic_category = 'claim_expired',
                   completed_at = statement_timestamp()
@@ -937,6 +960,13 @@ class KnowledgeSynchronizationRepository {
             job.reconciliation_generation, job.attempt_count, job.claim_token,
           ]
         );
+        if (attemptUpdate.rowCount !== 1) {
+          fail(
+            'knowledge_sync_attempt_authority_lost',
+            'Synchronization recovery evidence no longer matches the expired claim',
+            409
+          );
+        }
         await client.query(
           `UPDATE canonical_knowledge_sync_states
               SET status = CASE WHEN $3 THEN 'dead' ELSE 'retry' END,

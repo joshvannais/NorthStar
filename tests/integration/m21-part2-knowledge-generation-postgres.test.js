@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const os = require('os');
 const { Pool } = require('pg');
 const path = require('path');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
@@ -8,6 +10,11 @@ const { adaptBusinessProfile } = require('../../src/services/businessProfileAdap
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS = path.join(ROOT, 'migrations');
+const PART_2_LAST_MIGRATION = '025_provider_agnostic_knowledge_registry.sql';
+
+function migrationFiles(directory) {
+  return fs.readdirSync(directory).filter(name => /^\d{3}_[a-z0-9_]+\.sql$/.test(name)).sort();
+}
 
 const ORG_A = 'b1000000-0000-4000-8000-000000000001';
 const OWNER_A = 'b2000000-0000-4000-8000-000000000001';
@@ -95,13 +102,18 @@ async function seedProfile(pool, organizationId, actorUserId, profileId, raw = p
 realPostgres('Mission 21 Part 2 knowledge generation with mounted PostgreSQL', () => {
   let suiteDatabase;
   let pool;
+  let part2Directory;
 
   beforeAll(async () => {
     suiteDatabase = await createSuiteDatabase('m21-p2-generation');
     pool = new Pool({ connectionString: suiteDatabase.connectionString, max: 8 });
+    part2Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m21-p2-through025-'));
+    for (const filename of migrationFiles(MIGRATIONS).filter(name => name <= PART_2_LAST_MIGRATION)) {
+      fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(part2Directory, filename));
+    }
     jest.resetModules();
     const db = require('../../src/db');
-    expect(await db.runMigrations({ pool, migrationsDirectory: MIGRATIONS })).toBe(true);
+    expect(await db.runMigrations({ pool, migrationsDirectory: part2Directory })).toBe(true);
 
     await seedActor(pool, ORG_A, OWNER_A, 'owner', 'owner-a');
     await seedActor(pool, ORG_A, ADMIN_A, 'admin', 'admin-a');
@@ -179,6 +191,9 @@ realPostgres('Mission 21 Part 2 knowledge generation with mounted PostgreSQL', (
     try {
       if (pool) await pool.end();
     } finally {
+      if (part2Directory && path.resolve(part2Directory).startsWith(path.resolve(os.tmpdir()))) {
+        fs.rmSync(part2Directory, { recursive: true, force: true });
+      }
       if (suiteDatabase) await suiteDatabase.cleanup();
     }
   }, 90000);

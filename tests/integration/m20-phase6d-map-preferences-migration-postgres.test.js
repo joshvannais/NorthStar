@@ -50,7 +50,9 @@ realPostgres('Mission 20 Phase 6D canonical map preference migration', () => {
     jest.resetModules();
     const db = require('../../src/db');
     const corpus = migrationFiles(MIGRATIONS);
-    expect(corpus).toEqual([
+    const mapMigrationIndex = corpus.indexOf(MAP_MIGRATION);
+    expect(mapMigrationIndex).toBeGreaterThanOrEqual(0);
+    expect(corpus.slice(0, mapMigrationIndex + 1)).toEqual([
       '001_initial_schema.sql',
       '002_seed_data.sql',
       '003_voice_sessions.sql',
@@ -67,13 +69,6 @@ realPostgres('Mission 20 Phase 6D canonical map preference migration', () => {
       '016_tenant_asset_catalogue.sql',
       '017_retell_webhook_replay_authority.sql',
       MAP_MIGRATION,
-      '019_account_email_outbox.sql',
-      '020_canonical_workforce_access_roles.sql',
-      '021_bounded_api_observability.sql',
-      '022_demo_command_center_sessions.sql',
-      '023_homepage_demo_admission.sql',
-      '024_homepage_verified_purge_receipt.sql',
-      '025_provider_agnostic_knowledge_registry.sql',
     ]);
     for (const filename of corpus) {
       const bytes = fs.readFileSync(path.join(MIGRATIONS, filename));

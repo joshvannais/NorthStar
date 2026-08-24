@@ -75,6 +75,7 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
   let freshPool;
   let upgradePool;
   let preKnowledgeDirectory;
+  let part1Directory;
   let db;
 
   beforeAll(async () => {
@@ -83,8 +84,12 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
     freshPool = new Pool({ connectionString: freshDatabase.connectionString, max: 6 });
     upgradePool = new Pool({ connectionString: upgradeDatabase.connectionString, max: 4 });
     preKnowledgeDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m21-p1-pre025-'));
-    for (const filename of migrationFiles(MIGRATIONS).filter(name => name !== KNOWLEDGE_MIGRATION)) {
+    part1Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m21-p1-through025-'));
+    for (const filename of migrationFiles(MIGRATIONS).filter(name => name < KNOWLEDGE_MIGRATION)) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(preKnowledgeDirectory, filename));
+    }
+    for (const filename of migrationFiles(MIGRATIONS).filter(name => name <= KNOWLEDGE_MIGRATION)) {
+      fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(part1Directory, filename));
     }
     jest.resetModules();
     db = require('../../src/db');
@@ -92,8 +97,8 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
     expect((await upgradePool.query(
       "SELECT to_regclass('public.canonical_knowledge_entries') AS entries"
     )).rows).toEqual([{ entries: null }]);
-    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: MIGRATIONS })).toBe(true);
-    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: MIGRATIONS })).toBe(true);
+    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: part1Directory })).toBe(true);
+    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: part1Directory })).toBe(true);
 
     await seedActor(freshPool, ORG_A, OWNER_A, 'owner', 'owner-a');
     await seedActor(freshPool, ORG_A, MEMBER_A, 'member', 'member-a');
@@ -107,6 +112,9 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
     } finally {
       if (preKnowledgeDirectory && path.resolve(preKnowledgeDirectory).startsWith(path.resolve(os.tmpdir()))) {
         fs.rmSync(preKnowledgeDirectory, { recursive: true, force: true });
+      }
+      if (part1Directory && path.resolve(part1Directory).startsWith(path.resolve(os.tmpdir()))) {
+        fs.rmSync(part1Directory, { recursive: true, force: true });
       }
       if (freshDatabase) await freshDatabase.cleanup();
       if (upgradeDatabase) await upgradeDatabase.cleanup();
@@ -478,7 +486,7 @@ realPostgres('Mission 21 Part 1 canonical knowledge registry', () => {
     expect(bytes.at(-1)).toBe(0x0a);
     const migration = db.loadMigrations(MIGRATIONS).find(item => item.file === KNOWLEDGE_MIGRATION);
     expect(digest(bytes.toString('utf8'))).toBe(migration.digest);
-    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: MIGRATIONS })).toBe(true);
+    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: part1Directory })).toBe(true);
     expect((await freshPool.query(
       'SELECT trim(checksum) AS checksum FROM _migrations WHERE filename = $1',
       [KNOWLEDGE_MIGRATION]

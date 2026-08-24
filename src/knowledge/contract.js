@@ -213,6 +213,23 @@ function normalizeProvenance(provenance) {
   });
 }
 
+function buildCanonicalKnowledgeDocument(fields) {
+  const document = canonicalObject({
+    applicability: fields.applicability,
+    canonicalKey: fields.canonicalKey,
+    content: fields.content,
+    entryType: fields.entryType,
+    label: fields.label,
+    origin: fields.origin,
+    reviewRequirement: fields.reviewRequirement,
+    schemaVersion: 1,
+    sensitivity: fields.sensitivity,
+  }, 'document', MAX_DOCUMENT_BYTES);
+  const canonicalDocument = canonicalStringify(document);
+  const canonicalDigest = crypto.createHash('sha256').update(canonicalDocument, 'utf8').digest('hex');
+  return Object.freeze({ document, canonicalDocument, canonicalDigest });
+}
+
 function normalizeInitialDraft(input) {
   if (!plainObject(input)) fail('knowledge_invalid_input', 'Knowledge draft input must be an object');
   const organizationId = normalizeUuid(input.organizationId, 'organizationId');
@@ -241,10 +258,16 @@ function normalizeInitialDraft(input) {
     MAX_APPLICABILITY_BYTES
   );
   const content = canonicalObject(input.content, 'content', MAX_DOCUMENT_BYTES);
+  if (content.state === 'tombstoned') {
+    fail(
+      'knowledge_initial_tombstone_invalid',
+      'Tombstoned content requires the explicit tombstone lifecycle operation'
+    );
+  }
   const reason = boundedText(input.reason, 'reason', { min: 1, max: 500, maxBytes: 2000 });
   const provenance = normalizeProvenance(input.provenance);
 
-  const document = canonicalObject({
+  const canonical = buildCanonicalKnowledgeDocument({
     applicability,
     canonicalKey,
     content,
@@ -252,11 +275,8 @@ function normalizeInitialDraft(input) {
     label,
     origin,
     reviewRequirement,
-    schemaVersion: 1,
     sensitivity,
-  }, 'document', MAX_DOCUMENT_BYTES);
-  const canonicalDocument = canonicalStringify(document);
-  const canonicalDigest = crypto.createHash('sha256').update(canonicalDocument, 'utf8').digest('hex');
+  });
 
   return Object.freeze({
     organizationId,
@@ -271,9 +291,9 @@ function normalizeInitialDraft(input) {
     content,
     reason,
     provenance: Object.freeze(provenance.map(item => Object.freeze(item))),
-    document,
-    canonicalDocument,
-    canonicalDigest,
+    document: canonical.document,
+    canonicalDocument: canonical.canonicalDocument,
+    canonicalDigest: canonical.canonicalDigest,
   });
 }
 
@@ -287,8 +307,10 @@ module.exports = {
   REVIEW_REQUIREMENTS,
   SENSITIVITIES,
   SOURCE_TYPES,
+  buildCanonicalKnowledgeDocument,
   canonicalObject,
   canonicalStringify,
   normalizeInitialDraft,
+  normalizeProvenance,
   normalizeUuid,
 };

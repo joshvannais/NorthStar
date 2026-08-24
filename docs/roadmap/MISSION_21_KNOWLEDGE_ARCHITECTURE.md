@@ -126,3 +126,34 @@ Part 3 is complete only when all of the following are true:
   event. The publication record is append-only; no provider projection or synchronization occurs.
 - Part 3 adds no HTTP route, browser UI, provider mapping/call, tool authorization, scheduling,
   pricing decision, recording/AI-identity language, credential, or production configuration.
+
+## Part 4 acceptance contract
+
+Part 4 is complete only when all of the following are true:
+
+- Every later version requires an active individual owner or administrator and pins the exact
+  latest parent by tenant, entry, immutable version ID, version number, and canonical digest
+  inside the same serializable transaction that writes the next version.
+- Database authority independently locks the entry and requires an unbroken, gap-free parent
+  chain. A stale parent, duplicate version number, serialization conflict, authorization change,
+  or malformed direct write leaves no version, provenance, or audit residue.
+- A revision is a non-empty canonical document change with exact parent provenance plus at least
+  one bounded change-source link. It cannot disguise a tombstone or revise a tombstoned head.
+- A tombstone is a deterministic, non-destructive new version whose content state is exactly
+  `tombstoned`. It preserves the prior label, sensitivity, review requirement, and applicability,
+  and records the exact parent as its only source; repeated tombstones fail closed.
+- Rollback never moves or mutates a version/publication pointer. It creates a new version that
+  exactly copies a selected earlier non-tombstone document, pins both the current parent and the
+  rollback target, rejects no-op or forward targets, and records both as exact provenance.
+- Initial, revised, tombstoned, and rollback-created versions have distinct reciprocal audit
+  actions. Actor, reason, database-owned time, version number, parent/target IDs, digest, and
+  provenance must identify one exact immutable graph for repository and direct database writes.
+- Creating a later version does not change the current publication. Revisions, tombstones, and
+  rollbacks remain drafts and must pass the existing exact-diff review, approval class, and atomic
+  publication workflow before later consumers may observe them.
+- Complete lifecycle history is append-only and owner/admin readable with version, parent,
+  rollback target, canonical digest, provenance, actor, reason, action, and time evidence. Existing
+  sensitivity rules for exact-version reads remain in force.
+- Part 4 adds no HTTP route, browser UI, retrieval/ranking, provider projection/synchronization,
+  tool authorization, scheduling, pricing decision, recording/AI-identity language, credential,
+  or production configuration.

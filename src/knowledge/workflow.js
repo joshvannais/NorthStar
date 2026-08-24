@@ -127,13 +127,17 @@ function equalCanonical(left, right) {
   return canonicalStringify(left) === canonicalStringify(right);
 }
 
+function compareUtf8(left, right) {
+  return Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'));
+}
+
 function collectDiff(base, target, path, operations) {
   if (equalCanonical(base, target)) return;
   const baseObject = base !== null && typeof base === 'object' && !Array.isArray(base);
   const targetObject = target !== null && typeof target === 'object' && !Array.isArray(target);
   if (baseObject && targetObject) {
-    const baseKeys = Object.keys(base);
-    const targetKeys = Object.keys(target);
+    const baseKeys = Object.keys(base).sort(compareUtf8);
+    const targetKeys = Object.keys(target).sort(compareUtf8);
     const targetSet = new Set(targetKeys);
     for (const key of baseKeys) {
       if (!targetSet.has(key)) operations.push({ op: 'remove', path: `${path}/${escapePointer(key)}` });

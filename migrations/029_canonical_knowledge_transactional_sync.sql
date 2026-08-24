@@ -520,6 +520,452 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
 
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_sync_pick_fields(
+  source_value JSONB,
+  allowed_fields TEXT[]
+) RETURNS JSONB AS $$
+  SELECT COALESCE(jsonb_object_agg(field.key, field.value), '{}'::jsonb)
+    FROM jsonb_each(
+      CASE WHEN jsonb_typeof(source_value) = 'object' THEN source_value ELSE '{}'::jsonb END
+    ) AS field(key, value)
+   WHERE field.key = ANY(allowed_fields);
+$$ LANGUAGE sql IMMUTABLE PARALLEL SAFE SET search_path = pg_catalog;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_sync_customer_content(
+  canonical_key_value TEXT,
+  document_value JSONB
+) RETURNS JSONB AS $$
+DECLARE
+  facts_value JSONB := document_value->'content'->'facts';
+  services_value JSONB;
+BEGIN
+  IF jsonb_typeof(document_value->'content') <> 'object'
+     OR jsonb_typeof(facts_value) <> 'object' THEN
+    RAISE EXCEPTION 'Published knowledge does not satisfy its projection shape'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_projection_content_shape';
+  END IF;
+  IF canonical_key_value = 'organization.identity' THEN
+    RETURN public.canonical_knowledge_sync_pick_fields(
+      facts_value, ARRAY['businessDescription', 'industry']
+    ) || jsonb_build_object(
+      'company', public.canonical_knowledge_sync_pick_fields(
+        facts_value->'company', ARRAY['dba', 'name', 'phone', 'website']
+      )
+    );
+  ELSIF canonical_key_value = 'organization.availability' THEN
+    RETURN public.canonical_knowledge_sync_pick_fields(facts_value, ARRAY['hours']) ||
+      jsonb_build_object(
+        'serviceArea', public.canonical_knowledge_sync_pick_fields(
+          facts_value->'serviceArea',
+          ARRAY['maxRadiusMiles', 'maxTravelMinutes', 'primaryTerritory']
+        )
+      );
+  ELSIF canonical_key_value = 'organization.services' THEN
+    SELECT COALESCE(jsonb_agg(
+             public.canonical_knowledge_sync_pick_fields(
+               service.value,
+               ARRAY['active', 'category', 'description', 'id', 'name']
+             ) ORDER BY service.ordinality
+           ), '[]'::jsonb)
+      INTO services_value
+      FROM jsonb_array_elements(
+        CASE WHEN jsonb_typeof(facts_value->'services') = 'array'
+          THEN facts_value->'services' ELSE '[]'::jsonb END
+      ) WITH ORDINALITY AS service(value, ordinality)
+     WHERE jsonb_typeof(service.value) = 'object';
+    RETURN jsonb_build_object('services', services_value);
+  ELSIF canonical_key_value = 'organization.customer-guidance' THEN
+    RETURN public.canonical_knowledge_sync_pick_fields(
+      facts_value, ARRAY['companyValues', 'emergencyPolicy', 'faq', 'policies']
+    );
+  ELSIF canonical_key_value = 'organization.voice-guidance' THEN
+    RETURN jsonb_build_object(
+      'voiceAssistant', public.canonical_knowledge_sync_pick_fields(
+        facts_value->'voiceAssistant',
+        ARRAY['conversationStyle', 'greeting', 'name', 'personality', 'style']
+      )
+    );
+  END IF;
+  RAISE EXCEPTION 'Requested customer capability is not allowed'
+    USING ERRCODE = '23514',
+          CONSTRAINT = 'canonical_knowledge_sync_projection_customer_capability';
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = pg_catalog, public;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_sync_applicability_allows(
+  document_value JSONB,
+  consumer_value TEXT,
+  audience_value TEXT,
+  capability_value TEXT
+) RETURNS BOOLEAN AS $$
+DECLARE
+  projection_value JSONB := document_value->'applicability'->'projection';
+  field_name TEXT;
+  field_value JSONB;
+  expected_value TEXT;
+  allowed_values TEXT[];
+  item_count INTEGER;
+  distinct_count INTEGER;
+BEGIN
+  IF projection_value IS NULL THEN RETURN TRUE; END IF;
+  IF jsonb_typeof(projection_value) <> 'object'
+     OR EXISTS (
+       SELECT 1 FROM jsonb_object_keys(projection_value) AS key(value)
+        WHERE key.value NOT IN ('audiences', 'capabilities', 'consumers')
+     ) THEN
+    RAISE EXCEPTION 'Published projection applicability is invalid'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_projection_applicability';
+  END IF;
+  FOR field_name, expected_value, allowed_values IN
+    VALUES
+      ('audiences', audience_value, ARRAY['customer', 'internal', 'workforce']::text[]),
+      ('capabilities', capability_value, ARRAY[
+        'availability', 'customer_guidance', 'financial_constraints', 'identity',
+        'operational_capabilities', 'services', 'voice_guidance'
+      ]::text[]),
+      ('consumers', consumer_value, ARRAY[
+        'integration_adapter', 'northstar_assistant', 'northstar_search', 'voice_runtime'
+      ]::text[])
+  LOOP
+    field_value := projection_value->field_name;
+    IF field_value IS NULL THEN CONTINUE; END IF;
+    IF jsonb_typeof(field_value) <> 'array' THEN
+      RAISE EXCEPTION 'Published projection applicability is invalid'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_projection_applicability';
+    END IF;
+    SELECT count(*), count(DISTINCT item.value)
+      INTO item_count, distinct_count
+      FROM jsonb_array_elements_text(field_value) AS item(value);
+    IF item_count > cardinality(allowed_values) OR item_count <> distinct_count
+       OR EXISTS (
+         SELECT 1 FROM jsonb_array_elements(field_value) AS item(value)
+          WHERE jsonb_typeof(item.value) <> 'string'
+             OR trim(both '"' from item.value::text) <> ALL(allowed_values)
+       ) THEN
+      RAISE EXCEPTION 'Published projection applicability is invalid'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_projection_applicability';
+    END IF;
+    IF NOT field_value ? expected_value THEN RETURN FALSE; END IF;
+  END LOOP;
+  RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = pg_catalog, public;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_sync_expected_projection(
+  organization_id_value UUID,
+  consumer_value TEXT,
+  audience_value TEXT,
+  capabilities_value JSONB,
+  maximum_entries_value INTEGER,
+  maximum_bytes_value INTEGER,
+  source_mode_value TEXT,
+  source_pins_value JSONB DEFAULT '[]'::jsonb
+) RETURNS JSONB AS $$
+DECLARE
+  source_record RECORD;
+  capability_value TEXT;
+  fixed_capability TEXT;
+  projection_value JSONB;
+  document_value JSONB;
+  item_value JSONB;
+  source_value JSONB;
+  candidate_value JSONB;
+  candidates JSONB := '[]'::jsonb;
+  items_value JSONB := '[]'::jsonb;
+  sources_value JSONB := '[]'::jsonb;
+  missing_value JSONB := '[]'::jsonb;
+  expected_value JSONB;
+  source_index INTEGER;
+  source_count INTEGER := 0;
+  candidate_count INTEGER := 0;
+  maximum_candidates INTEGER := CASE consumer_value WHEN 'voice_runtime' THEN 16 ELSE 64 END;
+BEGIN
+  IF source_mode_value NOT IN ('latest', 'pins')
+     OR jsonb_typeof(capabilities_value) <> 'array'
+     OR jsonb_typeof(source_pins_value) <> 'array' THEN
+    RAISE EXCEPTION 'Synchronization projection authority request is invalid'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_projection_authority_request';
+  END IF;
+
+  FOR source_record IN
+    WITH latest_publications AS (
+      SELECT DISTINCT ON (publication.entry_id) publication.*
+        FROM public.canonical_knowledge_publications publication
+       WHERE publication.organization_id = organization_id_value
+       ORDER BY publication.entry_id, publication.publication_number DESC, publication.id
+    ), selected AS (
+      SELECT entry.id AS entry_id, entry.canonical_key, entry.entry_type,
+             version.id AS version_id, version.version_number, version.label,
+             version.sensitivity, version.review_requirement, version.applicability,
+             version.document, version.canonical_digest,
+             publication.id AS publication_id, publication.publication_number,
+             publication.canonical_digest AS publication_digest
+        FROM latest_publications publication
+        JOIN public.canonical_knowledge_entries entry
+          ON entry.organization_id = publication.organization_id
+         AND entry.id = publication.entry_id
+        JOIN public.canonical_knowledge_versions version
+          ON version.organization_id = publication.organization_id
+         AND version.entry_id = publication.entry_id AND version.id = publication.version_id
+       WHERE source_mode_value = 'latest'
+         AND (
+           entry.canonical_key = ANY(ARRAY[
+             CASE WHEN capabilities_value ? 'availability'
+               THEN 'organization.availability' END,
+             CASE WHEN capabilities_value ? 'customer_guidance'
+               THEN 'organization.customer-guidance' END,
+             CASE WHEN capabilities_value ? 'financial_constraints'
+               THEN 'organization.financial-constraints' END,
+             CASE WHEN capabilities_value ? 'identity'
+               THEN 'organization.identity' END,
+             CASE WHEN capabilities_value ? 'operational_capabilities'
+               THEN 'organization.operational-capabilities' END,
+             CASE WHEN capabilities_value ? 'services'
+               THEN 'organization.services' END,
+             CASE WHEN capabilities_value ? 'voice_guidance'
+               THEN 'organization.voice-guidance' END
+           ]::text[])
+           OR (
+             audience_value <> 'customer'
+             AND jsonb_typeof(version.applicability->'projection'->'capabilities') = 'array'
+             AND (version.applicability->'projection'->'capabilities') ?|
+               ARRAY(SELECT value FROM jsonb_array_elements_text(capabilities_value))
+             AND (
+               version.applicability->'projection'->'consumers' IS NULL
+               OR (
+                 jsonb_typeof(version.applicability->'projection'->'consumers') = 'array'
+                 AND (version.applicability->'projection'->'consumers') ? consumer_value
+               )
+             )
+             AND (
+               version.applicability->'projection'->'audiences' IS NULL
+               OR (
+                 jsonb_typeof(version.applicability->'projection'->'audiences') = 'array'
+                 AND (version.applicability->'projection'->'audiences') ? audience_value
+               )
+             )
+           )
+         )
+      UNION ALL
+      SELECT entry.id AS entry_id, entry.canonical_key, entry.entry_type,
+             version.id AS version_id, version.version_number, version.label,
+             version.sensitivity, version.review_requirement, version.applicability,
+             version.document, version.canonical_digest,
+             publication.id AS publication_id, publication.publication_number,
+             publication.canonical_digest AS publication_digest
+        FROM jsonb_array_elements(source_pins_value) AS exact(pin)
+        JOIN public.canonical_knowledge_publications publication
+          ON publication.organization_id = organization_id_value
+         AND publication.id = (exact.pin->>'publicationId')::uuid
+         AND publication.entry_id = (exact.pin->>'entryId')::uuid
+         AND publication.version_id = (exact.pin->>'versionId')::uuid
+        JOIN public.canonical_knowledge_entries entry
+          ON entry.organization_id = publication.organization_id
+         AND entry.id = publication.entry_id
+        JOIN public.canonical_knowledge_versions version
+          ON version.organization_id = publication.organization_id
+         AND version.entry_id = publication.entry_id AND version.id = publication.version_id
+       WHERE source_mode_value = 'pins'
+    )
+    SELECT * FROM selected
+     ORDER BY canonical_key COLLATE "C", publication_id
+  LOOP
+    source_count := source_count + 1;
+    IF source_count > maximum_candidates THEN
+      RAISE EXCEPTION 'Synchronization projection candidate limit was exceeded'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_projection_candidate_limit';
+    END IF;
+    IF rtrim(source_record.canonical_digest) <> rtrim(source_record.publication_digest)
+       OR source_record.document->>'canonicalKey' <> source_record.canonical_key
+       OR source_record.document->>'entryType' <> source_record.entry_type
+       OR source_record.document->>'sensitivity' <> source_record.sensitivity
+       OR source_record.document->>'reviewRequirement' <> source_record.review_requirement
+       OR source_record.document->'applicability' <> source_record.applicability THEN
+      RAISE EXCEPTION 'Published knowledge failed synchronization integrity verification'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_projection_publication_integrity';
+    END IF;
+    document_value := source_record.document;
+    fixed_capability := CASE source_record.canonical_key
+      WHEN 'organization.availability' THEN 'availability'
+      WHEN 'organization.customer-guidance' THEN 'customer_guidance'
+      WHEN 'organization.financial-constraints' THEN 'financial_constraints'
+      WHEN 'organization.identity' THEN 'identity'
+      WHEN 'organization.operational-capabilities' THEN 'operational_capabilities'
+      WHEN 'organization.services' THEN 'services'
+      WHEN 'organization.voice-guidance' THEN 'voice_guidance'
+      ELSE NULL
+    END;
+    IF fixed_capability IS NOT NULL THEN
+      IF NOT capabilities_value ? fixed_capability THEN CONTINUE; END IF;
+      FOR capability_value IN SELECT fixed_capability LOOP
+        IF NOT public.canonical_knowledge_sync_applicability_allows(
+          document_value, consumer_value, audience_value, capability_value
+        ) THEN CONTINUE; END IF;
+        source_value := jsonb_build_object(
+          'canonicalDigest', rtrim(source_record.canonical_digest),
+          'entryId', source_record.entry_id::text,
+          'publicationId', source_record.publication_id::text,
+          'publicationNumber', source_record.publication_number,
+          'versionId', source_record.version_id::text,
+          'versionNumber', source_record.version_number
+        );
+        item_value := jsonb_build_object(
+          'capability', capability_value,
+          'canonicalKey', source_record.canonical_key,
+          'entryType', source_record.entry_type,
+          'state', CASE WHEN document_value->'content'->>'state' = 'tombstoned'
+            THEN 'tombstoned' ELSE 'published' END
+        );
+        IF audience_value <> 'customer' THEN
+          item_value := item_value || jsonb_build_object('label', document_value->>'label');
+        END IF;
+        IF document_value->'content'->>'state' <> 'tombstoned' THEN
+          item_value := item_value || jsonb_build_object(
+            'content', CASE WHEN audience_value = 'customer'
+              THEN public.canonical_knowledge_sync_customer_content(
+                source_record.canonical_key, document_value
+              ) ELSE document_value->'content' END
+          );
+        END IF;
+        candidates := candidates || jsonb_build_array(jsonb_build_object(
+          'capability', capability_value,
+          'canonicalDigest', rtrim(source_record.canonical_digest),
+          'canonicalKey', source_record.canonical_key,
+          'item', item_value,
+          'source', source_value
+        ));
+      END LOOP;
+    ELSE
+      IF audience_value = 'customer' THEN CONTINUE; END IF;
+      projection_value := document_value->'applicability'->'projection';
+      IF projection_value IS NULL THEN CONTINUE; END IF;
+      IF jsonb_typeof(projection_value) <> 'object'
+         OR jsonb_typeof(projection_value->'capabilities') <> 'array'
+         OR jsonb_array_length(projection_value->'capabilities') < 1 THEN
+        RAISE EXCEPTION 'Published projection applicability is invalid'
+          USING ERRCODE = '23514',
+                CONSTRAINT = 'canonical_knowledge_sync_projection_applicability';
+      END IF;
+      FOR capability_value IN
+        SELECT DISTINCT capability.value
+          FROM jsonb_array_elements_text(projection_value->'capabilities') capability(value)
+         ORDER BY capability.value COLLATE "C"
+      LOOP
+        IF capability_value NOT IN (
+          'availability', 'customer_guidance', 'financial_constraints', 'identity',
+          'operational_capabilities', 'services', 'voice_guidance'
+        ) THEN
+          RAISE EXCEPTION 'Published projection applicability is invalid'
+            USING ERRCODE = '23514',
+                  CONSTRAINT = 'canonical_knowledge_sync_projection_applicability';
+        END IF;
+        IF NOT capabilities_value ? capability_value OR NOT
+          public.canonical_knowledge_sync_applicability_allows(
+            document_value, consumer_value, audience_value, capability_value
+          ) THEN CONTINUE; END IF;
+        source_value := jsonb_build_object(
+          'canonicalDigest', rtrim(source_record.canonical_digest),
+          'entryId', source_record.entry_id::text,
+          'publicationId', source_record.publication_id::text,
+          'publicationNumber', source_record.publication_number,
+          'versionId', source_record.version_id::text,
+          'versionNumber', source_record.version_number
+        );
+        item_value := jsonb_build_object(
+          'capability', capability_value,
+          'canonicalKey', source_record.canonical_key,
+          'entryType', source_record.entry_type,
+          'label', document_value->>'label',
+          'state', CASE WHEN document_value->'content'->>'state' = 'tombstoned'
+            THEN 'tombstoned' ELSE 'published' END
+        );
+        IF document_value->'content'->>'state' <> 'tombstoned' THEN
+          item_value := item_value || jsonb_build_object('content', document_value->'content');
+        END IF;
+        candidates := candidates || jsonb_build_array(jsonb_build_object(
+          'capability', capability_value,
+          'canonicalDigest', rtrim(source_record.canonical_digest),
+          'canonicalKey', source_record.canonical_key,
+          'item', item_value,
+          'source', source_value
+        ));
+      END LOOP;
+    END IF;
+  END LOOP;
+
+  FOR capability_value IN
+    SELECT value FROM jsonb_array_elements_text(capabilities_value) capability(value)
+     ORDER BY value COLLATE "C"
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(candidates) candidate(value)
+       WHERE candidate.value->>'capability' = capability_value
+    ) THEN
+      missing_value := missing_value || jsonb_build_array(capability_value);
+    END IF;
+  END LOOP;
+  IF jsonb_array_length(missing_value) > 0 THEN
+    RAISE EXCEPTION 'The exact requested synchronization projection is incomplete'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_projection_complete';
+  END IF;
+
+  FOR candidate_value IN
+    SELECT candidate.value
+      FROM jsonb_array_elements(candidates) candidate(value)
+     ORDER BY candidate.value->>'capability' COLLATE "C",
+              candidate.value->>'canonicalKey' COLLATE "C",
+              candidate.value->>'canonicalDigest' COLLATE "C"
+  LOOP
+    candidate_count := candidate_count + 1;
+    IF candidate_count > maximum_entries_value THEN
+      RAISE EXCEPTION 'The exact requested synchronization projection exceeds its entry limit'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_projection_entry_limit';
+    END IF;
+    SELECT source.ordinality::integer - 1 INTO source_index
+      FROM jsonb_array_elements(sources_value) WITH ORDINALITY AS source(value, ordinality)
+     WHERE source.value = candidate_value->'source'
+     LIMIT 1;
+    IF source_index IS NULL THEN
+      source_index := jsonb_array_length(sources_value);
+      sources_value := sources_value || jsonb_build_array(candidate_value->'source');
+    END IF;
+    items_value := items_value || jsonb_build_array(
+      (candidate_value->'item') || jsonb_build_object('sourceIndex', source_index)
+    );
+    source_index := NULL;
+  END LOOP;
+
+  expected_value := jsonb_build_object(
+    'audience', audience_value,
+    'capabilities', capabilities_value,
+    'consumer', consumer_value,
+    'contract', 'NorthStarKnowledgeProjection/v1',
+    'items', items_value,
+    'missingCapabilities', missing_value,
+    'organizationId', organization_id_value::text,
+    'queryDigest', NULL,
+    'selection', 'exact_pins',
+    'sources', sources_value,
+    'truncated', FALSE
+  );
+  IF octet_length(public.canonical_knowledge_render_jsonb(expected_value)) > maximum_bytes_value THEN
+    RAISE EXCEPTION 'The exact requested synchronization projection exceeds its byte limit'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_projection_byte_limit';
+  END IF;
+  RETURN expected_value;
+END;
+$$ LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public;
+
 CREATE OR REPLACE FUNCTION public.canonical_knowledge_assign_sync_outbox_identity()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -593,6 +1039,7 @@ DECLARE
   seen_entries JSONB := '{}'::jsonb;
   seen_publications JSONB := '{}'::jsonb;
   publication_record RECORD;
+  expected_projection JSONB;
 BEGIN
   FOR pin IN SELECT value FROM jsonb_array_elements(NEW.source_pins)
   LOOP
@@ -633,6 +1080,10 @@ BEGIN
   END LOOP;
 
   IF NEW.state = 'pending' THEN
+    expected_projection := public.canonical_knowledge_sync_expected_projection(
+      NEW.organization_id, NEW.consumer, NEW.audience, NEW.capabilities,
+      NEW.maximum_entries, NEW.maximum_bytes, 'latest', NEW.source_pins
+    );
     IF jsonb_array_length(NEW.source_pins) < 1
        OR NEW.desired_projection->>'contract' <> 'NorthStarKnowledgeProjection/v1'
        OR NEW.desired_projection->>'organizationId' <> NEW.organization_id::text
@@ -643,6 +1094,8 @@ BEGIN
        OR NEW.desired_projection->'sources' <> NEW.source_pins
        OR NEW.desired_projection->>'queryDigest' IS NOT NULL
        OR NEW.desired_projection->>'truncated' <> 'false'
+       OR NEW.source_pins <> expected_projection->'sources'
+       OR NEW.desired_projection <> expected_projection
        OR NEW.diagnostic_category IS NOT NULL THEN
       RAISE EXCEPTION 'Synchronization desired projection does not match its target and pins'
         USING ERRCODE = '23514',
@@ -715,10 +1168,17 @@ BEGIN
               CONSTRAINT = 'canonical_knowledge_sync_outbox_claim_transition';
     END IF;
   ELSIF OLD.state = 'claimed' AND NEW.state = 'claimed' THEN
-    IF NEW.claim_token <> OLD.claim_token
+    IF OLD.lease_expires_at <= statement_timestamp()
+       OR NEW.claim_token <> OLD.claim_token
        OR NEW.attempt_count <> OLD.attempt_count
        OR NEW.reconciliation_generation <> OLD.reconciliation_generation
-       OR NEW.lease_expires_at <= OLD.lease_expires_at THEN
+       OR NEW.lease_expires_at <= OLD.lease_expires_at
+       OR NEW.observed_projection_digest IS DISTINCT FROM OLD.observed_projection_digest
+       OR NEW.diagnostic_category IS DISTINCT FROM OLD.diagnostic_category
+       OR NEW.available_at IS DISTINCT FROM OLD.available_at
+       OR NEW.succeeded_at IS DISTINCT FROM OLD.succeeded_at
+       OR NEW.dead_at IS DISTINCT FROM OLD.dead_at
+       OR NEW.blocked_at IS DISTINCT FROM OLD.blocked_at THEN
       RAISE EXCEPTION 'Synchronization lease renewal is invalid'
         USING ERRCODE = '23514',
               CONSTRAINT = 'canonical_knowledge_sync_outbox_lease_transition';
@@ -732,6 +1192,19 @@ BEGIN
       RAISE EXCEPTION 'Synchronization finalization transition is invalid'
         USING ERRCODE = '23514',
               CONSTRAINT = 'canonical_knowledge_sync_outbox_finalize_transition';
+    END IF;
+    IF OLD.lease_expires_at <= statement_timestamp() THEN
+      IF NEW.state = 'succeeded'
+         OR NEW.diagnostic_category <> 'claim_expired'
+         OR NEW.observed_projection_digest IS DISTINCT FROM OLD.observed_projection_digest THEN
+        RAISE EXCEPTION 'Expired synchronization ownership cannot finalize provider state'
+          USING ERRCODE = '23514',
+                CONSTRAINT = 'canonical_knowledge_sync_outbox_expired_finalize';
+      END IF;
+    ELSIF NEW.diagnostic_category = 'claim_expired' THEN
+      RAISE EXCEPTION 'Unexpired synchronization ownership cannot be recovered as expired'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_outbox_unexpired_recovery';
     END IF;
   ELSIF OLD.state = 'retry' AND NEW.state = 'retry' THEN
     IF NEW.attempt_count <> OLD.attempt_count
@@ -883,7 +1356,28 @@ BEGIN
        AND outbox.target_id = NEW.target_id AND outbox.id = NEW.observed_event_id;
     IF NOT FOUND OR event_record.target_sequence <> NEW.observed_sequence
        OR rtrim(event_record.observed_projection_digest) IS DISTINCT FROM
-          rtrim(NEW.observed_projection_digest) THEN
+          rtrim(NEW.observed_projection_digest)
+       OR NOT (
+         (event_record.state IN ('succeeded', 'retry', 'dead') AND EXISTS (
+           SELECT 1 FROM public.canonical_knowledge_sync_attempts attempt
+            WHERE attempt.organization_id = NEW.organization_id
+              AND attempt.target_id = NEW.target_id
+              AND attempt.outbox_id = NEW.observed_event_id
+              AND attempt.outcome = 'succeeded'
+              AND rtrim(attempt.observed_projection_digest) =
+                  rtrim(NEW.observed_projection_digest)
+         ))
+         OR
+         (event_record.state IN ('retry', 'dead') AND EXISTS (
+           SELECT 1 FROM public.canonical_knowledge_sync_attempts attempt
+            WHERE attempt.organization_id = NEW.organization_id
+              AND attempt.target_id = NEW.target_id
+              AND attempt.outbox_id = NEW.observed_event_id
+              AND attempt.outcome = 'drift'
+              AND rtrim(attempt.observed_projection_digest) =
+                  rtrim(NEW.observed_projection_digest)
+         ))
+       ) THEN
       RAISE EXCEPTION 'Synchronization observed pointer is not exact'
         USING ERRCODE = '23514',
               CONSTRAINT = 'canonical_knowledge_sync_states_observed_exact';
@@ -893,7 +1387,10 @@ BEGIN
     SELECT * INTO event_record FROM public.canonical_knowledge_sync_outbox outbox
      WHERE outbox.organization_id = NEW.organization_id
        AND outbox.target_id = NEW.target_id AND outbox.id = NEW.last_known_good_event_id;
-    IF NOT FOUND OR event_record.target_sequence <> NEW.last_known_good_sequence
+    IF NOT FOUND OR event_record.state NOT IN ('succeeded', 'retry', 'dead')
+       OR event_record.target_sequence <> NEW.last_known_good_sequence
+       OR rtrim(event_record.observed_projection_digest) <>
+          rtrim(NEW.last_known_good_projection_digest)
        OR rtrim(event_record.projection_digest) <> rtrim(NEW.last_known_good_projection_digest)
        OR NOT EXISTS (
          SELECT 1 FROM public.canonical_knowledge_sync_attempts attempt
@@ -901,6 +1398,8 @@ BEGIN
             AND attempt.target_id = NEW.target_id
             AND attempt.outbox_id = NEW.last_known_good_event_id
             AND attempt.outcome = 'succeeded'
+            AND rtrim(attempt.observed_projection_digest) =
+                rtrim(NEW.last_known_good_projection_digest)
        ) THEN
       RAISE EXCEPTION 'Synchronization last-known-good pointer is not exact'
         USING ERRCODE = '23514',

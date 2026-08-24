@@ -222,10 +222,17 @@ Part 6 is complete only when all of the following are true:
   source pins, canonical projection bytes, and projection digest before transport. An incomplete,
   missing, malformed, oversized, stale, cross-tenant, or digest-mismatched projection fails closed;
   no subset is transported and canonical publication is never rolled back to satisfy a provider.
+  The durable database boundary independently reconstructs that exact projection and preserves its
+  semantic source order; application-supplied projection bytes, digests, or reordered pins cannot
+  establish synchronization authority. The worker independently repeats the exact-pin verification
+  from immutable publications immediately before provider transport.
 - Claiming is bounded and lease-owned. Work is claimed with `SKIP LOCKED` only in per-target sequence
   after earlier nonterminal work, receives one stable idempotency key for all attempts, and can be
   finalized or renewed only by its current unexpired claim. Crashes and expired leases recover
   deterministically; ambiguous provider acceptance retries with the same idempotency identity.
+  Every renewal, finalization, recovery transition, and observed/last-known-good advancement requires
+  the exact claim token and state plus authoritative database-time lease validity in the same atomic
+  mutation, so a stale worker cannot commit provider results after expiration or reclaim.
 - Retry count, exponential backoff, lease duration, batch size, diagnostic category, diagnostic
   bytes, and reconciliation batches are bounded. Exhaustion becomes an explicit dead-letter state;
   stale claim tokens, invalid transitions, repeated finalization, oversized or malformed provider

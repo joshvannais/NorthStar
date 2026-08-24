@@ -17,7 +17,7 @@ const {
   normalizeTrigger,
   retryDelaySeconds,
 } = require('./synchronization');
-const { normalizeUuid } = require('./contract');
+const { canonicalStringify, normalizeUuid } = require('./contract');
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
@@ -258,6 +258,44 @@ async function loadProjectionRows(client, target) {
       'knowledge_sync_candidate_limit_exceeded',
       'Synchronization projection candidate limit was exceeded',
       413
+    );
+  }
+  return result.rows;
+}
+
+async function loadExactProjectionRows(client, organizationId, sourcePins) {
+  const publicationIds = sourcePins.map(pin => pin.publicationId);
+  const result = await client.query(
+    `SELECT entry.id AS entry_id,
+            entry.canonical_key,
+            entry.entry_type,
+            version.id AS version_id,
+            version.version_number,
+            version.sensitivity,
+            version.review_requirement,
+            version.canonical_document,
+            version.canonical_digest,
+            publication.id AS publication_id,
+            publication.publication_number,
+            publication.canonical_digest AS publication_digest
+       FROM canonical_knowledge_publications publication
+       JOIN canonical_knowledge_entries entry
+         ON entry.organization_id = publication.organization_id
+        AND entry.id = publication.entry_id
+       JOIN canonical_knowledge_versions version
+         ON version.organization_id = publication.organization_id
+        AND version.entry_id = publication.entry_id
+        AND version.id = publication.version_id
+      WHERE publication.organization_id = $1
+        AND publication.id = ANY($2::uuid[])
+      ORDER BY entry.canonical_key, publication.id`,
+    [organizationId, publicationIds]
+  );
+  if (result.rowCount !== sourcePins.length) {
+    fail(
+      'knowledge_sync_projection_integrity_failure',
+      'Synchronization projection sources are no longer exact',
+      503
     );
   }
   return result.rows;
@@ -681,6 +719,76 @@ class KnowledgeSynchronizationRepository {
     }, 'READ COMMITTED');
   }
 
+  async verifyJobProjection(input) {
+    const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
+    const id = normalizeUuid(input && input.id, 'id');
+    const claimToken = normalizeUuid(input && input.claimToken, 'claimToken');
+    try {
+      return await withTransaction(this.pool, async client => {
+        const selected = await client.query(
+          `SELECT outbox.*, target.updated_by_user_id AS verifier_user_id
+             FROM canonical_knowledge_sync_outbox outbox
+             JOIN canonical_knowledge_sync_targets target
+               ON target.organization_id = outbox.organization_id
+              AND target.id = outbox.target_id
+            WHERE outbox.organization_id = $1 AND outbox.id = $2
+              AND outbox.state = 'claimed' AND outbox.claim_token = $3
+              AND outbox.lease_expires_at > statement_timestamp()
+            FOR SHARE OF outbox, target`,
+          [organizationId, id, claimToken]
+        );
+        if (selected.rowCount !== 1) return null;
+        const row = selected.rows[0];
+        const job = mapOutbox(row);
+        if (!job.projection || !job.canonicalProjection || !job.projectionDigest ||
+            !Array.isArray(job.sourcePins) || job.sourcePins.length < 1) {
+          fail(
+            'knowledge_sync_projection_integrity_failure',
+            'Synchronization projection evidence is incomplete',
+            503
+          );
+        }
+        const databaseProjection = (await client.query(
+          `SELECT public.canonical_knowledge_sync_expected_projection(
+             $1, $2, $3, $4::jsonb, $5, $6, 'pins', $7::jsonb
+           ) AS projection`,
+          [
+            job.organizationId, job.consumer, job.audience,
+            JSON.stringify(job.capabilities), job.maximumEntries, job.maximumBytes,
+            JSON.stringify(job.sourcePins),
+          ]
+        )).rows[0].projection;
+        const rows = await loadExactProjectionRows(client, job.organizationId, job.sourcePins);
+        const rebuilt = buildKnowledgeProjection(
+          targetProjectionRequest(row, row.verifier_user_id, job.sourcePins),
+          rows
+        );
+        const sourceIdentity = canonicalStringify(job.sourcePins);
+        if (rebuilt.canonicalProjection !== job.canonicalProjection ||
+            rebuilt.projectionDigest !== job.projectionDigest ||
+            canonicalStringify(rebuilt.projection) !== canonicalStringify(job.projection) ||
+            canonicalStringify(rebuilt.projection.sources) !== sourceIdentity ||
+            canonicalStringify(databaseProjection) !== canonicalStringify(rebuilt.projection) ||
+            canonicalStringify(databaseProjection.sources) !== sourceIdentity) {
+          fail(
+            'knowledge_sync_projection_integrity_failure',
+            'Synchronization projection failed exact source verification',
+            503
+          );
+        }
+        return Object.freeze({
+          ...job,
+          canonicalProjection: rebuilt.canonicalProjection,
+          projection: rebuilt.projection,
+          projectionDigest: rebuilt.projectionDigest,
+          sourcePins: rebuilt.projection.sources,
+        });
+      }, 'READ COMMITTED');
+    } catch (error) {
+      throw mapDatabaseError(error);
+    }
+  }
+
   async finalizeJob(input) {
     const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
     const id = normalizeUuid(input && input.id, 'id');
@@ -700,8 +808,7 @@ class KnowledgeSynchronizationRepository {
         );
         if (selected.rowCount !== 1) return null;
         const job = selected.rows[0];
-        if (job.state !== 'claimed' || job.claim_token !== claimToken ||
-            new Date(job.lease_expires_at).getTime() <= Date.now()) return null;
+        if (job.state !== 'claimed' || job.claim_token !== claimToken) return null;
         const exactSuccess = accepted && observedDigest === String(job.projection_digest).trim();
         const drift = accepted && !exactSuccess;
         const category = drift ? 'projection_digest_mismatch' : requestedCategory;
@@ -719,7 +826,8 @@ class KnowledgeSynchronizationRepository {
                     ELSE available_at END,
                   succeeded_at = CASE WHEN $4::text = 'succeeded' THEN statement_timestamp() ELSE NULL END,
                   dead_at = CASE WHEN $4::text = 'dead' THEN statement_timestamp() ELSE NULL END
-            WHERE organization_id = $1 AND id = $2 AND claim_token = $3
+            WHERE organization_id = $1 AND id = $2 AND state = 'claimed'
+              AND claim_token = $3 AND lease_expires_at > statement_timestamp()
             RETURNING *`,
           [organizationId, id, claimToken, nextState, observedDigest, category, delay]
         );
@@ -804,16 +912,19 @@ class KnowledgeSynchronizationRepository {
         const terminal = Number(job.attempt_count) >= MAX_ATTEMPTS;
         const nextState = terminal ? 'dead' : 'retry';
         const delay = terminal ? 0 : retryDelaySeconds(Number(job.attempt_count));
-        await client.query(
+        const recovered = await client.query(
           `UPDATE canonical_knowledge_sync_outbox
               SET state = $3::text, claim_token = NULL, claimed_at = NULL, lease_expires_at = NULL,
                   diagnostic_category = 'claim_expired',
                   available_at = CASE WHEN $3::text = 'retry'
                     THEN statement_timestamp() + ($4::text || ' seconds')::interval ELSE available_at END,
                   dead_at = CASE WHEN $3::text = 'dead' THEN statement_timestamp() ELSE NULL END
-            WHERE organization_id = $1 AND id = $2`,
-          [job.organization_id, job.id, nextState, delay]
+            WHERE organization_id = $1 AND id = $2 AND state = 'claimed'
+              AND claim_token = $5 AND lease_expires_at <= statement_timestamp()
+            RETURNING id`,
+          [job.organization_id, job.id, nextState, delay, job.claim_token]
         );
+        if (recovered.rowCount !== 1) continue;
         await client.query(
           `UPDATE canonical_knowledge_sync_attempts
               SET outcome = 'claim_expired', diagnostic_category = 'claim_expired',
@@ -954,6 +1065,7 @@ module.exports = {
   enqueuePublicationSynchronization,
   enqueueTargetDesiredState,
   loadProjectionRows,
+  loadExactProjectionRows,
   mapOutbox,
   mapState,
   mapTarget,

@@ -161,6 +161,10 @@ describe('Mission 21 Part 6 intercepted provider-neutral worker', () => {
       async reconcileStaleTargets() { return 0; },
       async claimJobs() { return calls.length === 0 ? [queued] : []; },
       async renewLease(input) { calls.push({ renew: input }); return queued; },
+      async verifyJobProjection(input) {
+        calls.push({ verify: input });
+        return queued;
+      },
       async finalizeJob(input) { finalized.push(input); return { exactSuccess: true }; },
     };
     const providerCalls = [];
@@ -182,6 +186,11 @@ describe('Mission 21 Part 6 intercepted provider-neutral worker', () => {
       claimed: 1, expired: 0, ownershipLost: 0, stale: 0, succeeded: 1,
     });
     expect(providerCalls).toHaveLength(1);
+    expect(calls).toContainEqual({ verify: {
+      organizationId: queued.organizationId,
+      id: queued.id,
+      claimToken: queued.claimToken,
+    } });
     expect(providerCalls[0].request).toMatchObject({
       idempotencyKey: queued.idempotencyKey,
       canonicalProjection: queued.canonicalProjection,
@@ -224,6 +233,7 @@ describe('Mission 21 Part 6 intercepted provider-neutral worker', () => {
       const finalized = [];
       const mockRepository = {
         async renewLease() { return queued; },
+        async verifyJobProjection() { return queued; },
         async finalizeJob(input) { finalized.push(input); return { exactSuccess: false }; },
       };
       const worker = new KnowledgeSynchronizationWorker({
@@ -239,5 +249,33 @@ describe('Mission 21 Part 6 intercepted provider-neutral worker', () => {
       expect(JSON.stringify(finalized)).not.toContain('private body');
       expect(JSON.stringify(finalized)).not.toContain('leak');
     }
+  });
+
+  test('fails closed before transport when exact projection revalidation fails', async () => {
+    const queued = job();
+    const provider = jest.fn();
+    const finalized = [];
+    const worker = new KnowledgeSynchronizationWorker({
+      repository: {
+        async renewLease() { return queued; },
+        async verifyJobProjection() {
+          const error = new Error('forged private tenant material');
+          error.code = 'knowledge_sync_projection_integrity_failure';
+          throw error;
+        },
+        async finalizeJob(input) {
+          finalized.push(input);
+          return { exactSuccess: false };
+        },
+      },
+      transports: { 'mounted.provider-one': { applyProjection: provider } },
+    });
+    await expect(worker.deliver(queued)).resolves.toEqual({ exactSuccess: false });
+    expect(provider).not.toHaveBeenCalled();
+    expect(finalized).toEqual([expect.objectContaining({
+      accepted: false,
+      diagnosticCategory: 'integrity_failure',
+    })]);
+    expect(JSON.stringify(finalized)).not.toContain('private tenant material');
   });
 });

@@ -18,6 +18,9 @@ function boundedInteger(value, minimum, maximum, fallback) {
 }
 
 function safeFailureCategory(error) {
+  if (error && error.code === 'knowledge_sync_projection_integrity_failure') {
+    return 'integrity_failure';
+  }
   if (error && error.code === 'knowledge_sync_malformed_response') return 'malformed_response';
   if (error && error.code === 'knowledge_sync_transport_timeout') return 'transport_timeout';
   if (error && typeof error.category === 'string') {
@@ -90,21 +93,39 @@ class KnowledgeSynchronizationWorker {
     });
     if (!renewed) return { ownershipLost: true };
 
+    let verified;
+    try {
+      verified = await this.repository.verifyJobProjection({
+        organizationId: job.organizationId,
+        id: job.id,
+        claimToken: job.claimToken,
+      });
+    } catch (error) {
+      return this.repository.finalizeJob({
+        organizationId: job.organizationId,
+        id: job.id,
+        claimToken: job.claimToken,
+        accepted: false,
+        diagnosticCategory: safeFailureCategory(error),
+      });
+    }
+    if (!verified) return { ownershipLost: true };
+
     const controller = new AbortController();
     const request = Object.freeze({
-      audience: job.audience,
-      canonicalProjection: job.canonicalProjection,
-      capabilities: Object.freeze([...job.capabilities]),
-      consumer: job.consumer,
-      idempotencyKey: job.idempotencyKey,
-      organizationId: job.organizationId,
-      projection: job.projection,
-      projectionDigest: job.projectionDigest,
-      providerKey: job.providerKey,
-      sourcePins: Object.freeze(job.sourcePins.map(pin => Object.freeze({ ...pin }))),
-      targetId: job.targetId,
-      targetRevision: job.targetRevision,
-      targetSequence: job.targetSequence,
+      audience: verified.audience,
+      canonicalProjection: verified.canonicalProjection,
+      capabilities: Object.freeze([...verified.capabilities]),
+      consumer: verified.consumer,
+      idempotencyKey: verified.idempotencyKey,
+      organizationId: verified.organizationId,
+      projection: verified.projection,
+      projectionDigest: verified.projectionDigest,
+      providerKey: verified.providerKey,
+      sourcePins: Object.freeze(verified.sourcePins.map(pin => Object.freeze({ ...pin }))),
+      targetId: verified.targetId,
+      targetRevision: verified.targetRevision,
+      targetSequence: verified.targetSequence,
     });
     try {
       const result = normalizeTransportResult(await Promise.race([

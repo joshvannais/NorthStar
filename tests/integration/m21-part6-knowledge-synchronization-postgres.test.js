@@ -7,6 +7,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { digestCanonical } = require('../../src/knowledge/synchronization');
+const { canonicalStringify } = require('../../src/knowledge/contract');
 
 const ROOT = path.resolve(__dirname, '../..');
 const MIGRATIONS = path.join(ROOT, 'migrations');
@@ -465,6 +466,183 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     )).rows).toEqual([{ count: 2 }]);
   }, 120000);
 
+  test('rejects expired finalization and stale-token races under authoritative database lease time', async () => {
+    const actors = await seedActors(freshPool, 'lease-authority');
+    const sync = new SyncRepository(freshPool);
+    const target = await sync.configureTarget(targetInput(actors));
+    await completeKnowledge(knowledge, freshPool, actors, 'lease-authority');
+    const claims = await sync.claimJobs({ batchSize: 25, leaseSeconds: 5 });
+    const claimed = claims.find(job => job.targetId === target.target.id);
+    expect(claimed).toBeDefined();
+    for (const other of claims.filter(job => job.id !== claimed.id)) {
+      await sync.finalizeJob({
+        organizationId: other.organizationId,
+        id: other.id,
+        claimToken: other.claimToken,
+        accepted: true,
+        observedProjectionDigest: other.projectionDigest,
+      });
+    }
+    const before = (await freshPool.query(
+      `SELECT state, observed_event_id, last_known_good_event_id
+         FROM canonical_knowledge_sync_states state
+         JOIN canonical_knowledge_sync_outbox outbox
+           ON outbox.organization_id = state.organization_id
+          AND outbox.target_id = state.target_id
+        WHERE outbox.id = $1`,
+      [claimed.id]
+    )).rows[0];
+    expect(before).toMatchObject({
+      state: 'claimed', observed_event_id: null, last_known_good_event_id: null,
+    });
+
+    const delayedPool = {
+      async connect() {
+        const mounted = await freshPool.connect();
+        let delayed = false;
+        return {
+          async query(text, values) {
+            if (!delayed && typeof text === 'string' &&
+                text.includes('UPDATE canonical_knowledge_sync_outbox') &&
+                text.includes('SET state = $4::text')) {
+              delayed = true;
+              await new Promise(resolve => setTimeout(resolve, 5400));
+            }
+            return mounted.query(text, values);
+          },
+          release() { mounted.release(); },
+        };
+      },
+    };
+    const delayedRepository = new SyncRepository(delayedPool);
+    await expect(delayedRepository.finalizeJob({
+      organizationId: claimed.organizationId,
+      id: claimed.id,
+      claimToken: claimed.claimToken,
+      accepted: true,
+      observedProjectionDigest: claimed.projectionDigest,
+    })).resolves.toBeNull();
+    await expect(sync.renewLease({
+      organizationId: claimed.organizationId,
+      id: claimed.id,
+      claimToken: claimed.claimToken,
+      leaseSeconds: 30,
+    })).resolves.toBeNull();
+    expect((await freshPool.query(
+      `SELECT outbox.state, outbox.claim_token, attempt.outcome,
+              state.observed_event_id, state.last_known_good_event_id
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_states state
+           ON state.organization_id = outbox.organization_id
+          AND state.target_id = outbox.target_id
+         JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id AND attempt.outbox_id = outbox.id
+        WHERE outbox.id = $1`,
+      [claimed.id]
+    )).rows).toEqual([{
+      state: 'claimed', claim_token: claimed.claimToken, outcome: null,
+      observed_event_id: null, last_known_good_event_id: null,
+    }]);
+
+    await expect(freshPool.query(
+      `UPDATE canonical_knowledge_sync_outbox
+          SET lease_expires_at = statement_timestamp() + interval '30 seconds'
+        WHERE id = $1`,
+      [claimed.id]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_knowledge_sync_outbox_lease_transition',
+    });
+    await expect(freshPool.query(
+      `UPDATE canonical_knowledge_sync_outbox
+          SET state = 'succeeded', claim_token = NULL, claimed_at = NULL,
+              lease_expires_at = NULL, observed_projection_digest = projection_digest,
+              diagnostic_category = NULL, succeeded_at = statement_timestamp()
+        WHERE id = $1`,
+      [claimed.id]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_knowledge_sync_outbox_expired_finalize',
+    });
+    const direct = await freshPool.connect();
+    try {
+      await direct.query('BEGIN');
+      await direct.query(
+        `UPDATE canonical_knowledge_sync_attempts attempt
+            SET outcome = 'succeeded', observed_projection_digest = outbox.projection_digest,
+                completed_at = statement_timestamp()
+           FROM canonical_knowledge_sync_outbox outbox
+          WHERE attempt.outbox_id = $1 AND outbox.id = attempt.outbox_id
+            AND attempt.outcome IS NULL`,
+        [claimed.id]
+      );
+      await expect(direct.query(
+        `UPDATE canonical_knowledge_sync_states state
+            SET observed_event_id = outbox.id,
+                observed_sequence = outbox.target_sequence,
+                observed_projection_digest = outbox.projection_digest,
+                last_known_good_event_id = outbox.id,
+                last_known_good_sequence = outbox.target_sequence,
+                last_known_good_projection_digest = outbox.projection_digest,
+                status = 'in_sync'
+           FROM canonical_knowledge_sync_outbox outbox
+          WHERE outbox.id = $1 AND state.organization_id = outbox.organization_id
+            AND state.target_id = outbox.target_id`,
+        [claimed.id]
+      )).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_sync_states_observed_exact',
+      });
+    } finally {
+      await direct.query('ROLLBACK');
+      direct.release();
+    }
+
+    expect(await sync.recoverExpiredJobs({ batchSize: 25 })).toBeGreaterThanOrEqual(1);
+    const recovered = (await freshPool.query(
+      `SELECT state, claim_token, diagnostic_category
+         FROM canonical_knowledge_sync_outbox WHERE id = $1`,
+      [claimed.id]
+    )).rows[0];
+    expect(recovered).toEqual({
+      state: 'retry', claim_token: null, diagnostic_category: 'claim_expired',
+    });
+    await freshPool.query(
+      `UPDATE canonical_knowledge_sync_outbox SET available_at = statement_timestamp()
+        WHERE id = $1`,
+      [claimed.id]
+    );
+    const reclaimedBatch = await sync.claimJobs({ batchSize: 25, leaseSeconds: 30 });
+    const reclaimed = reclaimedBatch.find(job => job.id === claimed.id);
+    expect(reclaimed).toBeDefined();
+    expect(reclaimed.claimToken).not.toBe(claimed.claimToken);
+    await expect(sync.finalizeJob({
+      organizationId: claimed.organizationId,
+      id: claimed.id,
+      claimToken: claimed.claimToken,
+      accepted: true,
+      observedProjectionDigest: claimed.projectionDigest,
+    })).resolves.toBeNull();
+    expect((await freshPool.query(
+      `SELECT state, claim_token FROM canonical_knowledge_sync_outbox WHERE id = $1`,
+      [claimed.id]
+    )).rows).toEqual([{ state: 'claimed', claim_token: reclaimed.claimToken }]);
+    await expect(sync.finalizeJob({
+      organizationId: reclaimed.organizationId,
+      id: reclaimed.id,
+      claimToken: reclaimed.claimToken,
+      accepted: true,
+      observedProjectionDigest: reclaimed.projectionDigest,
+    })).resolves.toMatchObject({ exactSuccess: true, state: 'succeeded' });
+    expect((await sync.getTargetState({
+      organizationId: actors.organizationId,
+      actorUserId: actors.admin,
+      targetId: target.target.id,
+    })).state).toMatchObject({
+      status: 'in_sync',
+      observedEventId: reclaimed.id,
+      lastKnownGoodEventId: reclaimed.id,
+    });
+  }, 120000);
+
   test('enforces ordered claims, stable retry identity, bounded dead-letter, stale claims, and drift', async () => {
     const actors = await seedActors(freshPool, 'retries');
     const sync = new SyncRepository(freshPool);
@@ -679,6 +857,44 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     )).rejects.toMatchObject({
       code: '23514', constraint: 'canonical_knowledge_sync_outbox_source_pin_exact',
     });
+
+    const insertProjection = async (projection, sourcePins) => {
+      const canonical = canonicalStringify(projection);
+      const projectionDigest = sha256(canonical);
+      return freshPool.query(
+        `INSERT INTO canonical_knowledge_sync_outbox(
+           organization_id, target_id, target_revision, target_sequence,
+           configuration_digest, provider_key, consumer, audience, capabilities,
+           maximum_entries, maximum_bytes, trigger_type, source_pins,
+           desired_projection, canonical_projection, projection_digest,
+           idempotency_key, state
+         ) VALUES ($1,$2,$3,1,$4,$5,$6,$7,$8::jsonb,$9,$10,'reconciliation',
+                   $11::jsonb,$12::jsonb,$13,$14,NULL,'pending')`,
+        [
+          actorsA.organizationId, configured.target.id, configured.target.targetRevision,
+          configured.target.configurationDigest, configured.target.providerKey,
+          configured.target.consumer, configured.target.audience,
+          JSON.stringify(configured.target.capabilities), configured.target.maximumEntries,
+          configured.target.maximumBytes, JSON.stringify(sourcePins), canonical,
+          canonical, projectionDigest,
+        ]
+      );
+    };
+    const forgedProjection = JSON.parse(JSON.stringify(pending.desired_projection));
+    forgedProjection.items[0].content = {
+      forgedProviderInstruction: 'SEND PRIVATE TENANT MATERIAL',
+      privateTenantValue: 'DO-NOT-SYNCHRONIZE',
+    };
+    await expect(insertProjection(forgedProjection, forgedProjection.sources))
+      .rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_sync_outbox_projection_exact',
+      });
+    const reversedProjection = JSON.parse(JSON.stringify(pending.desired_projection));
+    reversedProjection.sources.reverse();
+    await expect(insertProjection(reversedProjection, reversedProjection.sources))
+      .rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_sync_outbox_projection_exact',
+      });
 
     await expect(freshPool.query(
       `UPDATE canonical_knowledge_sync_outbox

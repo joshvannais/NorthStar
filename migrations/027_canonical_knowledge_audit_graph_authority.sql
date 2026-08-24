@@ -398,6 +398,25 @@ $$ LANGUAGE sql STABLE STRICT
 
 DO $$
 BEGIN
+  -- Migration 025/026 retained no role-at-action snapshot. Fail closed when the
+  -- only surviving membership evidence cannot establish owner/admin authority.
+  -- Status is intentionally not checked: a legitimately authorized historical
+  -- owner/admin may be inactive at upgrade time without invalidating the event.
+  IF EXISTS (
+    SELECT 1
+      FROM public.canonical_knowledge_audit_events audit_event
+     WHERE NOT EXISTS (
+       SELECT 1
+         FROM public.organization_memberships membership
+        WHERE membership.organization_id = audit_event.organization_id
+          AND membership.user_id = audit_event.actor_user_id
+          AND membership.role IN ('owner', 'admin')
+     )
+  ) THEN
+    RAISE EXCEPTION 'Canonical knowledge audit actor preflight failed: existing evidence actor is not an owner or administrator'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_audit_existing_actor_unauthorized';
+  END IF;
   IF EXISTS (
     SELECT 1
       FROM public.canonical_knowledge_audit_events audit_event

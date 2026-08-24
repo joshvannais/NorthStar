@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 const { Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { normalizeInitialDraft } = require('../../src/knowledge/contract');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS = path.join(ROOT, 'migrations');
@@ -84,6 +85,75 @@ function workflowTarget(created, actorUserId, reason, overrides = {}) {
     reason,
     ...overrides,
   };
+}
+
+async function insertDirectInitialGraph(pool, key, actorUserId) {
+  const draft = normalizeInitialDraft(initialDraft(key, 'standard', {
+    actorUserId,
+    provenance: [{
+      sourceType: 'human_input',
+      sourceRecordId: actorUserId,
+      sourceVersion: '1',
+      sourceDigest: digest(`source:${key}:${actorUserId}`),
+      jsonPointer: '',
+    }],
+  }));
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const entry = (await client.query(
+      `INSERT INTO canonical_knowledge_entries
+         (organization_id, canonical_key, entry_type, created_by_user_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [draft.organizationId, draft.canonicalKey, draft.entryType, draft.actorUserId]
+    )).rows[0];
+    const version = (await client.query(
+      `INSERT INTO canonical_knowledge_versions
+         (organization_id, entry_id, version_number, schema_version, canonical_key,
+          entry_type, content_origin, label, sensitivity, review_requirement,
+          applicability, document, canonical_document, canonical_digest,
+          parent_version_id, created_by_user_id, reason)
+       VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, $8,
+               $9::jsonb, $10::jsonb, $11, $12, NULL, $13, $14)
+       RETURNING *`,
+      [
+        draft.organizationId, entry.id, draft.canonicalKey, draft.entryType,
+        draft.origin, draft.label, draft.sensitivity, draft.reviewRequirement,
+        JSON.stringify(draft.applicability), draft.canonicalDocument,
+        draft.canonicalDocument, draft.canonicalDigest, draft.actorUserId, draft.reason,
+      ]
+    )).rows[0];
+    for (const link of draft.provenance) {
+      await client.query(
+        `INSERT INTO canonical_knowledge_provenance
+           (organization_id, version_id, ordinal, source_type, source_record_id,
+            source_version, source_digest, json_pointer)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          draft.organizationId, version.id, link.ordinal, link.sourceType,
+          link.sourceRecordId, link.sourceVersion, link.sourceDigest, link.jsonPointer,
+        ]
+      );
+    }
+    await client.query(
+      `INSERT INTO canonical_knowledge_audit_events
+         (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+       VALUES ($1, $2, $3, $4, 'entry_draft_created', $5,
+               jsonb_build_object('canonicalDigest', $6::text, 'versionNumber', 1))`,
+      [
+        draft.organizationId, entry.id, version.id, draft.actorUserId,
+        draft.reason, draft.canonicalDigest,
+      ]
+    );
+    await client.query('COMMIT');
+    return { entry, version, draft };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
@@ -1355,7 +1425,7 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
           reviewEventId: crypto.randomUUID(),
           reviewRequirement: 'standard',
           snapshotId: crypto.randomUUID(),
-        }), MEMBER_A, JSON.stringify({
+        }), OWNER_A, JSON.stringify({
           canonicalDigest: poisoned.version.canonicalDigest,
           publicationId: crypto.randomUUID(),
           publicationNumber: 1,
@@ -1400,6 +1470,85 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
       if (poisonedPool) await poisonedPool.end();
       if (validDatabase) await validDatabase.cleanup();
       if (poisonedDatabase) await poisonedDatabase.cleanup();
+    }
+  }, 120000);
+
+  test('atomically refuses an exact member-authored graph retained from migration 026', async () => {
+    let memberDatabase;
+    let memberPool;
+    try {
+      memberDatabase = await createSuiteDatabase('m21-p3-audit-member');
+      memberPool = new Pool({ connectionString: memberDatabase.connectionString, max: 4 });
+      expect(await db.runMigrations({
+        pool: memberPool, migrationsDirectory: workflowDirectory,
+      })).toBe(true);
+      await seedActor(memberPool, ORG_A, MEMBER_A, 'member', 'member-upgrade-actor');
+      const retained = await insertDirectInitialGraph(
+        memberPool, 'policies.workflow.member-authored-upgrade', MEMBER_A
+      );
+      expect((await memberPool.query(
+        `SELECT membership.role, membership.status,
+                entry.created_at = version.created_at AS entry_version_time_matches,
+                version.created_at = audit_event.created_at AS version_audit_time_matches,
+                count(provenance.*)::int AS provenance_count
+           FROM organization_memberships membership
+           JOIN canonical_knowledge_entries entry
+             ON entry.organization_id = membership.organization_id
+            AND entry.created_by_user_id = membership.user_id
+           JOIN canonical_knowledge_versions version
+             ON version.organization_id = entry.organization_id
+            AND version.entry_id = entry.id
+           JOIN canonical_knowledge_audit_events audit_event
+             ON audit_event.organization_id = version.organization_id
+            AND audit_event.entry_id = version.entry_id
+            AND audit_event.version_id = version.id
+           JOIN canonical_knowledge_provenance provenance
+             ON provenance.organization_id = version.organization_id
+            AND provenance.version_id = version.id
+          WHERE membership.organization_id = $1
+            AND membership.user_id = $2
+            AND entry.id = $3
+          GROUP BY membership.role, membership.status, entry.created_at,
+                   version.created_at, audit_event.created_at`,
+        [ORG_A, MEMBER_A, retained.entry.id]
+      )).rows).toEqual([{
+        role: 'member',
+        status: 'active',
+        entry_version_time_matches: true,
+        version_audit_time_matches: true,
+        provenance_count: 1,
+      }]);
+
+      await expect(db.runMigrations({
+        pool: memberPool, migrationsDirectory: auditDirectory,
+      })).rejects.toThrow(
+        'Migration run failed: Canonical knowledge audit actor preflight failed: ' +
+        'existing evidence actor is not an owner or administrator'
+      );
+      expect((await memberPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM _migrations WHERE filename = $1) AS ledger,
+           to_regprocedure('public.canonical_knowledge_audit_graph_matches(uuid)') AS graph_function,
+           to_regclass('public.canonical_knowledge_audit_entry_draft_source_unique') AS graph_index,
+           (SELECT count(*)::int FROM pg_trigger
+             WHERE tgname = 'canonical_knowledge_audit_events_authorize_actor') AS actor_trigger,
+           (SELECT count(*)::int FROM pg_constraint
+             WHERE conname = 'canonical_knowledge_audit_events_canonical_action_check')
+             AS graph_constraint,
+           (SELECT count(*)::int FROM canonical_knowledge_audit_events
+             WHERE entry_id = $2) AS retained_audits`,
+        [AUDIT_GRAPH_MIGRATION, retained.entry.id]
+      )).rows).toEqual([{
+        ledger: 0,
+        graph_function: null,
+        graph_index: null,
+        actor_trigger: 0,
+        graph_constraint: 0,
+        retained_audits: 1,
+      }]);
+    } finally {
+      if (memberPool) await memberPool.end();
+      if (memberDatabase) await memberDatabase.cleanup();
     }
   }, 120000);
 
@@ -1496,7 +1645,7 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
       [WORKFLOW_MIGRATION,
         '76bfeec25d20cf96cb3d871d1049e83600176532f6f6a40f8c4d3164c8ea3fc7'],
       [AUDIT_GRAPH_MIGRATION,
-        '79f0508c7af0e6da9d079ff818b89b04389a0bb5820807f368ca5d81acecc838'],
+        '0b36d01ffa23286c40f0d75c9f627ab3dbefcdc480dd4d7ad000d88345df3c3e'],
     ]);
     const loaded = db.loadMigrations(MIGRATIONS);
     for (const [filename, expectedDigest] of expectedDigests) {

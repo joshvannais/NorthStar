@@ -157,3 +157,41 @@ Part 4 is complete only when all of the following are true:
 - Part 4 adds no HTTP route, browser UI, retrieval/ranking, provider projection/synchronization,
   tool authorization, scheduling, pricing decision, recording/AI-identity language, credential,
   or production configuration.
+
+## Part 5 acceptance contract
+
+Part 5 is complete only when all of the following are true:
+
+- Every preview begins with one active individual tenant membership inside a serializable,
+  read-only PostgreSQL snapshot. Voice-runtime and integration-adapter previews require an owner
+  or administrator; search and assistant previews still apply the existing exact sensitivity and
+  review-class rules for the active member before selecting any knowledge row.
+- Retrieval reads only append-only publication records joined to their exact immutable versions.
+  Latest selection pins the highest publication number per entry, exact-pin replay requires the
+  tenant-scoped publication ID/number, version ID/number, and canonical digest to agree, and a
+  newer unpublished draft is never observable.
+- Consumer, audience, capability, and supported applicability filters are explicit and bounded.
+  Customer projections cannot request financial or operational-capability knowledge. Customer
+  identity, availability, service, guidance, and voice content is field-minimized; private contact,
+  precise-location, routing, scheduling, pricing/cost, and workforce-policy fields do not enter the
+  customer projection or its ranking text.
+- Tenant/role/sensitivity authorization is enforced in the publication query before rows are
+  retrieved for ranking. Applicability and audience minimization happen before query ranking, so
+  unauthorized or excluded content cannot affect a score, source pin, count, or projected item.
+- Projection output is provider-neutral, deterministic, recursively canonical, and digest-bound.
+  It names the tenant, consumer, audience, requested capabilities, selection mode, exact sources,
+  missing capabilities, bounded items, query digest when applicable, and truncation state without
+  making a provider authoritative.
+- External-bound previews are complete-or-fail and bounded by consumer-specific entry and UTF-8
+  byte limits. Search and assistant retrieval may return bounded ranked subsets. Exact-pin mismatch,
+  integrity failure, unsupported capability, malformed applicability, incomplete external content,
+  or oversized output fails closed with no partial transport.
+- A published tombstone projects only a deterministic deletion marker and its exact publication
+  pin; it never copies removed content. A later reviewed and published rollback is observed as its
+  own new exact publication while historical pins remain replayable.
+- Stored markup, URLs, prompt instructions, and hostile Unicode remain inert data. A projection
+  never authorizes a tool, schedule, final price, legal/recording statement, provider activation,
+  credential, or provider mutation.
+- Part 5 adds no migration, HTTP route, browser UI, provider SDK or network call, synchronization
+  state, outbox, retry, production configuration, or secret. Those transport and reconciliation
+  authorities begin only in Part 6 after a Part 5 projection has been independently accepted.

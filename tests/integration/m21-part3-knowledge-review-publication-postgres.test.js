@@ -10,12 +10,14 @@ const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database'
 const ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS = path.join(ROOT, 'migrations');
 const WORKFLOW_MIGRATION = '026_canonical_knowledge_review_publication.sql';
+const AUDIT_GRAPH_MIGRATION = '027_canonical_knowledge_audit_graph_authority.sql';
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 
 const ORG_A = 'b7000000-0000-4000-8000-000000000001';
 const OWNER_A = 'b8000000-0000-4000-8000-000000000001';
 const ADMIN_A = 'b8000000-0000-4000-8000-000000000002';
 const MEMBER_A = 'b8000000-0000-4000-8000-000000000003';
+const SUSPENDED_OWNER_A = 'b8000000-0000-4000-8000-000000000005';
 const ORG_B = 'b7000000-0000-4000-8000-000000000002';
 const OWNER_B = 'b8000000-0000-4000-8000-000000000004';
 
@@ -90,7 +92,8 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
   let freshPool;
   let upgradePool;
   let preWorkflowDirectory;
-  let part3Directory;
+  let workflowDirectory;
+  let auditDirectory;
   let db;
 
   beforeAll(async () => {
@@ -99,12 +102,16 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
     freshPool = new Pool({ connectionString: freshDatabase.connectionString, max: 8 });
     upgradePool = new Pool({ connectionString: upgradeDatabase.connectionString, max: 4 });
     preWorkflowDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m21-p3-pre026-'));
-    part3Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m21-p3-through026-'));
+    workflowDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m21-p3-through026-'));
+    auditDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m21-p3-through027-'));
     for (const filename of migrationFiles(MIGRATIONS).filter(name => name < WORKFLOW_MIGRATION)) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(preWorkflowDirectory, filename));
     }
     for (const filename of migrationFiles(MIGRATIONS).filter(name => name <= WORKFLOW_MIGRATION)) {
-      fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(part3Directory, filename));
+      fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(workflowDirectory, filename));
+    }
+    for (const filename of migrationFiles(MIGRATIONS).filter(name => name <= AUDIT_GRAPH_MIGRATION)) {
+      fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(auditDirectory, filename));
     }
     jest.resetModules();
     db = require('../../src/db');
@@ -114,12 +121,18 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
     expect((await upgradePool.query(
       "SELECT to_regclass('public.canonical_knowledge_publications') AS publications"
     )).rows).toEqual([{ publications: null }]);
-    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: part3Directory })).toBe(true);
-    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: part3Directory })).toBe(true);
+    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: workflowDirectory })).toBe(true);
+    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: auditDirectory })).toBe(true);
+    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: auditDirectory })).toBe(true);
 
     await seedActor(freshPool, ORG_A, OWNER_A, 'owner', 'owner-a');
     await seedActor(freshPool, ORG_A, ADMIN_A, 'admin', 'admin-a');
     await seedActor(freshPool, ORG_A, MEMBER_A, 'member', 'member-a');
+    await seedActor(freshPool, ORG_A, SUSPENDED_OWNER_A, 'owner', 'suspended-owner-a');
+    await freshPool.query(
+      "UPDATE organization_memberships SET status = 'suspended' WHERE user_id = $1",
+      [SUSPENDED_OWNER_A]
+    );
     await seedActor(freshPool, ORG_B, OWNER_B, 'owner', 'owner-b');
   }, 120000);
 
@@ -131,8 +144,11 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
       if (preWorkflowDirectory && path.resolve(preWorkflowDirectory).startsWith(path.resolve(os.tmpdir()))) {
         fs.rmSync(preWorkflowDirectory, { recursive: true, force: true });
       }
-      if (part3Directory && path.resolve(part3Directory).startsWith(path.resolve(os.tmpdir()))) {
-        fs.rmSync(part3Directory, { recursive: true, force: true });
+      if (workflowDirectory && path.resolve(workflowDirectory).startsWith(path.resolve(os.tmpdir()))) {
+        fs.rmSync(workflowDirectory, { recursive: true, force: true });
+      }
+      if (auditDirectory && path.resolve(auditDirectory).startsWith(path.resolve(os.tmpdir()))) {
+        fs.rmSync(auditDirectory, { recursive: true, force: true });
       }
       if (freshDatabase) await freshDatabase.cleanup();
       if (upgradeDatabase) await upgradeDatabase.cleanup();
@@ -600,6 +616,75 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
     }
   });
 
+  test('rejects forged immutable audit rows by actor role and reciprocal graph', async () => {
+    const repository = require('../../src/knowledge/repository');
+    const created = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.audit-forgery-guard')
+    );
+    const fakeReviewEventId = crypto.randomUUID();
+    const fakeSnapshotId = crypto.randomUUID();
+    const fakePublicationId = crypto.randomUUID();
+
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_audit_events
+         (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+       VALUES ($1, $2, $3, $4, 'standard_approved',
+               'Forge approval as an active member.', $5::jsonb)`,
+      [ORG_A, created.id, created.version.id, MEMBER_A, JSON.stringify({
+        canonicalDigest: created.version.canonicalDigest,
+        priorReviewEventId: crypto.randomUUID(),
+        reviewEventId: fakeReviewEventId,
+        reviewRequirement: 'standard',
+        snapshotId: fakeSnapshotId,
+      })]
+    )).rejects.toMatchObject({
+      code: '42501', constraint: 'canonical_knowledge_audit_actor_authorized',
+    });
+
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_audit_events
+         (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+       VALUES ($1, $2, $3, $4, 'version_published',
+               'Forge publication as a suspended owner.', $5::jsonb)`,
+      [ORG_A, created.id, created.version.id, SUSPENDED_OWNER_A, JSON.stringify({
+        canonicalDigest: created.version.canonicalDigest,
+        publicationId: fakePublicationId,
+        publicationNumber: 1,
+        reviewEventId: fakeReviewEventId,
+      })]
+    )).rejects.toMatchObject({
+      code: '42501', constraint: 'canonical_knowledge_audit_actor_authorized',
+    });
+
+    const ownerForgery = await freshPool.connect();
+    try {
+      await ownerForgery.query('BEGIN');
+      await ownerForgery.query(
+        `INSERT INTO canonical_knowledge_audit_events
+           (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+         VALUES ($1, $2, $3, $4, 'standard_approved',
+                 'Forge approval without a workflow graph.', $5::jsonb)`,
+        [ORG_A, created.id, created.version.id, OWNER_A, JSON.stringify({
+          canonicalDigest: created.version.canonicalDigest,
+          priorReviewEventId: crypto.randomUUID(),
+          reviewEventId: crypto.randomUUID(),
+          reviewRequirement: 'standard',
+          snapshotId: crypto.randomUUID(),
+        })]
+      );
+      await expect(ownerForgery.query('COMMIT')).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_audit_event_graph_required',
+      });
+    } finally {
+      await ownerForgery.query('ROLLBACK').catch(() => {});
+      ownerForgery.release();
+    }
+
+    expect((await freshPool.query(
+      "SELECT count(*)::int AS count FROM canonical_knowledge_audit_events WHERE reason LIKE 'Forge%'"
+    )).rows).toEqual([{ count: 0 }]);
+  });
+
   test('rejects an orphan direct review snapshot without poisoning normal submission', async () => {
     const repository = require('../../src/knowledge/repository');
     const { buildKnowledgeDiff } = require('../../src/knowledge/workflow');
@@ -735,6 +820,64 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
     )).rows).toEqual([{ snapshots: 0, events: 0, audits: 0 }]);
   });
 
+  test('allows audit-first writes only when the exact graph exists by commit', async () => {
+    const repository = require('../../src/knowledge/repository');
+    const { buildKnowledgeDiff } = require('../../src/knowledge/workflow');
+    const created = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.audit-first-deferral')
+    );
+    const diff = buildKnowledgeDiff(null, created.version.document);
+    const reason = 'Prove reciprocal audit validation remains commit-deferred.';
+    const reviewEventId = crypto.randomUUID();
+    const snapshotId = crypto.randomUUID();
+
+    const client = await freshPool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO canonical_knowledge_audit_events
+           (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+         VALUES ($1, $2, $3, $4, 'review_submitted', $5, $6::jsonb)`,
+        [ORG_A, created.id, created.version.id, OWNER_A, reason, JSON.stringify({
+          canonicalDigest: created.version.canonicalDigest,
+          diffDigest: diff.diffDigest,
+          reviewEventId,
+          reviewRequirement: 'standard',
+          snapshotId,
+        })]
+      );
+      await client.query(
+        `INSERT INTO canonical_knowledge_review_snapshots
+           (id, organization_id, entry_id, version_id, base_version_id, version_digest,
+            diff, canonical_diff, diff_digest, submitted_by_user_id, reason)
+         VALUES ($1, $2, $3, $4, NULL, $5, $6::text::jsonb, $6::text, $7, $8, $9)`,
+        [snapshotId, ORG_A, created.id, created.version.id, created.version.canonicalDigest,
+          diff.canonicalDiff, diff.diffDigest, OWNER_A, reason]
+      );
+      await client.query(
+        `INSERT INTO canonical_knowledge_review_events
+           (id, organization_id, entry_id, version_id, snapshot_id, event_sequence,
+            actor_user_id, action, version_digest, reason, details)
+         VALUES ($1, $2, $3, $4, $5, 1, $6, 'review_submitted', $7, $8, $9::jsonb)`,
+        [reviewEventId, ORG_A, created.id, created.version.id, snapshotId, OWNER_A,
+          created.version.canonicalDigest, reason, JSON.stringify({
+            diffDigest: diff.diffDigest, reviewRequirement: 'standard',
+          })]
+      );
+      await client.query('COMMIT');
+    } finally {
+      await client.query('ROLLBACK').catch(() => {});
+      client.release();
+    }
+
+    expect((await freshPool.query(
+      `SELECT public.canonical_knowledge_audit_graph_matches(audit_event.id) AS exact_graph
+         FROM canonical_knowledge_audit_events audit_event
+        WHERE audit_event.details->>'reviewEventId' = $1`,
+      [reviewEventId]
+    )).rows).toEqual([{ exact_graph: true }]);
+  });
+
   test('overwrites direct future workflow and audit times with one database transaction time', async () => {
     const repository = require('../../src/knowledge/repository');
     const { buildKnowledgeDiff } = require('../../src/knowledge/workflow');
@@ -867,16 +1010,510 @@ realPostgres('Mission 21 Part 3 knowledge review and publication', () => {
     }]);
   });
 
-  test('migration bytes are LF canonical, checksum-recorded and idempotent', async () => {
-    const bytes = fs.readFileSync(path.join(MIGRATIONS, WORKFLOW_MIGRATION));
-    expect(bytes.includes(0x0d)).toBe(false);
-    expect(bytes.at(-1)).toBe(0x0a);
-    const migration = db.loadMigrations(MIGRATIONS).find(item => item.file === WORKFLOW_MIGRATION);
-    expect(digest(bytes.toString('utf8'))).toBe(migration.digest);
-    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: part3Directory })).toBe(true);
+  test('rejects duplicate, unknown and malformed audit graph anchors', async () => {
+    const repository = require('../../src/knowledge/repository');
+    const { buildKnowledgeDiff } = require('../../src/knowledge/workflow');
+    const created = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.audit-anchor-guard')
+    );
+
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_audit_events
+         (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+       SELECT organization_id, entry_id, version_id, actor_user_id, action, reason, details
+         FROM canonical_knowledge_audit_events
+        WHERE organization_id = $1 AND entry_id = $2 AND action = 'entry_draft_created'`,
+      [ORG_A, created.id]
+    )).rejects.toMatchObject({
+      code: '23505', constraint: 'canonical_knowledge_audit_entry_draft_source_unique',
+    });
+
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_audit_events
+         (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+       VALUES ($1, $2, $3, $4, 'unknown_canonical_action',
+               'Reject an unknown canonical action.', '{}'::jsonb)`,
+      [ORG_A, created.id, created.version.id, OWNER_A]
+    )).rejects.toMatchObject({
+      code: '23514',
+      constraint: 'canonical_knowledge_audit_events_canonical_action_check',
+    });
+
+    for (const [reason, details] of [
+      ['Reject a missing audit graph key.', {
+        canonicalDigest: created.version.canonicalDigest,
+        reviewEventId: crypto.randomUUID(),
+        snapshotId: crypto.randomUUID(),
+      }],
+    ]) {
+      const client = await freshPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO canonical_knowledge_audit_events
+             (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+           VALUES ($1, $2, $3, $4, 'standard_approved', $5, $6::jsonb)`,
+          [ORG_A, created.id, created.version.id, OWNER_A, reason, JSON.stringify(details)]
+        );
+        await expect(client.query('COMMIT')).rejects.toMatchObject({
+          code: '23514', constraint: 'canonical_knowledge_audit_event_graph_required',
+        });
+      } finally {
+        await client.query('ROLLBACK').catch(() => {});
+        client.release();
+      }
+    }
+
+    const extraCreated = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.audit-extra-key-guard')
+    );
+    const extraDiff = buildKnowledgeDiff(null, extraCreated.version.document);
+    const extraSnapshotId = crypto.randomUUID();
+    const extraReviewEventId = crypto.randomUUID();
+    const extraReason = 'Reject an extra detail key on an otherwise complete graph.';
+    const extraClient = await freshPool.connect();
+    try {
+      await extraClient.query('BEGIN');
+      await extraClient.query(
+        `INSERT INTO canonical_knowledge_review_snapshots
+           (id, organization_id, entry_id, version_id, base_version_id, version_digest,
+            diff, canonical_diff, diff_digest, submitted_by_user_id, reason)
+         VALUES ($1, $2, $3, $4, NULL, $5, $6::text::jsonb, $6::text, $7, $8, $9)`,
+        [extraSnapshotId, ORG_A, extraCreated.id, extraCreated.version.id,
+          extraCreated.version.canonicalDigest, extraDiff.canonicalDiff,
+          extraDiff.diffDigest, OWNER_A, extraReason]
+      );
+      await extraClient.query(
+        `INSERT INTO canonical_knowledge_review_events
+           (id, organization_id, entry_id, version_id, snapshot_id, event_sequence,
+            actor_user_id, action, version_digest, reason, details)
+         VALUES ($1, $2, $3, $4, $5, 1, $6, 'review_submitted', $7, $8, $9::jsonb)`,
+        [extraReviewEventId, ORG_A, extraCreated.id, extraCreated.version.id,
+          extraSnapshotId, OWNER_A, extraCreated.version.canonicalDigest, extraReason,
+          JSON.stringify({
+            diffDigest: extraDiff.diffDigest, reviewRequirement: 'standard',
+          })]
+      );
+      await extraClient.query(
+        `INSERT INTO canonical_knowledge_audit_events
+           (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+         VALUES ($1, $2, $3, $4, 'review_submitted', $5, $6::jsonb)`,
+        [ORG_A, extraCreated.id, extraCreated.version.id, OWNER_A, extraReason,
+          JSON.stringify({
+            canonicalDigest: extraCreated.version.canonicalDigest,
+            diffDigest: extraDiff.diffDigest,
+            reviewEventId: extraReviewEventId,
+            reviewRequirement: 'standard',
+            snapshotId: extraSnapshotId,
+            unexpected: true,
+          })]
+      );
+      await expect(extraClient.query('COMMIT')).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_audit_event_graph_required',
+      });
+    } finally {
+      await extraClient.query('ROLLBACK').catch(() => {});
+      extraClient.release();
+    }
+
     expect((await freshPool.query(
-      'SELECT trim(checksum) AS checksum FROM _migrations WHERE filename = $1',
-      [WORKFLOW_MIGRATION]
-    )).rows).toEqual([{ checksum: migration.digest }]);
+      `SELECT count(*)::int AS count
+         FROM canonical_knowledge_audit_events
+        WHERE entry_id = $1 AND action <> 'entry_draft_created'`,
+      [created.id]
+    )).rows).toEqual([{ count: 0 }]);
+    expect((await freshPool.query(
+      `SELECT
+         (SELECT count(*)::int FROM canonical_knowledge_review_snapshots
+           WHERE entry_id = $1) AS snapshots,
+         (SELECT count(*)::int FROM canonical_knowledge_review_events
+           WHERE entry_id = $1) AS events,
+         (SELECT count(*)::int FROM canonical_knowledge_audit_events
+           WHERE entry_id = $1 AND action = 'review_submitted') AS audits`,
+      [extraCreated.id]
+    )).rows).toEqual([{ snapshots: 0, events: 0, audits: 0 }]);
+  });
+
+  test('binds every supported canonical audit action to one exact source anchor', async () => {
+    const repository = require('../../src/knowledge/repository');
+    const standard = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.audit-action-standard')
+    );
+    const standardSubmitted = await repository.submitKnowledgeVersionForReview(
+      freshPool, workflowTarget(standard, OWNER_A, 'Submit the action-set standard graph.')
+    );
+    const standardApproved = await repository.approveKnowledgeVersion(freshPool, workflowTarget(
+      standard, ADMIN_A, 'Approve the action-set standard graph.', {
+        expectedReviewEventId: standardSubmitted.event.id,
+      }
+    ));
+    await repository.publishKnowledgeVersion(freshPool, workflowTarget(
+      standard, OWNER_A, 'Publish the action-set standard graph.', {
+        expectedReviewEventId: standardApproved.event.id,
+        expectedPublicationId: null,
+        expectedPublicationNumber: 0,
+      }
+    ));
+
+    const changes = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.audit-action-changes', 'high_risk')
+    );
+    const changesSubmitted = await repository.submitKnowledgeVersionForReview(
+      freshPool, workflowTarget(changes, OWNER_A, 'Submit the action-set changes graph.')
+    );
+    await repository.requestKnowledgeChanges(freshPool, workflowTarget(
+      changes, ADMIN_A, 'Request changes for the action-set graph.', {
+        expectedReviewEventId: changesSubmitted.event.id,
+      }
+    ));
+
+    const highRisk = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('policies.workflow.audit-action-high-risk', 'high_risk')
+    );
+    const highRiskSubmitted = await repository.submitKnowledgeVersionForReview(
+      freshPool, workflowTarget(highRisk, OWNER_A, 'Submit the action-set high-risk graph.')
+    );
+    await repository.approveKnowledgeVersion(freshPool, workflowTarget(
+      highRisk, ADMIN_A, 'Approve the action-set high-risk graph.', {
+        expectedReviewEventId: highRiskSubmitted.event.id,
+      }
+    ));
+
+    const attorney = await repository.createInitialKnowledgeDraft(
+      freshPool, initialDraft('disclosures.workflow.audit-action-attorney', 'attorney_gated')
+    );
+    const attorneySubmitted = await repository.submitKnowledgeVersionForReview(
+      freshPool, workflowTarget(attorney, OWNER_A, 'Submit the action-set attorney graph.')
+    );
+    const attorneyApproved = await repository.approveKnowledgeVersion(freshPool, workflowTarget(
+      attorney, ADMIN_A, 'Approve the action-set attorney graph.', {
+        expectedReviewEventId: attorneySubmitted.event.id,
+        attorneyReview: {
+          reviewReference: 'action-set-attorney-record',
+          evidenceDigest: digest('action-set-attorney-evidence'),
+          reviewedAt: '2026-08-23T12:00:00.000Z',
+        },
+      }
+    ));
+    await repository.publishKnowledgeVersion(freshPool, workflowTarget(
+      attorney, OWNER_A, 'Publish the action-set attorney graph.', {
+        expectedReviewEventId: attorneyApproved.event.id,
+        expectedPublicationId: null,
+        expectedPublicationNumber: 0,
+      }
+    ));
+    const entryIds = [standard.id, changes.id, highRisk.id, attorney.id];
+
+    const actions = (await freshPool.query(
+      `SELECT action,
+              bool_and(public.canonical_knowledge_audit_graph_matches(id)) AS exact_graph
+         FROM canonical_knowledge_audit_events
+        WHERE entry_id = ANY($1::uuid[])
+        GROUP BY action ORDER BY action`
+      , [entryIds]
+    )).rows;
+    expect(actions).toEqual([
+      'attorney_gated_approved',
+      'attorney_review_evidence_recorded',
+      'changes_requested',
+      'entry_draft_created',
+      'high_risk_approved',
+      'review_submitted',
+      'standard_approved',
+      'version_published',
+    ].map(action => ({ action, exact_graph: true })));
+
+    expect((await freshPool.query(
+      `SELECT
+         (SELECT count(*) = count(DISTINCT (organization_id, version_id))
+            FROM canonical_knowledge_audit_events
+           WHERE action = 'entry_draft_created'
+             AND entry_id = ANY($1::uuid[])) AS draft_unique,
+         (SELECT count(*) = count(DISTINCT (organization_id, details->>'reviewEventId'))
+            FROM canonical_knowledge_audit_events
+           WHERE action IN ('review_submitted', 'changes_requested', 'standard_approved',
+                            'high_risk_approved', 'attorney_gated_approved')
+             AND entry_id = ANY($1::uuid[])) AS review_unique,
+         (SELECT count(*) = count(DISTINCT (organization_id, details->>'attorneyEvidenceId'))
+            FROM canonical_knowledge_audit_events
+           WHERE action = 'attorney_review_evidence_recorded'
+             AND entry_id = ANY($1::uuid[])) AS evidence_unique,
+         (SELECT count(*) = count(DISTINCT (organization_id, details->>'publicationId'))
+            FROM canonical_knowledge_audit_events
+           WHERE action = 'version_published'
+             AND entry_id = ANY($1::uuid[])) AS publication_unique`,
+      [entryIds]
+    )).rows).toEqual([{
+      draft_unique: true,
+      review_unique: true,
+      evidence_unique: true,
+      publication_unique: true,
+    }]);
+  });
+
+  test('upgrades valid 026 graphs and atomically refuses poisoned 026 graphs', async () => {
+    const repository = require('../../src/knowledge/repository');
+    let validDatabase;
+    let poisonedDatabase;
+    let validPool;
+    let poisonedPool;
+    try {
+      validDatabase = await createSuiteDatabase('m21-p3-audit-valid-up');
+      poisonedDatabase = await createSuiteDatabase('m21-p3-audit-poison');
+      validPool = new Pool({ connectionString: validDatabase.connectionString, max: 4 });
+      poisonedPool = new Pool({ connectionString: poisonedDatabase.connectionString, max: 4 });
+
+      expect(await db.runMigrations({
+        pool: validPool, migrationsDirectory: workflowDirectory,
+      })).toBe(true);
+      await seedActor(validPool, ORG_A, OWNER_A, 'owner', 'valid-upgrade-owner');
+      await seedActor(validPool, ORG_A, ADMIN_A, 'admin', 'valid-upgrade-admin');
+      const standard = await repository.createInitialKnowledgeDraft(
+        validPool, initialDraft('policies.workflow.valid-upgrade-standard')
+      );
+      const standardSubmitted = await repository.submitKnowledgeVersionForReview(
+        validPool, workflowTarget(standard, OWNER_A, 'Submit the valid upgrade standard graph.')
+      );
+      const standardApproved = await repository.approveKnowledgeVersion(validPool, workflowTarget(
+        standard, ADMIN_A, 'Approve the valid upgrade standard graph.', {
+          expectedReviewEventId: standardSubmitted.event.id,
+        }
+      ));
+      await repository.publishKnowledgeVersion(validPool, workflowTarget(
+        standard, OWNER_A, 'Publish the valid upgrade standard graph.', {
+          expectedReviewEventId: standardApproved.event.id,
+          expectedPublicationId: null,
+          expectedPublicationNumber: 0,
+        }
+      ));
+
+      const legal = await repository.createInitialKnowledgeDraft(
+        validPool, initialDraft('disclosures.workflow.valid-upgrade-legal', 'attorney_gated')
+      );
+      const legalSubmitted = await repository.submitKnowledgeVersionForReview(
+        validPool, workflowTarget(legal, OWNER_A, 'Submit the valid upgrade legal graph.')
+      );
+      const legalApproved = await repository.approveKnowledgeVersion(validPool, workflowTarget(
+        legal, ADMIN_A, 'Approve the valid upgrade legal graph.', {
+          expectedReviewEventId: legalSubmitted.event.id,
+          attorneyReview: {
+            reviewReference: 'valid-upgrade-counsel-record',
+            evidenceDigest: digest('valid-upgrade-attorney-evidence'),
+            reviewedAt: '2026-08-23T12:00:00.000Z',
+          },
+        }
+      ));
+      await repository.publishKnowledgeVersion(validPool, workflowTarget(
+        legal, OWNER_A, 'Publish the valid upgrade legal graph.', {
+          expectedReviewEventId: legalApproved.event.id,
+          expectedPublicationId: null,
+          expectedPublicationNumber: 0,
+        }
+      ));
+
+      const validAuditCount = (await validPool.query(
+        'SELECT count(*)::int AS count FROM canonical_knowledge_audit_events'
+      )).rows[0].count;
+      expect(validAuditCount).toBeGreaterThan(0);
+      await validPool.query(
+        "UPDATE organization_memberships SET status = 'suspended' WHERE user_id = $1",
+        [ADMIN_A]
+      );
+      expect(await db.runMigrations({
+        pool: validPool, migrationsDirectory: auditDirectory,
+      })).toBe(true);
+      expect((await validPool.query(
+        `SELECT count(*)::int AS count,
+                bool_and(public.canonical_knowledge_audit_graph_matches(id)) AS exact_graph
+           FROM canonical_knowledge_audit_events`
+      )).rows).toEqual([{ count: validAuditCount, exact_graph: true }]);
+      const auditMigration = db.loadMigrations(MIGRATIONS)
+        .find(item => item.file === AUDIT_GRAPH_MIGRATION);
+      expect((await validPool.query(
+        'SELECT trim(checksum) AS checksum FROM _migrations WHERE filename = $1',
+        [AUDIT_GRAPH_MIGRATION]
+      )).rows).toEqual([{ checksum: auditMigration.digest }]);
+
+      expect(await db.runMigrations({
+        pool: poisonedPool, migrationsDirectory: workflowDirectory,
+      })).toBe(true);
+      await seedActor(poisonedPool, ORG_A, OWNER_A, 'owner', 'poison-owner');
+      await seedActor(poisonedPool, ORG_A, MEMBER_A, 'member', 'poison-member');
+      const poisoned = await repository.createInitialKnowledgeDraft(
+        poisonedPool, initialDraft('policies.workflow.poisoned-upgrade')
+      );
+      await poisonedPool.query(
+        `INSERT INTO canonical_knowledge_audit_events
+           (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+         VALUES ($1, $2, $3, $4, 'standard_approved',
+                 'Retained forged approval from migration 026.', $5::jsonb),
+                ($1, $2, $3, $6, 'version_published',
+                 'Retained forged publication from migration 026.', $7::jsonb)`,
+        [ORG_A, poisoned.id, poisoned.version.id, OWNER_A, JSON.stringify({
+          canonicalDigest: poisoned.version.canonicalDigest,
+          priorReviewEventId: crypto.randomUUID(),
+          reviewEventId: crypto.randomUUID(),
+          reviewRequirement: 'standard',
+          snapshotId: crypto.randomUUID(),
+        }), MEMBER_A, JSON.stringify({
+          canonicalDigest: poisoned.version.canonicalDigest,
+          publicationId: crypto.randomUUID(),
+          publicationNumber: 1,
+          reviewEventId: crypto.randomUUID(),
+        })]
+      );
+      expect((await poisonedPool.query(
+        'SELECT count(*)::int AS count FROM canonical_knowledge_audit_events WHERE entry_id = $1',
+        [poisoned.id]
+      )).rows).toEqual([{ count: 3 }]);
+
+      await expect(db.runMigrations({
+        pool: poisonedPool, migrationsDirectory: auditDirectory,
+      })).rejects.toThrow(
+        'Migration run failed: Canonical knowledge audit graph preflight failed: ' +
+        'existing evidence does not match an exact workflow graph'
+      );
+      expect((await poisonedPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM _migrations WHERE filename = $1) AS ledger,
+           to_regprocedure('public.canonical_knowledge_audit_graph_matches(uuid)') AS graph_function,
+           to_regclass('public.canonical_knowledge_audit_entry_draft_source_unique') AS graph_index,
+           (SELECT count(*)::int FROM pg_trigger
+             WHERE tgname = 'canonical_knowledge_audit_event_graph_required') AS graph_trigger,
+           (SELECT count(*)::int FROM pg_constraint
+             WHERE conname = 'canonical_knowledge_audit_events_canonical_action_check')
+             AS graph_constraint`,
+        [AUDIT_GRAPH_MIGRATION]
+      )).rows).toEqual([{
+        ledger: 0,
+        graph_function: null,
+        graph_index: null,
+        graph_trigger: 0,
+        graph_constraint: 0,
+      }]);
+      expect((await poisonedPool.query(
+        'SELECT count(*)::int AS count FROM canonical_knowledge_audit_events WHERE entry_id = $1',
+        [poisoned.id]
+      )).rows).toEqual([{ count: 3 }]);
+    } finally {
+      if (validPool) await validPool.end();
+      if (poisonedPool) await poisonedPool.end();
+      if (validDatabase) await validDatabase.cleanup();
+      if (poisonedDatabase) await poisonedDatabase.cleanup();
+    }
+  }, 120000);
+
+  test('atomically refuses duplicate valid audit anchors retained from migration 026', async () => {
+    const repository = require('../../src/knowledge/repository');
+    const { buildKnowledgeDiff } = require('../../src/knowledge/workflow');
+    let duplicateDatabase;
+    let duplicatePool;
+    try {
+      duplicateDatabase = await createSuiteDatabase('m21-p3-audit-dup');
+      duplicatePool = new Pool({ connectionString: duplicateDatabase.connectionString, max: 4 });
+      expect(await db.runMigrations({
+        pool: duplicatePool, migrationsDirectory: workflowDirectory,
+      })).toBe(true);
+      await seedActor(duplicatePool, ORG_A, OWNER_A, 'owner', 'duplicate-upgrade-owner');
+      const created = await repository.createInitialKnowledgeDraft(
+        duplicatePool, initialDraft('policies.workflow.duplicate-upgrade')
+      );
+      const diff = buildKnowledgeDiff(null, created.version.document);
+      const snapshotId = crypto.randomUUID();
+      const reviewEventId = crypto.randomUUID();
+      const reason = 'Retain two individually valid audit anchors from migration 026.';
+      const details = JSON.stringify({
+        canonicalDigest: created.version.canonicalDigest,
+        diffDigest: diff.diffDigest,
+        reviewEventId,
+        reviewRequirement: 'standard',
+        snapshotId,
+      });
+      const client = await duplicatePool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO canonical_knowledge_review_snapshots
+             (id, organization_id, entry_id, version_id, base_version_id, version_digest,
+              diff, canonical_diff, diff_digest, submitted_by_user_id, reason)
+           VALUES ($1, $2, $3, $4, NULL, $5, $6::text::jsonb, $6::text, $7, $8, $9)`,
+          [snapshotId, ORG_A, created.id, created.version.id, created.version.canonicalDigest,
+            diff.canonicalDiff, diff.diffDigest, OWNER_A, reason]
+        );
+        await client.query(
+          `INSERT INTO canonical_knowledge_review_events
+             (id, organization_id, entry_id, version_id, snapshot_id, event_sequence,
+              actor_user_id, action, version_digest, reason, details)
+           VALUES ($1, $2, $3, $4, $5, 1, $6, 'review_submitted', $7, $8, $9::jsonb)`,
+          [reviewEventId, ORG_A, created.id, created.version.id, snapshotId, OWNER_A,
+            created.version.canonicalDigest, reason, JSON.stringify({
+              diffDigest: diff.diffDigest, reviewRequirement: 'standard',
+            })]
+        );
+        await client.query(
+          `INSERT INTO canonical_knowledge_audit_events
+             (organization_id, entry_id, version_id, actor_user_id, action, reason, details)
+           VALUES ($1, $2, $3, $4, 'review_submitted', $5, $6::jsonb),
+                  ($1, $2, $3, $4, 'review_submitted', $5, $6::jsonb)`,
+          [ORG_A, created.id, created.version.id, OWNER_A, reason, details]
+        );
+        await client.query('COMMIT');
+      } finally {
+        await client.query('ROLLBACK').catch(() => {});
+        client.release();
+      }
+      expect((await duplicatePool.query(
+        `SELECT count(*)::int AS count
+           FROM canonical_knowledge_audit_events
+          WHERE details->>'reviewEventId' = $1`,
+        [reviewEventId]
+      )).rows).toEqual([{ count: 2 }]);
+
+      await expect(db.runMigrations({
+        pool: duplicatePool, migrationsDirectory: auditDirectory,
+      })).rejects.toThrow(
+        'Migration run failed: Canonical knowledge audit graph preflight failed: ' +
+        'existing evidence contains duplicate graph anchors'
+      );
+      expect((await duplicatePool.query(
+        `SELECT
+           (SELECT count(*)::int FROM _migrations WHERE filename = $1) AS ledger,
+           to_regprocedure('public.canonical_knowledge_audit_graph_matches(uuid)') AS graph_function,
+           (SELECT count(*)::int FROM canonical_knowledge_audit_events
+             WHERE details->>'reviewEventId' = $2) AS retained_audits`,
+        [AUDIT_GRAPH_MIGRATION, reviewEventId]
+      )).rows).toEqual([{ ledger: 0, graph_function: null, retained_audits: 2 }]);
+    } finally {
+      if (duplicatePool) await duplicatePool.end();
+      if (duplicateDatabase) await duplicateDatabase.cleanup();
+    }
+  }, 120000);
+
+  test('migration bytes are LF canonical, checksum-recorded and idempotent', async () => {
+    const expectedDigests = new Map([
+      ['025_provider_agnostic_knowledge_registry.sql',
+        '174c3eb967d1663cd103d8edd331ee2bc373f1bcaa41829d7006bc41c539b15d'],
+      [WORKFLOW_MIGRATION,
+        '76bfeec25d20cf96cb3d871d1049e83600176532f6f6a40f8c4d3164c8ea3fc7'],
+      [AUDIT_GRAPH_MIGRATION,
+        '79f0508c7af0e6da9d079ff818b89b04389a0bb5820807f368ca5d81acecc838'],
+    ]);
+    const loaded = db.loadMigrations(MIGRATIONS);
+    for (const [filename, expectedDigest] of expectedDigests) {
+      const bytes = fs.readFileSync(path.join(MIGRATIONS, filename));
+      expect(bytes.includes(0x0d)).toBe(false);
+      expect(bytes.at(-1)).toBe(0x0a);
+      expect(digest(bytes.toString('utf8'))).toBe(expectedDigest);
+      expect(loaded.find(item => item.file === filename).digest).toBe(expectedDigest);
+    }
+    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: auditDirectory })).toBe(true);
+    expect((await freshPool.query(
+      `SELECT filename, trim(checksum) AS checksum
+         FROM _migrations WHERE filename = ANY($1::text[]) ORDER BY filename`,
+      [[WORKFLOW_MIGRATION, AUDIT_GRAPH_MIGRATION]]
+    )).rows).toEqual([
+      { filename: WORKFLOW_MIGRATION, checksum: expectedDigests.get(WORKFLOW_MIGRATION) },
+      { filename: AUDIT_GRAPH_MIGRATION, checksum: expectedDigests.get(AUDIT_GRAPH_MIGRATION) },
+    ]);
   });
 });

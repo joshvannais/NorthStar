@@ -288,6 +288,11 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     const preMigration = await completeKnowledge(knowledge, upgradePool, actors, 'upgrade');
     expect(preMigration.identityPublication.number).toBe(1);
     expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: MIGRATIONS })).toBe(true);
+    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: MIGRATIONS })).toBe(true);
+    expect((await upgradePool.query(
+      `SELECT count(*)::int AS applied FROM public._migrations
+        WHERE filename = '029_canonical_knowledge_transactional_sync.sql'`
+    )).rows).toEqual([{ applied: 1 }]);
     const sync = new SyncRepository(upgradePool);
     const configured = await sync.configureTarget(targetInput(actors));
     expect(configured.target.targetRevision).toBe(1);
@@ -596,7 +601,7 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     const direct = await freshPool.connect();
     try {
       await direct.query('BEGIN');
-      await direct.query(
+      await expect(direct.query(
         `UPDATE canonical_knowledge_sync_attempts attempt
             SET outcome = 'succeeded', observed_projection_digest = outbox.projection_digest,
                 completed_at = statement_timestamp()
@@ -604,7 +609,14 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
           WHERE attempt.outbox_id = $1 AND outbox.id = attempt.outbox_id
             AND attempt.outcome IS NULL`,
         [claimed.id]
-      );
+      )).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_knowledge_sync_attempts_live_authority',
+      });
+    } finally {
+      await direct.query('ROLLBACK');
+    }
+    try {
+      await direct.query('BEGIN');
       await expect(direct.query(
         `UPDATE canonical_knowledge_sync_states state
             SET observed_event_id = outbox.id,
@@ -1269,5 +1281,325 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
       await client.query('ROLLBACK').catch(() => {});
       client.release();
     }
+  }, 120000);
+
+  test('retains exact state and sequence authority across direct SQL sibling mutations', async () => {
+    const actors = await seedActors(freshPool, 'authority-retention');
+    const sync = new SyncRepository(freshPool);
+    const configured = await sync.configureTarget(targetInput(actors));
+    await completeKnowledge(knowledge, freshPool, actors, 'authority-retention');
+    const claimed = (await sync.claimJobs({ batchSize: 25, leaseSeconds: 30 }))
+      .find(job => job.targetId === configured.target.id);
+    expect(claimed).toBeDefined();
+    await expect(sync.finalizeJob({
+      organizationId: claimed.organizationId,
+      id: claimed.id,
+      claimToken: claimed.claimToken,
+      accepted: true,
+      observedProjectionDigest: claimed.projectionDigest,
+    })).resolves.toMatchObject({ state: 'succeeded', exactSuccess: true });
+
+    const authorityValues = [actors.organizationId, configured.target.id];
+    const authoritySnapshot = async () => (await freshPool.query(
+      `SELECT sequence.next_sequence, count(outbox.*)::bigint AS outbox_count,
+              max(outbox.target_sequence)::bigint AS maximum_sequence,
+              state.status, state.desired_sequence, state.observed_sequence,
+              state.last_known_good_sequence
+         FROM canonical_knowledge_sync_sequences sequence
+         JOIN canonical_knowledge_sync_states state
+           ON state.organization_id = sequence.organization_id
+          AND state.target_id = sequence.target_id
+         LEFT JOIN canonical_knowledge_sync_outbox outbox
+           ON outbox.organization_id = sequence.organization_id
+          AND outbox.target_id = sequence.target_id
+        WHERE sequence.organization_id = $1 AND sequence.target_id = $2
+        GROUP BY sequence.organization_id, sequence.target_id, sequence.next_sequence,
+                 state.organization_id, state.target_id`, authorityValues
+    )).rows[0];
+    const before = await authoritySnapshot();
+    expect(before).toMatchObject({
+      status: 'in_sync',
+      desired_sequence: expect.any(String),
+      observed_sequence: expect.any(String),
+      last_known_good_sequence: expect.any(String),
+    });
+    expect(BigInt(before.next_sequence)).toBe(BigInt(before.outbox_count) + 1n);
+    expect(BigInt(before.next_sequence)).toBe(BigInt(before.maximum_sequence) + 1n);
+
+    for (const orderedDeletes of [
+      [
+        { text: `DELETE FROM canonical_knowledge_sync_states
+                   WHERE organization_id = $1 AND target_id = $2`, values: authorityValues },
+        { text: `DELETE FROM canonical_knowledge_sync_sequences
+                   WHERE organization_id = $1 AND target_id = $2`, values: authorityValues },
+      ],
+      [
+        { text: `DELETE FROM canonical_knowledge_sync_sequences
+                   WHERE organization_id = $1 AND target_id = $2`, values: authorityValues },
+        { text: `DELETE FROM canonical_knowledge_sync_states
+                   WHERE organization_id = $1 AND target_id = $2`, values: authorityValues },
+      ],
+    ]) {
+      await expectTransactionRejected(freshPool, orderedDeletes, {
+        code: '55000',
+        constraint: orderedDeletes[0].text.includes('sync_states')
+          ? 'canonical_knowledge_sync_states_no_delete'
+          : 'canonical_knowledge_sync_sequences_no_delete',
+      });
+    }
+
+    await expect(freshPool.query(
+      `UPDATE canonical_knowledge_sync_sequences SET next_sequence = next_sequence
+        WHERE organization_id = $1 AND target_id = $2`, authorityValues
+    )).rejects.toMatchObject({
+      code: '55000', constraint: 'canonical_knowledge_sync_sequences_advance_exact',
+    });
+    await expect(freshPool.query(
+      `UPDATE canonical_knowledge_sync_sequences SET next_sequence = 1
+        WHERE organization_id = $1 AND target_id = $2`, authorityValues
+    )).rejects.toMatchObject({
+      code: '55000', constraint: 'canonical_knowledge_sync_sequences_advance_exact',
+    });
+    await expectTransactionRejected(freshPool, [{
+      text: `UPDATE canonical_knowledge_sync_sequences
+                SET next_sequence = next_sequence + 1
+              WHERE organization_id = $1 AND target_id = $2`,
+      values: authorityValues,
+    }], {
+      code: '23514', constraint: 'canonical_knowledge_sync_sequences_outbox_exact',
+    });
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_sync_sequences(organization_id, target_id, next_sequence)
+       VALUES ($1,$2,1)`, authorityValues
+    )).rejects.toMatchObject({ code: '23505' });
+    await expectTransactionRejected(freshPool, [{
+      text: `INSERT INTO canonical_knowledge_sync_sequences(
+               organization_id, target_id, next_sequence
+             ) VALUES ($1,$2,1)
+             ON CONFLICT (organization_id, target_id) DO UPDATE
+               SET next_sequence = canonical_knowledge_sync_sequences.next_sequence + 1`,
+      values: authorityValues,
+    }], {
+      code: '23514', constraint: 'canonical_knowledge_sync_sequences_outbox_exact',
+    });
+
+    await expect(freshPool.query(
+      `UPDATE canonical_knowledge_sync_states SET target_id = $3
+        WHERE organization_id = $1 AND target_id = $2`,
+      [...authorityValues, crypto.randomUUID()]
+    )).rejects.toMatchObject({
+      code: '55000', constraint: 'canonical_knowledge_sync_states_identity_immutable',
+    });
+    await expect(freshPool.query(
+      `UPDATE canonical_knowledge_sync_states
+          SET observed_sequence = NULL, status = 'retry',
+              diagnostic_category = 'provider_failure'
+        WHERE organization_id = $1 AND target_id = $2`, authorityValues
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_knowledge_sync_states_observed_monotonic',
+    });
+    await expect(freshPool.query(
+      `UPDATE canonical_knowledge_sync_states SET last_known_good_sequence = NULL
+        WHERE organization_id = $1 AND target_id = $2`, authorityValues
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_knowledge_sync_states_lkg_monotonic',
+    });
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_sync_states(
+         organization_id, target_id, status, diagnostic_category
+       ) VALUES ($1,$2,'blocked','projection_unavailable')`, authorityValues
+    )).rejects.toMatchObject({ code: '23505' });
+    await expectTransactionRejected(freshPool, [{
+      text: `INSERT INTO canonical_knowledge_sync_states(
+               organization_id, target_id, status, diagnostic_category
+             ) VALUES ($1,$2,'blocked','projection_unavailable')
+             ON CONFLICT (organization_id, target_id) DO UPDATE
+               SET status = 'retry', diagnostic_category = 'provider_failure'`,
+      values: authorityValues,
+    }], {
+      code: '23514', constraint: 'canonical_knowledge_sync_attempt_state_exact',
+    });
+
+    expect(await authoritySnapshot()).toEqual(before);
+    await expect(sync.configureTarget(targetInput(actors, {
+      expectedTargetRevision: configured.target.targetRevision,
+      status: 'suspended',
+    }))).resolves.toMatchObject({
+      target: { status: 'suspended' },
+      state: { status: 'suspended', diagnosticCategory: 'target_suspended' },
+    });
+    const reactivated = await sync.configureTarget(targetInput(actors, {
+      expectedTargetRevision: configured.target.targetRevision + 1,
+      status: 'active',
+    }));
+    expect(reactivated).toMatchObject({
+      target: { status: 'active' }, desired: { state: 'pending' },
+    });
+    expect((await freshPool.query(
+      `SELECT public.canonical_knowledge_sync_sequence_matches($1,$2) AS exact`,
+      authorityValues
+    )).rows).toEqual([{ exact: true }]);
+  }, 120000);
+
+  test('reserves ownership_lost from live, near-expiry, expired, stale, and ABA SQL paths', async () => {
+    const actors = await seedActors(freshPool, 'ownership-reserved');
+    const sync = new SyncRepository(freshPool);
+    const configured = await sync.configureTarget(targetInput(actors));
+    await completeKnowledge(knowledge, freshPool, actors, 'ownership-reserved');
+    const claimed = (await sync.claimJobs({ batchSize: 25, leaseSeconds: 5 }))
+      .find(job => job.targetId === configured.target.id);
+    expect(claimed).toBeDefined();
+
+    const attemptOwnershipLost = token => ({
+      text: `UPDATE canonical_knowledge_sync_attempts
+                SET outcome = 'ownership_lost', diagnostic_category = 'ownership_lost',
+                    completed_at = statement_timestamp()
+              WHERE outbox_id = $1 AND claim_token = $2 AND outcome IS NULL`,
+      values: [claimed.id, token],
+    });
+    const outboxOwnershipLost = token => ({
+      text: `UPDATE canonical_knowledge_sync_outbox
+                SET state = 'retry', claim_token = NULL, claimed_at = NULL,
+                    lease_expires_at = NULL, diagnostic_category = 'ownership_lost',
+                    available_at = statement_timestamp() + interval '30 seconds'
+              WHERE id = $1 AND claim_token = $2`,
+      values: [claimed.id, token],
+    });
+    for (const orderedAttack of [
+      [attemptOwnershipLost(claimed.claimToken), outboxOwnershipLost(claimed.claimToken)],
+      [outboxOwnershipLost(claimed.claimToken), attemptOwnershipLost(claimed.claimToken)],
+    ]) {
+      await expectTransactionRejected(freshPool, orderedAttack, {
+        code: '23514',
+        constraint: orderedAttack[0].text.includes('sync_attempts')
+          ? 'canonical_knowledge_sync_attempts_ownership_lost_reserved'
+          : 'canonical_knowledge_sync_outbox_ownership_lost_reserved',
+      });
+    }
+    for (const outcome of ['retry', 'dead']) {
+      await expect(freshPool.query(
+        `UPDATE canonical_knowledge_sync_attempts
+            SET outcome = $3, diagnostic_category = 'ownership_lost',
+                completed_at = statement_timestamp()
+          WHERE outbox_id = $1 AND claim_token = $2 AND outcome IS NULL`,
+        [claimed.id, claimed.claimToken, outcome]
+      )).rejects.toMatchObject({
+        code: '23514', constraint: outcome === 'retry'
+          ? 'canonical_knowledge_sync_attempts_outcome_shape_check'
+          : 'canonical_knowledge_sync_attempts_bounded_outcome',
+      });
+    }
+    await expectTransactionRejected(freshPool, [{
+      text: `UPDATE canonical_knowledge_sync_states
+                SET status = 'retry', diagnostic_category = 'ownership_lost'
+              WHERE organization_id = $1 AND target_id = $2`,
+      values: [actors.organizationId, configured.target.id],
+    }], {
+      code: '23514', constraint: 'canonical_knowledge_sync_states_ownership_lost_reserved',
+    });
+
+    await freshPool.query('SELECT pg_sleep(4)');
+    const nearExpiry = (await freshPool.query(
+      `SELECT lease_expires_at > statement_timestamp() AS live,
+              extract(epoch FROM lease_expires_at - statement_timestamp()) AS seconds_left
+         FROM canonical_knowledge_sync_outbox WHERE id = $1`, [claimed.id]
+    )).rows[0];
+    expect(nearExpiry.live).toBe(true);
+    expect(Number(nearExpiry.seconds_left)).toBeGreaterThan(0);
+    await expectTransactionRejected(freshPool, [outboxOwnershipLost(claimed.claimToken)], {
+      code: '23514', constraint: 'canonical_knowledge_sync_outbox_ownership_lost_reserved',
+    });
+
+    await freshPool.query('SELECT pg_sleep(1.2)');
+    expect((await freshPool.query(
+      `SELECT lease_expires_at <= statement_timestamp() AS expired
+         FROM canonical_knowledge_sync_outbox WHERE id = $1`, [claimed.id]
+    )).rows).toEqual([{ expired: true }]);
+    await expectTransactionRejected(freshPool, [attemptOwnershipLost(claimed.claimToken)], {
+      code: '23514', constraint: 'canonical_knowledge_sync_attempts_ownership_lost_reserved',
+    });
+    await expectTransactionRejected(freshPool, [outboxOwnershipLost(claimed.claimToken)], {
+      code: '23514', constraint: 'canonical_knowledge_sync_outbox_ownership_lost_reserved',
+    });
+    expect(await sync.recoverExpiredJobs({ batchSize: 25 })).toBeGreaterThanOrEqual(1);
+    expect((await freshPool.query(
+      `SELECT outbox.state, outbox.diagnostic_category,
+              attempt.outcome, attempt.diagnostic_category AS attempt_diagnostic
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id AND attempt.outbox_id = outbox.id
+          AND attempt.reconciliation_generation = outbox.reconciliation_generation
+          AND attempt.attempt_number = outbox.attempt_count
+        WHERE outbox.id = $1`, [claimed.id]
+    )).rows).toEqual([{
+      state: 'retry', diagnostic_category: 'claim_expired',
+      outcome: 'claim_expired', attempt_diagnostic: 'claim_expired',
+    }]);
+
+    await freshPool.query(
+      `UPDATE canonical_knowledge_sync_outbox SET available_at = statement_timestamp()
+        WHERE id = $1`, [claimed.id]
+    );
+    const reclaimed = (await sync.claimJobs({ batchSize: 25, leaseSeconds: 30 }))
+      .find(job => job.id === claimed.id);
+    expect(reclaimed).toBeDefined();
+    expect(reclaimed.claimToken).not.toBe(claimed.claimToken);
+    await expect(sync.finalizeJob({
+      organizationId: claimed.organizationId,
+      id: claimed.id,
+      claimToken: claimed.claimToken,
+      accepted: true,
+      observedProjectionDigest: claimed.projectionDigest,
+    })).resolves.toBeNull();
+    await expect(freshPool.query(
+      `INSERT INTO canonical_knowledge_sync_attempts(
+         organization_id, target_id, outbox_id, reconciliation_generation,
+         attempt_number, claim_token, idempotency_key
+       ) SELECT organization_id, target_id, id, reconciliation_generation,
+                attempt_count + 1, $2, idempotency_key
+           FROM canonical_knowledge_sync_outbox WHERE id = $1`,
+      [claimed.id, claimed.claimToken]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_knowledge_sync_attempts_claim_exact',
+    });
+
+    const providerRetry = await sync.finalizeJob({
+      organizationId: reclaimed.organizationId,
+      id: reclaimed.id,
+      claimToken: reclaimed.claimToken,
+      accepted: false,
+      diagnosticCategory: 'ownership_lost',
+    });
+    expect(providerRetry).toMatchObject({
+      state: 'retry', job: { diagnosticCategory: 'provider_failure' },
+    });
+    await freshPool.query(
+      `UPDATE canonical_knowledge_sync_outbox SET available_at = statement_timestamp()
+        WHERE id = $1`, [claimed.id]
+    );
+    const integrityClaim = (await sync.claimJobs({ batchSize: 25, leaseSeconds: 30 }))
+      .find(job => job.id === claimed.id);
+    expect(integrityClaim).toBeDefined();
+    await expect(sync.finalizeJob({
+      organizationId: integrityClaim.organizationId,
+      id: integrityClaim.id,
+      claimToken: integrityClaim.claimToken,
+      accepted: false,
+      diagnosticCategory: 'integrity_failure',
+    })).resolves.toMatchObject({
+      state: 'retry', job: { diagnosticCategory: 'integrity_failure' },
+    });
+
+    expect((await freshPool.query(
+      `SELECT
+         (SELECT count(*)::int FROM canonical_knowledge_sync_attempts
+           WHERE organization_id = $1 AND diagnostic_category = 'ownership_lost') AS attempts,
+         (SELECT count(*)::int FROM canonical_knowledge_sync_outbox
+           WHERE organization_id = $1 AND diagnostic_category = 'ownership_lost') AS outboxes,
+         (SELECT count(*)::int FROM canonical_knowledge_sync_states
+           WHERE organization_id = $1 AND diagnostic_category = 'ownership_lost') AS states`,
+      [actors.organizationId]
+    )).rows).toEqual([{ attempts: 0, outboxes: 0, states: 0 }]);
   }, 120000);
 });

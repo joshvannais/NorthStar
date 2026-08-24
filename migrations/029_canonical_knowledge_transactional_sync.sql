@@ -348,7 +348,7 @@ CREATE TABLE public.canonical_knowledge_sync_attempts (
   ),
   CONSTRAINT canonical_knowledge_sync_attempts_outcome_check CHECK (
     outcome IS NULL OR outcome IN (
-      'succeeded', 'retry', 'dead', 'claim_expired', 'ownership_lost', 'drift'
+      'succeeded', 'retry', 'dead', 'claim_expired', 'drift'
     )
   ),
   CONSTRAINT canonical_knowledge_sync_attempts_diagnostic_check CHECK (
@@ -376,10 +376,6 @@ CREATE TABLE public.canonical_knowledge_sync_attempts (
     OR
     (outcome = 'claim_expired'
       AND diagnostic_category = 'claim_expired'
-      AND observed_projection_digest IS NULL)
-    OR
-    (outcome = 'ownership_lost'
-      AND diagnostic_category = 'ownership_lost'
       AND observed_projection_digest IS NULL)
     OR
     (outcome IN ('retry', 'dead')
@@ -544,6 +540,48 @@ BEGIN
   RAISE EXCEPTION 'Synchronization targets are retained for ordered evidence'
     USING ERRCODE = '55000',
           CONSTRAINT = 'canonical_knowledge_sync_targets_no_delete';
+END;
+$$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_validate_sync_sequence()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.next_sequence <> 1 OR NOT EXISTS (
+      SELECT 1 FROM public.canonical_knowledge_sync_targets target
+       WHERE target.organization_id = NEW.organization_id
+         AND target.id = NEW.target_id
+    ) THEN
+      RAISE EXCEPTION 'Synchronization sequence must begin at its exact target origin'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_sequences_initial_exact';
+    END IF;
+  ELSIF NEW.organization_id <> OLD.organization_id
+     OR NEW.target_id <> OLD.target_id
+     OR NEW.next_sequence <> OLD.next_sequence + 1 THEN
+    RAISE EXCEPTION 'Synchronization sequence authority can only advance once'
+      USING ERRCODE = '55000',
+            CONSTRAINT = 'canonical_knowledge_sync_sequences_advance_exact';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_reject_sync_sequence_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'Synchronization sequence authority is retained'
+    USING ERRCODE = '55000',
+          CONSTRAINT = 'canonical_knowledge_sync_sequences_no_delete';
+END;
+$$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_reject_sync_state_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'Synchronization state authority is retained'
+    USING ERRCODE = '55000',
+          CONSTRAINT = 'canonical_knowledge_sync_states_no_delete';
 END;
 $$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
 
@@ -1068,6 +1106,12 @@ DECLARE
   publication_record RECORD;
   expected_projection JSONB;
 BEGIN
+  IF NEW.diagnostic_category = 'ownership_lost' THEN
+    RAISE EXCEPTION 'Ownership loss is an ephemeral worker observation, not durable evidence'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_outbox_ownership_lost_reserved';
+  END IF;
+
   FOR pin IN SELECT value FROM jsonb_array_elements(NEW.source_pins)
   LOOP
     IF jsonb_typeof(pin) <> 'object'
@@ -1163,6 +1207,12 @@ $$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
 CREATE OR REPLACE FUNCTION public.canonical_knowledge_validate_sync_outbox_update()
 RETURNS TRIGGER AS $$
 BEGIN
+  IF NEW.diagnostic_category = 'ownership_lost' THEN
+    RAISE EXCEPTION 'Ownership loss is an ephemeral worker observation, not durable evidence'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_outbox_ownership_lost_reserved';
+  END IF;
+
   IF NEW.id <> OLD.id OR NEW.organization_id <> OLD.organization_id
      OR NEW.target_id <> OLD.target_id OR NEW.target_revision <> OLD.target_revision
      OR NEW.target_sequence <> OLD.target_sequence
@@ -1270,6 +1320,10 @@ $$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
 
 CREATE OR REPLACE FUNCTION public.canonical_knowledge_validate_sync_attempt_update()
 RETURNS TRIGGER AS $$
+DECLARE
+  outbox_record public.canonical_knowledge_sync_outbox%ROWTYPE;
+  current_claim_matches BOOLEAN := FALSE;
+  finalized_outbox_matches BOOLEAN := FALSE;
 BEGIN
   IF NEW.organization_id <> OLD.organization_id OR NEW.target_id <> OLD.target_id
      OR NEW.outbox_id <> OLD.outbox_id
@@ -1281,6 +1335,86 @@ BEGIN
       USING ERRCODE = '55000',
             CONSTRAINT = 'canonical_knowledge_sync_attempts_transition';
   END IF;
+
+  IF NEW.outcome = 'ownership_lost' THEN
+    RAISE EXCEPTION 'Ownership loss is an ephemeral worker observation, not durable evidence'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_attempts_ownership_lost_reserved';
+  END IF;
+
+  SELECT * INTO outbox_record
+    FROM public.canonical_knowledge_sync_outbox outbox
+   WHERE outbox.organization_id = OLD.organization_id
+     AND outbox.target_id = OLD.target_id
+     AND outbox.id = OLD.outbox_id
+     AND outbox.reconciliation_generation = OLD.reconciliation_generation
+     AND outbox.attempt_count = OLD.attempt_number
+   FOR SHARE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Synchronization attempt no longer has exact outbox authority'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_attempts_outbox_authority';
+  END IF;
+
+  current_claim_matches := outbox_record.state = 'claimed'
+    AND outbox_record.claim_token = OLD.claim_token
+    AND rtrim(outbox_record.idempotency_key) = rtrim(OLD.idempotency_key);
+
+  finalized_outbox_matches := outbox_record.claim_token IS NULL
+    AND outbox_record.claimed_at IS NULL
+    AND outbox_record.lease_expires_at IS NULL
+    AND outbox_record.diagnostic_category IS NOT DISTINCT FROM NEW.diagnostic_category
+    AND rtrim(outbox_record.observed_projection_digest) IS NOT DISTINCT FROM
+      rtrim(NEW.observed_projection_digest)
+    AND (
+      (NEW.outcome = 'succeeded'
+        AND outbox_record.state = 'succeeded'
+        AND rtrim(NEW.observed_projection_digest) = rtrim(outbox_record.projection_digest))
+      OR
+      (NEW.outcome = 'retry'
+        AND OLD.attempt_number < 5
+        AND outbox_record.state = 'retry')
+      OR
+      (NEW.outcome = 'dead'
+        AND OLD.attempt_number = 5
+        AND outbox_record.state = 'dead')
+      OR
+      (NEW.outcome = 'drift'
+        AND outbox_record.state = CASE WHEN OLD.attempt_number = 5 THEN 'dead' ELSE 'retry' END
+        AND NEW.diagnostic_category = 'projection_digest_mismatch')
+      OR
+      (NEW.outcome = 'claim_expired'
+        AND outbox_record.state = CASE WHEN OLD.attempt_number = 5 THEN 'dead' ELSE 'retry' END
+        AND NEW.diagnostic_category = 'claim_expired')
+    );
+
+  IF NEW.outcome = 'claim_expired' THEN
+    IF NOT (
+      (current_claim_matches AND outbox_record.lease_expires_at <= statement_timestamp())
+      OR finalized_outbox_matches
+    ) THEN
+      RAISE EXCEPTION 'Claim-expired evidence requires an expired database-time lease'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_attempts_claim_expired_authority';
+    END IF;
+  ELSE
+    IF NEW.outcome = 'retry' AND OLD.attempt_number >= 5
+       OR NEW.outcome = 'dead' AND OLD.attempt_number <> 5 THEN
+      RAISE EXCEPTION 'Synchronization attempt outcome does not match its bounded attempt'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_attempts_bounded_outcome';
+    END IF;
+    IF NOT (
+      (current_claim_matches AND outbox_record.lease_expires_at > statement_timestamp())
+      OR finalized_outbox_matches
+    ) THEN
+      RAISE EXCEPTION 'Provider or integrity evidence requires live database-time ownership'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_attempts_live_authority';
+    END IF;
+  END IF;
+
+  NEW.completed_at := statement_timestamp();
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
@@ -1364,7 +1498,58 @@ CREATE OR REPLACE FUNCTION public.canonical_knowledge_validate_sync_state()
 RETURNS TRIGGER AS $$
 DECLARE
   event_record public.canonical_knowledge_sync_outbox%ROWTYPE;
+  target_record public.canonical_knowledge_sync_targets%ROWTYPE;
+  expected_initial_status TEXT;
+  expected_initial_diagnostic TEXT;
 BEGIN
+  IF TG_OP = 'UPDATE' AND (
+    NEW.organization_id <> OLD.organization_id OR NEW.target_id <> OLD.target_id
+  ) THEN
+    RAISE EXCEPTION 'Synchronization state target identity is immutable'
+      USING ERRCODE = '55000',
+            CONSTRAINT = 'canonical_knowledge_sync_states_identity_immutable';
+  END IF;
+  IF NEW.diagnostic_category = 'ownership_lost' THEN
+    RAISE EXCEPTION 'Ownership loss is an ephemeral worker observation, not durable state'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_states_ownership_lost_reserved';
+  END IF;
+
+  SELECT * INTO target_record
+    FROM public.canonical_knowledge_sync_targets target
+   WHERE target.organization_id = NEW.organization_id
+     AND target.id = NEW.target_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Synchronization state requires exact target authority'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_states_target_exact';
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    expected_initial_status := CASE
+      WHEN target_record.status = 'active' THEN 'blocked'
+      ELSE 'suspended'
+    END;
+    expected_initial_diagnostic := CASE
+      WHEN target_record.status = 'active' THEN 'projection_unavailable'
+      ELSE 'target_suspended'
+    END;
+    IF NEW.desired_event_id IS NOT NULL OR NEW.desired_sequence IS NOT NULL
+       OR NEW.desired_projection_digest IS NOT NULL
+       OR NEW.observed_event_id IS NOT NULL OR NEW.observed_sequence IS NOT NULL
+       OR NEW.observed_projection_digest IS NOT NULL
+       OR NEW.last_known_good_event_id IS NOT NULL
+       OR NEW.last_known_good_sequence IS NOT NULL
+       OR NEW.last_known_good_projection_digest IS NOT NULL
+       OR NEW.drift_detected_at IS NOT NULL OR NEW.last_observed_at IS NOT NULL
+       OR NEW.status <> expected_initial_status
+       OR NEW.diagnostic_category <> expected_initial_diagnostic THEN
+      RAISE EXCEPTION 'Synchronization state must begin at its exact target origin'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_states_initial_exact';
+    END IF;
+  END IF;
+
   IF NEW.desired_event_id IS NOT NULL THEN
     SELECT * INTO event_record FROM public.canonical_knowledge_sync_outbox outbox
      WHERE outbox.organization_id = NEW.organization_id
@@ -1449,6 +1634,13 @@ BEGIN
     RAISE EXCEPTION 'Last-known-good synchronization state cannot regress'
       USING ERRCODE = '23514',
             CONSTRAINT = 'canonical_knowledge_sync_states_lkg_monotonic';
+  END IF;
+  IF TG_OP = 'UPDATE' AND OLD.observed_sequence IS NOT NULL
+     AND (NEW.observed_sequence IS NULL
+       OR NEW.observed_sequence < OLD.observed_sequence) THEN
+    RAISE EXCEPTION 'Observed synchronization state cannot regress'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_states_observed_monotonic';
   END IF;
   IF TG_OP = 'UPDATE' AND OLD.desired_sequence IS NOT NULL
      AND (NEW.desired_sequence IS NULL
@@ -1547,14 +1739,14 @@ BEGIN
           (outbox_record.state = 'retry'
             AND outbox_record.attempt_count < 5
             AND attempt_record.outcome IN (
-              'retry', 'drift', 'claim_expired', 'ownership_lost'
+              'retry', 'drift', 'claim_expired'
             )
             AND outbox_record.available_at > attempt_record.completed_at)
           OR
           (outbox_record.state = 'dead'
             AND outbox_record.attempt_count = 5
             AND attempt_record.outcome IN (
-              'dead', 'drift', 'claim_expired', 'ownership_lost'
+              'dead', 'drift', 'claim_expired'
             ))
         );
     END IF;
@@ -1616,6 +1808,46 @@ BEGIN
   RETURN state_matches;
 END;
 $$ LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_sync_sequence_matches(
+  organization_id_value UUID,
+  target_id_value UUID
+) RETURNS BOOLEAN AS $$
+DECLARE
+  sequence_record public.canonical_knowledge_sync_sequences%ROWTYPE;
+  outbox_count BIGINT;
+  maximum_sequence BIGINT;
+BEGIN
+  SELECT * INTO sequence_record
+    FROM public.canonical_knowledge_sync_sequences sequence
+   WHERE sequence.organization_id = organization_id_value
+     AND sequence.target_id = target_id_value;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+
+  SELECT count(*), COALESCE(max(outbox.target_sequence), 0)
+    INTO outbox_count, maximum_sequence
+    FROM public.canonical_knowledge_sync_outbox outbox
+   WHERE outbox.organization_id = organization_id_value
+     AND outbox.target_id = target_id_value;
+
+  RETURN sequence_record.next_sequence = outbox_count + 1
+    AND sequence_record.next_sequence = maximum_sequence + 1;
+END;
+$$ LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public;
+
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_require_sync_sequence_matrix()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT public.canonical_knowledge_sync_sequence_matches(
+    NEW.organization_id, NEW.target_id
+  ) THEN
+    RAISE EXCEPTION 'Synchronization sequence contradicts durable target work'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_sequences_outbox_exact';
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
 
 CREATE OR REPLACE FUNCTION public.canonical_knowledge_require_sync_attempt_transition()
 RETURNS TRIGGER AS $$
@@ -1679,13 +1911,31 @@ CREATE OR REPLACE FUNCTION public.canonical_knowledge_require_sync_state_matrix(
 RETURNS TRIGGER AS $$
 DECLARE
   current_state public.canonical_knowledge_sync_states%ROWTYPE;
+  current_target public.canonical_knowledge_sync_targets%ROWTYPE;
 BEGIN
   SELECT * INTO current_state
     FROM public.canonical_knowledge_sync_states state
    WHERE state.organization_id = NEW.organization_id
      AND state.target_id = NEW.target_id;
-  IF current_state.desired_event_id IS NOT NULL
-     AND NOT public.canonical_knowledge_sync_attempt_state_matches(
+  SELECT * INTO current_target
+    FROM public.canonical_knowledge_sync_targets target
+   WHERE target.organization_id = NEW.organization_id
+     AND target.id = NEW.target_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Synchronization state is missing exact target authority'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_target_authorities_required';
+  END IF;
+
+  IF current_target.status = 'suspended' THEN
+    IF current_state.status <> 'suspended'
+       OR current_state.diagnostic_category <> 'target_suspended' THEN
+      RAISE EXCEPTION 'Suspended synchronization target requires exact suspended state'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'canonical_knowledge_sync_states_target_status_exact';
+    END IF;
+  ELSIF current_state.desired_event_id IS NULL
+     OR NOT public.canonical_knowledge_sync_attempt_state_matches(
        current_state.desired_event_id
      ) THEN
     RAISE EXCEPTION 'Synchronization observed state contradicts current outbox evidence'
@@ -1728,21 +1978,40 @@ CREATE OR REPLACE FUNCTION public.canonical_knowledge_require_sync_target_desire
 RETURNS TRIGGER AS $$
 DECLARE
   current_target public.canonical_knowledge_sync_targets%ROWTYPE;
+  current_state public.canonical_knowledge_sync_states%ROWTYPE;
 BEGIN
   SELECT * INTO current_target
     FROM public.canonical_knowledge_sync_targets target
    WHERE target.organization_id = NEW.organization_id AND target.id = NEW.id;
+  SELECT * INTO current_state
+    FROM public.canonical_knowledge_sync_states state
+   WHERE state.organization_id = NEW.organization_id
+     AND state.target_id = NEW.id;
+  IF NOT FOUND OR NOT public.canonical_knowledge_sync_sequence_matches(
+       NEW.organization_id, NEW.id
+     ) THEN
+    RAISE EXCEPTION 'Synchronization target is missing state or sequence authority'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_target_authorities_required';
+  END IF;
+
   IF current_target.status = 'active'
      AND current_target.target_revision = NEW.target_revision
-     AND NOT EXISTS (
+     AND (current_state.desired_event_id IS NULL OR NOT EXISTS (
        SELECT 1 FROM public.canonical_knowledge_sync_outbox outbox
         WHERE outbox.organization_id = NEW.organization_id
           AND outbox.target_id = NEW.id
           AND outbox.target_revision = NEW.target_revision
-     ) THEN
+     )) THEN
     RAISE EXCEPTION 'Active synchronization target is missing durable desired state'
       USING ERRCODE = '23514',
             CONSTRAINT = 'canonical_knowledge_sync_target_desired_required';
+  ELSIF current_target.status = 'suspended'
+     AND (current_state.status <> 'suspended'
+       OR current_state.diagnostic_category <> 'target_suspended') THEN
+    RAISE EXCEPTION 'Suspended synchronization target is missing exact state authority'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'canonical_knowledge_sync_states_target_status_exact';
   END IF;
   RETURN NULL;
 END;
@@ -1777,6 +2046,14 @@ CREATE TRIGGER canonical_knowledge_sync_targets_no_delete
   BEFORE DELETE ON public.canonical_knowledge_sync_targets
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_reject_sync_target_delete();
 
+CREATE TRIGGER canonical_knowledge_sync_sequences_validate
+  BEFORE INSERT OR UPDATE ON public.canonical_knowledge_sync_sequences
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_validate_sync_sequence();
+
+CREATE TRIGGER canonical_knowledge_sync_sequences_no_delete
+  BEFORE DELETE ON public.canonical_knowledge_sync_sequences
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_reject_sync_sequence_delete();
+
 CREATE TRIGGER canonical_knowledge_sync_outbox_assign_identity
   BEFORE INSERT ON public.canonical_knowledge_sync_outbox
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_assign_sync_outbox_identity();
@@ -1808,6 +2085,15 @@ CREATE TRIGGER canonical_knowledge_sync_attempts_no_delete
 CREATE TRIGGER canonical_knowledge_sync_states_validate
   BEFORE INSERT OR UPDATE ON public.canonical_knowledge_sync_states
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_validate_sync_state();
+
+CREATE TRIGGER canonical_knowledge_sync_states_no_delete
+  BEFORE DELETE ON public.canonical_knowledge_sync_states
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_reject_sync_state_delete();
+
+CREATE CONSTRAINT TRIGGER canonical_knowledge_sync_sequences_require_outbox
+  AFTER INSERT OR UPDATE ON public.canonical_knowledge_sync_sequences
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_require_sync_sequence_matrix();
 
 CREATE CONSTRAINT TRIGGER canonical_knowledge_publications_require_sync_outbox
   AFTER INSERT ON public.canonical_knowledge_publications

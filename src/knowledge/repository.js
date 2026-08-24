@@ -3,6 +3,11 @@
 const { normalizeInitialDraft, normalizeUuid } = require('./contract');
 const { generateInitialKnowledgeDrafts } = require('./generator');
 const {
+  CAPABILITY_KEYS,
+  buildKnowledgeProjection,
+  normalizeProjectionRequest,
+} = require('./projection');
+const {
   buildTombstoneDocument,
   normalizeRevisionInput,
   normalizeRollbackInput,
@@ -69,6 +74,44 @@ async function withTransaction(pool, operation) {
   } finally {
     client.release();
   }
+}
+
+async function withReadTransaction(pool, operation) {
+  if (!pool || typeof pool.connect !== 'function') {
+    throw new TypeError('Knowledge repository requires a PostgreSQL pool');
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY DEFERRABLE');
+    await client.query("SET LOCAL statement_timeout = '5000ms'");
+    const result = await operation(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      // Preserve the original database or contract failure.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function requireMembershipSnapshot(client, organizationId, actorUserId, allowedRoles) {
+  const result = await client.query(
+    `SELECT role
+       FROM organization_memberships
+      WHERE organization_id = $1
+        AND user_id = $2
+        AND status = 'active'`,
+    [organizationId, actorUserId]
+  );
+  if (result.rowCount !== 1 || (allowedRoles && !allowedRoles.includes(result.rows[0].role))) {
+    throw authorizationError();
+  }
+  return result.rows[0].role;
 }
 
 function mapVersion(entry, version, provenance) {
@@ -1133,6 +1176,151 @@ async function getKnowledgeLifecycleHistory(pool, input) {
   });
 }
 
+async function previewPublishedKnowledgeProjection(pool, input) {
+  const request = normalizeProjectionRequest(input);
+  const requestedKeys = request.capabilities.map(capability => CAPABILITY_KEYS[capability]);
+  try {
+    return await withReadTransaction(pool, async client => {
+      const allowedRoles = request.profile.requiresAdministrator ? ['owner', 'admin'] : null;
+      const role = await requireMembershipSnapshot(
+        client,
+        request.organizationId,
+        request.actorUserId,
+        allowedRoles
+      );
+      const canReadProtected = role === 'owner' || role === 'admin';
+      let result;
+      if (request.selection === 'exact_pins') {
+        result = await client.query(
+          `SELECT entry.id AS entry_id,
+                  entry.canonical_key,
+                  entry.entry_type,
+                  version.id AS version_id,
+                  version.version_number,
+                  version.sensitivity,
+                  version.review_requirement,
+                  version.canonical_document,
+                  version.canonical_digest,
+                  publication.id AS publication_id,
+                  publication.publication_number,
+                  publication.canonical_digest AS publication_digest
+             FROM canonical_knowledge_publications publication
+             JOIN canonical_knowledge_entries entry
+               ON entry.organization_id = publication.organization_id
+              AND entry.id = publication.entry_id
+             JOIN canonical_knowledge_versions version
+               ON version.organization_id = publication.organization_id
+              AND version.entry_id = publication.entry_id
+              AND version.id = publication.version_id
+            WHERE publication.organization_id = $1
+              AND publication.id = ANY($2::uuid[])
+              AND (
+                $3::boolean
+                OR (
+                  version.sensitivity IN ('public', 'internal')
+                  AND version.review_requirement = 'standard'
+                )
+              )`,
+          [
+            request.organizationId,
+            request.exactSourcePins.map(pin => pin.publicationId),
+            canReadProtected,
+          ]
+        );
+      } else {
+        result = await client.query(
+          `WITH latest_publications AS (
+             SELECT DISTINCT ON (publication.entry_id) publication.*
+               FROM canonical_knowledge_publications publication
+              WHERE publication.organization_id = $1
+              ORDER BY publication.entry_id, publication.publication_number DESC, publication.id
+           )
+           SELECT entry.id AS entry_id,
+                  entry.canonical_key,
+                  entry.entry_type,
+                  version.id AS version_id,
+                  version.version_number,
+                  version.sensitivity,
+                  version.review_requirement,
+                  version.canonical_document,
+                  version.canonical_digest,
+                  publication.id AS publication_id,
+                  publication.publication_number,
+                  publication.canonical_digest AS publication_digest
+             FROM latest_publications publication
+             JOIN canonical_knowledge_entries entry
+               ON entry.organization_id = publication.organization_id
+              AND entry.id = publication.entry_id
+             JOIN canonical_knowledge_versions version
+               ON version.organization_id = publication.organization_id
+              AND version.entry_id = publication.entry_id
+              AND version.id = publication.version_id
+            WHERE (
+                entry.canonical_key = ANY($2::text[])
+                OR (
+                  $4::boolean
+                  AND
+                  jsonb_typeof(version.applicability->'projection'->'capabilities') = 'array'
+                  AND (version.applicability->'projection'->'capabilities') ?| $3::text[]
+                  AND (
+                    version.applicability->'projection'->'consumers' IS NULL
+                    OR (
+                      jsonb_typeof(version.applicability->'projection'->'consumers') = 'array'
+                      AND (version.applicability->'projection'->'consumers') ? $5::text
+                    )
+                  )
+                  AND (
+                    version.applicability->'projection'->'audiences' IS NULL
+                    OR (
+                      jsonb_typeof(version.applicability->'projection'->'audiences') = 'array'
+                      AND (version.applicability->'projection'->'audiences') ? $6::text
+                    )
+                  )
+                )
+              )
+              AND (
+                $7::boolean
+                OR (
+                  version.sensitivity IN ('public', 'internal')
+                  AND version.review_requirement = 'standard'
+                )
+              )
+            ORDER BY entry.canonical_key, publication.id
+            LIMIT $8`,
+          [
+            request.organizationId,
+            requestedKeys,
+            request.capabilities,
+            request.audience !== 'customer',
+            request.consumer,
+            request.audience,
+            canReadProtected,
+            request.profile.maximumCandidates + 1,
+          ]
+        );
+      }
+      if (request.selection === 'latest_published' &&
+          result.rowCount > request.profile.maximumCandidates) {
+        throw new KnowledgeRepositoryError(
+          'knowledge_projection_candidate_limit_exceeded',
+          'The authorized projection candidate set exceeds its bounded limit',
+          413
+        );
+      }
+      return buildKnowledgeProjection(request, result.rows);
+    });
+  } catch (error) {
+    if (error && error.code === '40001') {
+      throw new KnowledgeRepositoryError(
+        'knowledge_projection_conflict',
+        'Published knowledge changed concurrently; retry from a fresh snapshot',
+        409
+      );
+    }
+    throw error;
+  }
+}
+
 async function getKnowledgeVersion(pool, input) {
   const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
   const actorUserId = normalizeUuid(input && input.actorUserId, 'actorUserId');
@@ -1220,6 +1408,7 @@ module.exports = {
   createKnowledgeTombstone,
   generateInitialKnowledgeFromAuthorities,
   getKnowledgeLifecycleHistory,
+  previewPublishedKnowledgeProjection,
   getKnowledgeWorkflowState,
   getKnowledgeVersion,
   publishKnowledgeVersion,

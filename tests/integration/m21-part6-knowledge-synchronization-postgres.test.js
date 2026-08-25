@@ -2875,11 +2875,11 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
       if (results[suspensionIndex].status === 'rejected') {
         expect(results[suspensionIndex].reason).toMatchObject({
           code: 'knowledge_sync_conflict',
-          statusCode: 409,
+          status: 409,
         });
         const freshTarget = await sync.getTargetState({
           organizationId: actors.organizationId,
-          actorUserId: actors.adminUserId,
+          actorUserId: actors.admin,
           targetId: configured.target.id,
         });
         await expect(sync.configureTarget(targetInput(actors, {

@@ -210,9 +210,14 @@ Part 6 is complete only when all of the following are true:
   distinct non-owner runtime role with no superuser, role/database creation, replication, RLS-bypass,
   schema-creation, role-assumption, `TRUNCATE`, `REFERENCES`, `TRIGGER`, migration-ledger, ownership,
   or DDL authority. Startup verifies the exact session roles, ownership, non-membership, grants, and
-  withheld privileges, same-cluster identity, and inability to disable triggers through
-  `session_replication_role`, and fails closed before serving when the split is absent or
-  inconsistent.
+  withheld privileges, same-cluster identity, exact effective `session_replication_role = origin`,
+  and absence of every runtime-owned or runtime-writable application schema. Every newly
+  authenticated runtime connection and every pooled checkout pins and verifies
+  `public, pg_catalog, pg_temp` so neither
+  role/database/URL defaults, a quoted `$user` schema, nor temporary objects can precede canonical
+  public authority. An injected runtime pool must be protected before its first connection.
+  Startup fails closed before serving when any identity, session, schema, or privilege boundary is
+  absent or inconsistent.
   Every retained synchronization table also rejects `TRUNCATE` with a statement trigger as defense
   in depth, including multi-table, `CASCADE`, and `RESTART IDENTITY` entry paths.
 - Creating, revising, activating, suspending, or explicitly reconciling a target requires one

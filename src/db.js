@@ -15,6 +15,7 @@ const { Pool } = require('pg');
 const DEFAULT_MIGRATIONS_DIRECTORY = path.join(__dirname, '..', 'migrations');
 const MIGRATION_LOCK_KEY = '5643944089238424905';
 const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
+const RUNTIME_SEARCH_PATH = 'public, pg_catalog, pg_temp';
 const PROTECTED_LEGACY_MIGRATION_CHECKSUMS = Object.freeze({
   '001_initial_schema.sql': '74ee47a852a376c3f5f8b2a5bf24579d24eb6a20dc8284e8b233a0159e858c14',
   '002_seed_data.sql': '370b2b2cd466817724f4788e104adef3f93d3d8a02bd877f252d1e3d6f588cd5',
@@ -30,15 +31,74 @@ const PROTECTED_LEGACY_MIGRATION_CHECKSUMS = Object.freeze({
 let pool = null;
 let dbAvailable = false;
 let readinessFailure = null;
+const protectedRuntimePools = new WeakSet();
 
-function createPool(connectionString, maximumConnections) {
-  return new Pool({
+async function enforceRuntimeSessionPolicy(client) {
+  const state = (await client.query(
+    `WITH pinned AS MATERIALIZED (
+       SELECT pg_catalog.set_config('search_path', $1, false) AS applied_search_path
+     )
+     SELECT pg_catalog.current_setting('session_replication_role') AS replication_role,
+            pg_catalog.current_setting('search_path') AS search_path
+       FROM pinned`,
+    [RUNTIME_SEARCH_PATH]
+  )).rows[0];
+  if (!state || state.replication_role !== 'origin') {
+    throw new Error('Runtime database session is not in origin replication mode');
+  }
+  if (state.search_path !== RUNTIME_SEARCH_PATH) {
+    throw new Error('Runtime database session search path verification failed');
+  }
+}
+
+function protectRuntimePool(runtimePool) {
+  if (protectedRuntimePools.has(runtimePool)) return runtimePool;
+  if (!runtimePool || typeof runtimePool.connect !== 'function') {
+    throw new Error('Runtime database pool is invalid');
+  }
+  if (runtimePool.totalCount !== 0) {
+    throw new Error('Runtime database pool must be protected before its first connection');
+  }
+
+  const connect = runtimePool.connect.bind(runtimePool);
+  runtimePool.connect = function connectWithRuntimePolicy(callback) {
+    if (typeof callback === 'function') {
+      return connect((error, client, release) => {
+        if (error) return callback(error);
+        enforceRuntimeSessionPolicy(client).then(
+          () => callback(undefined, client, release),
+          policyError => {
+            release(policyError);
+            callback(policyError);
+          }
+        );
+      });
+    }
+    return connect().then(async client => {
+      try {
+        await enforceRuntimeSessionPolicy(client);
+        return client;
+      } catch (error) {
+        client.release(error);
+        throw error;
+      }
+    });
+  };
+  protectedRuntimePools.add(runtimePool);
+  return runtimePool;
+}
+
+function createPool(connectionString, maximumConnections, options = {}) {
+  const poolOptions = {
     connectionString,
     ssl: connectionString.includes('railway') ? { rejectUnauthorized: false } : false,
     max: maximumConnections,
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 30000,
-  });
+  };
+  if (options.runtime === true) poolOptions.onConnect = enforceRuntimeSessionPolicy;
+  const createdPool = new Pool(poolOptions);
+  return options.runtime === true ? protectRuntimePool(createdPool) : createdPool;
 }
 
 function getPool() {
@@ -47,7 +107,9 @@ function getPool() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) return null;
 
-  pool = createPool(connectionString, parseInt(process.env.DB_POOL_MAX || '20', 10));
+  pool = createPool(connectionString, parseInt(process.env.DB_POOL_MAX || '20', 10), {
+    runtime: true,
+  });
   pool.on('error', (error) => {
     dbAvailable = false;
     readinessFailure = 'postgres_pool_error';
@@ -810,6 +872,7 @@ async function readDatabaseRoleIdentity(client) {
 }
 
 async function assertSeparatedDatabaseRoles(migrationClient, runtimeClient) {
+  await enforceRuntimeSessionPolicy(runtimeClient);
   const migration = await readDatabaseRoleIdentity(migrationClient);
   const runtime = await readDatabaseRoleIdentity(runtimeClient);
   if (!migration || !runtime || migration.database_name !== runtime.database_name ||
@@ -860,6 +923,24 @@ async function assertSeparatedDatabaseRoles(migrationClient, runtimeClient) {
   if (runtimeCreation.database_create || runtimeCreation.schema_create ||
       runtimeCreation.replication_role_set) {
     throw new Error('Runtime database role retains schema or trigger-bypass authority');
+  }
+
+  const writableSchemas = await migrationClient.query(
+    `SELECT namespace.nspname,
+            pg_catalog.pg_get_userbyid(namespace.nspowner) AS owner,
+            pg_catalog.has_schema_privilege($1, namespace.oid, 'CREATE') AS runtime_create
+       FROM pg_catalog.pg_namespace namespace
+      WHERE namespace.nspname !~ '^pg_'
+        AND namespace.nspname <> 'information_schema'
+        AND (
+          pg_catalog.pg_get_userbyid(namespace.nspowner) = $1
+          OR pg_catalog.has_schema_privilege($1, namespace.oid, 'CREATE')
+        )
+      ORDER BY namespace.nspname`,
+    [runtime.current_user]
+  );
+  if (writableSchemas.rowCount !== 0) {
+    throw new Error('Runtime database role owns or can create in an application schema');
   }
   return Object.freeze({ migrationRole: migration.current_user, runtimeRole: runtime.current_user });
 }
@@ -998,12 +1079,13 @@ async function runMigrations(options = {}) {
   const migrations = loadMigrations(migrationsDirectory);
   const migrationNames = new Set(migrations.map(migration => migration.file));
   const appliedNow = [];
+  const runtimeAuthorityPool = roleSeparated ? protectRuntimePool(options.runtimePool) : null;
   const client = await targetPool.connect();
   let runtimeClient = null;
   let transactionOpen = false;
 
   try {
-    if (roleSeparated) runtimeClient = await options.runtimePool.connect();
+    if (roleSeparated) runtimeClient = await runtimeAuthorityPool.connect();
     const authority = roleSeparated
       ? await assertSeparatedDatabaseRoles(client, runtimeClient)
       : null;

@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 const { Client, Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { AccountRepository } = require('../../src/accounts/repository');
 const { digestCanonical } = require('../../src/knowledge/synchronization');
 const { canonicalStringify } = require('../../src/knowledge/contract');
 
@@ -329,6 +330,9 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
   let SyncWorker;
   let freshDatabase;
   let upgradeDatabase;
+  let replicaDatabase;
+  let shadowDatabase;
+  let safePathDatabase;
   let freshPool;
   let upgradePool;
   let freshMigrationPool;
@@ -339,7 +343,16 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
   beforeAll(async () => {
     freshDatabase = await createSuiteDatabase('m21-p6-sync-fresh');
     upgradeDatabase = await createSuiteDatabase('m21-p6-sync-upgrade');
-    databaseRoles = await provisionSeparatedDatabaseRoles([freshDatabase, upgradeDatabase]);
+    replicaDatabase = await createSuiteDatabase('m21-p6-sync-replica');
+    shadowDatabase = await createSuiteDatabase('m21-p6-sync-shadow');
+    safePathDatabase = await createSuiteDatabase('m21-p6-sync-safe-path');
+    databaseRoles = await provisionSeparatedDatabaseRoles([
+      freshDatabase,
+      upgradeDatabase,
+      replicaDatabase,
+      shadowDatabase,
+      safePathDatabase,
+    ]);
     freshMigrationPool = new Pool({ connectionString: databaseRoles.migrationUrls[0], max: 4 });
     upgradeMigrationPool = new Pool({ connectionString: databaseRoles.migrationUrls[1], max: 4 });
     freshPool = new Pool({ connectionString: databaseRoles.runtimeUrls[0], max: 20 });
@@ -379,6 +392,9 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
       }
       if (freshDatabase) await freshDatabase.cleanup();
       if (upgradeDatabase) await upgradeDatabase.cleanup();
+      if (replicaDatabase) await replicaDatabase.cleanup();
+      if (shadowDatabase) await shadowDatabase.cleanup();
+      if (safePathDatabase) await safePathDatabase.cleanup();
       await dropSeparatedDatabaseRoles(databaseRoles);
     }
   }, 120000);
@@ -458,6 +474,343 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     }
   }, 120000);
 
+  test('rejects inherited replica mode in direct migration and production pool connection paths', async () => {
+    const admin = new Client({ connectionString: process.env.M19_PG_ADMIN_URL });
+    const migrationPool = new Pool({ connectionString: databaseRoles.migrationUrls[2], max: 2 });
+    const preusedRuntimePool = new Pool({ connectionString: databaseRoles.runtimeUrls[2], max: 2 });
+    const runtimePool = new Pool({ connectionString: databaseRoles.runtimeUrls[2], max: 2 });
+    const runtimeProbe = new Client({ connectionString: databaseRoles.runtimeUrls[2] });
+    const original = {
+      databaseUrl: process.env.DATABASE_URL,
+      migrationDatabaseUrl: process.env.MIGRATION_DATABASE_URL,
+      nodeEnv: process.env.NODE_ENV,
+    };
+    await admin.connect();
+    try {
+      await admin.query(
+        `ALTER ROLE ${quoteIdentifier(databaseRoles.runtimeRole)}
+           IN DATABASE ${quoteIdentifier(replicaDatabase.databaseName)}
+           SET session_replication_role = 'replica'`
+      );
+      await preusedRuntimePool.query('SELECT 1');
+      await expect(db.runMigrations({
+        pool: migrationPool,
+        runtimePool: preusedRuntimePool,
+        migrationsDirectory: MIGRATIONS,
+      })).rejects.toThrow('Runtime database pool must be protected before its first connection');
+      await expect(db.runMigrations({
+        pool: migrationPool,
+        runtimePool,
+        migrationsDirectory: MIGRATIONS,
+      })).rejects.toThrow('Runtime database session is not in origin replication mode');
+      await runtimeProbe.connect();
+      expect((await runtimeProbe.query(
+        `SELECT pg_catalog.current_setting('session_replication_role') AS replication_role,
+                pg_catalog.has_parameter_privilege(
+                  current_user, 'session_replication_role', 'SET'
+                ) AS replication_role_set`
+      )).rows).toEqual([{ replication_role: 'replica', replication_role_set: false }]);
+
+      process.env.NODE_ENV = 'test';
+      db.resetForTests();
+      process.env.NODE_ENV = 'production';
+      process.env.DATABASE_URL = databaseRoles.runtimeUrls[2];
+      process.env.MIGRATION_DATABASE_URL = databaseRoles.migrationUrls[2];
+      expect(await db.initDatabase()).toBe(false);
+      expect(db.readiness()).toEqual({
+        ready: false,
+        failure: 'postgres_initialization_failed',
+      });
+    } finally {
+      await db.close().catch(() => {});
+      await admin.query(
+        `ALTER ROLE ${quoteIdentifier(databaseRoles.runtimeRole)}
+           IN DATABASE ${quoteIdentifier(replicaDatabase.databaseName)}
+           RESET session_replication_role`
+      ).catch(() => {});
+      await runtimeProbe.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await preusedRuntimePool.end().catch(() => {});
+      await migrationPool.end().catch(() => {});
+      await admin.end().catch(() => {});
+      if (original.databaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = original.databaseUrl;
+      if (original.migrationDatabaseUrl === undefined) delete process.env.MIGRATION_DATABASE_URL;
+      else process.env.MIGRATION_DATABASE_URL = original.migrationDatabaseUrl;
+      if (original.nodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = original.nodeEnv;
+    }
+  }, 120000);
+
+  test('rejects quoted runtime-owned and separately granted writable application schemas', async () => {
+    const databaseAdmin = new Client({ connectionString: shadowDatabase.connectionString });
+    const migrationPool = new Pool({ connectionString: databaseRoles.migrationUrls[3], max: 2 });
+    const runtimePool = new Pool({ connectionString: databaseRoles.runtimeUrls[3], max: 2 });
+    const grantedSchema = `runtime-grant-${process.pid}`;
+    const original = {
+      databaseUrl: process.env.DATABASE_URL,
+      migrationDatabaseUrl: process.env.MIGRATION_DATABASE_URL,
+      nodeEnv: process.env.NODE_ENV,
+    };
+    await databaseAdmin.connect();
+    try {
+      await databaseAdmin.query(
+        `CREATE SCHEMA ${quoteIdentifier(databaseRoles.runtimeRole)}
+           AUTHORIZATION ${quoteIdentifier(databaseRoles.runtimeRole)}`
+      );
+      await expect(db.runMigrations({
+        pool: migrationPool,
+        runtimePool,
+        migrationsDirectory: MIGRATIONS,
+      })).rejects.toThrow('Runtime database role owns or can create in an application schema');
+
+      process.env.NODE_ENV = 'test';
+      db.resetForTests();
+      process.env.NODE_ENV = 'production';
+      process.env.DATABASE_URL = databaseRoles.runtimeUrls[3];
+      process.env.MIGRATION_DATABASE_URL = databaseRoles.migrationUrls[3];
+      expect(await db.initDatabase()).toBe(false);
+      expect(db.readiness()).toEqual({
+        ready: false,
+        failure: 'postgres_initialization_failed',
+      });
+      await db.close();
+
+      await databaseAdmin.query(`DROP SCHEMA ${quoteIdentifier(databaseRoles.runtimeRole)}`);
+      await databaseAdmin.query(
+        `CREATE SCHEMA ${quoteIdentifier(grantedSchema)}
+           AUTHORIZATION ${quoteIdentifier(databaseRoles.migrationRole)}`
+      );
+      await databaseAdmin.query(
+        `GRANT USAGE, CREATE ON SCHEMA ${quoteIdentifier(grantedSchema)}
+           TO ${quoteIdentifier(databaseRoles.runtimeRole)}`
+      );
+      await expect(db.runMigrations({
+        pool: migrationPool,
+        runtimePool,
+        migrationsDirectory: MIGRATIONS,
+      })).rejects.toThrow('Runtime database role owns or can create in an application schema');
+    } finally {
+      await db.close().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await migrationPool.end().catch(() => {});
+      await databaseAdmin.end().catch(() => {});
+      if (original.databaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = original.databaseUrl;
+      if (original.migrationDatabaseUrl === undefined) delete process.env.MIGRATION_DATABASE_URL;
+      else process.env.MIGRATION_DATABASE_URL = original.migrationDatabaseUrl;
+      if (original.nodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = original.nodeEnv;
+    }
+  }, 120000);
+
+  test('pins every new production runtime connection to canonical authority across hostile defaults and reconnects', async () => {
+    const databaseAdmin = new Client({ connectionString: safePathDatabase.connectionString });
+    const hostileSchema = `provider-shadow-${process.pid}`;
+    const forgedEmail = `shadow-${process.pid}@example.test`;
+    const forgedOrganizationId = crypto.randomUUID();
+    const forgedUserId = crypto.randomUUID();
+    const forgedProfileId = crypto.randomUUID();
+    const canonicalEmail = `canonical-${process.pid}@example.test`;
+    const canonicalOrganizationId = crypto.randomUUID();
+    const canonicalUserId = crypto.randomUUID();
+    const original = {
+      databaseUrl: process.env.DATABASE_URL,
+      migrationDatabaseUrl: process.env.MIGRATION_DATABASE_URL,
+      dbPoolMax: process.env.DB_POOL_MAX,
+      nodeEnv: process.env.NODE_ENV,
+    };
+    let heldClient;
+    let reconnectClient;
+    let poisonedClient;
+    let reusedClient;
+    await databaseAdmin.connect();
+    try {
+      await databaseAdmin.query(
+        `CREATE SCHEMA ${quoteIdentifier(hostileSchema)}
+           AUTHORIZATION ${quoteIdentifier(databaseRoles.migrationRole)}`
+      );
+      await databaseAdmin.query(`
+        CREATE TABLE ${quoteIdentifier(hostileSchema)}.users (
+          id UUID, organization_id UUID, name TEXT, email TEXT, phone TEXT,
+          password_hash TEXT, status TEXT, email_normalized TEXT
+        );
+        CREATE TABLE ${quoteIdentifier(hostileSchema)}.organizations (id UUID, name TEXT);
+        CREATE TABLE ${quoteIdentifier(hostileSchema)}.organization_memberships (
+          id UUID, user_id UUID, organization_id UUID, role TEXT, status TEXT
+        );
+        CREATE TABLE ${quoteIdentifier(hostileSchema)}.organization_onboarding (
+          organization_id UUID, status TEXT
+        );
+        CREATE TABLE ${quoteIdentifier(hostileSchema)}.canonical_business_profiles (
+          id UUID, organization_id UUID, is_active BOOLEAN
+        )
+      `);
+      await databaseAdmin.query(
+        `INSERT INTO ${quoteIdentifier(hostileSchema)}.users
+           VALUES ($1,$2,'Forged Owner',$3,NULL,'forged-password','active',$3)`,
+        [forgedUserId, forgedOrganizationId, forgedEmail]
+      );
+      await databaseAdmin.query(
+        `INSERT INTO ${quoteIdentifier(hostileSchema)}.organizations
+           VALUES ($1,'Forged Organization')`,
+        [forgedOrganizationId]
+      );
+      await databaseAdmin.query(
+        `INSERT INTO ${quoteIdentifier(hostileSchema)}.organization_memberships
+           VALUES ($1,$1,$2,'owner','active')`,
+        [forgedUserId, forgedOrganizationId]
+      );
+      await databaseAdmin.query(
+        `INSERT INTO ${quoteIdentifier(hostileSchema)}.organization_onboarding
+           VALUES ($1,'active')`,
+        [forgedOrganizationId]
+      );
+      await databaseAdmin.query(
+        `INSERT INTO ${quoteIdentifier(hostileSchema)}.canonical_business_profiles
+           VALUES ($1,$2,TRUE)`,
+        [forgedProfileId, forgedOrganizationId]
+      );
+      await databaseAdmin.query(
+        `GRANT USAGE ON SCHEMA ${quoteIdentifier(hostileSchema)}
+           TO ${quoteIdentifier(databaseRoles.runtimeRole)};
+         GRANT SELECT ON ALL TABLES IN SCHEMA ${quoteIdentifier(hostileSchema)}
+           TO ${quoteIdentifier(databaseRoles.runtimeRole)}`
+      );
+      await databaseAdmin.query(
+        `ALTER ROLE ${quoteIdentifier(databaseRoles.runtimeRole)}
+           IN DATABASE ${quoteIdentifier(safePathDatabase.databaseName)}
+           SET search_path = ${quoteIdentifier(hostileSchema)}, "$user", public`
+      );
+
+      process.env.NODE_ENV = 'test';
+      db.resetForTests();
+      process.env.NODE_ENV = 'production';
+      process.env.DB_POOL_MAX = '2';
+      process.env.DATABASE_URL = databaseRoles.runtimeUrls[4];
+      process.env.MIGRATION_DATABASE_URL = databaseRoles.migrationUrls[4];
+      expect(await db.initDatabase()).toBe(true);
+      const runtimePool = db.getPool();
+      const accountRepository = new AccountRepository(runtimePool);
+      expect((await runtimePool.query(
+        `SELECT pg_catalog.current_setting('session_replication_role') AS replication_role,
+                pg_catalog.current_setting('search_path') AS search_path,
+                namespace.nspname AS users_schema
+           FROM pg_catalog.pg_class relation
+           JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+          WHERE relation.oid = 'users'::pg_catalog.regclass`
+      )).rows).toEqual([{
+        replication_role: 'origin',
+        search_path: 'public, pg_catalog, pg_temp',
+        users_schema: 'public',
+      }]);
+      expect(await accountRepository.findLoginAuthority(forgedEmail)).toBeNull();
+
+      await runtimePool.query(
+        `INSERT INTO public.organizations(id, name, email) VALUES ($1,$2,$3)`,
+        [canonicalOrganizationId, 'Canonical runtime path', canonicalEmail]
+      );
+      await runtimePool.query(
+        `INSERT INTO public.users(
+           id, organization_id, name, email, email_normalized, password_hash, role, status
+         ) VALUES ($1,$2,'Canonical Owner',$3,$3,'canonical-password','owner','active')`,
+        [canonicalUserId, canonicalOrganizationId, canonicalEmail]
+      );
+      await runtimePool.query(
+        `INSERT INTO public.organization_memberships(
+           id, organization_id, user_id, role, status
+         ) VALUES ($1,$2,$1,'owner','active')`,
+        [canonicalUserId, canonicalOrganizationId]
+      );
+      await runtimePool.query(
+        `INSERT INTO public.organization_onboarding(organization_id, status)
+         VALUES ($1,'business_profile_required')`,
+        [canonicalOrganizationId]
+      );
+      expect(await accountRepository.findLoginAuthority(canonicalEmail)).toMatchObject({
+        user_id: canonicalUserId,
+        organization_id: canonicalOrganizationId,
+        role: 'owner',
+        user_status: 'active',
+        membership_status: 'active',
+      });
+
+      poisonedClient = await runtimePool.connect();
+      const poisonedBackend = (await poisonedClient.query(
+        'SELECT pg_catalog.pg_backend_pid() AS backend_pid'
+      )).rows[0].backend_pid;
+      await poisonedClient.query('CREATE TEMP TABLE users(id UUID)');
+      await poisonedClient.query('SET search_path = pg_temp, public');
+      poisonedClient.release();
+      poisonedClient = null;
+      reusedClient = await runtimePool.connect();
+      expect((await reusedClient.query(
+        `SELECT pg_catalog.pg_backend_pid() AS backend_pid,
+                pg_catalog.current_setting('search_path') AS search_path,
+                namespace.nspname AS users_schema
+           FROM pg_catalog.pg_class relation
+           JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+          WHERE relation.oid = 'users'::pg_catalog.regclass`
+      )).rows).toEqual([{
+        backend_pid: poisonedBackend,
+        search_path: 'public, pg_catalog, pg_temp',
+        users_schema: 'public',
+      }]);
+      await reusedClient.query('DROP TABLE pg_temp.users');
+      reusedClient.release();
+      reusedClient = null;
+
+      heldClient = await runtimePool.connect();
+      await databaseAdmin.query(
+        `ALTER ROLE ${quoteIdentifier(databaseRoles.runtimeRole)}
+           IN DATABASE ${quoteIdentifier(safePathDatabase.databaseName)}
+           SET session_replication_role = 'replica'`
+      );
+      await expect(runtimePool.connect())
+        .rejects.toThrow('Runtime database session is not in origin replication mode');
+      await databaseAdmin.query(
+        `ALTER ROLE ${quoteIdentifier(databaseRoles.runtimeRole)}
+           IN DATABASE ${quoteIdentifier(safePathDatabase.databaseName)}
+           RESET session_replication_role`
+      );
+      reconnectClient = await runtimePool.connect();
+      expect((await reconnectClient.query(
+        `SELECT pg_catalog.current_setting('session_replication_role') AS replication_role,
+                pg_catalog.current_setting('search_path') AS search_path`
+      )).rows).toEqual([{
+        replication_role: 'origin',
+        search_path: 'public, pg_catalog, pg_temp',
+      }]);
+      await reconnectClient.query('CREATE TEMP TABLE users(id UUID)');
+      expect((await reconnectClient.query(
+        `SELECT namespace.nspname AS users_schema
+           FROM pg_catalog.pg_class relation
+           JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+          WHERE relation.oid = 'users'::pg_catalog.regclass`
+      )).rows).toEqual([{ users_schema: 'public' }]);
+    } finally {
+      if (reusedClient) reusedClient.release();
+      if (poisonedClient) poisonedClient.release();
+      if (reconnectClient) reconnectClient.release();
+      if (heldClient) heldClient.release();
+      await databaseAdmin.query(
+        `ALTER ROLE ${quoteIdentifier(databaseRoles.runtimeRole)}
+           IN DATABASE ${quoteIdentifier(safePathDatabase.databaseName)}
+           RESET session_replication_role`
+      ).catch(() => {});
+      await db.close().catch(() => {});
+      await databaseAdmin.end().catch(() => {});
+      if (original.databaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = original.databaseUrl;
+      if (original.migrationDatabaseUrl === undefined) delete process.env.MIGRATION_DATABASE_URL;
+      else process.env.MIGRATION_DATABASE_URL = original.migrationDatabaseUrl;
+      if (original.dbPoolMax === undefined) delete process.env.DB_POOL_MAX;
+      else process.env.DB_POOL_MAX = original.dbPoolMax;
+      if (original.nodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = original.nodeEnv;
+    }
+  }, 120000);
+
   test('authenticates a distinct least-privileged runtime role and rejects every retained-authority TRUNCATE path', async () => {
     const roles = (await freshMigrationPool.query(
       `SELECT current_user::text AS migration_current,
@@ -476,9 +829,10 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
                 AS system_identifier,
               pg_has_role(current_user, $1, 'SET') AS can_set_migration,
               has_database_privilege(current_user, current_database(), 'CREATE') AS database_create,
-              has_schema_privilege(current_user, 'public', 'CREATE') AS schema_create,
-              has_parameter_privilege(current_user, 'session_replication_role', 'SET')
-                AS replication_role_set`,
+               has_schema_privilege(current_user, 'public', 'CREATE') AS schema_create,
+               has_parameter_privilege(current_user, 'session_replication_role', 'SET')
+                 AS replication_role_set,
+               pg_catalog.current_setting('session_replication_role') AS replication_role`,
       [databaseRoles.migrationRole]
     )).rows[0];
     expect(roles).toEqual({
@@ -496,7 +850,19 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
       database_create: false,
       schema_create: false,
       replication_role_set: false,
+      replication_role: 'origin',
     });
+    expect((await freshMigrationPool.query(
+      `SELECT namespace.nspname
+         FROM pg_catalog.pg_namespace namespace
+        WHERE namespace.nspname !~ '^pg_'
+          AND namespace.nspname <> 'information_schema'
+          AND (
+            pg_catalog.pg_get_userbyid(namespace.nspowner) = $1
+            OR pg_catalog.has_schema_privilege($1, namespace.oid, 'CREATE')
+          )`,
+      [databaseRoles.runtimeRole]
+    )).rows).toEqual([]);
 
     const syncTables = [
       'canonical_knowledge_sync_targets',

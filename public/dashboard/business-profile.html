@@ -10,6 +10,7 @@
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/workspace-form-state.css">
+  <link rel="stylesheet" href="/css/knowledge-management.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: var(--font-sans); color: inherit; background: inherit; }
@@ -194,7 +195,7 @@
           <div class="bp-nav-group"><span class="bp-nav-group-title">Services &amp; Pricing</span><button class="bp-nav-btn" data-section="services" onclick="switchSection('services')">📋 Services</button><button class="bp-nav-btn" data-section="financial" onclick="switchSection('financial')">💰 Financial</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Schedule &amp; Area</span><button class="bp-nav-btn" data-section="serviceArea" onclick="switchSection('serviceArea')">🗺️ Service Area</button><button class="bp-nav-btn" data-section="hours" onclick="switchSection('hours')">🕐 Hours</button><button class="bp-nav-btn" data-section="routing" onclick="switchSection('routing')">🧭 Routing</button><button class="bp-nav-btn" data-section="scheduling" onclick="switchSection('scheduling')">📅 Scheduling</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Team &amp; Assets</span><button class="bp-nav-btn" data-section="crew" onclick="switchSection('crew')">👥 Crews</button><button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Assets &amp; Fleet</button><button class="bp-nav-btn" data-section="policies" onclick="switchSection('policies')">📜 Policies</button></div>
-          <div class="bp-nav-group"><span class="bp-nav-group-title">AI &amp; Voice</span><button class="bp-nav-btn" data-section="polaris" onclick="switchSection('polaris')">🤖 Polaris</button><button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">☎️ Voice &amp; Knowledge</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">AI &amp; Voice</span><button class="bp-nav-btn" data-section="polaris" onclick="switchSection('polaris')">🤖 Polaris</button><button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">☎️ Voice &amp; Knowledge</button><button class="bp-nav-btn" data-section="knowledge" onclick="switchSection('knowledge')">📚 Knowledge Management</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Notifications &amp; Apps</span><button class="bp-nav-btn" data-section="notifications" onclick="switchSection('notifications')">🔔 Notifications</button><button class="bp-nav-btn" data-section="integrations" onclick="switchSection('integrations')">🔗 Integrations</button></div>
         </div>
 
@@ -553,6 +554,33 @@
           </div>
         </div>
 
+        <!-- Section: Canonical Knowledge Management -->
+        <section class="bp-section" id="section-knowledge">
+          <div class="bp-card km-shell" id="knowledge-management" data-knowledge-management data-surface="business-profile" data-state="loading" aria-labelledby="knowledgeManagementProfileHeading">
+            <h2 id="knowledgeManagementProfileHeading">Knowledge Management</h2>
+            <p class="km-intro">Inspect the generated knowledge that follows this Business Profile, its exact provenance and lifecycle, and the provider-neutral synchronization state.</p>
+            <div data-km-mode hidden></div>
+            <p class="km-status" data-km-status role="status" aria-live="polite" aria-atomic="true">Loading canonical tenant knowledge. Controls remain read-only until authority resolves…</p>
+            <div class="km-filters" data-km-filters aria-label="Knowledge filters"></div>
+            <ul class="km-counts" data-km-counts aria-label="Knowledge counts"></ul>
+            <div class="km-layout">
+              <section class="km-panel" aria-labelledby="knowledgeManagementProfileListHeading">
+                <div class="km-panel-heading">
+                  <h3 id="knowledgeManagementProfileListHeading">Knowledge items</h3>
+                  <span class="km-item-key">Exact latest versions</span>
+                </div>
+                <ul class="km-list" data-km-list aria-label="Canonical knowledge items">
+                  <li class="km-empty">Loading tenant-scoped knowledge…</li>
+                </ul>
+              </section>
+              <section class="km-panel" data-km-detail aria-label="Exact knowledge item detail" aria-live="polite">
+                <div class="km-empty">Choose a knowledge item to inspect content, provenance, changes, lifecycle history, and synchronization truth.</div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+
         <!-- Section: Notifications -->
         <div class="bp-section" id="section-notifications">
           <div class="bp-card">
@@ -760,7 +788,8 @@
       root.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
       if (status) status.textContent = message;
       document.querySelectorAll('.bp-section input, .bp-section select, .bp-section textarea, .bp-section button').forEach(function(control) {
-        if (control.id === 'addAssetButton' || control.closest('#assetCatalogueContainer')) return;
+        if (control.id === 'addAssetButton' || control.closest('#assetCatalogueContainer') ||
+            control.closest('[data-knowledge-management]')) return;
         control.disabled = !profileAvailable;
       });
       updateGeneralProfileActionState(profileAvailable);
@@ -3466,6 +3495,7 @@
   </script>
   <script src="/js/command-center-contract.js"></script>
   <script src="/js/nav-component.js"></script>
+  <script src="/js/knowledge-management.js"></script>
   <script src="/js/workspace-form-state.js"></script>
   <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveBtn, #saveOperationalConfigurationBtn, #saveFinancialConfigurationBtn, #saveVoiceAssistantBtn, #saveProfileReadinessBtn' });</script>
   <script>NavComponent.init("business-profile");</script>

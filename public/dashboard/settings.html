@@ -13,6 +13,7 @@
   <script src="/js/trial-status.js"></script>
   <link rel="stylesheet" href="/css/site-professionalism.css">
   <link rel="stylesheet" href="/css/workspace-form-state.css">
+  <link rel="stylesheet" href="/css/knowledge-management.css">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -150,6 +151,31 @@
           <p class="description">This mirrors the account-level Company Information preference and is not voice configuration authority.</p>
         </div>
       </div>
+
+      <!-- Canonical Knowledge Management -->
+      <section class="settings-section km-shell" id="knowledge-management" data-knowledge-management data-surface="settings" data-state="loading" aria-labelledby="knowledgeManagementSettingsHeading">
+        <h2 id="knowledgeManagementSettingsHeading">Knowledge Management</h2>
+        <p class="km-intro">See exactly what NorthStar knows, where it came from, which immutable version is eligible for use, and whether provider-neutral synchronization is current.</p>
+        <div data-km-mode hidden></div>
+        <p class="km-status" data-km-status role="status" aria-live="polite" aria-atomic="true">Loading canonical tenant knowledge. Controls remain read-only until authority resolves…</p>
+        <div class="km-filters" data-km-filters aria-label="Knowledge filters"></div>
+        <ul class="km-counts" data-km-counts aria-label="Knowledge counts"></ul>
+        <div class="km-layout">
+          <section class="km-panel" aria-labelledby="knowledgeManagementSettingsListHeading">
+            <div class="km-panel-heading">
+              <h3 id="knowledgeManagementSettingsListHeading">Knowledge items</h3>
+              <span class="km-item-key">Exact latest versions</span>
+            </div>
+            <ul class="km-list" data-km-list aria-label="Canonical knowledge items">
+              <li class="km-empty">Loading tenant-scoped knowledge…</li>
+            </ul>
+          </section>
+          <section class="km-panel" data-km-detail aria-label="Exact knowledge item detail" aria-live="polite">
+            <div class="km-empty">Choose a knowledge item to inspect content, provenance, changes, lifecycle history, and synchronization truth.</div>
+          </section>
+        </div>
+      </section>
+
 
       <!-- Call Routing -->
       <div class="settings-section">
@@ -442,6 +468,7 @@
   <script src="/js/api.js"></script>
   <script src="/js/command-center-contract.js"></script>
   <script src="/js/nav-component.js"></script>
+  <script src="/js/knowledge-management.js"></script>
   <script src="/js/workspace-form-state.js"></script>
   <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn' });</script>
   <script>NavComponent.init("settings");</script>

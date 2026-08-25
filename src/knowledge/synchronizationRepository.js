@@ -392,10 +392,10 @@ async function enqueueTargetDesiredState(client, target, actorUserId, rawTrigger
           SET desired_event_id = $3,
               desired_sequence = $4,
               desired_projection_digest = $5,
-              status = CASE WHEN $5::text IS NULL THEN 'blocked' ELSE
-                CASE WHEN observed_projection_digest = $5 THEN 'in_sync' ELSE 'pending' END
+              status = CASE WHEN $5::char(64) IS NULL THEN 'blocked' ELSE
+                CASE WHEN observed_projection_digest = $5::char(64) THEN 'in_sync' ELSE 'pending' END
               END,
-              diagnostic_category = CASE WHEN $5::text IS NULL THEN $6 ELSE NULL END,
+              diagnostic_category = CASE WHEN $5::char(64) IS NULL THEN $6::text ELSE NULL END,
               updated_at = statement_timestamp()
         WHERE organization_id = $1 AND target_id = $2`,
       [
@@ -1286,6 +1286,11 @@ class KnowledgeSynchronizationRepository {
           String(target.configuration_digest).trim() !== expectedConfigurationDigest) {
         fail('knowledge_sync_stale_target', 'Synchronization target changed; reload before reconciling');
       }
+      const state = (await client.query(
+        `SELECT * FROM canonical_knowledge_sync_states
+          WHERE organization_id = $1 AND target_id = $2 FOR UPDATE`,
+        [organizationId, targetId]
+      )).rows[0];
       const event = await enqueueTargetDesiredState(
         client, target, actorUserId, { type: 'reconciliation' }
       );
@@ -1294,12 +1299,23 @@ class KnowledgeSynchronizationRepository {
           WHERE organization_id = $1 AND id = $2 FOR UPDATE`,
         [organizationId, event.id]
       )).rows[0];
-      const state = (await client.query(
-        `SELECT * FROM canonical_knowledge_sync_states
-          WHERE organization_id = $1 AND target_id = $2 FOR UPDATE`,
-        [organizationId, targetId]
-      )).rows[0];
-      if (current && ['dead', 'succeeded'].includes(current.state) &&
+      if (current && current.state === 'retry' &&
+          ['drift', 'retry', 'stale'].includes(state.status)) {
+        current = (await client.query(
+          `UPDATE canonical_knowledge_sync_outbox
+              SET available_at = LEAST(available_at, statement_timestamp())
+            WHERE organization_id = $1 AND id = $2
+            RETURNING *`,
+          [organizationId, current.id]
+        )).rows[0];
+        await client.query(
+          `UPDATE canonical_knowledge_sync_states
+              SET status = $3, diagnostic_category = $4,
+                  updated_at = statement_timestamp()
+            WHERE organization_id = $1 AND target_id = $2`,
+          [organizationId, targetId, state.status, state.diagnostic_category]
+        );
+      } else if (current && ['dead', 'succeeded'].includes(current.state) &&
           ['dead', 'drift', 'stale'].includes(state.status)) {
         current = (await client.query(
           `UPDATE canonical_knowledge_sync_outbox

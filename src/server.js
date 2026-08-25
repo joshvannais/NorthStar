@@ -33,6 +33,7 @@ const { AssetCatalogueService } = require('./assets/service');
 const { createAssetCatalogueRouter } = require('./routes/assets');
 const { createIntegrationStatusRouter } = require('./routes/integrationStatus');
 const { createCommandCenterRouter } = require('./routes/commandCenter');
+const { createKnowledgeManagementRouter } = require('./routes/knowledgeManagement');
 const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
 const { HomepageDemoAdmissionHousekeepingWorker } = require('./services/homepageDemoAdmission');
 const commandCenterContract = require('../public/js/command-center-contract');
@@ -212,6 +213,7 @@ app.use('/api/v1', createCompatibilityRouter());
 // Specific downstream routers precede the broad dashboard router. This keeps
 // its router-wide authentication from touching paths it does not own.
 app.use('/api/v1/business-profile', businessProfileRoutes);
+app.use('/api/v1/knowledge-management', createKnowledgeManagementRouter());
 app.use('/api/v1/voice', voiceRoutes);
 app.use('/api/v1/integrations', createIntegrationStatusRouter());
 app.use('/api/v1', createLegacyAuthorityRetirementRouter());

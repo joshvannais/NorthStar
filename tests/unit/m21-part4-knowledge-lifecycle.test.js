@@ -147,7 +147,7 @@ describe('Mission 21 Part 4 immutable lifecycle contract', () => {
     ]);
   });
 
-  test('exports lifecycle repository operations without mounting a route or provider', () => {
+  test('exports lifecycle operations only through the authenticated Part 7 controller', () => {
     expect(repository).toEqual(expect.objectContaining({
       createKnowledgeRevision: expect.any(Function),
       createKnowledgeRollback: expect.any(Function),
@@ -156,11 +156,21 @@ describe('Mission 21 Part 4 immutable lifecycle contract', () => {
     }));
     const routeFiles = fs.readdirSync(path.join(ROOT, 'src/routes'))
       .filter(name => name.endsWith('.js'));
-    const routeSource = routeFiles.map(name =>
+    const earlierRouteSource = routeFiles
+      .filter(name => name !== 'knowledgeManagement.js')
+      .map(name =>
       fs.readFileSync(path.join(ROOT, 'src/routes', name), 'utf8')
     ).join('\n');
-    expect(routeSource).not.toMatch(
+    expect(earlierRouteSource).not.toMatch(
       /createKnowledgeRevision|createKnowledgeRollback|createKnowledgeTombstone|getKnowledgeLifecycleHistory/
     );
+    const managementRoute = fs.readFileSync(
+      path.join(ROOT, 'src/routes/knowledgeManagement.js'), 'utf8'
+    );
+    expect(managementRoute).toMatch(/requireTenantAccess/);
+    expect(managementRoute).toMatch(
+      /createKnowledgeRevision|createKnowledgeRollback|createKnowledgeTombstone/
+    );
+    expect(managementRoute).not.toMatch(/provider sdk|retell.*lifecycle/i);
   });
 });

@@ -137,14 +137,21 @@ describe('Mission 21 Part 6 synchronization contract', () => {
     expect(safeFailureCategory(hostile)).toBe('provider_failure');
   });
 
-  test('exports backend authorities without mounting a route, provider SDK, or server worker', () => {
+  test('exports backend authorities only through bounded Part 7 controls, without provider SDK or server worker', () => {
     expect(repositoryModule.KnowledgeSynchronizationRepository).toEqual(expect.any(Function));
     expect(repositoryModule.enqueuePublicationSynchronization).toEqual(expect.any(Function));
-    const routeSources = fs.readdirSync(path.join(ROOT, 'src/routes'))
-      .filter(name => name.endsWith('.js'))
+    const routeFiles = fs.readdirSync(path.join(ROOT, 'src/routes'))
+      .filter(name => name.endsWith('.js'));
+    const earlierRouteSources = routeFiles
+      .filter(name => name !== 'knowledgeManagement.js')
       .map(name => fs.readFileSync(path.join(ROOT, 'src/routes', name), 'utf8'))
       .join('\n');
-    expect(routeSources).not.toMatch(/KnowledgeSynchronization|configureTarget|claimJobs/);
+    expect(earlierRouteSources).not.toMatch(/KnowledgeSynchronization|configureTarget|claimJobs/);
+    const managementRoute = fs.readFileSync(
+      path.join(ROOT, 'src/routes/knowledgeManagement.js'), 'utf8'
+    );
+    expect(managementRoute).toMatch(/reconcileTarget|retryTarget/);
+    expect(managementRoute).not.toMatch(/configureTarget|claimJobs|deliverJob|retell.*sync/i);
     expect(fs.readFileSync(path.join(ROOT, 'src/server.js'), 'utf8'))
       .not.toMatch(/KnowledgeSynchronizationWorker/);
     expect(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))

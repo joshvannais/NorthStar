@@ -284,3 +284,117 @@ Part 6 is complete only when all of the following are true:
   split roles healthy, migrations 029 and 030 exactly once, runtime DML functional, runtime DDL/TRUNCATE
   rejected, and credential-free health acceptance; otherwise restore the prior configuration and
   revision without claiming Part 6 production readiness.
+
+## Part 7 acceptance contract
+
+Part 7 is complete only when all of the following are true:
+
+- Knowledge Management is integrated into both existing Settings and Business Profile
+  experiences. It is not a new sidebar destination. AI Settings remains in Settings, My Number
+  remains in Business Profile, and generated or authoritative corrections deep-link back to the
+  relevant Business Profile source instead of copying source fields into Knowledge Management.
+- Authenticated paid pages use mounted tenant-scoped HTTP controllers over the canonical Parts
+  1–6 PostgreSQL repositories. Browser state, copied validators, static fixtures, provider state,
+  and request claims are never knowledge authority. Account-free demo pages use only their
+  isolated shared demo authority and identify every knowledge view as a simulation or preview;
+  paid pages contain no demo scenario box or simulated-data hint.
+- Every read revalidates one active individual organization membership. Sensitivity filtering is
+  applied before list rows, filter results, counts, detail, provenance, workflow evidence,
+  history, or synchronization state are returned. Standard public/internal knowledge may be
+  visible to an active member or viewer; restricted, legal, high-risk, and attorney-gated bytes
+  require an active owner or administrator and never appear through a not-found side channel.
+- Browse and filter surfaces cover category, exact workflow state (`draft`, `review`, `approved`,
+  `published`), sensitivity, source, and applicability, with truthful visible/matching counts and
+  explicit loading, empty, error, read-only, disabled, and authority-unavailable states.
+- Item detail pins the exact immutable entry/version IDs and numbers, canonical document and
+  digest, readable content, applicability, provenance source IDs/versions/digests/pointers,
+  actor/reason/time, approval-evidence status, exact publication, and provider-neutral
+  synchronization state. Stored markup, URLs, prompt instructions, and hostile Unicode render as
+  inert text; unauthorized secret or high-sensitivity bytes never reach the browser.
+- For an authorized viewer, the displayed comparison against the current exact publication is the
+  accepted deterministic Part 3 diff, including its base version and digest. If the publication
+  is above the viewer's sensitivity, its comparison bytes, IDs, and digests are withheld with an
+  explicit restricted-state explanation rather than inferred or partially disclosed. Every
+  review, approval, publication,
+  lifecycle, retry, and reconciliation request carries the exact expected immutable/version,
+  review-event, publication, target-revision, and configuration-digest pins required by its
+  canonical repository. A stale or concurrent request fails closed and instructs the user to
+  reload; the browser never retries a mutation with inferred authority.
+- Eligible review submission, changes-requested, class-specific approval, and publication use
+  the Part 3 repository without bypasses. `needs_review` content cannot be approved or published.
+  High-risk actions have non-color warnings. Attorney-gated approval accepts only the real
+  bounded external-review reference, review time, and evidence digest; NorthStar does not create
+  attorney evidence, store the legal document, make a legal conclusion, or claim provider/legal
+  readiness.
+- Owner/administrator lifecycle UI exposes the complete append-only Part 4 version history,
+  revision for eligible human/imported knowledge, tombstone, and rollback-as-a-new-version.
+  Generated and authoritative-source revisions redirect to their Business Profile source.
+  Consequences are explained in accessible confirmation dialogs; prior versions, publications,
+  provenance, and audit evidence are never moved, overwritten, deleted, or hidden.
+- Part 6 truth is presented without provider embellishment: `current`, `pending`, `stale`,
+  `drifted`, `retrying`, `dead`, `suspended`, and `reconciliation_needed` map from canonical target,
+  desired, observed, last-known-good, diagnostic, and outbox state. Owner/administrator retry and
+  reconciliation controls pin the exact active target revision and configuration digest and only
+  queue provider-neutral durable repair. Part 7 adds no provider SDK, live provider call,
+  scheduler, credential, connection claim, or production-provider readiness claim.
+- The experience has real heading hierarchy, programmatic labels and state text, descriptive
+  controls, keyboard-operable tabs and actions, non-color-only status, and native accessible
+  dialogs with focused entry, modal containment, Escape/close, and focus restoration. Desktop and
+  narrow-mobile layouts have no horizontal overhang or header overlap, preserve light/dark
+  contrast and reduced-motion behavior, and leave the global header/footer and floating Quick
+  Start affordance unobstructed.
+- Focused unit, mounted HTTP, mounted PostgreSQL 18.x UTC, direct-SQL/adversarial, and browser
+  tests cover active membership, tenant and role isolation, sensitivity non-disclosure, filters
+  and counts, exact detail/diff/provenance, stale workflow/lifecycle/target writes, hostile stored
+  content, paid/demo separation, source correction links, disabled explanations, keyboard focus
+  and Escape, lifecycle actions, synchronization truth, and responsive light/dark rendering.
+  Part 7 also passes the combined Mission 21 Parts 1–7 and relevant unit, ratification,
+  compatibility, and browser matrices without weakening prior contracts.
+- Desktop and narrow-mobile evidence is retained for light and dark Settings and Business Profile
+  states, including list, detail/diff, lifecycle/history, synchronization/reconciliation, and at
+  least one confirmation, error, or read-only state. The visual ledger names every visible change,
+  route, state, breakpoint, and unavailable physical-device check. Playwright WebKit is reported
+  as WebKit, never as physical Safari.
+- Part 7 changes no provider credential, provider network transport, scheduler activation,
+  pricing or legal policy, recording/AI-identity language, site-wide theme/font/layout redesign,
+  or unrelated roadmap authority. Zero hosted GitHub workflows/checks, unavailable provider/live
+  transport, and unavailable physical Safari are reported as unavailable rather than passing.
+
+## Part 8 mission-wide closeout contract
+
+Part 8 is complete only after Part 7 is independently accepted and all of the following are true:
+
+- A fresh full-history checkout pins exact live `main`, ancestry, migration bytes/checksums,
+  branch/PR topology, protected scope, and a clean tree. Exactly one independent read-only auditor
+  examines the immutable candidate head; no writer evidence substitutes for that audit.
+- Fresh-install and every supported upgrade path run on deterministic PostgreSQL 18.x in UTC with
+  the exact migration/runtime identity split. Direct SQL proves tenant, actor, sensitivity,
+  append-only graph, workflow, publication, lifecycle, projection, synchronization, outbox,
+  lease, retry/dead-letter, tombstone, and stale-write constraints cannot be bypassed.
+- End-to-end authenticated HTTP and browser evidence covers owner, administrator, member, viewer,
+  inactive membership, cross-tenant identifiers, subscription read-only state, CSRF/session
+  authority, exact stale conflicts, hostile stored bytes, and complete paid/demo isolation. Every
+  mounted route and repository is exercised; copied modules, static mocks, browser-only state, and
+  source-string ratification do not establish acceptance.
+- One exact authority change is traced through deterministic generation, provenance and diff,
+  authorized review/approval/publication, minimized retrieval/projection, intercepted
+  provider-neutral synchronization, desired/observed/last-known-good evidence, drift or failure,
+  bounded reconciliation, tombstone, and reviewed rollback-as-a-new-version. Concurrency,
+  crash/restart, ordering, deduplication, lease expiry, retry exhaustion, poison isolation, and no
+  feedback loop or partial publication are demonstrated.
+- Accessibility acceptance covers heading/label/name/role/state semantics, focus order and
+  visibility, dialog entry/containment/Escape/restoration, keyboard-only workflow, non-color state,
+  contrast, reduced motion, zoom/reflow, and narrow-mobile overhang/header/Quick Start behavior.
+  Browser regression covers authenticated paid and isolated demo Settings and Business Profile in
+  light and dark mode plus all prior Mission 21 consumer surfaces.
+- Combined Mission 21 Parts 1–8, relevant full unit/ratification/compatibility/browser matrices,
+  fresh and upgrade PostgreSQL tests, and exact production-startup checks retain every
+  intermediate failure and rerun in evidence. Hosted CI with zero checks is unavailable, not
+  passing; actual Playwright WebKit is not physical Safari; provider tests with intercepted
+  transport do not prove provider, credential, scheduler, or live-delivery readiness.
+- Only after exact-head code approval may the normal merge and sole automatic deployment lane run.
+  Release evidence separately records merge SHA, deployed revision, migration result, credential-
+  free health, passive authenticated acceptance where authorized, final refs, and cleanup. Code
+  approval, migration release, visual approval, provider readiness, legal readiness, and physical-
+  device evidence remain separate verdicts. Any unavailable infrastructure remains explicitly
+  unavailable and prevents the corresponding claim without invalidating narrower proven results.

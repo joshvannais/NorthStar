@@ -4,8 +4,11 @@ const express = require('express');
 const request = require('supertest');
 const {
   applyFilters,
+  buildRelationshipGraphPolicy,
   correctionFor,
+  cursorContextDigest,
   decodeListCursor,
+  encodeListCursor,
   normalizeFilters,
   normalizePagination,
   syncPresentation,
@@ -46,9 +49,12 @@ function appFor(options) {
 describe('Mission 21 Part 7 knowledge-management contract helpers', () => {
   test('normalizes exact supported filters and rejects unknown or malformed values', () => {
     expect(normalizeFilters({ category: 'GUIDANCE', workflowStatus: 'review', applicability: 'voice_runtime' }))
-      .toEqual({ category: 'guidance', workflowStatus: 'review', sensitivity: null, source: null, applicability: 'voice_runtime' });
+      .toEqual({ search: null, category: 'guidance', workflowStatus: 'review', sensitivity: null,
+        source: null, applicability: 'voice_runtime' });
+    expect(normalizeFilters({ search: '  SAFETY Guide  ' }).search).toBe('safety guide');
     expect(() => normalizeFilters({ sensitivity: 'secret' })).toThrow(/not supported/);
     expect(() => normalizeFilters({ applicability: 'customer%27 OR true' })).toThrow(/not supported/);
+    expect(() => normalizeFilters({ search: 'x'.repeat(129) })).toThrow(/not supported/);
   });
 
   test('filters applicability by exact recursively stored token and never by substring', () => {
@@ -63,16 +69,79 @@ describe('Mission 21 Part 7 knowledge-management contract helpers', () => {
   });
 
   test('normalizes a bounded opaque list cursor and rejects forged or oversized pagination', () => {
-    const encoded = Buffer.from(JSON.stringify([
-      'Label', 'organization.identity', ENTRY,
-    ]), 'utf8').toString('base64url');
+    const issuedAt = Date.now();
+    const contextDigest = 'b'.repeat(64);
+    const encoded = encodeListCursor({ label: 'Label', canonical_key: 'organization.identity', entry_id: ENTRY }, {
+      contextDigest, issuedAt, snapshot: '100:200:150',
+    });
     expect(normalizePagination({ limit: '37', cursor: encoded })).toEqual({
       limit: 37,
-      cursor: { label: 'Label', canonicalKey: 'organization.identity', entryId: ENTRY },
+      cursor: { contextDigest, issuedAt, snapshot: '100:200:150',
+        label: 'Label', canonicalKey: 'organization.identity', entryId: ENTRY },
     });
     expect(decodeListCursor(encoded).entryId).toBe(ENTRY);
+    const forged = `${encoded.slice(0, -1)}${encoded.endsWith('0') ? '1' : '0'}`;
     expect(() => normalizePagination({ limit: 201 })).toThrow(/1 to 200/);
     expect(() => normalizePagination({ cursor: 'not-valid!' })).toThrow(/valid knowledge-list cursor/);
+    expect(() => normalizePagination({ cursor: forged })).toThrow(/valid knowledge-list cursor/);
+    expect(() => normalizePagination({ cursor: `${'a'.repeat(4097)}.${'b'.repeat(64)}` }))
+      .toThrow(/valid knowledge-list cursor/);
+  });
+
+  test('binds cursor context to tenant actor membership role filters ordering and limit', () => {
+    const input = {
+      organizationId: ORG, actorUserId: USER, membershipId: '70000000-0000-4000-8000-000000000001',
+      role: 'member', canReadProtected: false, filters: normalizeFilters({ search: 'safety', category: 'guidance' }),
+      limit: 50,
+    };
+    const baseline = cursorContextDigest(input);
+    for (const changed of [
+      { organizationId: '10000000-0000-4000-8000-000000000002' },
+      { actorUserId: '20000000-0000-4000-8000-000000000002' },
+      { membershipId: '70000000-0000-4000-8000-000000000002' },
+      { role: 'admin', canReadProtected: true },
+      { filters: normalizeFilters({ search: 'safety', category: 'fact' }) },
+      { limit: 51 },
+    ]) expect(cursorContextDigest({ ...input, ...changed })).not.toBe(baseline);
+  });
+
+  test('relationship graph fails closed for protected, transitive, cyclic, missing and mismatched targets', () => {
+    const readable = { organization_id: ORG, id: VERSION, version_number: 1,
+      canonical_digest: '1'.repeat(64), sensitivity: 'internal', review_requirement: 'standard' };
+    const protectedTarget = { organization_id: ORG, id: '41000000-0000-4000-8000-000000000001', version_number: 2,
+      canonical_digest: '2'.repeat(64), sensitivity: 'restricted', review_requirement: 'high_risk' };
+    const source = (versionId, ordinal, target, overrides = {}) => ({
+      version_id: versionId, ordinal, source_type: 'knowledge_version', source_record_id: target.id,
+      source_version: String(target.version_number), source_digest: target.canonical_digest,
+      json_pointer: `/versions/${target.id}`, ...overrides,
+    });
+    const direct = source(readable.id, 1, protectedTarget);
+    const missing = source(readable.id, 2, { ...protectedTarget, id: '42000000-0000-4000-8000-000000000001' });
+    const mismatch = source(readable.id, 3, protectedTarget, { source_digest: '3'.repeat(64) });
+    const transitiveTarget = { ...readable, id: '43000000-0000-4000-8000-000000000001',
+      canonical_digest: '4'.repeat(64) };
+    const transitive = source(readable.id, 4, transitiveTarget);
+    const transitiveChild = source(transitiveTarget.id, 1, protectedTarget);
+    const cycleA = { ...readable, id: '44000000-0000-4000-8000-000000000001', canonical_digest: '5'.repeat(64) };
+    const cycleB = { ...readable, id: '45000000-0000-4000-8000-000000000001', canonical_digest: '6'.repeat(64) };
+    const cycleRoot = source(readable.id, 5, cycleA);
+    const cycleForward = source(cycleA.id, 1, cycleB);
+    const cycleBack = source(cycleB.id, 1, cycleA);
+    const graph = buildRelationshipGraphPolicy({
+      organizationId: ORG, canReadProtected: false,
+      versionRows: [readable, protectedTarget, transitiveTarget, cycleA, cycleB],
+      candidateRows: [readable, protectedTarget, transitiveTarget, cycleA, cycleB],
+      provenanceRows: [direct, missing, mismatch, transitive, transitiveChild, cycleRoot, cycleForward, cycleBack],
+    });
+    expect(graph.restrictedProvenanceKeys).toEqual(new Set([
+      `${readable.id}:1`, `${readable.id}:2`, `${readable.id}:3`, `${readable.id}:4`,
+      `${transitiveTarget.id}:1`, `${readable.id}:5`, `${cycleA.id}:1`, `${cycleB.id}:1`,
+    ]));
+    const owner = buildRelationshipGraphPolicy({
+      organizationId: ORG, canReadProtected: true, versionRows: [readable, protectedTarget],
+      candidateRows: [readable, protectedTarget], provenanceRows: [direct, missing],
+    });
+    expect(owner.restrictedProvenanceKeys).toEqual(new Set([`${readable.id}:2`]));
   });
 
   test.each([
@@ -108,13 +177,14 @@ describe('Mission 21 Part 7 knowledge-management contract helpers', () => {
 describe('Mission 21 Part 7 mounted HTTP controller', () => {
   test('list binds organization and actor from trusted session context', async () => {
     const list = jest.fn().mockResolvedValue({ items: [], counts: { total: 0 }, filteredCount: 0 });
-    const response = await request(appFor({ list })).get('/api/v1/knowledge-management?category=guidance&limit=25&cursor=opaque');
+    const response = await request(appFor({ list }))
+      .get('/api/v1/knowledge-management?search=safety&category=guidance&limit=25&cursor=opaque');
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(list).toHaveBeenCalledWith({ marker: 'pool' }, expect.objectContaining({
       organizationId: ORG,
       actorUserId: USER,
-      filters: expect.objectContaining({ category: 'guidance' }),
+      filters: expect.objectContaining({ search: 'safety', category: 'guidance' }),
       pagination: { cursor: 'opaque', limit: '25' },
     }));
   });

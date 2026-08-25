@@ -51,7 +51,7 @@ function draft(organizationId, actorUserId, key, options = {}) {
     applicability: options.applicability || { projection: { audiences: ['customer'] } },
     content: options.content || { facts: { businessDescription: 'Mounted Part 7 tenant.', company: { name: 'Part 7 Company' } }, state: 'ready' },
     reason: `Create mounted Part 7 ${key}.`,
-    provenance: [{
+    provenance: options.provenance || [{
       sourceType: options.sourceType || 'human_input', sourceRecordId: `part7:${key}`,
       sourceVersion: '1', sourceDigest: sha256(`part7:${key}:1`), jsonPointer: '',
     }],
@@ -180,7 +180,9 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
     expect(response.body.data.permissions).toEqual({ canMutate: false, canReadProtected: false });
     expect(response.body.data.counts.total).toBe(1);
     expect(response.body.data.items.map(item => item.entryId)).toEqual([identity.id]);
-    expect(response.body.data.synchronization.targets[0].desired.sourcePins).toEqual([]);
+    expect(response.body.data.synchronization.targets[0]).toEqual(expect.objectContaining({
+      desired: null, observed: null, lastKnownGood: null, relationshipsRestricted: true,
+    }));
     expect(JSON.stringify(response.body)).not.toContain(legal.id);
     expect(JSON.stringify(response.body)).not.toContain('Restricted legal content');
   });
@@ -241,7 +243,9 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.history).toBeNull();
     expect(response.body.data.permissions.canMutate).toBe(false);
-    expect(response.body.data.synchronization[0].desired.sourcePins).toEqual([]);
+    expect(response.body.data.synchronization[0]).toEqual(expect.objectContaining({
+      desired: null, observed: null, lastKnownGood: null, relationshipsRestricted: true,
+    }));
     const legalResponse = await request(app)
       .get(`/api/v1/knowledge-management/items/${legal.id}`)
       .set('x-part7-actor', 'member');
@@ -313,7 +317,7 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
     expect(response.body.data.version.parentVersionId).toBeNull();
     expect(response.body.data.version.parentVersionRestricted).toBe(true);
     expect(response.body.data.version.provenance).toContainEqual(expect.objectContaining({
-      sourceType: 'system_generation',
+      sourceType: null,
       sourceRecordId: null,
       sourceDigest: null,
       restricted: true,
@@ -391,6 +395,92 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
     expect(ownerResponse.body.data.publication.current.number).toBe(readablePublication.number);
   });
 
+  test('cross-entry relationship authorization is transitive, tenant-bound and non-oracular', async () => {
+    const protectedTarget = await knowledge.createInitialKnowledgeDraft(pool, draft(
+      ORG_A, OWNER_A, 'relationship.protected-target', {
+        sensitivity: 'restricted', reviewRequirement: 'high_risk',
+        content: { facts: { privateInstruction: 'CROSS-ENTRY-PROTECTED-BYTES' }, state: 'ready' },
+      }
+    ));
+    const direct = await knowledge.createInitialKnowledgeDraft(pool, draft(
+      ORG_A, OWNER_A, 'relationship.direct-readable', {
+        provenance: [{
+          sourceType: 'system_generation', sourceRecordId: protectedTarget.version.id,
+          sourceVersion: String(protectedTarget.version.number),
+          sourceDigest: protectedTarget.version.canonicalDigest,
+          jsonPointer: `/protected/${protectedTarget.version.id}`,
+        }],
+      }
+    ));
+    const transitive = await knowledge.createInitialKnowledgeDraft(pool, draft(
+      ORG_A, OWNER_A, 'relationship.transitive-readable', {
+        provenance: [{
+          sourceType: 'system_generation', sourceRecordId: direct.version.id,
+          sourceVersion: String(direct.version.number), sourceDigest: direct.version.canonicalDigest,
+          jsonPointer: `/direct/${direct.version.id}`,
+        }],
+      }
+    ));
+    const crossTenant = await knowledge.createInitialKnowledgeDraft(pool, draft(
+      ORG_A, OWNER_A, 'relationship.cross-tenant-readable', {
+        provenance: [{
+          sourceType: 'system_generation', sourceRecordId: otherTenant.version.id,
+          sourceVersion: String(otherTenant.version.number), sourceDigest: otherTenant.version.canonicalDigest,
+          jsonPointer: `/other/${otherTenant.version.id}`,
+        }],
+      }
+    ));
+    const missingId = '7f000000-0000-4000-8000-000000000001';
+    const missing = await knowledge.createInitialKnowledgeDraft(pool, draft(
+      ORG_A, OWNER_A, 'relationship.missing-readable', {
+        provenance: [{
+          sourceType: 'system_generation', sourceRecordId: missingId, sourceVersion: '1',
+          sourceDigest: '7'.repeat(64), jsonPointer: `/missing/${missingId}`,
+        }],
+      }
+    ));
+    const mismatched = await knowledge.createInitialKnowledgeDraft(pool, draft(
+      ORG_A, OWNER_A, 'relationship.mismatched-readable', {
+        provenance: [{
+          sourceType: 'system_generation', sourceRecordId: protectedTarget.version.id,
+          sourceVersion: String(protectedTarget.version.number), sourceDigest: '8'.repeat(64),
+          jsonPointer: `/mismatched/${protectedTarget.version.id}`,
+        }],
+      }
+    ));
+
+    const restrictedMarker = [{
+      ordinal: null, sourceType: null, sourceRecordId: null, sourceVersion: null,
+      sourceDigest: null, jsonPointer: null, restricted: true,
+    }];
+    for (const entry of [direct, transitive, crossTenant, missing, mismatched]) {
+      const member = await request(app).get(`/api/v1/knowledge-management/items/${entry.id}`)
+        .set('x-part7-actor', 'member');
+      expect(member.status).toBe(200);
+      expect(member.body.data.version.provenance).toEqual(restrictedMarker);
+      const serialized = JSON.stringify(member.body);
+      for (const token of [protectedTarget.version.id, protectedTarget.version.canonicalDigest,
+        otherTenant.version.id, otherTenant.version.canonicalDigest, missingId, '7'.repeat(64), '8'.repeat(64)]) {
+        expect(serialized).not.toContain(token);
+      }
+    }
+
+    const ownerDirect = await request(app).get(`/api/v1/knowledge-management/items/${direct.id}`)
+      .set('x-part7-actor', 'owner');
+    expect(ownerDirect.status).toBe(200);
+    expect(ownerDirect.body.data.version.provenance).toEqual([expect.objectContaining({
+      sourceRecordId: protectedTarget.version.id,
+      sourceDigest: protectedTarget.version.canonicalDigest,
+      jsonPointer: `/protected/${protectedTarget.version.id}`,
+    })]);
+    for (const entry of [crossTenant, missing, mismatched]) {
+      const owner = await request(app).get(`/api/v1/knowledge-management/items/${entry.id}`)
+        .set('x-part7-actor', 'owner');
+      expect(owner.status).toBe(200);
+      expect(owner.body.data.version.provenance).toEqual(restrictedMarker);
+    }
+  });
+
   test('mounted stale workflow request fails closed with no review residue', async () => {
     const response = await request(app)
       .post(`/api/v1/knowledge-management/items/${identity.id}/review`)
@@ -463,7 +553,8 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
       const imported = index >= 200;
       bulk.push(await knowledge.createInitialKnowledgeDraft(pool, draft(
         ORG_A, OWNER_A, `pagination.bulk.${suffix}`, {
-          label: `${imported ? 'ZZZ' : 'Pagination'} ${suffix} readable item`,
+          label: index < 12 ? 'Pagination duplicated label'
+            : `${imported ? 'ZZZ' : 'Pagination'} ${suffix} readable item`,
           entryType: imported ? 'faq' : 'fact',
           sourceType: imported ? 'imported_record' : 'human_input',
           applicability: { projection: { audiences: [imported ? 'integration_adapter' : 'customer'] } },
@@ -496,7 +587,7 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
     )).rows.map(row => row.id);
     expect(direct.length).toBeGreaterThan(200);
 
-    async function traverse() {
+    async function traverse(expectedIds, onFirstPage) {
       const ids = [];
       let cursor = null;
       let pageNumber = 0;
@@ -506,8 +597,8 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
           .set('x-part7-actor', 'member');
         expect(response.status).toBe(200);
         const data = response.body.data;
-        expect(data.counts.total).toBe(direct.length);
-        expect(data.filteredCount).toBe(direct.length);
+        expect(data.counts.total).toBe(expectedIds.length);
+        expect(data.filteredCount).toBe(expectedIds.length);
         expect(data.items.length).toBeLessThanOrEqual(37);
         expect(data.pagination).toEqual(expect.objectContaining({
           limit: 37,
@@ -516,6 +607,7 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
           truncated: Boolean(data.pagination.nextCursor),
         }));
         ids.push(...data.items.map(item => item.entryId));
+        if (pageNumber === 0 && onFirstPage) await onFirstPage();
         cursor = data.pagination.nextCursor;
         pageNumber += 1;
         expect(pageNumber).toBeLessThan(20);
@@ -524,11 +616,47 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
       return ids;
     }
 
-    const firstTraversal = await traverse();
-    const secondTraversal = await traverse();
+    let concurrentInsert;
+    const firstTraversal = await traverse(direct, async () => {
+      concurrentInsert = await knowledge.createInitialKnowledgeDraft(pool, draft(
+        ORG_A, OWNER_A, 'pagination.concurrent.insert', { label: 'AAA concurrent insert' }
+      ));
+      const target = bulk[199];
+      await knowledge.createKnowledgeRevision(pool, {
+        organizationId: ORG_A, actorUserId: OWNER_A, entryId: target.id,
+        expectedVersionId: target.version.id, expectedVersionNumber: target.version.number,
+        expectedCanonicalDigest: target.version.canonicalDigest,
+        canonicalKey: target.canonicalKey, entryType: target.entryType,
+        label: 'AAA concurrent revised label', sensitivity: target.version.sensitivity,
+        reviewRequirement: target.version.reviewRequirement, origin: 'human',
+        applicability: target.version.applicability, content: target.version.document.content,
+        reason: 'Exercise stable snapshot pagination.',
+        provenance: [{
+          sourceType: 'human_input', sourceRecordId: 'pagination-concurrent-revision', sourceVersion: '2',
+          sourceDigest: sha256('pagination-concurrent-revision'), jsonPointer: '',
+        }],
+      });
+    });
     expect(firstTraversal).toEqual(direct);
-    expect(secondTraversal).toEqual(direct);
+    expect(firstTraversal).not.toContain(concurrentInsert.id);
     protectedEntries.forEach(entry => expect(firstTraversal).not.toContain(entry.id));
+
+    const afterChanges = (await pool.query(
+      `SELECT entry.id
+         FROM canonical_knowledge_entries entry
+         JOIN LATERAL (
+           SELECT version.* FROM canonical_knowledge_versions version
+            WHERE version.organization_id = entry.organization_id AND version.entry_id = entry.id
+            ORDER BY version.version_number DESC LIMIT 1
+         ) latest ON TRUE
+        WHERE entry.organization_id = $1
+          AND latest.sensitivity IN ('public', 'internal')
+          AND latest.review_requirement = 'standard'
+        ORDER BY latest.label COLLATE "C", entry.canonical_key COLLATE "C", entry.id`,
+      [ORG_A]
+    )).rows.map(row => row.id);
+    const secondTraversal = await traverse(afterChanges);
+    expect(secondTraversal).toEqual(afterChanges);
 
     const importedResponse = await request(app)
       .get('/api/v1/knowledge-management?source=imported_record&applicability=integration_adapter&workflowStatus=draft&limit=3')
@@ -550,7 +678,66 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
     expect(importedSecond.body.data.pagination.hasMore).toBe(false);
     expect(importedResponse.body.data.items.concat(importedSecond.body.data.items).map(item => item.entryId))
       .toEqual(bulk.slice(200).map(entry => entry.id));
+
+    async function traverseFiltered(parameters, expectedSubset) {
+      const ids = [];
+      let cursor = null;
+      let matching = null;
+      do {
+        const query = new URLSearchParams({ ...parameters, limit: '37' });
+        if (cursor) query.set('cursor', cursor);
+        const response = await request(app).get(`/api/v1/knowledge-management?${query.toString()}`)
+          .set('x-part7-actor', 'member');
+        expect(response.status).toBe(200);
+        matching = response.body.data.filteredCount;
+        ids.push(...response.body.data.items.map(item => item.entryId));
+        cursor = response.body.data.pagination.nextCursor;
+      } while (cursor);
+      expect(ids).toHaveLength(matching);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(matching).toBeGreaterThan(200);
+      expectedSubset.forEach(id => expect(ids).toContain(id));
+    }
+    const firstTwoHundred = bulk.slice(0, 200).map(entry => entry.id);
+    const allBulk = bulk.map(entry => entry.id);
+    await traverseFiltered({ category: 'fact' }, firstTwoHundred);
+    await traverseFiltered({ workflowStatus: 'draft' }, allBulk);
+    await traverseFiltered({ sensitivity: 'internal' }, allBulk);
+    await traverseFiltered({ source: 'human_input' }, firstTwoHundred);
+    await traverseFiltered({ applicability: 'customer' }, firstTwoHundred);
+    await traverseFiltered({ search: 'pagination' }, allBulk.concat(concurrentInsert.id));
   }, 120000);
+
+  test('signed cursors reject forgery and every cross-query or authorization context', async () => {
+    const first = await request(app).get('/api/v1/knowledge-management?limit=3')
+      .set('x-part7-actor', 'member');
+    expect(first.status).toBe(200);
+    const cursor = first.body.data.pagination.nextCursor;
+    expect(cursor).toEqual(expect.any(String));
+    const variants = [
+      ['member', `?limit=4&cursor=${encodeURIComponent(cursor)}`],
+      ['member', `?limit=3&search=safety&cursor=${encodeURIComponent(cursor)}`],
+      ['member', `?limit=3&category=fact&cursor=${encodeURIComponent(cursor)}`],
+      ['member', `?limit=3&workflowStatus=draft&cursor=${encodeURIComponent(cursor)}`],
+      ['member', `?limit=3&sensitivity=internal&cursor=${encodeURIComponent(cursor)}`],
+      ['member', `?limit=3&source=human_input&cursor=${encodeURIComponent(cursor)}`],
+      ['member', `?limit=3&applicability=customer&cursor=${encodeURIComponent(cursor)}`],
+      ['owner', `?limit=3&cursor=${encodeURIComponent(cursor)}`],
+      ['other', `?limit=3&cursor=${encodeURIComponent(cursor)}`],
+    ];
+    for (const [actor, query] of variants) {
+      const response = await request(app).get(`/api/v1/knowledge-management${query}`)
+        .set('x-part7-actor', actor);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('knowledge_management_invalid_pagination');
+    }
+    const forged = `${cursor.slice(0, -1)}${cursor.endsWith('0') ? '1' : '0'}`;
+    const forgedResponse = await request(app)
+      .get(`/api/v1/knowledge-management?limit=3&cursor=${encodeURIComponent(forged)}`)
+      .set('x-part7-actor', 'member');
+    expect(forgedResponse.status).toBe(400);
+    expect(forgedResponse.body.error.code).toBe('knowledge_management_invalid_pagination');
+  });
 
   test('direct SQL cannot mutate prior immutable knowledge bytes', async () => {
     await expect(pool.query(

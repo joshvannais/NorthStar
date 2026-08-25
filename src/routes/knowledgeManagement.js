@@ -109,6 +109,7 @@ function createKnowledgeManagementRouter(options = {}) {
       const data = await reads.list(poolProvider(), {
         ...context(req),
         filters: {
+          search: req.query.search,
           category: req.query.category,
           workflowStatus: req.query.workflowStatus,
           sensitivity: req.query.sensitivity,

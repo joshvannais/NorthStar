@@ -82,69 +82,49 @@ class KnowledgeSynchronizationWorker {
         diagnosticCategory: 'provider_unavailable',
       });
     }
-    const renewed = await this.repository.renewLease({
-      organizationId: job.organizationId,
-      id: job.id,
-      claimToken: job.claimToken,
-      leaseSeconds: Math.max(
-        this.leaseSeconds,
-        Math.ceil(this.transportTimeoutMs / 1000) + 5
-      ),
-    });
-    if (!renewed) return { ownershipLost: true };
-
-    let verified;
     try {
-      verified = await this.repository.verifyJobProjection({
+      return await this.repository.executeClaimWithAuthority({
         organizationId: job.organizationId,
         id: job.id,
         claimToken: job.claimToken,
+        leaseSeconds: Math.max(
+          this.leaseSeconds,
+          Math.ceil(this.transportTimeoutMs / 1000) + 5
+        ),
+      }, async verified => {
+        const controller = new AbortController();
+        const request = Object.freeze({
+          audience: verified.audience,
+          canonicalProjection: verified.canonicalProjection,
+          capabilities: Object.freeze([...verified.capabilities]),
+          consumer: verified.consumer,
+          idempotencyKey: verified.idempotencyKey,
+          organizationId: verified.organizationId,
+          projection: verified.projection,
+          projectionDigest: verified.projectionDigest,
+          providerKey: verified.providerKey,
+          sourcePins: Object.freeze(verified.sourcePins.map(pin => Object.freeze({ ...pin }))),
+          targetId: verified.targetId,
+          targetRevision: verified.targetRevision,
+          targetSequence: verified.targetSequence,
+        });
+        try {
+          return normalizeTransportResult(await Promise.race([
+            Promise.resolve().then(() => transport.applyProjection(request, {
+              signal: controller.signal,
+            })),
+            timeoutPromise(this.transportTimeoutMs, controller),
+          ]));
+        } catch (error) {
+          return {
+            accepted: false,
+            diagnosticCategory: safeFailureCategory(error),
+          };
+        } finally {
+          controller.abort();
+        }
       });
     } catch (error) {
-      return this.repository.finalizeJob({
-        organizationId: job.organizationId,
-        id: job.id,
-        claimToken: job.claimToken,
-        accepted: false,
-        diagnosticCategory: safeFailureCategory(error),
-      });
-    }
-    if (!verified) return { ownershipLost: true };
-
-    const controller = new AbortController();
-    const request = Object.freeze({
-      audience: verified.audience,
-      canonicalProjection: verified.canonicalProjection,
-      capabilities: Object.freeze([...verified.capabilities]),
-      consumer: verified.consumer,
-      idempotencyKey: verified.idempotencyKey,
-      organizationId: verified.organizationId,
-      projection: verified.projection,
-      projectionDigest: verified.projectionDigest,
-      providerKey: verified.providerKey,
-      sourcePins: Object.freeze(verified.sourcePins.map(pin => Object.freeze({ ...pin }))),
-      targetId: verified.targetId,
-      targetRevision: verified.targetRevision,
-      targetSequence: verified.targetSequence,
-    });
-    try {
-      const result = normalizeTransportResult(await Promise.race([
-        Promise.resolve().then(() => transport.applyProjection(request, {
-          signal: controller.signal,
-        })),
-        timeoutPromise(this.transportTimeoutMs, controller),
-      ]));
-      controller.abort();
-      return this.repository.finalizeJob({
-        organizationId: job.organizationId,
-        id: job.id,
-        claimToken: job.claimToken,
-        accepted: result.accepted,
-        observedProjectionDigest: result.observedProjectionDigest,
-        diagnosticCategory: result.diagnosticCategory,
-      });
-    } catch (error) {
-      controller.abort();
       return this.repository.finalizeJob({
         organizationId: job.organizationId,
         id: job.id,
@@ -168,9 +148,13 @@ class KnowledgeSynchronizationWorker {
       }))[0];
       if (!job) break;
       claimed += 1;
-      const result = await this.deliver(job);
-      if (result && result.exactSuccess) succeeded += 1;
-      if (result && result.ownershipLost) ownershipLost += 1;
+      try {
+        const result = await this.deliver(job);
+        if (result && result.exactSuccess) succeeded += 1;
+        if (result && result.ownershipLost) ownershipLost += 1;
+      } catch {
+        ownershipLost += 1;
+      }
     }
     return { claimed, expired, ownershipLost, stale, succeeded };
   }

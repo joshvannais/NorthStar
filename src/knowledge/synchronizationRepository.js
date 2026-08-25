@@ -156,6 +156,7 @@ function mapOutbox(row) {
     succeededAt: row.succeeded_at,
     deadAt: row.dead_at,
     blockedAt: row.blocked_at,
+    revokedAt: row.revoked_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -667,14 +668,24 @@ class KnowledgeSynchronizationRepository {
                  ON target.organization_id = outbox.organization_id
                 AND target.id = outbox.target_id
               WHERE target.status = 'active'
+                AND outbox.target_revision = target.target_revision
+                AND outbox.configuration_digest = target.configuration_digest
+                AND outbox.provider_key = target.provider_key
+                AND outbox.consumer = target.consumer
+                AND outbox.audience = target.audience
+                AND outbox.capabilities = target.capabilities
+                AND outbox.maximum_entries = target.maximum_entries
+                AND outbox.maximum_bytes = target.maximum_bytes
                 AND outbox.state IN ('pending', 'retry')
                 AND outbox.available_at <= statement_timestamp()
                 AND NOT EXISTS (
                   SELECT 1 FROM canonical_knowledge_sync_outbox prior
                    WHERE prior.organization_id = outbox.organization_id
-                     AND prior.target_id = outbox.target_id
-                     AND prior.target_sequence < outbox.target_sequence
-                     AND prior.state IN ('pending', 'retry', 'claimed')
+                      AND prior.target_id = outbox.target_id
+                      AND prior.target_sequence < outbox.target_sequence
+                      AND prior.target_revision = target.target_revision
+                      AND prior.configuration_digest = target.configuration_digest
+                      AND prior.state IN ('pending', 'retry', 'claimed')
                 )
               ORDER BY outbox.available_at, outbox.organization_id,
                        outbox.target_id, outbox.target_sequence, outbox.id
@@ -713,30 +724,52 @@ class KnowledgeSynchronizationRepository {
     }
   }
 
-  async renewLease(input) {
+  async renewLease(input, transactionClient = null) {
     const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
     const id = normalizeUuid(input && input.id, 'id');
     const claimToken = normalizeUuid(input && input.claimToken, 'claimToken');
     const leaseSeconds = normalizeClaimOptions({ batchSize: 1, leaseSeconds: input.leaseSeconds }).leaseSeconds;
-    return withTransaction(this.pool, async client => {
+    const renew = async client => {
       const result = await client.query(
-        `UPDATE canonical_knowledge_sync_outbox
+        `WITH authority AS MATERIALIZED (
+           SELECT outbox.id
+             FROM canonical_knowledge_sync_outbox outbox
+             JOIN canonical_knowledge_sync_targets target
+               ON target.organization_id = outbox.organization_id
+              AND target.id = outbox.target_id
+            WHERE outbox.organization_id = $1 AND outbox.id = $2
+              AND outbox.claim_token = $3 AND outbox.state = 'claimed'
+              AND outbox.lease_expires_at > statement_timestamp()
+              AND target.status = 'active'
+              AND outbox.target_revision = target.target_revision
+              AND outbox.configuration_digest = target.configuration_digest
+              AND outbox.provider_key = target.provider_key
+              AND outbox.consumer = target.consumer
+              AND outbox.audience = target.audience
+              AND outbox.capabilities = target.capabilities
+              AND outbox.maximum_entries = target.maximum_entries
+              AND outbox.maximum_bytes = target.maximum_bytes
+            FOR SHARE OF target
+         )
+         UPDATE canonical_knowledge_sync_outbox outbox
             SET lease_expires_at = statement_timestamp() + ($4::text || ' seconds')::interval
-          WHERE organization_id = $1 AND id = $2 AND claim_token = $3
-            AND state = 'claimed' AND lease_expires_at > statement_timestamp()
-          RETURNING *`,
+           FROM authority
+          WHERE outbox.id = authority.id
+          RETURNING outbox.*`,
         [organizationId, id, claimToken, leaseSeconds]
       );
       return mapOutbox(result.rows[0]);
-    }, 'READ COMMITTED');
+    };
+    if (transactionClient) return renew(transactionClient);
+    return withTransaction(this.pool, renew, 'READ COMMITTED');
   }
 
-  async verifyJobProjection(input) {
+  async verifyJobProjection(input, transactionClient = null) {
     const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
     const id = normalizeUuid(input && input.id, 'id');
     const claimToken = normalizeUuid(input && input.claimToken, 'claimToken');
     try {
-      return await withTransaction(this.pool, async client => {
+      const verify = async client => {
         const selected = await client.query(
           `SELECT outbox.*, target.updated_by_user_id AS verifier_user_id
              FROM canonical_knowledge_sync_outbox outbox
@@ -746,6 +779,15 @@ class KnowledgeSynchronizationRepository {
             WHERE outbox.organization_id = $1 AND outbox.id = $2
               AND outbox.state = 'claimed' AND outbox.claim_token = $3
               AND outbox.lease_expires_at > statement_timestamp()
+              AND target.status = 'active'
+              AND outbox.target_revision = target.target_revision
+              AND outbox.configuration_digest = target.configuration_digest
+              AND outbox.provider_key = target.provider_key
+              AND outbox.consumer = target.consumer
+              AND outbox.audience = target.audience
+              AND outbox.capabilities = target.capabilities
+              AND outbox.maximum_entries = target.maximum_entries
+              AND outbox.maximum_bytes = target.maximum_bytes
             FOR SHARE OF outbox, target`,
           [organizationId, id, claimToken]
         );
@@ -795,13 +837,15 @@ class KnowledgeSynchronizationRepository {
           projectionDigest: rebuilt.projectionDigest,
           sourcePins: rebuilt.projection.sources,
         });
-      }, 'READ COMMITTED');
+      };
+      if (transactionClient) return await verify(transactionClient);
+      return await withTransaction(this.pool, verify, 'READ COMMITTED');
     } catch (error) {
       throw mapDatabaseError(error);
     }
   }
 
-  async finalizeJob(input) {
+  async finalizeJob(input, transactionClient = null) {
     const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
     const id = normalizeUuid(input && input.id, 'id');
     const claimToken = normalizeUuid(input && input.claimToken, 'claimToken');
@@ -815,11 +859,24 @@ class KnowledgeSynchronizationRepository {
       input && input.diagnosticCategory
     );
     try {
-      return await withTransaction(this.pool, async client => {
+      const finalize = async client => {
         const selected = await client.query(
-          `SELECT * FROM canonical_knowledge_sync_outbox
-            WHERE organization_id = $1 AND id = $2
-            FOR UPDATE`,
+          `SELECT outbox.*
+             FROM canonical_knowledge_sync_outbox outbox
+             JOIN canonical_knowledge_sync_targets target
+               ON target.organization_id = outbox.organization_id
+              AND target.id = outbox.target_id
+            WHERE outbox.organization_id = $1 AND outbox.id = $2
+              AND target.status = 'active'
+              AND outbox.target_revision = target.target_revision
+              AND outbox.configuration_digest = target.configuration_digest
+              AND outbox.provider_key = target.provider_key
+              AND outbox.consumer = target.consumer
+              AND outbox.audience = target.audience
+              AND outbox.capabilities = target.capabilities
+              AND outbox.maximum_entries = target.maximum_entries
+              AND outbox.maximum_bytes = target.maximum_bytes
+            FOR UPDATE OF outbox FOR SHARE OF target`,
           [organizationId, id]
         );
         if (selected.rowCount !== 1) return null;
@@ -912,6 +969,61 @@ class KnowledgeSynchronizationRepository {
           );
         }
         return { job: mapOutbox(updated.rows[0]), state: nextState, exactSuccess, drift };
+      };
+      if (transactionClient) return await finalize(transactionClient);
+      return await withTransaction(this.pool, finalize, 'READ COMMITTED');
+    } catch (error) {
+      throw mapDatabaseError(error);
+    }
+  }
+
+  async executeClaimWithAuthority(input, operation) {
+    const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
+    const id = normalizeUuid(input && input.id, 'id');
+    const claimToken = normalizeUuid(input && input.claimToken, 'claimToken');
+    const leaseSeconds = normalizeClaimOptions({
+      batchSize: 1,
+      leaseSeconds: input && input.leaseSeconds,
+    }).leaseSeconds;
+    if (typeof operation !== 'function') {
+      fail(
+        'knowledge_sync_delivery_operation_required',
+        'Synchronization delivery requires a bounded operation',
+        500
+      );
+    }
+    try {
+      return await withTransaction(this.pool, async client => {
+        const renewed = await this.renewLease({
+          organizationId,
+          id,
+          claimToken,
+          leaseSeconds,
+        }, client);
+        if (!renewed) return { ownershipLost: true };
+        const verified = await this.verifyJobProjection({
+          organizationId,
+          id,
+          claimToken,
+        }, client);
+        if (!verified) return { ownershipLost: true };
+
+        const finalization = await operation(verified);
+        if (!finalization || typeof finalization !== 'object' || Array.isArray(finalization)) {
+          fail(
+            'knowledge_sync_malformed_response',
+            'Synchronization delivery operation returned an invalid result',
+            503
+          );
+        }
+        return this.finalizeJob({
+          organizationId,
+          id,
+          claimToken,
+          accepted: finalization.accepted === true,
+          observedProjectionDigest: finalization.observedProjectionDigest,
+          diagnosticCategory: finalization.diagnosticCategory,
+        }, client);
       }, 'READ COMMITTED');
     } catch (error) {
       throw mapDatabaseError(error);
@@ -923,19 +1035,32 @@ class KnowledgeSynchronizationRepository {
       batchSize: input.batchSize,
       leaseSeconds: input.leaseSeconds === undefined ? 30 : input.leaseSeconds,
     });
-    return withTransaction(this.pool, async client => {
-      const expired = await client.query(
-        `SELECT * FROM canonical_knowledge_sync_outbox
-          WHERE state = 'claimed' AND lease_expires_at <= statement_timestamp()
-          ORDER BY lease_expires_at, organization_id, target_id, target_sequence, id
-          LIMIT $1 FOR UPDATE SKIP LOCKED`,
-        [options.batchSize]
-      );
-      for (const job of expired.rows) {
+    const candidates = await this.pool.query(
+      `SELECT organization_id, id
+        FROM canonical_knowledge_sync_outbox
+        WHERE state = 'claimed' AND lease_expires_at <= statement_timestamp()
+        ORDER BY lease_expires_at, organization_id, target_id, target_sequence, id
+        LIMIT LEAST($1 * 4, 100)`,
+      [options.batchSize]
+    );
+    let recoveredCount = 0;
+    for (const candidate of candidates.rows) {
+      if (recoveredCount >= options.batchSize) break;
+      try {
+        const recovered = await withTransaction(this.pool, async client => {
+          const selected = await client.query(
+            `SELECT * FROM canonical_knowledge_sync_outbox
+              WHERE organization_id = $1 AND id = $2
+                AND state = 'claimed' AND lease_expires_at <= statement_timestamp()
+              FOR UPDATE SKIP LOCKED`,
+            [candidate.organization_id, candidate.id]
+          );
+          if (selected.rowCount !== 1) return false;
+          const job = selected.rows[0];
         const terminal = Number(job.attempt_count) >= MAX_ATTEMPTS;
         const nextState = terminal ? 'dead' : 'retry';
         const delay = terminal ? 0 : retryDelaySeconds(Number(job.attempt_count));
-        const recovered = await client.query(
+          const outboxUpdate = await client.query(
           `UPDATE canonical_knowledge_sync_outbox
               SET state = $3::text, claim_token = NULL, claimed_at = NULL, lease_expires_at = NULL,
                   diagnostic_category = 'claim_expired',
@@ -947,7 +1072,7 @@ class KnowledgeSynchronizationRepository {
             RETURNING id`,
           [job.organization_id, job.id, nextState, delay, job.claim_token]
         );
-        if (recovered.rowCount !== 1) continue;
+          if (outboxUpdate.rowCount !== 1) return false;
         const attemptUpdate = await client.query(
           `UPDATE canonical_knowledge_sync_attempts
               SET outcome = 'claim_expired', diagnostic_category = 'claim_expired',
@@ -974,9 +1099,19 @@ class KnowledgeSynchronizationRepository {
             WHERE organization_id = $1 AND target_id = $2 AND desired_event_id = $4`,
           [job.organization_id, job.target_id, terminal, job.id]
         );
+          return true;
+        }, 'READ COMMITTED');
+        if (recovered) recoveredCount += 1;
+      } catch (error) {
+        // A single poisoned or concurrently revoked job must not prevent recovery
+        // of unrelated tenant work. The bounded candidate will be reconsidered
+        // after an operator repairs its durable invariant.
+        const databaseCode = String(error && error.code || '');
+        if (!databaseCode.startsWith('23') && databaseCode !== '55000' &&
+            databaseCode !== 'knowledge_sync_attempt_authority_lost') throw error;
       }
-      return expired.rowCount;
-    }, 'READ COMMITTED');
+    }
+    return recoveredCount;
   }
 
   async reconcileTarget(input) {

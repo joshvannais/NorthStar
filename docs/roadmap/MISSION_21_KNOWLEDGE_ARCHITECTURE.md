@@ -248,6 +248,13 @@ Part 6 is complete only when all of the following are true:
   Every renewal, finalization, recovery transition, and observed/last-known-good advancement requires
   the exact claim token and state plus authoritative database-time lease validity in the same atomic
   mutation, so a stale worker cannot commit provider results after expiration or reclaim.
+- Migration 030 atomically revokes every pending, retrying, or claimed event from an older target
+  revision when suspension or reconfiguration becomes durable. Revoked claims retain closed attempt
+  evidence but no claim token or lease, cannot renew, verify, finalize, recover, or be resurrected by
+  reactivation, and cannot authorize provider transport. A bounded delivery holds exact active-target
+  authority through projection verification, intercepted transport, and finalization; a concurrent
+  suspension either commits after that delivery or fails closed for an administrator retry. Recovery
+  and draining isolate one integrity-poisoned job so unrelated tenant work can continue.
 - Retry count, exponential backoff, lease duration, batch size, diagnostic category, diagnostic
   bytes, and reconciliation batches are bounded. Exhaustion becomes an explicit dead-letter state;
   stale claim tokens, invalid transitions, repeated finalization, oversized or malformed provider
@@ -274,6 +281,6 @@ Part 6 is complete only when all of the following are true:
   `MIGRATION_DATABASE_URL`, provision and independently verify a new restricted runtime login, then
   install that login as `DATABASE_URL` before deploying the Part 6 revision. Do not overwrite or
   remove the working owner credential first. A release may proceed only after startup reports the
-  split roles healthy, migration 029 exactly once, runtime DML functional, runtime DDL/TRUNCATE
+  split roles healthy, migrations 029 and 030 exactly once, runtime DML functional, runtime DDL/TRUNCATE
   rejected, and credential-free health acceptance; otherwise restore the prior configuration and
   revision without claiming Part 6 production readiness.

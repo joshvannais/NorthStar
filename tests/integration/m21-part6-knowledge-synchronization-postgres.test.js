@@ -427,8 +427,11 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     })).toBe(true);
     expect((await upgradeMigrationPool.query(
       `SELECT count(*)::int AS applied FROM public._migrations
-        WHERE filename = '029_canonical_knowledge_transactional_sync.sql'`
-    )).rows).toEqual([{ applied: 1 }]);
+        WHERE filename IN (
+          '029_canonical_knowledge_transactional_sync.sql',
+          '030_canonical_knowledge_sync_revocation.sql'
+        ) GROUP BY filename ORDER BY filename`
+    )).rows).toEqual([{ applied: 1 }, { applied: 1 }]);
     const sync = new SyncRepository(upgradePool);
     const configured = await sync.configureTarget(targetInput(actors));
     expect(configured.target.targetRevision).toBe(1);
@@ -2345,5 +2348,294 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
            WHERE organization_id = $1 AND diagnostic_category = 'ownership_lost') AS states`,
       [actors.organizationId]
     )).rows).toEqual([{ attempts: 0, outboxes: 0, states: 0 }]);
+  }, 120000);
+
+  test('revokes claimed delivery authority atomically when a target is suspended', async () => {
+    const actors = await seedActors(freshPool, 'suspension-revocation');
+    const sync = new SyncRepository(freshPool);
+    const configured = await sync.configureTarget(targetInput(actors));
+    await completeKnowledge(knowledge, freshPool, actors, 'suspension-revocation');
+    const claimed = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 30 }))[0];
+    expect(claimed).toBeDefined();
+
+    const suspended = await sync.configureTarget(targetInput(actors, {
+      expectedTargetRevision: configured.target.targetRevision,
+      status: 'suspended',
+    }));
+    expect(suspended).toMatchObject({
+      target: { status: 'suspended' },
+      state: { status: 'suspended', diagnosticCategory: 'target_suspended' },
+    });
+
+    expect((await freshPool.query(
+      `SELECT outbox.state, outbox.claim_token, outbox.diagnostic_category,
+              attempt.outcome, attempt.diagnostic_category AS attempt_diagnostic
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id
+          AND attempt.outbox_id = outbox.id
+          AND attempt.reconciliation_generation = outbox.reconciliation_generation
+          AND attempt.attempt_number = outbox.attempt_count
+        WHERE outbox.id = $1`,
+      [claimed.id]
+    )).rows).toEqual([{
+      state: 'revoked',
+      claim_token: null,
+      diagnostic_category: 'target_suspended',
+      outcome: 'revoked',
+      attempt_diagnostic: 'target_suspended',
+    }]);
+    await expect(sync.renewLease({
+      organizationId: claimed.organizationId,
+      id: claimed.id,
+      claimToken: claimed.claimToken,
+      leaseSeconds: 30,
+    })).resolves.toBeNull();
+    await expect(sync.verifyJobProjection({
+      organizationId: claimed.organizationId,
+      id: claimed.id,
+      claimToken: claimed.claimToken,
+    })).resolves.toBeNull();
+    await expect(sync.finalizeJob({
+      organizationId: claimed.organizationId,
+      id: claimed.id,
+      claimToken: claimed.claimToken,
+      accepted: true,
+      observedProjectionDigest: claimed.projectionDigest,
+    })).resolves.toBeNull();
+    expect(await sync.recoverExpiredJobs({ batchSize: 25 })).toBe(0);
+  }, 120000);
+
+  test('blocks transport after durable suspension and reactivation never resurrects revoked work', async () => {
+    const actors = await seedActors(freshPool, 'suspend-before-verify');
+    const sync = new SyncRepository(freshPool);
+    const configured = await sync.configureTarget(targetInput(actors));
+    await completeKnowledge(knowledge, freshPool, actors, 'suspend-before-verify');
+    const claimed = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 30 }))[0];
+    const suspended = await sync.configureTarget(targetInput(actors, {
+      expectedTargetRevision: configured.target.targetRevision,
+      status: 'suspended',
+    }));
+    const calls = [];
+    const worker = new SyncWorker({
+      repository: sync,
+      transports: {
+        'intercepted.voice-provider': {
+          async applyProjection(request) {
+            calls.push(request);
+            return { accepted: true, observedProjectionDigest: request.projectionDigest };
+          },
+        },
+      },
+      batchSize: 1,
+    });
+    await expect(worker.deliver(claimed)).resolves.toEqual({ ownershipLost: true });
+    expect(calls).toEqual([]);
+
+    const reactivated = await sync.configureTarget(targetInput(actors, {
+      expectedTargetRevision: suspended.target.targetRevision,
+      status: 'active',
+    }));
+    expect(reactivated).toMatchObject({
+      target: { status: 'active', targetRevision: 3 },
+      desired: { state: 'pending', targetRevision: 3 },
+    });
+    const current = await sync.claimJobs({ batchSize: 5, leaseSeconds: 30 });
+    expect(current).toHaveLength(1);
+    expect(current[0]).toMatchObject({
+      id: reactivated.desired.id,
+      targetRevision: 3,
+    });
+    await expect(worker.deliver(current[0])).resolves.toMatchObject({ exactSuccess: true });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].targetRevision).toBe(3);
+    expect((await freshPool.query(
+      `SELECT state, claim_token, diagnostic_category, revoked_at IS NOT NULL AS revoked
+         FROM canonical_knowledge_sync_outbox WHERE id = $1`,
+      [claimed.id]
+    )).rows).toEqual([{
+      state: 'revoked', claim_token: null,
+      diagnostic_category: 'target_suspended', revoked: true,
+    }]);
+  }, 120000);
+
+  test('revokes an in-flight claim when active target configuration is superseded', async () => {
+    const actors = await seedActors(freshPool, 'active-supersession');
+    const sync = new SyncRepository(freshPool);
+    const configured = await sync.configureTarget(targetInput(actors));
+    await completeKnowledge(knowledge, freshPool, actors, 'active-supersession');
+    const claimed = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 30 }))[0];
+    const revised = await sync.configureTarget(targetInput(actors, {
+      expectedTargetRevision: configured.target.targetRevision,
+      maximumEntries: 7,
+    }));
+    expect(revised).toMatchObject({
+      target: { status: 'active', targetRevision: 2, maximumEntries: 7 },
+      desired: { state: 'pending', targetRevision: 2, maximumEntries: 7 },
+    });
+    expect((await freshPool.query(
+      `SELECT outbox.state, outbox.diagnostic_category,
+              attempt.outcome, attempt.diagnostic_category AS attempt_diagnostic
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id
+          AND attempt.outbox_id = outbox.id
+          AND attempt.reconciliation_generation = outbox.reconciliation_generation
+          AND attempt.attempt_number = outbox.attempt_count
+        WHERE outbox.id = $1`,
+      [claimed.id]
+    )).rows).toEqual([{
+      state: 'revoked', diagnostic_category: 'target_superseded',
+      outcome: 'revoked', attempt_diagnostic: 'target_superseded',
+    }]);
+    const next = await sync.claimJobs({ batchSize: 5, leaseSeconds: 30 });
+    expect(next).toHaveLength(1);
+    expect(next[0]).toMatchObject({ id: revised.desired.id, targetRevision: 2, maximumEntries: 7 });
+  }, 120000);
+
+  test('serializes suspension behind one bounded in-flight delivery transaction', async () => {
+    const actors = await seedActors(freshPool, 'suspension-race');
+    const sync = new SyncRepository(freshPool);
+    const configured = await sync.configureTarget(targetInput(actors));
+    await completeKnowledge(knowledge, freshPool, actors, 'suspension-race');
+    const claimed = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 30 }))[0];
+    let releaseTransport;
+    let markTransportStarted;
+    const transportStarted = new Promise(resolve => { markTransportStarted = resolve; });
+    const transportRelease = new Promise(resolve => { releaseTransport = resolve; });
+    const worker = new SyncWorker({
+      repository: sync,
+      transports: {
+        'intercepted.voice-provider': {
+          async applyProjection(request) {
+            markTransportStarted();
+            await transportRelease;
+            return { accepted: true, observedProjectionDigest: request.projectionDigest };
+          },
+        },
+      },
+      batchSize: 1,
+      transportTimeoutMs: 2000,
+    });
+
+    const delivery = worker.deliver(claimed);
+    await transportStarted;
+    let suspensionCommitted = false;
+    const suspension = sync.configureTarget(targetInput(actors, {
+      expectedTargetRevision: configured.target.targetRevision,
+      status: 'suspended',
+    })).then(result => {
+      suspensionCommitted = true;
+      return result;
+    });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(suspensionCommitted).toBe(false);
+    releaseTransport();
+    await expect(delivery).resolves.toMatchObject({ exactSuccess: true });
+    await expect(suspension).rejects.toMatchObject({
+      code: 'knowledge_sync_conflict',
+    });
+    expect(suspensionCommitted).toBe(false);
+    await expect(sync.configureTarget(targetInput(actors, {
+      expectedTargetRevision: configured.target.targetRevision,
+      status: 'suspended',
+    }))).resolves.toMatchObject({
+      target: { status: 'suspended', targetRevision: 2 },
+      state: { status: 'suspended', diagnosticCategory: 'target_suspended' },
+    });
+    await expect(worker.deliver(claimed)).resolves.toEqual({ ownershipLost: true });
+  }, 120000);
+
+  test('isolates one legacy-poisoned expired claim so unrelated tenant recovery and delivery continue', async () => {
+    const poisonedActors = await seedActors(freshPool, 'legacy-poison');
+    const unrelatedActors = await seedActors(freshPool, 'legacy-unrelated');
+    const sync = new SyncRepository(freshPool);
+    await sync.configureTarget(targetInput(poisonedActors));
+    await sync.configureTarget(targetInput(unrelatedActors));
+    await completeKnowledge(knowledge, freshPool, poisonedActors, 'legacy-poison');
+    await completeKnowledge(knowledge, freshPool, unrelatedActors, 'legacy-unrelated');
+    const claimed = await sync.claimJobs({ batchSize: 2, leaseSeconds: 5 });
+    const poisoned = claimed.find(job => job.organizationId === poisonedActors.organizationId);
+    const unrelated = claimed.find(job => job.organizationId === unrelatedActors.organizationId);
+    expect(poisoned).toBeDefined();
+    expect(unrelated).toBeDefined();
+
+    await freshMigrationPool.query(
+      'ALTER TABLE public.canonical_knowledge_sync_attempts DISABLE TRIGGER USER'
+    );
+    try {
+      await freshMigrationPool.query(
+        `UPDATE public.canonical_knowledge_sync_attempts
+            SET outcome = 'claim_expired', diagnostic_category = 'claim_expired',
+                completed_at = statement_timestamp()
+          WHERE organization_id = $1 AND target_id = $2 AND outbox_id = $3
+            AND reconciliation_generation = $4 AND attempt_number = $5
+            AND claim_token = $6`,
+        [
+          poisoned.organizationId, poisoned.targetId, poisoned.id,
+          poisoned.reconciliationGeneration, poisoned.attemptCount, poisoned.claimToken,
+        ]
+      );
+    } finally {
+      await freshMigrationPool.query(
+        'ALTER TABLE public.canonical_knowledge_sync_attempts ENABLE TRIGGER USER'
+      );
+    }
+    await freshMigrationPool.query(
+      'ALTER TABLE public.canonical_knowledge_sync_outbox DISABLE TRIGGER USER'
+    );
+    try {
+      await freshMigrationPool.query(
+        `UPDATE public.canonical_knowledge_sync_outbox
+            SET claimed_at = statement_timestamp() - interval '20 seconds',
+                lease_expires_at = statement_timestamp() - interval '10 seconds'
+          WHERE organization_id = $1 AND id = $2`,
+        [poisoned.organizationId, poisoned.id]
+      );
+      await freshMigrationPool.query(
+        `UPDATE public.canonical_knowledge_sync_outbox
+            SET claimed_at = statement_timestamp() - interval '10 seconds',
+                lease_expires_at = statement_timestamp() - interval '5 seconds'
+          WHERE organization_id = $1 AND id = $2`,
+        [unrelated.organizationId, unrelated.id]
+      );
+    } finally {
+      await freshMigrationPool.query(
+        'ALTER TABLE public.canonical_knowledge_sync_outbox ENABLE TRIGGER USER'
+      );
+    }
+    expect(await sync.recoverExpiredJobs({ batchSize: 1 })).toBe(1);
+    expect((await freshPool.query(
+      `SELECT organization_id, state FROM canonical_knowledge_sync_outbox
+        WHERE id IN ($1,$2) ORDER BY organization_id`,
+      [poisoned.id, unrelated.id]
+    )).rows).toEqual(expect.arrayContaining([
+      { organization_id: poisoned.organizationId, state: 'claimed' },
+      { organization_id: unrelated.organizationId, state: 'retry' },
+    ]));
+    await freshPool.query(
+      `UPDATE canonical_knowledge_sync_outbox
+          SET available_at = statement_timestamp()
+        WHERE organization_id = $1 AND id = $2`,
+      [unrelated.organizationId, unrelated.id]
+    );
+    const calls = [];
+    const worker = new SyncWorker({
+      repository: sync,
+      transports: {
+        'intercepted.voice-provider': {
+          async applyProjection(request) {
+            calls.push(request);
+            return { accepted: true, observedProjectionDigest: request.projectionDigest };
+          },
+        },
+      },
+      batchSize: 1,
+    });
+    await expect(worker.drainOnce()).resolves.toMatchObject({ succeeded: 1 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].organizationId).toBe(unrelated.organizationId);
   }, 120000);
 });

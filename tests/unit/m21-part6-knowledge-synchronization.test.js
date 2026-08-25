@@ -160,12 +160,13 @@ describe('Mission 21 Part 6 intercepted provider-neutral worker', () => {
       async recoverExpiredJobs() { return 0; },
       async reconcileStaleTargets() { return 0; },
       async claimJobs() { return calls.length === 0 ? [queued] : []; },
-      async renewLease(input) { calls.push({ renew: input }); return queued; },
-      async verifyJobProjection(input) {
-        calls.push({ verify: input });
-        return queued;
+      async executeClaimWithAuthority(input, operation) {
+        calls.push({ authority: input });
+        const result = await operation(queued);
+        finalized.push({ ...input, ...result });
+        return { exactSuccess: true };
       },
-      async finalizeJob(input) { finalized.push(input); return { exactSuccess: true }; },
+      async finalizeJob(input) { finalized.push(input); return { exactSuccess: false }; },
     };
     const providerCalls = [];
     const worker = new KnowledgeSynchronizationWorker({
@@ -186,10 +187,11 @@ describe('Mission 21 Part 6 intercepted provider-neutral worker', () => {
       claimed: 1, expired: 0, ownershipLost: 0, stale: 0, succeeded: 1,
     });
     expect(providerCalls).toHaveLength(1);
-    expect(calls).toContainEqual({ verify: {
+    expect(calls).toContainEqual({ authority: {
       organizationId: queued.organizationId,
       id: queued.id,
       claimToken: queued.claimToken,
+      leaseSeconds: 30,
     } });
     expect(providerCalls[0].request).toMatchObject({
       idempotencyKey: queued.idempotencyKey,
@@ -232,8 +234,11 @@ describe('Mission 21 Part 6 intercepted provider-neutral worker', () => {
       const queued = job();
       const finalized = [];
       const mockRepository = {
-        async renewLease() { return queued; },
-        async verifyJobProjection() { return queued; },
+        async executeClaimWithAuthority(input, operation) {
+          const result = await operation(queued);
+          finalized.push({ ...input, ...result });
+          return { exactSuccess: false };
+        },
         async finalizeJob(input) { finalized.push(input); return { exactSuccess: false }; },
       };
       const worker = new KnowledgeSynchronizationWorker({
@@ -257,8 +262,7 @@ describe('Mission 21 Part 6 intercepted provider-neutral worker', () => {
     const finalized = [];
     const worker = new KnowledgeSynchronizationWorker({
       repository: {
-        async renewLease() { return queued; },
-        async verifyJobProjection() {
+        async executeClaimWithAuthority() {
           const error = new Error('forged private tenant material');
           error.code = 'knowledge_sync_projection_integrity_failure';
           throw error;

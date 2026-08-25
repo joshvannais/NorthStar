@@ -345,10 +345,10 @@ describe('Mission 20 Phase 7 password-reset/refresh transaction authority', () =
     await refreshBlocker.query('SELECT pg_advisory_lock($1)', [refreshLock]);
     try {
       const refreshPromise = refreshRequest(refreshFirst).then(value => value);
-      expect((await waitForLock(['INSERT INTO auth_refresh_tokens'])).wait_event).toBe('advisory');
+      expect((await waitForLock(['INSERT INTO public.auth_refresh_tokens'])).wait_event).toBe('advisory');
       const resetPromise = resetRequest(refreshFirst).then(value => value);
       expect(['transactionid', 'tuple']).toContain(
-        (await waitForLock(['FROM account_action_tokens t'])).wait_event
+        (await waitForLock(['FROM public.account_action_tokens t'])).wait_event
       );
       expect((await refreshBlocker.query('SELECT pg_advisory_unlock($1) AS unlocked', [refreshLock]))
         .rows[0].unlocked).toBe(true);
@@ -388,7 +388,7 @@ describe('Mission 20 Phase 7 password-reset/refresh transaction authority', () =
     const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const resetPromise = resetRequest(resetFirst).then(value => value);
-      expect((await waitForLock(['UPDATE users SET password_hash'])).wait_event).toBe('advisory');
+      expect((await waitForLock(['UPDATE public.users SET password_hash'])).wait_event).toBe('advisory');
       const staleRefreshPromise = refreshRequest(resetFirst).then(value => value);
       expect(['transactionid', 'tuple']).toContain((await waitForLock([
         'FOR UPDATE OF token, session, u, membership',
@@ -532,7 +532,7 @@ describe('Mission 20 Phase 7 password-reset/refresh transaction authority', () =
             return async (...args) => {
               const result = await value.apply(target, args);
               const statement = typeof args[0] === 'string' ? args[0] : String(args[0] && args[0].text);
-              if (!routed && statement.includes('FROM auth_refresh_tokens token') &&
+              if (!routed && statement.includes('FROM public.auth_refresh_tokens token') &&
                   statement.includes('WHERE token.token_hash = $1') && !statement.includes('FOR UPDATE')) {
                 routed = true;
                 signalRouteRead(result.rows[0]);

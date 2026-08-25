@@ -233,10 +233,10 @@ describe('Mission 20 Phase 7 OAuth-state/password-reset transaction authority', 
     let unlocked = false;
     try {
       const resetPromise = withObserved('reset', () => resetOperation(account));
-      await waitForLock(['UPDATE users SET password_hash'], 'advisory');
+      await waitForLock(['UPDATE public.users SET password_hash'], 'advisory');
       const oauthPromise = withObserved(operation, () => oauthOperation(operation, prepared));
       await waitForLock([
-        'FROM auth_sessions session',
+        'FROM public.auth_sessions session',
         'FROM oauth_authorization_states state',
         'FROM users',
       ]);
@@ -267,7 +267,7 @@ describe('Mission 20 Phase 7 OAuth-state/password-reset transaction authority', 
         'UPDATE oauth_authorization_states',
       ], 'advisory');
       const resetPromise = withObserved('reset', () => resetOperation(account));
-      await waitForLock(['FROM account_action_tokens t']);
+      await waitForLock(['FROM public.account_action_tokens t']);
       unlocked = (await blocker.query('SELECT pg_advisory_unlock($1) AS value', [lockKey])).rows[0].value;
       const [oauthResult, resetResult] = await Promise.allSettled([oauthPromise, resetPromise]);
       return { account, prepared, resetResult, oauthResult, state: await durableState(account) };

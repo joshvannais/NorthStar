@@ -916,7 +916,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     const pool = db.getPool();
     const originalQuery = pool.query.bind(pool);
     pool.query = async function (statement, values) {
-      if (/canonical_/i.test(String(statement)) && !/FROM auth_sessions/i.test(String(statement))) {
+      if (/canonical_/i.test(String(statement)) && !/FROM public\.auth_sessions/i.test(String(statement))) {
         throw new Error('connection unavailable');
       }
       return originalQuery(statement, values);
@@ -947,7 +947,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     const isolatedRoot = path.resolve(process.env.NORTHSTAR_DATA_DIR) + path.sep;
     let membershipLookups = 0;
     pool.query = async function (statement, values) {
-      if (/FROM auth_sessions/i.test(String(statement))) membershipLookups += 1;
+      if (/FROM public\.auth_sessions/i.test(String(statement))) membershipLookups += 1;
       return originalQuery(statement, values);
     };
     function rejectRepositoryAccess(target) {

@@ -15,6 +15,7 @@ const { Pool } = require('pg');
 const DEFAULT_MIGRATIONS_DIRECTORY = path.join(__dirname, '..', 'migrations');
 const MIGRATION_LOCK_KEY = '5643944089238424905';
 const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
+const RUNTIME_SEARCH_PATH = 'public, pg_catalog, pg_temp';
 const PROTECTED_LEGACY_MIGRATION_CHECKSUMS = Object.freeze({
   '001_initial_schema.sql': '74ee47a852a376c3f5f8b2a5bf24579d24eb6a20dc8284e8b233a0159e858c14',
   '002_seed_data.sql': '370b2b2cd466817724f4788e104adef3f93d3d8a02bd877f252d1e3d6f588cd5',
@@ -30,6 +31,75 @@ const PROTECTED_LEGACY_MIGRATION_CHECKSUMS = Object.freeze({
 let pool = null;
 let dbAvailable = false;
 let readinessFailure = null;
+const protectedRuntimePools = new WeakSet();
+
+async function enforceRuntimeSessionPolicy(client) {
+  const state = (await client.query(
+    `WITH pinned AS MATERIALIZED (
+       SELECT pg_catalog.set_config('search_path', $1, false) AS applied_search_path
+     )
+     SELECT pg_catalog.current_setting('session_replication_role') AS replication_role,
+            pg_catalog.current_setting('search_path') AS search_path
+       FROM pinned`,
+    [RUNTIME_SEARCH_PATH]
+  )).rows[0];
+  if (!state || state.replication_role !== 'origin') {
+    throw new Error('Runtime database session is not in origin replication mode');
+  }
+  if (state.search_path !== RUNTIME_SEARCH_PATH) {
+    throw new Error('Runtime database session search path verification failed');
+  }
+}
+
+function protectRuntimePool(runtimePool) {
+  if (protectedRuntimePools.has(runtimePool)) return runtimePool;
+  if (!runtimePool || typeof runtimePool.connect !== 'function') {
+    throw new Error('Runtime database pool is invalid');
+  }
+  if (runtimePool.totalCount !== 0) {
+    throw new Error('Runtime database pool must be protected before its first connection');
+  }
+
+  const connect = runtimePool.connect.bind(runtimePool);
+  runtimePool.connect = function connectWithRuntimePolicy(callback) {
+    if (typeof callback === 'function') {
+      return connect((error, client, release) => {
+        if (error) return callback(error);
+        enforceRuntimeSessionPolicy(client).then(
+          () => callback(undefined, client, release),
+          policyError => {
+            release(policyError);
+            callback(policyError);
+          }
+        );
+      });
+    }
+    return connect().then(async client => {
+      try {
+        await enforceRuntimeSessionPolicy(client);
+        return client;
+      } catch (error) {
+        client.release(error);
+        throw error;
+      }
+    });
+  };
+  protectedRuntimePools.add(runtimePool);
+  return runtimePool;
+}
+
+function createPool(connectionString, maximumConnections, options = {}) {
+  const poolOptions = {
+    connectionString,
+    ssl: connectionString.includes('railway') ? { rejectUnauthorized: false } : false,
+    max: maximumConnections,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+  };
+  if (options.runtime === true) poolOptions.onConnect = enforceRuntimeSessionPolicy;
+  const createdPool = new Pool(poolOptions);
+  return options.runtime === true ? protectRuntimePool(createdPool) : createdPool;
+}
 
 function getPool() {
   if (pool) return pool;
@@ -37,12 +107,8 @@ function getPool() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) return null;
 
-  pool = new Pool({
-    connectionString,
-    ssl: connectionString.includes('railway') ? { rejectUnauthorized: false } : false,
-    max: parseInt(process.env.DB_POOL_MAX || '20', 10),
-    connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: 30000,
+  pool = createPool(connectionString, parseInt(process.env.DB_POOL_MAX || '20', 10), {
+    runtime: true,
   });
   pool.on('error', (error) => {
     dbAvailable = false;
@@ -780,17 +846,249 @@ async function normalizeMigrationLedger(client) {
   }
 }
 
+async function readDatabaseRoleIdentity(client) {
+  return (await client.query(`
+    SELECT current_user::text AS current_user,
+           session_user::text AS session_user,
+           current_database() AS database_name,
+           pg_catalog.pg_get_userbyid(database_record.datdba) AS database_owner,
+           (SELECT system_identifier::text
+              FROM pg_catalog.pg_control_system()) AS system_identifier,
+           role_record.rolsuper,
+           role_record.rolinherit,
+           role_record.rolcreaterole,
+           role_record.rolcreatedb,
+           role_record.rolcanlogin,
+           role_record.rolreplication,
+           role_record.rolbypassrls,
+           pg_catalog.pg_get_userbyid(schema_record.nspowner) AS public_schema_owner
+      FROM pg_catalog.pg_database database_record
+      JOIN pg_catalog.pg_roles role_record
+        ON role_record.rolname = current_user
+      JOIN pg_catalog.pg_namespace schema_record
+        ON schema_record.nspname = 'public'
+     WHERE database_record.datname = current_database()
+  `)).rows[0];
+}
+
+async function assertSeparatedDatabaseRoles(migrationClient, runtimeClient) {
+  await enforceRuntimeSessionPolicy(runtimeClient);
+  const migration = await readDatabaseRoleIdentity(migrationClient);
+  const runtime = await readDatabaseRoleIdentity(runtimeClient);
+  if (!migration || !runtime || migration.database_name !== runtime.database_name ||
+      !migration.system_identifier || migration.system_identifier !== runtime.system_identifier) {
+    throw new Error('Migration and runtime database identities do not match');
+  }
+  if (migration.current_user !== migration.session_user || runtime.current_user !== runtime.session_user) {
+    throw new Error('Migration and runtime connections must use authenticated roles without SET ROLE');
+  }
+  if (migration.current_user === runtime.current_user) {
+    throw new Error('Migration and runtime database roles must be distinct');
+  }
+  if (!migration.rolcanlogin || migration.database_owner !== migration.current_user) {
+    throw new Error('Migration connection must authenticate as the database owner');
+  }
+  if (!runtime.rolcanlogin || runtime.database_owner === runtime.current_user || runtime.rolsuper ||
+      runtime.rolcreaterole || runtime.rolcreatedb || runtime.rolreplication || runtime.rolbypassrls) {
+    throw new Error('Runtime database role is not least-privileged');
+  }
+  if (![migration.current_user, 'pg_database_owner'].includes(migration.public_schema_owner)) {
+    throw new Error('Migration database role does not own the public schema authority');
+  }
+
+  const membership = (await migrationClient.query(
+    `SELECT pg_has_role($1, $2, 'SET') AS runtime_can_set_migration,
+            pg_has_role($1, $2, 'MEMBER') AS runtime_is_migration_member,
+            NOT EXISTS (
+              SELECT 1
+                FROM pg_catalog.pg_auth_members membership
+                JOIN pg_catalog.pg_roles member_role
+                  ON member_role.oid = membership.member
+               WHERE member_role.rolname = $1
+            ) AS runtime_has_no_role_memberships`,
+    [runtime.current_user, migration.current_user]
+  )).rows[0];
+  if (membership.runtime_can_set_migration || membership.runtime_is_migration_member ||
+      !membership.runtime_has_no_role_memberships) {
+    throw new Error('Runtime database role retains role membership authority');
+  }
+
+  const runtimeCreation = (await migrationClient.query(
+    `SELECT has_database_privilege($1, current_database(), 'CREATE') AS database_create,
+            has_schema_privilege($1, 'public', 'CREATE') AS schema_create,
+            has_parameter_privilege($1, 'session_replication_role', 'SET')
+              AS replication_role_set`,
+    [runtime.current_user]
+  )).rows[0];
+  if (runtimeCreation.database_create || runtimeCreation.schema_create ||
+      runtimeCreation.replication_role_set) {
+    throw new Error('Runtime database role retains schema or trigger-bypass authority');
+  }
+
+  const writableSchemas = await migrationClient.query(
+    `SELECT namespace.nspname,
+            pg_catalog.pg_get_userbyid(namespace.nspowner) AS owner,
+            pg_catalog.has_schema_privilege($1, namespace.oid, 'CREATE') AS runtime_create
+       FROM pg_catalog.pg_namespace namespace
+      WHERE namespace.nspname !~ '^pg_'
+        AND namespace.nspname <> 'information_schema'
+        AND (
+          pg_catalog.pg_get_userbyid(namespace.nspowner) = $1
+          OR pg_catalog.has_schema_privilege($1, namespace.oid, 'CREATE')
+        )
+      ORDER BY namespace.nspname`,
+    [runtime.current_user]
+  );
+  if (writableSchemas.rowCount !== 0) {
+    throw new Error('Runtime database role owns or can create in an application schema');
+  }
+  return Object.freeze({ migrationRole: migration.current_user, runtimeRole: runtime.current_user });
+}
+
+async function grantAndVerifyRuntimeAuthority(client, authority) {
+  await client.query(
+    "SELECT pg_catalog.set_config('northstar.runtime_role', $1, true)",
+    [authority.runtimeRole]
+  );
+  await client.query(`
+    DO $northstar_runtime_grants$
+    DECLARE
+      runtime_role TEXT := pg_catalog.current_setting('northstar.runtime_role');
+    BEGIN
+      EXECUTE pg_catalog.format('REVOKE CREATE ON SCHEMA public FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT USAGE ON SCHEMA public TO %I', runtime_role);
+      EXECUTE pg_catalog.format(
+        'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'REVOKE ALL PRIVILEGES ON SEQUENCE public._migrations_id_seq FROM %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO %I',
+        runtime_role
+      );
+    END
+    $northstar_runtime_grants$;
+  `);
+
+  const wrongRelationOwners = await client.query(
+    `SELECT namespace.nspname, relation.relname,
+            pg_get_userbyid(relation.relowner) AS owner
+       FROM pg_catalog.pg_class relation
+       JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+      WHERE namespace.nspname = 'public'
+        AND relation.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+        AND pg_get_userbyid(relation.relowner) <> $1
+      ORDER BY relation.relname`,
+    [authority.migrationRole]
+  );
+  const wrongFunctionOwners = await client.query(
+    `SELECT routine.oid::regprocedure::text AS routine,
+            pg_get_userbyid(routine.proowner) AS owner
+       FROM pg_catalog.pg_proc routine
+       JOIN pg_catalog.pg_namespace namespace ON namespace.oid = routine.pronamespace
+      WHERE namespace.nspname = 'public'
+        AND pg_get_userbyid(routine.proowner) <> $1
+      ORDER BY routine.oid::regprocedure::text`,
+    [authority.migrationRole]
+  );
+  if (wrongRelationOwners.rowCount !== 0 || wrongFunctionOwners.rowCount !== 0) {
+    throw new Error('Migration role does not own every public database authority');
+  }
+
+  const runtimePrivileges = (await client.query(
+    `SELECT
+       has_schema_privilege($1, 'public', 'USAGE') AS schema_usage,
+       has_schema_privilege($1, 'public', 'CREATE') AS schema_create,
+       has_database_privilege($1, current_database(), 'CREATE') AS database_create,
+       has_parameter_privilege($1, 'session_replication_role', 'SET')
+         AS replication_role_set,
+       (SELECT bool_and(
+          has_table_privilege($1, relation.oid, 'SELECT')
+          AND has_table_privilege($1, relation.oid, 'INSERT')
+          AND has_table_privilege($1, relation.oid, 'UPDATE')
+          AND has_table_privilege($1, relation.oid, 'DELETE')
+        )
+          FROM pg_catalog.pg_class relation
+          JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+         WHERE namespace.nspname = 'public'
+           AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')
+           AND relation.relname <> '_migrations') AS table_dml,
+       (SELECT bool_and(
+          NOT has_table_privilege($1, relation.oid, 'TRUNCATE')
+          AND NOT has_table_privilege($1, relation.oid, 'REFERENCES')
+          AND NOT has_table_privilege($1, relation.oid, 'TRIGGER')
+        )
+          FROM pg_catalog.pg_class relation
+          JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+         WHERE namespace.nspname = 'public'
+           AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')) AS table_ddl_withheld,
+       NOT has_table_privilege($1, 'public._migrations', 'SELECT')
+         AND NOT has_table_privilege($1, 'public._migrations', 'INSERT')
+         AND NOT has_table_privilege($1, 'public._migrations', 'UPDATE')
+         AND NOT has_table_privilege($1, 'public._migrations', 'DELETE')
+         AND NOT has_table_privilege($1, 'public._migrations', 'TRUNCATE') AS ledger_withheld,
+       NOT has_sequence_privilege($1, 'public._migrations_id_seq', 'USAGE')
+         AND NOT has_sequence_privilege($1, 'public._migrations_id_seq', 'SELECT')
+         AND NOT has_sequence_privilege($1, 'public._migrations_id_seq', 'UPDATE') AS ledger_sequence_withheld`,
+    [authority.runtimeRole]
+  )).rows[0];
+  if (!runtimePrivileges.schema_usage || runtimePrivileges.schema_create ||
+      runtimePrivileges.replication_role_set ||
+      runtimePrivileges.database_create || !runtimePrivileges.table_dml ||
+      !runtimePrivileges.table_ddl_withheld || !runtimePrivileges.ledger_withheld ||
+      !runtimePrivileges.ledger_sequence_withheld) {
+    throw new Error('Runtime database role privilege verification failed');
+  }
+}
+
 async function runMigrations(options = {}) {
   const targetPool = options.pool || getPool();
   if (!targetPool) throw new Error('DATABASE_URL is required for PostgreSQL authority');
+  const roleSeparated = Boolean(options.runtimePool);
+  if (!roleSeparated && process.env.NODE_ENV !== 'test') {
+    throw new Error('Separate migration and runtime database roles are required');
+  }
   const migrationsDirectory = options.migrationsDirectory || DEFAULT_MIGRATIONS_DIRECTORY;
   const migrations = loadMigrations(migrationsDirectory);
   const migrationNames = new Set(migrations.map(migration => migration.file));
   const appliedNow = [];
+  const runtimeAuthorityPool = roleSeparated ? protectRuntimePool(options.runtimePool) : null;
   const client = await targetPool.connect();
+  let runtimeClient = null;
   let transactionOpen = false;
 
   try {
+    if (roleSeparated) runtimeClient = await runtimeAuthorityPool.connect();
+    const authority = roleSeparated
+      ? await assertSeparatedDatabaseRoles(client, runtimeClient)
+      : null;
     await client.query('BEGIN');
     transactionOpen = true;
     await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [MIGRATION_LOCK_KEY]);
@@ -833,6 +1131,8 @@ async function runMigrations(options = {}) {
       appliedNow.push(migration.file);
     }
 
+    if (authority) await grantAndVerifyRuntimeAuthority(client, authority);
+
     await client.query('COMMIT');
     transactionOpen = false;
   } catch (error) {
@@ -845,6 +1145,7 @@ async function runMigrations(options = {}) {
     }
     throw new Error(`Migration run failed: ${error.message}`);
   } finally {
+    if (runtimeClient) runtimeClient.release();
     client.release();
   }
 
@@ -861,9 +1162,29 @@ async function initDatabase() {
     return false;
   }
 
+  const migrationConnectionString = process.env.MIGRATION_DATABASE_URL;
+  const testOnlySingleRole = process.env.NODE_ENV === 'test' && !migrationConnectionString;
+  if (!migrationConnectionString && !testOnlySingleRole) {
+    readinessFailure = 'migration_database_url_missing';
+    return false;
+  }
+
+  const migrationPool = migrationConnectionString
+    ? createPool(migrationConnectionString, 2)
+    : null;
+  if (migrationPool) {
+    migrationPool.on('error', (error) => {
+      console.error('[DB] Migration pool error:', error.message);
+    });
+  }
+
   try {
     await targetPool.query('SELECT 1');
-    await runMigrations();
+    if (migrationPool) {
+      await runMigrations({ pool: migrationPool, runtimePool: targetPool });
+    } else {
+      await runMigrations({ pool: targetPool });
+    }
     dbAvailable = true;
     return true;
   } catch (error) {
@@ -871,6 +1192,8 @@ async function initDatabase() {
     console.error('[DB] PostgreSQL initialization failed:', error.message);
     dbAvailable = false;
     return false;
+  } finally {
+    if (migrationPool) await migrationPool.end().catch(() => {});
   }
 }
 

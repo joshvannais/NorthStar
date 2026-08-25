@@ -41,7 +41,7 @@ describe('Mission 20 Phase 7 Lane 2 durable account email outbox', () => {
         return {
           async query(text, parameters) {
             if (typeof text === 'string' && text.includes('token_unavailable') &&
-                text.includes('UPDATE account_email_outbox outbox')) {
+                text.includes('UPDATE public.account_email_outbox outbox')) {
               captured = { text, parameters };
               return { rows: [], rowCount: 0 };
             }

@@ -20,6 +20,9 @@ const {
   normalizePublicationTarget,
   normalizeWorkflowTarget,
 } = require('./workflow');
+const {
+  enqueuePublicationSynchronization,
+} = require('./synchronizationRepository');
 
 class KnowledgeRepositoryError extends Error {
   constructor(code, message, status) {
@@ -1039,6 +1042,7 @@ async function publishKnowledgeVersion(pool, input) {
         publicationNumber: Number(stored.publication_number),
         reviewEventId: latestEvent.id,
       });
+      await enqueuePublicationSynchronization(client, stored, target.actorUserId);
       return mapPublication(stored);
     });
   } catch (error) {

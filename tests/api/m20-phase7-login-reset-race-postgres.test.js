@@ -333,13 +333,13 @@ describe('Mission 20 Phase 7 password-reset/login transaction authority', () => 
         .set('X-Forwarded-For', source())
         .send({ email: account.email, password: account.oldPassword })
         .then(response => response);
-      const loginWait = await waitForActivity('INSERT INTO auth_sessions');
+      const loginWait = await waitForActivity('INSERT INTO public.auth_sessions');
       expect(loginWait.wait_event).toBe('advisory');
       const resetPromise = repository.resetPasswordWithToken({
         tokenHash: account.tokenHash,
         passwordHash: account.newHash,
       });
-      const resetWait = await waitForActivity('FROM account_action_tokens t');
+      const resetWait = await waitForActivity('FROM public.account_action_tokens t');
       expect(['transactionid', 'tuple']).toContain(resetWait.wait_event);
       expect((await blocker.query('SELECT pg_advisory_unlock($1) AS unlocked', [lockKey])).rows[0].unlocked)
         .toBe(true);

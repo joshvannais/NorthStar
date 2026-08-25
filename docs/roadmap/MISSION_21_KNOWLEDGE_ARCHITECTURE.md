@@ -195,3 +195,92 @@ Part 5 is complete only when all of the following are true:
 - Part 5 adds no migration, HTTP route, browser UI, provider SDK or network call, synchronization
   state, outbox, retry, production configuration, or secret. Those transport and reconciliation
   authorities begin only in Part 6 after a Part 5 projection has been independently accepted.
+
+## Part 6 acceptance contract
+
+Part 6 is complete only when all of the following are true:
+
+- Migration 029 is additive and leaves migrations 025–028 byte-for-byte unchanged. It creates
+  only tenant-scoped provider-neutral synchronization targets, ordered transactional outbox work,
+  desired/observed synchronization state, and bounded reconciliation evidence. It stores no
+  credential, provider-authentication material, provider-owned canonical fact, or executable tool
+  instruction.
+- Database DDL and runtime DML use separately authenticated principals. `MIGRATION_DATABASE_URL`
+  authenticates as the exact database and public-authority owner; `DATABASE_URL` authenticates as a
+  distinct non-owner runtime role with no superuser, role/database creation, replication, RLS-bypass,
+  schema-creation, role-assumption, `TRUNCATE`, `REFERENCES`, `TRIGGER`, migration-ledger, ownership,
+  or DDL authority. Startup verifies the exact session roles, ownership, non-membership, grants, and
+  withheld privileges, same-cluster identity, exact effective `session_replication_role = origin`,
+  and absence of every runtime-owned or runtime-writable application schema. Every newly
+  authenticated runtime connection and every pooled checkout pins and verifies
+  `public, pg_catalog, pg_temp` so neither
+  role/database/URL defaults, a quoted `$user` schema, nor temporary objects can precede canonical
+  public authority. An injected runtime pool must be protected before its first connection.
+  Startup fails closed before serving when any identity, session, schema, or privilege boundary is
+  absent or inconsistent.
+  Every retained synchronization table also rejects `TRUNCATE` with a statement trigger as defense
+  in depth, including multi-table, `CASCADE`, and `RESTART IDENTITY` entry paths.
+- Creating, revising, activating, suspending, or explicitly reconciling a target requires one
+  active individual owner or administrator membership. A target pins one normalized provider key,
+  external consumer, audience, sorted capabilities, target revision, configuration digest, and
+  bounded delivery contract. Voice and integration targets retain the Part 5 administrator and
+  complete-projection requirements; request claims and shared/provider identities cannot authorize
+  target configuration.
+- Every canonical publication transaction atomically records deterministic reconciliation work for
+  every active matching target. The database locks and sequences each tenant/provider/consumer
+  target independently, captures the exact latest relevant publication/version/digest source pins,
+  and structurally deduplicates an unchanged desired state. A target activation or revision uses the
+  same source-snapshot authority, so a committed publication or target change cannot be left without
+  durable desired-state evidence even after a process crash.
+- Outbox preparation replays only the captured exact source pins through the accepted Part 5
+  projection contract and verifies organization, consumer, audience, capabilities, target revision,
+  source pins, canonical projection bytes, and projection digest before transport. An incomplete,
+  missing, malformed, oversized, stale, cross-tenant, or digest-mismatched projection fails closed;
+  no subset is transported and canonical publication is never rolled back to satisfy a provider.
+  The durable database boundary independently reconstructs that exact projection and preserves its
+  semantic source order; application-supplied projection bytes, digests, or reordered pins cannot
+  establish synchronization authority. The worker independently repeats the exact-pin verification
+  from immutable publications immediately before provider transport.
+- Claiming is bounded and lease-owned. Work is claimed with `SKIP LOCKED` only in per-target sequence
+  after earlier nonterminal work, receives one stable idempotency key for all attempts, and can be
+  finalized or renewed only by its current unexpired claim. Crashes and expired leases recover
+  deterministically; ambiguous provider acceptance retries with the same idempotency identity.
+  Every renewal, finalization, recovery transition, and observed/last-known-good advancement requires
+  the exact claim token and state plus authoritative database-time lease validity in the same atomic
+  mutation, so a stale worker cannot commit provider results after expiration or reclaim.
+- Migration 030 atomically revokes every pending, retrying, or claimed event from an older target
+  revision when suspension or reconfiguration becomes durable. Revoked claims retain closed attempt
+  evidence but no claim token or lease, cannot renew, verify, finalize, recover, or be resurrected by
+  reactivation, and cannot authorize provider transport. A bounded delivery holds exact active-target
+  authority through projection verification, intercepted transport, and finalization; a concurrent
+  suspension either commits after that delivery or fails closed for an administrator retry. Recovery
+  and draining isolate one integrity-poisoned job so unrelated tenant work can continue.
+- Retry count, exponential backoff, lease duration, batch size, diagnostic category, diagnostic
+  bytes, and reconciliation batches are bounded. Exhaustion becomes an explicit dead-letter state;
+  stale claim tokens, invalid transitions, repeated finalization, oversized or malformed provider
+  diagnostics, and out-of-order work cannot advance observed state.
+- Desired state, last observed provider state, and last-known-good state are distinct. Success moves
+  observed and last-known-good only when the provider-neutral acknowledgement matches the exact
+  desired projection digest. A mismatch records drift without accepting provider content; elapsed
+  synchronization age records staleness without changing canonical knowledge.
+- Reconciliation is deterministic and restart-safe. Missing durable work, retryable failure, drift,
+  staleness, dead-letter recovery after a later desired state, and an explicit administrator request
+  produce at most one structurally deduplicated event for the same target revision and exact source
+  pins. Provider observations can schedule outbound repair but can never feed mutations into the
+  registry, publication workflow, generation inputs, or target configuration.
+- A published tombstone synchronizes only the Part 5 deletion marker. A later published rollback is
+  a new ordered desired state with its own publication/version/projection pins; it never mutates or
+  reuses the historical tombstone event. Earlier exact events and successful last-known-good evidence
+  remain attributable and immutable.
+- Provider transport is a constructor-injected, bounded interface exercised only with intercepted
+  test doubles. Part 6 makes no live provider call or readiness claim and adds no provider SDK,
+  provider credential, HTTP route, browser UI, scheduler/tool/pricing/legal decision, recording
+  language, or public configuration. The two database URLs are externally provisioned operational
+  credentials and are never generated, stored, printed, or copied into evidence by Part 6.
+- Railway predeployment is serialized and fail-closed: preserve the existing owner credential as
+  `MIGRATION_DATABASE_URL`, provision and independently verify a new restricted runtime login, then
+  install that login as `DATABASE_URL` before deploying the Part 6 revision. Do not overwrite or
+  remove the working owner credential first. A release may proceed only after startup reports the
+  split roles healthy, migrations 029 and 030 exactly once, runtime DML functional, runtime DDL/TRUNCATE
+  rejected, and credential-free health acceptance; otherwise restore the prior configuration and
+  revision without claiming Part 6 production readiness.

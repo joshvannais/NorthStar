@@ -205,6 +205,16 @@ Part 6 is complete only when all of the following are true:
   desired/observed synchronization state, and bounded reconciliation evidence. It stores no
   credential, provider-authentication material, provider-owned canonical fact, or executable tool
   instruction.
+- Database DDL and runtime DML use separately authenticated principals. `MIGRATION_DATABASE_URL`
+  authenticates as the exact database and public-authority owner; `DATABASE_URL` authenticates as a
+  distinct non-owner runtime role with no superuser, role/database creation, replication, RLS-bypass,
+  schema-creation, role-assumption, `TRUNCATE`, `REFERENCES`, `TRIGGER`, migration-ledger, ownership,
+  or DDL authority. Startup verifies the exact session roles, ownership, non-membership, grants, and
+  withheld privileges, same-cluster identity, and inability to disable triggers through
+  `session_replication_role`, and fails closed before serving when the split is absent or
+  inconsistent.
+  Every retained synchronization table also rejects `TRUNCATE` with a statement trigger as defense
+  in depth, including multi-table, `CASCADE`, and `RESTART IDENTITY` entry paths.
 - Creating, revising, activating, suspending, or explicitly reconciling a target requires one
   active individual owner or administrator membership. A target pins one normalized provider key,
   external consumer, audience, sorted capabilities, target revision, configuration digest, and
@@ -252,5 +262,13 @@ Part 6 is complete only when all of the following are true:
   remain attributable and immutable.
 - Provider transport is a constructor-injected, bounded interface exercised only with intercepted
   test doubles. Part 6 makes no live provider call or readiness claim and adds no provider SDK,
-  credential, HTTP route, browser UI, scheduler/tool/pricing/legal decision, recording language,
-  public configuration, or production secret.
+  provider credential, HTTP route, browser UI, scheduler/tool/pricing/legal decision, recording
+  language, or public configuration. The two database URLs are externally provisioned operational
+  credentials and are never generated, stored, printed, or copied into evidence by Part 6.
+- Railway predeployment is serialized and fail-closed: preserve the existing owner credential as
+  `MIGRATION_DATABASE_URL`, provision and independently verify a new restricted runtime login, then
+  install that login as `DATABASE_URL` before deploying the Part 6 revision. Do not overwrite or
+  remove the working owner credential first. A release may proceed only after startup reports the
+  split roles healthy, migration 029 exactly once, runtime DML functional, runtime DDL/TRUNCATE
+  rejected, and credential-free health acceptance; otherwise restore the prior configuration and
+  revision without claiming Part 6 production readiness.

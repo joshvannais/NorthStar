@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { Pool } = require('pg');
+const { Client, Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { digestCanonical } = require('../../src/knowledge/synchronization');
 const { canonicalStringify } = require('../../src/knowledge/contract');
@@ -25,6 +25,61 @@ function migrationFiles(directory) {
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function quoteIdentifier(value) {
+  return '"' + String(value).replace(/"/g, '""') + '"';
+}
+
+function roleConnectionString(connectionString, role) {
+  const parsed = new URL(connectionString);
+  parsed.username = role;
+  parsed.password = '';
+  return parsed.toString();
+}
+
+async function provisionSeparatedDatabaseRoles(databases) {
+  const suffix = `${process.pid}_${crypto.randomBytes(5).toString('hex')}`;
+  const migrationRole = `northstar-migration-${suffix}`.slice(0, 63);
+  const runtimeRole = `northstar-runtime-${suffix}`.slice(0, 63);
+  const admin = new Client({ connectionString: process.env.M19_PG_ADMIN_URL });
+  await admin.connect();
+  try {
+    await admin.query(
+      `CREATE ROLE ${quoteIdentifier(migrationRole)}
+         LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`
+    );
+    await admin.query(
+      `CREATE ROLE ${quoteIdentifier(runtimeRole)}
+         LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`
+    );
+    for (const database of databases) {
+      await admin.query(
+        `ALTER DATABASE ${quoteIdentifier(database.databaseName)}
+           OWNER TO ${quoteIdentifier(migrationRole)}`
+      );
+    }
+  } finally {
+    await admin.end();
+  }
+  return {
+    migrationRole,
+    runtimeRole,
+    migrationUrls: databases.map(database => roleConnectionString(database.connectionString, migrationRole)),
+    runtimeUrls: databases.map(database => roleConnectionString(database.connectionString, runtimeRole)),
+  };
+}
+
+async function dropSeparatedDatabaseRoles(roles) {
+  if (!roles) return;
+  const admin = new Client({ connectionString: process.env.M19_PG_ADMIN_URL });
+  await admin.connect();
+  try {
+    await admin.query(`DROP ROLE ${quoteIdentifier(roles.runtimeRole)}`);
+    await admin.query(`DROP ROLE ${quoteIdentifier(roles.migrationRole)}`);
+  } finally {
+    await admin.end();
+  }
 }
 
 async function seedActors(pool, suffix) {
@@ -225,6 +280,48 @@ async function expectTransactionRejected(pool, statements, expectedFailure) {
   });
 }
 
+async function expectSqlRejected(pool, text, expectedFailure) {
+  let failure = null;
+  try {
+    await pool.query(text);
+  } catch (error) {
+    failure = error;
+  }
+  if (!failure
+    || failure.code !== expectedFailure.code
+    || (expectedFailure.constraint !== undefined && failure.constraint !== expectedFailure.constraint)) {
+    throw new Error(
+      `unexpected rejection: ${failure && failure.code} ${failure && failure.constraint} ${failure && failure.message}`
+    );
+  }
+  expect(failure && {
+    code: failure.code,
+    constraint: failure.constraint,
+    message: failure.message,
+  }).toEqual({
+    code: expectedFailure.code,
+    constraint: expectedFailure.constraint === undefined ? failure.constraint : expectedFailure.constraint,
+    message: expect.any(String),
+  });
+}
+
+async function expectSqlRejectedOneOf(pool, text, expectedCodes) {
+  let failure = null;
+  try {
+    await pool.query(text);
+  } catch (error) {
+    failure = error;
+  }
+  if (!failure || !expectedCodes.includes(failure.code)) {
+    throw new Error(
+      `unexpected rejection: ${failure && failure.code} ${failure && failure.constraint} ${failure && failure.message}`
+    );
+  }
+  if (failure.code === '55000') {
+    expect(failure.constraint).toBe('canonical_knowledge_sync_retained_authority_no_truncate');
+  }
+}
+
 realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
   let db;
   let knowledge;
@@ -234,13 +331,19 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
   let upgradeDatabase;
   let freshPool;
   let upgradePool;
+  let freshMigrationPool;
+  let upgradeMigrationPool;
+  let databaseRoles;
   let through028Directory;
 
   beforeAll(async () => {
     freshDatabase = await createSuiteDatabase('m21-p6-sync-fresh');
     upgradeDatabase = await createSuiteDatabase('m21-p6-sync-upgrade');
-    freshPool = new Pool({ connectionString: freshDatabase.connectionString, max: 20 });
-    upgradePool = new Pool({ connectionString: upgradeDatabase.connectionString, max: 10 });
+    databaseRoles = await provisionSeparatedDatabaseRoles([freshDatabase, upgradeDatabase]);
+    freshMigrationPool = new Pool({ connectionString: databaseRoles.migrationUrls[0], max: 4 });
+    upgradeMigrationPool = new Pool({ connectionString: databaseRoles.migrationUrls[1], max: 4 });
+    freshPool = new Pool({ connectionString: databaseRoles.runtimeUrls[0], max: 20 });
+    upgradePool = new Pool({ connectionString: databaseRoles.runtimeUrls[1], max: 10 });
     through028Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m21-p6-through028-'));
     for (const filename of migrationFiles(MIGRATIONS).filter(name => name <= THROUGH_028)) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(through028Directory, filename));
@@ -252,9 +355,15 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
       .KnowledgeSynchronizationRepository;
     SyncWorker = require('../../src/knowledge/synchronizationWorker')
       .KnowledgeSynchronizationWorker;
-    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: MIGRATIONS })).toBe(true);
     expect(await db.runMigrations({
-      pool: upgradePool, migrationsDirectory: through028Directory,
+      pool: freshMigrationPool,
+      runtimePool: freshPool,
+      migrationsDirectory: MIGRATIONS,
+    })).toBe(true);
+    expect(await db.runMigrations({
+      pool: upgradeMigrationPool,
+      runtimePool: upgradePool,
+      migrationsDirectory: through028Directory,
     })).toBe(true);
   }, 120000);
 
@@ -262,12 +371,15 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     try {
       if (freshPool) await freshPool.end();
       if (upgradePool) await upgradePool.end();
+      if (freshMigrationPool) await freshMigrationPool.end();
+      if (upgradeMigrationPool) await upgradeMigrationPool.end();
     } finally {
       if (through028Directory && path.resolve(through028Directory).startsWith(path.resolve(os.tmpdir()))) {
         fs.rmSync(through028Directory, { recursive: true, force: true });
       }
       if (freshDatabase) await freshDatabase.cleanup();
       if (upgradeDatabase) await upgradeDatabase.cleanup();
+      await dropSeparatedDatabaseRoles(databaseRoles);
     }
   }, 120000);
 
@@ -287,9 +399,17 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     const actors = await seedActors(upgradePool, 'upgrade');
     const preMigration = await completeKnowledge(knowledge, upgradePool, actors, 'upgrade');
     expect(preMigration.identityPublication.number).toBe(1);
-    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: MIGRATIONS })).toBe(true);
-    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: MIGRATIONS })).toBe(true);
-    expect((await upgradePool.query(
+    expect(await db.runMigrations({
+      pool: upgradeMigrationPool,
+      runtimePool: upgradePool,
+      migrationsDirectory: MIGRATIONS,
+    })).toBe(true);
+    expect(await db.runMigrations({
+      pool: upgradeMigrationPool,
+      runtimePool: upgradePool,
+      migrationsDirectory: MIGRATIONS,
+    })).toBe(true);
+    expect((await upgradeMigrationPool.query(
       `SELECT count(*)::int AS applied FROM public._migrations
         WHERE filename = '029_canonical_knowledge_transactional_sync.sql'`
     )).rows).toEqual([{ applied: 1 }]);
@@ -302,6 +422,264 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     expect(configured.desired.canonicalProjection).toContain('Company upgrade');
     expect(configured.desired.canonicalProjection).not.toContain('private-upgrade@example.test');
     expect(configured.desired.canonicalProjection).not.toContain('canonicalPricing');
+  }, 120000);
+
+  test('fails production startup closed without the owner credential and mounts through both authenticated URLs', async () => {
+    const original = {
+      databaseUrl: process.env.DATABASE_URL,
+      migrationDatabaseUrl: process.env.MIGRATION_DATABASE_URL,
+      nodeEnv: process.env.NODE_ENV,
+    };
+    try {
+      process.env.NODE_ENV = 'test';
+      db.resetForTests();
+      process.env.NODE_ENV = 'production';
+      process.env.DATABASE_URL = databaseRoles.runtimeUrls[0];
+      delete process.env.MIGRATION_DATABASE_URL;
+      expect(await db.initDatabase()).toBe(false);
+      expect(db.readiness()).toEqual({
+        ready: false,
+        failure: 'migration_database_url_missing',
+      });
+      await db.close();
+
+      process.env.DATABASE_URL = databaseRoles.runtimeUrls[0];
+      process.env.MIGRATION_DATABASE_URL = databaseRoles.migrationUrls[0];
+      expect(await db.initDatabase()).toBe(true);
+      expect(db.readiness()).toEqual({ ready: true, failure: null });
+      await db.close();
+    } finally {
+      if (original.databaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = original.databaseUrl;
+      if (original.migrationDatabaseUrl === undefined) delete process.env.MIGRATION_DATABASE_URL;
+      else process.env.MIGRATION_DATABASE_URL = original.migrationDatabaseUrl;
+      if (original.nodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = original.nodeEnv;
+    }
+  }, 120000);
+
+  test('authenticates a distinct least-privileged runtime role and rejects every retained-authority TRUNCATE path', async () => {
+    const roles = (await freshMigrationPool.query(
+      `SELECT current_user::text AS migration_current,
+              session_user::text AS migration_session,
+              (SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_catalog.pg_database
+                WHERE datname = current_database()) AS database_owner,
+              (SELECT system_identifier::text FROM pg_catalog.pg_control_system())
+                AS system_identifier,
+              $1::text AS expected_runtime`,
+      [databaseRoles.runtimeRole]
+    )).rows[0];
+    const runtime = (await freshPool.query(
+      `SELECT current_user::text AS runtime_current,
+              session_user::text AS runtime_session,
+              (SELECT system_identifier::text FROM pg_catalog.pg_control_system())
+                AS system_identifier,
+              pg_has_role(current_user, $1, 'SET') AS can_set_migration,
+              has_database_privilege(current_user, current_database(), 'CREATE') AS database_create,
+              has_schema_privilege(current_user, 'public', 'CREATE') AS schema_create,
+              has_parameter_privilege(current_user, 'session_replication_role', 'SET')
+                AS replication_role_set`,
+      [databaseRoles.migrationRole]
+    )).rows[0];
+    expect(roles).toEqual({
+      migration_current: databaseRoles.migrationRole,
+      migration_session: databaseRoles.migrationRole,
+      database_owner: databaseRoles.migrationRole,
+      system_identifier: expect.stringMatching(/^\d+$/),
+      expected_runtime: databaseRoles.runtimeRole,
+    });
+    expect(runtime).toEqual({
+      runtime_current: databaseRoles.runtimeRole,
+      runtime_session: databaseRoles.runtimeRole,
+      system_identifier: roles.system_identifier,
+      can_set_migration: false,
+      database_create: false,
+      schema_create: false,
+      replication_role_set: false,
+    });
+
+    const syncTables = [
+      'canonical_knowledge_sync_targets',
+      'canonical_knowledge_sync_sequences',
+      'canonical_knowledge_sync_outbox',
+      'canonical_knowledge_sync_attempts',
+      'canonical_knowledge_sync_states',
+    ];
+    const relationAuthority = (await freshMigrationPool.query(
+      `SELECT relation.relname,
+              pg_get_userbyid(relation.relowner) AS owner,
+              has_table_privilege($1, relation.oid, 'SELECT')
+                AND has_table_privilege($1, relation.oid, 'INSERT')
+                AND has_table_privilege($1, relation.oid, 'UPDATE')
+                AND has_table_privilege($1, relation.oid, 'DELETE') AS runtime_dml,
+              has_table_privilege($1, relation.oid, 'TRUNCATE') AS runtime_truncate,
+              has_table_privilege($1, relation.oid, 'TRIGGER') AS runtime_trigger
+         FROM pg_catalog.pg_class relation
+         JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = 'public' AND relation.relname = ANY($2::text[])
+        ORDER BY relation.relname`,
+      [databaseRoles.runtimeRole, syncTables]
+    )).rows;
+    expect(relationAuthority).toHaveLength(syncTables.length);
+    for (const authority of relationAuthority) {
+      expect(authority).toMatchObject({
+        owner: databaseRoles.migrationRole,
+        runtime_dml: true,
+        runtime_truncate: false,
+        runtime_trigger: false,
+      });
+    }
+    const truncateTriggers = (await freshMigrationPool.query(
+      `SELECT relation.relname, trigger_record.tgname
+         FROM pg_catalog.pg_trigger trigger_record
+         JOIN pg_catalog.pg_class relation ON relation.oid = trigger_record.tgrelid
+         JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = 'public'
+          AND relation.relname = ANY($1::text[])
+          AND NOT trigger_record.tgisinternal
+          AND (trigger_record.tgtype & 32) = 32
+        ORDER BY relation.relname, trigger_record.tgname`,
+      [syncTables]
+    )).rows;
+    expect(truncateTriggers).toHaveLength(syncTables.length);
+
+    const actors = await seedActors(freshPool, 'runtime-boundary');
+    await completeKnowledge(knowledge, freshPool, actors, 'runtime-boundary');
+    const sync = new SyncRepository(freshPool);
+    const configured = await sync.configureTarget(targetInput(actors));
+    const claimed = (await sync.claimJobs({ batchSize: 25, leaseSeconds: 30 }))
+      .find(job => job.targetId === configured.target.id);
+    expect(claimed).toBeDefined();
+
+    const counts = async poolToRead => Object.fromEntries(await Promise.all(syncTables.map(async table => [
+      table,
+      Number((await poolToRead.query(`SELECT count(*)::bigint AS count FROM public.${table}`)).rows[0].count),
+    ])));
+    const retainedBefore = await counts(freshPool);
+    for (const table of syncTables) {
+      await expectSqlRejected(freshPool, `TRUNCATE TABLE public.${table}`, { code: '42501' });
+    }
+    await expectSqlRejected(
+      freshPool,
+      `TRUNCATE TABLE ${syncTables.map(table => `public.${table}`).join(', ')}`,
+      { code: '42501' }
+    );
+    await expectSqlRejected(
+      freshPool,
+      'TRUNCATE TABLE public.canonical_knowledge_sync_outbox CASCADE',
+      { code: '42501' }
+    );
+    await expectSqlRejected(
+      freshPool,
+      'TRUNCATE TABLE public.canonical_knowledge_sync_targets RESTART IDENTITY CASCADE',
+      { code: '42501' }
+    );
+    await expectSqlRejected(
+      freshPool,
+      'ALTER TABLE public.canonical_knowledge_sync_targets DISABLE TRIGGER canonical_knowledge_sync_targets_no_truncate',
+      { code: '42501' }
+    );
+    await expectSqlRejected(
+      freshPool,
+      'DROP TRIGGER canonical_knowledge_sync_targets_no_truncate ON public.canonical_knowledge_sync_targets',
+      { code: '42501' }
+    );
+    await freshPool.query(
+      `GRANT TRUNCATE ON public.canonical_knowledge_sync_targets TO ${quoteIdentifier(databaseRoles.runtimeRole)}`
+    );
+    expect((await freshPool.query(
+      `SELECT has_table_privilege(
+         current_user, 'public.canonical_knowledge_sync_targets', 'TRUNCATE'
+       ) AS runtime_truncate`
+    )).rows).toEqual([{ runtime_truncate: false }]);
+    await expectSqlRejected(
+      freshPool,
+      'TRUNCATE TABLE public.canonical_knowledge_sync_targets',
+      { code: '42501' }
+    );
+    await expectSqlRejected(
+      freshPool,
+      `SET ROLE ${quoteIdentifier(databaseRoles.migrationRole)}`,
+      { code: '42501' }
+    );
+    await expectSqlRejected(
+      freshPool,
+      "SET session_replication_role = 'replica'",
+      { code: '42501' }
+    );
+    const resetRole = await freshPool.connect();
+    try {
+      await resetRole.query('RESET ROLE');
+      expect((await resetRole.query(
+        'SELECT current_user::text AS current_user, session_user::text AS session_user'
+      )).rows).toEqual([{
+        current_user: databaseRoles.runtimeRole,
+        session_user: databaseRoles.runtimeRole,
+      }]);
+    } finally {
+      resetRole.release();
+    }
+    expect(await counts(freshPool)).toEqual(retainedBefore);
+
+    const retainedConstraint = {
+      code: '55000',
+      constraint: 'canonical_knowledge_sync_retained_authority_no_truncate',
+    };
+    for (const table of syncTables) {
+      await expectSqlRejectedOneOf(
+        freshMigrationPool,
+        `TRUNCATE TABLE public.${table}`,
+        ['0A000', '55000']
+      );
+      await expectSqlRejected(
+        freshMigrationPool,
+        `TRUNCATE TABLE public.${table} CASCADE`,
+        retainedConstraint
+      );
+    }
+    await expectSqlRejected(
+      freshMigrationPool,
+      `TRUNCATE TABLE ${syncTables.map(table => `public.${table}`).join(', ')}`,
+      retainedConstraint
+    );
+    await expectSqlRejected(
+      freshMigrationPool,
+      'TRUNCATE TABLE public.canonical_knowledge_sync_outbox CASCADE',
+      retainedConstraint
+    );
+    await expectSqlRejected(
+      freshMigrationPool,
+      'TRUNCATE TABLE public.canonical_knowledge_sync_targets RESTART IDENTITY CASCADE',
+      retainedConstraint
+    );
+    expect(await counts(freshPool)).toEqual(retainedBefore);
+
+    const organizationBeforeRollback = (await freshPool.query(
+      'SELECT name FROM public.organizations WHERE id = $1',
+      [actors.organizationId]
+    )).rows[0].name;
+    const rollbackClient = await freshPool.connect();
+    let transactionOpen = false;
+    try {
+      await rollbackClient.query('BEGIN');
+      transactionOpen = true;
+      await rollbackClient.query(
+        `UPDATE public.organizations
+            SET name = name || ' rollback probe'
+          WHERE id = $1`,
+        [actors.organizationId]
+      );
+      await rollbackClient.query('ROLLBACK');
+      transactionOpen = false;
+    } finally {
+      if (transactionOpen) await rollbackClient.query('ROLLBACK').catch(() => {});
+      rollbackClient.release();
+    }
+    expect((await freshPool.query(
+      'SELECT name FROM public.organizations WHERE id = $1',
+      [actors.organizationId]
+    )).rows).toEqual([{ name: organizationBeforeRollback }]);
+    expect(await counts(freshPool)).toEqual(retainedBefore);
   }, 120000);
 
   test('atomically records blocked then complete exact desired projections for each publication', async () => {

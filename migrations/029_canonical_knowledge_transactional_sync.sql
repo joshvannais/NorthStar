@@ -585,6 +585,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
 
+CREATE OR REPLACE FUNCTION public.canonical_knowledge_reject_sync_truncate()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'Synchronization authority cannot be truncated'
+    USING ERRCODE = '55000',
+          CONSTRAINT = 'canonical_knowledge_sync_retained_authority_no_truncate';
+END;
+$$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
+
 CREATE OR REPLACE FUNCTION public.canonical_knowledge_sync_pick_fields(
   source_value JSONB,
   allowed_fields TEXT[]
@@ -2046,6 +2055,10 @@ CREATE TRIGGER canonical_knowledge_sync_targets_no_delete
   BEFORE DELETE ON public.canonical_knowledge_sync_targets
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_reject_sync_target_delete();
 
+CREATE TRIGGER canonical_knowledge_sync_targets_no_truncate
+  BEFORE TRUNCATE ON public.canonical_knowledge_sync_targets
+  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_knowledge_reject_sync_truncate();
+
 CREATE TRIGGER canonical_knowledge_sync_sequences_validate
   BEFORE INSERT OR UPDATE ON public.canonical_knowledge_sync_sequences
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_validate_sync_sequence();
@@ -2053,6 +2066,10 @@ CREATE TRIGGER canonical_knowledge_sync_sequences_validate
 CREATE TRIGGER canonical_knowledge_sync_sequences_no_delete
   BEFORE DELETE ON public.canonical_knowledge_sync_sequences
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_reject_sync_sequence_delete();
+
+CREATE TRIGGER canonical_knowledge_sync_sequences_no_truncate
+  BEFORE TRUNCATE ON public.canonical_knowledge_sync_sequences
+  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_knowledge_reject_sync_truncate();
 
 CREATE TRIGGER canonical_knowledge_sync_outbox_assign_identity
   BEFORE INSERT ON public.canonical_knowledge_sync_outbox
@@ -2070,6 +2087,10 @@ CREATE TRIGGER canonical_knowledge_sync_outbox_no_delete
   BEFORE DELETE ON public.canonical_knowledge_sync_outbox
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_reject_sync_attempt_delete();
 
+CREATE TRIGGER canonical_knowledge_sync_outbox_no_truncate
+  BEFORE TRUNCATE ON public.canonical_knowledge_sync_outbox
+  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_knowledge_reject_sync_truncate();
+
 CREATE TRIGGER canonical_knowledge_sync_attempts_validate_update
   BEFORE UPDATE ON public.canonical_knowledge_sync_attempts
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_validate_sync_attempt_update();
@@ -2082,6 +2103,10 @@ CREATE TRIGGER canonical_knowledge_sync_attempts_no_delete
   BEFORE DELETE ON public.canonical_knowledge_sync_attempts
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_reject_sync_attempt_delete();
 
+CREATE TRIGGER canonical_knowledge_sync_attempts_no_truncate
+  BEFORE TRUNCATE ON public.canonical_knowledge_sync_attempts
+  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_knowledge_reject_sync_truncate();
+
 CREATE TRIGGER canonical_knowledge_sync_states_validate
   BEFORE INSERT OR UPDATE ON public.canonical_knowledge_sync_states
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_validate_sync_state();
@@ -2089,6 +2114,10 @@ CREATE TRIGGER canonical_knowledge_sync_states_validate
 CREATE TRIGGER canonical_knowledge_sync_states_no_delete
   BEFORE DELETE ON public.canonical_knowledge_sync_states
   FOR EACH ROW EXECUTE FUNCTION public.canonical_knowledge_reject_sync_state_delete();
+
+CREATE TRIGGER canonical_knowledge_sync_states_no_truncate
+  BEFORE TRUNCATE ON public.canonical_knowledge_sync_states
+  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_knowledge_reject_sync_truncate();
 
 CREATE CONSTRAINT TRIGGER canonical_knowledge_sync_sequences_require_outbox
   AFTER INSERT OR UPDATE ON public.canonical_knowledge_sync_sequences

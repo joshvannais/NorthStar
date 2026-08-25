@@ -115,6 +115,10 @@ function createKnowledgeManagementRouter(options = {}) {
           source: req.query.source,
           applicability: req.query.applicability,
         },
+        pagination: {
+          cursor: req.query.cursor,
+          limit: req.query.limit,
+        },
       });
       return res.json({ success: true, data, requestId: requestId(req) });
     } catch (error) {

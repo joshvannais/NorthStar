@@ -56,6 +56,7 @@
 .km-panel-heading { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; margin-bottom: 10px; }
 .km-panel-heading h3 { font-size: 16px; margin: 0; }
 .km-list { display: grid; gap: 9px; list-style: none; margin: 0; max-height: 720px; overflow: auto; padding: 2px; }
+.km-list-continuation { align-items: flex-start; border-top: 1px solid var(--neutral-200); display: grid; gap: 8px; padding: 12px 4px 4px; }
 .km-item-button {
   background: var(--km-surface);
   border: 1px solid var(--km-border);

@@ -6,16 +6,16 @@ Part 7 adds Knowledge Management inside the existing Settings and Business Profi
 
 Evidence root (outside the repository):
 
-`C:\Users\joshv\Documents\Codex\2026-08-05\read-and-follow-northstar-monitor-handoff\mission21-part7-evidence`
+`C:\Users\joshv\Documents\Codex\2026-08-05\read-and-follow-northstar-monitor-handoff\pr142-correction-evidence-20260825T142323Z\browser`
 
 ## Visible changes
 
 | Existing surface | Visible addition or change | Captured states | Responsive treatment |
 | --- | --- | --- | --- |
-| Settings, beneath AI Settings | Knowledge heading and explanation; authority/loading/error/read-only status; category, workflow, sensitivity, source, and applicability filters; workflow counts; item list; detail tabs; exact immutable identifiers and digests; approval/publication evidence; readable canonical content; source-correction link; owner/admin actions | Paid main list/detail, provenance and deterministic comparison, lifecycle history, tombstone confirmation, stale-write error, narrow main; demo synchronization and read-only preview | Two-column browser becomes a single column below 760px; filter grid and actions wrap; identifiers and canonical content break safely; no horizontal overhang at 390px |
+| Settings, beneath AI Settings | Knowledge heading and explanation; authority/loading/error/read-only status; category, workflow, sensitivity, source, and applicability filters; truthful authorized/matching counts; deterministic Load more continuation; item list; detail tabs; exact immutable identifiers and digests; approval/publication evidence; readable canonical content; source-correction link; owner/admin actions | Paid main list/detail, provenance and deterministic comparison, lifecycle history, tombstone confirmation, stale-write error, narrow list with more than 200 authorized entries and a post-boundary filter; demo synchronization and read-only preview | Two-column browser becomes a single column below 760px; filter grid and actions wrap; identifiers and canonical content break safely; no horizontal overhang at 390px |
 | Business Profile, new Knowledge tab | The same tenant-backed Knowledge Management experience embedded beside the authoritative source editor; correction links return to the relevant Business Profile source section | Paid dark comparison detail, paid narrow read-only member, demo main list/detail | Business Profile navigation remains keyboard-operable; cards, tabs, detail fields, and actions stack at 390px |
 | Item detail | Overview, Changes & provenance, Lifecycle history, and Synchronization tabs; non-color-only status words; exact version/publication/configuration truth | Draft, approved, published, drifted, suspended, stale conflict, and no-permission/read-only explanations | Tabs wrap; definition rows collapse; long immutable values wrap rather than overflow |
-| Mutating workflows | Review, approve, publish, revise, tombstone, rollback-as-new-version, retry, and reconcile controls shown only when eligible; high-risk external-evidence warning and inputs | Accessible tombstone confirmation and stale expected-version failure | Native modal dialog supplies focus containment and Escape/close; focus is restored; actions have full descriptive labels and wrap on narrow screens |
+| Mutating workflows | Review, request changes, approve, publish, revise, tombstone, rollback-as-new-version, retry, and reconcile controls shown only when eligible; every confirmation displays its captured item/entry/version or target pins; high-risk external-evidence warning and inputs | Accessible tombstone confirmation, stale expected-version failure, and delayed-response/no-retarget behavior | Native modal dialog supplies focus containment and Escape/close; focus is restored; actions have full descriptive labels and wrap on narrow screens |
 | Synchronization | Current/in-sync, pending/stale, drifted, retrying, dead, suspended, and reconciliation-needed labels when canonical state supports them; exact target/version/configuration pins | Paid drift reconciliation and demo current/drifted/suspended read-only preview | Target details use wrapping definition rows and retain state text without relying on color |
 
 Both surfaces retain the existing global header/sidebar/footer conventions. The floating Quick Start affordance remains reachable and does not cover Knowledge Management controls. Light and dark themes use the existing application tokens, and motion is disabled under `prefers-reduced-motion: reduce`.
@@ -26,15 +26,15 @@ All hashes are SHA-256. The Chrome and WebKit files capture the same scenario an
 
 | Scenario | Chrome SHA-256 | WebKit SHA-256 |
 | --- | --- | --- |
-| `settings-desktop-light-main` | `f66e70ed018cf766ada7e8eea4f59a483146ecb73903c8ffd1c4d7aa4cc28f36` | `f1379b5f495352242da29788db8cbf21287095bdf182c6d09beb41b0da375273` |
-| `settings-desktop-light-diff-provenance` | `7b725d0c5d7d147c9e9300c9dfa7c9641538402a8338f23853c5e7524bdd8971` | `d2c9172b7ff6568b5fbfab2b212d477281d6cc476619459c2c68ed1fbf1460e4` |
-| `settings-desktop-light-lifecycle` | `e4288efef9cfe3ae085990e6e9e051427115d85a07744f7eddb3a22920fe7961` | `77f4d3c7fc31a4c82464b765b9d622a99b2552ce85e1a5867dd48e1eddf00bd7` |
-| `settings-desktop-light-tombstone-confirmation` | `8156de1e82d2f2e15a1c66f14173b5a00401de25cee1d8eb8f73ee9699dac394` | `5dd2a55ec9afbe5e6cfdede75bbd9f3c8b31e0db85fa2e81f84a781a0fa4bb16` |
-| `settings-desktop-light-stale-error` | `2feed49ece6215eaeb658fbb0d36658e2da6e2b9b03251cfce26a3cfe1db2951` | `116c9e73866069aaac3409d057928c536b627c9a75befac935dc32fecdb27194` |
-| `business-profile-desktop-dark-diff` | `1e4aec842292a27aab4dc6d8eb339d4f4a48f08ab96166ece0e4edc2941ace62` | `372aa4c1059ec575cdc5019a7c83dbbc698a43ab820b081d8bc8f8886441b74b` |
-| `business-profile-mobile-dark-readonly` | `8fefb47f13eac89a96f263e6c359a9c50ef01b45fde9a8ae40ade48aa5abb65c` | `bee03557c3cfe3545b57db0c4407e33511c760b26cb16a1ea6c5005873835846` |
-| `settings-mobile-light-main` | `2d843ed824e4631c0e53f948cb342c70ed54be3845416389acdd5adfdfe6de4e` | `1d9e6a6b1161f7fa824005d60dee2da2b701dbfe37e9d449579498d9740fddc5` |
-| `demo-settings-mobile-dark-sync-readonly` | `0d92295c48cbbe397490510eafa5842f9bb86c7007906ab000e382a36ae85c48` | `bbe821d2e44e53301138818527cd82f21b59e08a88a60d376753bd238bed2e94` |
-| `demo-business-profile-desktop-light-main` | `aff8f0a13743a09e746b7164b06aa1c38a493c3cbbf1910d3b58d72fe078cd08` | `621ecbc678ad5e53d5111295cd5726a525598a36f7a71e28aef944197de6e32b` |
+| `settings-desktop-light-main` | `66d13c124e660b876d1fe5b9f3c3848fbc81a481bb469cc3c3ac70555cdc2055` | `5a41f4a1b95ee75059653bc2040b3cee1ba50113dcb34ff6f59d4068476d7cca` |
+| `settings-desktop-light-diff-provenance` | `a5a392e573e007f9591063bfb449e50b4ac49136d822719b72e74d3dd31104a0` | `c1b87798c3fd30ba93f9dbdd56cdcb1d102e83de3b0d447c9bb00f170941056c` |
+| `settings-desktop-light-lifecycle` | `8b4acde66df1dbe7e8bd994911df37544aae0945cb4ec94ec34055cdc24644f9` | `c0c5c9fbcf84ae8f859c4a4d2f7f6b4ac1e67e9f5a0df208e5aeb9a80f2a21a2` |
+| `settings-desktop-light-tombstone-confirmation` | `851810867b7b7d6124b04850137bd9f123c3b8b404f73c9bfbbd2ca4b4b16804` | `11de364899980c2b8c1ebb778bdf2cffb4b5ec88abe95513632d4f890315647c` |
+| `settings-desktop-light-stale-error` | `3428ceb63aa5b5dc8395b5007313f501bde059b2d1a199f1a2ab011f5fbe47ac` | `e93aaec7da4324a0a466b71000001495d1a30dd8a352c785c1d452f9aa156be0` |
+| `business-profile-desktop-dark-diff` | `7a9881594ddf195347ea298633eb79e560223406a21fdd8a30b1643a650b5de5` | `f1728aa3d0f34d82ba2115250eb72ce4a6209d9e4b404ea53536fa4586060184` |
+| `business-profile-mobile-dark-readonly` | `f8006e6faff276101cf237a772c37c0fc5e9ecd835acb2b437f541593cae73f0` | `f1def43198288991377bb8c49d293918aa2a336a83ce3f20e5097d064ffe24d6` |
+| `settings-mobile-light-main` | `2f44b472e4d5f92bd800d1e05df21b3e0055bf3ab465c2d7754d8031b299240c` | `db2ce4294a1f7134b7e5e6426d4ec19fea0d8355ffffe2ed0a3edce9a210ecab` |
+| `demo-settings-mobile-dark-sync-readonly` | `c6d16b7f7a059e28290205936c7cfd355e7ef324c684144134e3922bd8a7b24d` | `94cc3f556f98e74f8d78d162fb1c6dd589c0dab4c0b0d1c57766efb2727846f6` |
+| `demo-business-profile-desktop-light-main` | `37581078223c86bc4017c477b5b2552a0d8de7f9c33315c42478cac804399763` | `42b0c7b0085b02badfb11bbb79e074f2976c72b6ba31788289ad8be55b2d2628` |
 
-The filenames are prefixed with `chrome-` or `webkit-` and stored directly in the evidence root. Screenshot review confirmed both existing surfaces, both themes, desktop and 390px narrow layouts, paid/demo separation, main/detail/diff/history/synchronization, a confirmation dialog, a stale-write error, and a member read-only state. Immediate user visual approval was explicitly waived; these artifacts are preserved for later review.
+The filenames are prefixed with `chrome-` or `webkit-` and stored in their corresponding engine subdirectory. Screenshot review confirmed both existing surfaces, both themes, desktop and 390px narrow layouts, paid/demo separation, main/detail/diff/history/synchronization, a confirmation dialog, a stale-write error, a member read-only state, and truthful continuation behavior with more than 200 authorized items. Immediate user visual approval was explicitly waived; these artifacts are preserved for later review.

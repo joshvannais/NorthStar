@@ -22,7 +22,10 @@ const SYNC_PRESENTATION = Object.freeze({
   suspended: 'suspended',
 });
 const MAX_ITEMS = 200;
+const DEFAULT_PAGE_SIZE = MAX_ITEMS;
+const MAX_CURSOR_BYTES = 1024;
 const SAFE_FILTER = /^[a-z][a-z0-9_:-]{0,63}$/;
+const SAFE_CURSOR = /^[A-Za-z0-9_-]{1,1366}$/;
 
 class KnowledgeManagementError extends Error {
   constructor(code, message, status = 400, details = {}) {
@@ -57,6 +60,57 @@ function normalizeFilters(input = {}) {
     sensitivity: normalizeOptionalFilter(input.sensitivity, SENSITIVITIES, 'sensitivity'),
     source: normalizeOptionalFilter(input.source, SOURCE_TYPES, 'source'),
     applicability: normalizeOptionalFilter(input.applicability, null, 'applicability'),
+  });
+}
+
+function normalizePageLimit(value) {
+  if (value === undefined || value === null || value === '') return DEFAULT_PAGE_SIZE;
+  const limit = Number(value);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_ITEMS) {
+    fail('knowledge_management_invalid_pagination', `limit must be an integer from 1 to ${MAX_ITEMS}`);
+  }
+  return limit;
+}
+
+function decodeListCursor(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !SAFE_CURSOR.test(value)) {
+    fail('knowledge_management_invalid_pagination', 'cursor is not a valid knowledge-list cursor');
+  }
+  let bytes;
+  let decoded;
+  try {
+    bytes = Buffer.from(value, 'base64url');
+    if (!bytes.length || bytes.length > MAX_CURSOR_BYTES || bytes.toString('base64url') !== value) throw new Error('invalid cursor');
+    decoded = JSON.parse(bytes.toString('utf8'));
+  } catch (_error) {
+    fail('knowledge_management_invalid_pagination', 'cursor is not a valid knowledge-list cursor');
+  }
+  if (!Array.isArray(decoded) || decoded.length !== 3 ||
+      typeof decoded[0] !== 'string' || Buffer.byteLength(decoded[0], 'utf8') > 512 ||
+      typeof decoded[1] !== 'string' || Buffer.byteLength(decoded[1], 'utf8') > 512) {
+    fail('knowledge_management_invalid_pagination', 'cursor is not a valid knowledge-list cursor');
+  }
+  let entryId;
+  try {
+    entryId = normalizeUuid(decoded[2], 'cursor.entryId');
+  } catch (_error) {
+    fail('knowledge_management_invalid_pagination', 'cursor is not a valid knowledge-list cursor');
+  }
+  return Object.freeze({ label: decoded[0], canonicalKey: decoded[1], entryId });
+}
+
+function encodeListCursor(row) {
+  return Buffer.from(JSON.stringify([row.label, row.canonical_key, row.entry_id]), 'utf8').toString('base64url');
+}
+
+function normalizePagination(input = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    fail('knowledge_management_invalid_pagination', 'Knowledge pagination must be an object');
+  }
+  return Object.freeze({
+    limit: normalizePageLimit(input.limit),
+    cursor: decodeListCursor(input.cursor),
   });
 }
 
@@ -157,7 +211,8 @@ function mapListRow(row) {
     latestReviewEventId: row.review_event_id || null,
     publication: row.publication_id ? {
       id: row.publication_id,
-      number: Number(row.publication_number),
+      number: row.publication_number_restricted ? null : Number(row.publication_number),
+      numberRestricted: Boolean(row.publication_number_restricted),
       versionId: row.publication_version_id,
       digest: digest(row.publication_digest),
       actorUserId: row.published_by_user_id,
@@ -316,73 +371,184 @@ function redactSynchronizationPins(row) {
   };
 }
 
+const KNOWLEDGE_LIST_BASE_SQL = `
+  SELECT entry.id AS entry_id, entry.canonical_key, entry.entry_type,
+          version.id AS version_id, version.version_number, version.content_origin,
+          version.label, version.sensitivity, version.review_requirement,
+          version.applicability, version.document, version.canonical_digest,
+          version.lifecycle_action, version.created_by_user_id AS version_actor_user_id,
+          version.created_at AS version_created_at,
+          review.id AS review_event_id, review.action AS review_action,
+          publication.id AS publication_id, publication.publication_number,
+          publication.version_id AS publication_version_id,
+          publication.canonical_digest AS publication_digest,
+          publication.published_by_user_id, publication.published_at,
+          COALESCE(publication_visibility.number_restricted, FALSE) AS publication_number_restricted,
+          COALESCE(provenance.sources, ARRAY[]::text[]) AS sources,
+          CASE
+            WHEN publication.version_id = version.id THEN 'published'
+            WHEN review.action IN ('standard_approved', 'high_risk_approved', 'attorney_gated_approved') THEN 'approved'
+            WHEN review.action = 'review_submitted' THEN 'review'
+            ELSE 'draft'
+          END AS workflow_status
+     FROM canonical_knowledge_entries entry
+     JOIN LATERAL (
+       SELECT * FROM canonical_knowledge_versions candidate
+        WHERE candidate.organization_id = entry.organization_id
+          AND candidate.entry_id = entry.id
+        ORDER BY candidate.version_number DESC LIMIT 1
+     ) version ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT id, action FROM canonical_knowledge_review_events candidate
+        WHERE candidate.organization_id = entry.organization_id
+          AND candidate.entry_id = entry.id AND candidate.version_id = version.id
+        ORDER BY candidate.event_sequence DESC LIMIT 1
+     ) review ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT candidate.*
+         FROM (
+           SELECT latest.* FROM canonical_knowledge_publications latest
+            WHERE latest.organization_id = entry.organization_id
+              AND latest.entry_id = entry.id
+            ORDER BY latest.publication_number DESC LIMIT 1
+         ) candidate
+         JOIN canonical_knowledge_versions published_version
+           ON published_version.organization_id = candidate.organization_id
+          AND published_version.entry_id = candidate.entry_id
+          AND published_version.id = candidate.version_id
+        WHERE ($2::boolean OR (
+            published_version.sensitivity IN ('public', 'internal')
+            AND published_version.review_requirement = 'standard'
+          ))
+     ) publication ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT EXISTS (
+         SELECT 1
+           FROM canonical_knowledge_publications predecessor
+           JOIN canonical_knowledge_versions predecessor_version
+             ON predecessor_version.organization_id = predecessor.organization_id
+            AND predecessor_version.entry_id = predecessor.entry_id
+            AND predecessor_version.id = predecessor.version_id
+          WHERE predecessor.organization_id = entry.organization_id
+            AND predecessor.entry_id = entry.id
+            AND predecessor.publication_number < publication.publication_number
+            AND NOT (
+              predecessor_version.sensitivity IN ('public', 'internal')
+              AND predecessor_version.review_requirement = 'standard'
+            )
+       ) AS number_restricted
+     ) publication_visibility ON publication.id IS NOT NULL AND NOT $2::boolean
+     LEFT JOIN LATERAL (
+       SELECT array_agg(DISTINCT source.source_type ORDER BY source.source_type) AS sources
+         FROM canonical_knowledge_provenance source
+        WHERE source.organization_id = entry.organization_id
+          AND source.version_id = version.id
+     ) provenance ON TRUE
+    WHERE entry.organization_id = $1
+      AND ($2::boolean OR (
+        version.sensitivity IN ('public', 'internal')
+        AND version.review_requirement = 'standard'
+      ))`;
+
+const KNOWLEDGE_LIST_FILTER_SQL = `
+  ($3::text IS NULL OR authorized.entry_type = $3)
+  AND ($4::text IS NULL OR authorized.workflow_status = $4)
+  AND ($5::text IS NULL OR authorized.sensitivity = $5)
+  AND ($6::text IS NULL OR $6 = ANY(authorized.sources))
+  AND ($7::text IS NULL OR EXISTS (
+    SELECT 1
+      FROM jsonb_path_query(
+        COALESCE(authorized.applicability, '{}'::jsonb),
+        '$.** ? (@.type() == "string")'
+      ) AS applicability_tokens(value)
+     WHERE lower(applicability_tokens.value #>> '{}') = $7
+  ))`;
+
+function emptyCounts() {
+  return { total: 0, category: {}, workflowStatus: {}, sensitivity: {}, source: {} };
+}
+
+function countsFromRows(rows) {
+  const counts = emptyCounts();
+  const dimensions = {
+    category: counts.category,
+    workflowStatus: counts.workflowStatus,
+    sensitivity: counts.sensitivity,
+    source: counts.source,
+  };
+  for (const row of rows) {
+    const value = Number(row.value);
+    if (row.dimension === 'total') counts.total = value;
+    else if (dimensions[row.dimension]) dimensions[row.dimension][row.bucket_key] = value;
+  }
+  return counts;
+}
+
 async function listKnowledgeManagement(pool, input) {
   const organizationId = normalizeUuid(input && input.organizationId, 'organizationId');
   const actorUserId = normalizeUuid(input && input.actorUserId, 'actorUserId');
   const filters = normalizeFilters(input && input.filters);
+  const pagination = normalizePagination(input && input.pagination);
   return withReadTransaction(pool, async client => {
     const role = await membership(client, organizationId, actorUserId);
     const canReadProtected = role === 'owner' || role === 'admin';
-    const rows = (await client.query(
-      `SELECT entry.id AS entry_id, entry.canonical_key, entry.entry_type,
-              version.id AS version_id, version.version_number, version.content_origin,
-              version.label, version.sensitivity, version.review_requirement,
-              version.applicability, version.document, version.canonical_digest,
-              version.lifecycle_action, version.created_by_user_id AS version_actor_user_id,
-              version.created_at AS version_created_at,
-              review.id AS review_event_id, review.action AS review_action,
-              publication.id AS publication_id, publication.publication_number,
-              publication.version_id AS publication_version_id,
-              publication.canonical_digest AS publication_digest,
-              publication.published_by_user_id, publication.published_at,
-              COALESCE(provenance.sources, ARRAY[]::text[]) AS sources
-         FROM canonical_knowledge_entries entry
-         JOIN LATERAL (
-           SELECT * FROM canonical_knowledge_versions candidate
-            WHERE candidate.organization_id = entry.organization_id
-              AND candidate.entry_id = entry.id
-            ORDER BY candidate.version_number DESC LIMIT 1
-         ) version ON TRUE
-         LEFT JOIN LATERAL (
-           SELECT id, action FROM canonical_knowledge_review_events candidate
-            WHERE candidate.organization_id = entry.organization_id
-              AND candidate.entry_id = entry.id AND candidate.version_id = version.id
-            ORDER BY candidate.event_sequence DESC LIMIT 1
-         ) review ON TRUE
-         LEFT JOIN LATERAL (
-           SELECT candidate.*
-             FROM (
-               SELECT latest.* FROM canonical_knowledge_publications latest
-                WHERE latest.organization_id = entry.organization_id
-                  AND latest.entry_id = entry.id
-                ORDER BY latest.publication_number DESC LIMIT 1
-             ) candidate
-             JOIN canonical_knowledge_versions published_version
-               ON published_version.organization_id = candidate.organization_id
-              AND published_version.entry_id = candidate.entry_id
-              AND published_version.id = candidate.version_id
-            WHERE ($2::boolean OR (
-                published_version.sensitivity IN ('public', 'internal')
-                AND published_version.review_requirement = 'standard'
-              ))
-         ) publication ON TRUE
-         LEFT JOIN LATERAL (
-           SELECT array_agg(DISTINCT source.source_type ORDER BY source.source_type) AS sources
-             FROM canonical_knowledge_provenance source
-            WHERE source.organization_id = entry.organization_id
-              AND source.version_id = version.id
-         ) provenance ON TRUE
-        WHERE entry.organization_id = $1
-          AND ($2::boolean OR (
-            version.sensitivity IN ('public', 'internal')
-            AND version.review_requirement = 'standard'
-          ))
-        ORDER BY version.label COLLATE "C", entry.canonical_key COLLATE "C", entry.id
-        LIMIT ${MAX_ITEMS}`,
-      [organizationId, canReadProtected]
+    const parameters = [
+      organizationId,
+      canReadProtected,
+      filters.category,
+      filters.workflowStatus,
+      filters.sensitivity,
+      filters.source,
+      filters.applicability,
+    ];
+    const countRows = (await client.query(
+      `WITH authorized AS (${KNOWLEDGE_LIST_BASE_SQL})
+       SELECT dimension, bucket_key, value
+         FROM (
+           SELECT 'total'::text AS dimension, 'total'::text AS bucket_key, COUNT(*)::bigint AS value
+             FROM authorized
+           UNION ALL
+           SELECT 'category', entry_type, COUNT(*)::bigint FROM authorized GROUP BY entry_type
+           UNION ALL
+           SELECT 'workflowStatus', workflow_status, COUNT(*)::bigint FROM authorized GROUP BY workflow_status
+           UNION ALL
+           SELECT 'sensitivity', sensitivity, COUNT(*)::bigint FROM authorized GROUP BY sensitivity
+           UNION ALL
+           SELECT 'source', source_type, COUNT(*)::bigint
+             FROM authorized CROSS JOIN LATERAL unnest(sources) AS source_type
+            GROUP BY source_type
+         ) dimensions
+        ORDER BY dimension, bucket_key`,
+      parameters.slice(0, 2)
     )).rows;
-    const allItems = rows.map(mapListRow);
-    const items = applyFilters(allItems, filters);
+    const matchingCount = Number((await client.query(
+      `WITH authorized AS (${KNOWLEDGE_LIST_BASE_SQL})
+       SELECT COUNT(*)::bigint AS value FROM authorized WHERE ${KNOWLEDGE_LIST_FILTER_SQL}`,
+      parameters
+    )).rows[0].value);
+    const cursor = pagination.cursor;
+    const rows = (await client.query(
+      `WITH authorized AS (${KNOWLEDGE_LIST_BASE_SQL}),
+            filtered AS (
+              SELECT * FROM authorized WHERE ${KNOWLEDGE_LIST_FILTER_SQL}
+            )
+       SELECT * FROM filtered
+        WHERE ($8::text IS NULL
+          OR label COLLATE "C" > $8::text COLLATE "C"
+          OR (label = $8 AND canonical_key COLLATE "C" > $9::text COLLATE "C")
+          OR (label = $8 AND canonical_key = $9 AND entry_id > $10::uuid))
+        ORDER BY label COLLATE "C", canonical_key COLLATE "C", entry_id
+        LIMIT $11`,
+      parameters.concat([
+        cursor && cursor.label,
+        cursor && cursor.canonicalKey,
+        cursor && cursor.entryId,
+        pagination.limit + 1,
+      ])
+    )).rows;
+    const hasMore = rows.length > pagination.limit;
+    const pageRows = hasMore ? rows.slice(0, pagination.limit) : rows;
+    const items = pageRows.map(mapListRow);
     const synchronizationRows = await loadSyncRows(client, organizationId);
     const synchronization = canReadProtected
       ? synchronizationRows : synchronizationRows.map(redactSynchronizationPins);
@@ -394,9 +560,16 @@ async function listKnowledgeManagement(pool, input) {
         canReadProtected,
       },
       filters,
-      counts: countsFor(allItems),
-      filteredCount: items.length,
+      counts: countsFromRows(countRows),
+      filteredCount: matchingCount,
       items,
+      pagination: {
+        limit: pagination.limit,
+        returned: items.length,
+        hasMore,
+        nextCursor: hasMore && pageRows.length ? encodeListCursor(pageRows[pageRows.length - 1]) : null,
+        truncated: hasMore,
+      },
       synchronization: {
         counts: syncCounts(synchronization),
         targets: synchronization,
@@ -405,7 +578,59 @@ async function listKnowledgeManagement(pool, input) {
   });
 }
 
-function mapProvenance(row, restrictedVersionIds = new Set()) {
+function publicationReadable(row) {
+  return Boolean(row && ['public', 'internal'].includes(row.version_sensitivity) &&
+    row.version_review_requirement === 'standard');
+}
+
+function createRelationshipPolicy(canReadProtected, restrictedVersionRows, publicationRows, snapshotRow) {
+  const restrictedVersionIds = new Set();
+  const restrictedPublicationIds = new Set();
+  const restrictedPublicationNumbers = new Set();
+  const restrictedSnapshotIds = new Set();
+  const restrictedIds = new Set();
+  const restrictedDigests = new Set();
+  if (!canReadProtected) {
+    for (const row of restrictedVersionRows) {
+      restrictedVersionIds.add(row.id);
+      restrictedIds.add(row.id);
+      if (digest(row.canonical_digest)) restrictedDigests.add(digest(row.canonical_digest));
+    }
+    for (const row of publicationRows) {
+      if (publicationReadable(row)) continue;
+      restrictedPublicationIds.add(row.id);
+      restrictedPublicationNumbers.add(Number(row.publication_number));
+      restrictedIds.add(row.id);
+      if (digest(row.canonical_digest)) restrictedDigests.add(digest(row.canonical_digest));
+    }
+    if (snapshotRow && restrictedVersionIds.has(snapshotRow.base_version_id)) {
+      restrictedSnapshotIds.add(snapshotRow.id);
+      restrictedIds.add(snapshotRow.id);
+      if (digest(snapshotRow.diff_digest)) restrictedDigests.add(digest(snapshotRow.diff_digest));
+    }
+  }
+  return {
+    restrictedVersionIds,
+    restrictedPublicationIds,
+    restrictedPublicationNumbers,
+    restrictedSnapshotIds,
+    restrictedIds,
+    restrictedDigests,
+  };
+}
+
+function redactRelationshipValue(value, policy) {
+  if (typeof value === 'string' &&
+      (policy.restrictedIds.has(value) || policy.restrictedDigests.has(digest(value)))) return null;
+  if (Array.isArray(value)) return value.map(item => redactRelationshipValue(item, policy));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactRelationshipValue(item, policy)]));
+  }
+  return value;
+}
+
+function mapProvenance(row, relationshipPolicy) {
+  const policy = relationshipPolicy || createRelationshipPolicy(true, [], [], null);
   const mapped = {
     ordinal: Number(row.ordinal),
     sourceType: row.source_type,
@@ -414,7 +639,9 @@ function mapProvenance(row, restrictedVersionIds = new Set()) {
     sourceDigest: digest(row.source_digest),
     jsonPointer: row.json_pointer,
   };
-  if (!restrictedVersionIds.has(row.source_record_id)) return mapped;
+  const restricted = policy.restrictedIds.has(row.source_record_id) ||
+    policy.restrictedDigests.has(digest(row.source_digest));
+  if (!restricted) return redactRelationshipValue(mapped, policy);
   return {
     ...mapped,
     sourceRecordId: null,
@@ -425,31 +652,40 @@ function mapProvenance(row, restrictedVersionIds = new Set()) {
   };
 }
 
-function mapPublication(row) {
+function mapPublication(row, relationshipPolicy) {
   if (!row) return null;
+  const policy = relationshipPolicy || createRelationshipPolicy(true, [], [], null);
+  const previousRestricted = policy.restrictedPublicationIds.has(row.previous_publication_id);
+  const numberRestricted = Array.from(policy.restrictedPublicationNumbers)
+    .some(number => number < Number(row.publication_number));
   return {
     id: row.id,
     versionId: row.version_id,
-    number: Number(row.publication_number),
+    number: numberRestricted ? null : Number(row.publication_number),
+    numberRestricted,
     digest: digest(row.canonical_digest),
     reviewEventId: row.review_event_id,
-    previousPublicationId: row.previous_publication_id,
+    previousPublicationId: previousRestricted ? null : row.previous_publication_id,
+    previousPublicationRestricted: previousRestricted,
     actorUserId: row.published_by_user_id,
     reason: row.reason,
     publishedAt: row.published_at,
   };
 }
 
-function mapReviewEvent(row) {
+function mapReviewEvent(row, relationshipPolicy) {
+  const policy = relationshipPolicy || createRelationshipPolicy(true, [], [], null);
+  const snapshotRestricted = policy.restrictedSnapshotIds.has(row.snapshot_id);
   return {
     id: row.id,
-    snapshotId: row.snapshot_id,
+    snapshotId: snapshotRestricted ? null : row.snapshot_id,
+    snapshotRestricted,
     sequence: Number(row.event_sequence),
     actorUserId: row.actor_user_id,
     action: row.action,
     versionDigest: digest(row.version_digest),
     reason: row.reason,
-    details: storedJson(row.details) || {},
+    details: redactRelationshipValue(storedJson(row.details) || {}, policy),
     createdAt: row.created_at,
   };
 }
@@ -498,12 +734,12 @@ async function getKnowledgeManagementItem(pool, input) {
       fail('knowledge_management_not_found', 'Knowledge item was not found', 404);
     }
     const row = selected.rows[0];
-    const restrictedVersionIds = canMutate ? new Set() : new Set((await client.query(
-      `SELECT id FROM canonical_knowledge_versions
+    const restrictedVersionRows = canMutate ? [] : (await client.query(
+      `SELECT id, canonical_digest FROM canonical_knowledge_versions
         WHERE organization_id = $1 AND entry_id = $2
           AND NOT (sensitivity IN ('public', 'internal') AND review_requirement = 'standard')`,
       [organizationId, entryId]
-    )).rows.map(item => item.id));
+    )).rows;
     const provenanceRows = (await client.query(
       `SELECT * FROM canonical_knowledge_provenance
         WHERE organization_id = $1 AND version_id = $2 ORDER BY ordinal`,
@@ -538,14 +774,13 @@ async function getKnowledgeManagementItem(pool, input) {
       [organizationId, entryId]
     )).rows;
     const actualCurrentPublicationRow = allPublicationRows[allPublicationRows.length - 1] || null;
-    const restrictedCurrentPublication = !canMutate && actualCurrentPublicationRow && !(
-      ['public', 'internal'].includes(actualCurrentPublicationRow.version_sensitivity) &&
-      actualCurrentPublicationRow.version_review_requirement === 'standard'
+    const relationshipPolicy = createRelationshipPolicy(
+      canMutate, restrictedVersionRows, allPublicationRows, snapshotRow
     );
-    const publicationRows = canMutate ? allPublicationRows : allPublicationRows.filter(publication =>
-      ['public', 'internal'].includes(publication.version_sensitivity) &&
-      publication.version_review_requirement === 'standard'
-    );
+    const { restrictedVersionIds } = relationshipPolicy;
+    const restrictedCurrentPublication = !canMutate && actualCurrentPublicationRow &&
+      !publicationReadable(actualCurrentPublicationRow);
+    const publicationRows = canMutate ? allPublicationRows : allPublicationRows.filter(publicationReadable);
     const currentPublicationRow = publicationRows[publicationRows.length - 1] || null;
     const selectedPublicationRow = publicationRows.find(item => item.version_id === row.version_id) || null;
     let comparison;
@@ -664,19 +899,23 @@ async function getKnowledgeManagementItem(pool, input) {
         actorUserId: row.created_by_user_id,
         reason: row.reason,
         createdAt: row.created_at,
-        provenance: provenanceRows.map(item => mapProvenance(item, restrictedVersionIds)),
+        provenance: provenanceRows.map(item => mapProvenance(item, relationshipPolicy)),
       },
       workflow: {
         status: selectedPublicationRow ? 'published'
           : latestReview && Object.values(APPROVAL_ACTIONS).includes(latestReview.action) ? 'approved'
             : latestReview && latestReview.action === 'review_submitted' ? 'review' : 'draft',
         latestReviewEventId: latestReview && latestReview.id,
-        events: reviewRows.map(mapReviewEvent),
+        events: reviewRows.map(item => mapReviewEvent(item, relationshipPolicy)),
         snapshot: snapshotRow ? {
-          id: snapshotRow.id,
-          baseVersionId: snapshotRow.base_version_id,
+          id: relationshipPolicy.restrictedSnapshotIds.has(snapshotRow.id) ? null : snapshotRow.id,
+          idRestricted: relationshipPolicy.restrictedSnapshotIds.has(snapshotRow.id),
+          baseVersionId: restrictedVersionIds.has(snapshotRow.base_version_id) ? null : snapshotRow.base_version_id,
+          baseVersionRestricted: restrictedVersionIds.has(snapshotRow.base_version_id),
           versionDigest: digest(snapshotRow.version_digest),
-          diffDigest: digest(snapshotRow.diff_digest),
+          diffDigest: relationshipPolicy.restrictedDigests.has(digest(snapshotRow.diff_digest))
+            ? null : digest(snapshotRow.diff_digest),
+          diffRestricted: relationshipPolicy.restrictedDigests.has(digest(snapshotRow.diff_digest)),
           actorUserId: snapshotRow.submitted_by_user_id,
           reason: snapshotRow.reason,
           createdAt: snapshotRow.created_at,
@@ -696,10 +935,10 @@ async function getKnowledgeManagementItem(pool, input) {
       },
       comparison,
       publication: {
-        selected: mapPublication(selectedPublicationRow),
-        current: restrictedCurrentPublication ? null : mapPublication(currentPublicationRow),
+        selected: mapPublication(selectedPublicationRow, relationshipPolicy),
+        current: restrictedCurrentPublication ? null : mapPublication(currentPublicationRow, relationshipPolicy),
         currentRestricted: Boolean(restrictedCurrentPublication),
-        history: publicationRows.map(mapPublication),
+        history: publicationRows.map(item => mapPublication(item, relationshipPolicy)),
       },
       history: canMutate ? historyRows.map(item => ({
         versionId: item.id,
@@ -736,9 +975,11 @@ module.exports = {
   WORKFLOW_STATES,
   applyFilters,
   correctionFor,
+  decodeListCursor,
   getKnowledgeManagementItem,
   listKnowledgeManagement,
   normalizeFilters,
+  normalizePagination,
   syncPresentation,
   workflowState,
 };

@@ -81,13 +81,51 @@
     return global.NorthStarAccountSession.fetch(path, options || {}).then(parseResponse);
   }
 
-  function queryString(filters) {
+  function queryString(filters, pagination) {
     var params = new URLSearchParams();
     Object.keys(filters).forEach(function (key) {
       if (filters[key]) params.set(key, filters[key]);
     });
+    if (pagination && pagination.cursor) params.set('cursor', pagination.cursor);
+    if (pagination && pagination.limit) params.set('limit', String(pagination.limit));
     var value = params.toString();
     return value ? '?' + value : '';
+  }
+
+  function captureDetailTarget(detail) {
+    var publication = detail.publication && detail.publication.current;
+    return Object.freeze({
+      entryId: detail.entry.id,
+      canonicalKey: detail.entry.canonicalKey,
+      category: detail.entry.category,
+      versionId: detail.version.id,
+      versionNumber: detail.version.number,
+      canonicalDigest: detail.version.canonicalDigest,
+      expectedReviewEventId: detail.workflow.latestReviewEventId || null,
+      expectedPublicationId: publication && publication.id || null,
+      expectedPublicationNumber: publication && publication.number || 0,
+      label: detail.version.label,
+      origin: detail.version.origin,
+      sensitivity: detail.version.sensitivity,
+      reviewRequirement: detail.version.reviewRequirement,
+      applicability: detail.version.applicability,
+      document: detail.version.document,
+      history: Array.isArray(detail.history) ? detail.history.map(function (version) {
+        return Object.freeze({
+          versionId: version.versionId,
+          versionNumber: version.versionNumber,
+          canonicalDigest: version.canonicalDigest,
+          lifecycleAction: version.lifecycleAction,
+        });
+      }) : [],
+    });
+  }
+
+  function detailTargetKey(target) {
+    return JSON.stringify([
+      target.entryId, target.versionId, target.versionNumber, target.canonicalDigest,
+      target.expectedReviewEventId, target.expectedPublicationId, target.expectedPublicationNumber,
+    ]);
   }
 
   function createController(root, instance) {
@@ -95,8 +133,11 @@
       account: null,
       data: null,
       detail: null,
+      detailRequestSequence: 0,
       filters: {},
       instance: instance,
+      listRequestSequence: 0,
+      renderedTargetKey: null,
       selectedEntryId: null,
       surface: root.dataset.surface || 'settings',
     };
@@ -156,6 +197,8 @@
     }
 
     function selectItem(entryId, versionNumber, restoreFocus) {
+      var requestSequence = state.detailRequestSequence + 1;
+      state.detailRequestSequence = requestSequence;
       state.selectedEntryId = entryId;
       listRoot.querySelectorAll('.km-item-button').forEach(function (button) {
         button.setAttribute('aria-current', button.dataset.entryId === entryId ? 'true' : 'false');
@@ -166,19 +209,34 @@
       return request('/api/v1/knowledge-management/items/' + encodeURIComponent(entryId) + suffix, {
         method: 'GET', cache: 'no-store',
       }).then(function (detail) {
+        if (requestSequence !== state.detailRequestSequence || state.selectedEntryId !== entryId) return null;
+        if (!detail || !detail.entry || detail.entry.id !== entryId ||
+            (versionNumber && Number(detail.version.number) !== Number(versionNumber))) {
+          var mismatch = new Error('The detail response did not match the requested immutable knowledge target. Reload the exact item.');
+          mismatch.code = 'knowledge_management_detail_target_mismatch';
+          throw mismatch;
+        }
         state.detail = detail;
         renderDetail();
-        setStatus('ready', 'Knowledge detail loaded from canonical tenant authority.');
+        setStatus('ready', state.data
+          ? listStatusMessage(state.data)
+          : 'Knowledge detail loaded from canonical tenant authority.');
         if (restoreFocus) {
           var heading = detailRoot.querySelector('h3');
           if (heading) heading.focus();
         }
+        return detail;
       }).catch(function (error) {
+        if (requestSequence !== state.detailRequestSequence || state.selectedEntryId !== entryId) return null;
         state.detail = null;
+        state.renderedTargetKey = null;
+        delete detailRoot.dataset.targetKey;
         renderDetailError(error);
         setStatus('error', error.message);
       }).finally(function () {
-        detailRoot.removeAttribute('aria-busy');
+        if (requestSequence === state.detailRequestSequence && state.selectedEntryId === entryId) {
+          detailRoot.removeAttribute('aria-busy');
+        }
       });
     }
 
@@ -188,6 +246,8 @@
         listRoot.replaceChildren(node('li', 'km-empty', state.data && state.data.counts && state.data.counts.total
           ? 'No knowledge matches these filters.' : 'No generated knowledge exists yet. Generate knowledge from authoritative Business Profile inputs before review.'));
         state.detail = null;
+        state.renderedTargetKey = null;
+        delete detailRoot.dataset.targetKey;
         detailRoot.replaceChildren(node('div', 'km-empty', 'Choose an available knowledge item to inspect its exact authority.'));
         return;
       }
@@ -211,6 +271,17 @@
         wrapper.appendChild(button);
         fragment.appendChild(wrapper);
       });
+      if (state.data.pagination && state.data.pagination.hasMore) {
+        var continuation = node('li', 'km-list-continuation');
+        var loadMore = node('button', 'km-action km-action-secondary', 'Load more knowledge items');
+        loadMore.type = 'button';
+        loadMore.addEventListener('click', function () { loadNextPage(loadMore); });
+        append(continuation,
+          node('p', 'km-action-explanation', items.length + ' of ' + state.data.filteredCount + ' matching items are loaded.'),
+          loadMore
+        );
+        fragment.appendChild(continuation);
+      }
       listRoot.replaceChildren(fragment);
       if (!items.some(function (item) { return item.entryId === state.selectedEntryId; })) {
         selectItem(items[0].entryId, null, false);
@@ -242,7 +313,9 @@
       append(published, node('h4', '', 'Publication and approval evidence'), definition([
         ['Workflow', STATUS_LABELS[detail.workflow.status] || titleCase(detail.workflow.status)],
         ['Approval evidence', titleCase(detail.workflow.approvalEvidenceStatus)],
-        ['Current publication', publication ? '#' + publication.number + ' · ' + publication.id : detail.publication.currentRestricted ? 'Restricted for this role' : 'Not published', publication ? 'km-mono' : ''],
+        ['Current publication', publication
+          ? (publication.numberRestricted ? 'Number restricted · ' : '#' + publication.number + ' · ') + publication.id
+          : detail.publication.currentRestricted ? 'Restricted for this role' : 'Not published', publication ? 'km-mono' : ''],
         ['Published exact version', publication ? publication.versionId : null, 'km-mono'],
         ['Published digest', publication ? publication.digest : null, 'km-mono'],
         ['Published by', publication ? publication.actorUserId : null, 'km-mono'],
@@ -426,6 +499,9 @@
     function renderDetail() {
       var detail = state.detail;
       if (!detail) return;
+      var renderedTarget = captureDetailTarget(detail);
+      state.renderedTargetKey = detailTargetKey(renderedTarget);
+      detailRoot.dataset.targetKey = state.renderedTargetKey;
       var fragment = document.createDocumentFragment();
       var header = node('header', 'km-detail-header');
       var heading = node('h3', '', detail.version.label);
@@ -464,6 +540,20 @@
     function latestSelected(detail) {
       var item = state.data && state.data.items.find(function (candidate) { return candidate.entryId === detail.entry.id; });
       return item && item.version.number === detail.version.number && item.version.id === detail.version.id;
+    }
+
+    function assertCurrentDialogTarget(target, dialog) {
+      var expected = detailTargetKey(target);
+      var current = state.detail && detailTargetKey(captureDetailTarget(state.detail));
+      var selected = listRoot.querySelector('.km-item-button[aria-current="true"]');
+      var valid = state.selectedEntryId === target.entryId &&
+        selected && selected.dataset.entryId === target.entryId &&
+        current === expected && state.renderedTargetKey === expected &&
+        detailRoot.dataset.targetKey === expected && dialog.dataset.targetKey === expected;
+      if (valid) return;
+      var error = new Error('The visible knowledge selection or exact version changed. Close this dialog and reload the exact item before continuing.');
+      error.code = 'knowledge_management_dialog_target_changed';
+      throw error;
     }
 
     function renderActions(panel, detail) {
@@ -554,24 +644,25 @@
       }, 0);
     }
 
-    function mutation(name, payload) {
-      return request('/api/v1/knowledge-management/items/' + encodeURIComponent(state.detail.entry.id) + '/' + name, {
+    function mutation(target, name, payload) {
+      return request('/api/v1/knowledge-management/items/' + encodeURIComponent(target.entryId) + '/' + name, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       });
     }
 
-    function workflowPayload(reason) {
+    function workflowPayload(target, reason) {
       return {
-        versionId: state.detail.version.id,
-        versionNumber: state.detail.version.number,
-        canonicalDigest: state.detail.version.canonicalDigest,
-        expectedReviewEventId: state.detail.workflow.latestReviewEventId || null,
+        versionId: target.versionId,
+        versionNumber: target.versionNumber,
+        canonicalDigest: target.canonicalDigest,
+        expectedReviewEventId: target.expectedReviewEventId,
         reason: reason,
       };
     }
 
     function openActionDialog(name, opener) {
       var detail = state.detail;
+      var target = captureDetailTarget(detail);
       var descriptions = {
         review: ['Submit for review', 'Bind this submission to the exact immutable version and current review state.'],
         changes: ['Request changes', 'Close this exact review with an immutable changes-requested event. Correction creates a later version.'],
@@ -583,6 +674,13 @@
       };
       var copy = descriptions[name];
       var view = createDialog(copy[0], copy[1], opener);
+      view.dialog.dataset.targetKey = detailTargetKey(target);
+      view.inner.appendChild(definition([
+        ['Knowledge item', target.label],
+        ['Entry ID', target.entryId, 'km-mono'],
+        ['Exact version', target.versionNumber + ' · ' + target.versionId, 'km-mono'],
+        ['Canonical digest', target.canonicalDigest, 'km-mono'],
+      ]));
       if (['approve', 'publish', 'tombstone'].includes(name)) view.inner.appendChild(node('div', 'km-warning',
         name === 'approve' && detail.version.reviewRequirement !== 'standard'
           ? 'High-risk approval: verify the external evidence and operational consequences before continuing.'
@@ -618,10 +716,11 @@
         };
       }
       finishDialog(view, copy[0], ['publish', 'tombstone'].includes(name) ? 'km-action-danger' : '', function () {
+        assertCurrentDialogTarget(target, view.dialog);
         var reasonValue = reason.value.trim();
         if (!reasonValue) throw new Error('A reason is required.');
         if (['review', 'changes', 'approve', 'publish'].includes(name)) {
-          var payload = workflowPayload(reasonValue);
+          var payload = workflowPayload(target, reasonValue);
           if (name === 'approve' && attorney) {
             if (!attorney.reviewReference.value.trim() || !attorney.reviewedAt.value || !attorney.evidenceDigest.value.trim()) {
               throw new Error('Genuine external attorney-review reference, time, and digest are required.');
@@ -633,35 +732,42 @@
             };
           }
           if (name === 'publish') {
-            payload.expectedPublicationId = detail.publication.current && detail.publication.current.id || null;
-            payload.expectedPublicationNumber = detail.publication.current && detail.publication.current.number || 0;
+            payload.expectedPublicationId = target.expectedPublicationId;
+            payload.expectedPublicationNumber = target.expectedPublicationNumber;
           }
-          return mutation(name, payload);
+          return mutation(target, name, payload);
         }
         var lifecycle = {
-          expectedVersionId: detail.version.id,
-          expectedVersionNumber: detail.version.number,
-          expectedCanonicalDigest: detail.version.canonicalDigest,
+          expectedVersionId: target.versionId,
+          expectedVersionNumber: target.versionNumber,
+          expectedCanonicalDigest: target.canonicalDigest,
           reason: reasonValue,
         };
-        if (name === 'tombstone') return mutation(name, lifecycle);
+        if (name === 'tombstone') return mutation(target, name, lifecycle);
         if (name === 'rollback') {
           var selected = rollback.options[rollback.selectedIndex];
+          var capturedRollback = target.history.find(function (version) { return version.versionId === selected.value; });
+          if (!capturedRollback || capturedRollback.versionNumber !== Number(selected.dataset.versionNumber) ||
+              capturedRollback.canonicalDigest !== selected.dataset.digest) {
+            var rollbackError = new Error('The rollback target changed. Close this dialog and reload the exact item before continuing.');
+            rollbackError.code = 'knowledge_management_dialog_target_changed';
+            throw rollbackError;
+          }
           lifecycle.rollbackVersionId = selected.value;
           lifecycle.rollbackVersionNumber = Number(selected.dataset.versionNumber);
           lifecycle.rollbackCanonicalDigest = selected.dataset.digest;
-          return mutation(name, lifecycle);
+          return mutation(target, name, lifecycle);
         }
         if (name === 'revise') {
           var content;
           try { content = JSON.parse(revision.content.value); } catch (_error) { throw new Error('Revision content must be valid JSON.'); }
-          return mutation(name, Object.assign(lifecycle, {
-            canonicalKey: detail.entry.canonicalKey,
-            entryType: detail.entry.category,
-            label: detail.version.label,
-            sensitivity: detail.version.sensitivity,
-            reviewRequirement: detail.version.reviewRequirement,
-            applicability: detail.version.applicability,
+          return mutation(target, name, Object.assign(lifecycle, {
+            canonicalKey: target.canonicalKey,
+            entryType: target.category,
+            label: target.label,
+            sensitivity: target.sensitivity,
+            reviewRequirement: target.reviewRequirement,
+            applicability: target.applicability,
             content: content,
             provenance: [{
               sourceType: 'human_input', sourceRecordId: revision.sourceRecordId.value.trim(),
@@ -675,16 +781,35 @@
     }
 
     function openSyncDialog(target, name, opener) {
+      var detailTarget = captureDetailTarget(state.detail);
+      var syncTarget = Object.freeze({
+        targetId: target.targetId,
+        targetRevision: target.targetRevision,
+        configurationDigest: target.configurationDigest,
+        status: target.status,
+      });
       var view = createDialog(name === 'retry' ? 'Retry exact synchronization target' : 'Reconcile exact synchronization target',
         'This queues provider-neutral outbound repair for the exact target revision and configuration digest. It does not call a provider now or claim a live connection.', opener);
+      view.dialog.dataset.targetKey = detailTargetKey(detailTarget);
       view.inner.appendChild(definition([
-        ['Target ID', target.targetId, 'km-mono'], ['Target revision', target.targetRevision],
-        ['Configuration digest', target.configurationDigest, 'km-mono'], ['Current state', STATUS_LABELS[target.status] || titleCase(target.status)],
+        ['Knowledge item', detailTarget.label], ['Entry ID', detailTarget.entryId, 'km-mono'],
+        ['Target ID', syncTarget.targetId, 'km-mono'], ['Target revision', syncTarget.targetRevision],
+        ['Configuration digest', syncTarget.configurationDigest, 'km-mono'], ['Current state', STATUS_LABELS[syncTarget.status] || titleCase(syncTarget.status)],
       ]));
       finishDialog(view, name === 'retry' ? 'Queue retry' : 'Queue reconciliation', '', function () {
-        return request('/api/v1/knowledge-management/synchronization/' + encodeURIComponent(target.targetId) + '/' + name, {
+        assertCurrentDialogTarget(detailTarget, view.dialog);
+        var currentTarget = state.detail.synchronization.find(function (candidate) {
+          return candidate.targetId === syncTarget.targetId;
+        });
+        if (!currentTarget || currentTarget.targetRevision !== syncTarget.targetRevision ||
+            currentTarget.configurationDigest !== syncTarget.configurationDigest) {
+          var error = new Error('The synchronization target changed. Close this dialog and reload the exact item before continuing.');
+          error.code = 'knowledge_management_dialog_target_changed';
+          throw error;
+        }
+        return request('/api/v1/knowledge-management/synchronization/' + encodeURIComponent(syncTarget.targetId) + '/' + name, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expectedTargetRevision: target.targetRevision, expectedConfigurationDigest: target.configurationDigest }),
+          body: JSON.stringify({ expectedTargetRevision: syncTarget.targetRevision, expectedConfigurationDigest: syncTarget.configurationDigest }),
         });
       });
     }
@@ -713,15 +838,59 @@
       }
     }
 
+    function listStatusMessage(data) {
+      var loaded = data.items && data.items.length || 0;
+      var matching = Number(data.filteredCount || 0);
+      var visible = Number(data.counts && data.counts.total || 0);
+      if (data.pagination && data.pagination.hasMore) {
+        return loaded + ' of ' + matching + ' matching knowledge items are loaded; ' + visible + ' are visible to this role.';
+      }
+      return matching + ' of ' + visible + ' visible knowledge items match the current filters. All matching items are loaded.';
+    }
+
+    function loadNextPage(button) {
+      var page = state.data && state.data.pagination;
+      if (!page || !page.hasMore || !page.nextCursor) return Promise.resolve(state.data);
+      var requestSequence = state.listRequestSequence;
+      button.disabled = true;
+      button.textContent = 'Loading…';
+      listRoot.setAttribute('aria-busy', 'true');
+      setStatus('loading', 'Loading the next deterministic page of authorized knowledge…');
+      return request('/api/v1/knowledge-management' + queryString(state.filters, {
+        cursor: page.nextCursor,
+        limit: page.limit,
+      }), { method: 'GET', cache: 'no-store' }).then(function (next) {
+        if (requestSequence !== state.listRequestSequence) return state.data;
+        var known = new Set(state.data.items.map(function (item) { return item.entryId; }));
+        var additions = (next.items || []).filter(function (item) { return !known.has(item.entryId); });
+        state.data = Object.assign({}, next, { items: state.data.items.concat(additions) });
+        renderMode(); renderCounts(); renderList();
+        setStatus('ready', listStatusMessage(state.data));
+        return state.data;
+      }).catch(function (error) {
+        if (requestSequence !== state.listRequestSequence) return state.data;
+        button.disabled = false;
+        button.textContent = 'Retry loading more knowledge items';
+        setStatus('error', error.message + ' Previously loaded knowledge remains available.');
+        throw error;
+      }).finally(function () {
+        if (requestSequence === state.listRequestSequence) listRoot.removeAttribute('aria-busy');
+      });
+    }
+
     function loadList(preserveSelection) {
+      var requestSequence = state.listRequestSequence + 1;
+      state.listRequestSequence = requestSequence;
+      state.detailRequestSequence += 1;
       setStatus('loading', 'Loading canonical tenant knowledge. Controls remain read-only until authority resolves…');
       listRoot.setAttribute('aria-busy', 'true');
       if (!preserveSelection) state.selectedEntryId = null;
       return request('/api/v1/knowledge-management' + queryString(state.filters), { method: 'GET', cache: 'no-store' })
         .then(function (data) {
+          if (requestSequence !== state.listRequestSequence) return state.data;
           state.data = data;
           renderMode(); renderCounts(); renderList();
-          setStatus('ready', data.filteredCount + ' of ' + data.counts.total + ' visible knowledge items match the current filters.');
+          setStatus('ready', listStatusMessage(data));
           if (preserveSelection && state.selectedEntryId && data.items.some(function (item) {
             return item.entryId === state.selectedEntryId;
           })) {
@@ -729,7 +898,10 @@
           }
           return data;
         }).catch(function (error) {
+          if (requestSequence !== state.listRequestSequence) return state.data;
           state.data = null; state.detail = null;
+          state.renderedTargetKey = null;
+          delete detailRoot.dataset.targetKey;
           countRoot.replaceChildren();
           var retry = node('button', 'km-action km-action-secondary', 'Retry Knowledge Management');
           retry.type = 'button'; retry.addEventListener('click', function () { loadList(false); });
@@ -738,7 +910,9 @@
           detailRoot.replaceChildren(node('div', 'km-empty', 'Canonical knowledge detail is unavailable while the list authority is unavailable.'));
           setStatus('error', error.message);
           throw error;
-        }).finally(function () { listRoot.removeAttribute('aria-busy'); });
+        }).finally(function () {
+          if (requestSequence === state.listRequestSequence) listRoot.removeAttribute('aria-busy');
+        });
     }
 
     buildFilters();

@@ -305,12 +305,21 @@ Part 7 is complete only when all of the following are true:
   require an active owner or administrator and never appear through a not-found side channel.
 - Browse and filter surfaces cover category, exact workflow state (`draft`, `review`, `approved`,
   `published`), sensitivity, source, and applicability, with truthful visible/matching counts and
-  explicit loading, empty, error, read-only, disabled, and authority-unavailable states.
+  explicit loading, empty, error, read-only, disabled, and authority-unavailable states. Every
+  authorization and supported filter predicate is applied in PostgreSQL before bounded keyset
+  pagination. Pages use a deterministic label/canonical-key/entry-ID cursor, return at most 200
+  rows, state `hasMore` and `nextCursor` explicitly, and expose tenant-wide authorized and matching
+  counts; no authorized match is silently unreachable or presented as a complete result.
 - Item detail pins the exact immutable entry/version IDs and numbers, canonical document and
   digest, readable content, applicability, provenance source IDs/versions/digests/pointers,
   actor/reason/time, approval-evidence status, exact publication, and provider-neutral
   synchronization state. Stored markup, URLs, prompt instructions, and hostile Unicode render as
   inert text; unauthorized secret or high-sensitivity bytes never reach the browser.
+- Relationship authorization is one fail-closed policy across snapshots, review events,
+  comparisons, publications, publication history, provenance, and derived digests. When a readable
+  item follows a protected predecessor, members and viewers receive explicit restricted markers
+  with null predecessor identifiers, publication sequence, snapshot identifiers, and derived
+  digests; protected identifiers or counts cannot be reconstructed from response shape or errors.
 - For an authorized viewer, the displayed comparison against the current exact publication is the
   accepted deterministic Part 3 diff, including its base version and digest. If the publication
   is above the viewer's sensitivity, its comparison bytes, IDs, and digests are withheld with an
@@ -320,6 +329,12 @@ Part 7 is complete only when all of the following are true:
   review-event, publication, target-revision, and configuration-digest pins required by its
   canonical repository. A stale or concurrent request fails closed and instructs the user to
   reload; the browser never retries a mutation with inferred authority.
+- Detail reads are request-sequenced so a late response cannot overwrite a newer selection. Every
+  review, changes, approval, publication, revision, tombstone, rollback, retry, and reconciliation
+  dialog captures one immutable visible entry/version/digest/workflow/publication/lifecycle or
+  synchronization target before opening. The selected list item, rendered detail, dialog target,
+  URL, and submitted pins are revalidated immediately before transport; any divergence performs no
+  POST and requires an explicit reload.
 - Eligible review submission, changes-requested, class-specific approval, and publication use
   the Part 3 repository without bypasses. `needs_review` content cannot be approved or published.
   High-risk actions have non-color warnings. Attorney-gated approval accepts only the real

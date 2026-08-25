@@ -5,7 +5,9 @@ const request = require('supertest');
 const {
   applyFilters,
   correctionFor,
+  decodeListCursor,
   normalizeFilters,
+  normalizePagination,
   syncPresentation,
   workflowState,
 } = require('../../src/knowledge/managementRepository');
@@ -60,6 +62,19 @@ describe('Mission 21 Part 7 knowledge-management contract helpers', () => {
     expect(applyFilters(items, normalizeFilters({ applicability: 'customer' }))).toEqual([items[1]]);
   });
 
+  test('normalizes a bounded opaque list cursor and rejects forged or oversized pagination', () => {
+    const encoded = Buffer.from(JSON.stringify([
+      'Label', 'organization.identity', ENTRY,
+    ]), 'utf8').toString('base64url');
+    expect(normalizePagination({ limit: '37', cursor: encoded })).toEqual({
+      limit: 37,
+      cursor: { label: 'Label', canonicalKey: 'organization.identity', entryId: ENTRY },
+    });
+    expect(decodeListCursor(encoded).entryId).toBe(ENTRY);
+    expect(() => normalizePagination({ limit: 201 })).toThrow(/1 to 200/);
+    expect(() => normalizePagination({ cursor: 'not-valid!' })).toThrow(/valid knowledge-list cursor/);
+  });
+
   test.each([
     ['in_sync', 'current'], ['pending', 'pending'], ['stale', 'stale'], ['drift', 'drifted'],
     ['retry', 'retrying'], ['dead', 'dead'], ['suspended', 'suspended'], ['blocked', 'reconciliation_needed'],
@@ -93,13 +108,14 @@ describe('Mission 21 Part 7 knowledge-management contract helpers', () => {
 describe('Mission 21 Part 7 mounted HTTP controller', () => {
   test('list binds organization and actor from trusted session context', async () => {
     const list = jest.fn().mockResolvedValue({ items: [], counts: { total: 0 }, filteredCount: 0 });
-    const response = await request(appFor({ list })).get('/api/v1/knowledge-management?category=guidance');
+    const response = await request(appFor({ list })).get('/api/v1/knowledge-management?category=guidance&limit=25&cursor=opaque');
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(list).toHaveBeenCalledWith({ marker: 'pool' }, expect.objectContaining({
       organizationId: ORG,
       actorUserId: USER,
       filters: expect.objectContaining({ category: 'guidance' }),
+      pagination: { cursor: 'opaque', limit: '25' },
     }));
   });
 

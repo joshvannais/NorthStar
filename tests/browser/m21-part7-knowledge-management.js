@@ -215,9 +215,40 @@ async function selectItem(page, label) {
   return button;
 }
 
+async function openDialogWithReorderedDetail(page, staleEntryId, targetLabel, actionName, prepare) {
+  let release;
+  let observed;
+  const gate = new Promise(resolve => { release = resolve; });
+  const seen = new Promise(resolve => { observed = resolve; });
+  const stalePath = `/api/v1/knowledge-management/items/${staleEntryId}`;
+  await page.route(url => new URL(url).pathname === stalePath, async route => {
+    observed();
+    await gate;
+    await route.continue();
+  }, { times: 1 });
+  await page.locator(`.km-item-button[data-entry-id="${staleEntryId}"]`).click();
+  await seen;
+  const targetButton = await selectItem(page, targetLabel);
+  if (prepare) await prepare();
+  const opener = page.getByRole('button', { name: actionName, exact: true }).first();
+  await opener.click();
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor({ state: 'visible' });
+  const staleResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname === stalePath && response.request().method() === 'GET');
+  release();
+  assert.strictEqual((await staleResponse).status(), 200);
+  await page.waitForTimeout(25);
+  assert.strictEqual(await targetButton.getAttribute('aria-current'), 'true');
+  assert.strictEqual(await page.locator('[data-km-detail] h3').textContent(), targetLabel);
+  assert.match(await dialog.textContent(), new RegExp(targetLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  return dialog;
+}
+
 async function activateTab(page, name) {
   const tab = page.getByRole('tab', { name, exact: true });
   await tab.click();
+  await page.waitForFunction(element => element.getAttribute('aria-selected') === 'true', await tab.elementHandle());
   assert.strictEqual(await tab.getAttribute('aria-selected'), 'true');
   return tab;
 }
@@ -382,6 +413,15 @@ async function run() {
     const stale = await knowledge.createInitialKnowledgeDraft(pool, draft(OWNER, 'human.stale', {
       label: 'Stale conflict item', entryType: 'guidance',
     }));
+    const changesRace = await knowledge.createInitialKnowledgeDraft(pool, draft(OWNER, 'human.changes-race', {
+      label: 'Changes request race item', entryType: 'guidance',
+    }));
+    await knowledge.submitKnowledgeVersionForReview(
+      pool, workflow(changesRace, OWNER, 'Submit the changes-request race item.')
+    );
+    const revisionRace = await knowledge.createInitialKnowledgeDraft(pool, draft(OWNER, 'human.revision-race', {
+      label: 'Direct revision race item', entryType: 'faq',
+    }));
     const unresolved = await knowledge.createInitialKnowledgeDraft(pool, draft(OWNER, 'generated.unresolved', {
       label: 'Unresolved evidence item',
       entryType: 'guidance',
@@ -396,6 +436,29 @@ async function run() {
       reviewRequirement: 'attorney_gated',
       content: { state: 'ready', facts: { disclosure: 'Protected legal bytes.' } },
     }));
+    const retryConfigured = await sync.configureTarget({
+      organizationId: ORG,
+      actorUserId: OWNER,
+      providerKey: 'intercepted.part7-browser-retry',
+      consumer: 'voice_runtime',
+      audience: 'customer',
+      capabilities: ['identity'],
+      maximumEntries: 8,
+      maximumBytes: 32768,
+      staleAfterSeconds: 300,
+    });
+    const retryJobs = await sync.claimJobs({ batchSize: 10, leaseSeconds: 30 });
+    const retryJob = retryJobs.find(job => job.targetId === retryConfigured.target.id);
+    assert.ok(retryJob && retryJob.claimToken);
+    const retryState = await sync.finalizeJob({
+      organizationId: ORG,
+      id: retryJob.id,
+      claimToken: retryJob.claimToken,
+      accepted: false,
+      diagnosticCategory: 'provider_unavailable',
+    });
+    assert.strictEqual(retryState.state, 'retry');
+    assert.strictEqual(retryState.job.diagnosticCategory, 'provider_unavailable');
 
     const { app } = require('../../src/server');
     server = await listen(app);
@@ -410,7 +473,7 @@ async function run() {
     await openSettings(ownerLight, origin);
     assert.strictEqual(await ownerLight.locator('[data-km-mode]').isHidden(), true);
     assert.strictEqual((await ownerLight.locator('[data-knowledge-management]').textContent()).includes('Demo preview'), false);
-    assert.strictEqual(await ownerLight.locator('.km-item-button').count(), 5);
+    assert.strictEqual(await ownerLight.locator('.km-item-button').count(), 7);
     assert.strictEqual(await ownerLight.evaluate(() => window.__part7Xss), 0);
     await assertNoOverflow(ownerLight);
     await screenshot(ownerLight, evidenceDirectory, `${selected}-settings-desktop-light-main.png`);
@@ -429,47 +492,102 @@ async function run() {
     assert.match(await ownerLight.locator('[role="tabpanel"]:visible').textContent(), /Version 1/);
     assert.match(await ownerLight.locator('[role="tabpanel"]:visible').textContent(), /Version 2/);
     await screenshot(ownerLight, evidenceDirectory, `${selected}-settings-desktop-light-lifecycle.png`);
-    await activateTab(ownerLight, 'Synchronization');
+    let dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Generated business identity', 'Reconcile exact target',
+      async () => activateTab(ownerLight, 'Synchronization')
+    );
     assert.match(await ownerLight.locator('[role="tabpanel"]:visible').textContent(), /Drift detected/);
     assert.match(await ownerLight.locator('[role="tabpanel"]:visible').textContent(), /intercepted\.part7-browser-preview/);
-    const reconcile = ownerLight.getByRole('button', { name: 'Reconcile exact target' });
-    await reconcile.click();
-    const syncDialog = ownerLight.getByRole('dialog');
-    assert.match(await syncDialog.textContent(), /does not call a provider now or claim a live connection/);
+    assert.match(await dialog.textContent(), /does not call a provider now or claim a live connection/);
     const reconcileResponse = ownerLight.waitForResponse(response =>
       response.url().includes('/synchronization/') && response.url().endsWith('/reconcile') &&
       response.request().method() === 'POST');
-    await syncDialog.getByRole('button', { name: 'Queue reconciliation' }).click();
+    await dialog.getByRole('button', { name: 'Queue reconciliation' }).click();
     assert.strictEqual((await reconcileResponse).status(), 201);
     await ownerLight.waitForFunction(() => !document.querySelector('dialog.km-dialog'));
     const reconciledState = await sync.getTargetState({ organizationId: ORG, actorUserId: OWNER, targetId: configured.target.id });
     assert.ok(['drift', 'pending', 'retry'].includes(reconciledState.state.status));
+
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Generated business identity', 'Retry exact target',
+      async () => activateTab(ownerLight, 'Synchronization')
+    );
+    const retryResponse = ownerLight.waitForResponse(response =>
+      response.url().includes(`/synchronization/${retryConfigured.target.id}/retry`) &&
+      response.request().method() === 'POST');
+    await dialog.getByRole('button', { name: 'Queue retry' }).click();
+    assert.strictEqual((await retryResponse).status(), 201);
+    await ownerLight.waitForFunction(() => !document.querySelector('dialog.km-dialog'));
+
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Changes request race item', 'Request changes'
+    );
+    await dialog.getByLabel('Reason').fill('Request exact changes without accepting a stale detail response.');
+    const changesResponse = ownerLight.waitForResponse(value =>
+      value.url().endsWith(`/items/${changesRace.id}/changes`) && value.request().method() === 'POST');
+    await dialog.getByRole('button', { name: 'Request changes' }).click();
+    assert.strictEqual((await changesResponse).status(), 201);
+    await ownerLight.waitForFunction(() => !document.querySelector('dialog.km-dialog'));
+
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Direct revision race item', 'Create revision'
+    );
+    await dialog.getByLabel('Reason').fill('Create the exact captured revision without stale retargeting.');
+    await dialog.getByLabel('Revised knowledge content (JSON)').fill(JSON.stringify({
+      state: 'ready', facts: { answer: 'Captured revision remains on the intended item.' },
+    }));
+    await dialog.getByLabel('Human source record ID').fill('m21-p7-browser:revision-race:2');
+    await dialog.getByLabel('Human source version').fill('2');
+    await dialog.getByLabel('Human source SHA-256 digest').fill(sha256('m21-p7-browser:revision-race:2'));
+    const revisionResponse = ownerLight.waitForResponse(value =>
+      value.url().endsWith(`/items/${revisionRace.id}/revise`) && value.request().method() === 'POST');
+    await dialog.getByRole('button', { name: 'Create an immutable revision' }).click();
+    assert.strictEqual((await revisionResponse).status(), 201);
+    await ownerLight.waitForFunction(() => !document.querySelector('dialog.km-dialog'));
 
     await selectItem(ownerLight, 'Unresolved evidence item');
     assert.match(await ownerLight.locator('[data-km-detail]').textContent(),
       /Direct revision is disabled for generated or authoritative-source content/);
     assert.strictEqual(await ownerLight.getByRole('button', { name: 'Create revision' }).count(), 0);
 
-    await selectItem(ownerLight, 'Workflow lifecycle item');
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Workflow lifecycle item', 'Submit exact version for review'
+    );
     const submitReview = ownerLight.getByRole('button', { name: 'Submit exact version for review' });
-    await submitReview.click();
-    let dialog = ownerLight.getByRole('dialog');
     await ownerLight.waitForFunction(() => document.activeElement && document.activeElement.id.startsWith('km-dialog-reason-'));
     assert.strictEqual(await dialog.getByLabel('Reason').evaluate(element => element === document.activeElement), true);
+    await dialog.getByLabel('Reason').fill('Browser submits the exact immutable version for review.');
+    const reviewWritesBeforeDivergence = ledger.requests.filter(entry =>
+      entry.path.endsWith(`/items/${lifecycle.id}/review`) && entry.method === 'POST').length;
+    await ownerLight.locator('[data-km-detail]').evaluate(element => {
+      element.dataset.targetKey = 'deliberately-diverged-browser-regression';
+    });
+    await dialog.getByRole('button', { name: 'Submit for review' }).click();
+    await ownerLight.getByRole('alert').waitFor();
+    assert.match(await ownerLight.getByRole('alert').textContent(), /selection changed|reload/i);
+    const reviewWritesAfterDivergence = ledger.requests.filter(entry =>
+      entry.path.endsWith(`/items/${lifecycle.id}/review`) && entry.method === 'POST').length;
+    assert.strictEqual(reviewWritesAfterDivergence, reviewWritesBeforeDivergence);
+    await ownerLight.keyboard.press('Escape');
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Workflow lifecycle item', 'Submit exact version for review'
+    );
     await dialog.getByLabel('Reason').fill('Browser submits the exact immutable version for review.');
     let response = ownerLight.waitForResponse(value => value.url().endsWith(`/items/${lifecycle.id}/review`) && value.request().method() === 'POST');
     await dialog.getByRole('button', { name: 'Submit for review' }).click();
     assert.strictEqual((await response).status(), 201);
     await ownerLight.waitForFunction(() => document.querySelector('[data-km-detail] .km-badge').textContent === 'In review');
-    await ownerLight.getByRole('button', { name: 'Approve exact version' }).click();
-    dialog = ownerLight.getByRole('dialog');
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Workflow lifecycle item', 'Approve exact version'
+    );
     await dialog.getByLabel('Reason').fill('Browser approves the exact standard version.');
     response = ownerLight.waitForResponse(value => value.url().endsWith(`/items/${lifecycle.id}/approve`) && value.request().method() === 'POST');
     await dialog.getByRole('button', { name: 'Approve exact version' }).click();
     assert.strictEqual((await response).status(), 201);
     await ownerLight.waitForFunction(() => document.querySelector('[data-km-detail] .km-badge').textContent === 'Approved');
-    await ownerLight.getByRole('button', { name: 'Publish exact approved version' }).click();
-    dialog = ownerLight.getByRole('dialog');
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Workflow lifecycle item', 'Publish exact approved version'
+    );
     await dialog.getByLabel('Reason').fill('Browser publishes the exact approved version.');
     response = ownerLight.waitForResponse(value => value.url().endsWith(`/items/${lifecycle.id}/publish`) && value.request().method() === 'POST');
     await dialog.getByRole('button', { name: 'Publish exact approved version' }).click();
@@ -482,15 +600,17 @@ async function run() {
     assert.strictEqual(workflowEvidence.rows[0].count, 1);
 
     const tombstoneOpener = ownerLight.getByRole('button', { name: 'Create tombstone version' });
-    await tombstoneOpener.click();
-    dialog = ownerLight.getByRole('dialog');
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Workflow lifecycle item', 'Create tombstone version'
+    );
     assert.match(await dialog.textContent(), /prior bytes remain immutable/i);
     await screenshot(ownerLight, evidenceDirectory, `${selected}-settings-desktop-light-tombstone-confirmation.png`);
     await ownerLight.keyboard.press('Escape');
     await ownerLight.waitForFunction(element => document.activeElement === element, await tombstoneOpener.elementHandle());
     assert.strictEqual(await tombstoneOpener.evaluate(element => element === document.activeElement), true);
-    await tombstoneOpener.click();
-    dialog = ownerLight.getByRole('dialog');
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Workflow lifecycle item', 'Create tombstone version'
+    );
     await dialog.getByLabel('Reason').fill('Browser creates an immutable deletion marker.');
     response = ownerLight.waitForResponse(value => value.url().endsWith(`/items/${lifecycle.id}/tombstone`) && value.request().method() === 'POST');
     await dialog.getByRole('button', { name: 'Create a tombstone version' }).click();
@@ -499,8 +619,9 @@ async function run() {
       const badges = document.querySelector('[data-km-detail] .km-badges');
       return badges && /Version 2/.test(badges.textContent);
     });
-    await ownerLight.getByRole('button', { name: 'Rollback as new version' }).click();
-    dialog = ownerLight.getByRole('dialog');
+    dialog = await openDialogWithReorderedDetail(
+      ownerLight, stale.id, 'Workflow lifecycle item', 'Rollback as new version'
+    );
     await dialog.getByLabel('Reason').fill('Browser restores the prior value as a new immutable version.');
     response = ownerLight.waitForResponse(value => value.url().endsWith(`/items/${lifecycle.id}/rollback`) && value.request().method() === 'POST');
     const rollbackDetailResponse = ownerLight.waitForResponse(value =>
@@ -522,6 +643,9 @@ async function run() {
     assert.deepStrictEqual(lifecycleEvidence.rows.map(row => [Number(row.version_number), row.lifecycle_action]), [
       [1, 'initial'], [2, 'tombstone'], [3, 'rollback'],
     ]);
+    const staleRetargetWrites = ledger.requests.filter(entry =>
+      entry.path.startsWith(`/api/v1/knowledge-management/items/${stale.id}/`) && entry.method === 'POST');
+    assert.deepStrictEqual(staleRetargetWrites, []);
 
     await selectItem(ownerLight, 'Stale conflict item');
     const staleRevision = await knowledge.createKnowledgeRevision(pool, {
@@ -553,6 +677,23 @@ async function run() {
     await ownerLight.waitForFunction(element => document.activeElement === element, await staleOpener.elementHandle());
     assert.strictEqual(await staleOpener.evaluate(element => element === document.activeElement), true);
     await ownerLightContext.close();
+
+    for (let index = 0; index < 202; index += 1) {
+      const suffix = String(index).padStart(3, '0');
+      const imported = index >= 199;
+      await knowledge.createInitialKnowledgeDraft(pool, draft(OWNER, `browser.pagination.${suffix}`, {
+        label: imported ? `ZZZ Browser pagination ${suffix}` : `Paged browser knowledge ${suffix}`,
+        entryType: imported ? 'faq' : 'fact',
+        sourceType: imported ? 'imported_record' : 'human_input',
+        applicability: { projection: { audiences: [imported ? 'integration_adapter' : 'customer'] } },
+      }));
+    }
+    for (const index of [25, 75, 125, 175]) {
+      await knowledge.createInitialKnowledgeDraft(pool, draft(OWNER, `browser.pagination.protected.${index}`, {
+        label: `Paged browser knowledge ${String(index).padStart(3, '0')}.5 protected`,
+        sensitivity: 'restricted',
+      }));
+    }
 
     const ownerDarkContext = await contextFor(browser, origin, sessions.owner, {
       role: 'paid-owner-desktop-dark', viewport: { width: 1440, height: 1000 }, theme: 'dark',
@@ -594,6 +735,23 @@ async function run() {
     const mobileLight = await mobileLightContext.newPage();
     attachPage(mobileLight, ledger, 'paid-owner-mobile-light');
     await openSettings(mobileLight, origin);
+    assert.strictEqual(await mobileLight.locator('.km-item-button').count(), 200);
+    assert.match(await mobileLight.locator('[data-km-status]').textContent(), /200 of \d+ matching knowledge items are loaded/);
+    await mobileLight.getByRole('button', { name: 'Load more knowledge items' }).click();
+    await mobileLight.waitForFunction(() => {
+      const root = document.querySelector('[data-knowledge-management]');
+      return root && root.dataset.state === 'ready' && !root.querySelector('.km-list-continuation button');
+    });
+    assert.ok(await mobileLight.locator('.km-item-button').count() > 200);
+    await mobileLight.locator('[data-filter="source"]').selectOption('imported_record');
+    await mobileLight.waitForFunction(() => {
+      const root = document.querySelector('[data-knowledge-management]');
+      return root && root.dataset.state === 'ready' && root.querySelectorAll('.km-item-button').length === 3;
+    });
+    assert.deepStrictEqual(await mobileLight.locator('.km-item-title').allTextContents(), [
+      'ZZZ Browser pagination 199', 'ZZZ Browser pagination 200', 'ZZZ Browser pagination 201',
+    ]);
+    assert.match(await mobileLight.locator('[data-km-status]').textContent(), /3 of \d+ visible knowledge items match/);
     await assertNoOverflow(mobileLight);
     await screenshot(mobileLight, evidenceDirectory, `${selected}-settings-mobile-light-main.png`);
     await mobileLightContext.close();
@@ -653,9 +811,10 @@ async function run() {
       themes: ['light', 'dark'],
       viewports: ['1440x1000', '390x844'],
       filters: true,
-      exactWorkflow: ['review', 'approve', 'publish'],
-      exactLifecycle: ['tombstone', 'rollback-as-new-version'],
-      synchronization: ['drift', 'reconciliation'],
+      exactWorkflow: ['review', 'changes', 'approve', 'publish'],
+      exactLifecycle: ['revise', 'tombstone', 'rollback-as-new-version'],
+      synchronization: ['drift', 'reconciliation', 'retry'],
+      delayedDetailOrdering: ['review', 'changes', 'approve', 'publish', 'revise', 'tombstone', 'rollback', 'reconcile', 'retry'],
       accessibility: ['headings', 'labels', 'tabs', 'keyboard', 'dialog', 'Escape', 'focus restoration', 'alert focus'],
       boundaries: ['paid tenant authority', 'isolated simulated demo', 'read-only member', 'no provider transport'],
       xssExecutions: 0,

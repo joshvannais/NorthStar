@@ -27,6 +27,8 @@ const INTERNAL_DIAGNOSTIC_CATEGORIES = new Set([
   'reconciliation_requested',
   'stale_observation',
 ]);
+const RECOVERY_TRANSIENT_CODES = new Set(['40P01', '40001']);
+const RECOVERY_TRANSIENT_ATTEMPTS = 3;
 
 function fail(code, message, status = 409) {
   throw new KnowledgeSynchronizationError(code, message, status);
@@ -539,6 +541,7 @@ function mapDatabaseError(error) {
 class KnowledgeSynchronizationRepository {
   constructor(pool) {
     this.pool = pool;
+    this.recoveryCursor = null;
   }
 
   async configureTarget(input) {
@@ -770,29 +773,41 @@ class KnowledgeSynchronizationRepository {
     const claimToken = normalizeUuid(input && input.claimToken, 'claimToken');
     try {
       const verify = async client => {
+        const identity = await client.query(
+          `SELECT target_id FROM canonical_knowledge_sync_outbox
+            WHERE organization_id = $1 AND id = $2`,
+          [organizationId, id]
+        );
+        if (identity.rowCount !== 1) return null;
+        const target = await client.query(
+          `SELECT * FROM canonical_knowledge_sync_targets
+            WHERE organization_id = $1 AND id = $2 AND status = 'active'
+            FOR SHARE`,
+          [organizationId, identity.rows[0].target_id]
+        );
+        if (target.rowCount !== 1) return null;
+        const authority = target.rows[0];
         const selected = await client.query(
-          `SELECT outbox.*, target.updated_by_user_id AS verifier_user_id
-             FROM canonical_knowledge_sync_outbox outbox
-             JOIN canonical_knowledge_sync_targets target
-               ON target.organization_id = outbox.organization_id
-              AND target.id = outbox.target_id
-            WHERE outbox.organization_id = $1 AND outbox.id = $2
-              AND outbox.state = 'claimed' AND outbox.claim_token = $3
-              AND outbox.lease_expires_at > statement_timestamp()
-              AND target.status = 'active'
-              AND outbox.target_revision = target.target_revision
-              AND outbox.configuration_digest = target.configuration_digest
-              AND outbox.provider_key = target.provider_key
-              AND outbox.consumer = target.consumer
-              AND outbox.audience = target.audience
-              AND outbox.capabilities = target.capabilities
-              AND outbox.maximum_entries = target.maximum_entries
-              AND outbox.maximum_bytes = target.maximum_bytes
-            FOR SHARE OF outbox, target`,
-          [organizationId, id, claimToken]
+          `SELECT * FROM canonical_knowledge_sync_outbox
+            WHERE organization_id = $1 AND id = $2 AND target_id = $3
+              AND state = 'claimed' AND claim_token = $4
+              AND lease_expires_at > statement_timestamp()
+              AND target_revision = $5 AND configuration_digest = $6
+              AND provider_key = $7 AND consumer = $8 AND audience = $9
+              AND capabilities = $10::jsonb AND maximum_entries = $11
+              AND maximum_bytes = $12
+            FOR SHARE`,
+          [
+            organizationId, id, authority.id, claimToken,
+            authority.target_revision, String(authority.configuration_digest).trim(),
+            authority.provider_key, authority.consumer, authority.audience,
+            JSON.stringify(authority.capabilities), authority.maximum_entries,
+            authority.maximum_bytes,
+          ]
         );
         if (selected.rowCount !== 1) return null;
         const row = selected.rows[0];
+        row.verifier_user_id = authority.updated_by_user_id;
         const job = mapOutbox(row);
         if (!job.projection || !job.canonicalProjection || !job.projectionDigest ||
             !Array.isArray(job.sourcePins) || job.sourcePins.length < 1) {
@@ -860,34 +875,67 @@ class KnowledgeSynchronizationRepository {
     );
     try {
       const finalize = async client => {
-        const selected = await client.query(
-          `SELECT outbox.*
-             FROM canonical_knowledge_sync_outbox outbox
-             JOIN canonical_knowledge_sync_targets target
-               ON target.organization_id = outbox.organization_id
-              AND target.id = outbox.target_id
-            WHERE outbox.organization_id = $1 AND outbox.id = $2
-              AND target.status = 'active'
-              AND outbox.target_revision = target.target_revision
-              AND outbox.configuration_digest = target.configuration_digest
-              AND outbox.provider_key = target.provider_key
-              AND outbox.consumer = target.consumer
-              AND outbox.audience = target.audience
-              AND outbox.capabilities = target.capabilities
-              AND outbox.maximum_entries = target.maximum_entries
-              AND outbox.maximum_bytes = target.maximum_bytes
-            FOR UPDATE OF outbox FOR SHARE OF target`,
+        const identity = await client.query(
+          `SELECT target_id FROM canonical_knowledge_sync_outbox
+            WHERE organization_id = $1 AND id = $2`,
           [organizationId, id]
+        );
+        if (identity.rowCount !== 1) return null;
+        const target = await client.query(
+          `SELECT * FROM canonical_knowledge_sync_targets
+            WHERE organization_id = $1 AND id = $2 AND status = 'active'
+            FOR SHARE`,
+          [organizationId, identity.rows[0].target_id]
+        );
+        if (target.rowCount !== 1) return null;
+        const authority = target.rows[0];
+        const selected = await client.query(
+          `SELECT * FROM canonical_knowledge_sync_outbox
+            WHERE organization_id = $1 AND id = $2 AND target_id = $3
+              AND state = 'claimed' AND claim_token = $4
+              AND target_revision = $5 AND configuration_digest = $6
+              AND provider_key = $7 AND consumer = $8 AND audience = $9
+              AND capabilities = $10::jsonb AND maximum_entries = $11
+              AND maximum_bytes = $12
+            FOR UPDATE`,
+          [
+            organizationId, id, authority.id, claimToken,
+            authority.target_revision, String(authority.configuration_digest).trim(),
+            authority.provider_key, authority.consumer, authority.audience,
+            JSON.stringify(authority.capabilities), authority.maximum_entries,
+            authority.maximum_bytes,
+          ]
         );
         if (selected.rowCount !== 1) return null;
         const job = selected.rows[0];
-        if (job.state !== 'claimed' || job.claim_token !== claimToken) return null;
+        const attempt = await client.query(
+          `SELECT 1 FROM canonical_knowledge_sync_attempts
+            WHERE organization_id = $1 AND target_id = $2 AND outbox_id = $3
+              AND reconciliation_generation = $4 AND attempt_number = $5
+              AND claim_token = $6 AND outcome IS NULL
+            FOR UPDATE`,
+          [
+            job.organization_id, job.target_id, job.id,
+            job.reconciliation_generation, job.attempt_count, claimToken,
+          ]
+        );
+        if (attempt.rowCount !== 1) return null;
+        const state = await client.query(
+          `SELECT * FROM canonical_knowledge_sync_states
+            WHERE organization_id = $1 AND target_id = $2
+            FOR UPDATE`,
+          [job.organization_id, job.target_id]
+        );
+        if (state.rowCount !== 1) return null;
         const exactSuccess = accepted && observedDigest === String(job.projection_digest).trim();
         const drift = accepted && !exactSuccess;
         const category = drift ? 'projection_digest_mismatch' : requestedCategory;
         const terminal = Number(job.attempt_count) >= MAX_ATTEMPTS;
         const nextState = exactSuccess ? 'succeeded' : (terminal ? 'dead' : 'retry');
         const delay = exactSuccess || terminal ? 0 : retryDelaySeconds(Number(job.attempt_count));
+        const eventObservedDigest = accepted
+          ? observedDigest
+          : (job.observed_projection_digest ? String(job.observed_projection_digest).trim() : null);
         const updated = await client.query(
           `UPDATE canonical_knowledge_sync_outbox
               SET state = $4::text,
@@ -902,7 +950,7 @@ class KnowledgeSynchronizationRepository {
             WHERE organization_id = $1 AND id = $2 AND state = 'claimed'
               AND claim_token = $3 AND lease_expires_at > statement_timestamp()
             RETURNING *`,
-          [organizationId, id, claimToken, nextState, observedDigest, category, delay]
+          [organizationId, id, claimToken, nextState, eventObservedDigest, category, delay]
         );
         if (updated.rowCount !== 1) return null;
         const outcome = exactSuccess ? 'succeeded' : (drift ? 'drift' : nextState);
@@ -926,12 +974,6 @@ class KnowledgeSynchronizationRepository {
             409
           );
         }
-        const state = await client.query(
-          `SELECT * FROM canonical_knowledge_sync_states
-            WHERE organization_id = $1 AND target_id = $2
-            FOR UPDATE`,
-          [job.organization_id, job.target_id]
-        );
         const desiredIsThis = state.rows[0] && state.rows[0].desired_event_id === job.id;
         if (exactSuccess) {
           await client.query(
@@ -1035,31 +1077,129 @@ class KnowledgeSynchronizationRepository {
       batchSize: input.batchSize,
       leaseSeconds: input.leaseSeconds === undefined ? 30 : input.leaseSeconds,
     });
-    const candidates = await this.pool.query(
-      `SELECT organization_id, id
-        FROM canonical_knowledge_sync_outbox
-        WHERE state = 'claimed' AND lease_expires_at <= statement_timestamp()
-        ORDER BY lease_expires_at, organization_id, target_id, target_sequence, id
-        LIMIT LEAST($1 * 4, 100)`,
-      [options.batchSize]
+    const fetchCandidates = cursor => this.pool.query(
+      `WITH recovery_window AS MATERIALIZED (
+         SELECT outbox.*
+           FROM canonical_knowledge_sync_outbox outbox
+          WHERE outbox.state = 'claimed'
+            AND outbox.lease_expires_at <= statement_timestamp()
+            AND ($2::timestamptz IS NULL OR (
+              outbox.lease_expires_at, outbox.organization_id, outbox.target_id,
+              outbox.target_sequence, outbox.id
+            ) > ($2::timestamptz, $3::uuid, $4::uuid, $5::bigint, $6::uuid))
+          ORDER BY outbox.lease_expires_at, outbox.organization_id,
+                   outbox.target_id, outbox.target_sequence, outbox.id
+          LIMIT LEAST($1 * 4, 100)
+       )
+       SELECT candidate_window.organization_id, candidate_window.target_id, candidate_window.id,
+              candidate_window.lease_expires_at, candidate_window.target_sequence,
+              EXISTS (
+                SELECT 1
+                  FROM canonical_knowledge_sync_targets target
+                  JOIN canonical_knowledge_sync_attempts attempt
+                    ON attempt.organization_id = candidate_window.organization_id
+                   AND attempt.target_id = candidate_window.target_id
+                   AND attempt.outbox_id = candidate_window.id
+                   AND attempt.reconciliation_generation = candidate_window.reconciliation_generation
+                   AND attempt.attempt_number = candidate_window.attempt_count
+                   AND attempt.claim_token = candidate_window.claim_token
+                   AND rtrim(attempt.idempotency_key) = rtrim(candidate_window.idempotency_key)
+                   AND attempt.outcome IS NULL
+                 WHERE target.organization_id = candidate_window.organization_id
+                   AND target.id = candidate_window.target_id
+                   AND target.status = 'active'
+                   AND target.target_revision = candidate_window.target_revision
+                   AND target.configuration_digest = candidate_window.configuration_digest
+                   AND target.provider_key = candidate_window.provider_key
+                   AND target.consumer = candidate_window.consumer
+                   AND target.audience = candidate_window.audience
+                   AND target.capabilities = candidate_window.capabilities
+                   AND target.maximum_entries = candidate_window.maximum_entries
+                   AND target.maximum_bytes = candidate_window.maximum_bytes
+                   AND public.canonical_knowledge_sync_attempt_state_matches(candidate_window.id)
+              ) AS recoverable
+         FROM recovery_window candidate_window
+        ORDER BY candidate_window.lease_expires_at, candidate_window.organization_id,
+                 candidate_window.target_id, candidate_window.target_sequence, candidate_window.id`,
+      [
+        options.batchSize,
+        cursor && cursor.leaseExpiresAt,
+        cursor && cursor.organizationId,
+        cursor && cursor.targetId,
+        cursor && cursor.targetSequence,
+        cursor && cursor.id,
+      ]
     );
+    let candidates = await fetchCandidates(this.recoveryCursor);
+    if (candidates.rowCount === 0 && this.recoveryCursor) {
+      this.recoveryCursor = null;
+      candidates = await fetchCandidates(null);
+    }
     let recoveredCount = 0;
     for (const candidate of candidates.rows) {
       if (recoveredCount >= options.batchSize) break;
-      try {
-        const recovered = await withTransaction(this.pool, async client => {
-          const selected = await client.query(
-            `SELECT * FROM canonical_knowledge_sync_outbox
-              WHERE organization_id = $1 AND id = $2
-                AND state = 'claimed' AND lease_expires_at <= statement_timestamp()
-              FOR UPDATE SKIP LOCKED`,
-            [candidate.organization_id, candidate.id]
-          );
-          if (selected.rowCount !== 1) return false;
-          const job = selected.rows[0];
-        const terminal = Number(job.attempt_count) >= MAX_ATTEMPTS;
-        const nextState = terminal ? 'dead' : 'retry';
-        const delay = terminal ? 0 : retryDelaySeconds(Number(job.attempt_count));
+      this.recoveryCursor = {
+        leaseExpiresAt: candidate.lease_expires_at,
+        organizationId: candidate.organization_id,
+        targetId: candidate.target_id,
+        targetSequence: candidate.target_sequence,
+        id: candidate.id,
+      };
+      if (candidate.recoverable !== true) continue;
+      for (let transientAttempt = 1;
+        transientAttempt <= RECOVERY_TRANSIENT_ATTEMPTS;
+        transientAttempt += 1) {
+        try {
+          const recovered = await withTransaction(this.pool, async client => {
+            const target = await client.query(
+              `SELECT * FROM canonical_knowledge_sync_targets
+                WHERE organization_id = $1 AND id = $2 AND status = 'active'
+                FOR SHARE`,
+              [candidate.organization_id, candidate.target_id]
+            );
+            if (target.rowCount !== 1) return false;
+            const authority = target.rows[0];
+            const selected = await client.query(
+              `SELECT * FROM canonical_knowledge_sync_outbox
+                WHERE organization_id = $1 AND target_id = $2 AND id = $3
+                  AND state = 'claimed' AND lease_expires_at <= statement_timestamp()
+                  AND target_revision = $4 AND configuration_digest = $5
+                  AND provider_key = $6 AND consumer = $7 AND audience = $8
+                  AND capabilities = $9::jsonb AND maximum_entries = $10
+                  AND maximum_bytes = $11
+                FOR UPDATE SKIP LOCKED`,
+              [
+                candidate.organization_id, candidate.target_id, candidate.id,
+                authority.target_revision, String(authority.configuration_digest).trim(),
+                authority.provider_key, authority.consumer, authority.audience,
+                JSON.stringify(authority.capabilities), authority.maximum_entries,
+                authority.maximum_bytes,
+              ]
+            );
+            if (selected.rowCount !== 1) return false;
+            const job = selected.rows[0];
+            const attempt = await client.query(
+              `SELECT 1 FROM canonical_knowledge_sync_attempts
+                WHERE organization_id = $1 AND target_id = $2 AND outbox_id = $3
+                  AND reconciliation_generation = $4 AND attempt_number = $5
+                  AND claim_token = $6 AND outcome IS NULL
+                FOR UPDATE`,
+              [
+                job.organization_id, job.target_id, job.id,
+                job.reconciliation_generation, job.attempt_count, job.claim_token,
+              ]
+            );
+            if (attempt.rowCount !== 1) return false;
+            const state = await client.query(
+              `SELECT 1 FROM canonical_knowledge_sync_states
+                WHERE organization_id = $1 AND target_id = $2
+                FOR UPDATE`,
+              [job.organization_id, job.target_id]
+            );
+            if (state.rowCount !== 1) return false;
+            const terminal = Number(job.attempt_count) >= MAX_ATTEMPTS;
+            const nextState = terminal ? 'dead' : 'retry';
+            const delay = terminal ? 0 : retryDelaySeconds(Number(job.attempt_count));
           const outboxUpdate = await client.query(
           `UPDATE canonical_knowledge_sync_outbox
               SET state = $3::text, claim_token = NULL, claimed_at = NULL, lease_expires_at = NULL,
@@ -1072,8 +1212,8 @@ class KnowledgeSynchronizationRepository {
             RETURNING id`,
           [job.organization_id, job.id, nextState, delay, job.claim_token]
         );
-          if (outboxUpdate.rowCount !== 1) return false;
-        const attemptUpdate = await client.query(
+            if (outboxUpdate.rowCount !== 1) return false;
+            const attemptUpdate = await client.query(
           `UPDATE canonical_knowledge_sync_attempts
               SET outcome = 'claim_expired', diagnostic_category = 'claim_expired',
                   completed_at = statement_timestamp()
@@ -1085,30 +1225,36 @@ class KnowledgeSynchronizationRepository {
             job.reconciliation_generation, job.attempt_count, job.claim_token,
           ]
         );
-        if (attemptUpdate.rowCount !== 1) {
-          fail(
-            'knowledge_sync_attempt_authority_lost',
-            'Synchronization recovery evidence no longer matches the expired claim',
-            409
-          );
-        }
-        await client.query(
+            if (attemptUpdate.rowCount !== 1) {
+              fail(
+                'knowledge_sync_attempt_authority_lost',
+                'Synchronization recovery evidence no longer matches the expired claim',
+                409
+              );
+            }
+            await client.query(
           `UPDATE canonical_knowledge_sync_states
               SET status = CASE WHEN $3 THEN 'dead' ELSE 'retry' END,
                   diagnostic_category = 'claim_expired', updated_at = statement_timestamp()
             WHERE organization_id = $1 AND target_id = $2 AND desired_event_id = $4`,
           [job.organization_id, job.target_id, terminal, job.id]
         );
-          return true;
-        }, 'READ COMMITTED');
-        if (recovered) recoveredCount += 1;
-      } catch (error) {
-        // A single poisoned or concurrently revoked job must not prevent recovery
-        // of unrelated tenant work. The bounded candidate will be reconsidered
-        // after an operator repairs its durable invariant.
-        const databaseCode = String(error && error.code || '');
-        if (!databaseCode.startsWith('23') && databaseCode !== '55000' &&
-            databaseCode !== 'knowledge_sync_attempt_authority_lost') throw error;
+            return true;
+          }, 'READ COMMITTED');
+          if (recovered) recoveredCount += 1;
+          break;
+        } catch (error) {
+          const databaseCode = String(error && error.code || '');
+          if (RECOVERY_TRANSIENT_CODES.has(databaseCode) &&
+              transientAttempt < RECOVERY_TRANSIENT_ATTEMPTS) continue;
+          // One poisoned or concurrently revoked job must not prevent recovery
+          // of unrelated tenant work. Keyset progress lets a repaired row be
+          // reconsidered after the bounded cursor wraps.
+          if (!databaseCode.startsWith('23') && databaseCode !== '55000' &&
+              databaseCode !== 'knowledge_sync_attempt_authority_lost' &&
+              !RECOVERY_TRANSIENT_CODES.has(databaseCode)) throw error;
+          break;
+        }
       }
     }
     return recoveredCount;
@@ -1192,7 +1338,7 @@ class KnowledgeSynchronizationRepository {
             AND state.last_observed_at + (target.stale_after_seconds::text || ' seconds')::interval
                 <= statement_timestamp()
           ORDER BY state.last_observed_at, target.organization_id, target.id
-          LIMIT $1 FOR UPDATE OF target, state SKIP LOCKED`,
+          LIMIT $1 FOR UPDATE OF target SKIP LOCKED`,
         [batchSize]
       );
       for (const target of targets.rows) {
@@ -1203,6 +1349,17 @@ class KnowledgeSynchronizationRepository {
           [target.organization_id, target.id, target.desired_event_id]
         )).rows[0];
         if (!event || event.state !== 'succeeded') continue;
+        const state = await client.query(
+          `SELECT * FROM canonical_knowledge_sync_states
+            WHERE organization_id = $1 AND target_id = $2
+              AND desired_event_id = $3 AND status = 'in_sync'
+              AND last_observed_at IS NOT NULL
+              AND last_observed_at + ($4::text || ' seconds')::interval
+                  <= statement_timestamp()
+            FOR UPDATE`,
+          [target.organization_id, target.id, target.desired_event_id, target.stale_after_seconds]
+        );
+        if (state.rowCount !== 1) continue;
         await client.query(
           `UPDATE canonical_knowledge_sync_outbox
               SET state = 'retry', reconciliation_generation = reconciliation_generation + 1,

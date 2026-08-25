@@ -150,6 +150,38 @@ describe('Mission 21 Part 6 synchronization contract', () => {
     expect(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
       .not.toMatch(/retell.*sync|provider.*sync/i);
   });
+
+  test('bounds and isolates transient recovery deadlock retries', async () => {
+    const candidate = {
+      organization_id: ORG,
+      target_id: 'f6100000-0000-4000-8000-000000000002',
+      id: 'f6100000-0000-4000-8000-000000000001',
+      lease_expires_at: new Date('2026-08-25T00:00:00.000Z'),
+      target_sequence: '1',
+      recoverable: true,
+    };
+    let connections = 0;
+    const pool = {
+      async query() { return { rowCount: 1, rows: [candidate] }; },
+      async connect() {
+        connections += 1;
+        return {
+          async query(text) {
+            if (/^SELECT \* FROM canonical_knowledge_sync_targets/.test(text.trim())) {
+              const error = new Error('synthetic deadlock');
+              error.code = '40P01';
+              throw error;
+            }
+            return { rowCount: 0, rows: [] };
+          },
+          release() {},
+        };
+      },
+    };
+    const repository = new repositoryModule.KnowledgeSynchronizationRepository(pool);
+    await expect(repository.recoverExpiredJobs({ batchSize: 1 })).resolves.toBe(0);
+    expect(connections).toBe(3);
+  });
 });
 describe('Mission 21 Part 6 intercepted provider-neutral worker', () => {
   test('renews the exact lease and submits one immutable projection with a stable idempotency key', async () => {

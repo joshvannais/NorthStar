@@ -429,9 +429,20 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
       `SELECT count(*)::int AS applied FROM public._migrations
         WHERE filename IN (
           '029_canonical_knowledge_transactional_sync.sql',
-          '030_canonical_knowledge_sync_revocation.sql'
+          '030_canonical_knowledge_sync_revocation.sql',
+          '031_canonical_knowledge_sync_recovery_lifecycle.sql'
         ) GROUP BY filename ORDER BY filename`
-    )).rows).toEqual([{ applied: 1 }, { applied: 1 }]);
+    )).rows).toEqual([{ applied: 1 }, { applied: 1 }, { applied: 1 }]);
+    const recoveryMigration = '031_canonical_knowledge_sync_recovery_lifecycle.sql';
+    const recoveryBytes = fs.readFileSync(path.join(MIGRATIONS, recoveryMigration));
+    expect(recoveryBytes.at(-1)).toBe(0x0a);
+    expect(recoveryBytes.includes(Buffer.from('\r'))).toBe(false);
+    expect((await upgradeMigrationPool.query(
+      `SELECT trim(checksum) AS checksum FROM public._migrations WHERE filename = $1`,
+      [recoveryMigration]
+    )).rows).toEqual([{
+      checksum: crypto.createHash('sha256').update(recoveryBytes).digest('hex'),
+    }]);
     const sync = new SyncRepository(upgradePool);
     const configured = await sync.configureTarget(targetInput(actors));
     expect(configured.target.targetRevision).toBe(1);
@@ -2637,5 +2648,391 @@ realPostgres('Mission 21 Part 6 mounted transactional synchronization', () => {
     await expect(worker.drainOnce()).resolves.toMatchObject({ succeeded: 1 });
     expect(calls).toHaveLength(1);
     expect(calls[0].organizationId).toBe(unrelated.organizationId);
+  }, 120000);
+
+  test('preserves immutable success evidence through a rejected stale replay and later expiry recovery', async () => {
+    const actors = await seedActors(freshPool, 'stale-replay-rejected');
+    const sync = new SyncRepository(freshPool);
+    const configured = await sync.configureTarget(targetInput(actors, { staleAfterSeconds: 300 }));
+    await completeKnowledge(knowledge, freshPool, actors, 'stale-replay-rejected');
+
+    const firstClaim = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 30 }))[0];
+    await expect(sync.finalizeJob({
+      organizationId: actors.organizationId,
+      id: firstClaim.id,
+      claimToken: firstClaim.claimToken,
+      accepted: true,
+      observedProjectionDigest: firstClaim.projectionDigest,
+    })).resolves.toMatchObject({ exactSuccess: true });
+    const historicalDigest = firstClaim.projectionDigest;
+
+    await freshPool.query(
+      `UPDATE canonical_knowledge_sync_states
+          SET last_observed_at = statement_timestamp() - interval '301 seconds'
+        WHERE organization_id = $1 AND target_id = $2`,
+      [actors.organizationId, configured.target.id]
+    );
+    expect(await sync.reconcileStaleTargets({ batchSize: 25 })).toBeGreaterThanOrEqual(1);
+    const replay = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 30 }))[0];
+    await expect(sync.finalizeJob({
+      organizationId: actors.organizationId,
+      id: replay.id,
+      claimToken: replay.claimToken,
+      accepted: false,
+      diagnosticCategory: 'provider_rejected',
+    })).resolves.toMatchObject({ state: 'retry', exactSuccess: false, drift: false });
+
+    expect((await freshPool.query(
+      `SELECT outbox.state, trim(outbox.observed_projection_digest) AS outbox_digest,
+              trim(state.observed_projection_digest) AS state_digest,
+              trim(state.last_known_good_projection_digest) AS lkg_digest,
+              attempt.outcome, attempt.observed_projection_digest AS attempt_digest
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_states state
+           ON state.organization_id = outbox.organization_id AND state.target_id = outbox.target_id
+         JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id AND attempt.outbox_id = outbox.id
+          AND attempt.reconciliation_generation = outbox.reconciliation_generation
+          AND attempt.attempt_number = outbox.attempt_count
+        WHERE outbox.id = $1`,
+      [replay.id]
+    )).rows).toEqual([{
+      state: 'retry', outbox_digest: historicalDigest,
+      state_digest: historicalDigest, lkg_digest: historicalDigest,
+      outcome: 'retry', attempt_digest: null,
+    }]);
+
+    await freshPool.query(
+      `UPDATE canonical_knowledge_sync_outbox SET available_at = statement_timestamp()
+        WHERE organization_id = $1 AND id = $2`,
+      [actors.organizationId, replay.id]
+    );
+    const expiringReplay = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 5 }))[0];
+    await freshMigrationPool.query(
+      'ALTER TABLE public.canonical_knowledge_sync_outbox DISABLE TRIGGER USER'
+    );
+    try {
+      await freshMigrationPool.query(
+        `UPDATE public.canonical_knowledge_sync_outbox
+            SET claimed_at = statement_timestamp() - interval '10 seconds',
+                lease_expires_at = statement_timestamp() - interval '5 seconds'
+          WHERE organization_id = $1 AND id = $2`,
+        [actors.organizationId, expiringReplay.id]
+      );
+    } finally {
+      await freshMigrationPool.query(
+        'ALTER TABLE public.canonical_knowledge_sync_outbox ENABLE TRIGGER USER'
+      );
+    }
+    expect(await sync.recoverExpiredJobs({ batchSize: 1 })).toBe(1);
+    expect((await freshPool.query(
+      `SELECT outbox.state, trim(outbox.observed_projection_digest) AS outbox_digest,
+              count(*) FILTER (WHERE attempt.outcome IS NULL)::int AS open_attempts,
+              max(attempt.outcome) FILTER (
+                WHERE attempt.reconciliation_generation = outbox.reconciliation_generation
+                  AND attempt.attempt_number = outbox.attempt_count
+              ) AS current_outcome
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_attempts attempt
+           ON attempt.organization_id = outbox.organization_id
+          AND attempt.target_id = outbox.target_id AND attempt.outbox_id = outbox.id
+        WHERE outbox.id = $1 GROUP BY outbox.id`,
+      [expiringReplay.id]
+    )).rows).toEqual([{
+      state: 'retry', outbox_digest: historicalDigest,
+      open_attempts: 0, current_outcome: 'claim_expired',
+    }]);
+
+    for (let expectedAttempt = 3; expectedAttempt <= 5; expectedAttempt += 1) {
+      await freshPool.query(
+        `UPDATE canonical_knowledge_sync_outbox SET available_at = statement_timestamp()
+          WHERE organization_id = $1 AND id = $2`,
+        [actors.organizationId, replay.id]
+      );
+      const terminalReplay = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 30 }))[0];
+      expect(terminalReplay.attemptCount).toBe(expectedAttempt);
+      await expect(sync.finalizeJob({
+        organizationId: actors.organizationId,
+        id: terminalReplay.id,
+        claimToken: terminalReplay.claimToken,
+        accepted: false,
+        diagnosticCategory: 'provider_rejected',
+      })).resolves.toMatchObject({ state: expectedAttempt === 5 ? 'dead' : 'retry' });
+    }
+    expect((await freshPool.query(
+      `SELECT state, trim(observed_projection_digest) AS observed_digest,
+              diagnostic_category
+         FROM canonical_knowledge_sync_outbox WHERE id = $1`,
+      [replay.id]
+    )).rows).toEqual([{
+      state: 'dead', observed_digest: historicalDigest,
+      diagnostic_category: 'provider_rejected',
+    }]);
+  }, 120000);
+
+  test('preserves a prior drift witness when a later replay is rejected without observation', async () => {
+    const actors = await seedActors(freshPool, 'drift-replay-rejected');
+    const sync = new SyncRepository(freshPool);
+    await sync.configureTarget(targetInput(actors));
+    await completeKnowledge(knowledge, freshPool, actors, 'drift-replay-rejected');
+    const driftClaim = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 30 }))[0];
+    const driftDigest = driftClaim.projectionDigest === 'd'.repeat(64)
+      ? 'e'.repeat(64) : 'd'.repeat(64);
+    await expect(sync.finalizeJob({
+      organizationId: actors.organizationId,
+      id: driftClaim.id,
+      claimToken: driftClaim.claimToken,
+      accepted: true,
+      observedProjectionDigest: driftDigest,
+    })).resolves.toMatchObject({ drift: true, state: 'retry' });
+    await freshPool.query(
+      `UPDATE canonical_knowledge_sync_outbox SET available_at = statement_timestamp()
+        WHERE organization_id = $1 AND id = $2`,
+      [actors.organizationId, driftClaim.id]
+    );
+    const rejected = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 30 }))[0];
+    await expect(sync.finalizeJob({
+      organizationId: actors.organizationId,
+      id: rejected.id,
+      claimToken: rejected.claimToken,
+      accepted: false,
+      diagnosticCategory: 'provider_rejected',
+    })).resolves.toMatchObject({ drift: false, state: 'retry' });
+    expect((await freshPool.query(
+      `SELECT trim(outbox.observed_projection_digest) AS outbox_digest,
+              trim(state.observed_projection_digest) AS state_digest,
+              current_attempt.outcome, current_attempt.observed_projection_digest AS current_digest,
+              count(history.*) FILTER (
+                WHERE history.outcome = 'drift'
+                  AND trim(history.observed_projection_digest) = $2
+              )::int AS drift_witnesses
+         FROM canonical_knowledge_sync_outbox outbox
+         JOIN canonical_knowledge_sync_states state
+           ON state.organization_id = outbox.organization_id AND state.target_id = outbox.target_id
+         JOIN canonical_knowledge_sync_attempts current_attempt
+           ON current_attempt.organization_id = outbox.organization_id
+          AND current_attempt.target_id = outbox.target_id
+          AND current_attempt.outbox_id = outbox.id
+          AND current_attempt.reconciliation_generation = outbox.reconciliation_generation
+          AND current_attempt.attempt_number = outbox.attempt_count
+         JOIN canonical_knowledge_sync_attempts history
+           ON history.organization_id = outbox.organization_id
+          AND history.target_id = outbox.target_id AND history.outbox_id = outbox.id
+        WHERE outbox.id = $1
+        GROUP BY outbox.id, state.organization_id, state.target_id,
+                 current_attempt.reconciliation_generation, current_attempt.attempt_number,
+                 current_attempt.outcome, current_attempt.observed_projection_digest`,
+      [rejected.id, driftDigest]
+    )).rows).toEqual([{
+      outbox_digest: driftDigest, state_digest: driftDigest,
+      outcome: 'retry', current_digest: null, drift_witnesses: 1,
+    }]);
+  }, 120000);
+
+  test('serializes suspension and expiry recovery in both orders without deadlock or tenant starvation', async () => {
+    const sync = new SyncRepository(freshPool);
+    for (let index = 0; index < 6; index += 1) {
+      const actors = await seedActors(freshPool, `suspend-recover-race-${index}`);
+      const configured = await sync.configureTarget(targetInput(actors));
+      await completeKnowledge(knowledge, freshPool, actors, `suspend-recover-race-${index}`);
+      const claimed = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 5 }))[0];
+      await freshMigrationPool.query(
+        'ALTER TABLE public.canonical_knowledge_sync_outbox DISABLE TRIGGER USER'
+      );
+      try {
+        await freshMigrationPool.query(
+          `UPDATE public.canonical_knowledge_sync_outbox
+              SET claimed_at = statement_timestamp() - interval '10 seconds',
+                  lease_expires_at = statement_timestamp() - interval '5 seconds'
+            WHERE organization_id = $1 AND id = $2`,
+          [actors.organizationId, claimed.id]
+        );
+      } finally {
+        await freshMigrationPool.query(
+          'ALTER TABLE public.canonical_knowledge_sync_outbox ENABLE TRIGGER USER'
+        );
+      }
+      const operations = index % 2 === 0
+        ? [
+          sync.recoverExpiredJobs({ batchSize: 1 }),
+          sync.configureTarget(targetInput(actors, {
+            expectedTargetRevision: configured.target.targetRevision,
+            status: 'suspended',
+          })),
+        ]
+        : [
+          sync.configureTarget(targetInput(actors, {
+            expectedTargetRevision: configured.target.targetRevision,
+            status: 'suspended',
+          })),
+          sync.recoverExpiredJobs({ batchSize: 1 }),
+        ];
+      const results = await Promise.allSettled(operations);
+      const suspensionIndex = index % 2 === 0 ? 1 : 0;
+      const recoveryIndex = index % 2 === 0 ? 0 : 1;
+      expect(results[recoveryIndex]).toEqual(expect.objectContaining({ status: 'fulfilled' }));
+      if (results[suspensionIndex].status === 'rejected') {
+        expect(results[suspensionIndex].reason).toMatchObject({
+          code: 'knowledge_sync_conflict',
+          statusCode: 409,
+        });
+        const freshTarget = await sync.getTargetState({
+          organizationId: actors.organizationId,
+          actorUserId: actors.adminUserId,
+          targetId: configured.target.id,
+        });
+        await expect(sync.configureTarget(targetInput(actors, {
+          expectedTargetRevision: freshTarget.target.targetRevision,
+          status: 'suspended',
+        }))).resolves.toMatchObject({ target: { status: 'suspended' } });
+      }
+      expect((await freshPool.query(
+        `SELECT outbox.state, outbox.diagnostic_category,
+                count(*) FILTER (WHERE attempt.outcome IS NULL)::int AS open_attempts,
+                state.status AS sync_status
+           FROM canonical_knowledge_sync_outbox outbox
+           JOIN canonical_knowledge_sync_states state
+             ON state.organization_id = outbox.organization_id
+            AND state.target_id = outbox.target_id
+           LEFT JOIN canonical_knowledge_sync_attempts attempt
+             ON attempt.organization_id = outbox.organization_id
+            AND attempt.target_id = outbox.target_id AND attempt.outbox_id = outbox.id
+          WHERE outbox.id = $1
+          GROUP BY outbox.id, state.organization_id, state.target_id`,
+        [claimed.id]
+      )).rows).toEqual([{
+        state: 'revoked', diagnostic_category: 'target_suspended',
+        open_attempts: 0, sync_status: 'suspended',
+      }]);
+    }
+
+    const unrelated = await seedActors(freshPool, 'suspend-recover-unrelated');
+    await sync.configureTarget(targetInput(unrelated));
+    await completeKnowledge(knowledge, freshPool, unrelated, 'suspend-recover-unrelated');
+    const unrelatedClaim = (await sync.claimJobs({ batchSize: 25, leaseSeconds: 30 }))
+      .find(claimed => claimed.organizationId === unrelated.organizationId);
+    const calls = [];
+    const worker = new SyncWorker({
+      repository: sync,
+      transports: {
+        'intercepted.voice-provider': {
+          async applyProjection(request) {
+            calls.push(request);
+            return { accepted: true, observedProjectionDigest: request.projectionDigest };
+          },
+        },
+      },
+    });
+    await expect(worker.deliver(unrelatedClaim)).resolves.toMatchObject({ exactSuccess: true });
+    expect(calls).toHaveLength(1);
+  }, 120000);
+
+  test('recovers a later tenant after more poisoned claims than the former candidate window', async () => {
+    const sync = new SyncRepository(freshPool);
+    const poisonedClaims = [];
+    for (let index = 0; index < 6; index += 1) {
+      const actors = await seedActors(freshPool, `fair-poison-${index}`);
+      await sync.configureTarget(targetInput(actors));
+      await completeKnowledge(knowledge, freshPool, actors, `fair-poison-${index}`);
+      poisonedClaims.push((await sync.claimJobs({ batchSize: 1, leaseSeconds: 5 }))[0]);
+    }
+    const validActors = await seedActors(freshPool, 'fair-valid-later');
+    await sync.configureTarget(targetInput(validActors));
+    await completeKnowledge(knowledge, freshPool, validActors, 'fair-valid-later');
+    const validClaim = (await sync.claimJobs({ batchSize: 1, leaseSeconds: 5 }))[0];
+
+    await freshMigrationPool.query(
+      'ALTER TABLE public.canonical_knowledge_sync_attempts DISABLE TRIGGER USER'
+    );
+    try {
+      for (const poisoned of poisonedClaims) {
+        await freshMigrationPool.query(
+          `UPDATE public.canonical_knowledge_sync_attempts
+              SET outcome = 'claim_expired', diagnostic_category = 'claim_expired',
+                  completed_at = statement_timestamp()
+            WHERE organization_id = $1 AND target_id = $2 AND outbox_id = $3
+              AND reconciliation_generation = $4 AND attempt_number = $5
+              AND claim_token = $6`,
+          [
+            poisoned.organizationId, poisoned.targetId, poisoned.id,
+            poisoned.reconciliationGeneration, poisoned.attemptCount, poisoned.claimToken,
+          ]
+        );
+      }
+    } finally {
+      await freshMigrationPool.query(
+        'ALTER TABLE public.canonical_knowledge_sync_attempts ENABLE TRIGGER USER'
+      );
+    }
+    await freshMigrationPool.query(
+      'ALTER TABLE public.canonical_knowledge_sync_outbox DISABLE TRIGGER USER'
+    );
+    try {
+      for (const [index, claimed] of [...poisonedClaims, validClaim].entries()) {
+        await freshMigrationPool.query(
+          `UPDATE public.canonical_knowledge_sync_outbox
+              SET claimed_at = statement_timestamp() - interval '20 seconds',
+                  lease_expires_at = statement_timestamp() - interval '10 seconds' +
+                    ($3::text || ' milliseconds')::interval
+            WHERE organization_id = $1 AND id = $2`,
+          [claimed.organizationId, claimed.id, index]
+        );
+      }
+    } finally {
+      await freshMigrationPool.query(
+        'ALTER TABLE public.canonical_knowledge_sync_outbox ENABLE TRIGGER USER'
+      );
+    }
+
+    expect((await freshPool.query(
+      `SELECT public.canonical_knowledge_sync_attempt_state_matches($1) AS exact`,
+      [validClaim.id]
+    )).rows).toEqual([{ exact: true }]);
+    const recoveryRuns = [];
+    for (let cycle = 0; cycle < 5 && !recoveryRuns.includes(1); cycle += 1) {
+      recoveryRuns.push(await sync.recoverExpiredJobs({ batchSize: 1 }));
+    }
+    expect(recoveryRuns[0]).toBe(0);
+    expect(recoveryRuns).toContain(1);
+    expect((await freshPool.query(
+      `SELECT state, diagnostic_category
+         FROM canonical_knowledge_sync_outbox WHERE id = $1`,
+      [validClaim.id]
+    )).rows).toEqual([{ state: 'retry', diagnostic_category: 'claim_expired' }]);
+    expect((await freshPool.query(
+      `SELECT count(*)::int AS retained
+         FROM canonical_knowledge_sync_outbox
+        WHERE id = ANY($1::uuid[]) AND state = 'claimed'`,
+      [poisonedClaims.map(claim => claim.id)]
+    )).rows).toEqual([{ retained: poisonedClaims.length }]);
+
+    const repaired = poisonedClaims[0];
+    await freshMigrationPool.query(
+      'ALTER TABLE public.canonical_knowledge_sync_attempts DISABLE TRIGGER USER'
+    );
+    try {
+      await freshMigrationPool.query(
+        `UPDATE public.canonical_knowledge_sync_attempts
+            SET outcome = NULL, diagnostic_category = NULL, completed_at = NULL
+          WHERE organization_id = $1 AND target_id = $2 AND outbox_id = $3
+            AND reconciliation_generation = $4 AND attempt_number = $5
+            AND claim_token = $6`,
+        [
+          repaired.organizationId, repaired.targetId, repaired.id,
+          repaired.reconciliationGeneration, repaired.attemptCount, repaired.claimToken,
+        ]
+      );
+    } finally {
+      await freshMigrationPool.query(
+        'ALTER TABLE public.canonical_knowledge_sync_attempts ENABLE TRIGGER USER'
+      );
+    }
+    expect(await sync.recoverExpiredJobs({ batchSize: 1 })).toBe(1);
+    expect((await freshPool.query(
+      `SELECT state, diagnostic_category
+         FROM canonical_knowledge_sync_outbox WHERE id = $1`,
+      [repaired.id]
+    )).rows).toEqual([{ state: 'retry', diagnostic_category: 'claim_expired' }]);
   }, 120000);
 });

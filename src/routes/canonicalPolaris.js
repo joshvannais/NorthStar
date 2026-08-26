@@ -13,6 +13,14 @@ const { sha256, stableStringify, stableValue } = require('../services/businessPr
 const { bindIntegrationOwner } = require('../services/organizationAuthority');
 const { normalizeScheduleMutation } = require('../scheduling/contract');
 const { scheduleAuthority, updateAppointmentSchedule } = require('../scheduling/repository');
+const {
+  normalizeAvailabilityMutation,
+  normalizeConflictEvaluation,
+} = require('../scheduling/conflictContract');
+const {
+  evaluateScheduleConflicts,
+  replaceAvailability,
+} = require('../scheduling/conflictRepository');
 const schedulingTime = require('../../public/js/scheduling-time-contract');
 
 const READ_MODEL_VERSION = 'm22-part1-read-v1';
@@ -789,6 +797,60 @@ function createCanonicalRouter(options) {
       return handleEndpointError(res, _error, req);
     }
   });
+
+  router.put('/availability/profiles/:id', dependencies.onboardedAuth, requireCanonicalContext,
+    dependencies.permission('calendar', 'update'), express.json(), async function (req, res) {
+      const context = requestContext(req);
+      try {
+        const mutation = normalizeAvailabilityMutation({
+          body: req.body,
+          profileId: req.params.id,
+          idempotencyKey: req.get('Idempotency-Key'),
+        });
+        const updated = await replaceAvailability(resolvePool(dependencies.poolProvider), {
+          ...mutation,
+          organizationId: context.organizationId,
+          actorUserId: context.userId,
+          actorAccessRole: req.userRole || req.tenantContext.role,
+          authSessionId: req.authSession && req.authSession.id,
+        });
+        if (updated.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(updated.status).json(updated.body);
+      } catch (error) {
+        if (error && Number.isInteger(error.status) && error.code) {
+          return res.status(error.status).json({
+            success: false,
+            error: { code: error.code, message: error.message },
+          });
+        }
+        return sendPersistenceUnavailable(res, req);
+      }
+    });
+
+  router.post('/appointments/:id/conflicts', dependencies.onboardedAuth, requireCanonicalContext,
+    dependencies.permission('calendar', 'read'), express.json(), async function (req, res) {
+      const context = requestContext(req);
+      try {
+        const evaluation = normalizeConflictEvaluation({ body: req.body, appointmentId: req.params.id });
+        const response = await evaluateScheduleConflicts(resolvePool(dependencies.poolProvider), {
+          ...evaluation,
+          organizationId: context.organizationId,
+          actorUserId: context.userId,
+          actorAccessRole: req.userRole || req.tenantContext.role,
+          authSessionId: req.authSession && req.authSession.id,
+          explicitSession: context.explicitSession,
+        });
+        return res.json(response);
+      } catch (error) {
+        if (error && Number.isInteger(error.status) && error.code) {
+          return res.status(error.status).json({
+            success: false,
+            error: { code: error.code, message: error.message },
+          });
+        }
+        return sendPersistenceUnavailable(res, req);
+      }
+    });
 
   router.patch('/appointments/:id', dependencies.onboardedAuth, requireCanonicalContext, dependencies.permission('calendar', 'update'), express.json(), async function (req, res) {
     const context = requestContext(req);

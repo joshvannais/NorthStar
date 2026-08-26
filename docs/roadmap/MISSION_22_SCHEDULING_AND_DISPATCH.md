@@ -5,10 +5,13 @@ authority for Calendar/Scheduling, the owner/dispatcher Command Center, and each
 employee's scoped mobile Today view. NorthStar may evaluate and recommend, but
 only a currently authorized individual may approve a mutation.
 
-This document is the root-ratified implementation contract. Part 1 is active.
-Parts 2–7 are planned and must not begin before the prior part is independently
-accepted, normally merged, automatically deployed, health-clean, and passively
-accepted.
+This document is the root-ratified implementation contract. Part 1 was
+independently accepted, normally merged at
+`192ce709caec2fdd873ab7387182e3a66898fb4a`, automatically deployed, and
+terminally released. Part 2 is implemented on its narrow writer branch and is
+awaiting exact-head independent audit and release. Parts 3–7 remain planned and
+must not begin before the prior part is independently accepted, normally
+merged, automatically deployed, health-clean, and passively accepted.
 
 ## Non-negotiable boundaries
 
@@ -57,7 +60,7 @@ update permission, exact record scope, and action-specific approval.
 
 ## Serialized delivery
 
-### Part 1 — Canonical assignment and schedule authority (active)
+### Part 1 — Canonical assignment and schedule authority (complete/released)
 
 Add migration 032 and mounted production code for:
 
@@ -101,7 +104,7 @@ evidence. Part 1 exposes no public assign, reassign, unassign, or dispatch
 workflow and implements no conflicts, travel, recommendations, new board, or
 Today experience.
 
-### Part 2 — Availability, capacity, and conflict authority (planned)
+### Part 2 — Availability, capacity, and conflict authority (implemented; audit pending)
 
 Add declared availability and deterministic bounded evaluation from working
 hours, active membership/crew composition, skills, approved schedules, location
@@ -111,6 +114,58 @@ unavailability, known required-skill mismatch, and known location-scope mismatch
 are hard conflicts. Non-strict thresholds are warnings. Incomplete authority is
 `needs_review`. Cover DST gaps/folds, overnight/multiday work, simultaneous
 work, buffers, stable ordering, and membership changes.
+
+Part 2 adds only migration 034 and mounted production modules beneath the
+existing `/api/v1/canonical` authority:
+
+- `PUT /availability/profiles/:id` replaces a bounded declared-availability
+  window. It requires a current owner/admin or active dispatcher, real cookie
+  session and CSRF, current subscription/onboarding/permission authority,
+  exact revision/digest/time-zone pins, an idempotency key, and a bounded
+  reason. Current authority, immutable revision, actor evidence, audit, and
+  one canonical idempotency response commit together or roll back together.
+  Each response is uniquely bound to its exact same-transaction revision;
+  replay reconstructs that canonical revision response instead of trusting
+  caller-selected durable response bytes.
+- `POST /appointments/:id/conflicts` evaluates a proposed profile, crew, or
+  unassigned target and exact schedule without assigning, scheduling,
+  dispatching, recommending, or granting a mutation capability. It returns a
+  deterministic content identity/digest with `persisted: false`; Part 2 has no
+  durable evaluation sink that an ordinary runtime SQL role could forge.
+  Durable preview/approval evidence belongs to Part 4, where current human
+  approval and mutation authority are established. Immutable declared-
+  availability mutation evidence remains in Part 2.
+- Active membership and crew composition, declared availability, service-skill
+  authority, exact Business Profile locations/hours/policies, and approved
+  canonical schedules are read from mounted PostgreSQL authority. Approved
+  person/crew overlap, explicit unavailability, inactive targets, known skill
+  mismatch, and known location mismatch are hard. Current Business Profile
+  hours, buffers, workload, workday length, and crew-size thresholds are
+  warnings because the accepted profile contract contains no hard-policy flag.
+  Missing/stale/ambiguous authority and unapproved or legacy-import overlap or
+  workload remain visible as `needs_review`. Workload evaluation uses a
+  separate tenant-zone local-day evidence set rather than reusing the narrower
+  overlap/buffer set, so distant same-day, DST-fold, overnight, and multiday
+  approved work remains visible to max-job and workday thresholds.
+- Evidence reads are explicitly bounded to 100 candidate crew members, 4,096
+  skill rows, 4,096 availability intervals, 1,000 overlapping/buffer schedules,
+  and a separately bounded 1,000-schedule workload set. Any truncation forces
+  `needs_review`; a conflict or workload fact beyond a bounded set therefore
+  cannot yield `clear`.
+- RFC 3339 timestamps require explicit offsets that round-trip through the
+  current tenant IANA zone. DST gaps reject, fold occurrences remain distinct,
+  and positive midnight, overnight, and multiday intervals are bounded to 31
+  days. Availability bodies are bounded to 256 KiB, 512 intervals, and a
+  366-day coverage window.
+- New database functions use fixed `pg_catalog, public` search paths, revoke
+  `PUBLIC` execution, and keep all table/function references schema-qualified.
+  Migrations 001–033 remain byte-for-byte protected.
+
+Part 2 adds no Calendar/Command Center/Today UI and no browser-executed code, so
+it does not claim a new Chrome/WebKit matrix. Existing Part 1 Calendar and
+compatibility behavior remain required regression gates. Physical Safari,
+hosted checks, providers, credentials/configuration, production evidence, and
+Part 2 deployment remain unavailable until their separate release stages.
 
 ### Part 3 — Route implications and Polaris recommendations (planned)
 

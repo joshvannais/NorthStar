@@ -18,6 +18,51 @@ function dateAtOffset(date, days) {
   return value.toISOString().slice(0, 10);
 }
 
+function timeAtSecond(secondOfDay) {
+  const hour = Math.floor(secondOfDay / 3600);
+  const minute = Math.floor((secondOfDay % 3600) / 60);
+  const second = secondOfDay % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
+}
+
+function firstInstantForLocalDate(date, timeZone) {
+  const midnight = schedulingTime.resolveWallTime(date, '00:00:00', timeZone);
+  if (midnight.candidates.length) return midnight.candidates[0].epochMilliseconds;
+  for (let minute = 1; minute < 1440; minute += 1) {
+    const resolved = schedulingTime.resolveWallTime(date, timeAtSecond(minute * 60), timeZone);
+    if (!resolved.candidates.length) continue;
+    for (let second = (minute - 1) * 60 + 1; second <= minute * 60; second += 1) {
+      const exact = schedulingTime.resolveWallTime(date, timeAtSecond(second), timeZone);
+      if (exact.candidates.length) return exact.candidates[0].epochMilliseconds;
+    }
+  }
+  return null;
+}
+
+function localDayBounds(date, timeZone) {
+  const start = firstInstantForLocalDate(date, timeZone);
+  if (start === null) return null;
+  for (let offset = 1; offset <= 7; offset += 1) {
+    const end = firstInstantForLocalDate(dateAtOffset(date, offset), timeZone);
+    if (end !== null && end > start) return { date, start, end };
+  }
+  return null;
+}
+
+function applicableWorkloadDays(start, end, timeZone) {
+  const first = schedulingTime.formatInstant(new Date(start), timeZone).date;
+  const last = schedulingTime.formatInstant(new Date(end - 1), timeZone).date;
+  const days = [];
+  let date = first;
+  for (let guard = 0; date <= last && guard < 32; guard += 1) {
+    const bounds = localDayBounds(date, timeZone);
+    if (!bounds) return { days, incomplete: true };
+    days.push(bounds);
+    date = dateAtOffset(date, 1);
+  }
+  return { days, incomplete: date <= last };
+}
+
 function weekday(date) {
   const parts = date.split('-').map(Number);
   return WEEKDAYS[new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])).getUTCDay()];
@@ -256,7 +301,7 @@ function evaluateConflictEvidence(input) {
       }
     }
 
-    const approvedSchedules = schedules.filter(schedule => schedule.approved === true);
+    const approvedOverlapSchedules = schedules.filter(schedule => schedule.approved === true);
 
     const scheduling = input.businessProfile && input.businessProfile.scheduling || {};
     const appointmentBuffer = boundedNumber(scheduling.appointmentBuffer, 0, 1440);
@@ -264,7 +309,7 @@ function evaluateConflictEvidence(input) {
     const bufferMinutes = Math.max(appointmentBuffer || 0, travelBuffer || 0);
     if (bufferMinutes > 0) {
       const buffer = bufferMinutes * 60000;
-      for (const schedule of approvedSchedules) {
+      for (const schedule of approvedOverlapSchedules) {
         const shared = (schedule.profileIds || []).filter(profileId => memberIds.has(profileId)).sort();
         if (!shared.length) continue;
         const scheduleStart = milliseconds(schedule.scheduledStart);
@@ -280,30 +325,55 @@ function evaluateConflictEvidence(input) {
       }
     }
 
-    const localDate = schedulingTime.formatInstant(new Date(start), proposal.timeZone).date;
-    const sameDaySchedules = approvedSchedules.filter(schedule =>
-      schedulingTime.formatInstant(new Date(schedule.scheduledStart), proposal.timeZone).date === localDate);
+    const workloadSchedules = Array.isArray(input.workloadSchedules) ? input.workloadSchedules : schedules;
+    const workloadDays = applicableWorkloadDays(start, end, proposal.timeZone);
+    if (input.workloadSetTruncated === true) review.push(entry('workload_evidence_bounded'));
+    if (input.workloadAuthorityMissing === true || workloadDays.incomplete) {
+      review.push(entry('workload_authority_incomplete'));
+    }
     const maxJobs = boundedNumber(scheduling.maxJobsPerDay, 1, 1000);
     const workDayLength = boundedNumber(scheduling.workDayLength, 0.25, 24);
     for (const member of members) {
-      const memberSchedules = sameDaySchedules.filter(schedule => (schedule.profileIds || []).includes(member.profileId));
-      if (maxJobs !== null && memberSchedules.length + 1 > maxJobs) {
-        warnings.push(entry('max_jobs_per_day_threshold', {
-          profileId: member.profileId,
-          proposedJobs: memberSchedules.length + 1,
-          threshold: maxJobs,
-        }));
-      }
-      if (workDayLength !== null) {
-        const minutes = (end - start) / 60000 + memberSchedules.reduce(function (total, schedule) {
-          return total + Math.max(0, milliseconds(schedule.scheduledEnd) - milliseconds(schedule.scheduledStart)) / 60000;
-        }, 0);
-        if (minutes > workDayLength * 60) {
-          warnings.push(entry('workday_length_threshold', {
+      for (const day of workloadDays.days) {
+        const memberSchedules = workloadSchedules.filter(function (schedule) {
+          if (!(schedule.profileIds || []).includes(member.profileId)) return false;
+          const scheduleStart = milliseconds(schedule.scheduledStart);
+          const scheduleEnd = milliseconds(schedule.scheduledEnd);
+          return Number.isFinite(scheduleStart) && Number.isFinite(scheduleEnd) &&
+            overlap(day.start, day.end, scheduleStart, scheduleEnd);
+        });
+        const unapproved = memberSchedules.filter(schedule => schedule.approved !== true);
+        for (const schedule of unapproved) {
+          review.push(entry('workload_authority_unapproved', {
+            assignmentId: schedule.assignmentId,
+            localDate: day.date,
             profileId: member.profileId,
-            proposedMinutes: Math.round(minutes),
-            thresholdMinutes: Math.round(workDayLength * 60),
           }));
+        }
+        const approved = memberSchedules.filter(schedule => schedule.approved === true);
+        if (maxJobs !== null && approved.length + 1 > maxJobs) {
+          warnings.push(entry('max_jobs_per_day_threshold', {
+            localDate: day.date,
+            profileId: member.profileId,
+            proposedJobs: approved.length + 1,
+            threshold: maxJobs,
+          }));
+        }
+        if (workDayLength !== null) {
+          const proposedMinutes = Math.max(0, Math.min(end, day.end) - Math.max(start, day.start)) / 60000;
+          const minutes = proposedMinutes + approved.reduce(function (total, schedule) {
+            const scheduleStart = milliseconds(schedule.scheduledStart);
+            const scheduleEnd = milliseconds(schedule.scheduledEnd);
+            return total + Math.max(0, Math.min(scheduleEnd, day.end) - Math.max(scheduleStart, day.start)) / 60000;
+          }, 0);
+          if (minutes > workDayLength * 60) {
+            warnings.push(entry('workday_length_threshold', {
+              localDate: day.date,
+              profileId: member.profileId,
+              proposedMinutes: Math.round(minutes),
+              thresholdMinutes: Math.round(workDayLength * 60),
+            }));
+          }
         }
       }
     }

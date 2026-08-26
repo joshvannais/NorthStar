@@ -126,9 +126,12 @@ existing `/api/v1/canonical` authority:
   idempotency response commit together or roll back together.
 - `POST /appointments/:id/conflicts` evaluates a proposed profile, crew, or
   unassigned target and exact schedule without assigning, scheduling,
-  dispatching, recommending, or granting a mutation capability. It stores an
-  immutable evidence snapshot and stable digest so identical current inputs
-  reuse one deterministic result.
+  dispatching, recommending, or granting a mutation capability. It returns a
+  deterministic content identity/digest with `persisted: false`; Part 2 has no
+  durable evaluation sink that an ordinary runtime SQL role could forge.
+  Durable preview/approval evidence belongs to Part 4, where current human
+  approval and mutation authority are established. Immutable declared-
+  availability mutation evidence remains in Part 2.
 - Active membership and crew composition, declared availability, service-skill
   authority, exact Business Profile locations/hours/policies, and approved
   canonical schedules are read from mounted PostgreSQL authority. Approved
@@ -136,12 +139,16 @@ existing `/api/v1/canonical` authority:
   mismatch, and known location mismatch are hard. Current Business Profile
   hours, buffers, workload, workday length, and crew-size thresholds are
   warnings because the accepted profile contract contains no hard-policy flag.
-  Missing/stale/ambiguous authority and unapproved or legacy-import overlap
-  remain visible as `needs_review`.
+  Missing/stale/ambiguous authority and unapproved or legacy-import overlap or
+  workload remain visible as `needs_review`. Workload evaluation uses a
+  separate tenant-zone local-day evidence set rather than reusing the narrower
+  overlap/buffer set, so distant same-day, DST-fold, overnight, and multiday
+  approved work remains visible to max-job and workday thresholds.
 - Evidence reads are explicitly bounded to 100 candidate crew members, 4,096
-  skill rows, 4,096 availability intervals, and 1,000 overlapping schedules.
-  Any truncation forces `needs_review`; a conflict beyond the bounded member
-  set therefore cannot yield `clear`.
+  skill rows, 4,096 availability intervals, 1,000 overlapping/buffer schedules,
+  and a separately bounded 1,000-schedule workload set. Any truncation forces
+  `needs_review`; a conflict or workload fact beyond a bounded set therefore
+  cannot yield `clear`.
 - RFC 3339 timestamps require explicit offsets that round-trip through the
   current tenant IANA zone. DST gaps reject, fold occurrences remain distinct,
   and positive midnight, overnight, and multiday intervals are bounded to 31

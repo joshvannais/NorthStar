@@ -219,6 +219,7 @@ describe('Mission 22 Part 2 deterministic evaluator', () => {
     expect(result.reviewReasons.map(value => value.code)).toEqual([
       'availability_authority_missing', 'location_scope_authority_missing',
       'overlap_authority_unapproved', 'required_skill_authority_missing',
+      'workload_authority_unapproved',
     ]);
   });
 
@@ -259,6 +260,76 @@ describe('Mission 22 Part 2 deterministic evaluator', () => {
     const result = evaluateConflictEvidence(fold);
     expect(result.status).toBe('needs_review');
     expect(result.reviewReasons.map(value => value.code)).toContain('working_hours_authority_incomplete');
+  });
+
+  test('counts distant approved same-day workload independently from overlap and buffer evidence', () => {
+    const input = baseInput();
+    input.proposal.scheduledStart = '2027-03-08T20:00:00.000Z';
+    input.proposal.scheduledEnd = '2027-03-08T21:00:00.000Z';
+    input.businessProfile.scheduling.maxJobsPerDay = 1;
+    input.businessProfile.scheduling.workDayLength = 1;
+    input.workloadSchedules = [{
+      assignmentId: 'b7000000-0000-4000-8000-000000000020',
+      revision: 2, digest: '2'.repeat(64), approved: true,
+      scheduledStart: '2027-03-08T14:00:00.000Z',
+      scheduledEnd: '2027-03-08T15:00:00.000Z',
+      profileIds: [PROFILE],
+    }];
+    const first = evaluateConflictEvidence(input);
+    const second = evaluateConflictEvidence(JSON.parse(JSON.stringify(input)));
+    expect(first).toEqual(second);
+    expect(first.status).toBe('warning');
+    expect(first.hardConflicts).toEqual([]);
+    expect(first.warnings).toEqual([
+      {
+        code: 'max_jobs_per_day_threshold', localDate: '2027-03-08',
+        profileId: PROFILE, proposedJobs: 2, threshold: 1,
+      },
+      {
+        code: 'workday_length_threshold', localDate: '2027-03-08',
+        profileId: PROFILE, proposedMinutes: 120, thresholdMinutes: 60,
+      },
+    ]);
+
+    input.businessProfile.scheduling.maxJobsPerDay = 4;
+    input.businessProfile.scheduling.workDayLength = 8;
+    input.workloadSetTruncated = true;
+    const bounded = evaluateConflictEvidence(input);
+    expect(bounded).toMatchObject({
+      status: 'needs_review', hardConflicts: [], warnings: [], needsReview: true,
+      reviewReasons: [{ code: 'workload_evidence_bounded' }],
+    });
+  });
+
+  test('allocates DST-fold and overnight workload to exact tenant-local days deterministically', () => {
+    const fold = baseInput();
+    fold.proposal.scheduledStart = '2027-11-07T05:15:00.000Z';
+    fold.proposal.scheduledEnd = '2027-11-07T05:45:00.000Z';
+    fold.businessProfile.scheduling.maxJobsPerDay = 1;
+    fold.businessProfile.scheduling.workDayLength = 0.5;
+    fold.workloadSchedules = [{
+      assignmentId: 'b7000000-0000-4000-8000-000000000021',
+      revision: 2, digest: '3'.repeat(64), approved: true,
+      scheduledStart: '2027-11-07T06:15:00.000Z',
+      scheduledEnd: '2027-11-07T06:45:00.000Z',
+      profileIds: [PROFILE],
+    }];
+    const foldResult = evaluateConflictEvidence(fold);
+    expect(foldResult.warnings.filter(value => value.code !== 'outside_working_hours')
+      .map(value => [value.code, value.localDate])).toEqual([
+      ['max_jobs_per_day_threshold', '2027-11-07'],
+      ['workday_length_threshold', '2027-11-07'],
+    ]);
+
+    const overnight = baseInput();
+    overnight.proposal.scheduledStart = '2027-03-08T04:30:00.000Z';
+    overnight.proposal.scheduledEnd = '2027-03-08T05:30:00.000Z';
+    overnight.businessProfile.scheduling.workDayLength = 0.25;
+    const first = evaluateConflictEvidence(overnight);
+    const second = evaluateConflictEvidence(JSON.parse(JSON.stringify(overnight)));
+    expect(first).toEqual(second);
+    expect(first.warnings.filter(value => value.code === 'workday_length_threshold')
+      .map(value => value.localDate)).toEqual(['2027-03-07', '2027-03-08']);
   });
 
   test('expands crew-member conflicts and preserves simultaneous-work/resource-bound review', () => {

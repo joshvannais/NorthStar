@@ -1,6 +1,8 @@
 -- Mission 22 Part 2: declared availability and deterministic conflict evidence.
 -- Additive only. This migration does not assign, schedule, dispatch, route,
 -- recommend, execute field work, or authorize an automated mutation.
+-- Read-only conflict evaluations are deterministic non-capability responses,
+-- not durable database records. Part 4 owns durable preview/approval evidence.
 
 CREATE OR REPLACE FUNCTION public.canonical_workforce_availability_digest(
   workforce_profile_id_value UUID,
@@ -19,36 +21,6 @@ AS $function$
     'coverageStart', to_char(coverage_start_value AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
     'intervals', intervals_value,
     'profileId', workforce_profile_id_value
-  )::text, 'UTF8')), 'hex')
-$function$;
-
-CREATE OR REPLACE FUNCTION public.canonical_schedule_conflict_evaluation_digest(
-  evaluation_version_value SMALLINT,
-  assignment_id_value UUID,
-  expected_revision_value BIGINT,
-  expected_digest_value TEXT,
-  proposal_value JSONB,
-  evidence_value JSONB,
-  hard_conflicts_value JSONB,
-  warnings_value JSONB,
-  review_reasons_value JSONB
-)
-RETURNS TEXT
-LANGUAGE SQL
-IMMUTABLE
-PARALLEL SAFE
-SET search_path = pg_catalog, public
-AS $function$
-  SELECT encode(sha256(convert_to(jsonb_build_object(
-    'assignmentId', assignment_id_value,
-    'evaluationVersion', evaluation_version_value,
-    'evidence', evidence_value,
-    'expectedDigest', rtrim(expected_digest_value),
-    'expectedRevision', expected_revision_value,
-    'hardConflicts', hard_conflicts_value,
-    'proposal', proposal_value,
-    'reviewReasons', review_reasons_value,
-    'warnings', warnings_value
   )::text, 'UTF8')), 'hex')
 $function$;
 
@@ -234,69 +206,6 @@ CREATE TABLE public.canonical_workforce_availability_idempotency (
   )
 );
 
-CREATE TABLE public.canonical_schedule_conflict_evaluations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
-  assignment_id UUID NOT NULL,
-  appointment_id UUID NOT NULL,
-  actor_user_id UUID NOT NULL,
-  actor_access_role VARCHAR(16) NOT NULL,
-  auth_session_id UUID NOT NULL REFERENCES public.auth_sessions(id) ON DELETE RESTRICT,
-  evaluation_version SMALLINT NOT NULL,
-  expected_revision BIGINT NOT NULL,
-  expected_digest CHAR(64) NOT NULL,
-  request_digest CHAR(64) NOT NULL,
-  proposal JSONB NOT NULL,
-  evidence JSONB NOT NULL,
-  status VARCHAR(24) NOT NULL,
-  hard_conflicts JSONB NOT NULL,
-  warnings JSONB NOT NULL,
-  needs_review BOOLEAN NOT NULL,
-  review_reasons JSONB NOT NULL,
-  canonical_digest CHAR(64) NOT NULL,
-  transaction_id BIGINT NOT NULL DEFAULT txid_current(),
-  evaluated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT canonical_schedule_conflict_evaluations_tenant_identity UNIQUE (organization_id, id),
-  CONSTRAINT canonical_schedule_conflict_evaluations_digest_unique
-    UNIQUE (organization_id, assignment_id, canonical_digest),
-  CONSTRAINT canonical_schedule_conflict_evaluations_assignment_fk
-    FOREIGN KEY (organization_id, assignment_id)
-    REFERENCES public.canonical_schedule_assignments(organization_id, id) ON DELETE RESTRICT,
-  CONSTRAINT canonical_schedule_conflict_evaluations_appointment_fk
-    FOREIGN KEY (organization_id, appointment_id)
-    REFERENCES public.canonical_appointments(organization_id, id) ON DELETE RESTRICT,
-  CONSTRAINT canonical_schedule_conflict_evaluations_actor_fk
-    FOREIGN KEY (organization_id, actor_user_id)
-    REFERENCES public.organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
-  CONSTRAINT canonical_schedule_conflict_evaluations_version_check CHECK (evaluation_version = 1),
-  CONSTRAINT canonical_schedule_conflict_evaluations_role_check CHECK (
-    actor_access_role IN ('owner', 'admin', 'member')
-  ),
-  CONSTRAINT canonical_schedule_conflict_evaluations_revision_check CHECK (expected_revision >= 1),
-  CONSTRAINT canonical_schedule_conflict_evaluations_digest_check CHECK (
-    expected_digest ~ '^[0-9a-f]{64}$' AND request_digest ~ '^[0-9a-f]{64}$'
-    AND canonical_digest ~ '^[0-9a-f]{64}$'
-  ),
-  CONSTRAINT canonical_schedule_conflict_evaluations_json_check CHECK (
-    jsonb_typeof(proposal) = 'object' AND jsonb_typeof(evidence) = 'object'
-    AND jsonb_typeof(hard_conflicts) = 'array' AND jsonb_array_length(hard_conflicts) <= 256
-    AND jsonb_typeof(warnings) = 'array' AND jsonb_array_length(warnings) <= 256
-    AND jsonb_typeof(review_reasons) = 'array' AND jsonb_array_length(review_reasons) <= 256
-  ),
-  CONSTRAINT canonical_schedule_conflict_evaluations_status_check CHECK (
-    status IN ('clear', 'warning', 'hard_conflict', 'needs_review')
-    AND (status <> 'hard_conflict' OR jsonb_array_length(hard_conflicts) > 0)
-    AND (status <> 'needs_review' OR needs_review)
-    AND (needs_review OR jsonb_array_length(review_reasons) = 0)
-    AND (NOT needs_review OR jsonb_array_length(review_reasons) > 0)
-  )
-);
-
-CREATE INDEX canonical_schedule_conflict_evaluations_assignment_time
-  ON public.canonical_schedule_conflict_evaluations(
-    organization_id, assignment_id, evaluated_at DESC, id
-  );
-
 CREATE OR REPLACE FUNCTION public.canonical_schedule_part2_immutable_evidence()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -317,10 +226,6 @@ CREATE TRIGGER canonical_workforce_availability_audit_immutable
 CREATE TRIGGER canonical_workforce_availability_idempotency_immutable
   BEFORE UPDATE OR DELETE ON public.canonical_workforce_availability_idempotency
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_part2_immutable_evidence();
-CREATE TRIGGER canonical_schedule_conflict_evaluations_immutable
-  BEFORE UPDATE OR DELETE ON public.canonical_schedule_conflict_evaluations
-  FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_part2_immutable_evidence();
-
 CREATE OR REPLACE FUNCTION public.canonical_workforce_availability_guard()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -587,83 +492,9 @@ CREATE CONSTRAINT TRIGGER canonical_workforce_availability_intervals_complete
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION public.canonical_workforce_availability_validate_completion();
 
-CREATE OR REPLACE FUNCTION public.canonical_schedule_validate_conflict_evaluation()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $function$
-DECLARE
-  assignment_record public.canonical_schedule_assignments%ROWTYPE;
-  membership_record RECORD;
-BEGIN
-  SELECT * INTO assignment_record
-    FROM public.canonical_schedule_assignments
-   WHERE organization_id = NEW.organization_id AND id = NEW.assignment_id
-   FOR SHARE;
-  IF NOT FOUND OR assignment_record.appointment_id <> NEW.appointment_id
-     OR assignment_record.revision <> NEW.expected_revision
-     OR rtrim(assignment_record.canonical_digest) <> rtrim(NEW.expected_digest)
-     OR NEW.transaction_id <> txid_current()::bigint THEN
-    RAISE EXCEPTION 'Canonical schedule conflict evaluation is stale'
-      USING ERRCODE = '40001', CONSTRAINT = 'canonical_schedule_conflict_evaluation_stale';
-  END IF;
-  SELECT membership.id, membership.role, profile.operational_role
-    INTO membership_record
-    FROM public.organization_memberships membership
-    JOIN public.workforce_profiles profile
-      ON profile.organization_id = membership.organization_id
-     AND profile.membership_id = membership.id
-   WHERE membership.organization_id = NEW.organization_id
-     AND membership.user_id = NEW.actor_user_id
-     AND membership.status = 'active'
-   FOR SHARE OF membership, profile;
-  IF NOT FOUND OR membership_record.role <> NEW.actor_access_role
-     OR NOT (membership_record.role IN ('owner', 'admin')
-       OR (membership_record.role = 'member' AND membership_record.operational_role = 'dispatcher'))
-     OR NOT EXISTS (
-       SELECT 1 FROM public.auth_sessions session
-        WHERE session.id = NEW.auth_session_id
-          AND session.organization_id = NEW.organization_id
-          AND session.user_id = NEW.actor_user_id
-          AND session.membership_id = membership_record.id
-          AND session.status = 'active' AND session.access_expires_at > clock_timestamp()
-     ) OR NOT EXISTS (
-       SELECT 1 FROM public.organization_onboarding onboarding
-        WHERE onboarding.organization_id = NEW.organization_id AND onboarding.status = 'complete'
-     ) OR NOT EXISTS (
-       SELECT 1 FROM public.subscriptions subscription
-        WHERE subscription.organization_id = NEW.organization_id
-          AND (subscription.status = 'active'
-            OR (subscription.status = 'trialing'
-              AND subscription.trial_started_at IS NOT NULL
-              AND subscription.trial_ends_at = subscription.trial_started_at + INTERVAL '14 days'
-              AND subscription.trial_ends_at > clock_timestamp()))
-     ) THEN
-    RAISE EXCEPTION 'Canonical schedule conflict evaluator is unauthorized'
-      USING ERRCODE = '42501', CONSTRAINT = 'canonical_schedule_conflict_evaluator_unauthorized';
-  END IF;
-  IF rtrim(NEW.canonical_digest) <> public.canonical_schedule_conflict_evaluation_digest(
-       NEW.evaluation_version, NEW.assignment_id, NEW.expected_revision, NEW.expected_digest,
-       NEW.proposal, NEW.evidence, NEW.hard_conflicts, NEW.warnings, NEW.review_reasons
-     ) THEN
-    RAISE EXCEPTION 'Canonical schedule conflict evaluation digest is invalid'
-      USING ERRCODE = '23514', CONSTRAINT = 'canonical_schedule_conflict_evaluation_digest_invalid';
-  END IF;
-  RETURN NEW;
-END
-$function$;
-
-CREATE TRIGGER canonical_schedule_conflict_evaluations_validate
-  BEFORE INSERT ON public.canonical_schedule_conflict_evaluations
-  FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_validate_conflict_evaluation();
-
 REVOKE ALL ON FUNCTION public.canonical_workforce_availability_digest(UUID, TIMESTAMPTZ, TIMESTAMPTZ, JSONB)
   FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.canonical_schedule_conflict_evaluation_digest(
-  SMALLINT, UUID, BIGINT, TEXT, JSONB, JSONB, JSONB, JSONB, JSONB
-) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_part2_immutable_evidence() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_workforce_availability_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_workforce_availability_validate_revision() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_workforce_availability_validate_completion() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.canonical_schedule_validate_conflict_evaluation() FROM PUBLIC;

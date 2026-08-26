@@ -6,7 +6,10 @@ const os = require('os');
 const path = require('path');
 const { Client, Pool } = require('pg');
 const request = require('supertest');
-const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
+const {
+  adaptBusinessProfile,
+  sha256: stableSha256,
+} = require('../../src/services/businessProfileAdapter');
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
@@ -525,7 +528,7 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
     expect(missingTarget.body.data.hardConflicts).toEqual(crossTarget.body.data.hardConflicts);
   }, 120000);
 
-  test('persists deterministic complete evaluations without granting a mutation capability', async () => {
+  test('returns deterministic non-persisted evaluations without granting a mutation capability', async () => {
     const pins = await assignmentPins(runtimePool, IDS.appointment);
     const body = evaluationBody(pins, { kind: 'profile', id: IDS.owner });
     const first = await request(app)
@@ -537,21 +540,17 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
     expect(first.status).toBe(200);
     expect(first.body.data).toMatchObject({
       status: 'clear', hardConflicts: [], warnings: [], needsReview: false,
-      reviewReasons: [], grantsMutation: false,
+      reviewReasons: [], persisted: false, grantsMutation: false,
     });
     expect(second.body.data.id).toBe(first.body.data.id);
     expect(second.body.data.digest).toBe(first.body.data.digest);
-    const stored = (await runtimePool.query(
-      `SELECT count(*)::int AS count FROM public.canonical_schedule_conflict_evaluations
-        WHERE organization_id=$1 AND appointment_id=$2`,
-      [IDS.organization, IDS.appointment]
-    )).rows[0];
-    expect(stored.count).toBe(3);
-    await expect(runtimePool.query(
-      `UPDATE public.canonical_schedule_conflict_evaluations SET status='warning'
-        WHERE organization_id=$1 AND id=$2`,
-      [IDS.organization, first.body.data.id]
-    )).rejects.toMatchObject({ code: '23514' });
+    expect(first.body.data.id).toBe(first.body.data.digest);
+    expect((await migrationPool.query(
+      `SELECT to_regclass('public.canonical_schedule_conflict_evaluations')::text AS relation,
+              to_regprocedure(
+                'public.canonical_schedule_conflict_evaluation_digest(smallint,uuid,bigint,text,jsonb,jsonb,jsonb,jsonb,jsonb)'
+              )::text AS digest_routine`
+    )).rows[0]).toEqual({ relation: null, digest_routine: null });
   }, 120000);
 
   test('mounts DST gap/fold, midnight, overnight, and multiday proposal boundaries', async () => {
@@ -713,8 +712,8 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
     await installOverlapFixture(migrationPool, {
       approved: true,
       sessionId: sessions.owner.sessionId,
-      start: '2027-03-08T15:00:00.000Z',
-      end: '2027-03-08T16:00:00.000Z',
+      start: '2027-03-08T14:00:00.000Z',
+      end: '2027-03-08T15:00:00.000Z',
     });
     const activeProfile = (await runtimePool.query(
       `SELECT version_label FROM public.canonical_business_profiles
@@ -736,13 +735,34 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
       .post(`/api/v1/canonical/appointments/${IDS.appointment}/conflicts`)
       .set(sessions.owner.headers)
       .send(evaluationBody(pins, { kind: 'profile', id: IDS.owner }, {
-        scheduledStart: '2027-03-08T11:05:00-05:00', scheduledEnd: '2027-03-08T11:35:00-05:00',
+        scheduledStart: '2027-03-08T10:05:00-05:00', scheduledEnd: '2027-03-08T10:35:00-05:00',
       }));
     expect(capacity.status).toBe(200);
     expect(capacity.body.data.status).toBe('warning');
     expect(capacity.body.data.hardConflicts).toEqual([]);
     expect(capacity.body.data.warnings.map(value => value.code)).toEqual([
       'max_jobs_per_day_threshold', 'schedule_buffer_threshold', 'workday_length_threshold',
+    ]);
+
+    const distant = await request(app)
+      .post(`/api/v1/canonical/appointments/${IDS.appointment}/conflicts`)
+      .set(sessions.owner.headers)
+      .send(evaluationBody(pins, { kind: 'profile', id: IDS.owner }, {
+        scheduledStart: '2027-03-08T15:00:00-05:00', scheduledEnd: '2027-03-08T16:00:00-05:00',
+      }));
+    expect(distant.status).toBe(200);
+    expect(distant.body.data.status).toBe('warning');
+    expect(distant.body.data.hardConflicts).toEqual([]);
+    expect(distant.body.data.needsReview).toBe(false);
+    expect(distant.body.data.warnings).toEqual([
+      {
+        code: 'max_jobs_per_day_threshold', localDate: '2027-03-08',
+        profileId: IDS.owner, proposedJobs: 2, threshold: 1,
+      },
+      {
+        code: 'workday_length_threshold', localDate: '2027-03-08',
+        profileId: IDS.owner, proposedMinutes: 120, thresholdMinutes: 60,
+      },
     ]);
 
     const outside = await request(app)
@@ -838,24 +858,19 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
     expect(bounded.body.data.hardConflicts).toEqual([]);
     expect(bounded.body.data.reviewReasons.map(value => value.code)).toContain('crew_membership_bounded');
     expect(Buffer.byteLength(JSON.stringify(bounded.body), 'utf8')).toBeLessThanOrEqual(256 * 1024);
-    const evidence = (await runtimePool.query(
-      `SELECT jsonb_array_length(evaluation.evidence #> '{candidate,members}') AS members,
-              evaluation.evidence #>> '{candidate,membersTruncated}' AS truncated,
-              evaluation.evidence #> '{candidate,members}' @>
-                jsonb_build_array(jsonb_build_object('profileId',$3::text)) AS includes_hidden,
-              membership.status AS hidden_status,
-              evaluation.evidence #> '{schedules,0,profileIds}' @>
-                jsonb_build_array($3::text) AS hidden_overlap_present
-         FROM public.canonical_schedule_conflict_evaluations
-              evaluation
-         JOIN public.organization_memberships membership
-           ON membership.organization_id=evaluation.organization_id AND membership.id=$3
-        WHERE evaluation.organization_id=$1 AND evaluation.id=$2`,
-      [IDS.organization, bounded.body.data.id, hiddenConflictProfile]
+    const hiddenAuthority = (await runtimePool.query(
+      `SELECT membership.status AS hidden_status,
+              assignment.workforce_profile_id = $2 AS hidden_overlap_present,
+              assignment.last_approval_id IS NOT NULL AS approved
+         FROM public.organization_memberships membership
+         JOIN public.canonical_schedule_assignments assignment
+           ON assignment.organization_id = membership.organization_id
+          AND assignment.appointment_id = $3
+        WHERE membership.organization_id=$1 AND membership.id=$2`,
+      [IDS.organization, hiddenConflictProfile, IDS.overlapAppointment]
     )).rows[0];
-    expect(evidence).toEqual({
-      members: 100, truncated: 'true', includes_hidden: false, hidden_status: 'suspended',
-      hidden_overlap_present: true,
+    expect(hiddenAuthority).toEqual({
+      hidden_status: 'suspended', hidden_overlap_present: true, approved: true,
     });
   }, 120000);
 
@@ -890,19 +905,48 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
         WHERE organization_id=$1 AND workforce_profile_id=$2`,
       [IDS.organization, IDS.owner]
     )).rejects.toMatchObject({ code: '23514' });
+    const pins = await assignmentPins(runtimePool, IDS.appointment);
+    const proposal = {
+      target: { kind: 'profile', id: IDS.owner },
+      timeZone: 'America/New_York',
+      scheduledStart: '2027-03-08T20:00:00.000Z',
+      scheduledEnd: '2027-03-08T21:00:00.000Z',
+      submittedScheduledStart: '2027-03-08T15:00:00-05:00',
+      submittedScheduledEnd: '2027-03-08T16:00:00-05:00',
+    };
+    const forgedEvidence = { forged: true, source: 'runtime-direct-sql' };
+    const matchingDigest = stableSha256({
+      assignmentId: pins.id,
+      evaluationVersion: 1,
+      evidence: forgedEvidence,
+      expectedDigest: pins.expectedDigest,
+      expectedRevision: pins.expectedRevision,
+      hardConflicts: [],
+      proposal,
+      reviewReasons: [],
+      warnings: [],
+    });
+    expect(matchingDigest).toMatch(/^[0-9a-f]{64}$/);
+    await expect(runtimePool.query(
+      `SELECT public.canonical_schedule_conflict_evaluation_digest(
+         1::smallint,$1::uuid,$2::bigint,$3::text,$4::jsonb,$5::jsonb,
+         '[]'::jsonb,'[]'::jsonb,'[]'::jsonb)`,
+      [pins.id, pins.expectedRevision, pins.expectedDigest,
+        JSON.stringify(proposal), JSON.stringify(forgedEvidence)]
+    )).rejects.toMatchObject({ code: '42883' });
     await expect(runtimePool.query(
       `INSERT INTO public.canonical_schedule_conflict_evaluations
-        (id,organization_id,assignment_id,appointment_id,actor_user_id,actor_access_role,
+        (organization_id,assignment_id,appointment_id,actor_user_id,actor_access_role,
          auth_session_id,evaluation_version,expected_revision,expected_digest,request_digest,
          proposal,evidence,status,hard_conflicts,warnings,needs_review,review_reasons,canonical_digest)
-       SELECT gen_random_uuid(),organization_id,assignment_id,appointment_id,actor_user_id,
-              actor_access_role,auth_session_id,evaluation_version,expected_revision,expected_digest,
-              request_digest,proposal,evidence,status,hard_conflicts,warnings,needs_review,
-              review_reasons,repeat('0',64)
-         FROM public.canonical_schedule_conflict_evaluations
-        WHERE organization_id=$1 LIMIT 1`,
-      [IDS.organization]
-    )).rejects.toMatchObject({ code: '23514' });
+       VALUES ($1,$2,$3,$4,'owner',$5,1,$6,$7,$8,$9::jsonb,$10::jsonb,'clear',
+               '[]'::jsonb,'[]'::jsonb,FALSE,'[]'::jsonb,$11)`,
+      [IDS.organization, pins.id, IDS.appointment, IDS.owner, sessions.owner.sessionId,
+        pins.expectedRevision, pins.expectedDigest, 'f'.repeat(64), JSON.stringify(proposal),
+        JSON.stringify(forgedEvidence), matchingDigest]
+    )).rejects.toMatchObject({ code: '42P01' });
+    expect(fs.readFileSync(path.join(ROOT, 'src', 'scheduling', 'conflictRepository.js'), 'utf8'))
+      .not.toContain('canonical_schedule_conflict_evaluations');
   }, 120000);
 
   test('serializes concurrent exact-pin availability writes with one winner and stable conflict identity', async () => {
@@ -1136,6 +1180,12 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
       expect((await upgradeMigrationPool.query(
         'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1', [PART2_MIGRATION]
       )).rows).toEqual([{ count: 1 }]);
+      expect((await upgradeMigrationPool.query(
+        `SELECT to_regclass('public.canonical_schedule_conflict_evaluations')::text AS relation,
+                to_regprocedure(
+                  'public.canonical_schedule_conflict_evaluation_digest(smallint,uuid,bigint,text,jsonb,jsonb,jsonb,jsonb,jsonb)'
+                )::text AS digest_routine`
+      )).rows[0]).toEqual({ relation: null, digest_routine: null });
     } finally {
       if (upgradeRuntimePool) await upgradeRuntimePool.end().catch(() => {});
       if (upgradeMigrationPool) await upgradeMigrationPool.end().catch(() => {});

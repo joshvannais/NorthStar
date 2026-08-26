@@ -6,6 +6,7 @@ const { evaluateConflictEvidence, EVALUATION_VERSION } = require('./conflictEval
 const MAXIMUM_CANDIDATE_MEMBERS = 100;
 const MAXIMUM_CANDIDATE_SKILLS = 4096;
 const MAXIMUM_CANDIDATE_INTERVALS = 4096;
+const MAXIMUM_SCHEDULE_EVIDENCE = 1000;
 
 class ConflictRepositoryError extends Error {
   constructor(status, code, message, cause) {
@@ -512,14 +513,15 @@ async function scheduleEvidence(client, input, bufferMinutes) {
         AND assignment.scheduled_start < $4::timestamptz + make_interval(mins => $5)
         AND assignment.scheduled_end > $3::timestamptz - make_interval(mins => $5)
       ORDER BY assignment.scheduled_start, assignment.id
-      LIMIT 1001
+      LIMIT ${MAXIMUM_SCHEDULE_EVIDENCE + 1}
       FOR SHARE OF assignment`,
     [input.organizationId, input.assignmentId, input.proposal.scheduledStart,
       input.proposal.scheduledEnd, bufferMinutes]
   );
   return {
-    truncated: result.rows.length > 1000 || result.rows.some(row => row.targets_truncated === true),
-    rows: result.rows.slice(0, 1000).map(row => ({
+    truncated: result.rows.length > MAXIMUM_SCHEDULE_EVIDENCE ||
+      result.rows.some(row => row.targets_truncated === true),
+    rows: result.rows.slice(0, MAXIMUM_SCHEDULE_EVIDENCE).map(row => ({
       assignmentId: row.id,
       revision: Number(row.revision),
       digest: digest(row.canonical_digest),
@@ -531,22 +533,75 @@ async function scheduleEvidence(client, input, bufferMinutes) {
   };
 }
 
-function evaluationResponse(row) {
+async function workloadEvidence(client, input) {
+  const result = await client.query(
+    `SELECT assignment.id, assignment.revision, assignment.canonical_digest,
+            assignment.scheduled_start, assignment.scheduled_end,
+            (assignment.last_approval_id IS NOT NULL) AS approved,
+            COALESCE(targets.profile_ids, ARRAY[]::uuid[]) AS profile_ids,
+            COALESCE(array_length(targets.profile_ids, 1), 0) >
+              ${MAXIMUM_CANDIDATE_MEMBERS} AS targets_truncated
+       FROM public.canonical_schedule_assignments assignment
+       LEFT JOIN LATERAL (
+         SELECT array_agg(bounded.profile_id ORDER BY bounded.profile_id) AS profile_ids
+           FROM (
+             SELECT candidate.profile_id
+               FROM (
+                 SELECT assignment.workforce_profile_id AS profile_id
+                  WHERE assignment.workforce_profile_id IS NOT NULL
+                 UNION
+                 SELECT member.profile_id
+                   FROM public.workforce_crew_members member
+                  WHERE member.organization_id = assignment.organization_id
+                    AND member.crew_id = assignment.workforce_crew_id
+               ) candidate
+              ORDER BY candidate.profile_id
+              LIMIT ${MAXIMUM_CANDIDATE_MEMBERS + 1}
+           ) bounded
+       ) targets ON TRUE
+      WHERE assignment.organization_id = $1 AND assignment.id <> $2
+        AND assignment.schedule_state = 'scheduled'
+        AND assignment.appointment_status <> 'cancelled'
+        AND assignment.scheduled_start < $4::timestamptz + INTERVAL '48 hours'
+        AND assignment.scheduled_end > $3::timestamptz - INTERVAL '48 hours'
+      ORDER BY assignment.scheduled_start, assignment.id
+      LIMIT ${MAXIMUM_SCHEDULE_EVIDENCE + 1}
+      FOR SHARE OF assignment`,
+    [input.organizationId, input.assignmentId, input.proposal.scheduledStart,
+      input.proposal.scheduledEnd]
+  );
   return {
-    id: row.id,
-    assignmentId: row.assignment_id,
-    appointmentId: row.appointment_id,
-    evaluationVersion: Number(row.evaluation_version),
-    assignmentRevision: Number(row.expected_revision),
-    assignmentDigest: digest(row.expected_digest),
-    proposal: row.proposal,
-    status: row.status,
-    hardConflicts: row.hard_conflicts,
-    warnings: row.warnings,
-    needsReview: row.needs_review,
-    reviewReasons: row.review_reasons,
-    digest: digest(row.canonical_digest),
-    evaluatedAt: timestamp(row.evaluated_at),
+    truncated: result.rows.length > MAXIMUM_SCHEDULE_EVIDENCE ||
+      result.rows.some(row => row.targets_truncated === true),
+    rows: result.rows.slice(0, MAXIMUM_SCHEDULE_EVIDENCE).map(row => ({
+      assignmentId: row.id,
+      revision: Number(row.revision),
+      digest: digest(row.canonical_digest),
+      scheduledStart: timestamp(row.scheduled_start),
+      scheduledEnd: timestamp(row.scheduled_end),
+      approved: row.approved === true,
+      profileIds: row.profile_ids.slice(0, MAXIMUM_CANDIDATE_MEMBERS),
+    })),
+  };
+}
+
+function evaluationResponse(input) {
+  return {
+    id: input.evaluationDigest,
+    assignmentId: input.assignment.id,
+    appointmentId: input.appointmentId,
+    evaluationVersion: EVALUATION_VERSION,
+    assignmentRevision: Number(input.expectedRevision),
+    assignmentDigest: digest(input.expectedDigest),
+    proposal: input.proposal,
+    status: input.result.status,
+    hardConflicts: input.result.hardConflicts,
+    warnings: input.result.warnings,
+    needsReview: input.result.needsReview,
+    reviewReasons: input.result.reviewReasons,
+    digest: input.evaluationDigest,
+    evaluatedAt: input.evaluatedAt,
+    persisted: false,
     grantsMutation: false,
   };
 }
@@ -565,6 +620,7 @@ async function evaluateInTransaction(client, input) {
   const travelBuffer = Number.isFinite(rawScheduling.travelBuffer) ? rawScheduling.travelBuffer : 0;
   const bufferMinutes = Math.max(0, Math.min(1440, Math.max(appointmentBuffer, travelBuffer)));
   const schedules = await scheduleEvidence(client, input, bufferMinutes);
+  const workload = await workloadEvidence(client, input);
   const rawScope = assignment.job_scope && typeof assignment.job_scope === 'object' && !Array.isArray(assignment.job_scope)
     ? assignment.job_scope : {};
   const serviceId = typeof assignment.service_type === 'string' ? assignment.service_type : null;
@@ -584,6 +640,8 @@ async function evaluateInTransaction(client, input) {
     candidate,
     schedules: schedules.rows,
     scheduleSetTruncated: schedules.truncated,
+    workloadSchedules: workload.rows,
+    workloadSetTruncated: workload.truncated,
   };
   const result = evaluateConflictEvidence(evaluatorInput);
   const evidence = stableValue({
@@ -606,38 +664,34 @@ async function evaluateInTransaction(client, input) {
     candidate,
     schedules: schedules.rows,
     scheduleSetTruncated: schedules.truncated,
+    workloadSchedules: workload.rows,
+    workloadSetTruncated: workload.truncated,
     skillAuthorityKnown: evaluatorInput.skillAuthorityKnown,
   });
-  const evaluationDigest = digest((await client.query(
-    `SELECT public.canonical_schedule_conflict_evaluation_digest(
-       $1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb
-     ) AS digest`,
-    [EVALUATION_VERSION, assignment.id, input.expectedRevision, input.expectedDigest,
-      json(input.proposal), json(evidence), json(result.hardConflicts), json(result.warnings),
-      json(result.reviewReasons)]
-  )).rows[0].digest);
-  const inserted = await client.query(
-    `INSERT INTO public.canonical_schedule_conflict_evaluations
-      (organization_id, assignment_id, appointment_id, actor_user_id,
-       actor_access_role, auth_session_id, evaluation_version, expected_revision,
-       expected_digest, request_digest, proposal, evidence, status,
-       hard_conflicts, warnings, needs_review, review_reasons, canonical_digest)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,
-             $14::jsonb,$15::jsonb,$16,$17::jsonb,$18)
-     ON CONFLICT (organization_id, assignment_id, canonical_digest) DO NOTHING
-     RETURNING *`,
-    [input.organizationId, assignment.id, input.appointmentId, input.actorUserId,
-      input.actorAccessRole, input.authSessionId, EVALUATION_VERSION, input.expectedRevision,
-      input.expectedDigest, input.requestDigest, json(input.proposal), json(evidence), result.status,
-      json(result.hardConflicts), json(result.warnings), result.needsReview,
-      json(result.reviewReasons), evaluationDigest]
-  );
-  const row = inserted.rows[0] || (await client.query(
-    `SELECT * FROM public.canonical_schedule_conflict_evaluations
-      WHERE organization_id = $1 AND assignment_id = $2 AND canonical_digest = $3`,
-    [input.organizationId, assignment.id, evaluationDigest]
-  )).rows[0];
-  return { success: true, data: evaluationResponse(row) };
+  const evaluationDigest = sha256({
+    assignmentId: assignment.id,
+    evaluationVersion: EVALUATION_VERSION,
+    evidence,
+    expectedDigest: input.expectedDigest,
+    expectedRevision: input.expectedRevision,
+    hardConflicts: result.hardConflicts,
+    proposal: input.proposal,
+    reviewReasons: result.reviewReasons,
+    warnings: result.warnings,
+  });
+  return {
+    success: true,
+    data: evaluationResponse({
+      appointmentId: input.appointmentId,
+      assignment,
+      evaluatedAt: new Date().toISOString(),
+      evaluationDigest,
+      expectedDigest: input.expectedDigest,
+      expectedRevision: input.expectedRevision,
+      proposal: input.proposal,
+      result,
+    }),
+  };
 }
 
 async function evaluateScheduleConflicts(pool, input) {

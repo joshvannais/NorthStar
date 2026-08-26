@@ -1001,6 +1001,21 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       { key: 'm22-direct-rfc3339-fraction', rawStart: '2027-07-01T09:00:00.0000-04:00' },
       { key: 'm22-direct-rfc3339-calendar', rawStart: '2027-02-30T09:00:00-05:00' },
       { key: 'm22-direct-rfc3339-offset', rawStart: '2027-07-01T09:00:00+14:30' },
+      { key: 'm22-direct-rfc3339-second-60', rawStart: '2027-01-01T23:59:60-05:00',
+        rawEnd: '2027-01-02T01:00:00-05:00', approvedStart: '2027-01-02T05:00:00.000Z',
+        approvedEnd: '2027-01-02T06:00:00.000Z' },
+      { key: 'm22-direct-rfc3339-second-60-fraction-1', rawStart: '2027-01-01T23:59:60.0-05:00',
+        rawEnd: '2027-01-02T01:00:00-05:00', approvedStart: '2027-01-02T05:00:00.000Z',
+        approvedEnd: '2027-01-02T06:00:00.000Z' },
+      { key: 'm22-direct-rfc3339-second-60-fraction-3', rawStart: '2027-01-01T23:59:60.000-05:00',
+        rawEnd: '2027-01-02T01:00:00-05:00', approvedStart: '2027-01-02T05:00:00.000Z',
+        approvedEnd: '2027-01-02T06:00:00.000Z' },
+      { key: 'm22-direct-rfc3339-hour-24', rawStart: '2027-01-01T24:00:00-05:00',
+        rawEnd: '2027-01-02T01:00:00-05:00', approvedStart: '2027-01-02T05:00:00.000Z',
+        approvedEnd: '2027-01-02T06:00:00.000Z' },
+      { key: 'm22-direct-rfc3339-hour-24-fraction-3', rawStart: '2027-01-01T24:00:00.000-05:00',
+        rawEnd: '2027-01-02T01:00:00-05:00', approvedStart: '2027-01-02T05:00:00.000Z',
+        approvedEnd: '2027-01-02T06:00:00.000Z' },
     ]) {
       await expectRejected({ ...validNewYork, ...malformed }, 'canonical_schedule_time_rfc3339_invalid');
     }

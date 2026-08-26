@@ -120,6 +120,11 @@ BEGIN
     RAISE EXCEPTION 'Canonical schedule timestamp is not strict RFC3339'
       USING ERRCODE = '23514', CONSTRAINT = 'canonical_schedule_time_rfc3339_invalid';
   END IF;
+  IF pieces[4]::INTEGER NOT BETWEEN 0 AND 23
+     OR pieces[6]::INTEGER NOT BETWEEN 0 AND 59 THEN
+    RAISE EXCEPTION 'Canonical schedule timestamp has invalid calendar fields'
+      USING ERRCODE = '23514', CONSTRAINT = 'canonical_schedule_time_rfc3339_invalid';
+  END IF;
 
   fraction_milliseconds := CASE WHEN pieces[7] IS NULL THEN 0
     ELSE rpad(substring(pieces[7] FROM 2), 3, '0')::INTEGER END;

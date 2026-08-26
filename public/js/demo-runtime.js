@@ -253,6 +253,112 @@
     };
   }
 
+  function demoDigest(character) {
+    return new Array(65).join(character);
+  }
+
+  function demoKnowledgeItems(value) {
+    var at = value.session.expiresAt;
+    return [
+      {
+        entryId: '10000000-0000-4000-8000-000000000001', canonicalKey: 'generated.identity', category: 'generated_knowledge',
+        version: { id: '20000000-0000-4000-8000-000000000001', number: 2, digest: demoDigest('a'), label: 'Business identity', origin: 'generated', sensitivity: 'internal', reviewRequirement: 'standard', applicability: { projection: { audiences: ['customer', 'internal'] } }, contentState: 'ready', lifecycleAction: 'revision', actorUserId: value.viewer.id, createdAt: at },
+        workflowStatus: 'published', latestReviewEventId: '30000000-0000-4000-8000-000000000001',
+        publication: { id: '40000000-0000-4000-8000-000000000001', number: 2, versionId: '20000000-0000-4000-8000-000000000001', digest: demoDigest('a'), actorUserId: value.viewer.id, publishedAt: at },
+        sources: ['business_profile', 'system_generation'],
+        sourceCorrection: { label: 'Correct this in Business Profile: company', section: 'company', focus: 'company-name', url: '/dashboard/business-profile?section=company#company-name' },
+      },
+      {
+        entryId: '10000000-0000-4000-8000-000000000002', canonicalKey: 'generated.customer_workforce_guidance', category: 'guidance',
+        version: { id: '20000000-0000-4000-8000-000000000002', number: 1, digest: demoDigest('b'), label: 'Customer and workforce guidance', origin: 'generated', sensitivity: 'internal', reviewRequirement: 'standard', applicability: { projection: { audiences: ['customer', 'workforce'] } }, contentState: 'ready', lifecycleAction: 'initial', actorUserId: value.viewer.id, createdAt: at },
+        workflowStatus: 'review', latestReviewEventId: '30000000-0000-4000-8000-000000000002', publication: null,
+        sources: ['business_profile', 'workforce', 'system_generation'],
+        sourceCorrection: { label: 'Correct this in Business Profile: policies', section: 'policies', focus: 'policiesContainer', url: '/dashboard/business-profile?section=policies#policiesContainer' },
+      },
+      {
+        entryId: '10000000-0000-4000-8000-000000000003', canonicalKey: 'generated.voice_guidance', category: 'guidance',
+        version: { id: '20000000-0000-4000-8000-000000000003', number: 3, digest: demoDigest('c'), label: 'Provider-neutral voice guidance', origin: 'generated', sensitivity: 'internal', reviewRequirement: 'standard', applicability: { projection: { consumers: ['voice_runtime'], audiences: ['customer'] } }, contentState: 'ready', lifecycleAction: 'rollback', actorUserId: value.viewer.id, createdAt: at },
+        workflowStatus: 'approved', latestReviewEventId: '30000000-0000-4000-8000-000000000003',
+        publication: { id: '40000000-0000-4000-8000-000000000003', number: 1, versionId: '20000000-0000-4000-8000-000000000030', digest: demoDigest('d'), actorUserId: value.viewer.id, publishedAt: at },
+        sources: ['business_profile', 'system_generation'],
+        sourceCorrection: { label: 'Correct this in Business Profile: voice and knowledge', section: 'retell', focus: 'voice-assistant-configuration', url: '/dashboard/business-profile?section=retell#voice-assistant-configuration' },
+      },
+    ];
+  }
+
+  function demoSyncTarget(value, item, status) {
+    var targetId = '50000000-0000-4000-8000-00000000000' + String(item.entryId.slice(-1));
+    return {
+      targetId: targetId, providerKey: 'demo_voice_preview', consumer: 'voice_runtime', audience: 'customer',
+      capabilities: ['identity', 'guidance'], targetRevision: 2, configurationDigest: demoDigest('e'), targetStatus: status === 'suspended' ? 'suspended' : 'active',
+      status: status, canonicalStatus: status === 'current' ? 'in_sync' : status === 'drifted' ? 'drift' : status,
+      diagnosticCategory: status === 'drifted' ? 'projection_digest_mismatch' : status === 'suspended' ? 'target_suspended' : null,
+      desired: { eventId: '60000000-0000-4000-8000-00000000000' + String(item.entryId.slice(-1)), sequence: 2, projectionDigest: item.version.digest, sourcePins: [{ entryId: item.entryId, versionId: item.version.id, canonicalDigest: item.version.digest }], state: status === 'current' ? 'succeeded' : status === 'suspended' ? 'blocked' : 'retry', attemptCount: status === 'drifted' ? 1 : 0, availableAt: value.session.expiresAt },
+      observed: status === 'suspended' ? null : { eventId: '70000000-0000-4000-8000-00000000000' + String(item.entryId.slice(-1)), sequence: 1, projectionDigest: status === 'drifted' ? demoDigest('f') : item.version.digest, observedAt: value.session.expiresAt },
+      lastKnownGood: status === 'suspended' ? null : { eventId: '70000000-0000-4000-8000-00000000000' + String(item.entryId.slice(-1)), sequence: 1, projectionDigest: item.version.digest },
+      driftDetectedAt: status === 'drifted' ? value.session.expiresAt : null, updatedAt: value.session.expiresAt,
+    };
+  }
+
+  function demoKnowledgeList(value, url) {
+    var all = demoKnowledgeItems(value);
+    var keys = ['category', 'workflowStatus', 'sensitivity', 'source', 'applicability'];
+    var filtered = all.filter(function (item) {
+      return keys.every(function (key) {
+        var selected = url.searchParams.get(key);
+        if (!selected) return true;
+        if (key === 'source') return item.sources.indexOf(selected) >= 0;
+        if (key === 'applicability') return JSON.stringify(item.version.applicability).indexOf('"' + selected + '"') >= 0;
+        if (key === 'workflowStatus') return item.workflowStatus === selected;
+        return (key === 'category' ? item.category : item.version.sensitivity) === selected;
+      });
+    });
+    var statusCounts = {}, categoryCounts = {}, sensitivityCounts = {}, sourceCounts = {};
+    all.forEach(function (item) {
+      statusCounts[item.workflowStatus] = (statusCounts[item.workflowStatus] || 0) + 1;
+      categoryCounts[item.category] = (categoryCounts[item.category] || 0) + 1;
+      sensitivityCounts[item.version.sensitivity] = (sensitivityCounts[item.version.sensitivity] || 0) + 1;
+      item.sources.forEach(function (source) { sourceCounts[source] = (sourceCounts[source] || 0) + 1; });
+    });
+    var targets = [demoSyncTarget(value, all[0], 'current'), demoSyncTarget(value, all[1], 'drifted'), demoSyncTarget(value, all[2], 'suspended')];
+    return {
+      authority: 'isolated_demo_knowledge_preview_v1', role: 'viewer', simulated: true,
+      permissions: { canMutate: false, canReadProtected: false },
+      filters: {}, counts: { total: all.length, category: categoryCounts, workflowStatus: statusCounts, sensitivity: sensitivityCounts, source: sourceCounts },
+      filteredCount: filtered.length, items: filtered,
+      synchronization: { counts: { current: 1, drifted: 1, suspended: 1 }, targets: targets },
+    };
+  }
+
+  function demoKnowledgeDetail(value, entryId, versionNumber) {
+    var item = demoKnowledgeItems(value).find(function (candidate) { return candidate.entryId === entryId; });
+    if (!item) return null;
+    var selectedNumber = versionNumber ? Number(versionNumber) : item.version.number;
+    var isHistorical = selectedNumber < item.version.number;
+    var versionId = isHistorical ? '20000000-0000-4000-8000-000000000010' : item.version.id;
+    var versionDigest = isHistorical ? demoDigest('d') : item.version.digest;
+    var content = item.canonicalKey === 'generated.identity'
+      ? { state: 'ready', facts: { company: { name: value.tenant.name, industry: value.configuration.businessProfile.industry } } }
+      : item.canonicalKey.indexOf('voice') >= 0
+        ? { state: 'ready', facts: { greeting: value.configuration.businessProfile.voiceAssistant && value.configuration.businessProfile.voiceAssistant.greeting || 'Welcome to the NorthStar demo.' } }
+        : { state: 'ready', facts: { guidance: 'Confirm scope and appointment details before dispatch.' } };
+    var targetStatus = item.entryId.slice(-1) === '1' ? 'current' : item.entryId.slice(-1) === '2' ? 'drifted' : 'suspended';
+    var history = [
+      { versionId: '20000000-0000-4000-8000-000000000010', versionNumber: 1, canonicalDigest: demoDigest('d'), parentVersionId: null, lifecycleAction: 'initial', rollbackTargetVersionId: null, origin: 'generated', sensitivity: 'internal', reviewRequirement: 'standard', actorUserId: value.viewer.id, reason: 'Generated from the isolated demo Business Profile.', createdAt: value.session.expiresAt, publicationId: item.publication && item.publication.id, publicationNumber: item.publication && 1, audit: null },
+    ];
+    if (item.version.number > 1) history.push({ versionId: item.version.id, versionNumber: item.version.number, canonicalDigest: item.version.digest, parentVersionId: history[0].versionId, lifecycleAction: item.version.lifecycleAction, rollbackTargetVersionId: item.version.lifecycleAction === 'rollback' ? history[0].versionId : null, origin: 'generated', sensitivity: 'internal', reviewRequirement: 'standard', actorUserId: value.viewer.id, reason: 'Simulated immutable demo lifecycle evidence.', createdAt: value.session.expiresAt, publicationId: item.workflowStatus === 'published' && item.publication && item.publication.id, publicationNumber: item.workflowStatus === 'published' ? item.publication.number : null, audit: null });
+    return {
+      authority: 'isolated_demo_knowledge_preview_v1', role: 'viewer', simulated: true,
+      permissions: { canMutate: false, canReviseDirectly: false, canReadHistory: true },
+      entry: { id: item.entryId, canonicalKey: item.canonicalKey, category: item.category },
+      version: { id: versionId, number: selectedNumber, schemaVersion: 1, origin: item.version.origin, label: item.version.label, sensitivity: item.version.sensitivity, reviewRequirement: item.version.reviewRequirement, applicability: item.version.applicability, document: { applicability: item.version.applicability, canonicalKey: item.canonicalKey, content: content, entryType: item.category, label: item.version.label, origin: item.version.origin, reviewRequirement: item.version.reviewRequirement, schemaVersion: 1, sensitivity: item.version.sensitivity }, canonicalDocument: JSON.stringify(content), canonicalDigest: versionDigest, parentVersionId: isHistorical ? null : history[0].versionId, lifecycleAction: isHistorical ? 'initial' : item.version.lifecycleAction, rollbackTargetVersionId: null, actorUserId: value.viewer.id, reason: 'Simulated immutable demo evidence.', createdAt: value.session.expiresAt, provenance: [{ ordinal: 1, sourceType: 'business_profile', sourceRecordId: 'demo-business-profile', sourceVersion: 'demo-v1', sourceDigest: demoDigest('9'), jsonPointer: '' }, { ordinal: 2, sourceType: 'system_generation', sourceRecordId: 'mission-21-demo-contract', sourceVersion: '1', sourceDigest: demoDigest('8'), jsonPointer: '' }] },
+      workflow: { status: isHistorical ? 'published' : item.workflowStatus, latestReviewEventId: item.latestReviewEventId, events: [], snapshot: null, attorneyReviewEvidence: null, approvalEvidenceStatus: item.workflowStatus === 'approved' || item.workflowStatus === 'published' ? 'approved' : 'not_approved' },
+      comparison: { document: { operations: isHistorical ? [] : [{ op: 'replace', path: '/content', value: content }] , schemaVersion: 1 }, canonicalDiff: '{}', diffDigest: demoDigest('7'), baseVersionId: history[0].versionId, unchangedFromPublished: isHistorical },
+      publication: { selected: isHistorical ? item.publication : item.workflowStatus === 'published' ? item.publication : null, current: item.publication, history: item.publication ? [item.publication] : [] },
+      history: history, synchronization: [demoSyncTarget(value, item, targetStatus)], sourceCorrection: item.sourceCorrection,
+    };
+  }
+
   function transport(input, options) {
     var url = requestPath(input);
     var method = methodOf(options, input);
@@ -283,6 +389,15 @@
         return jsonResponse({ success: true, data: value.configuration.integrations });
       }
       if (method === 'GET' && url.pathname === '/api/account/map-preferences') return jsonResponse(mapPreferences(value));
+      if (method === 'GET' && url.pathname === '/api/v1/knowledge-management') {
+        return jsonResponse({ success: true, data: demoKnowledgeList(value, url) });
+      }
+      if (method === 'GET' && url.pathname.indexOf('/api/v1/knowledge-management/items/') === 0) {
+        var entryId = decodeURIComponent(url.pathname.slice('/api/v1/knowledge-management/items/'.length));
+        var detail = demoKnowledgeDetail(value, entryId, url.searchParams.get('versionNumber'));
+        return detail ? jsonResponse({ success: true, data: detail })
+          : jsonResponse({ success: false, error: { code: 'knowledge_management_not_found', message: 'Demo knowledge item was not found.' } }, 404);
+      }
       if (method === 'GET' && url.pathname === '/api/v1/business-profile/profileReadiness') {
         return jsonResponse({ success: true, data: readiness(value) });
       }

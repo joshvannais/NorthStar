@@ -40,6 +40,7 @@ const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/demo-command-center.js',
   'public/js/demo-runtime.js',
   'public/js/homepage-demo.js',
+  'public/js/knowledge-management.js',
   'public/js/navigation-launcher.js',
   'public/js/polaris-card.js',
   'public/js/polaris-surface-card.js',
@@ -172,6 +173,14 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
     expect(fs.readFileSync(path.join(ROOT, 'public/js/calendar-engine.js'), 'utf8'))
       .toMatch(/if \(event\.type === 'lead' && window\.CustomerDrawer\)[\s\S]*window\.CustomerDrawer\.open\(lead\)/);
     expect(fs.readFileSync(path.join(ROOT, 'public/js/customer-detail.js'), 'utf8')).toContain('cdCustomerDrawer');
+  });
+
+  test('the authorized Part 7 controller is mounted by both shipped settings surfaces and its authenticated route', async () => {
+    for (const page of ['settings.html', 'business-profile.html']) {
+      const html = fs.readFileSync(path.join(ROOT, 'public', 'dashboard', page), 'utf8');
+      expect(scriptsIn(html)).toContain('/js/knowledge-management.js');
+    }
+    await request(app).get('/api/v1/knowledge-management').expect(401);
   });
 
   test('complete tracked literal and dynamic-load inventory reaches neither retired asset', () => {

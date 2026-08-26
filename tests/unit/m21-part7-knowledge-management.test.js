@@ -14,7 +14,11 @@ const {
   syncPresentation,
   workflowState,
 } = require('../../src/knowledge/managementRepository');
-const { createKnowledgeManagementRouter, exactBody } = require('../../src/routes/knowledgeManagement');
+const {
+  applyMutationAuthority,
+  createKnowledgeManagementRouter,
+  exactBody,
+} = require('../../src/routes/knowledgeManagement');
 
 const ORG = '10000000-0000-4000-8000-000000000001';
 const USER = '20000000-0000-4000-8000-000000000001';
@@ -29,6 +33,7 @@ function passContext(req, _res, next) {
   req.user = { id: USER };
   req.userRole = 'owner';
   req.orgId = ORG;
+  req.subscriptionAuthority = { state: 'active', safe: true, readOnly: false };
   next();
 }
 
@@ -265,6 +270,24 @@ describe('Mission 21 Part 7 knowledge-management contract helpers', () => {
     expect(exactBody({ reason: 'review' }, ['reason'])).toBe(true);
     expect(exactBody({ reason: 'review', organizationId: ORG }, ['reason'])).toBe(false);
     expect(exactBody({}, ['reason'])).toBe(false);
+  });
+
+  test('intersects role permissions with trusted subscription mutation authority', () => {
+    const owner = { permissions: { canMutate: true, canReviseDirectly: true, canReadHistory: true } };
+    expect(applyMutationAuthority(owner, {
+      subscriptionAuthority: { state: 'active', safe: true },
+    }).permissions).toMatchObject({
+      canMutate: true, canReviseDirectly: true, mutationRestriction: null,
+    });
+    expect(applyMutationAuthority(owner, {
+      subscriptionAuthority: { state: 'expired', safe: true },
+    }).permissions).toMatchObject({
+      canMutate: false, canReviseDirectly: false, mutationRestriction: 'subscription_read_only',
+      canReadHistory: true,
+    });
+    expect(applyMutationAuthority({ permissions: { canMutate: false } }, {
+      subscriptionAuthority: { state: 'active', safe: true },
+    }).permissions).toMatchObject({ canMutate: false, mutationRestriction: 'role_read_only' });
   });
 });
 

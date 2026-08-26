@@ -510,7 +510,10 @@
       append(badges, badge(detail.workflow.status), node('span', 'km-badge', titleCase(detail.version.sensitivity)), node('span', 'km-badge', 'Version ' + detail.version.number));
       append(header, heading, node('p', 'km-item-key', detail.entry.canonicalKey), badges);
       if (!detail.permissions.canMutate) {
-        header.appendChild(node('div', 'km-readonly-note', 'Read-only access: review, approval, publication, lifecycle, and reconciliation actions require an active owner or administrator.'));
+        var readOnlyExplanation = detail.permissions.mutationRestriction === 'subscription_read_only'
+          ? 'Read-only subscription: knowledge remains visible, but review, approval, publication, lifecycle, and reconciliation actions require current subscription access.'
+          : 'Read-only membership: review, approval, publication, lifecycle, and reconciliation actions require an active owner or administrator.';
+        header.appendChild(node('div', 'km-readonly-note', readOnlyExplanation));
       }
       var tablist = node('div', 'km-tabs');
       tablist.setAttribute('role', 'tablist');
@@ -831,7 +834,9 @@
       } else if (state.data && !state.data.permissions.canMutate) {
         mode.hidden = false;
         mode.className = 'km-readonly-note';
-        mode.textContent = 'Read-only membership: visible standard knowledge is tenant-scoped. Protected bytes and owner/administrator workflow actions remain unavailable.';
+        mode.textContent = state.data.permissions.mutationRestriction === 'subscription_read_only'
+          ? 'Read-only subscription: tenant knowledge remains visible, but workflow and lifecycle actions require current subscription access.'
+          : 'Read-only membership: visible standard knowledge is tenant-scoped. Protected bytes and owner/administrator workflow actions remain unavailable.';
       } else {
         mode.hidden = true;
         mode.textContent = '';

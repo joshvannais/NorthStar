@@ -205,6 +205,53 @@ async function assertNoOverflow(page) {
   assert.ok(overflow.knowledge <= 1, `knowledge horizontal overflow: ${overflow.knowledge}`);
 }
 
+async function assertTextContrast(page, selector, label) {
+  const sample = await page.locator(selector).first().evaluate(element => {
+    const parse = value => {
+      const match = String(value).match(/^rgba?\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)(?:,\s*(\d+(?:\.\d+)?))?\)$/);
+      if (!match) throw new Error(`Unsupported computed color: ${value}`);
+      return [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === undefined ? 1 : Number(match[4])];
+    };
+    const blend = (foreground, background) => {
+      const alpha = foreground[3] + background[3] * (1 - foreground[3]);
+      return [0, 1, 2].map(index => (
+        foreground[index] * foreground[3] + background[index] * background[3] * (1 - foreground[3])
+      ) / alpha).concat(alpha);
+    };
+    let background = [255, 255, 255, 1];
+    const ancestors = [];
+    for (let node = element; node; node = node.parentElement) ancestors.push(node);
+    for (const node of ancestors.reverse()) {
+      const layer = parse(getComputedStyle(node).backgroundColor);
+      if (layer[3] > 0) background = blend(layer, background);
+    }
+    const foreground = blend(parse(getComputedStyle(element).color), background);
+    const component = value => {
+      const normalized = value / 255;
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = rgb => 0.2126 * component(rgb[0]) + 0.7152 * component(rgb[1]) + 0.0722 * component(rgb[2]);
+    const first = luminance(foreground);
+    const second = luminance(background);
+    return {
+      foreground: foreground.slice(0, 3),
+      background: background.slice(0, 3),
+      ratio: (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05),
+    };
+  });
+  assert.ok(sample.ratio >= 4.5, `${label} contrast ${sample.ratio}`);
+  return sample;
+}
+
+async function assertReducedMotion(page) {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  assert.strictEqual(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), true);
+  const transitionDuration = await page.locator('.km-item-button').first().evaluate(element =>
+    getComputedStyle(element).transitionDuration
+  );
+  assert.match(transitionDuration, /^(0s(?:, 0s)*)$/);
+}
+
 async function selectItem(page, label) {
   const button = page.locator('.km-item-button').filter({ hasText: label }).first();
   await button.click();
@@ -248,7 +295,9 @@ async function openDialogWithReorderedDetail(page, staleEntryId, targetLabel, ac
 async function activateTab(page, name) {
   const tab = page.getByRole('tab', { name, exact: true });
   await tab.click();
-  await page.waitForFunction(element => element.getAttribute('aria-selected') === 'true', await tab.elementHandle());
+  await page.waitForFunction(expected => Array.from(document.querySelectorAll('[role="tab"]')).some(element =>
+    element.textContent.trim() === expected && element.getAttribute('aria-selected') === 'true'
+  ), name);
   assert.strictEqual(await tab.getAttribute('aria-selected'), 'true');
   return tab;
 }
@@ -716,7 +765,7 @@ async function run() {
     attachPage(memberPage, ledger, 'paid-member-mobile-dark');
     await openProfile(memberPage, origin);
     assert.match(await memberPage.locator('[data-km-mode]').textContent(), /Read-only membership/);
-    assert.match(await memberPage.locator('[data-km-detail]').textContent(), /Read-only access/);
+    assert.match(await memberPage.locator('[data-km-detail]').textContent(), /Read-only membership/);
     assert.strictEqual((await memberPage.locator('[data-knowledge-management]').textContent()).includes('Protected legal bytes'), false);
     assert.strictEqual(await memberPage.locator('.km-actions button').count(), 0);
     const correction = memberPage.locator('.km-correction-link');
@@ -755,6 +804,50 @@ async function run() {
     await assertNoOverflow(mobileLight);
     await screenshot(mobileLight, evidenceDirectory, `${selected}-settings-mobile-light-main.png`);
     await mobileLightContext.close();
+
+    await pool.query(
+      "UPDATE subscriptions SET status='expired', updated_at=statement_timestamp() WHERE organization_id=$1",
+      [ORG]
+    );
+    const subscriptionReadOnlyContext = await contextFor(browser, origin, sessions.owner, {
+      role: 'paid-owner-subscription-readonly-desktop-light',
+      viewport: { width: 1440, height: 1000 }, theme: 'light',
+    }, ledger);
+    const subscriptionReadOnly = await subscriptionReadOnlyContext.newPage();
+    attachPage(subscriptionReadOnly, ledger, 'paid-owner-subscription-readonly-desktop-light');
+    await openSettings(subscriptionReadOnly, origin);
+    assert.match(await subscriptionReadOnly.locator('#northstar-trial-status').textContent(), /restricted read-only mode/);
+    assert.match(await subscriptionReadOnly.locator('[data-km-mode]').textContent(), /Read-only subscription/);
+    assert.match(await subscriptionReadOnly.locator('[data-km-detail]').textContent(), /Read-only subscription/);
+    assert.strictEqual(await subscriptionReadOnly.locator('.km-actions button').count(), 0);
+    await assertNoOverflow(subscriptionReadOnly);
+    await assertReducedMotion(subscriptionReadOnly);
+    const subscriptionModeContrast = await assertTextContrast(
+      subscriptionReadOnly, '[data-km-mode]', 'subscription read-only mode'
+    );
+    const subscriptionHeadingContrast = await assertTextContrast(
+      subscriptionReadOnly, '[data-km-detail] h3', 'subscription read-only detail heading'
+    );
+    await screenshot(
+      subscriptionReadOnly,
+      evidenceDirectory,
+      `${selected}-settings-desktop-light-subscription-readonly.png`
+    );
+    await subscriptionReadOnly.setViewportSize({ width: 320, height: 800 });
+    await assertNoOverflow(subscriptionReadOnly);
+    assert.strictEqual(await subscriptionReadOnly.locator('.km-actions button').count(), 0);
+    await screenshot(
+      subscriptionReadOnly,
+      evidenceDirectory,
+      `${selected}-settings-reflow-320-subscription-readonly.png`
+    );
+    const subscriptionWrites = ledger.requests.filter(entry =>
+      entry.role === 'paid-owner-subscription-readonly-desktop-light' &&
+      entry.path.startsWith('/api/v1/knowledge-management') &&
+      ['POST', 'PUT', 'PATCH', 'DELETE'].includes(entry.method)
+    );
+    assert.deepStrictEqual(subscriptionWrites, []);
+    await subscriptionReadOnlyContext.close();
 
     const demoDarkContext = await contextFor(browser, origin, null, {
       role: 'demo-mobile-dark', viewport: { width: 390, height: 844 }, theme: 'dark',
@@ -809,14 +902,15 @@ async function run() {
       paidSurfaces: ['Settings', 'Business Profile'],
       demoSurfaces: ['Settings', 'Business Profile'],
       themes: ['light', 'dark'],
-      viewports: ['1440x1000', '390x844'],
+      viewports: ['1440x1000', '390x844', '320x800 reflow equivalent'],
       filters: true,
       exactWorkflow: ['review', 'changes', 'approve', 'publish'],
       exactLifecycle: ['revise', 'tombstone', 'rollback-as-new-version'],
       synchronization: ['drift', 'reconciliation', 'retry'],
       delayedDetailOrdering: ['review', 'changes', 'approve', 'publish', 'revise', 'tombstone', 'rollback', 'reconcile', 'retry'],
-      accessibility: ['headings', 'labels', 'tabs', 'keyboard', 'dialog', 'Escape', 'focus restoration', 'alert focus'],
-      boundaries: ['paid tenant authority', 'isolated simulated demo', 'read-only member', 'no provider transport'],
+      accessibility: ['headings', 'labels', 'tabs', 'keyboard', 'dialog', 'Escape', 'focus restoration', 'alert focus', 'reduced motion', 'contrast', '320px reflow'],
+      contrast: { subscriptionMode: subscriptionModeContrast, subscriptionHeading: subscriptionHeadingContrast },
+      boundaries: ['paid tenant authority', 'isolated simulated demo', 'read-only member', 'subscription read-only', 'no provider transport'],
       xssExecutions: 0,
       overflow: 0,
       evidenceDirectory: evidenceDirectory || null,

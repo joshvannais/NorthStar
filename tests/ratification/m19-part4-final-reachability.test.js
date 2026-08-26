@@ -46,6 +46,7 @@ const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/polaris-surface-card.js',
   'public/js/presentation-format.js',
   'public/js/product-telemetry.js',
+  'public/js/scheduling-time-contract.js',
   'public/js/transcript-renderer.js',
   'public/js/vendor/retell-web-client.mjs',
   'public/js/workspace-form-state.js',

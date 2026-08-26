@@ -109,8 +109,15 @@ async function demoCanonicalProjection(req, res, compatibility) {
     const workspace = demoWorkspace(record);
     const items = demoCanonicalFilters(demoCanonicalItems(workspace), req.query || {});
     const context = demoCanonicalContext(workspace);
+    const first = items[0];
+    const calendarTimeZoneAuthority = req.params.surface === 'calendar' && first ? {
+      profileId: first.businessProfileAuthorityId,
+      profileVersion: Number(first.businessProfileInputVersion),
+      profileHash: first.businessProfileInputHash,
+      timeZone: workspace.configuration.businessProfile.timeZone,
+    } : null;
     const data = compatibility
-      ? compatibilityProjection(req.params.surface, items, context)
+      ? compatibilityProjection(req.params.surface, items, context, calendarTimeZoneAuthority)
       : surfaceProjection(req.params.surface, items, context);
     return res.json({ success: true, data });
   } catch (error) {

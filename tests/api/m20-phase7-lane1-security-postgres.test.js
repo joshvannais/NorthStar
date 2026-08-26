@@ -182,11 +182,13 @@ realPostgres('Mission 20 Phase 7 Lane 1 customer and CSV security boundary', () 
       [OWNER_ID, MEMBER_ID, ORGANIZATION_ID]
     );
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+    const businessProfile = canonicalFenceProfile({ version: 'm20-phase7-lane1-api-v1' });
+    businessProfile.company.timeZone = 'America/New_York';
     await putBusinessProfile(pool, {
       organizationId: ORGANIZATION_ID,
       userId: OWNER_ID,
       expectedVersion: null,
-      profile: canonicalFenceProfile({ version: 'm20-phase7-lane1-api-v1' }),
+      profile: businessProfile,
     });
     ownerSession = await provisionDurableSession(pool, {
       userId: OWNER_ID, organizationId: ORGANIZATION_ID, role: 'owner',

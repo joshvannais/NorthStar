@@ -8,7 +8,11 @@
 (function (global) {
   'use strict';
 
-  var READ_MODEL_VERSION = 'm19-part3-read-v1';
+  var READ_MODEL_VERSION = 'm22-part1-read-v1';
+  var ACCEPTED_READ_MODEL_VERSIONS = Object.freeze({
+    'm19-part3-read-v1': true,
+    'm22-part1-read-v1': true,
+  });
   var DIGEST = /^[0-9a-f]{64}$/i;
   var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   var ALLOWED_SURFACES = {
@@ -217,7 +221,8 @@
 
   function validateProjection(surface, data, context) {
     if (!data || typeof data !== 'object' || data.surface !== surface) throw new Error('Polaris surface does not match the request.');
-    if (data.readModelVersion !== READ_MODEL_VERSION || !DIGEST.test(String(data.digest || '')) || !Array.isArray(data.items)) {
+    if (!ACCEPTED_READ_MODEL_VERSIONS[data.readModelVersion] ||
+        !DIGEST.test(String(data.digest || '')) || !Array.isArray(data.items)) {
       throw new Error('Polaris response envelope is malformed.');
     }
     validateAuthority(data.authority, context);

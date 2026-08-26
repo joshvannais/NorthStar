@@ -493,13 +493,27 @@ class CalendarData {
 
       async updateEvent(id, data) {
         try {
+          var current = calState.events.find(function(event) { return event.id === id; });
+          var authority = current && current.scheduleAuthority;
+          if (!authority || !Number.isSafeInteger(authority.revision) ||
+              !/^[0-9a-f]{64}$/.test(authority.digest || '')) {
+            throw new Error('Current schedule revision is unavailable. Refresh Calendar before approving this change.');
+          }
           var start = data.date && data.time ? new Date(data.date + 'T' + data.time).toISOString() : null;
           var end = data.date && data.endTime ? new Date(data.date + 'T' + data.endTime).toISOString() : null;
           var headers = Object.assign({'Content-Type':'application/json'}, this._authHeaders());
           var context = window.CanonicalIntelligence.synchronizeAuthority();
           if (context.sessionId) headers['X-NorthStar-Session-ID'] = context.sessionId;
+          headers['Idempotency-Key'] = 'calendar-edit-' + window.crypto.randomUUID();
           const r = await window.NorthStarAccountSession.fetch('/api/v1/canonical/appointments/' + encodeURIComponent(id), {
-            method:'PATCH', headers:headers, body:JSON.stringify({ scheduledStart:start, scheduledEnd:end, status:'scheduled' })
+            method:'PATCH', headers:headers, body:JSON.stringify({
+              scheduledStart:start,
+              scheduledEnd:end,
+              status:'scheduled',
+              expectedRevision:authority.revision,
+              expectedDigest:authority.digest,
+              action:'calendar_edit'
+            })
           });
           const d = await r.json();
           if (!r.ok) throw new Error(d && d.error && d.error.message || 'Appointment update failed.');
@@ -707,6 +721,7 @@ window.syncCalendarFromAppStore = function() {
       duration: values ? values.estimatedProductionDurationHours : null,
       calculationVersion: record.canonical && record.canonical.calculationVersion,
       snapshotDigest: record.canonical && record.canonical.snapshotDigest,
+      scheduleAuthority: record.scheduleAuthority,
       readOnly: true
     };
   });

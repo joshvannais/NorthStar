@@ -11,8 +11,10 @@ const {
 const { requirePermission } = require('../auth/permissions');
 const { sha256, stableStringify, stableValue } = require('../services/businessProfileAdapter');
 const { bindIntegrationOwner } = require('../services/organizationAuthority');
+const { normalizeScheduleMutation } = require('../scheduling/contract');
+const { scheduleAuthority, updateAppointmentSchedule } = require('../scheduling/repository');
 
-const READ_MODEL_VERSION = 'm19-part3-read-v1';
+const READ_MODEL_VERSION = 'm22-part1-read-v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SURFACES = new Set([
   'customer-detail', 'leads', 'communications', 'calendar',
@@ -102,6 +104,14 @@ const GRAPH_SELECT = `
          a.id AS appointment_id, a.external_appointment_id, a.preference,
          a.scheduled_start, a.scheduled_end, a.status AS appointment_status,
          a.created_at AS appointment_created_at, a.updated_at AS appointment_updated_at,
+         sa.id AS assignment_id, sa.target_state, sa.workforce_profile_id,
+         sa.workforce_crew_id, sa.schedule_state, sa.dispatch_state,
+         sa.scheduled_start AS assignment_scheduled_start,
+         sa.scheduled_end AS assignment_scheduled_end,
+         sa.appointment_status AS assignment_appointment_status,
+         sa.needs_review, sa.review_reasons, sa.revision,
+         sa.canonical_digest, sa.last_action_code, sa.last_reason,
+         sa.updated_at AS assignment_updated_at,
          ps.id AS polaris_snapshot_id, ps.calculation_version,
          ps.normalized_input_fingerprint, ps.business_profile_id, ps.business_profile_version,
          ps.business_profile_hash, ps.supporting_fact_ids, ps.snapshot,
@@ -139,6 +149,8 @@ const GRAPH_SELECT = `
       ON e.organization_id = o.organization_id AND e.operation_id = o.id
     JOIN canonical_appointments a
       ON a.organization_id = o.organization_id AND a.operation_id = o.id
+    JOIN canonical_schedule_assignments sa
+      ON sa.organization_id = a.organization_id AND sa.appointment_id = a.id
     JOIN canonical_polaris_snapshots ps
       ON ps.organization_id = o.organization_id AND ps.operation_id = o.id`;
 
@@ -198,8 +210,23 @@ function assertPersistedSnapshotAgreement(row) {
   }
 }
 
+function assertScheduleAgreement(row) {
+  const matches = row.assignment_id &&
+    timestamp(row.scheduled_start, 'appointment scheduledStart') ===
+      timestamp(row.assignment_scheduled_start, 'assignment scheduledStart') &&
+    timestamp(row.scheduled_end, 'appointment scheduledEnd') ===
+      timestamp(row.assignment_scheduled_end, 'assignment scheduledEnd') &&
+    row.appointment_status === row.assignment_appointment_status;
+  if (!matches) {
+    const error = new Error('Persisted appointment and canonical schedule authority disagree.');
+    error.code = 'CANONICAL_PROJECTION_CONTRADICTION';
+    throw error;
+  }
+}
+
 function projectRow(row) {
   assertPersistedSnapshotAgreement(row);
+  assertScheduleAgreement(row);
   const facts = persistedFacts(row);
   const timestamps = {
     operationClaimedAt: timestamp(row.operation_claimed_at, 'operation claimedAt'),
@@ -231,6 +258,7 @@ function projectRow(row) {
       opportunity: row.opportunity_id,
       estimate: row.estimate_id,
       appointment: row.appointment_id,
+      scheduleAssignment: row.assignment_id,
       polarisSnapshot: row.polaris_snapshot_id,
       facts: facts.map(function (fact) { return fact.id; }),
     },
@@ -278,9 +306,15 @@ function projectRow(row) {
     appointment: {
       id: row.appointment_id,
       preference: row.preference,
-      scheduledStart: row.scheduled_start,
-      scheduledEnd: row.scheduled_end,
-      status: row.appointment_status,
+      scheduledStart: timestamp(row.assignment_scheduled_start, 'assignment scheduledStart'),
+      scheduledEnd: timestamp(row.assignment_scheduled_end, 'assignment scheduledEnd'),
+      status: row.assignment_appointment_status,
+      scheduleAuthority: scheduleAuthority({
+        ...row,
+        scheduled_start: row.assignment_scheduled_start,
+        scheduled_end: row.assignment_scheduled_end,
+        appointment_status: row.assignment_appointment_status,
+      }),
     },
     facts,
     calculationVersion: row.calculation_version,
@@ -308,6 +342,7 @@ function projectRow(row) {
     supportingTranscriptFactIds: projection.supportingTranscriptFactIds,
     calculationVersion: projection.calculationVersion,
     snapshotDigest: projection.snapshotDigest,
+    scheduleAuthority: projection.appointment.scheduleAuthority,
     timestamps: projection.timestamps,
     metadata: projection.metadata,
     businessProfile: {
@@ -705,41 +740,47 @@ function createCanonicalRouter(options) {
     if (!UUID.test(req.params.id)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } });
     try {
       const pool = resolvePool(dependencies.poolProvider);
-      const before = await pool.query(
-        `SELECT a.* FROM canonical_appointments a
-          JOIN canonical_transcripts t
-            ON t.organization_id = a.organization_id AND t.operation_id = a.operation_id
-         WHERE a.organization_id = $1 AND a.id = $2
-           AND (t.source NOT IN ('simulation', 'demo')
-             OR ($3::text IS NOT NULL AND t.external_call_id = $3 || ':call'))`,
+      const scoped = await pool.query(
+        `SELECT 1
+           FROM canonical_schedule_assignments assignment
+           JOIN canonical_appointments appointment
+             ON appointment.organization_id = assignment.organization_id
+            AND appointment.id = assignment.appointment_id
+           JOIN canonical_transcripts transcript
+             ON transcript.organization_id = appointment.organization_id
+            AND transcript.operation_id = appointment.operation_id
+          WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2
+            AND (transcript.source NOT IN ('simulation', 'demo')
+              OR ($3::text IS NOT NULL AND transcript.external_call_id = $3 || ':call'))`,
         [context.organizationId, req.params.id, context.explicitSession]
       );
-      if (!before.rows.length) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } });
-      const allowedStatus = ['preferred', 'scheduled', 'cancelled', 'completed'];
-      const status = req.body.status === undefined ? before.rows[0].status : String(req.body.status);
-      if (!allowedStatus.includes(status)) return res.status(400).json({ success: false, error: { code: 'INVALID_APPOINTMENT_STATUS', message: 'Appointment status is invalid.' } });
-      const start = req.body.scheduledStart === undefined ? before.rows[0].scheduled_start : req.body.scheduledStart;
-      const end = req.body.scheduledEnd === undefined ? before.rows[0].scheduled_end : req.body.scheduledEnd;
-      const updated = await pool.query(
-        `UPDATE canonical_appointments
-            SET scheduled_start = $3, scheduled_end = $4, status = $5, updated_at = NOW()
-          WHERE organization_id = $1 AND id = $2
-          RETURNING *`,
-        [context.organizationId, req.params.id, start, end, status]
-      );
-      try {
-        await dependencies.audit.record({
+      if (scoped.rowCount !== 1) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } });
+      }
+      const mutation = normalizeScheduleMutation({
         organizationId: context.organizationId,
-        userId: context.userId,
-        actorLabel: 'authenticated',
-        actorRole: req.userRole || req.tenantContext.role,
-        action: 'PATCH 200',
-        entityType: 'canonical_appointment',
-        entityId: req.params.id,
-        beforeState: before.rows[0],
-        afterState: updated.rows[0],
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent'),
+        actorUserId: context.userId,
+        actorAccessRole: req.userRole || req.tenantContext.role,
+        authSessionId: req.authSession && req.authSession.id,
+        appointmentId: req.params.id,
+        explicitSession: context.explicitSession,
+        idempotencyKey: req.get('Idempotency-Key'),
+        body: req.body,
+      });
+      const updated = await updateAppointmentSchedule(pool, mutation);
+      if (!updated.replayed) try {
+        await dependencies.audit.record({
+          organizationId: context.organizationId,
+          userId: context.userId,
+          actorLabel: 'authenticated',
+          actorRole: req.userRole || req.tenantContext.role,
+          action: 'PATCH 200',
+          entityType: 'canonical_appointment',
+          entityId: req.params.id,
+          beforeState: updated.audit.before,
+          afterState: updated.audit.after,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
           correlationId: req.requestId,
         });
       } catch (_auditError) {
@@ -748,10 +789,13 @@ function createCanonicalRouter(options) {
           event: 'audit_persistence_failed',
         });
       }
-      return res.json({ success: true, data: updated.rows[0] });
+      if (updated.replayed) res.set('Idempotency-Replayed', 'true');
+      return res.status(updated.status).json(updated.body);
     } catch (error) {
-      if (error && error.code === '23514') return res.status(400).json({ success: false, error: { code: 'INVALID_APPOINTMENT_SCHEDULE', message: 'Appointment schedule is invalid.' } });
-      return sendPersistenceUnavailable(res);
+      if (error && error.status) {
+        return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
+      }
+      return sendPersistenceUnavailable(res, req);
     }
   });
 

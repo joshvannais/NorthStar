@@ -367,12 +367,147 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .send({ status: 'scheduled' });
     expect(viewerPatch.status).toBe(403);
-    const ownerPatch = await request(app)
+    const assignment = (await db.getPool().query(
+      `SELECT revision, canonical_digest FROM canonical_schedule_assignments
+        WHERE organization_id = $1 AND appointment_id = $2`,
+      [ORG_A, memberSimulation.body.ids.appointment]
+    )).rows[0];
+    const missingApproval = await request(app)
       .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
       .set(auth(USERS.owner))
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .send({ status: 'scheduled' });
+    expect(missingApproval.status).toBe(428);
+    expect(missingApproval.body.error.code).toBe('M22_APPROVAL_REQUIRED');
+    const memberPatch = await request(app)
+      .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
+      .set(auth(USERS.member))
+      .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
+      .set('Idempotency-Key', 'm22-mounted-member-update-0001')
+      .send({
+        status: 'scheduled',
+        expectedRevision: Number(assignment.revision),
+        expectedDigest: assignment.canonical_digest.trim(),
+        action: 'calendar_edit',
+        organizationId: ORG_B,
+        actorUserId: USERS.owner,
+        actorAccessRole: 'owner',
+        authSessionId: USERS.owner,
+      });
+    expect(memberPatch.status).toBe(403);
+    expect(memberPatch.body.error.code).toBe('M22_APPROVAL_FORBIDDEN');
+    const ownerBody = {
+      status: 'scheduled',
+      expectedRevision: Number(assignment.revision),
+      expectedDigest: assignment.canonical_digest.trim(),
+      action: 'calendar_edit',
+    };
+    const ownerPatch = await request(app)
+      .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
+      .set(auth(USERS.owner))
+      .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
+      .set('Idempotency-Key', 'm22-mounted-appointment-update-0001')
+      .send(ownerBody);
     expect(ownerPatch.status).toBe(200);
+    expect(ownerPatch.body.data.scheduleAuthority).toMatchObject({
+      revision: 2,
+      targetState: 'unassigned',
+      scheduleState: 'unscheduled',
+      dispatchState: 'not_dispatched',
+      needsReview: true,
+      reviewReasons: ['conflict_evaluation_not_available'],
+    });
+    const replay = await request(app)
+      .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
+      .set(auth(USERS.owner))
+      .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
+      .set('Idempotency-Key', 'm22-mounted-appointment-update-0001')
+      .send(ownerBody);
+    expect(replay.status).toBe(200);
+    expect(replay.headers['idempotency-replayed']).toBe('true');
+    expect(replay.body).toEqual(ownerPatch.body);
+    const collision = await request(app)
+      .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
+      .set(auth(USERS.owner))
+      .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
+      .set('Idempotency-Key', 'm22-mounted-appointment-update-0001')
+      .send({ ...ownerBody, reason: 'Divergent replay.' });
+    expect(collision.status).toBe(409);
+    expect(collision.body.error.code).toBe('M22_IDEMPOTENCY_CONFLICT');
+    const stale = await request(app)
+      .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
+      .set(auth(USERS.owner))
+      .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
+      .set('Idempotency-Key', 'm22-mounted-stale-update-0001')
+      .send(ownerBody);
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe('M22_STALE_APPROVAL');
+    await db.getPool().query(
+      `UPDATE workforce_profiles profile
+          SET operational_role = 'dispatcher', updated_at = NOW()
+         FROM organization_memberships membership
+        WHERE profile.organization_id = membership.organization_id
+          AND profile.membership_id = membership.id
+          AND membership.organization_id = $1
+          AND membership.user_id = $2`,
+      [ORG_A, USERS.member]
+    );
+    const dispatcherAuthority = (await db.getPool().query(
+      `SELECT revision, canonical_digest FROM canonical_schedule_assignments
+        WHERE organization_id = $1 AND appointment_id = $2`,
+      [ORG_A, memberSimulation.body.ids.appointment]
+    )).rows[0];
+    const dispatcherBody = {
+      scheduledStart: '2027-05-01T13:00:00Z',
+      scheduledEnd: '2027-05-01T14:00:00Z',
+      status: 'scheduled',
+      expectedRevision: Number(dispatcherAuthority.revision),
+      expectedDigest: dispatcherAuthority.canonical_digest.trim(),
+      action: 'calendar_edit',
+      reason: 'Active dispatcher approved this exact schedule.',
+    };
+    const dispatcherPatch = await request(app)
+      .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
+      .set(auth(USERS.member))
+      .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
+      .set('Idempotency-Key', 'm22-mounted-dispatcher-update-0001')
+      .send(dispatcherBody);
+    expect(dispatcherPatch.status).toBe(200);
+    expect(dispatcherPatch.body.data.scheduleAuthority).toMatchObject({ revision: 3, scheduleState: 'scheduled' });
+    await db.getPool().query(
+      `UPDATE workforce_profiles profile
+          SET operational_role = 'employee', updated_at = NOW()
+         FROM organization_memberships membership
+        WHERE profile.organization_id = membership.organization_id
+          AND profile.membership_id = membership.id
+          AND membership.organization_id = $1
+          AND membership.user_id = $2`,
+      [ORG_A, USERS.member]
+    );
+    const downgradedReplay = await request(app)
+      .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
+      .set(auth(USERS.member))
+      .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
+      .set('Idempotency-Key', 'm22-mounted-dispatcher-update-0001')
+      .send(dispatcherBody);
+    expect(downgradedReplay.status).toBe(403);
+    expect(downgradedReplay.body.error.code).toBe('M22_APPROVAL_FORBIDDEN');
+    const evidence = await db.getPool().query(
+      `SELECT
+         (SELECT count(*)::int FROM canonical_schedule_approvals approval
+           WHERE approval.organization_id = assignment.organization_id
+             AND approval.assignment_id = assignment.id) AS approvals,
+         (SELECT count(*)::int FROM canonical_schedule_audit_events audit
+           WHERE audit.organization_id = assignment.organization_id
+             AND audit.assignment_id = assignment.id) AS audits,
+         (SELECT count(*)::int FROM canonical_schedule_idempotency replay
+           WHERE replay.organization_id = assignment.organization_id
+             AND replay.assignment_id = assignment.id) AS idempotency
+       FROM canonical_schedule_assignments assignment
+      WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2`,
+      [ORG_A, memberSimulation.body.ids.appointment]
+    );
+    expect(evidence.rows).toEqual([{ approvals: 2, audits: 2, idempotency: 2 }]);
     const crossOrganization = await request(app)
       .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
       .set(auth(USERS.other))

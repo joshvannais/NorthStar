@@ -12,6 +12,7 @@ const { stableStringify } = require('../../src/services/businessProfileAdapter')
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { EXTREME_FENCE_SUBTOTAL, canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const {
   READ_MODEL_VERSION,
   createCanonicalRouter,
@@ -23,20 +24,17 @@ const {
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const migrationDir = path.resolve(__dirname, '../../migrations');
-const migrations = [
-  '001_initial_schema.sql', '002_seed_data.sql', '003_voice_sessions.sql',
-  '004_canonical_persistence_v2.sql', '005_canonical_organization_authority.sql',
-  '006_canonical_voice_sessions.sql',
-  '007_canonical_tax_authority.sql',
-  '008_canonical_demo_authority.sql',
-  '009_canonical_voice_provider_identity.sql',
-  '010_account_session_authority.sql',
-];
+const migrations = fs.readdirSync(migrationDir)
+  .filter(filename => /^\d{3}_[a-z0-9_]+\.sql$/.test(filename))
+  .sort();
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const USER_A = '00000000-0000-0000-0000-000000000002';
 const ORG_B = '00000000-0000-0000-0000-000000000010';
 const USER_B = '00000000-0000-0000-0000-000000000011';
+const SESSION_A = '00000000-0000-4000-8000-000000000021';
+const SESSION_B = '00000000-0000-4000-8000-000000000022';
 const RATIFICATION_KEY = 'm19-part3-fence-001';
+const authSessions = new Map();
 
 function dataDigest() {
   const root = path.resolve(__dirname, '../../data');
@@ -74,6 +72,12 @@ async function applyMigrations(pool) {
   );
   await putBusinessProfile(pool, { organizationId: ORG_A, userId: USER_A, expectedVersion: null, profile: graphInput(ORG_A, 'profile-a', 'profile-a', 'Profile A').businessProfile });
   await putBusinessProfile(pool, { organizationId: ORG_B, userId: USER_B, expectedVersion: null, profile: graphInput(ORG_B, 'profile-b', 'profile-b', 'Profile B').businessProfile });
+  for (const [userId, organizationId, sessionId] of [
+    [USER_A, ORG_A, SESSION_A], [USER_B, ORG_B, SESSION_B],
+  ]) {
+    const session = await provisionDurableSession(pool, { userId, organizationId, role: 'owner', sessionId });
+    authSessions.set(userId, session.sessionId);
+  }
 }
 
 function graphInput(organizationId, sessionId, key, customerName) {
@@ -136,6 +140,7 @@ function fakeAuth(req, _res, next) {
     req.orgId = organizationId;
     req.userRole = 'owner';
     req.user = Object.freeze({ id: userId, organizationId, role: 'owner' });
+    req.authSession = Object.freeze({ id: req.get('X-Test-Auth-Session'), transport: 'test' });
   }
   next();
 }
@@ -145,6 +150,7 @@ function headers(organizationId, userId, sessionId) {
     'X-Test-Organization': organizationId,
     'X-Test-User': userId,
     'X-NorthStar-Session-ID': sessionId,
+    'X-Test-Auth-Session': authSessions.get(userId) || '',
   };
 }
 
@@ -690,6 +696,11 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     };
     const mutationApp = createApp(function () { return pool; }, cache, auditRecorder);
     const appointmentId = graphA.body.ids.appointment;
+    const scheduleAuthority = (await pool.query(
+      `SELECT revision, canonical_digest FROM canonical_schedule_assignments
+        WHERE organization_id = $1 AND appointment_id = $2`,
+      [ORG_A, appointmentId]
+    )).rows[0];
     const crossTenant = await request(mutationApp)
       .patch('/api/v1/canonical/appointments/' + appointmentId)
       .set(headers(ORG_B, USER_B, 'session-a'))
@@ -705,9 +716,18 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     const updated = await request(mutationApp)
       .patch('/api/v1/canonical/appointments/' + appointmentId)
       .set(headers(ORG_A, USER_A, 'session-a'))
-      .send({ status: 'scheduled', scheduledStart: '2026-07-28T13:00:00.000Z', scheduledEnd: '2026-07-28T14:00:00.000Z' });
+      .set('Idempotency-Key', 'm22-compat-appointment-update-0001')
+      .send({
+        status: 'scheduled',
+        scheduledStart: '2026-07-28T13:00:00.000Z',
+        scheduledEnd: '2026-07-28T14:00:00.000Z',
+        expectedRevision: Number(scheduleAuthority.revision),
+        expectedDigest: scheduleAuthority.canonical_digest.trim(),
+        action: 'calendar_edit',
+      });
     expect(updated.status).toBe(200);
     expect(updated.body.data.status).toBe('scheduled');
+    expect(updated.body.data.scheduleAuthority).toMatchObject({ revision: 2, scheduleState: 'scheduled' });
     const auditRow = await pool.query(
       `SELECT organization_id, user_id, action, entity_type, entity_id, details
          FROM audit_logs WHERE entity_type = 'canonical_appointment' AND entity_id = $1`,

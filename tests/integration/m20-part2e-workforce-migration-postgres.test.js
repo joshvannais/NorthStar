@@ -19,7 +19,11 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
     suiteDatabase = await createSuiteDatabase('m20-part2e-migration');
     pool = new Pool({ connectionString: suiteDatabase.connectionString });
     preWorkforceDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m20-p2e-pre-'));
-    const deferred = new Set(['015_workforce_authority.sql', '020_canonical_workforce_access_roles.sql']);
+    const deferred = new Set([
+      '015_workforce_authority.sql',
+      '020_canonical_workforce_access_roles.sql',
+      '032_canonical_schedule_assignment_authority.sql',
+    ]);
     for (const filename of fs.readdirSync(MIGRATIONS).filter(name => /^\d+.*\.sql$/.test(name) && !deferred.has(name))) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(preWorkforceDirectory, filename));
     }
@@ -217,13 +221,18 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
               (SELECT count(*)::int FROM workforce_audit_events) AS audit_count
          FROM workforce_profiles`
     )).rows).toEqual(beforeRerun.rows);
-    for (const filename of ['015_workforce_authority.sql', '020_canonical_workforce_access_roles.sql']) {
+    for (const filename of [
+      '015_workforce_authority.sql',
+      '020_canonical_workforce_access_roles.sql',
+      '032_canonical_schedule_assignment_authority.sql',
+    ]) {
       const migration = db.loadMigrations(MIGRATIONS).find(item => item.file === filename);
       expect(migration).toBeDefined();
       expect((await pool.query(
-        `SELECT trim(checksum) AS checksum FROM _migrations WHERE filename = $1`,
+        `SELECT trim(checksum) AS checksum, count(*) OVER ()::int AS ledger_count
+           FROM _migrations WHERE filename = $1`,
         [filename]
-      )).rows).toEqual([{ checksum: migration.digest }]);
+      )).rows).toEqual([{ checksum: migration.digest, ledger_count: 1 }]);
     }
   }, 60000);
 });

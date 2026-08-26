@@ -12,6 +12,7 @@ const { provisionDurableSession } = require('../helpers/account-session-fixture'
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { normalizeScheduleMutation } = require('../../src/scheduling/contract');
 const { updateAppointmentSchedule } = require('../../src/scheduling/repository');
+const schedulingTime = require('../../public/js/scheduling-time-contract');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const ORGANIZATION_ID = '81000000-0000-4000-8000-000000000001';
@@ -109,11 +110,13 @@ async function main() {
       [OWNER_ID, ORGANIZATION_ID]
     );
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+    const browserProfile = canonicalFenceProfile({ companyName: 'Mission 22 Browser Tenant' });
+    browserProfile.company.timeZone = 'America/New_York';
     await putBusinessProfile(pool, {
       organizationId: ORGANIZATION_ID,
       userId: OWNER_ID,
       expectedVersion: null,
-      profile: canonicalFenceProfile({ companyName: 'Mission 22 Browser Tenant' }),
+      profile: browserProfile,
     });
     const auth = await provisionDurableSession(pool, {
       userId: OWNER_ID,
@@ -154,8 +157,8 @@ async function main() {
     movedDay.setUTCDate(weekStart.getUTCDate() + 4);
     const scheduledDate = scheduledDay.toISOString().slice(0, 10);
     const movedDate = movedDay.toISOString().slice(0, 10);
-    const fixtureStart = scheduledDate + 'T10:00:00.000Z';
-    const fixtureEnd = scheduledDate + 'T11:00:00.000Z';
+    const fixtureStart = schedulingTime.resolveWallTime(scheduledDate, '10:00', 'America/New_York').candidates[0].rfc3339;
+    const fixtureEnd = schedulingTime.resolveWallTime(scheduledDate, '11:00', 'America/New_York').candidates[0].rfc3339;
     const fixture = normalizeScheduleMutation({
       organizationId: ORGANIZATION_ID,
       actorUserId: OWNER_ID,
@@ -170,6 +173,7 @@ async function main() {
         status: 'scheduled',
         expectedRevision: 1,
         expectedDigest: initial.canonical_digest.trim(),
+        expectedTimeZone: 'America/New_York',
         action: 'calendar_edit',
         reason: 'Create visible browser schedule fixture through canonical approval.',
       },
@@ -228,7 +232,7 @@ async function main() {
 
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
-      timezoneId: 'UTC',
+      timezoneId: 'America/Los_Angeles',
       colorScheme: 'light',
       serviceWorkers: 'block',
     });
@@ -296,6 +300,8 @@ async function main() {
     await screenshot(page, 'desktop-light-edit-dialog');
     assert.ok((await page.locator('#calScheduleCurrent').textContent()).includes('Current schedule:'));
     assert.strictEqual(await page.locator('#calScheduleApprove').isDisabled(), true, 'approval begins disabled');
+    assert.strictEqual(await page.locator('#calEventDate').inputValue(), scheduledDate, 'dialog displays the tenant date outside the browser zone');
+    assert.strictEqual(await page.locator('#calEventTime').inputValue(), '10:00', 'dialog displays the tenant wall clock outside the browser zone');
     await page.getByRole('button', { name:'Cancel', exact:true }).focus();
     await page.keyboard.press('Tab');
     assert.strictEqual(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('cal-modal-close')), true, 'Tab wraps from the last enabled control');
@@ -304,6 +310,30 @@ async function main() {
     assert.strictEqual(await page.evaluate(() => document.activeElement && document.activeElement.textContent.trim()), 'Cancel', 'Shift+Tab wraps from the first control');
     await page.keyboard.press('Escape');
     assert.strictEqual(await page.evaluate(() => document.activeElement && document.activeElement.dataset.calendarEventAction), 'edit', 'Escape restores focus');
+
+    await editButton.press('Enter');
+    await page.locator('#calEventDate').fill('2027-03-14');
+    await page.locator('#calEventTime').fill('02:30');
+    await page.locator('#calEventEndDate').fill('2027-03-14');
+    await page.locator('#calEventEndTime').fill('03:30');
+    await page.locator('#calScheduleConfirmed').check();
+    assert.strictEqual(await page.locator('#calScheduleApprove').isDisabled(), true, 'DST gap cannot be approved');
+    assert.match(await page.locator('#calScheduleStatus').textContent(), /does not exist.*America\/New_York/i);
+    assert.strictEqual(scheduleRequests.length, 0, 'DST gap sends zero PATCH requests');
+    await page.getByRole('button', { name:'Cancel', exact:true }).click();
+
+    await editButton.press('Enter');
+    await page.locator('#calEventDate').fill('2027-11-07');
+    await page.locator('#calEventTime').fill('01:30');
+    await page.locator('#calEventEndDate').fill('2027-11-07');
+    await page.locator('#calEventEndTime').fill('02:30');
+    assert.strictEqual(await page.locator('#calStartOccurrence input').count(), 2, 'fold exposes two explicit occurrence choices');
+    assert.strictEqual(await page.locator('#calStartOccurrence input:checked').count(), 0, 'fold occurrence is never preselected');
+    await page.locator('#calScheduleConfirmed').check();
+    assert.strictEqual(await page.locator('#calScheduleApprove').isDisabled(), true, 'unselected fold cannot be approved');
+    assert.match(await page.locator('#calStartOccurrence').textContent(), /First occurrence.*UTC-04:00.*Second occurrence.*UTC-05:00/s);
+    assert.strictEqual(scheduleRequests.length, 0, 'unselected fold sends zero PATCH requests');
+    await page.getByRole('button', { name:'Cancel', exact:true }).click();
 
     await editButton.press('Enter');
     await page.locator('#calEventDate').fill(scheduledDate);
@@ -409,21 +439,35 @@ async function main() {
     await mobile.locator('#calScheduleApprove').tap();
     await mobile.locator('#calModalOverlay').waitFor({ state:'detached' });
     await waitForRevision(mobile, 5);
+    await mobile.getByRole('button', { name:'Agenda' }).tap();
+    await mobile.locator('.cal-agenda-event[data-calendar-event-action="edit"]').tap();
+    await mobile.locator('#calEventDate').fill('2027-11-07');
+    await mobile.locator('#calEventTime').fill('01:30');
+    await mobile.locator('#calEventEndDate').fill('2027-11-07');
+    await mobile.locator('#calEventEndTime').fill('02:30');
+    await mobile.getByLabel('Second occurrence — UTC-05:00').check();
+    await mobile.locator('#calScheduleConfirmed').check();
+    await mobile.locator('#calScheduleApprove').tap();
+    await mobile.locator('#calModalOverlay').waitFor({ state:'detached' });
+    await waitForRevision(mobile, 6);
     await mobile.reload({ waitUntil:'domcontentloaded' });
-    await waitForRevision(mobile, 5);
+    await waitForRevision(mobile, 6);
     await mobileContext.close();
 
-    assert.strictEqual(scheduleRequests.length, 6, 'only explicit visible approvals emit the six expected attempts');
+    assert.strictEqual(scheduleRequests.length, 7, 'only explicit visible approvals emit the seven expected attempts');
     assert.deepStrictEqual(scheduleRequests.map(item => item.body.action), [
       'calendar_edit', 'calendar_edit', 'calendar_edit',
-      'calendar_drag_drop', 'calendar_resize', 'calendar_resize',
+      'calendar_drag_drop', 'calendar_resize', 'calendar_resize', 'calendar_edit',
     ]);
-    assert.deepStrictEqual(scheduleRequests.map(item => item.body.expectedRevision), [2, 2, 3, 3, 4, 4]);
+    assert.deepStrictEqual(scheduleRequests.map(item => item.body.expectedRevision), [2, 2, 3, 3, 4, 4, 5]);
     for (const submitted of scheduleRequests) {
       assert.strictEqual(submitted.headers['x-northstar-session-id'], simulationSession);
       assert.strictEqual(submitted.headers['x-csrf-token'], auth.csrfToken);
       assert.match(submitted.headers['idempotency-key'], /^calendar-(?:edit|drag-drop|resize)-[0-9a-f-]{36}$/);
       assert.match(submitted.body.expectedDigest, /^[0-9a-f]{64}$/);
+      assert.strictEqual(submitted.body.expectedTimeZone, 'America/New_York');
+      assert.match(submitted.body.scheduledStart, /(?:-04:00|-05:00)$/);
+      assert.match(submitted.body.scheduledEnd, /(?:-04:00|-05:00)$/);
       assert.ok(submitted.body.reason, 'every UI approval supplies a human reason');
     }
 
@@ -453,27 +497,27 @@ async function main() {
         WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2`,
       [ORGANIZATION_ID, appointmentId, OWNER_ID]
     )).rows[0];
-    assert.strictEqual(Number(durable.revision), 5);
-    assert.strictEqual(durable.scheduled_start.toISOString(), movedDate + 'T12:00:00.000Z');
-    assert.strictEqual(durable.scheduled_end.toISOString(), movedDate + 'T13:30:00.000Z');
+    assert.strictEqual(Number(durable.revision), 6);
+    assert.strictEqual(durable.scheduled_start.toISOString(), '2027-11-07T06:30:00.000Z');
+    assert.strictEqual(durable.scheduled_end.toISOString(), '2027-11-07T07:30:00.000Z');
     assert.strictEqual(durable.appointment_start.toISOString(), durable.scheduled_start.toISOString());
     assert.strictEqual(durable.appointment_end.toISOString(), durable.scheduled_end.toISOString());
-    assert.strictEqual(Number(durable.expected_revision), 4);
-    assert.strictEqual(durable.action_code, 'calendar_resize');
+    assert.strictEqual(Number(durable.expected_revision), 5);
+    assert.strictEqual(durable.action_code, 'calendar_edit');
     assert.strictEqual(durable.auth_session_id, auth.sessionId);
-    assert.strictEqual(durable.idempotency_key_hash.trim(), sha256(scheduleRequests[5].headers['idempotency-key']));
+    assert.strictEqual(durable.idempotency_key_hash.trim(), sha256(scheduleRequests[6].headers['idempotency-key']));
     assert.deepStrictEqual({
       approvals: durable.approvals,
       revisions: durable.revisions,
       audits: durable.audits,
       idempotency: durable.idempotency_rows,
-    }, { approvals: 4, revisions: 5, audits: 4, idempotency: 4 });
+    }, { approvals: 5, revisions: 6, audits: 5, idempotency: 5 });
     const durableActions = (await pool.query(
       `SELECT action_code FROM public.canonical_schedule_approvals
         WHERE organization_id=$1 AND appointment_id=$2 ORDER BY approved_at, id`,
       [ORGANIZATION_ID, appointmentId]
     )).rows.map(row => row.action_code);
-    assert.deepStrictEqual(durableActions, ['calendar_edit','calendar_edit','calendar_drag_drop','calendar_resize']);
+    assert.deepStrictEqual(durableActions, ['calendar_edit','calendar_edit','calendar_drag_drop','calendar_resize','calendar_edit']);
     assert.deepStrictEqual(pageErrors, [], 'no uncaught Calendar page errors');
     const unexpectedConsoleErrors = consoleErrors.filter(message =>
       !/Failed to load resource: the server responded with a status of (409|503|403)/.test(message)
@@ -489,7 +533,7 @@ async function main() {
       readModelVersion: before.model,
       appointmentId,
       beforeRevision: 1,
-      afterRevision: 5,
+      afterRevision: 6,
       approvalRows: durable.approvals,
       revisionRows: durable.revisions,
       auditRows: durable.audits,

@@ -77,6 +77,7 @@ function demoBusinessProfile(selectionValue) {
     mode: 'fictional_read_only',
     businessKey: business.id,
     company: business.label,
+    timeZone: 'America/New_York',
     industry: 'Home services',
     description: business.description,
     serviceArea: 'A demo ' + business.material.serviceRadiusMiles + '-mile service area',

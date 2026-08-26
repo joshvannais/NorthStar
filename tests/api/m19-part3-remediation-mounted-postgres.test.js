@@ -63,6 +63,7 @@ Object.assign(profile.company, {
   website: 'https://mounted.example.test',
   email: 'voice@mounted.example.test',
   phone: '+15555553090',
+  timeZone: 'UTC',
 });
 profile.hours = { monday: { open: '08:00', close: '17:00' } };
 profile.emergencyPolicy = 'Human confirmation is required for emergencies.';
@@ -92,6 +93,7 @@ const otherProfile = canonicalFenceProfile({
   gateRates: { walk: 29, drive: 31 },
   removalPerFoot: 37,
 });
+otherProfile.company.timeZone = 'UTC';
 otherProfile.financial = {
   desiredGrossMargin: 33,
   markup: 1.1,
@@ -388,6 +390,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
         status: 'scheduled',
         expectedRevision: Number(assignment.revision),
         expectedDigest: assignment.canonical_digest.trim(),
+        expectedTimeZone: 'UTC',
         action: 'calendar_edit',
         organizationId: ORG_B,
         actorUserId: USERS.owner,
@@ -400,6 +403,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       status: 'scheduled',
       expectedRevision: Number(assignment.revision),
       expectedDigest: assignment.canonical_digest.trim(),
+      expectedTimeZone: 'UTC',
       action: 'calendar_edit',
     };
     const ownerPatch = await request(app)
@@ -463,6 +467,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       status: 'scheduled',
       expectedRevision: Number(dispatcherAuthority.revision),
       expectedDigest: dispatcherAuthority.canonical_digest.trim(),
+      expectedTimeZone: 'UTC',
       action: 'calendar_edit',
       reason: 'Active dispatcher approved this exact schedule.',
     };

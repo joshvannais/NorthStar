@@ -16,6 +16,7 @@ const BASE = Object.freeze({
     status: 'scheduled',
     expectedRevision: 7,
     expectedDigest: 'a'.repeat(64),
+    expectedTimeZone: 'America/New_York',
     action: 'calendar_edit',
   }),
 });
@@ -28,8 +29,11 @@ describe('Mission 22 Part 1 schedule mutation contract', () => {
       authSessionId: BASE.authSessionId,
       expectedRevision: 7,
       expectedDigest: 'a'.repeat(64),
+      expectedTimeZone: 'America/New_York',
       scheduledStart: '2027-11-07T05:30:00.000Z',
       scheduledEnd: '2027-11-07T06:30:00.000Z',
+      rawScheduledStart: '2027-11-07T01:30:00-04:00',
+      rawScheduledEnd: '2027-11-07T01:30:00-05:00',
       action: 'calendar_edit',
       reason: 'Human-approved calendar edit.',
     });
@@ -40,6 +44,7 @@ describe('Mission 22 Part 1 schedule mutation contract', () => {
   test.each([
     ['revision', { body: Object.fromEntries(Object.entries(BASE.body).filter(([key]) => key !== 'expectedRevision')) }],
     ['digest', { body: Object.fromEntries(Object.entries(BASE.body).filter(([key]) => key !== 'expectedDigest')) }],
+    ['time zone', { body: Object.fromEntries(Object.entries(BASE.body).filter(([key]) => key !== 'expectedTimeZone')) }],
     ['action', { body: Object.fromEntries(Object.entries(BASE.body).filter(([key]) => key !== 'action')) }],
     ['idempotency', { idempotencyKey: '' }],
     ['session', { authSessionId: null }],
@@ -67,6 +72,7 @@ describe('Mission 22 Part 1 schedule mutation contract', () => {
       body: {
         expectedRevision: 7,
         expectedDigest: 'a'.repeat(64),
+        expectedTimeZone: 'America/New_York',
         action: 'calendar_edit',
       },
     });
@@ -78,6 +84,7 @@ describe('Mission 22 Part 1 schedule mutation contract', () => {
         scheduledEnd: null,
         expectedRevision: 7,
         expectedDigest: 'a'.repeat(64),
+        expectedTimeZone: 'America/New_York',
         action: 'calendar_edit',
       },
     });
@@ -98,6 +105,30 @@ describe('Mission 22 Part 1 schedule mutation contract', () => {
       ...BASE,
       actorAccessRole: 'admin',
     }).requestDigest).not.toBe(normalized.requestDigest);
+  });
+
+  test('request digest preserves raw fold selection and tenant time-zone pin', () => {
+    const first = normalizeScheduleMutation({
+      ...BASE,
+      body: {
+        ...BASE.body,
+        scheduledStart: '2027-11-07T01:30:00-04:00',
+        scheduledEnd: '2027-11-07T02:30:00-05:00',
+      },
+    });
+    const second = normalizeScheduleMutation({
+      ...BASE,
+      body: {
+        ...BASE.body,
+        scheduledStart: '2027-11-07T01:30:00-05:00',
+        scheduledEnd: '2027-11-07T02:30:00-05:00',
+      },
+    });
+    expect(first.requestDigest).not.toBe(second.requestDigest);
+    expect(normalizeScheduleMutation({
+      ...BASE,
+      body: { ...BASE.body, expectedTimeZone: 'America/Chicago' },
+    }).requestDigest).not.toBe(normalizeScheduleMutation(BASE).requestDigest);
   });
 
   test.each([

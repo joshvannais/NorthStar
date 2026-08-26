@@ -20,13 +20,35 @@ function calendarTimeValue(date) {
   return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
 }
 
+function calendarTimeContract() {
+  var contract = window.NorthStarSchedulingTime;
+  if (!contract) throw new Error('Calendar scheduling time contract is unavailable.');
+  return contract;
+}
+
+function calendarTimeZoneAuthority() {
+  var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
+  var authority = projection && projection.timeZoneAuthority;
+  if (!authority || !calendarTimeContract().isValidTimeZone(authority.timeZone)) {
+    throw new Error('Current Calendar time-zone authority is unavailable.');
+  }
+  return authority;
+}
+
+function calendarTodayDate() {
+  try { return calendarTimeContract().formatInstant(new Date(), calendarTimeZoneAuthority().timeZone).date; }
+  catch (_error) { return null; }
+}
+
 function calendarScheduleLabel(event) {
   if (!event || !event.rawScheduledStart || !event.rawScheduledEnd) return 'Schedule unavailable';
   var start = new Date(event.rawScheduledStart);
   var end = new Date(event.rawScheduledEnd);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Schedule unavailable';
-  return start.toLocaleString([], { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) +
-    ' to ' + end.toLocaleString([], { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+  var timeZone;
+  try { timeZone = calendarTimeZoneAuthority().timeZone; } catch (_error) { return 'Schedule unavailable'; }
+  var options = { timeZone:timeZone, weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' };
+  return start.toLocaleString([], options) + ' to ' + end.toLocaleString([], options) + ' (' + timeZone + ')';
 }
 
 function calendarEventButton(event, className, content, options) {
@@ -81,7 +103,7 @@ class CalendarState {
   }
 
   getTodayEvents() {
-    const today = this._formatDate(new Date());
+    const today = calendarTodayDate() || this._formatDate(new Date());
     return this.events.filter(e => e.date === today);
   }
 
@@ -106,8 +128,9 @@ class CalendarState {
   }
 
   goToday() {
-    this.currentDate = new Date();
-    this.selectedDate = null;
+    var today = calendarTodayDate();
+    this.currentDate = today ? new Date(today + 'T12:00:00') : new Date();
+    this.selectedDate = today;
     this._notify();
   }
 
@@ -210,18 +233,16 @@ class CalendarRenderer {
       var originalStart = new Date(selected.rawScheduledStart);
       var originalEnd = new Date(selected.rawScheduledEnd);
       if (Number.isNaN(originalStart.getTime()) || Number.isNaN(originalEnd.getTime())) return;
-      var proposedStart = new Date(target.getAttribute('data-calendar-drop-date') + 'T' +
-        String(target.getAttribute('data-calendar-drop-hour')).padStart(2, '0') + ':00');
-      var proposedEnd = new Date(proposedStart.getTime() + (originalEnd.getTime() - originalStart.getTime()));
+      var proposedDate = target.getAttribute('data-calendar-drop-date');
+      var proposedTime = String(target.getAttribute('data-calendar-drop-hour')).padStart(2, '0') + ':00';
       window.calModal.openEditEvent(selected, {
         action: 'calendar_drag_drop',
         returnFocus: document.querySelector('[data-calendar-event-action="edit"][data-calendar-event-id="' + CSS.escape(String(selected.id)) + '"]'),
         proposal: {
-          date: this.state._formatDate(proposedStart),
-          time: calendarTimeValue(proposedStart),
-          endDate: this.state._formatDate(proposedEnd),
-          endTime: calendarTimeValue(proposedEnd)
-        }
+          date: proposedDate,
+          time: proposedTime
+        },
+        elapsedMilliseconds: originalEnd.getTime() - originalStart.getTime()
       });
     };
     var pointerStart = event => {
@@ -247,6 +268,12 @@ class CalendarRenderer {
       var steps = Math.round((event.clientY - gesture.startY) / 24);
       if (steps === 0) steps = event.clientY > gesture.startY ? 1 : -1;
       var proposedEnd = new Date(Math.max(start.getTime() + 15 * 60000, end.getTime() + steps * 30 * 60000));
+      var timeZone;
+      var proposedEndFields;
+      try {
+        timeZone = calendarTimeZoneAuthority().timeZone;
+        proposedEndFields = calendarTimeContract().formatInstant(proposedEnd, timeZone);
+      } catch (_error) { return; }
       this.suppressResizeClick = gesture.id;
       window.calModal.openEditEvent(selected, {
         action: 'calendar_resize',
@@ -254,8 +281,8 @@ class CalendarRenderer {
         proposal: {
           date: selected.date,
           time: selected.timeValue,
-          endDate: this.state._formatDate(proposedEnd),
-          endTime: calendarTimeValue(proposedEnd)
+          endDate: proposedEndFields.date,
+          endTime: proposedEndFields.time
         }
       });
     };
@@ -364,7 +391,7 @@ class CalendarRenderer {
     const year = s.year, month = s.month;
     const firstDay = s.getFirstDayOfMonth();
     const daysInMonth = s.getDaysInMonth();
-    const todayStr = s._formatDate(new Date());
+    const todayStr = calendarTodayDate() || s._formatDate(new Date());
     const selectedDate = s.selectedDate instanceof Date
       ? s.selectedDate
       : (s.selectedDate ? new Date(s.selectedDate + 'T12:00:00') : null);
@@ -406,7 +433,7 @@ class CalendarRenderer {
     const s = this.state;
     const startOfWeek = new Date(s.currentDate);
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-    const todayStr = s._formatDate(new Date());
+    const todayStr = calendarTodayDate() || s._formatDate(new Date());
     const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     var hours = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM'];
     var eventsByDay = {};
@@ -467,7 +494,7 @@ class CalendarRenderer {
     const day = s.selectedDate instanceof Date ? s.selectedDate : new Date(s.selectedDate + 'T12:00:00');
     const dayStr = s._formatDate(day);
     const dayEvents = s.events.filter(e => e.date === dayStr);
-    const todayStr = s._formatDate(new Date());
+    const todayStr = calendarTodayDate() || s._formatDate(new Date());
     const isToday = dayStr === todayStr;
     const dayLabel = day.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
     let html = '<div class="cal-day-view">';
@@ -507,7 +534,7 @@ class CalendarRenderer {
   _renderAgendaView() {
     const s = this.state;
     const sorted = [...s.events].sort((a,b) => (a.date||'').localeCompare(b.date||''));
-    const todayStr = s._formatDate(new Date());
+    const todayStr = calendarTodayDate() || s._formatDate(new Date());
     let html = '<div class="cal-agenda-view">';
     if (sorted.length === 0) {
       html += '<div class="cal-agenda-empty">No events scheduled. Use the + New Event button to add one.</div>';
@@ -546,7 +573,7 @@ class CalendarRenderer {
   // ═══════════════════════════════════════════════════════════════
   renderEventList() {
     if (!this.eventList) return;
-    const todayStr = this.state._formatDate(new Date());
+    const todayStr = calendarTodayDate() || this.state._formatDate(new Date());
     const todayEvents = this.state.events.filter(e => e.date === todayStr);
     let html = `<div class="cal-event-list-header">Today\u2019s Schedule</div>`;
     if (this.loading) {
@@ -630,9 +657,19 @@ class CalendarData {
         }
         var action = ['calendar_edit','calendar_drag_drop','calendar_resize'].includes(data.action)
           ? data.action : 'calendar_edit';
-        var startDate = new Date(data.date + 'T' + data.time);
-        var endDate = new Date(data.endDate + 'T' + data.endTime);
-        if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
+        var timeZoneAuthority;
+        var start;
+        var end;
+        try {
+          timeZoneAuthority = calendarTimeZoneAuthority();
+          if (data.expectedTimeZone !== timeZoneAuthority.timeZone) throw new Error('Calendar time-zone authority changed.');
+          start = calendarTimeContract().validateRfc3339InZone(data.scheduledStart, timeZoneAuthority.timeZone);
+          end = calendarTimeContract().validateRfc3339InZone(data.scheduledEnd, timeZoneAuthority.timeZone);
+        } catch (_timeError) {
+          return { ok:false, status:400, code:'INVALID_APPOINTMENT_SCHEDULE',
+            message:'The proposed wall clock and UTC offset must agree with the current tenant time zone.' };
+        }
+        if (end.epochMilliseconds <= start.epochMilliseconds) {
           return { ok:false, status:400, code:'INVALID_APPOINTMENT_SCHEDULE',
             message:'The end of the schedule must be after its start.' };
         }
@@ -648,8 +685,9 @@ class CalendarData {
         try {
           var response = await window.NorthStarAccountSession.fetch('/api/v1/canonical/appointments/' + encodeURIComponent(id), {
             method:'PATCH', headers:headers, body:JSON.stringify({
-              scheduledStart:startDate.toISOString(),
-              scheduledEnd:endDate.toISOString(),
+              scheduledStart:data.scheduledStart,
+              scheduledEnd:data.scheduledEnd,
+              expectedTimeZone:data.expectedTimeZone,
               status:'scheduled',
               expectedRevision:authority.revision,
               expectedDigest:authority.digest,
@@ -738,16 +776,34 @@ class CalendarModal {
     var proposal = options.proposal || {};
     var start = new Date(event.rawScheduledStart);
     var end = new Date(event.rawScheduledEnd);
-    var date = proposal.date || event.date || (!Number.isNaN(start.getTime()) ? this._formatDate(start) : '');
-    var time = proposal.time || event.timeValue || (!Number.isNaN(start.getTime()) ? calendarTimeValue(start) : '09:00');
-    var endDate = proposal.endDate || event.endDate || (!Number.isNaN(end.getTime()) ? this._formatDate(end) : date);
-    var endTime = proposal.endTime || event.endTimeValue || (!Number.isNaN(end.getTime()) ? calendarTimeValue(end) : '10:00');
+    var timeZoneAuthority;
+    var zonedStart;
+    var zonedEnd;
+    try {
+      timeZoneAuthority = calendarTimeZoneAuthority();
+      zonedStart = !Number.isNaN(start.getTime()) ? calendarTimeContract().formatInstant(start, timeZoneAuthority.timeZone) : null;
+      zonedEnd = !Number.isNaN(end.getTime()) ? calendarTimeContract().formatInstant(end, timeZoneAuthority.timeZone) : null;
+    } catch (_timeError) {
+      return;
+    }
+    var date = proposal.date || event.date || zonedStart && zonedStart.date || '';
+    var time = proposal.time || event.timeValue || zonedStart && zonedStart.time || '09:00';
+    var endDate = proposal.endDate || event.endDate || zonedEnd && zonedEnd.date || date;
+    var endTime = proposal.endTime || event.endTimeValue || zonedEnd && zonedEnd.time || '10:00';
     var reasons = {
       calendar_edit: 'Human-approved Calendar schedule edit.',
       calendar_drag_drop: 'Human-approved Calendar drag and drop.',
       calendar_resize: 'Human-approved Calendar resize.'
     };
-    this.editContext = { id:String(event.id), action:action, returnFocusId:String(event.id) };
+    this.editContext = {
+      id:String(event.id), action:action, returnFocusId:String(event.id),
+      timeZone:timeZoneAuthority.timeZone,
+      startChoice:null, endChoice:null,
+      elapsedMilliseconds:Number.isFinite(options.elapsedMilliseconds) && options.elapsedMilliseconds > 0
+        ? options.elapsedMilliseconds : null,
+      deriveEndFromStart:Number.isFinite(options.elapsedMilliseconds) && options.elapsedMilliseconds > 0,
+      initialMessage:options.message || null
+    };
     this.pendingReturnFocus = options.returnFocus || document.activeElement;
     const html = `
       <div class="cal-modal-overlay" id="calModalOverlay" onclick="window.calModal.close()">
@@ -760,10 +816,12 @@ class CalendarModal {
               <div class="cal-modal-field"><label for="calEventDate">Start date</label><input type="date" id="calEventDate" value="${escapeCalendarMarkup(date)}" required></div>
               <div class="cal-modal-field"><label for="calEventTime">Start time</label><input type="time" id="calEventTime" value="${escapeCalendarMarkup(time)}" required></div>
             </div>
+            <fieldset class="cal-occurrence-choice" id="calStartOccurrence" hidden><legend>Choose the start occurrence</legend><div></div></fieldset>
             <div class="cal-modal-row">
               <div class="cal-modal-field"><label for="calEventEndDate">End date</label><input type="date" id="calEventEndDate" value="${escapeCalendarMarkup(endDate)}" required></div>
               <div class="cal-modal-field"><label for="calEventEndTime">End time</label><input type="time" id="calEventEndTime" value="${escapeCalendarMarkup(endTime)}" required></div>
             </div>
+            <fieldset class="cal-occurrence-choice" id="calEndOccurrence" hidden><legend>Choose the end occurrence</legend><div></div></fieldset>
             <div class="cal-modal-field"><label for="calScheduleReason">Approval reason</label><textarea id="calScheduleReason" rows="2" maxlength="1000" required>${escapeCalendarMarkup(reasons[action])}</textarea></div>
             <label class="cal-approval-confirm"><input type="checkbox" id="calScheduleConfirmed" onchange="window.calModal.toggleApproval()"> I reviewed the proposed schedule and approve this ${action === 'calendar_drag_drop' ? 'move' : action === 'calendar_resize' ? 'resize' : 'edit'}.</label>
             <div class="cal-schedule-status" id="calScheduleStatus" role="status" aria-live="polite" tabindex="-1">${escapeCalendarMarkup(options.message || '')}</div>
@@ -775,6 +833,8 @@ class CalendarModal {
         </div>
       </div>`;
     this._show(html);
+    this._bindScheduleFields();
+    this._refreshTimeResolution(false);
   }
 
   _show(html) {
@@ -849,10 +909,178 @@ class CalendarModal {
     window.calData.createEvent(data).then(() => { window.calModal.close(); window.refreshCalendar(); });
   }
 
+  _bindScheduleFields() {
+    var self = this;
+    ['calEventDate', 'calEventTime'].forEach(function(id) {
+      var control = document.getElementById(id);
+      if (control) control.addEventListener('input', function() {
+        if (!self.editContext) return;
+        self.editContext.startChoice = null;
+        self.editContext.endChoice = null;
+        self.editContext.derivedEndRfc = null;
+        self._clearScheduleConfirmation();
+        self._refreshTimeResolution(false);
+      });
+    });
+    ['calEventEndDate', 'calEventEndTime'].forEach(function(id) {
+      var control = document.getElementById(id);
+      if (control) control.addEventListener('input', function() {
+        if (!self.editContext) return;
+        self.editContext.endChoice = null;
+        self.editContext.derivedEndRfc = null;
+        self.editContext.deriveEndFromStart = false;
+        self._clearScheduleConfirmation();
+        self._refreshTimeResolution(false);
+      });
+    });
+  }
+
+  _clearScheduleConfirmation() {
+    var checkbox = document.getElementById('calScheduleConfirmed');
+    if (checkbox) checkbox.checked = false;
+    this.toggleApproval();
+  }
+
+  _renderOccurrence(kind, resolution) {
+    var fieldset = document.getElementById(kind === 'start' ? 'calStartOccurrence' : 'calEndOccurrence');
+    if (!fieldset) return;
+    var container = fieldset.querySelector('div');
+    while (container && container.firstChild) container.removeChild(container.firstChild);
+    if (!container || !resolution || resolution.status !== 'ambiguous') {
+      fieldset.hidden = true;
+      return;
+    }
+    fieldset.hidden = false;
+    var self = this;
+    resolution.candidates.forEach(function(candidate, index) {
+      var label = document.createElement('label');
+      label.className = 'cal-occurrence-option';
+      var input = document.createElement('input');
+      input.type = 'radio';
+      input.name = kind === 'start' ? 'calStartOccurrenceChoice' : 'calEndOccurrenceChoice';
+      input.value = candidate.rfc3339;
+      input.checked = self.editContext && self.editContext[kind + 'Choice'] === candidate.rfc3339;
+      input.addEventListener('change', function() {
+        if (!self.editContext) return;
+        self.editContext[kind + 'Choice'] = candidate.rfc3339;
+        self._clearScheduleConfirmation();
+        self._refreshTimeResolution(false);
+      });
+      var text = document.createElement('span');
+      text.textContent = (index === 0 ? 'First occurrence' : 'Second occurrence') + ' — UTC' + candidate.offset;
+      label.appendChild(input);
+      label.appendChild(text);
+      container.appendChild(label);
+    });
+  }
+
+  _candidate(resolution, choice) {
+    if (!resolution || resolution.status === 'gap') return null;
+    if (resolution.status === 'unique') return resolution.candidates[0];
+    return resolution.candidates.find(function(candidate) { return candidate.rfc3339 === choice; }) || null;
+  }
+
+  _refreshTimeResolution(announce) {
+    var context = this.editContext;
+    if (!context) return null;
+    var date = document.getElementById('calEventDate')?.value;
+    var time = document.getElementById('calEventTime')?.value;
+    var endDateControl = document.getElementById('calEventEndDate');
+    var endTimeControl = document.getElementById('calEventEndTime');
+    var endDate = endDateControl && endDateControl.value;
+    var endTime = endTimeControl && endTimeControl.value;
+    context.resolvedSchedule = null;
+    this.scheduleReady = false;
+    if (!date || !time || !endDate || !endTime) {
+      this._renderOccurrence('start', null);
+      this._renderOccurrence('end', null);
+      this._setScheduleStatus('Complete every schedule date and time.', true, false);
+      this.toggleApproval();
+      return null;
+    }
+    var startResolution;
+    var endResolution;
+    try {
+      startResolution = calendarTimeContract().resolveWallTime(date, time, context.timeZone);
+    } catch (_error) {
+      this._setScheduleStatus('The proposed start is not a valid wall clock in ' + context.timeZone + '.', true, false);
+      this.toggleApproval();
+      return null;
+    }
+    this._renderOccurrence('start', startResolution);
+    if (startResolution.status === 'gap') {
+      this._renderOccurrence('end', null);
+      this._setScheduleStatus('The proposed start does not exist in ' + context.timeZone + ' because of a daylight-saving transition.', true, false);
+      this.toggleApproval();
+      return null;
+    }
+    var startCandidate = this._candidate(startResolution, context.startChoice);
+    if (!startCandidate) {
+      this._renderOccurrence('end', null);
+      this._setScheduleStatus('Choose the first or second start occurrence before approval.', true, false);
+      this.toggleApproval();
+      return null;
+    }
+
+    var endCandidate;
+    if (context.deriveEndFromStart && context.elapsedMilliseconds) {
+      var derived = calendarTimeContract().formatInstant(
+        startCandidate.epochMilliseconds + context.elapsedMilliseconds,
+        context.timeZone
+      );
+      if (endDateControl) endDateControl.value = derived.date;
+      if (endTimeControl) endTimeControl.value = derived.time;
+      endDate = derived.date;
+      endTime = derived.time;
+      context.derivedEndRfc = derived.rfc3339;
+      this._renderOccurrence('end', null);
+      try {
+        endCandidate = calendarTimeContract().validateRfc3339InZone(derived.rfc3339, context.timeZone);
+      } catch (_error) { endCandidate = null; }
+    } else {
+      try {
+        endResolution = calendarTimeContract().resolveWallTime(endDate, endTime, context.timeZone);
+      } catch (_error) {
+        this._setScheduleStatus('The proposed end is not a valid wall clock in ' + context.timeZone + '.', true, false);
+        this.toggleApproval();
+        return null;
+      }
+      this._renderOccurrence('end', endResolution);
+      if (endResolution.status === 'gap') {
+        this._setScheduleStatus('The proposed end does not exist in ' + context.timeZone + ' because of a daylight-saving transition.', true, false);
+        this.toggleApproval();
+        return null;
+      }
+      endCandidate = this._candidate(endResolution, context.endChoice);
+      if (!endCandidate) {
+        this._setScheduleStatus('Choose the first or second end occurrence before approval.', true, false);
+        this.toggleApproval();
+        return null;
+      }
+    }
+    if (!endCandidate || endCandidate.epochMilliseconds <= startCandidate.epochMilliseconds) {
+      this._setScheduleStatus('The end of the schedule must be after its start.', true, false);
+      this.toggleApproval();
+      return null;
+    }
+    context.resolvedSchedule = {
+      scheduledStart:startCandidate.rfc3339,
+      scheduledEnd:context.derivedEndRfc || endCandidate.rfc3339,
+      expectedTimeZone:context.timeZone
+    };
+    this.scheduleReady = true;
+    var message = context.initialMessage || 'Times verified against ' + context.timeZone + '. Review and approve this change.';
+    var isAlert = Boolean(context.initialMessage);
+    context.initialMessage = null;
+    this._setScheduleStatus(message, isAlert, announce !== false);
+    this.toggleApproval();
+    return context.resolvedSchedule;
+  }
+
   toggleApproval() {
     var checkbox = document.getElementById('calScheduleConfirmed');
     var approve = document.getElementById('calScheduleApprove');
-    if (approve) approve.disabled = !checkbox || !checkbox.checked;
+    if (approve) approve.disabled = !checkbox || !checkbox.checked || !this.scheduleReady;
   }
 
   _setScheduleBusy(busy) {
@@ -866,24 +1094,24 @@ class CalendarModal {
     if (dialog) dialog.setAttribute('aria-busy', String(Boolean(busy)));
   }
 
-  _setScheduleStatus(message, alert) {
+  _setScheduleStatus(message, alert, focusAlert) {
     var status = document.getElementById('calScheduleStatus');
     if (!status) return;
     status.textContent = message;
     status.setAttribute('role', alert ? 'alert' : 'status');
-    if (alert) status.focus({ preventScroll:true });
+    if (alert && focusAlert !== false) status.focus({ preventScroll:true });
   }
 
   _getScheduleData() {
+    var resolved = this._refreshTimeResolution(false);
     var data = {
-      date: document.getElementById('calEventDate')?.value,
-      time: document.getElementById('calEventTime')?.value,
-      endDate: document.getElementById('calEventEndDate')?.value,
-      endTime: document.getElementById('calEventEndTime')?.value,
       reason: document.getElementById('calScheduleReason')?.value.trim(),
-      action: this.editContext && this.editContext.action
+      action: this.editContext && this.editContext.action,
+      scheduledStart: resolved && resolved.scheduledStart,
+      scheduledEnd: resolved && resolved.scheduledEnd,
+      expectedTimeZone: resolved && resolved.expectedTimeZone
     };
-    if (!data.date || !data.time || !data.endDate || !data.endTime || !data.reason) return null;
+    if (!resolved || !data.reason) return null;
     return data;
   }
 
@@ -951,21 +1179,28 @@ window.openEventModal = function() {
 // retained for the PR #68 readiness contract; it no longer synthesizes events.
 window.syncCalendarFromAppStore = function() {
   var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
+    var timeZoneAuthority = projection && projection.timeZoneAuthority;
+    var timeZone = timeZoneAuthority && timeZoneAuthority.timeZone;
     var records = projection && Array.isArray(projection.records) ? projection.records : [];
+    if (!calendarTimeContract().isValidTimeZone(timeZone)) throw new Error('Current Calendar time-zone authority is unavailable.');
+    var today = calendarTodayDate();
+    if (today && !calState.selectedDate) calState.currentDate = new Date(today + 'T12:00:00');
     return records.map(function(record) {
       var start = record.scheduledStart ? new Date(record.scheduledStart) : null;
       var end = record.scheduledEnd ? new Date(record.scheduledEnd) : null;
+      var zonedStart = start && !isNaN(start.getTime()) ? calendarTimeContract().formatInstant(start, timeZone) : null;
+      var zonedEnd = end && !isNaN(end.getTime()) ? calendarTimeContract().formatInstant(end, timeZone) : null;
       var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(record.canonical);
       var values = presentation && presentation.values;
     return {
       id: record.id,
       title: record.customer && record.customer.name || 'Appointment',
-      date: start && !isNaN(start.getTime()) ? calState._formatDate(start) : null,
-      time: start && !isNaN(start.getTime()) ? start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null,
-      endTime: end && !isNaN(end.getTime()) ? end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null,
-      timeValue: start && !isNaN(start.getTime()) ? calendarTimeValue(start) : null,
-      endDate: end && !isNaN(end.getTime()) ? calState._formatDate(end) : null,
-      endTimeValue: end && !isNaN(end.getTime()) ? calendarTimeValue(end) : null,
+      date: zonedStart ? zonedStart.date : null,
+      time: zonedStart ? zonedStart.time + ' (' + timeZone + ')' : null,
+      endTime: zonedEnd ? zonedEnd.time + ' (' + timeZone + ')' : null,
+      timeValue: zonedStart ? zonedStart.time : null,
+      endDate: zonedEnd ? zonedEnd.date : null,
+      endTimeValue: zonedEnd ? zonedEnd.time : null,
       rawScheduledStart: record.scheduledStart || null,
       rawScheduledEnd: record.scheduledEnd || null,
       type: 'canonical',
@@ -980,6 +1215,7 @@ window.syncCalendarFromAppStore = function() {
       calculationVersion: record.canonical && record.canonical.calculationVersion,
       snapshotDigest: record.canonical && record.canonical.snapshotDigest,
       scheduleAuthority: record.scheduleAuthority,
+      timeZoneAuthority: timeZoneAuthority,
       readOnly: true
     };
   });

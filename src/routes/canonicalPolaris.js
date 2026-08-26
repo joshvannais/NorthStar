@@ -13,6 +13,7 @@ const { sha256, stableStringify, stableValue } = require('../services/businessPr
 const { bindIntegrationOwner } = require('../services/organizationAuthority');
 const { normalizeScheduleMutation } = require('../scheduling/contract');
 const { scheduleAuthority, updateAppointmentSchedule } = require('../scheduling/repository');
+const schedulingTime = require('../../public/js/scheduling-time-contract');
 
 const READ_MODEL_VERSION = 'm22-part1-read-v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -386,6 +387,33 @@ async function getCanonicalGraph(pool, context, identifier) {
   return result.rows.length ? projectRow(result.rows[0]) : null;
 }
 
+async function currentCalendarTimeZoneAuthority(pool, context) {
+  const result = await pool.query(
+    `SELECT id, version_number, normalized_profile_hash,
+            raw_profile #>> '{company,timeZone}' AS time_zone
+       FROM public.canonical_business_profiles
+      WHERE organization_id = $1 AND is_active = TRUE
+      ORDER BY version_number DESC, id`,
+    [context.organizationId]
+  );
+  const profile = result.rowCount === 1 ? result.rows[0] : null;
+  if (!profile || !UUID.test(String(profile.id || '')) ||
+      !Number.isSafeInteger(Number(profile.version_number)) || Number(profile.version_number) < 1 ||
+      !/^[0-9a-f]{64}$/.test(String(profile.normalized_profile_hash || '')) ||
+      !schedulingTime.isValidTimeZone(profile.time_zone)) {
+    const error = new Error('A current authoritative tenant IANA time zone is required before scheduling.');
+    error.code = 'M22_TIME_ZONE_AUTHORITY_REQUIRED';
+    error.statusCode = 409;
+    throw error;
+  }
+  return Object.freeze({
+    profileId: String(profile.id),
+    profileVersion: Number(profile.version_number),
+    profileHash: String(profile.normalized_profile_hash),
+    timeZone: profile.time_zone,
+  });
+}
+
 function finiteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const numeric = Number(value);
@@ -603,8 +631,24 @@ function recommendationProjection(items) {
   };
 }
 
-function compatibilityProjection(surface, items, context) {
-  const common = surfaceProjection(surface, items, context);
+function compatibilityProjection(surface, items, context, calendarTimeZoneAuthority) {
+  let common = surfaceProjection(surface, items, context);
+  if (surface === 'calendar') {
+    if (!calendarTimeZoneAuthority || !schedulingTime.isValidTimeZone(calendarTimeZoneAuthority.timeZone)) {
+      const error = new Error('A current authoritative tenant IANA time zone is required before scheduling.');
+      error.code = 'M22_TIME_ZONE_AUTHORITY_REQUIRED';
+      error.statusCode = 409;
+      throw error;
+    }
+    common = {
+      ...common,
+      digest: sha256({
+        graphs: items.map(function (item) { return item.projectionDigest; }),
+        timeZoneAuthority: calendarTimeZoneAuthority,
+      }),
+      timeZoneAuthority: stableValue(calendarTimeZoneAuthority),
+    };
+  }
   const records = items.map(function (item) {
     if (surface === 'customer-detail') return { ...item.customer, canonical: common.items.find(value => value.ids.graph === item.ids.graph) };
     if (surface === 'leads') return { ...item.opportunity, customer: item.customer, canonical: common.items.find(value => value.ids.graph === item.ids.graph) };
@@ -646,6 +690,13 @@ function sendInvalidCustomerId(res, req) {
 
 function handleEndpointError(res, _error, req) {
   if (_error && _error.code === 'INVALID_CUSTOMER_ID') return sendInvalidCustomerId(res, req);
+  if (_error && Number.isInteger(_error.statusCode) && _error.code) {
+    return res.status(_error.statusCode).json({
+      success: false,
+      requestId: req && req.requestId || undefined,
+      error: { code: _error.code, message: _error.message },
+    });
+  }
   return sendPersistenceUnavailable(res, req);
 }
 
@@ -729,7 +780,11 @@ function createCanonicalRouter(options) {
     if (!SURFACES.has(req.params.surface)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Compatibility projection not found.' } });
     try {
       const items = await authoritativeItems(req, dependencies, 'canonical.compat.' + req.params.surface);
-      return res.json({ success: true, data: compatibilityProjection(req.params.surface, items, requestContext(req)) });
+      const context = requestContext(req);
+      const timeZoneAuthority = req.params.surface === 'calendar'
+        ? await currentCalendarTimeZoneAuthority(resolvePool(dependencies.poolProvider), context)
+        : null;
+      return res.json({ success: true, data: compatibilityProjection(req.params.surface, items, context, timeZoneAuthority) });
     } catch (_error) {
       return handleEndpointError(res, _error, req);
     }
@@ -879,10 +934,14 @@ function createCompatibilityRouter(options) {
     return async function (req, res) {
       try {
         const items = await authoritativeItems(req, dependencies, 'compat.' + surface + '.' + req.path);
-        const projection = compatibilityProjection(surface, items, requestContext(req));
+        const context = requestContext(req);
+        const timeZoneAuthority = surface === 'calendar'
+          ? await currentCalendarTimeZoneAuthority(resolvePool(dependencies.poolProvider), context)
+          : null;
+        const projection = compatibilityProjection(surface, items, context, timeZoneAuthority);
         return res.json(shape(projection, items));
       } catch (_error) {
-        return sendPersistenceUnavailable(res);
+        return handleEndpointError(res, _error, req);
       }
     };
   }
@@ -1049,6 +1108,7 @@ module.exports = {
   compatibilityProjection,
   createCanonicalRouter,
   createCompatibilityRouter,
+  currentCalendarTimeZoneAuthority,
   getCanonicalGraph,
   listCanonicalGraphs,
   pipelineStageProjection,

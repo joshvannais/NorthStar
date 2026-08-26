@@ -82,6 +82,7 @@ async function applyMigrations(pool) {
 
 function graphInput(organizationId, sessionId, key, customerName) {
   const businessProfile = canonicalFenceProfile({ version: 'bp-ratification-v1' });
+  businessProfile.company.timeZone = 'UTC';
   delete businessProfile.canonicalPricing.taxRatePercent;
   return {
     tenantContext: { organizationId, trusted: true },
@@ -723,6 +724,7 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
         scheduledEnd: '2026-07-28T14:00:00.000Z',
         expectedRevision: Number(scheduleAuthority.revision),
         expectedDigest: scheduleAuthority.canonical_digest.trim(),
+        expectedTimeZone: 'UTC',
         action: 'calendar_edit',
       });
     expect(updated.status).toBe(200);

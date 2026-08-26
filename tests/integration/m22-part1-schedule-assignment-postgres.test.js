@@ -8,6 +8,7 @@ const { Client, Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { normalizeScheduleMutation } = require('../../src/scheduling/contract');
 const { updateAppointmentSchedule } = require('../../src/scheduling/repository');
+const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS = path.join(ROOT, 'migrations');
@@ -47,6 +48,11 @@ const IDS = Object.freeze({
   customerMutation: 'a5000000-0000-4000-8000-000000000004',
   opportunityMutation: 'a6000000-0000-4000-8000-000000000004',
   appointmentMutation: 'a7000000-0000-4000-8000-000000000004',
+  operationTime: 'a3000000-0000-4000-8000-000000000006',
+  graphTime: 'a4000000-0000-4000-8000-000000000006',
+  customerTime: 'a5000000-0000-4000-8000-000000000006',
+  opportunityTime: 'a6000000-0000-4000-8000-000000000006',
+  appointmentTime: 'a7000000-0000-4000-8000-000000000006',
 });
 
 function quoteIdentifier(value) {
@@ -237,7 +243,7 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       `INSERT INTO canonical_business_profiles
          (id,organization_id,version_number,version_label,raw_profile,normalized_profile,
           normalized_profile_hash,is_active,created_by)
-       VALUES ($1,$2,1,'m22-part1','{}','{}',$3,TRUE,$4)`,
+       VALUES ($1,$2,1,'org-profile-v1','{"company":{"timeZone":"America/New_York"}}','{}',$3,TRUE,$4)`,
       [IDS.profile, IDS.organization, '1'.repeat(64), IDS.owner]
     );
     await upgradePool.query(
@@ -270,13 +276,22 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       appointmentId: IDS.appointmentMutation,
       name: 'Human approved schedule mutation',
     });
+    await seedAppointment(upgradePool, {
+      organizationId: IDS.organization,
+      operationId: IDS.operationTime,
+      graphId: IDS.graphTime,
+      customerId: IDS.customerTime,
+      opportunityId: IDS.opportunityTime,
+      appointmentId: IDS.appointmentTime,
+      name: 'Tenant time-zone authority mutation',
+    });
 
     await seedOrganization(separatedRuntimePool, IDS.organization, IDS.owner, 'separated');
     await separatedRuntimePool.query(
       `INSERT INTO canonical_business_profiles
          (id,organization_id,version_number,version_label,raw_profile,normalized_profile,
           normalized_profile_hash,is_active,created_by)
-       VALUES ($1,$2,1,'m22-part1-separated','{}','{}',$3,TRUE,$4)`,
+       VALUES ($1,$2,1,'org-profile-v1','{"company":{"timeZone":"America/New_York"}}','{}',$3,TRUE,$4)`,
       [IDS.profile, IDS.organization, '3'.repeat(64), IDS.owner]
     );
     await separatedRuntimePool.query(
@@ -427,10 +442,11 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
         body: {
           expectedRevision: Number(authority.revision),
           expectedDigest: String(authority.canonical_digest).trim(),
+          expectedTimeZone: 'America/New_York',
           action: 'calendar_edit',
           reason: 'Approve through the role-separated runtime boundary.',
-          scheduledStart: '2026-11-03T15:00:00.000Z',
-          scheduledEnd: '2026-11-03T16:00:00.000Z',
+          scheduledStart: '2026-11-03T10:00:00-05:00',
+          scheduledEnd: '2026-11-03T11:00:00-05:00',
         },
       });
       const wrapper = { connect: async () => ({
@@ -454,10 +470,11 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
         body: {
           expectedRevision: 2,
           expectedDigest: result.body.data.scheduleAuthority.digest,
+          expectedTimeZone: 'America/New_York',
           action: 'calendar_edit',
           reason: 'This mismatched simulation scope must remain rejected.',
-          scheduledStart: '2026-11-03T16:00:00.000Z',
-          scheduledEnd: '2026-11-03T17:00:00.000Z',
+          scheduledStart: '2026-11-03T11:00:00-05:00',
+          scheduledEnd: '2026-11-03T12:00:00-05:00',
         },
       });
       await expect(updateAppointmentSchedule(wrapper, wrongScope)).rejects.toMatchObject({
@@ -669,11 +686,12 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       explicitSession: null,
       idempotencyKey: 'm22-part1-human-approval-0001',
       body: {
-        scheduledStart: '2027-03-14T06:30:00-05:00',
+        scheduledStart: '2027-03-14T07:30:00-04:00',
         scheduledEnd: '2027-03-14T08:30:00-04:00',
         status: 'scheduled',
         expectedRevision: Number(current.revision),
         expectedDigest: current.canonical_digest.trim(),
+        expectedTimeZone: 'America/New_York',
         action: 'calendar_edit',
         reason: 'Owner approved the calendar schedule.',
       },
@@ -727,8 +745,8 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       idempotencyKey: `m22-part1-concurrent-approval-${index}`,
       body: {
         ...base.body,
-        scheduledStart: `2027-03-${15 + index}T13:00:00Z`,
-        scheduledEnd: `2027-03-${15 + index}T14:00:00Z`,
+        scheduledStart: `2027-03-${15 + index}T09:00:00-04:00`,
+        scheduledEnd: `2027-03-${15 + index}T10:00:00-04:00`,
         expectedRevision: next.revision,
         expectedDigest: next.digest,
         reason: index === 0
@@ -763,6 +781,170 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
     expect(evidence.rows).toEqual([{ approvals: 2, revisions: 3, audits: 2, idempotency: 2 }]);
   });
 
+  test('current tenant zone rejects gaps and forged offsets, preserves both folds, and serializes zone changes', async () => {
+    async function activeProfileVersion() {
+      return String((await upgradePool.query(
+        `SELECT version_label FROM public.canonical_business_profiles
+          WHERE organization_id=$1 AND is_active=TRUE`,
+        [IDS.organization]
+      )).rows[0].version_label);
+    }
+    async function replaceZone(timeZone) {
+      return putBusinessProfile(upgradePool, {
+        organizationId: IDS.organization,
+        userId: IDS.owner,
+        expectedVersion: await activeProfileVersion(),
+        profile: { company: timeZone ? { timeZone } : {} },
+      });
+    }
+    async function authority() {
+      return (await upgradePool.query(
+        `SELECT revision, canonical_digest FROM public.canonical_schedule_assignments
+          WHERE organization_id=$1 AND appointment_id=$2`,
+        [IDS.organization, IDS.appointmentTime]
+      )).rows[0];
+    }
+    function mutation(current, key, body) {
+      return normalizeScheduleMutation({
+        organizationId: IDS.organization,
+        actorUserId: IDS.owner,
+        actorAccessRole: 'owner',
+        authSessionId: IDS.authSession,
+        appointmentId: IDS.appointmentTime,
+        explicitSession: null,
+        idempotencyKey: key,
+        body: {
+          status: 'scheduled',
+          expectedRevision: Number(current.revision),
+          expectedDigest: String(current.canonical_digest || current.digest).trim(),
+          expectedTimeZone: 'America/New_York',
+          action: 'calendar_edit',
+          reason: 'Explicit tenant-zone test approval.',
+          ...body,
+        },
+      });
+    }
+    async function durableCounts() {
+      return (await upgradePool.query(
+        `SELECT assignment.revision,
+                (SELECT count(*)::int FROM public.canonical_schedule_approvals WHERE assignment_id=assignment.id) AS approvals,
+                (SELECT count(*)::int FROM public.canonical_schedule_audit_events WHERE assignment_id=assignment.id) AS audits,
+                (SELECT count(*)::int FROM public.canonical_schedule_idempotency WHERE assignment_id=assignment.id) AS idempotency
+           FROM public.canonical_schedule_assignments assignment
+          WHERE assignment.organization_id=$1 AND assignment.appointment_id=$2`,
+        [IDS.organization, IDS.appointmentTime]
+      )).rows[0];
+    }
+
+    const initial = await authority();
+    const initialCounts = await durableCounts();
+    await expect(updateAppointmentSchedule(upgradePool, mutation(initial, 'm22-time-gap-reject-0001', {
+      scheduledStart: '2027-03-14T02:30:00-05:00',
+      scheduledEnd: '2027-03-14T04:30:00-04:00',
+    }))).rejects.toMatchObject({ status: 400, code: 'INVALID_APPOINTMENT_SCHEDULE' });
+    await expect(updateAppointmentSchedule(upgradePool, mutation(initial, 'm22-time-forged-offset-0002', {
+      scheduledStart: '2027-07-01T09:00:00Z',
+      scheduledEnd: '2027-07-01T10:00:00Z',
+    }))).rejects.toMatchObject({ status: 400, code: 'INVALID_APPOINTMENT_SCHEDULE' });
+    await expect(updateAppointmentSchedule(upgradePool, normalizeScheduleMutation({
+      ...mutation(initial, 'm22-time-stale-zone-0003', {
+        scheduledStart: '2027-07-01T09:00:00-04:00',
+        scheduledEnd: '2027-07-01T10:00:00-04:00',
+      }),
+      idempotencyKey: 'm22-time-stale-zone-0003',
+      body: {
+        scheduledStart: '2027-07-01T09:00:00-04:00',
+        scheduledEnd: '2027-07-01T10:00:00-04:00',
+        status: 'scheduled', expectedRevision: Number(initial.revision),
+        expectedDigest: initial.canonical_digest.trim(), expectedTimeZone: 'America/Chicago',
+        action: 'calendar_edit', reason: 'Stale zone must fail.',
+      },
+    }))).rejects.toMatchObject({ status: 409, code: 'M22_STALE_TIME_ZONE' });
+    expect(await durableCounts()).toEqual(initialCounts);
+
+    await replaceZone(null);
+    await expect(updateAppointmentSchedule(upgradePool, mutation(initial, 'm22-time-missing-zone-0004', {
+      scheduledStart: '2027-07-01T09:00:00-04:00',
+      scheduledEnd: '2027-07-01T10:00:00-04:00',
+    }))).rejects.toMatchObject({ status: 409, code: 'M22_TIME_ZONE_AUTHORITY_REQUIRED' });
+    expect(await durableCounts()).toEqual(initialCounts);
+    await replaceZone('America/New_York');
+
+    const firstFoldMutation = mutation(initial, 'm22-time-first-fold-0005', {
+      scheduledStart: '2027-11-07T01:30:00-04:00',
+      scheduledEnd: '2027-11-07T02:30:00-05:00',
+      reason: 'Human selected the first fold occurrence.',
+    });
+    const firstFold = await updateAppointmentSchedule(upgradePool, firstFoldMutation);
+    expect(firstFold.body.data).toMatchObject({
+      scheduled_start: '2027-11-07T05:30:00.000Z',
+      scheduled_end: '2027-11-07T07:30:00.000Z',
+    });
+    const afterFirst = firstFold.body.data.scheduleAuthority;
+    const secondFoldMutation = mutation(afterFirst, 'm22-time-second-fold-0006', {
+      scheduledStart: '2027-11-07T01:30:00-05:00',
+      scheduledEnd: '2027-11-07T02:30:00-05:00',
+      reason: 'Human selected the second fold occurrence.',
+    });
+    const secondFold = await updateAppointmentSchedule(upgradePool, secondFoldMutation);
+    expect(secondFold.body.data).toMatchObject({
+      scheduled_start: '2027-11-07T06:30:00.000Z',
+      scheduled_end: '2027-11-07T07:30:00.000Z',
+    });
+    const evidence = (await upgradePool.query(
+      `SELECT revision.source_snapshot, audit.details
+         FROM public.canonical_schedule_assignments assignment
+         JOIN public.canonical_schedule_assignment_revisions revision
+           ON revision.assignment_id=assignment.id AND revision.revision=assignment.revision
+         JOIN public.canonical_schedule_audit_events audit
+           ON audit.assignment_id=assignment.id AND audit.after_revision=assignment.revision
+        WHERE assignment.organization_id=$1 AND assignment.appointment_id=$2`,
+      [IDS.organization, IDS.appointmentTime]
+    )).rows[0];
+    expect(evidence.source_snapshot).toMatchObject({
+      submittedSchedule: { scheduledStart: '2027-11-07T01:30:00-05:00' },
+      timeZoneAuthority: { timeZone: 'America/New_York' },
+    });
+    expect(evidence.details).toMatchObject({
+      submittedSchedule: { scheduledStart: '2027-11-07T01:30:00-05:00' },
+      timeZoneAuthority: { timeZone: 'America/New_York' },
+    });
+
+    const beforeConcurrent = secondFold.body.data.scheduleAuthority;
+    const concurrentMutation = mutation(beforeConcurrent, 'm22-time-concurrent-zone-0007', {
+      scheduledStart: '2027-07-01T09:00:00-04:00',
+      scheduledEnd: '2027-07-01T10:00:00-04:00',
+      reason: 'Serialize this approval with the current profile zone.',
+    });
+    let zoneChange;
+    const serializingPool = {
+      async connect() {
+        const client = await upgradePool.connect();
+        return {
+          async query(...args) {
+            const result = await client.query(...args);
+            if (!zoneChange && /FROM public\.canonical_business_profiles[\s\S]*FOR SHARE/i.test(String(args[0]))) {
+              zoneChange = replaceZone('America/Chicago');
+            }
+            return result;
+          },
+          release() { client.release(); },
+        };
+      },
+    };
+    const serialized = await updateAppointmentSchedule(serializingPool, concurrentMutation);
+    expect(serialized.body.data.scheduleAuthority.revision).toBe(4);
+    await zoneChange;
+    expect(await updateAppointmentSchedule(upgradePool, concurrentMutation)).toMatchObject({ replayed: true });
+    const staleAfterChange = mutation(serialized.body.data.scheduleAuthority, 'm22-time-after-zone-change-0008', {
+      scheduledStart: '2027-07-01T10:00:00-04:00',
+      scheduledEnd: '2027-07-01T11:00:00-04:00',
+    });
+    await expect(updateAppointmentSchedule(upgradePool, staleAfterChange))
+      .rejects.toMatchObject({ status: 409, code: 'M22_STALE_TIME_ZONE' });
+    await replaceZone('America/New_York');
+  });
+
   test('audit failure rolls back the entire mutation and orphan or dispatch-forging approvals cannot commit', async () => {
     const before = (await upgradePool.query(
       `SELECT *, id AS assignment_id FROM canonical_schedule_assignments
@@ -786,11 +968,12 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       explicitSession: null,
       idempotencyKey: 'm22-part1-injected-audit-failure',
       body: {
-        scheduledStart: '2027-04-01T13:00:00Z',
-        scheduledEnd: '2027-04-01T14:00:00Z',
+        scheduledStart: '2027-04-01T09:00:00-04:00',
+        scheduledEnd: '2027-04-01T10:00:00-04:00',
         status: 'scheduled',
         expectedRevision: Number(before.revision),
         expectedDigest: before.canonical_digest.trim(),
+        expectedTimeZone: 'America/New_York',
         action: 'calendar_edit',
         reason: 'This transaction must roll back.',
       },

@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const ENGINE_PATH = path.join(ROOT, 'public', 'js', 'polaris-engine.js');
 const UI_PATH = path.join(ROOT, 'public', 'js', 'polaris-ui.js');
 const CALENDAR_PATH = path.join(ROOT, 'public', 'js', 'calendar-engine.js');
+const SCHEDULING_TIME_PATH = path.join(ROOT, 'public', 'js', 'scheduling-time-contract.js');
 const CUSTOMER_DETAIL_PATH = path.join(ROOT, 'public', 'js', 'customer-detail.js');
 const PRESENTATION_FORMAT_PATH = path.join(ROOT, 'public', 'js', 'presentation-format.js');
 const TRANSCRIPT_RENDERER_PATH = path.join(ROOT, 'public', 'js', 'transcript-renderer.js');
@@ -280,6 +281,12 @@ function createConsumerRuntime(source, options) {
         items: [item],
         records: options.records || [],
         metrics: { estimatedRevenue: values.estimatedRevenue },
+        timeZoneAuthority: {
+          profileId: '10000000-0000-4000-8000-000000000001',
+          profileVersion: 1,
+          profileHash: 'a'.repeat(64),
+          timeZone: 'UTC',
+        },
       };
     },
     loadCompatibility: function () { return Promise.resolve({ items: [item], records: [], digest: 'presentation-digest' }); },
@@ -299,6 +306,7 @@ function createConsumerRuntime(source, options) {
     Boolean: Boolean,
     Promise: Promise,
     Date: Date,
+    Intl: Intl,
     URL: URL,
     Set: Set,
     Map: Map,
@@ -319,6 +327,7 @@ function createConsumerRuntime(source, options) {
   vm.runInContext(fs.readFileSync(PRESENTATION_FORMAT_PATH, 'utf8'), sandbox, { filename: 'presentation-format.js' });
   vm.runInContext(fs.readFileSync(TRANSCRIPT_RENDERER_PATH, 'utf8'), sandbox, { filename: 'transcript-renderer.js' });
   vm.runInContext(fs.readFileSync(ENGINE_PATH, 'utf8'), sandbox, { filename: 'polaris-engine.js' });
+  vm.runInContext(fs.readFileSync(SCHEDULING_TIME_PATH, 'utf8'), sandbox, { filename: 'scheduling-time-contract.js' });
   var productionSelector = sandbox.window.PolarisEngine.selectPresentation;
   var selectorCalls = [];
   sandbox.window.PolarisEngine = {

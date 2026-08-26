@@ -1,6 +1,7 @@
 'use strict';
 
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
+const schedulingTime = require('../../public/js/scheduling-time-contract');
 
 const DIGEST = /^[0-9a-f]{64}$/;
 const ACTIONS = new Set(['calendar_drag_drop', 'calendar_resize', 'calendar_edit']);
@@ -25,14 +26,11 @@ function has(object, key) {
 
 function exactTimestamp(value, field) {
   if (value === null) return null;
-  if (typeof value !== 'string' || value.length < 20 || value.length > 40 || value !== value.trim()) {
-    fail(400, 'INVALID_APPOINTMENT_SCHEDULE', field + ' must be an exact RFC3339 timestamp.');
+  try {
+    return schedulingTime.parseRfc3339(value);
+  } catch (_error) {
+    fail(400, 'INVALID_APPOINTMENT_SCHEDULE', field + ' must be an exact RFC3339 timestamp with an explicit UTC offset.');
   }
-  const parsed = new Date(value);
-  if (!Number.isFinite(parsed.getTime()) || !/(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
-    fail(400, 'INVALID_APPOINTMENT_SCHEDULE', field + ' must include an RFC3339 UTC offset.');
-  }
-  return parsed.toISOString();
 }
 
 function normalizeReason(value, action) {
@@ -53,9 +51,10 @@ function normalizeReason(value, action) {
 
 function requireApprovalPins(body, idempotencyKey, authSessionId) {
   const missing = !has(body, 'expectedRevision') || !has(body, 'expectedDigest') ||
-    !has(body, 'action') || typeof idempotencyKey !== 'string' || !idempotencyKey || !authSessionId;
+    !has(body, 'expectedTimeZone') || !has(body, 'action') ||
+    typeof idempotencyKey !== 'string' || !idempotencyKey || !authSessionId;
   if (missing) {
-    fail(428, 'M22_APPROVAL_REQUIRED', 'Current revision, digest, action, idempotency, and session approval evidence are required.');
+    fail(428, 'M22_APPROVAL_REQUIRED', 'Current revision, digest, time zone, action, idempotency, and session approval evidence are required.');
   }
 }
 
@@ -71,6 +70,10 @@ function normalizeScheduleMutation(input) {
     fail(400, 'INVALID_APPROVAL_PRECONDITION', 'Schedule revision or digest is invalid.');
   }
   if (!ACTIONS.has(action)) fail(400, 'INVALID_APPROVAL_ACTION', 'Schedule approval action is invalid.');
+  const expectedTimeZone = typeof body.expectedTimeZone === 'string' ? body.expectedTimeZone : '';
+  if (!schedulingTime.isValidTimeZone(expectedTimeZone)) {
+    fail(400, 'INVALID_APPOINTMENT_SCHEDULE', 'The expected tenant IANA time zone is invalid.');
+  }
 
   const idempotencyKey = input.idempotencyKey;
   if (idempotencyKey !== idempotencyKey.trim() || idempotencyKey.length < 16 || idempotencyKey.length > 128) {
@@ -81,8 +84,12 @@ function normalizeScheduleMutation(input) {
   if (status !== undefined && !STATUSES.has(status)) {
     fail(400, 'INVALID_APPOINTMENT_STATUS', 'Appointment status is invalid.');
   }
-  const scheduledStart = has(body, 'scheduledStart') ? exactTimestamp(body.scheduledStart, 'scheduledStart') : undefined;
-  const scheduledEnd = has(body, 'scheduledEnd') ? exactTimestamp(body.scheduledEnd, 'scheduledEnd') : undefined;
+  const parsedStart = has(body, 'scheduledStart') ? exactTimestamp(body.scheduledStart, 'scheduledStart') : undefined;
+  const parsedEnd = has(body, 'scheduledEnd') ? exactTimestamp(body.scheduledEnd, 'scheduledEnd') : undefined;
+  const scheduledStart = parsedStart === undefined || parsedStart === null ? parsedStart : parsedStart.instant;
+  const scheduledEnd = parsedEnd === undefined || parsedEnd === null ? parsedEnd : parsedEnd.instant;
+  const rawScheduledStart = parsedStart === undefined || parsedStart === null ? parsedStart : parsedStart.raw;
+  const rawScheduledEnd = parsedEnd === undefined || parsedEnd === null ? parsedEnd : parsedEnd.raw;
   if (scheduledStart !== undefined && scheduledEnd !== undefined &&
       ((scheduledStart === null) !== (scheduledEnd === null) ||
        (scheduledStart !== null && new Date(scheduledEnd).getTime() <= new Date(scheduledStart).getTime()))) {
@@ -99,10 +106,13 @@ function normalizeScheduleMutation(input) {
     explicitSession: input.explicitSession ? String(input.explicitSession) : null,
     expectedRevision,
     expectedDigest,
+    expectedTimeZone,
     action,
     reason,
     scheduledStart,
     scheduledEnd,
+    rawScheduledStart,
+    rawScheduledEnd,
     status,
     idempotencyKeyHash: sha256(idempotencyKey),
   };
@@ -115,13 +125,14 @@ function normalizeScheduleMutation(input) {
     explicitSession: normalized.explicitSession,
     expectedRevision: normalized.expectedRevision,
     expectedDigest: normalized.expectedDigest,
+    expectedTimeZone: normalized.expectedTimeZone,
     action: normalized.action,
     reason: normalized.reason,
     hasScheduledStart: normalized.scheduledStart !== undefined,
     hasScheduledEnd: normalized.scheduledEnd !== undefined,
     hasStatus: normalized.status !== undefined,
-    scheduledStart: normalized.scheduledStart === undefined ? null : normalized.scheduledStart,
-    scheduledEnd: normalized.scheduledEnd === undefined ? null : normalized.scheduledEnd,
+    rawScheduledStart: normalized.rawScheduledStart === undefined ? null : normalized.rawScheduledStart,
+    rawScheduledEnd: normalized.rawScheduledEnd === undefined ? null : normalized.rawScheduledEnd,
     status: normalized.status === undefined ? null : normalized.status,
   }));
   return Object.freeze(normalized);

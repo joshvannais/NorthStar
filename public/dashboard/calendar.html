@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta name="northstar-canonical-surfaces" content="calendar">
+  <script src="/js/scheduling-time-contract.js"></script>
   <script src="/js/canonical-intelligence.js"></script>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
@@ -309,6 +310,11 @@ body { background: var(--neutral-50); }
 .cal-approval-confirm input { flex: 0 0 auto; width: 18px; height: 18px; margin: 0; }
 .cal-schedule-status { min-height: 20px; margin-top: 10px; color: var(--neutral-700); font-size: 12px; }
 .cal-schedule-status[role="alert"] { color: #b91c1c; font-weight: 600; }
+.cal-occurrence-choice { margin: 0 0 12px; padding: 10px; border: 1px solid var(--neutral-300); border-radius: 6px; }
+.cal-occurrence-choice[hidden] { display: none; }
+.cal-occurrence-choice legend { padding: 0 4px; color: var(--neutral-700); font-size: 12px; font-weight: 600; }
+.cal-occurrence-option { display: flex; align-items: center; gap: 8px; min-height: 36px; color: var(--neutral-700); font-size: 12px; }
+.cal-occurrence-option input { flex: 0 0 auto; width: 18px; height: 18px; margin: 0; }
 
 /* Responsive */
 @media (min-width: 769px) and (max-width: 1100px) {
@@ -436,6 +442,10 @@ function renderCalendarSources() {
 
 function syncAuthoritativeCalendarLeads(loadInfo) {
   if (!loadInfo || loadInfo.from !== 'server') return;
+  // AppStore emits store:loaded for its independent Leads compatibility read.
+  // Do not consume that signal until the Calendar projection (including its
+  // current time-zone authority) has settled.
+  if (!window.CanonicalIntelligence || !window.CanonicalIntelligence.getProjection('calendar')) return;
   var events = window.syncCalendarFromAppStore();
   calendarLeadEvents = Array.isArray(events) ? events : [];
   renderCalendarSources();

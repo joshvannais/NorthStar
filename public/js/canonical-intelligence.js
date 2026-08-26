@@ -226,6 +226,16 @@
       throw new Error('Polaris response envelope is malformed.');
     }
     validateAuthority(data.authority, context);
+    if (surface === 'calendar') {
+      var timeZoneAuthority = data.timeZoneAuthority;
+      var timeContract = global.NorthStarSchedulingTime;
+      if (!timeZoneAuthority || !UUID.test(String(timeZoneAuthority.profileId || '')) ||
+          !Number.isSafeInteger(Number(timeZoneAuthority.profileVersion)) || Number(timeZoneAuthority.profileVersion) < 1 ||
+          !DIGEST.test(String(timeZoneAuthority.profileHash || '')) || !timeContract ||
+          !timeContract.isValidTimeZone(timeZoneAuthority.timeZone)) {
+        throw new Error('Current Calendar time-zone authority is unavailable.');
+      }
+    }
     var byGraph = Object.create(null);
     var order = [];
     data.items.forEach(function (candidate) {
@@ -343,6 +353,7 @@
       timestamps: item ? item.timestamps : null,
       metadata: item ? item.metadata : null,
       businessProfile: item ? item.businessProfile : null,
+      timeZoneAuthority: projection.timeZoneAuthority || null,
       price: values ? values.customerFacingPrice : null,
       tax: values ? {
         ratePercent: values.taxRatePercent,

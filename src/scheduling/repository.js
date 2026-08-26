@@ -1,5 +1,7 @@
 'use strict';
 
+const schedulingTime = require('../../public/js/scheduling-time-contract');
+
 class ScheduleRepositoryError extends Error {
   constructor(status, code, message, cause) {
     super(message);
@@ -161,7 +163,58 @@ async function requireRecordScope(client, input) {
   if (scoped.rowCount !== 1) fail(404, 'NOT_FOUND', 'Appointment not found.');
 }
 
+async function lockTenantTimeZoneMutationLane(client, input) {
+  // Business Profile version changes take this organization lock first, then
+  // update the active profile and onboarding pointer. Match that order before
+  // the existing authority query locks onboarding so concurrent zone rotation
+  // cannot deadlock with schedule approval.
+  await client.query(
+    'SELECT id FROM public.organizations WHERE id = $1 FOR SHARE',
+    [input.organizationId]
+  );
+}
+
+async function requireCurrentTimeZoneAuthority(client, input) {
+  const result = await client.query(
+    `SELECT id, version_number, normalized_profile_hash,
+            raw_profile #>> '{company,timeZone}' AS time_zone
+       FROM public.canonical_business_profiles
+      WHERE organization_id = $1 AND is_active = TRUE
+      ORDER BY version_number DESC, id
+      FOR SHARE`,
+    [input.organizationId]
+  );
+  const profile = result.rowCount === 1 ? result.rows[0] : null;
+  if (!profile || !schedulingTime.isValidTimeZone(profile.time_zone)) {
+    fail(409, 'M22_TIME_ZONE_AUTHORITY_REQUIRED', 'A current authoritative tenant IANA time zone is required before scheduling.');
+  }
+  if (profile.time_zone !== input.expectedTimeZone) {
+    fail(409, 'M22_STALE_TIME_ZONE', 'The tenant time zone changed; refresh and review the schedule again.');
+  }
+  return Object.freeze({
+    profileId: String(profile.id),
+    profileVersion: Number(profile.version_number),
+    profileHash: trimDigest(profile.normalized_profile_hash),
+    timeZone: profile.time_zone,
+  });
+}
+
+function validatedScheduleInstant(rawValue, canonicalValue, timeZone) {
+  if (rawValue === undefined || rawValue === null) return rawValue;
+  try {
+    const validated = schedulingTime.validateRfc3339InZone(rawValue, timeZone);
+    if (validated.instant !== canonicalValue) {
+      fail(400, 'INVALID_APPOINTMENT_SCHEDULE', 'Appointment schedule changed during normalization.');
+    }
+    return validated.instant;
+  } catch (error) {
+    if (error instanceof ScheduleRepositoryError) throw error;
+    fail(400, 'INVALID_APPOINTMENT_SCHEDULE', 'Appointment schedule does not agree with the current tenant IANA time zone.', error);
+  }
+}
+
 async function mutateInTransaction(client, input) {
+  await lockTenantTimeZoneMutationLane(client, input);
   await requireCurrentAuthority(client, input);
   await requireRecordScope(client, input);
   const replay = await idempotencyResult(client, input);
@@ -190,8 +243,16 @@ async function mutateInTransaction(client, input) {
     fail(409, 'M22_STALE_APPROVAL', 'Schedule authority changed; refresh before approving again.');
   }
 
-  const scheduledStart = input.scheduledStart === undefined ? timestamp(current.scheduled_start) : input.scheduledStart;
-  const scheduledEnd = input.scheduledEnd === undefined ? timestamp(current.scheduled_end) : input.scheduledEnd;
+  const timeZoneAuthority = await requireCurrentTimeZoneAuthority(client, input);
+  const validatedStart = validatedScheduleInstant(
+    input.rawScheduledStart, input.scheduledStart, timeZoneAuthority.timeZone
+  );
+  const validatedEnd = validatedScheduleInstant(
+    input.rawScheduledEnd, input.scheduledEnd, timeZoneAuthority.timeZone
+  );
+
+  const scheduledStart = validatedStart === undefined ? timestamp(current.scheduled_start) : validatedStart;
+  const scheduledEnd = validatedEnd === undefined ? timestamp(current.scheduled_end) : validatedEnd;
   if ((scheduledStart === null) !== (scheduledEnd === null) ||
       (scheduledStart !== null && new Date(scheduledEnd).getTime() <= new Date(scheduledStart).getTime())) {
     fail(400, 'INVALID_APPOINTMENT_SCHEDULE', 'Appointment schedule must be absent or have a strictly positive interval.');
@@ -261,6 +322,11 @@ async function mutateInTransaction(client, input) {
         appointmentId: input.appointmentId,
         expectedRevision: input.expectedRevision,
         expectedDigest: input.expectedDigest,
+        submittedSchedule: {
+          scheduledStart: input.rawScheduledStart === undefined ? null : input.rawScheduledStart,
+          scheduledEnd: input.rawScheduledEnd === undefined ? null : input.rawScheduledEnd,
+        },
+        timeZoneAuthority,
       })]
   );
   const appointmentResult = await client.query(
@@ -283,6 +349,11 @@ async function mutateInTransaction(client, input) {
         dispatchState,
         needsReview,
         reviewReasons,
+        submittedSchedule: {
+          scheduledStart: input.rawScheduledStart === undefined ? null : input.rawScheduledStart,
+          scheduledEnd: input.rawScheduledEnd === undefined ? null : input.rawScheduledEnd,
+        },
+        timeZoneAuthority,
       })]
   );
   const authority = scheduleAuthority(assignment);

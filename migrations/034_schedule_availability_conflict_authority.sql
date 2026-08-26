@@ -189,6 +189,8 @@ CREATE TABLE public.canonical_workforce_availability_idempotency (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT canonical_workforce_availability_idempotency_primary
     PRIMARY KEY (organization_id, actor_user_id, idempotency_key_hash),
+  CONSTRAINT canonical_workforce_availability_idempotency_revision_unique
+    UNIQUE (organization_id, availability_revision_id),
   CONSTRAINT canonical_workforce_availability_idempotency_actor_fk
     FOREIGN KEY (organization_id, actor_user_id)
     REFERENCES public.organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
@@ -205,6 +207,75 @@ CREATE TABLE public.canonical_workforce_availability_idempotency (
     response_status BETWEEN 200 AND 299 AND jsonb_typeof(response_body) = 'object'
   )
 );
+
+CREATE OR REPLACE FUNCTION public.canonical_workforce_availability_validate_idempotency()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $function$
+DECLARE
+  authority_record public.canonical_workforce_availability_authorities%ROWTYPE;
+  revision_record public.canonical_workforce_availability_revisions%ROWTYPE;
+  expected_response JSONB;
+BEGIN
+  SELECT * INTO revision_record
+    FROM public.canonical_workforce_availability_revisions
+   WHERE organization_id = NEW.organization_id
+     AND id = NEW.availability_revision_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Canonical workforce availability idempotency revision is unavailable'
+      USING ERRCODE = '23514', CONSTRAINT = 'canonical_workforce_availability_idempotency_divergent';
+  END IF;
+
+  SELECT * INTO authority_record
+    FROM public.canonical_workforce_availability_authorities
+   WHERE organization_id = NEW.organization_id
+     AND id = NEW.availability_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Canonical workforce availability idempotency authority is unavailable'
+      USING ERRCODE = '23514', CONSTRAINT = 'canonical_workforce_availability_idempotency_divergent';
+  END IF;
+
+  expected_response := jsonb_build_object(
+    'data', jsonb_build_object(
+      'coverageEnd', to_char(revision_record.coverage_end AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'coverageStart', to_char(revision_record.coverage_start AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'digest', rtrim(revision_record.canonical_digest),
+      'id', revision_record.availability_id,
+      'intervals', revision_record.intervals,
+      'profileId', revision_record.workforce_profile_id,
+      'revision', revision_record.revision,
+      'updatedAt', to_char(authority_record.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+    ),
+    'success', TRUE
+  );
+
+  IF revision_record.availability_id <> NEW.availability_id
+     OR revision_record.actor_user_id <> NEW.actor_user_id
+     OR rtrim(revision_record.idempotency_key_hash) <> rtrim(NEW.idempotency_key_hash)
+     OR rtrim(revision_record.request_digest) <> rtrim(NEW.request_digest)
+     OR revision_record.transaction_id <> NEW.transaction_id
+     OR NEW.transaction_id <> txid_current()::bigint
+     OR NEW.created_at IS DISTINCT FROM revision_record.created_at
+     OR authority_record.workforce_profile_id <> revision_record.workforce_profile_id
+     OR authority_record.revision <> revision_record.revision
+     OR rtrim(authority_record.canonical_digest) <> rtrim(revision_record.canonical_digest)
+     OR authority_record.coverage_start IS DISTINCT FROM revision_record.coverage_start
+     OR authority_record.coverage_end IS DISTINCT FROM revision_record.coverage_end
+     OR authority_record.last_actor_user_id <> revision_record.actor_user_id
+     OR authority_record.updated_at IS DISTINCT FROM revision_record.created_at
+     OR NEW.response_status <> 200
+     OR NEW.response_body <> expected_response THEN
+    RAISE EXCEPTION 'Canonical workforce availability idempotency evidence diverges from its revision'
+      USING ERRCODE = '23514', CONSTRAINT = 'canonical_workforce_availability_idempotency_divergent';
+  END IF;
+  RETURN NEW;
+END
+$function$;
+
+CREATE TRIGGER canonical_workforce_availability_idempotency_validate
+  BEFORE INSERT ON public.canonical_workforce_availability_idempotency
+  FOR EACH ROW EXECUTE FUNCTION public.canonical_workforce_availability_validate_idempotency();
 
 CREATE OR REPLACE FUNCTION public.canonical_schedule_part2_immutable_evidence()
 RETURNS TRIGGER
@@ -417,6 +488,7 @@ DECLARE
   authority_record public.canonical_workforce_availability_authorities%ROWTYPE;
   revision_record public.canonical_workforce_availability_revisions%ROWTYPE;
   canonical_items JSONB;
+  expected_response JSONB;
 BEGIN
   target_organization := CASE WHEN TG_OP = 'DELETE' THEN OLD.organization_id ELSE NEW.organization_id END;
   IF TG_TABLE_NAME = 'canonical_workforce_availability_authorities' THEN
@@ -445,6 +517,19 @@ BEGIN
     FROM public.canonical_workforce_availability_intervals interval
    WHERE interval.organization_id = authority_record.organization_id
      AND interval.availability_id = authority_record.id;
+  expected_response := jsonb_build_object(
+    'data', jsonb_build_object(
+      'coverageEnd', to_char(revision_record.coverage_end AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'coverageStart', to_char(revision_record.coverage_start AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'digest', rtrim(revision_record.canonical_digest),
+      'id', revision_record.availability_id,
+      'intervals', revision_record.intervals,
+      'profileId', revision_record.workforce_profile_id,
+      'revision', revision_record.revision,
+      'updatedAt', to_char(authority_record.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+    ),
+    'success', TRUE
+  );
   IF revision_record.id IS NULL
      OR revision_record.workforce_profile_id <> authority_record.workforce_profile_id
      OR revision_record.coverage_start IS DISTINCT FROM authority_record.coverage_start
@@ -464,8 +549,8 @@ BEGIN
           AND audit.after_revision = authority_record.revision
           AND rtrim(audit.after_digest) = rtrim(authority_record.canonical_digest)
           AND audit.transaction_id = revision_record.transaction_id
-     ) OR NOT EXISTS (
-       SELECT 1 FROM public.canonical_workforce_availability_idempotency replay
+     ) OR 1 <> (
+       SELECT count(*) FROM public.canonical_workforce_availability_idempotency replay
         WHERE replay.organization_id = authority_record.organization_id
           AND replay.actor_user_id = revision_record.actor_user_id
           AND replay.availability_id = authority_record.id
@@ -473,8 +558,8 @@ BEGIN
           AND rtrim(replay.idempotency_key_hash) = rtrim(revision_record.idempotency_key_hash)
           AND rtrim(replay.request_digest) = rtrim(revision_record.request_digest)
           AND replay.transaction_id = revision_record.transaction_id
-          AND replay.response_body #>> '{data,revision}' = authority_record.revision::text
-          AND replay.response_body #>> '{data,digest}' = rtrim(authority_record.canonical_digest)
+          AND replay.response_status = 200
+          AND replay.response_body = expected_response
      ) THEN
     RAISE EXCEPTION 'Canonical workforce availability mutation evidence is incomplete'
       USING ERRCODE = '23514', CONSTRAINT = 'canonical_workforce_availability_evidence_incomplete';
@@ -497,4 +582,5 @@ REVOKE ALL ON FUNCTION public.canonical_workforce_availability_digest(UUID, TIME
 REVOKE ALL ON FUNCTION public.canonical_schedule_part2_immutable_evidence() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_workforce_availability_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_workforce_availability_validate_revision() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_workforce_availability_validate_idempotency() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_workforce_availability_validate_completion() FROM PUBLIC;

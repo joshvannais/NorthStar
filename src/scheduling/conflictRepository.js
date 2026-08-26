@@ -39,6 +39,13 @@ function mapDatabaseError(error) {
   if (error && ['40001', '40P01'].includes(error.code)) {
     return new ConflictRepositoryError(409, 'M22_EVALUATION_STALE', 'Scheduling authority changed; refresh and evaluate again.', error);
   }
+  if (error && error.code === '23505' && [
+    'canonical_workforce_availability_idempotency_primary',
+    'canonical_workforce_availability_idempotency_revision_unique',
+  ].includes(error.constraint)) {
+    return new ConflictRepositoryError(409, 'M22_AVAILABILITY_IDEMPOTENCY_CONFLICT',
+      'The Idempotency-Key was already used for another availability write.', error);
+  }
   if (error && error.code === '42501') {
     return new ConflictRepositoryError(403, 'M22_EVALUATION_FORBIDDEN', 'Current scheduling authority is unavailable.', error);
   }
@@ -151,18 +158,78 @@ function availabilityResponse(row, intervals) {
   };
 }
 
-async function replayAvailability(client, input) {
+async function replayAvailability(client, input, current) {
   const result = await client.query(
-    `SELECT request_digest, response_status, response_body
-       FROM public.canonical_workforce_availability_idempotency
-      WHERE organization_id = $1 AND actor_user_id = $2 AND idempotency_key_hash = $3`,
+    `SELECT replay.request_digest, replay.response_status, replay.response_body,
+            replay.availability_id, replay.availability_revision_id,
+            replay.transaction_id AS replay_transaction_id,
+            revision.id AS revision_record_id,
+            revision.workforce_profile_id, revision.revision,
+            revision.canonical_digest, revision.coverage_start, revision.coverage_end,
+            revision.intervals, revision.actor_user_id AS revision_actor_user_id,
+            revision.idempotency_key_hash AS revision_key_hash,
+            revision.request_digest AS revision_request_digest,
+            revision.transaction_id AS revision_transaction_id,
+            revision.created_at AS revision_created_at,
+            audit.id AS audit_record_id, audit.before_revision, audit.before_digest,
+            audit.after_revision, audit.after_digest,
+            audit.transaction_id AS audit_transaction_id
+       FROM public.canonical_workforce_availability_idempotency replay
+       LEFT JOIN public.canonical_workforce_availability_revisions revision
+         ON revision.organization_id = replay.organization_id
+        AND revision.id = replay.availability_revision_id
+       LEFT JOIN public.canonical_workforce_availability_audit_events audit
+         ON audit.organization_id = replay.organization_id
+        AND audit.availability_revision_id = replay.availability_revision_id
+      WHERE replay.organization_id = $1 AND replay.actor_user_id = $2
+        AND replay.idempotency_key_hash = $3`,
     [input.organizationId, input.actorUserId, input.idempotencyKeyHash]
   );
   if (result.rowCount === 0) return null;
-  if (digest(result.rows[0].request_digest) !== input.requestDigest) {
+  const row = result.rows[0];
+  if (digest(row.request_digest) !== input.requestDigest) {
     fail(409, 'M22_AVAILABILITY_IDEMPOTENCY_CONFLICT', 'The Idempotency-Key was already used for another availability write.');
   }
-  return { status: result.rows[0].response_status, body: result.rows[0].response_body, replayed: true };
+  const beforeDigest = row.before_digest === null ? null : digest(row.before_digest);
+  const replayRevision = Number(row.revision);
+  const currentRevision = current ? Number(current.revision) : 0;
+  const canonicalIntervals = Array.isArray(row.intervals) ? row.intervals.map(interval => ({
+    ordinal: Number(interval.ordinal),
+    interval_kind: interval.kind,
+    starts_at: interval.start,
+    ends_at: interval.end,
+  })) : null;
+  const canonicalBody = canonicalIntervals ? {
+    success: true,
+    data: availabilityResponse({
+      id: row.availability_id,
+      workforce_profile_id: row.workforce_profile_id,
+      coverage_start: row.coverage_start,
+      coverage_end: row.coverage_end,
+      revision: row.revision,
+      canonical_digest: row.canonical_digest,
+      updated_at: row.revision_created_at,
+    }, canonicalIntervals),
+  } : null;
+  const structurallyBound = current && row.revision_record_id && row.audit_record_id && canonicalBody &&
+    String(current.id) === String(row.availability_id) &&
+    String(current.workforce_profile_id) === input.profileId &&
+    String(row.workforce_profile_id) === input.profileId &&
+    String(row.revision_actor_user_id) === input.actorUserId &&
+    digest(row.revision_key_hash) === input.idempotencyKeyHash &&
+    digest(row.revision_request_digest) === input.requestDigest &&
+    String(row.replay_transaction_id) === String(row.revision_transaction_id) &&
+    String(row.replay_transaction_id) === String(row.audit_transaction_id) &&
+    Number(row.before_revision) === input.expectedRevision && beforeDigest === input.expectedDigest &&
+    Number(row.after_revision) === replayRevision && replayRevision === input.expectedRevision + 1 &&
+    digest(row.after_digest) === digest(row.canonical_digest) &&
+    currentRevision >= replayRevision &&
+    (currentRevision !== replayRevision || digest(current.canonical_digest) === digest(row.canonical_digest)) &&
+    Number(row.response_status) === 200 && json(row.response_body) === json(canonicalBody);
+  if (!structurallyBound) {
+    fail(503, 'CANONICAL_PERSISTENCE_UNAVAILABLE', 'Canonical availability idempotency evidence is unavailable.');
+  }
+  return { status: 200, body: canonicalBody, replayed: true };
 }
 
 async function replaceAvailabilityInTransaction(client, input) {
@@ -181,9 +248,6 @@ async function replaceAvailabilityInTransaction(client, input) {
     [input.organizationId, input.profileId]
   );
   if (target.rowCount !== 1) fail(404, 'NOT_FOUND', 'Workforce profile not found.');
-  const replay = await replayAvailability(client, input);
-  if (replay) return replay;
-
   const currentResult = await client.query(
     `SELECT * FROM public.canonical_workforce_availability_authorities
       WHERE organization_id = $1 AND workforce_profile_id = $2 FOR UPDATE`,
@@ -192,6 +256,8 @@ async function replaceAvailabilityInTransaction(client, input) {
   const current = currentResult.rows[0] || null;
   const currentRevision = current ? Number(current.revision) : 0;
   const currentDigest = current ? digest(current.canonical_digest) : null;
+  const replay = await replayAvailability(client, input, current);
+  if (replay) return replay;
   if (currentRevision !== input.expectedRevision || currentDigest !== input.expectedDigest) {
     fail(409, 'M22_AVAILABILITY_STALE', 'Availability authority changed; refresh before replacing it.');
   }

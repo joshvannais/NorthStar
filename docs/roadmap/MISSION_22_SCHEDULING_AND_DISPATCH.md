@@ -123,7 +123,10 @@ existing `/api/v1/canonical` authority:
   session and CSRF, current subscription/onboarding/permission authority,
   exact revision/digest/time-zone pins, an idempotency key, and a bounded
   reason. Current authority, immutable revision, actor evidence, audit, and
-  idempotency response commit together or roll back together.
+  one canonical idempotency response commit together or roll back together.
+  Each response is uniquely bound to its exact same-transaction revision;
+  replay reconstructs that canonical revision response instead of trusting
+  caller-selected durable response bytes.
 - `POST /appointments/:id/conflicts` evaluates a proposed profile, crew, or
   unassigned target and exact schedule without assigning, scheduling,
   dispatching, recommending, or granting a mutation capability. It returns a

@@ -11,6 +11,8 @@ const {
   sha256: stableSha256,
 } = require('../../src/services/businessProfileAdapter');
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+const { normalizeAvailabilityMutation } = require('../../src/scheduling/conflictContract');
+const { replaceAvailability } = require('../../src/scheduling/conflictRepository');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
@@ -493,6 +495,232 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
     expect(durable.raw_reason).toContain(HOSTILE);
   }, 120000);
 
+  test('rejects ordinary-runtime forged replay rows and preserves canonical idempotency semantics', async () => {
+    const current = (await runtimePool.query(
+      `SELECT authority.id,authority.revision,rtrim(authority.canonical_digest) AS digest,
+              revision.id AS revision_id
+         FROM public.canonical_workforce_availability_authorities authority
+         JOIN public.canonical_workforce_availability_revisions revision
+           ON revision.organization_id=authority.organization_id
+          AND revision.availability_id=authority.id
+          AND revision.revision=authority.revision
+        WHERE authority.organization_id=$1 AND authority.workforce_profile_id=$2`,
+      [IDS.organization, IDS.owner]
+    )).rows[0];
+    const idempotencyKey = 'm22-runtime-poison-rejected-0001';
+    const body = availabilityBody({
+      expectedRevision: Number(current.revision),
+      expectedDigest: current.digest,
+      reason: 'Legitimate availability request after a rejected runtime replay poison.',
+    });
+    const normalized = normalizeAvailabilityMutation({ profileId: IDS.owner, idempotencyKey, body });
+    const forgedBody = { success: true, data: { forged: true, source: 'runtime-direct-sql' } };
+    await expect(runtimePool.query(
+      `INSERT INTO public.canonical_workforce_availability_idempotency
+        (organization_id,actor_user_id,idempotency_key_hash,request_digest,
+         availability_id,availability_revision_id,response_status,response_body)
+       VALUES ($1,$2,$3,$4,$5,$6,200,$7::jsonb)`,
+      [IDS.organization, IDS.owner, normalized.idempotencyKeyHash, normalized.requestDigest,
+        current.id, current.revision_id, JSON.stringify(forgedBody)]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_workforce_availability_idempotency_divergent',
+    });
+    expect((await runtimePool.query(
+      `SELECT count(*)::int AS count
+         FROM public.canonical_workforce_availability_idempotency
+        WHERE organization_id=$1 AND actor_user_id=$2 AND idempotency_key_hash=$3`,
+      [IDS.organization, IDS.owner, normalized.idempotencyKeyHash]
+    )).rows).toEqual([{ count: 0 }]);
+
+    const accepted = await request(app)
+      .put(`/api/v1/canonical/availability/profiles/${IDS.owner}`)
+      .set(sessions.owner.headers).set('Idempotency-Key', idempotencyKey).send(body);
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.data).toMatchObject({ profileId: IDS.owner, revision: Number(current.revision) + 1 });
+    expect(accepted.body.data.forged).toBeUndefined();
+    const replay = await request(app)
+      .put(`/api/v1/canonical/availability/profiles/${IDS.owner}`)
+      .set(sessions.owner.headers).set('Idempotency-Key', idempotencyKey).send(body);
+    expect(replay.status).toBe(200);
+    expect(replay.headers['idempotency-replayed']).toBe('true');
+    expect(replay.body).toEqual(accepted.body);
+    const collision = await request(app)
+      .put(`/api/v1/canonical/availability/profiles/${IDS.owner}`)
+      .set(sessions.owner.headers).set('Idempotency-Key', idempotencyKey)
+      .send({ ...body, reason: 'A different request cannot reuse canonical replay evidence.' });
+    expect(collision.status).toBe(409);
+    expect(collision.body.error.code).toBe('M22_AVAILABILITY_IDEMPOTENCY_CONFLICT');
+
+    const bound = (await runtimePool.query(
+      `SELECT replay.response_status,replay.response_body,
+              replay.transaction_id=revision.transaction_id AS same_revision_transaction,
+              replay.transaction_id=audit.transaction_id AS same_audit_transaction,
+              replay.actor_user_id=revision.actor_user_id AS same_actor,
+              rtrim(replay.request_digest)=rtrim(revision.request_digest) AS same_request,
+              rtrim(replay.idempotency_key_hash)=rtrim(revision.idempotency_key_hash) AS same_key
+         FROM public.canonical_workforce_availability_idempotency replay
+         JOIN public.canonical_workforce_availability_revisions revision
+           ON revision.organization_id=replay.organization_id
+          AND revision.id=replay.availability_revision_id
+         JOIN public.canonical_workforce_availability_audit_events audit
+           ON audit.organization_id=replay.organization_id
+          AND audit.availability_revision_id=replay.availability_revision_id
+        WHERE replay.organization_id=$1 AND replay.actor_user_id=$2
+          AND replay.idempotency_key_hash=$3`,
+      [IDS.organization, IDS.owner, normalized.idempotencyKeyHash]
+    )).rows[0];
+    expect(bound).toEqual({
+      response_status: 200, response_body: accepted.body,
+      same_revision_transaction: true, same_audit_transaction: true,
+      same_actor: true, same_request: true, same_key: true,
+    });
+    await expect(runtimePool.query(
+      `INSERT INTO public.canonical_workforce_availability_idempotency
+        (organization_id,actor_user_id,idempotency_key_hash,request_digest,
+         availability_id,availability_revision_id,response_status,response_body,
+         transaction_id,created_at)
+       SELECT organization_id,actor_user_id,idempotency_key_hash,request_digest,
+              availability_id,availability_revision_id,response_status,response_body,
+              transaction_id,created_at
+         FROM public.canonical_workforce_availability_idempotency
+        WHERE organization_id=$1 AND actor_user_id=$2 AND idempotency_key_hash=$3`,
+      [IDS.organization, IDS.owner, normalized.idempotencyKeyHash]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_workforce_availability_idempotency_divergent',
+    });
+    expect((await runtimePool.query(
+      `SELECT count(*)::int AS count
+         FROM public.canonical_workforce_availability_idempotency
+        WHERE organization_id=$1 AND availability_revision_id=(
+          SELECT availability_revision_id
+            FROM public.canonical_workforce_availability_idempotency
+           WHERE organization_id=$1 AND actor_user_id=$2 AND idempotency_key_hash=$3
+        )`,
+      [IDS.organization, IDS.owner, normalized.idempotencyKeyHash]
+    )).rows).toEqual([{ count: 1 }]);
+  }, 120000);
+
+  test('serializes identical-key availability collisions to one revision and one canonical replay', async () => {
+    const before = (await runtimePool.query(
+      `SELECT authority.id,authority.revision,rtrim(authority.canonical_digest) AS digest,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_revisions revision
+                WHERE revision.organization_id=authority.organization_id
+                  AND revision.availability_id=authority.id) AS revision_count
+         FROM public.canonical_workforce_availability_authorities authority
+        WHERE authority.organization_id=$1 AND authority.workforce_profile_id=$2`,
+      [IDS.organization, IDS.owner]
+    )).rows[0];
+    const body = availabilityBody({
+      expectedRevision: Number(before.revision), expectedDigest: before.digest,
+      reason: 'Concurrent identical idempotency collision must create one canonical revision.',
+    });
+    const key = 'm22-identical-collision-0001';
+    const endpoint = `/api/v1/canonical/availability/profiles/${IDS.owner}`;
+    const [first, second] = await Promise.all([
+      request(app).put(endpoint).set(sessions.owner.headers).set('Idempotency-Key', key).send(body),
+      request(app).put(endpoint).set(sessions.owner.headers).set('Idempotency-Key', key).send(body),
+    ]);
+    expect([first.status, second.status]).toEqual([200, 200]);
+    expect(first.body).toEqual(second.body);
+    const replayHeaders = [first.headers['idempotency-replayed'], second.headers['idempotency-replayed']];
+    expect(replayHeaders.filter(value => value === 'true')).toHaveLength(1);
+    expect(replayHeaders.filter(value => value === undefined)).toHaveLength(1);
+    const after = (await runtimePool.query(
+      `SELECT authority.revision,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_revisions revision
+                WHERE revision.organization_id=authority.organization_id
+                  AND revision.availability_id=authority.id) AS revision_count,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_idempotency replay
+                WHERE replay.organization_id=authority.organization_id
+                  AND replay.availability_id=authority.id) AS replay_count
+         FROM public.canonical_workforce_availability_authorities authority
+        WHERE authority.organization_id=$1 AND authority.id=$2`,
+      [IDS.organization, before.id]
+    )).rows[0];
+    expect(Number(after.revision)).toBe(Number(before.revision) + 1);
+    expect(Number(after.revision_count)).toBe(Number(before.revision_count) + 1);
+    expect(Number(after.replay_count)).toBe(Number(after.revision_count));
+
+    const historicalPins = (await runtimePool.query(
+      `SELECT audit.before_revision,rtrim(audit.before_digest) AS before_digest
+         FROM public.canonical_workforce_availability_idempotency replay
+         JOIN public.canonical_workforce_availability_audit_events audit
+           ON audit.organization_id=replay.organization_id
+          AND audit.availability_revision_id=replay.availability_revision_id
+        WHERE replay.organization_id=$1 AND replay.actor_user_id=$2
+          AND replay.idempotency_key_hash=$3`,
+      [IDS.organization, IDS.owner,
+        stableSha256('m22-runtime-poison-rejected-0001')]
+    )).rows[0];
+    const historical = await request(app)
+      .put(endpoint).set(sessions.owner.headers)
+      .set('Idempotency-Key', 'm22-runtime-poison-rejected-0001')
+      .send(availabilityBody({
+        expectedRevision: Number(historicalPins.before_revision),
+        expectedDigest: historicalPins.before_digest,
+        reason: 'Legitimate availability request after a rejected runtime replay poison.',
+      }));
+    expect(historical.status).toBe(200);
+    expect(historical.headers['idempotency-replayed']).toBe('true');
+    expect(historical.body.data.revision).toBe(Number(historicalPins.before_revision) + 1);
+  }, 120000);
+
+  test('rolls back the complete availability mutation when canonical replay insertion fails', async () => {
+    const before = (await runtimePool.query(
+      `SELECT authority.revision,rtrim(authority.canonical_digest) AS digest,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_revisions) AS revisions,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_audit_events) AS audits,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_idempotency) AS replays
+         FROM public.canonical_workforce_availability_authorities authority
+        WHERE authority.organization_id=$1 AND authority.workforce_profile_id=$2`,
+      [IDS.organization, IDS.owner]
+    )).rows[0];
+    const body = availabilityBody({
+      expectedRevision: Number(before.revision), expectedDigest: before.digest,
+      reason: 'Availability transaction must roll back if replay evidence cannot commit.',
+    });
+    const key = 'm22-replay-insert-rollback-0001';
+    await migrationPool.query(`
+      CREATE FUNCTION public.zz_m22_test_reject_availability_replay()
+      RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public AS $function$
+      BEGIN
+        RAISE EXCEPTION 'test-only replay insertion failure'
+          USING ERRCODE='23514',CONSTRAINT='zz_m22_test_replay_failure';
+      END
+      $function$;
+      CREATE TRIGGER zz_m22_test_reject_availability_replay
+        BEFORE INSERT ON public.canonical_workforce_availability_idempotency
+        FOR EACH ROW EXECUTE FUNCTION public.zz_m22_test_reject_availability_replay();
+    `);
+    try {
+      const failed = await request(app)
+        .put(`/api/v1/canonical/availability/profiles/${IDS.owner}`)
+        .set(sessions.owner.headers).set('Idempotency-Key', key).send(body);
+      expect(failed.status).toBe(400);
+      expect(failed.body.error.code).toBe('M22_EVALUATION_INVALID');
+    } finally {
+      await migrationPool.query(`
+        DROP TRIGGER IF EXISTS zz_m22_test_reject_availability_replay
+          ON public.canonical_workforce_availability_idempotency;
+        DROP FUNCTION IF EXISTS public.zz_m22_test_reject_availability_replay();
+      `);
+    }
+    const after = (await runtimePool.query(
+      `SELECT authority.revision,rtrim(authority.canonical_digest) AS digest,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_revisions) AS revisions,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_audit_events) AS audits,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_idempotency) AS replays
+         FROM public.canonical_workforce_availability_authorities authority
+        WHERE authority.organization_id=$1 AND authority.workforce_profile_id=$2`,
+      [IDS.organization, IDS.owner]
+    )).rows[0];
+    expect(after).toEqual(before);
+    const retry = await request(app)
+      .put(`/api/v1/canonical/availability/profiles/${IDS.owner}`)
+      .set(sessions.owner.headers).set('Idempotency-Key', key).send(body);
+    expect(retry.status).toBe(200);
+  }, 120000);
+
   test('fails cross-tenant and unknown profile/appointment identifiers with the same generic identities', async () => {
     const profileBody = availabilityBody();
     const crossProfile = await request(app)
@@ -951,8 +1179,15 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
 
   test('serializes concurrent exact-pin availability writes with one winner and stable conflict identity', async () => {
     const current = (await runtimePool.query(
-      `SELECT revision,canonical_digest FROM public.canonical_workforce_availability_authorities
-        WHERE organization_id=$1 AND workforce_profile_id=$2`,
+      `SELECT authority.revision,authority.canonical_digest,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_revisions revision
+                WHERE revision.organization_id=authority.organization_id
+                  AND revision.availability_id=authority.id) AS revision_count,
+              (SELECT count(*)::int FROM public.canonical_workforce_availability_audit_events audit
+                WHERE audit.organization_id=authority.organization_id
+                  AND audit.availability_id=authority.id) AS audit_count
+         FROM public.canonical_workforce_availability_authorities authority
+        WHERE authority.organization_id=$1 AND authority.workforce_profile_id=$2`,
       [IDS.organization, IDS.owner]
     )).rows[0];
     const firstBody = availabilityBody({
@@ -988,7 +1223,9 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
         WHERE authority.organization_id=$1 AND authority.workforce_profile_id=$2`,
       [IDS.organization, IDS.owner]
     )).rows[0];
-    expect(durable).toMatchObject({ revision: '2', revisions: 2, audits: 2 });
+    expect(Number(durable.revision)).toBe(Number(current.revision) + 1);
+    expect(Number(durable.revisions)).toBe(Number(current.revision_count) + 1);
+    expect(Number(durable.audits)).toBe(Number(current.audit_count) + 1);
   }, 120000);
 
   test('enforces bounded request bodies and deterministic 4xx identities before PostgreSQL mutation', async () => {
@@ -1186,6 +1423,57 @@ realPostgres('Mission 22 Part 2 mounted availability and conflict authority', ()
                   'public.canonical_schedule_conflict_evaluation_digest(smallint,uuid,bigint,text,jsonb,jsonb,jsonb,jsonb,jsonb)'
                 )::text AS digest_routine`
       )).rows[0]).toEqual({ relation: null, digest_routine: null });
+
+      const upgradeSession = await provisionDurableSession(upgradeRuntimePool, {
+        userId: IDS.owner, organizationId: IDS.organization, membershipId: IDS.owner, role: 'owner',
+      });
+      const initialMutation = normalizeAvailabilityMutation({
+        profileId: IDS.owner,
+        idempotencyKey: 'm22-upgrade-initial-availability-0001',
+        body: availabilityBody({ reason: 'Supported upgrade availability control.' }),
+      });
+      const initial = await replaceAvailability(upgradeRuntimePool, {
+        ...initialMutation, organizationId: IDS.organization, actorUserId: IDS.owner,
+        actorAccessRole: 'owner', authSessionId: upgradeSession.sessionId,
+      });
+      expect(initial).toMatchObject({ status: 200, replayed: false });
+      const upgradeCurrent = (await upgradeRuntimePool.query(
+        `SELECT authority.id,authority.revision,rtrim(authority.canonical_digest) AS digest,
+                revision.id AS revision_id
+           FROM public.canonical_workforce_availability_authorities authority
+           JOIN public.canonical_workforce_availability_revisions revision
+             ON revision.organization_id=authority.organization_id
+            AND revision.availability_id=authority.id
+            AND revision.revision=authority.revision
+          WHERE authority.organization_id=$1 AND authority.workforce_profile_id=$2`,
+        [IDS.organization, IDS.owner]
+      )).rows[0];
+      const poisonMutation = normalizeAvailabilityMutation({
+        profileId: IDS.owner,
+        idempotencyKey: 'm22-upgrade-runtime-poison-0001',
+        body: availabilityBody({
+          expectedRevision: Number(upgradeCurrent.revision),
+          expectedDigest: upgradeCurrent.digest,
+          reason: 'Supported upgrade runtime poison must fail closed.',
+        }),
+      });
+      await expect(upgradeRuntimePool.query(
+        `INSERT INTO public.canonical_workforce_availability_idempotency
+          (organization_id,actor_user_id,idempotency_key_hash,request_digest,
+           availability_id,availability_revision_id,response_status,response_body)
+         VALUES ($1,$2,$3,$4,$5,$6,200,$7::jsonb)`,
+        [IDS.organization, IDS.owner, poisonMutation.idempotencyKeyHash,
+          poisonMutation.requestDigest, upgradeCurrent.id, upgradeCurrent.revision_id,
+          JSON.stringify({ success: true, data: { forged: true, source: 'upgrade-runtime-direct-sql' } })]
+      )).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_workforce_availability_idempotency_divergent',
+      });
+      expect((await upgradeRuntimePool.query(
+        `SELECT count(*)::int AS count
+           FROM public.canonical_workforce_availability_idempotency
+          WHERE organization_id=$1 AND actor_user_id=$2 AND idempotency_key_hash=$3`,
+        [IDS.organization, IDS.owner, poisonMutation.idempotencyKeyHash]
+      )).rows).toEqual([{ count: 0 }]);
     } finally {
       if (upgradeRuntimePool) await upgradeRuntimePool.end().catch(() => {});
       if (upgradeMigrationPool) await upgradeMigrationPool.end().catch(() => {});

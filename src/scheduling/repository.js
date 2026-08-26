@@ -220,6 +220,8 @@ async function mutateInTransaction(client, input) {
   const replay = await idempotencyResult(client, input);
   if (replay) return replay;
 
+  const timeZoneAuthority = await requireCurrentTimeZoneAuthority(client, input);
+
   const locked = await client.query(
     `SELECT assignment.*, assignment.id AS assignment_id,
             assignment.updated_at AS assignment_updated_at,
@@ -243,7 +245,6 @@ async function mutateInTransaction(client, input) {
     fail(409, 'M22_STALE_APPROVAL', 'Schedule authority changed; refresh before approving again.');
   }
 
-  const timeZoneAuthority = await requireCurrentTimeZoneAuthority(client, input);
   const validatedStart = validatedScheduleInstant(
     input.rawScheduledStart, input.scheduledStart, timeZoneAuthority.timeZone
   );
@@ -273,6 +274,12 @@ async function mutateInTransaction(client, input) {
   );
   const afterRevision = Number(current.revision) + 1;
   const afterDigest = trimDigest(digestResult.rows[0].digest);
+  const submittedSchedule = Object.freeze({
+    startProvided: input.rawScheduledStart !== undefined,
+    endProvided: input.rawScheduledEnd !== undefined,
+    scheduledStart: input.rawScheduledStart === undefined ? null : input.rawScheduledStart,
+    scheduledEnd: input.rawScheduledEnd === undefined ? null : input.rawScheduledEnd,
+  });
   const approval = await client.query(
     `INSERT INTO public.canonical_schedule_approvals
        (organization_id, assignment_id, appointment_id, actor_user_id,
@@ -280,16 +287,26 @@ async function mutateInTransaction(client, input) {
         applied_revision, applied_digest, request_digest, idempotency_key_hash,
         action_code, reason, approved_scheduled_start, approved_scheduled_end,
         approved_appointment_status, resulting_schedule_state, resulting_dispatch_state,
-        resulting_needs_review, resulting_review_reasons)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb)
+        resulting_needs_review, resulting_review_reasons, time_evidence_version,
+        submitted_schedule, time_zone_authority, time_evidence_digest)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,
+             2::smallint,$22::jsonb,$23::jsonb,
+             public.canonical_schedule_time_evidence_digest(2::smallint,$22::jsonb,$23::jsonb))
      RETURNING *`,
     [input.organizationId, current.assignment_id, input.appointmentId, input.actorUserId,
       input.actorAccessRole, input.authSessionId, input.expectedRevision, input.expectedDigest,
       afterRevision, afterDigest, input.requestDigest, input.idempotencyKeyHash,
       input.action, input.reason, scheduledStart, scheduledEnd, appointmentStatus,
-      scheduleState, dispatchState, needsReview, JSON.stringify(reviewReasons)]
+      scheduleState, dispatchState, needsReview, JSON.stringify(reviewReasons),
+      JSON.stringify(submittedSchedule), JSON.stringify(timeZoneAuthority)]
   );
   const approvalRow = approval.rows[0];
+  const timeEvidence = Object.freeze({
+    timeEvidenceVersion: Number(approvalRow.time_evidence_version),
+    submittedSchedule: approvalRow.submitted_schedule,
+    timeZoneAuthority: approvalRow.time_zone_authority,
+    timeEvidenceDigest: trimDigest(approvalRow.time_evidence_digest),
+  });
   const assignmentResult = await client.query(
     `UPDATE public.canonical_schedule_assignments
         SET schedule_state = $3, dispatch_state = $4, scheduled_start = $5,
@@ -322,11 +339,7 @@ async function mutateInTransaction(client, input) {
         appointmentId: input.appointmentId,
         expectedRevision: input.expectedRevision,
         expectedDigest: input.expectedDigest,
-        submittedSchedule: {
-          scheduledStart: input.rawScheduledStart === undefined ? null : input.rawScheduledStart,
-          scheduledEnd: input.rawScheduledEnd === undefined ? null : input.rawScheduledEnd,
-        },
-        timeZoneAuthority,
+        ...timeEvidence,
       })]
   );
   const appointmentResult = await client.query(
@@ -349,11 +362,7 @@ async function mutateInTransaction(client, input) {
         dispatchState,
         needsReview,
         reviewReasons,
-        submittedSchedule: {
-          scheduledStart: input.rawScheduledStart === undefined ? null : input.rawScheduledStart,
-          scheduledEnd: input.rawScheduledEnd === undefined ? null : input.rawScheduledEnd,
-        },
-        timeZoneAuthority,
+        ...timeEvidence,
       })]
   );
   const authority = scheduleAuthority(assignment);

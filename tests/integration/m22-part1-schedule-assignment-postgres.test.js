@@ -13,6 +13,7 @@ const { putBusinessProfile } = require('../../src/services/organizationAuthority
 const ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS = path.join(ROOT, 'migrations');
 const PART1_MIGRATION = '032_canonical_schedule_assignment_authority.sql';
+const TIME_EVIDENCE_MIGRATION = '033_canonical_schedule_time_evidence.sql';
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 
 const IDS = Object.freeze({
@@ -53,6 +54,16 @@ const IDS = Object.freeze({
   customerTime: 'a5000000-0000-4000-8000-000000000006',
   opportunityTime: 'a6000000-0000-4000-8000-000000000006',
   appointmentTime: 'a7000000-0000-4000-8000-000000000006',
+  operationPre033: 'a3000000-0000-4000-8000-000000000007',
+  graphPre033: 'a4000000-0000-4000-8000-000000000007',
+  customerPre033: 'a5000000-0000-4000-8000-000000000007',
+  opportunityPre033: 'a6000000-0000-4000-8000-000000000007',
+  appointmentPre033: 'a7000000-0000-4000-8000-000000000007',
+  operationDirect: 'a3000000-0000-4000-8000-000000000008',
+  graphDirect: 'a4000000-0000-4000-8000-000000000008',
+  customerDirect: 'a5000000-0000-4000-8000-000000000008',
+  opportunityDirect: 'a6000000-0000-4000-8000-000000000008',
+  appointmentDirect: 'a7000000-0000-4000-8000-000000000008',
 });
 
 function quoteIdentifier(value) {
@@ -170,6 +181,190 @@ async function seedAppointment(pool, input) {
   );
 }
 
+function sha256(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+async function commitDirectScheduleMutation(pool, input) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      'SELECT id FROM public.organizations WHERE id=$1 FOR SHARE',
+      [input.organizationId]
+    );
+    const profile = (await client.query(
+      `SELECT profile.id, profile.version_number, profile.normalized_profile_hash,
+              profile.raw_profile #>> '{company,timeZone}' AS time_zone
+         FROM public.organization_onboarding onboarding
+         JOIN public.canonical_business_profiles profile
+           ON profile.organization_id=onboarding.organization_id
+          AND profile.id=onboarding.active_business_profile_id
+        WHERE onboarding.organization_id=$1
+        FOR SHARE OF onboarding, profile`,
+      [input.organizationId]
+    )).rows[0];
+    const assignment = (await client.query(
+      `SELECT * FROM public.canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2
+        FOR UPDATE`,
+      [input.organizationId, input.appointmentId]
+    )).rows[0];
+    const approvedStart = hasOwn(input, 'approvedStart')
+      ? input.approvedStart : assignment.scheduled_start;
+    const approvedEnd = hasOwn(input, 'approvedEnd')
+      ? input.approvedEnd : assignment.scheduled_end;
+    const appointmentStatus = input.status || assignment.appointment_status;
+    const scheduleState = approvedStart === null && approvedEnd === null ? 'unscheduled' : 'scheduled';
+    const dispatchState = assignment.dispatch_state === 'dispatched' &&
+      (String(assignment.scheduled_start) !== String(approvedStart) ||
+       String(assignment.scheduled_end) !== String(approvedEnd))
+      ? 'revoked' : assignment.dispatch_state;
+    const reviewReasons = ['conflict_evaluation_not_available'];
+    const appliedDigest = String((await client.query(
+      `SELECT public.canonical_schedule_assignment_digest(
+         $1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9::jsonb) AS digest`,
+      [assignment.target_state, assignment.workforce_profile_id, assignment.workforce_crew_id,
+        scheduleState, dispatchState, approvedStart, approvedEnd, appointmentStatus,
+        JSON.stringify(reviewReasons)]
+    )).rows[0].digest).trim();
+    const appliedRevision = Number(assignment.revision) + 1;
+    const requestDigest = sha256(`request:${input.key}`);
+    const idempotencyHash = sha256(`idempotency:${input.key}`);
+    let evidence = null;
+
+    if (input.beforeApproval) await input.beforeApproval(client, profile);
+    if (input.includeTimeEvidence !== false) {
+      const submittedSchedule = input.submittedSchedule || {
+        startProvided: hasOwn(input, 'rawStart'),
+        endProvided: hasOwn(input, 'rawEnd'),
+        scheduledStart: hasOwn(input, 'rawStart') ? input.rawStart : null,
+        scheduledEnd: hasOwn(input, 'rawEnd') ? input.rawEnd : null,
+      };
+      const timeZoneAuthority = input.timeZoneAuthority || {
+        profileId: String(profile.id),
+        profileVersion: Number(profile.version_number),
+        profileHash: String(profile.normalized_profile_hash).trim(),
+        timeZone: profile.time_zone,
+      };
+      const version = input.timeEvidenceVersion === undefined ? 2 : input.timeEvidenceVersion;
+      const computedDigest = input.skipDigestComputation ? null : String((await client.query(
+        `SELECT public.canonical_schedule_time_evidence_digest($1::smallint,$2::jsonb,$3::jsonb) AS digest`,
+        [version, JSON.stringify(submittedSchedule), JSON.stringify(timeZoneAuthority)]
+      )).rows[0].digest || '').trim();
+      evidence = {
+        timeEvidenceVersion: version,
+        submittedSchedule,
+        timeZoneAuthority,
+        timeEvidenceDigest: hasOwn(input, 'timeEvidenceDigest')
+          ? input.timeEvidenceDigest : computedDigest,
+      };
+    }
+
+    const approval = (await client.query(
+      `INSERT INTO public.canonical_schedule_approvals
+         (organization_id,assignment_id,appointment_id,actor_user_id,actor_access_role,
+          auth_session_id,expected_revision,expected_digest,applied_revision,applied_digest,
+          request_digest,idempotency_key_hash,action_code,reason,approved_scheduled_start,
+          approved_scheduled_end,approved_appointment_status,resulting_schedule_state,
+          resulting_dispatch_state,resulting_needs_review,resulting_review_reasons
+          ${evidence ? ',time_evidence_version,submitted_schedule,time_zone_authority,time_evidence_digest' : ''})
+       VALUES ($1,$2,$3,$4,'owner',$5,$6,$7,$8,$9,$10,$11,'calendar_edit',$12,
+               $13,$14,$15,$16,$17,TRUE,$18::jsonb
+               ${evidence ? ',$19,$20::jsonb,$21::jsonb,$22' : ''})
+       RETURNING id`,
+      [input.organizationId, assignment.id, input.appointmentId, IDS.owner, IDS.authSession,
+        Number(assignment.revision), String(assignment.canonical_digest).trim(),
+        appliedRevision, appliedDigest, requestDigest, idempotencyHash,
+        input.reason || 'Direct mounted schedule evidence transaction.',
+        approvedStart, approvedEnd, appointmentStatus, scheduleState, dispatchState,
+        JSON.stringify(reviewReasons),
+        ...(evidence ? [evidence.timeEvidenceVersion, JSON.stringify(evidence.submittedSchedule),
+          JSON.stringify(evidence.timeZoneAuthority), evidence.timeEvidenceDigest] : [])]
+    )).rows[0];
+    if (input.afterApproval) await input.afterApproval(client, profile);
+
+    await client.query(
+      `UPDATE public.canonical_schedule_assignments
+          SET schedule_state=$3,dispatch_state=$4,scheduled_start=$5,scheduled_end=$6,
+              appointment_status=$7,needs_review=TRUE,review_reasons=$8::jsonb,
+              revision=$9,canonical_digest=$10,last_approval_id=$11,last_actor_user_id=$12,
+              last_action_code='calendar_edit',last_reason=$13,updated_at=NOW()
+        WHERE organization_id=$1 AND id=$2`,
+      [input.organizationId, assignment.id, scheduleState, dispatchState, approvedStart,
+        approvedEnd, appointmentStatus, JSON.stringify(reviewReasons), appliedRevision,
+        appliedDigest, approval.id, IDS.owner,
+        input.reason || 'Direct mounted schedule evidence transaction.']
+    );
+    const canonicalEvidence = evidence ? {
+      timeEvidenceVersion: evidence.timeEvidenceVersion,
+      submittedSchedule: evidence.submittedSchedule,
+      timeZoneAuthority: evidence.timeZoneAuthority,
+      timeEvidenceDigest: evidence.timeEvidenceDigest,
+    } : {};
+    const sourceSnapshot = hasOwn(input, 'sourceSnapshot')
+      ? input.sourceSnapshot : canonicalEvidence;
+    const details = hasOwn(input, 'details') ? input.details : canonicalEvidence;
+    await client.query(
+      `INSERT INTO public.canonical_schedule_assignment_revisions
+         (organization_id,assignment_id,revision,workforce_profile_id,workforce_crew_id,
+          target_state,schedule_state,dispatch_state,scheduled_start,scheduled_end,
+          appointment_status,needs_review,review_reasons,canonical_digest,source_kind,
+          approval_id,actor_user_id,action_code,reason,request_digest,source_snapshot)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,TRUE,$12::jsonb,$13,
+               'human_approved',$14,$15,'calendar_edit',$16,$17,$18::jsonb)`,
+      [input.organizationId, assignment.id, appliedRevision, assignment.workforce_profile_id,
+        assignment.workforce_crew_id, assignment.target_state, scheduleState, dispatchState,
+        approvedStart, approvedEnd, appointmentStatus, JSON.stringify(reviewReasons),
+        appliedDigest, approval.id, IDS.owner,
+        input.reason || 'Direct mounted schedule evidence transaction.', requestDigest,
+        JSON.stringify(sourceSnapshot)]
+    );
+    await client.query(
+      `UPDATE public.canonical_appointments
+          SET scheduled_start=$3,scheduled_end=$4,status=$5,updated_at=NOW()
+        WHERE organization_id=$1 AND id=$2`,
+      [input.organizationId, input.appointmentId, approvedStart, approvedEnd, appointmentStatus]
+    );
+    await client.query(
+      `INSERT INTO public.canonical_schedule_audit_events
+         (organization_id,assignment_id,approval_id,actor_user_id,action_code,reason,
+          before_revision,after_revision,before_digest,after_digest,details)
+       VALUES ($1,$2,$3,$4,'calendar_edit',$5,$6,$7,$8,$9,$10::jsonb)`,
+      [input.organizationId, assignment.id, approval.id, IDS.owner,
+        input.reason || 'Direct mounted schedule evidence transaction.',
+        Number(assignment.revision), appliedRevision, String(assignment.canonical_digest).trim(),
+        appliedDigest, JSON.stringify(details)]
+    );
+    const responseBody = {
+      success: true,
+      data: {
+        id: input.appointmentId,
+        scheduleAuthority: { revision: appliedRevision, digest: appliedDigest },
+      },
+    };
+    await client.query(
+      `INSERT INTO public.canonical_schedule_idempotency
+         (organization_id,actor_user_id,idempotency_key_hash,request_digest,
+          assignment_id,approval_id,response_status,response_body)
+       VALUES ($1,$2,$3,$4,$5,$6,200,$7::jsonb)`,
+      [input.organizationId, IDS.owner, idempotencyHash, requestDigest,
+        assignment.id, approval.id, JSON.stringify(responseBody)]
+    );
+    await client.query('COMMIT');
+    return { assignmentId: assignment.id, approvalId: approval.id, appliedRevision, appliedDigest };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) { /* Preserve the authoritative failure. */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
   let freshDatabase;
   let upgradeDatabase;
@@ -180,6 +375,7 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
   let separatedMigrationPool;
   let separatedRuntimePool;
   let prePart1Directory;
+  let through032Directory;
   let throughPart1Directory;
   let db;
   let replayMutation;
@@ -194,11 +390,15 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
     separatedMigrationPool = new Pool({ connectionString: separatedRoles.migrationUrl, max: 2 });
     separatedRuntimePool = new Pool({ connectionString: separatedRoles.runtimeUrl, max: 4 });
     prePart1Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m22-p1-pre032-'));
-    throughPart1Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m22-p1-through032-'));
+    through032Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m22-p1-through032-'));
+    throughPart1Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m22-p1-through033-'));
     for (const filename of migrationFiles(MIGRATIONS).filter(name => name < PART1_MIGRATION)) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(prePart1Directory, filename));
     }
     for (const filename of migrationFiles(MIGRATIONS).filter(name => name <= PART1_MIGRATION)) {
+      fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(through032Directory, filename));
+    }
+    for (const filename of migrationFiles(MIGRATIONS).filter(name => name <= TIME_EVIDENCE_MIGRATION)) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(throughPart1Directory, filename));
     }
     jest.resetModules();
@@ -232,13 +432,7 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       status: 'completed',
     });
 
-    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: throughPart1Directory })).toBe(true);
-    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: throughPart1Directory })).toBe(true);
-    expect(await db.runMigrations({
-      pool: separatedMigrationPool,
-      runtimePool: separatedRuntimePool,
-      migrationsDirectory: throughPart1Directory,
-    })).toBe(true);
+    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: through032Directory })).toBe(true);
     await upgradePool.query(
       `INSERT INTO canonical_business_profiles
          (id,organization_id,version_number,version_label,raw_profile,normalized_profile,
@@ -285,6 +479,33 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       appointmentId: IDS.appointmentTime,
       name: 'Tenant time-zone authority mutation',
     });
+    await seedAppointment(upgradePool, {
+      organizationId: IDS.organization,
+      operationId: IDS.operationPre033,
+      graphId: IDS.graphPre033,
+      customerId: IDS.customerPre033,
+      opportunityId: IDS.opportunityPre033,
+      appointmentId: IDS.appointmentPre033,
+      name: 'Pre-033 approval compatibility',
+    });
+    await commitDirectScheduleMutation(upgradePool, {
+      organizationId: IDS.organization,
+      appointmentId: IDS.appointmentPre033,
+      key: 'm22-pre033-legacy-approval',
+      includeTimeEvidence: false,
+      approvedStart: '2027-02-01T14:00:00.000Z',
+      approvedEnd: '2027-02-01T15:00:00.000Z',
+      status: 'scheduled',
+      reason: 'Committed before migration 033 without fabricated evidence.',
+    });
+
+    expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: throughPart1Directory })).toBe(true);
+    expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: throughPart1Directory })).toBe(true);
+    expect(await db.runMigrations({
+      pool: separatedMigrationPool,
+      runtimePool: separatedRuntimePool,
+      migrationsDirectory: throughPart1Directory,
+    })).toBe(true);
 
     await seedOrganization(separatedRuntimePool, IDS.organization, IDS.owner, 'separated');
     await separatedRuntimePool.query(
@@ -322,6 +543,15 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       appointmentId: IDS.appointmentMutation,
       name: 'Search path invariant schedule',
     });
+    await seedAppointment(separatedRuntimePool, {
+      organizationId: IDS.organization,
+      operationId: IDS.operationDirect,
+      graphId: IDS.graphDirect,
+      customerId: IDS.customerDirect,
+      opportunityId: IDS.opportunityDirect,
+      appointmentId: IDS.appointmentDirect,
+      name: 'Direct runtime time evidence boundary',
+    });
     await separatedRuntimePool.query(
       `UPDATE public.canonical_transcripts
           SET source='simulation', external_call_id='m22-separated-scope:call'
@@ -339,6 +569,9 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
     } finally {
       if (prePart1Directory && path.resolve(prePart1Directory).startsWith(path.resolve(os.tmpdir()))) {
         fs.rmSync(prePart1Directory, { recursive: true, force: true });
+      }
+      if (through032Directory && path.resolve(through032Directory).startsWith(path.resolve(os.tmpdir()))) {
+        fs.rmSync(through032Directory, { recursive: true, force: true });
       }
       if (throughPart1Directory && path.resolve(throughPart1Directory).startsWith(path.resolve(os.tmpdir()))) {
         fs.rmSync(throughPart1Directory, { recursive: true, force: true });
@@ -371,7 +604,55 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
           WHERE connamespace = 'public'::regnamespace
             AND conname LIKE 'canonical_schedule_%' AND NOT convalidated`
       )).rows).toEqual([{ count: 0 }]);
+      expect((await pool.query(
+        `SELECT column_name, column_default, is_nullable
+           FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='canonical_schedule_approvals'
+            AND column_name IN (
+              'time_evidence_version','submitted_schedule','time_zone_authority','time_evidence_digest'
+            )
+          ORDER BY ordinal_position`
+      )).rows).toEqual([
+        { column_name: 'time_evidence_version', column_default: '2', is_nullable: 'NO' },
+        { column_name: 'submitted_schedule', column_default: null, is_nullable: 'YES' },
+        { column_name: 'time_zone_authority', column_default: null, is_nullable: 'YES' },
+        { column_name: 'time_evidence_digest', column_default: null, is_nullable: 'YES' },
+      ]);
     }
+  });
+
+  test('keeps pre-033 approvals readable and immutable without fabricating time evidence', async () => {
+    const legacy = await upgradePool.query(
+      `SELECT approval.time_evidence_version, approval.submitted_schedule,
+              approval.time_zone_authority, approval.time_evidence_digest
+         FROM public.canonical_schedule_approvals approval
+         JOIN public.canonical_schedule_assignments assignment
+           ON assignment.organization_id=approval.organization_id
+          AND assignment.id=approval.assignment_id
+        WHERE approval.organization_id=$1 AND assignment.appointment_id=$2`,
+      [IDS.organization, IDS.appointmentPre033]
+    );
+    expect(legacy.rows).toEqual([{
+      time_evidence_version: 1,
+      submitted_schedule: null,
+      time_zone_authority: null,
+      time_evidence_digest: null,
+    }]);
+    await expect(upgradePool.query(
+      `UPDATE public.canonical_schedule_approvals
+          SET time_evidence_version=2
+        WHERE organization_id=$1 AND id=(
+          SELECT approval.id
+            FROM public.canonical_schedule_approvals approval
+            JOIN public.canonical_schedule_assignments assignment
+              ON assignment.organization_id=approval.organization_id
+             AND assignment.id=approval.assignment_id
+           WHERE approval.organization_id=$1 AND assignment.appointment_id=$2
+        )`,
+      [IDS.organization, IDS.appointmentPre033]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_schedule_evidence_immutable',
+    });
   });
 
   test('pins every Part 1 function and preserves runtime authority under hostile session name resolution', async () => {
@@ -388,11 +669,13 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
         'canonical_schedule_guard_assignment',
         'canonical_schedule_guard_revision',
         'canonical_schedule_immutable_evidence',
+        'canonical_schedule_time_evidence_digest',
         'canonical_schedule_validate_approval',
         'canonical_schedule_validate_approval_completion',
+        'canonical_schedule_validate_rfc3339_in_zone',
       ]]
     );
-    expect(functions.rows).toHaveLength(8);
+    expect(functions.rows).toHaveLength(10);
     expect(functions.rows.every(row =>
       JSON.stringify(row.proconfig) === JSON.stringify(['search_path=pg_catalog, public, pg_temp'])
     )).toBe(true);
@@ -425,6 +708,19 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       ]) {
         await client.query(`CREATE TEMP TABLE ${quoteIdentifier(relation)} (marker text)`);
       }
+      await client.query(
+        `CREATE FUNCTION pg_temp.canonical_schedule_time_evidence_digest(smallint,jsonb,jsonb)
+         RETURNS text LANGUAGE sql IMMUTABLE AS 'SELECT repeat(''0'',64)'`
+      );
+      await client.query(
+        `CREATE FUNCTION pg_temp.canonical_schedule_validate_rfc3339_in_zone(text,timestamptz,text)
+         RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT TRUE'`
+      );
+      expect((await client.query(
+        `SELECT public.canonical_schedule_validate_rfc3339_in_zone(
+           '2027-07-01T09:00:00-04:00','2027-07-01T13:00:00Z','america/new_york'
+         ) AS valid`
+      )).rows).toEqual([{ valid: true }]);
       const authority = (await client.query(
         `SELECT revision, canonical_digest
            FROM public.canonical_schedule_assignments
@@ -494,6 +790,318 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       client.release();
     }
   });
+
+  test('separated runtime SQL cannot forge time evidence and valid folds remain independently provable', async () => {
+    async function durableState() {
+      return (await separatedRuntimePool.query(
+        `SELECT assignment.revision, assignment.scheduled_start, assignment.scheduled_end,
+                assignment.schedule_state, assignment.appointment_status,
+                (SELECT count(*)::int FROM public.canonical_schedule_approvals approval
+                  WHERE approval.organization_id=assignment.organization_id
+                    AND approval.assignment_id=assignment.id) AS approvals,
+                (SELECT count(*)::int FROM public.canonical_schedule_assignment_revisions revision
+                  WHERE revision.organization_id=assignment.organization_id
+                    AND revision.assignment_id=assignment.id) AS revisions,
+                (SELECT count(*)::int FROM public.canonical_schedule_audit_events audit
+                  WHERE audit.organization_id=assignment.organization_id
+                    AND audit.assignment_id=assignment.id) AS audits,
+                (SELECT count(*)::int FROM public.canonical_schedule_idempotency replay
+                  WHERE replay.organization_id=assignment.organization_id
+                    AND replay.assignment_id=assignment.id) AS idempotency
+           FROM public.canonical_schedule_assignments assignment
+          WHERE assignment.organization_id=$1 AND assignment.appointment_id=$2`,
+        [IDS.organization, IDS.appointmentDirect]
+      )).rows[0];
+    }
+    async function currentProfile() {
+      return (await separatedRuntimePool.query(
+        `SELECT profile.id, profile.version_number, profile.version_label,
+                rtrim(profile.normalized_profile_hash) AS profile_hash,
+                profile.raw_profile #>> '{company,timeZone}' AS time_zone
+           FROM public.organization_onboarding onboarding
+           JOIN public.canonical_business_profiles profile
+             ON profile.organization_id=onboarding.organization_id
+            AND profile.id=onboarding.active_business_profile_id
+          WHERE onboarding.organization_id=$1`,
+        [IDS.organization]
+      )).rows[0];
+    }
+    function authorityEvidence(profile, overrides = {}) {
+      return {
+        profileId: String(profile.id),
+        profileVersion: Number(profile.version_number),
+        profileHash: String(profile.profile_hash),
+        timeZone: profile.time_zone,
+        ...overrides,
+      };
+    }
+    async function expectRejected(input, constraint) {
+      const before = await durableState();
+      await expect(commitDirectScheduleMutation(separatedRuntimePool, {
+        organizationId: IDS.organization,
+        appointmentId: IDS.appointmentDirect,
+        ...input,
+      })).rejects.toMatchObject({ code: expect.stringMatching(/^(23514|40001|42501)$/), constraint });
+      const after = await durableState();
+      expect(after).toEqual(before);
+    }
+    async function replaceSeparatedZone(timeZone) {
+      const profile = await currentProfile();
+      return putBusinessProfile(separatedRuntimePool, {
+        organizationId: IDS.organization,
+        userId: IDS.owner,
+        expectedVersion: profile.version_label,
+        profile: { company: timeZone ? { timeZone } : {} },
+      });
+    }
+
+    const initial = await durableState();
+    expect(initial).toMatchObject({
+      revision: '1', scheduled_start: null, scheduled_end: null,
+      schedule_state: 'unscheduled', approvals: 0, revisions: 1, audits: 0, idempotency: 0,
+    });
+
+    // Replay the validated P1 transaction: a runtime role supplies a New York
+    // gap instant and attempts the otherwise-complete mutation with empty
+    // revision/audit evidence. Migration 033 now rejects its root approval.
+    await expectRejected({
+      key: 'm22-direct-gap-no-evidence',
+      includeTimeEvidence: false,
+      approvedStart: '2027-03-14T07:30:00.000Z',
+      approvedEnd: '2027-03-14T08:30:00.000Z',
+      status: 'scheduled',
+      sourceSnapshot: {},
+      details: {},
+    }, 'canonical_schedule_time_evidence_invalid');
+
+    const profile = await currentProfile();
+    const validNewYork = {
+      rawStart: '2027-07-01T09:00:00-04:00',
+      rawEnd: '2027-07-01T10:00:00-04:00',
+      approvedStart: '2027-07-01T13:00:00.000Z',
+      approvedEnd: '2027-07-01T14:00:00.000Z',
+      status: 'scheduled',
+    };
+    await expectRejected({
+      key: 'm22-direct-explicit-v1', ...validNewYork, timeEvidenceVersion: 1,
+    }, 'canonical_schedule_time_evidence_version_required');
+    await expectRejected({
+      key: 'm22-direct-malformed-shape', ...validNewYork,
+      submittedSchedule: {
+        startProvided: true, endProvided: true,
+        scheduledStart: validNewYork.rawStart,
+      },
+    }, 'canonical_schedule_time_evidence_invalid');
+    await expectRejected({
+      key: 'm22-direct-bad-digest', ...validNewYork, timeEvidenceDigest: '0'.repeat(64),
+    }, 'canonical_schedule_time_evidence_digest_invalid');
+    await expectRejected({
+      key: 'm22-direct-stale-profile-id', ...validNewYork,
+      timeZoneAuthority: authorityEvidence(profile, {
+        profileId: 'b8000000-0000-4000-8000-000000000001',
+      }),
+    }, 'canonical_schedule_time_zone_authority_stale');
+    await expectRejected({
+      key: 'm22-direct-stale-profile-version', ...validNewYork,
+      timeZoneAuthority: authorityEvidence(profile, { profileVersion: 2 }),
+    }, 'canonical_schedule_time_zone_authority_stale');
+    await expectRejected({
+      key: 'm22-direct-stale-profile-hash', ...validNewYork,
+      timeZoneAuthority: authorityEvidence(profile, { profileHash: '9'.repeat(64) }),
+    }, 'canonical_schedule_time_zone_authority_stale');
+    await expectRejected({
+      key: 'm22-direct-raw-instant-mismatch', ...validNewYork,
+      approvedStart: '2027-07-01T14:00:00.000Z',
+    }, 'canonical_schedule_time_instant_mismatch');
+
+    await separatedRuntimePool.query(
+      `UPDATE public.canonical_business_profiles
+          SET raw_profile='{"company":{}}'::jsonb
+        WHERE organization_id=$1 AND id=$2`,
+      [IDS.organization, profile.id]
+    );
+    await expectRejected({
+      key: 'm22-direct-missing-current-zone', ...validNewYork,
+      timeZoneAuthority: authorityEvidence(profile),
+    }, 'canonical_schedule_time_zone_authority_stale');
+    await separatedRuntimePool.query(
+      `UPDATE public.canonical_business_profiles
+          SET raw_profile='{"company":{"timeZone":"Mars/Olympus"}}'::jsonb
+        WHERE organization_id=$1 AND id=$2`,
+      [IDS.organization, profile.id]
+    );
+    await expectRejected({
+      key: 'm22-direct-invalid-current-zone', ...validNewYork,
+      timeZoneAuthority: authorityEvidence(profile, { timeZone: 'Mars/Olympus' }),
+    }, 'canonical_schedule_time_zone_invalid');
+    await separatedRuntimePool.query(
+      `UPDATE public.canonical_business_profiles
+          SET raw_profile='{"company":{"timeZone":"America/New_York"}}'::jsonb
+        WHERE organization_id=$1 AND id=$2`,
+      [IDS.organization, profile.id]
+    );
+
+    const inactiveProfileId = 'a8000000-0000-4000-8000-000000000002';
+    await separatedRuntimePool.query(
+      `INSERT INTO public.canonical_business_profiles
+         (id,organization_id,version_number,version_label,raw_profile,normalized_profile,
+          normalized_profile_hash,is_active,created_by,retired_at)
+       VALUES ($1,$2,2,'org-profile-inactive-pointer',
+               '{"company":{"timeZone":"America/New_York"}}','{}',$3,FALSE,$4,NOW())`,
+      [inactiveProfileId, IDS.organization, '5'.repeat(64), IDS.owner]
+    );
+    await separatedRuntimePool.query(
+      `UPDATE public.organization_onboarding SET active_business_profile_id=$2
+        WHERE organization_id=$1`,
+      [IDS.organization, inactiveProfileId]
+    );
+    await expectRejected({
+      key: 'm22-direct-inactive-pointer', ...validNewYork,
+    }, 'canonical_schedule_time_zone_authority_unavailable');
+    await separatedRuntimePool.query(
+      `UPDATE public.organization_onboarding SET active_business_profile_id=$2
+        WHERE organization_id=$1`,
+      [IDS.organization, profile.id]
+    );
+    await separatedRuntimePool.query(
+      `DELETE FROM public.canonical_business_profiles WHERE organization_id=$1 AND id=$2`,
+      [IDS.organization, inactiveProfileId]
+    );
+
+    for (const mismatch of [
+      { key: 'm22-direct-empty-revision-evidence', sourceSnapshot: {} },
+      { key: 'm22-direct-empty-audit-evidence', details: {} },
+    ]) {
+      await expectRejected({ ...validNewYork, ...mismatch }, 'canonical_schedule_approval_incomplete');
+    }
+    await expectRejected({
+      key: 'm22-direct-profile-restored-after-approval',
+      rawStart: '2027-03-14T07:30:00Z',
+      rawEnd: '2027-03-14T08:30:00Z',
+      approvedStart: '2027-03-14T07:30:00.000Z',
+      approvedEnd: '2027-03-14T08:30:00.000Z',
+      status: 'scheduled',
+      timeZoneAuthority: authorityEvidence(profile, { timeZone: 'UTC' }),
+      beforeApproval: async client => client.query(
+        `UPDATE public.canonical_business_profiles
+            SET raw_profile='{"company":{"timeZone":"UTC"}}'::jsonb
+          WHERE organization_id=$1 AND id=$2`,
+        [IDS.organization, profile.id]
+      ),
+      afterApproval: async client => client.query(
+        `UPDATE public.canonical_business_profiles
+            SET raw_profile='{"company":{"timeZone":"America/New_York"}}'::jsonb
+          WHERE organization_id=$1 AND id=$2`,
+        [IDS.organization, profile.id]
+      ),
+    }, 'canonical_schedule_approval_incomplete');
+
+    for (const malformed of [
+      { key: 'm22-direct-rfc3339-space', rawStart: '2027-07-01 09:00:00-04:00' },
+      { key: 'm22-direct-rfc3339-fraction', rawStart: '2027-07-01T09:00:00.0000-04:00' },
+      { key: 'm22-direct-rfc3339-calendar', rawStart: '2027-02-30T09:00:00-05:00' },
+      { key: 'm22-direct-rfc3339-offset', rawStart: '2027-07-01T09:00:00+14:30' },
+    ]) {
+      await expectRejected({ ...validNewYork, ...malformed }, 'canonical_schedule_time_rfc3339_invalid');
+    }
+
+    await expectRejected({
+      key: 'm22-direct-new-york-gap',
+      rawStart: '2027-03-14T02:30:00-05:00',
+      rawEnd: '2027-03-14T04:30:00-04:00',
+      approvedStart: '2027-03-14T07:30:00.000Z',
+      approvedEnd: '2027-03-14T08:30:00.000Z',
+      status: 'scheduled',
+    }, 'canonical_schedule_time_zone_mismatch');
+    await commitDirectScheduleMutation(separatedRuntimePool, {
+      organizationId: IDS.organization,
+      appointmentId: IDS.appointmentDirect,
+      key: 'm22-direct-new-york-fold-first',
+      rawStart: '2027-11-07T01:30:00-04:00',
+      rawEnd: '2027-11-07T02:30:00-05:00',
+      approvedStart: '2027-11-07T05:30:00.000Z',
+      approvedEnd: '2027-11-07T07:30:00.000Z',
+      status: 'scheduled',
+    });
+    await commitDirectScheduleMutation(separatedRuntimePool, {
+      organizationId: IDS.organization,
+      appointmentId: IDS.appointmentDirect,
+      key: 'm22-direct-new-york-fold-second',
+      rawStart: '2027-11-07T01:30:00-05:00',
+      rawEnd: '2027-11-07T02:30:00-05:00',
+      approvedStart: '2027-11-07T06:30:00.000Z',
+      approvedEnd: '2027-11-07T07:30:00.000Z',
+      status: 'scheduled',
+    });
+    expect(await durableState()).toMatchObject({
+      revision: '3', schedule_state: 'scheduled', approvals: 2, revisions: 3,
+      audits: 2, idempotency: 2,
+    });
+
+    await replaceSeparatedZone('Australia/Lord_Howe');
+    await expectRejected({
+      key: 'm22-direct-lord-howe-gap',
+      rawStart: '2027-10-03T02:15:00+10:30',
+      rawEnd: '2027-10-03T03:15:00+11:00',
+      approvedStart: '2027-10-02T15:45:00.000Z',
+      approvedEnd: '2027-10-02T16:15:00.000Z',
+      status: 'scheduled',
+    }, 'canonical_schedule_time_zone_mismatch');
+    await commitDirectScheduleMutation(separatedRuntimePool, {
+      organizationId: IDS.organization,
+      appointmentId: IDS.appointmentDirect,
+      key: 'm22-direct-lord-howe-fold-first',
+      rawStart: '2027-04-04T01:45:00+11:00',
+      rawEnd: '2027-04-04T02:45:00+10:30',
+      approvedStart: '2027-04-03T14:45:00.000Z',
+      approvedEnd: '2027-04-03T16:15:00.000Z',
+      status: 'scheduled',
+    });
+    await commitDirectScheduleMutation(separatedRuntimePool, {
+      organizationId: IDS.organization,
+      appointmentId: IDS.appointmentDirect,
+      key: 'm22-direct-lord-howe-fold-second',
+      rawStart: '2027-04-04T01:45:00+10:30',
+      rawEnd: '2027-04-04T02:45:00+10:30',
+      approvedStart: '2027-04-03T15:15:00.000Z',
+      approvedEnd: '2027-04-03T16:15:00.000Z',
+      status: 'scheduled',
+    });
+    const afterFolds = await durableState();
+    expect(afterFolds).toMatchObject({
+      revision: '5', schedule_state: 'scheduled', approvals: 4, revisions: 5,
+      audits: 4, idempotency: 4,
+    });
+    expect(afterFolds.scheduled_start.toISOString()).toBe('2027-04-03T15:15:00.000Z');
+
+    await commitDirectScheduleMutation(separatedRuntimePool, {
+      organizationId: IDS.organization,
+      appointmentId: IDS.appointmentDirect,
+      key: 'm22-direct-omitted-schedule',
+      status: 'completed',
+    });
+    const preserved = await durableState();
+    expect(preserved).toMatchObject({ revision: '6', schedule_state: 'scheduled', appointment_status: 'completed' });
+    expect(preserved.scheduled_start.toISOString()).toBe('2027-04-03T15:15:00.000Z');
+    expect(preserved.scheduled_end.toISOString()).toBe('2027-04-03T16:15:00.000Z');
+
+    await commitDirectScheduleMutation(separatedRuntimePool, {
+      organizationId: IDS.organization,
+      appointmentId: IDS.appointmentDirect,
+      key: 'm22-direct-explicit-unschedule',
+      rawStart: null,
+      rawEnd: null,
+      approvedStart: null,
+      approvedEnd: null,
+      status: 'completed',
+    });
+    expect(await durableState()).toMatchObject({
+      revision: '7', scheduled_start: null, scheduled_end: null,
+      schedule_state: 'unscheduled', appointment_status: 'completed',
+      approvals: 6, revisions: 7, audits: 6, idempotency: 6,
+    });
+    await replaceSeparatedZone('America/New_York');
+  }, 60000);
 
   test('deterministically backfills valid and invalid legacy schedules without fabricated approval or actor', async () => {
     const assignments = await upgradePool.query(
@@ -1016,6 +1624,30 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
     )).rows[0];
     expect(countsAfter).toEqual(countsBefore);
 
+    const currentProfile = (await upgradePool.query(
+      `SELECT profile.id, profile.version_number, profile.normalized_profile_hash,
+              profile.raw_profile #>> '{company,timeZone}' AS time_zone
+         FROM public.organization_onboarding onboarding
+         JOIN public.canonical_business_profiles profile
+           ON profile.organization_id=onboarding.organization_id
+          AND profile.id=onboarding.active_business_profile_id
+        WHERE onboarding.organization_id=$1`,
+      [IDS.organization]
+    )).rows[0];
+    const submittedSchedule = {
+      startProvided: false, endProvided: false, scheduledStart: null, scheduledEnd: null,
+    };
+    const timeZoneAuthority = {
+      profileId: String(currentProfile.id),
+      profileVersion: Number(currentProfile.version_number),
+      profileHash: String(currentProfile.normalized_profile_hash).trim(),
+      timeZone: currentProfile.time_zone,
+    };
+    const timeEvidenceDigest = String((await upgradePool.query(
+      `SELECT public.canonical_schedule_time_evidence_digest(2::smallint,$1::jsonb,$2::jsonb) AS digest`,
+      [JSON.stringify(submittedSchedule), JSON.stringify(timeZoneAuthority)]
+    )).rows[0].digest).trim();
+
     const direct = await upgradePool.connect();
     try {
       await direct.query('BEGIN');
@@ -1025,14 +1657,17 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
             auth_session_id,expected_revision,expected_digest,applied_revision,applied_digest,
             request_digest,idempotency_key_hash,action_code,reason,approved_scheduled_start,
             approved_scheduled_end,approved_appointment_status,resulting_schedule_state,
-            resulting_dispatch_state,resulting_needs_review,resulting_review_reasons)
+            resulting_dispatch_state,resulting_needs_review,resulting_review_reasons,
+            time_evidence_version,submitted_schedule,time_zone_authority,time_evidence_digest)
          VALUES ($1,$2,$3,$4,'owner',$5,$6,$7,$8,$7,$9,$10,'calendar_edit',$11,
-                 $12,$13,$14,$15,'not_dispatched',$16,$17::jsonb)`,
+                 $12,$13,$14,$15,'not_dispatched',$16,$17::jsonb,
+                 2,$18::jsonb,$19::jsonb,$20)`,
         [IDS.organization, before.id, IDS.appointmentMutation, IDS.owner, IDS.authSession,
           Number(before.revision), before.canonical_digest.trim(), Number(before.revision) + 1,
           '3'.repeat(64), '4'.repeat(64), 'Orphan approval must not commit.',
           before.scheduled_start, before.scheduled_end, before.appointment_status,
-          before.schedule_state, before.needs_review, JSON.stringify(before.review_reasons)]
+          before.schedule_state, before.needs_review, JSON.stringify(before.review_reasons),
+          JSON.stringify(submittedSchedule), JSON.stringify(timeZoneAuthority), timeEvidenceDigest]
       );
       await expect(direct.query('COMMIT')).rejects.toMatchObject({
         code: '23514', constraint: 'canonical_schedule_approval_incomplete',
@@ -1055,14 +1690,17 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
           auth_session_id,expected_revision,expected_digest,applied_revision,applied_digest,
           request_digest,idempotency_key_hash,action_code,reason,approved_scheduled_start,
           approved_scheduled_end,approved_appointment_status,resulting_schedule_state,
-          resulting_dispatch_state,resulting_needs_review,resulting_review_reasons)
+          resulting_dispatch_state,resulting_needs_review,resulting_review_reasons,
+          time_evidence_version,submitted_schedule,time_zone_authority,time_evidence_digest)
        VALUES ($1,$2,$3,$4,'owner',$5,$6,$7,$8,$9,$10,$11,'calendar_edit',$12,
-               $13,$14,$15,$16,'dispatched',$17,$18::jsonb)`,
+               $13,$14,$15,$16,'dispatched',$17,$18::jsonb,
+               2,$19::jsonb,$20::jsonb,$21)`,
       [IDS.organization, before.id, IDS.appointmentMutation, IDS.owner, IDS.authSession,
         Number(before.revision), before.canonical_digest.trim(), Number(before.revision) + 1,
         forgedDigest, '5'.repeat(64), '6'.repeat(64), 'Dispatch forgery.',
         before.scheduled_start, before.scheduled_end, before.appointment_status,
-        before.schedule_state, before.needs_review, JSON.stringify(before.review_reasons)]
+        before.schedule_state, before.needs_review, JSON.stringify(before.review_reasons),
+        JSON.stringify(submittedSchedule), JSON.stringify(timeZoneAuthority), timeEvidenceDigest]
     )).rejects.toMatchObject({
       code: '23514', constraint: 'canonical_schedule_dispatch_transition_forbidden',
     });

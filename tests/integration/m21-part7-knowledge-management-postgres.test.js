@@ -309,6 +309,7 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
       req.user = { id: actor.userId };
       req.userRole = actor.role;
       req.orgId = actor.organizationId;
+      req.subscriptionAuthority = { state: 'active', safe: true, readOnly: false };
       next();
     }
     app = express();
@@ -329,7 +330,11 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
   test('active member list filters protected bytes before rows and counts', async () => {
     const response = await request(app).get('/api/v1/knowledge-management').set('x-part7-actor', 'member');
     expect(response.status).toBe(200);
-    expect(response.body.data.permissions).toEqual({ canMutate: false, canReadProtected: false });
+    expect(response.body.data.permissions).toEqual({
+      canMutate: false,
+      canReadProtected: false,
+      mutationRestriction: 'role_read_only',
+    });
     expect(response.body.data.counts.total).toBe(1);
     expect(response.body.data.items.map(item => item.entryId)).toEqual([identity.id]);
     expect(response.body.data.synchronization.targets[0]).toEqual(expect.objectContaining({

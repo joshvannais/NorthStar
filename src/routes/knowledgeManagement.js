@@ -2,6 +2,7 @@
 
 const express = require('express');
 const db = require('../db');
+const { canMutateInternal } = require('../accounts/subscriptionPolicy');
 const { requireAccountMutation, requireTenantAccess } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const {
@@ -45,6 +46,27 @@ function invalidBody(req, res) {
     },
     requestId: requestId(req),
   });
+}
+
+function applyMutationAuthority(data, req) {
+  if (!data || !data.permissions || typeof data.permissions !== 'object') return data;
+  const roleCanMutate = data.permissions.canMutate === true;
+  const subscriptionCanMutate = canMutateInternal(
+    req && req.subscriptionAuthority,
+    { allowPending: true }
+  );
+  const canMutate = roleCanMutate && subscriptionCanMutate;
+  const permissions = {
+    ...data.permissions,
+    canMutate,
+    mutationRestriction: canMutate
+      ? null
+      : (roleCanMutate ? 'subscription_read_only' : 'role_read_only'),
+  };
+  if (Object.prototype.hasOwnProperty.call(permissions, 'canReviseDirectly')) {
+    permissions.canReviseDirectly = canMutate && permissions.canReviseDirectly === true;
+  }
+  return { ...data, permissions };
 }
 
 function failure(req, res, error, event) {
@@ -121,7 +143,11 @@ function createKnowledgeManagementRouter(options = {}) {
           limit: req.query.limit,
         },
       });
-      return res.json({ success: true, data, requestId: requestId(req) });
+      return res.json({
+        success: true,
+        data: applyMutationAuthority(data, req),
+        requestId: requestId(req),
+      });
     } catch (error) {
       return failure(req, res, error, 'knowledge_management_list_failed');
     }
@@ -134,7 +160,11 @@ function createKnowledgeManagementRouter(options = {}) {
         entryId: req.params.entryId,
         versionNumber: req.query.versionNumber,
       });
-      return res.json({ success: true, data, requestId: requestId(req) });
+      return res.json({
+        success: true,
+        data: applyMutationAuthority(data, req),
+        requestId: requestId(req),
+      });
     } catch (error) {
       return failure(req, res, error, 'knowledge_management_item_failed');
     }
@@ -277,6 +307,7 @@ function createKnowledgeManagementRouter(options = {}) {
 }
 
 module.exports = {
+  applyMutationAuthority,
   createKnowledgeManagementRouter,
   exactBody,
 };
